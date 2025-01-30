@@ -2,15 +2,17 @@ import { useEffect, useState, useRef } from 'react';
 import { TableCell, Table, TableBody, TableContainer, TableHead, TableRow } from '@mui/material';
 import { IconButton,  Paper } from '@mui/material/';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LaunchIcon from '@mui/icons-material/Launch';
 import AddEntry from './AddEntry'
 import { styled } from '@mui/system';
 import Stack from "@mui/material/Stack";
+import { useNavigate } from 'react-router-dom';
 // search
 
-import  supabase from "../utils/supabaseClient";
+import  supabase from "src/utils/supabaseClient";
 
 //Feedback
-import { AlertsManager , AlertsContext } from '../utils/AlertsManager';
+import { AlertsManager , AlertsContext } from 'src/utils/AlertsManager';
 
 const StyledPaper = styled(Paper)(() => ({
     backgroundColor: '#090c11', // Semi-transparent white
@@ -23,6 +25,7 @@ const Items = () => {
 
     const alertsManagerRef =  useRef(AlertsContext);
     const [items, setItems] = useState([]);
+    const navigate = useNavigate();
 
     useEffect(() => {
         // Create the channel for listening to changes
@@ -112,6 +115,13 @@ const Items = () => {
             alertsManagerRef.current.showAlert('error', 'Error deleting item', error.message);
         }
     }
+
+    const handleRedirect = (id) => {
+        const baseUrl = import.meta.env.BASE_URL || '/'; //  Important: Use import.meta.env.BASE_URL
+        const targetUrl = `${baseUrl}item/${id}`;
+    
+        navigate(targetUrl);
+    }
     
     return (
             <TableContainer component={StyledPaper}>
@@ -148,6 +158,7 @@ const Items = () => {
                                     <Stack  direction="row"
                                             spacing={0}
                                             alignItems="start">
+                                        <IconButton variant="contained" color="info" onClick={( )=> handleRedirect(item.id)}><LaunchIcon/></IconButton>
                                         <AddEntry action={"update"}/>
                                         <IconButton variant="contained" onClick={() => handleDelete(item.id)} color="error"><DeleteIcon/></IconButton>
                                     </Stack>

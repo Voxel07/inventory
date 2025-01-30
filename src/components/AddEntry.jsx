@@ -22,10 +22,10 @@ import { IconButton } from '@mui/material/';
 import ClearIcon from '@mui/icons-material/Clear';
 import { createTheme, ThemeProvider } from '@mui/material';
 
-import supabase from '../utils/supabaseClient';
+import supabase from 'src/utils/supabaseClient';
 
 //Feedback
-import { AlertsManager } from '../utils/AlertsManager';
+import { AlertsManager } from 'src/utils/AlertsManager';
 
 const style = {
     position: 'absolute',
