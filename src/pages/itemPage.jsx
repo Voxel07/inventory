@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import supabase from 'src/utils/supabaseClient';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Paper } from '@mui/material';
 
 //layout

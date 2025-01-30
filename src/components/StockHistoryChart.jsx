@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from "@mui/material";
 import { LineChart } from "@mui/x-charts";
 import { createTheme, ThemeProvider } from "@mui/material";

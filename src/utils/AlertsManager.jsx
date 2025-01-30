@@ -9,7 +9,7 @@ const AlertsContext = createContext();
 
 const tiemoutDuration = 4000
 
-const AlertsManager = forwardRef((props, ref) => {
+const AlertsManager = forwardRef(function AlertsManager(props, ref) {
     const [alerts, setAlerts] = useState([]);
 
     useEffect(() => {
