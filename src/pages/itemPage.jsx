@@ -10,7 +10,7 @@ import Grid from '@mui/material/Grid2';
 import { styled } from '@mui/system';
 
 //charts
-import StockHistoryChart from '../components/StockHistoryChart';
+import StockHistoryChart from 'src/components/StockHistoryChart';
 
 //qr code
 import QRCode from "react-qr-code";

@@ -34,15 +34,35 @@ const Items = () => {
           .on(
             'postgres_changes',
             { 
-              event: '*', 
+              event: 'insert', 
               schema: 'public', 
               table: 'items' 
             },
             (payload) => {
-              // Add the new item to the state
-              setItems(prevItems => [...prevItems, payload.new]);
-              console.log('New item inserted:', payload.new);
-            }
+                const fetchNewItemStock = async () => {
+                  const { data: stockData, error } = await supabase
+                    .from('stock')
+                    .select('*')
+                    .eq('item_id', payload.new.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+              
+                  const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
+              
+                  setItems(prevItems => {
+                    const newItemWithStock = {
+                      ...payload.new,
+                      stock: stockData || [],
+                      latestStock: latestStock
+                    };
+                    
+                    return [...prevItems, newItemWithStock];
+                  });
+                };
+              
+                fetchNewItemStock();
+                console.log('New item inserted:', payload.new);
+              }
           )
           .subscribe();
     
@@ -171,7 +191,7 @@ const Items = () => {
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', marginBottom: '20px' }}>
                     <AddEntry action={"add"} />
                 </div>
-                {/* <pre>{JSON.stringify(items, null, 2)}</pre> */}
+                <pre>{JSON.stringify(items, null, 2)}</pre>
                 </TableContainer>
     );
 };
