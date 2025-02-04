@@ -30,42 +30,76 @@ const Items = () => {
     useEffect(() => {
         // Create the channel for listening to changes
         const channel = supabase
-          .channel('custom-insert-channel')
+          .channel('items-changes')
           .on(
             'postgres_changes',
             { 
-              event: 'insert', 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'items' 
+            },
+            async (payload) => {
+              const { data: stockData } = await supabase
+                .from('stock')
+                .select('*')
+                .eq('item_id', payload.new.id)
+                .order('created_at', { ascending: false })
+                .limit(1);
+      
+              const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
+      
+              setItems(prevItems => {
+                const newItemWithStock = {
+                  ...payload.new,
+                  stock: stockData || [],
+                  latestStock: latestStock
+                };
+                
+                return [...prevItems, newItemWithStock];
+              });
+            }
+          )
+          .on(
+            'postgres_changes',
+            { 
+              event: 'UPDATE', 
+              schema: 'public', 
+              table: 'items' 
+            },
+            async (payload) => {
+              const { data: stockData } = await supabase
+                .from('stock')
+                .select('*')
+                .eq('item_id', payload.new.id)
+                .order('created_at', { ascending: false })
+                .limit(1);
+      
+              const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
+      
+              setItems(prevItems => 
+                prevItems.map(item => 
+                  item.id === payload.new.id 
+                    ? { ...payload.new, stock: stockData || [], latestStock: latestStock }
+                    : item
+                )
+              );
+            }
+          )
+          .on(
+            'postgres_changes',
+            { 
+              event: 'DELETE', 
               schema: 'public', 
               table: 'items' 
             },
             (payload) => {
-                const fetchNewItemStock = async () => {
-                  const { data: stockData, error } = await supabase
-                    .from('stock')
-                    .select('*')
-                    .eq('item_id', payload.new.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-              
-                  const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
-              
-                  setItems(prevItems => {
-                    const newItemWithStock = {
-                      ...payload.new,
-                      stock: stockData || [],
-                      latestStock: latestStock
-                    };
-                    
-                    return [...prevItems, newItemWithStock];
-                  });
-                };
-              
-                fetchNewItemStock();
-                console.log('New item inserted:', payload.new);
-              }
+              setItems(prevItems => 
+                prevItems.filter(item => item.id !== payload.old.id)
+              );
+            }
           )
           .subscribe();
-    
+      
         // Cleanup subscription on component unmount
         return () => {
           supabase.removeChannel(channel);
@@ -179,7 +213,7 @@ const Items = () => {
                                             spacing={0}
                                             alignItems="start">
                                         <IconButton variant="contained" color="info" onClick={( )=> handleRedirect(item.id)}><LaunchIcon/></IconButton>
-                                        <AddEntry action={"update"}/>
+                                        <AddEntry action={"update"} ItemToModify={item}/>
                                         <IconButton variant="contained" onClick={() => handleDelete(item.id)} color="error"><DeleteIcon/></IconButton>
                                     </Stack>
                                 </TableCell>

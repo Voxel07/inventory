@@ -75,12 +75,12 @@ const style = {
     },
   });
 
-const AddProduct = (({action}) =>
+const AddProduct = (({action, ItemToModify}) =>
 {
     const alertsManagerRef =  useRef();
     const [open, setOpen] = useState(false);
     const nameRef = useRef();
- 
+
     const handleOpen = () => {
         setOpen(true);
         };
@@ -110,17 +110,21 @@ const AddProduct = (({action}) =>
           alertsManagerRef.current.showAlert('success', 'Item added successfully')
       }
 
-      const newStock = {
-          item_id: data[0].id,
-          stock: values.stock,
-      }
-      console.log(newStock)
+      addStock(data[0].id, values.stock)
+    }
 
+    const addStock = async (item_id, new_stock) =>{
+
+      const newStock = {
+          item_id: item_id,
+          stock: new_stock,
+      }
+  
       const {data: stockData, error: stockError} = await supabase
       .from('stock')
       .insert([newStock])
       .select();
-
+  
       if (stockError) {
           console.log('error', stockError)
           alertsManagerRef.current.showAlert('error', 'Error adding stock', stockError.message)
@@ -131,29 +135,51 @@ const AddProduct = (({action}) =>
       }
     }
 
-    const updateEntry = async (values) => {
+  const updateEntry = async (values) => {
+    // Compare values to detect changes
+    const hasChanges = ['name', 'location', 'position'].some(
+        field => ItemToModify[field] !== values[field]
+    );
 
-      const updatedItem = {
-        name: values.name,
-        location: values.location,
-        position: values.position
-      }
-
-      const { data, error } = await supabase
-      .from('items')
-      .update([updatedItem])
-      .eq('id', values.id)
-      .select()
+    if (!hasChanges && ItemToModify.latestStock.stock === values.stock) {
+        alertsManagerRef.current.showAlert('info', 'No changes detected');
+        return;
     }
+
+    if (hasChanges) {
+        const updatedItem = {
+            name: values.name,
+            location: values.location,
+            position: values.position
+        };
+
+        const { data, error } = await supabase
+            .from('items')
+            .update([updatedItem])
+            .eq('id', ItemToModify.id)
+            .select();
+
+        if (error) {
+            console.log('error', error);
+            alertsManagerRef.current.showAlert('error', 'Error updating item', error.message);
+            return;
+        }
+        
+        alertsManagerRef.current.showAlert('success', 'Item updated successfully');
+    }
+
+    if (ItemToModify.latestStock.stock !== values.stock) {
+        await addStock(ItemToModify.id, values.stock);
+    }
+};
 
 
     const handleSubmit = async (values) => {
-        console.log(values);
 
         if (action == "add") {
           addEntry(values);
         }
-        else if (action == "edit") {
+        else if (action == "update") {
           updateEntry(values);
         }
         
@@ -198,12 +224,18 @@ const AddProduct = (({action}) =>
       >
         <FormikWithRef
         validateOnChange={true}
-        initialValues={{
+        initialValues={ItemToModify?{
+                name: ItemToModify.name,
+                stock: ItemToModify.latestStock.stock,
+                position: ItemToModify.position,
+                location: ItemToModify.location
+                } :
+              {
                 name: '',
                 stock: '',
                 position: '',
                 location: ''
-                }   }
+              }  }
         validationSchema={validationSchema}
         onSubmit={async(data, { setSubmitting, resetForm }) => {
                 setSubmitting(true);
