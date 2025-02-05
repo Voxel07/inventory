@@ -10,14 +10,6 @@ RUN npm install
 # Copy the rest of the app
 COPY . .
 
-# Define build arguments
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_KEY
-
-# Set environment variables for Vite
-ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-ENV VITE_SUPABASE_KEY=${VITE_SUPABASE_KEY}
-
 # Build the app
 RUN npm run build
 
