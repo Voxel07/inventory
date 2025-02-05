@@ -225,7 +225,7 @@ const Items = () => {
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', marginBottom: '20px' }}>
                     <AddEntry action={"add"} />
                 </div>
-                <pre>{JSON.stringify(items, null, 2)}</pre>
+                {/* <pre>{JSON.stringify(items, null, 2)}</pre> */}
                 </TableContainer>
     );
 };

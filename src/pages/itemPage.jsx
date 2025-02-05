@@ -80,7 +80,7 @@ const ItemPage = () => {
       </Grid>
 
       <Grid item xs={12}>
-        <pre>{JSON.stringify(item.stock, null, 2)}</pre>
+        {/* <pre>{JSON.stringify(item.stock, null, 2)}</pre> */}
     </Grid>
     </Grid>
     )
