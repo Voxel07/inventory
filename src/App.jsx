@@ -5,7 +5,7 @@ import { createTheme, ThemeProvider } from '@mui/material';
 //Auth
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
-import Login from "./auth/Login";
+import Login from "./auth/LogIn";
 import SignUp from "./auth/SignUp";
 
 //Pages
