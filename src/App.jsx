@@ -2,9 +2,13 @@ import './App.css'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@mui/material';
 
-import axios from 'axios';
-axios.defaults.baseURL = "https://bierdeckel.matzeschasdneider.de/api";
+//Auth
+import { AuthProvider } from "./auth/AuthContext";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import Login from "./auth/Login";
+import SignUp from "./auth/SignUp";
 
+//Pages
 import Inventry from './pages/inventory';
 import ItemPage from './pages/itemPage';
 
@@ -129,20 +133,34 @@ const theme = createTheme({
 });
 
 function App() {
-
   return (
-    <>
-    <ThemeProvider theme={theme}>
-      <Router>
-        <Routes>
-          <Route path='/' Component={Inventry}/>
-          <Route path="/item/:id" element={<ItemPage />} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
-
-    </>
-  )
+    <AuthProvider>
+      <ThemeProvider theme={theme}>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Inventry />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/item/:id"
+              element={
+                <ProtectedRoute>
+                  <ItemPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </ThemeProvider>
+    </AuthProvider>
+  );
 }
 
 export default App
