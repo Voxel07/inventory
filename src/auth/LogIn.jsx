@@ -1,55 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
-  const { supabase } = useAuth();
+  const { loginWithAuthentik, user } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Check if the user is already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      navigate("/"); // Redirect to home page on success
+    try {
+      await loginWithAuthentik();
+      // Note: The user will be redirected to Authentik's login page,
+      // so the following code won't execute immediately
+    } catch (error) {
+      setError("Failed to initialize login with Authentik. Please try again.");
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
     <div>
-      <h2>Login</h2>
+      <h2>Login with Authentik</h2>
       {error && <p style={{ color: "red" }}>{error}</p>}
       <form onSubmit={handleLogin}>
-        <input
-          type="email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Enter your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
         <button type="submit" disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
+          {loading ? "Connecting..." : "Login with Authentik"}
         </button>
       </form>
     </div>

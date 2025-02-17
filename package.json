@@ -19,6 +19,7 @@
     "@supabase/supabase-js": "^2.48.1",
     "@types/react-router": "^5.1.20",
     "@types/react-router-dom": "^5.3.3",
+    "appwrite": "^17.0.0",
     "axios": "^1.7.9",
     "formik": "^2.4.6",
     "inventory": "file:",

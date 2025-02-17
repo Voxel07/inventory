@@ -1,11 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { Client } from 'appwrite';
 
-const supabaseUrl = "https://jfjrgeegpvpzjdpmmaix.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmanJnZWVncHZwempkcG1tYWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgyNjkwNzUsImV4cCI6MjA1Mzg0NTA3NX0.IXMaIeGZZaLorpURyaBYxw7yE66OR30wxCBNTuQkxdU";
+const client = new Client();
+client
+    .setEndpoint('http://192.168.0.115/v1')
+    .setProject('67a52c90002b79ca0975');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase environment variables.");
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-export default supabase;
+export default client;

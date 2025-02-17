@@ -13,7 +13,7 @@ import { styled } from '@mui/system';
 import StockHistoryChart from 'src/components/StockHistoryChart';
 
 //qr code
-import QRCode from "react-qr-code";
+import QRCodeGenerator from "src/components/QrCode";
 
 const StyledPaper = styled(Paper)(() => ({
     backgroundColor: '#242424',
@@ -66,7 +66,7 @@ const ItemPage = () => {
       <Grid item xs={5}>
       <StyledPaper>
       <div style={{ height: "auto", margin: "0 auto", maxWidth: 256, width: "100%" }}>
-        <QRCode
+        <QRCodeGenerator
             size={256}
             style={{ height: "auto", maxWidth: "100%", width: "100%" }}
             value={window.location.href}

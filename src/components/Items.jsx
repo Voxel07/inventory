@@ -9,7 +9,7 @@ import Stack from "@mui/material/Stack";
 import { useNavigate } from 'react-router-dom';
 // search
 
-import  supabase from "src/utils/supabaseClient";
+import  client from "src/utils/supabaseClient";
 
 //Feedback
 import { AlertsManager , AlertsContext } from 'src/utils/AlertsManager';
