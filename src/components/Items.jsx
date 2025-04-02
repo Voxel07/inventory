@@ -1,232 +1,336 @@
-import { useEffect, useState, useRef } from 'react';
-import { TableCell, Table, TableBody, TableContainer, TableHead, TableRow } from '@mui/material';
-import { IconButton,  Paper } from '@mui/material/';
+import React, { useEffect, useState, useRef, useContext, useCallback } from 'react'; // Added useContext, useCallback
+import { TableCell, Table, TableBody, TableContainer, TableHead, TableRow, CircularProgress, Typography } from '@mui/material'; // Added loading/error components
+import { IconButton, Paper } from '@mui/material/';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LaunchIcon from '@mui/icons-material/Launch';
-import AddEntry from './AddEntry'
 import { styled } from '@mui/system';
 import Stack from "@mui/material/Stack";
 import { useNavigate } from 'react-router-dom';
-// search
 
-import  client from "src/utils/supabaseClient";
+// --- 1. Import Appwrite client instances and Query ---
+import { client, databases } from 'src/utils/appwriteClient'; // Adjust path if needed
+import { Query } from 'appwrite';
 
-//Feedback
-import { AlertsManager , AlertsContext } from 'src/utils/AlertsManager';
+import AddEntry from 'src/components/AddEntry'
 
-const StyledPaper = styled(Paper)(() => ({
-    backgroundColor: '#090c11', // Semi-transparent white
+
+// Feedback
+import { AlertsManager, AlertsContext } from 'src/utils/AlertsManager';
+
+// --- 2. Appwrite Configuration (Replace or use Environment Variables) ---
+const DATABASE_ID = '67a54e42001855e41827'; // <-- REPLACE
+const ITEMS_COLLECTION_ID = '67a54e8000209a02158f';
+const STOCK_COLLECTION_ID = '67a54f6a001085d2c8de';
+const STOCK_ITEM_ID_ATTRIBUTE = 'item'; // <-- REPLACE with the actual attribute linking stock to items (e.g., 'itemId', 'item')
+const STOCK_CREATED_AT_ATTRIBUTE = '$createdAt'; // Use '$createdAt' or your custom date attribute for sorting stock
+const ITEM_STOCK_VALUE_ATTRIBUTE = 'stock'; // <-- REPLACE with the actual attribute name holding the stock count in the 'stock' collection
+// --------------------------------------------------------------------
+
+const StyledPaper = styled(Paper)(({ theme }) => ({ // Added theme access
+    backgroundColor: '#090c11',
     borderRadius: '5px',
-    color:'#F5F0F3',
-    minWidth: '1200px',
+    color: '#F5F0F3',
+    overflowX: 'auto', // Handle potential horizontal overflow
+    [theme.breakpoints.up('md')]: { // Example: Apply minWidth only on medium screens and up
+         minWidth: '800px',
+    },
+     [theme.breakpoints.up('lg')]: {
+         minWidth: '1200px',
+    }
 }));
 
 const Items = () => {
-
-    const alertsManagerRef =  useRef(AlertsContext);
+    const alertsManagerRef = useRef(null); // Initialize ref with null
     const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const navigate = useNavigate();
+    const contextAlertsManager = useContext(AlertsContext); // Get manager from context
 
+    // Assign context manager to ref once available
     useEffect(() => {
-        // Create the channel for listening to changes
-        const channel = supabase
-          .channel('items-changes')
-          .on(
-            'postgres_changes',
-            { 
-              event: 'INSERT', 
-              schema: 'public', 
-              table: 'items' 
-            },
-            async (payload) => {
-              const { data: stockData } = await supabase
-                .from('stock')
-                .select('*')
-                .eq('item_id', payload.new.id)
-                .order('created_at', { ascending: false })
-                .limit(1);
-      
-              const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
-      
-              setItems(prevItems => {
-                const newItemWithStock = {
-                  ...payload.new,
-                  stock: stockData || [],
-                  latestStock: latestStock
-                };
-                
-                return [...prevItems, newItemWithStock];
-              });
+        alertsManagerRef.current = contextAlertsManager;
+    }, [contextAlertsManager]);
+
+    // --- Helper function to show alerts safely ---
+    const showAlert = (severity, title, message = '') => {
+        if (alertsManagerRef.current) {
+            alertsManagerRef.current.showAlert(severity, title, message);
+        } else {
+            console.warn("AlertsManager ref not ready, logging to console:", { severity, title, message });
+        }
+    };
+
+    // --- 3. Memoized fetchStockForItem using useCallback ---
+    // Ensures the function identity is stable unless dependencies change
+    const fetchStockForItem = useCallback(async (itemId) => {
+        // Fetches latest stock entries for an item
+        try {
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                STOCK_COLLECTION_ID,
+                [
+                    Query.equal(STOCK_ITEM_ID_ATTRIBUTE, itemId),
+                    Query.orderDesc(STOCK_CREATED_AT_ATTRIBUTE), // Sort by creation date/time
+                    Query.limit(20) // Limit to latest 20 entries (adjust as needed)
+                ]
+            );
+            // Map needed fields, assuming ITEM_STOCK_VALUE_ATTRIBUTE holds the count
+            return response.documents.map(doc => ({
+                ...doc, // Include all doc fields if needed elsewhere
+                stockValue: doc[ITEM_STOCK_VALUE_ATTRIBUTE], // Map the specific stock value field
+                created_at: doc.$createdAt // Keep track of creation time if needed
+            }));
+        } catch (error) {
+            console.error(`Error fetching stock data for item ${itemId}:`, error);
+            // Don't show alert for every failed stock fetch, maybe log it
+            return []; // Return empty array on error
+        }
+    }, [STOCK_ITEM_ID_ATTRIBUTE, STOCK_CREATED_AT_ATTRIBUTE]); // Dependencies: IDs are constants, only attribute names matter
+
+
+    // --- 4. Initial Data Fetch ---
+    const fetchInitialItems = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // Fetch all items
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                ITEMS_COLLECTION_ID,
+                [Query.limit(1000)] // Add a limit; default is 25. Adjust as needed.
+            );
+
+            // Map base item data
+            const itemsData = response.documents.map(doc => ({
+                ...doc,
+                id: doc.$id,
+                stock: [], // Initialize stock array
+                latestStock: null // Initialize latest stock object
+            }));
+
+            // *Performance Note*: Fetching stock for each item (N+1 queries).
+            const itemsWithStock = await Promise.all(
+                itemsData.map(async (item) => {
+                    const stockData = await fetchStockForItem(item.id);
+                    return {
+                        ...item,
+                        stock: stockData, // Store the fetched array (up to 20 entries)
+                        // --- 5. Simplified latestStock ---
+                        latestStock: stockData.length > 0 ? stockData[0] : null // First element is the latest due to query sorting
+                    };
+                })
+            );
+
+            setItems(itemsWithStock);
+            // Don't show success alert on initial load unless desired
+            // showAlert('success', 'Items fetched successfully');
+
+        } catch (err) {
+            console.error('Error fetching initial items:', err);
+            setError(err.message || 'Failed to load items.');
+            showAlert('error', 'Error fetching items', err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchStockForItem, showAlert]); // Dependency includes fetchStockForItem & showAlert
+
+    // --- Effect for Initial Fetch ---
+    useEffect(() => {
+        fetchInitialItems();
+    }, []); // Run only when fetchInitialItems function identity changes
+
+
+    // --- 6. Real-time Subscription Effect ---
+    useEffect(() => {
+        const subscriptionChannel = `databases.${DATABASE_ID}.collections.${ITEMS_COLLECTION_ID}.documents`;
+
+        const unsubscribe = client.subscribe(subscriptionChannel,
+            async (response) => { // Make the callback async to await fetchStockForItem
+                const event = response.events[0]; // Get the specific event type
+                const payload = response.payload;
+
+                // --- Handle Create ---
+                 if (event.endsWith('.create')) {
+                    console.log('Realtime: Item Created', payload);
+                    // Fetch stock for the newly created item
+                    const stockData = await fetchStockForItem(payload.$id);
+                    const latestStock = stockData.length > 0 ? stockData[0] : null;
+                    setItems(prevItems => {
+                        // Avoid adding duplicates if create event fires multiple times quickly
+                        if (prevItems.some(item => item.id === payload.$id)) {
+                            return prevItems;
+                        }
+                        return [
+                            ...prevItems,
+                            { ...payload, id: payload.$id, stock: stockData, latestStock: latestStock }
+                        ];
+                    });
+                 }
+                 // --- Handle Update ---
+                 else if (event.endsWith('.update')) {
+                    console.log('Realtime: Item Updated', payload);
+                     // Re-fetch stock data for the updated item
+                     const stockData = await fetchStockForItem(payload.$id);
+                     const latestStock = stockData.length > 0 ? stockData[0] : null;
+                    setItems(prevItems =>
+                        prevItems.map(item =>
+                            item.id === payload.$id
+                                ? { ...payload, id: payload.$id, stock: stockData, latestStock: latestStock }
+                                : item
+                        )
+                    );
+                 }
+                 // --- Handle Delete ---
+                 else if (event.endsWith('.delete')) {
+                     console.log('Realtime: Item Deleted', payload);
+                    setItems(prevItems =>
+                        prevItems.filter(item => item.id !== payload.$id)
+                    );
+                 }
             }
-          )
-          .on(
-            'postgres_changes',
-            { 
-              event: 'UPDATE', 
-              schema: 'public', 
-              table: 'items' 
-            },
-            async (payload) => {
-              const { data: stockData } = await supabase
-                .from('stock')
-                .select('*')
-                .eq('item_id', payload.new.id)
-                .order('created_at', { ascending: false })
-                .limit(1);
-      
-              const latestStock = stockData && stockData.length > 0 ? stockData[0] : null;
-      
-              setItems(prevItems => 
-                prevItems.map(item => 
-                  item.id === payload.new.id 
-                    ? { ...payload.new, stock: stockData || [], latestStock: latestStock }
-                    : item
-                )
-              );
-            }
-          )
-          .on(
-            'postgres_changes',
-            { 
-              event: 'DELETE', 
-              schema: 'public', 
-              table: 'items' 
-            },
-            (payload) => {
-              setItems(prevItems => 
-                prevItems.filter(item => item.id !== payload.old.id)
-              );
-            }
-          )
-          .subscribe();
-      
+        );
+
+        console.log(`Subscribed to Appwrite channel: ${subscriptionChannel}`);
+
         // Cleanup subscription on component unmount
         return () => {
-          supabase.removeChannel(channel);
+            console.log(`Unsubscribing from Appwrite channel: ${subscriptionChannel}`);
+            unsubscribe();
         };
-      }, []);
-    
-
-    const fetchItems = async () => {
-
-        const { data: items, error } = await supabase
-            .from('items')
-            .select(`
-                *,
-                stock (
-                    stock,
-                    created_at
-                )
-                // Assumes stock table/view with latest stock per item
-            `)
-    
-        if (error) {
-            console.log('error', error)
-            alertsManagerRef.current.showAlert('error', 'Error fetching items', error.message)
-        } else {
-            console.log('items', items)
-            alertsManagerRef.current.showAlert('success', 'Items fetched successfully')
-            const itemsWithLatestStock = items.map(item => ({
-                ...item,
-                latestStock: item.stock.length > 0 
-                    ? item.stock.reduce((latest, current) => 
-                        new Date(current.created_at) > new Date(latest.created_at) ? current : latest)
-                    : null
-            }))
-            setItems(itemsWithLatestStock) 
-        }
-    }
-
-    useEffect(() => {
-        fetchItems();
-    }, []);
+        // Dependencies: client, fetchStockForItem. Assuming IDs are constants.
+    }, [client, fetchStockForItem]); // Re-subscribe if client or fetch function changes
 
 
-    const handleDelete = async (id) => {
-        
+    // --- 7. Delete Handler ---
+    const handleDelete = async (id, name) => {
+         // Optional: Ask for confirmation
+         if (!window.confirm(`Are you sure you want to delete item "${name}" (${id}) and all its stock history? This cannot be undone.`)) {
+             return;
+         }
+
         try {
-            // Delete stock entry first
-            const { error: stockError } = await supabase
-                .from('stock')
-                .delete()
-                .eq('item_id', id);
-    
-            if (stockError) throw stockError;
-    
+            // *Performance Note*: Deleting stock entries one by one.
+            console.log(`Attempting to delete stock entries for item ${id}`);
+            const stockResponse = await databases.listDocuments(
+                DATABASE_ID,
+                STOCK_COLLECTION_ID,
+                [
+                    Query.equal(STOCK_ITEM_ID_ATTRIBUTE, id),
+                    Query.limit(5000) // Fetch up to 5000 stock docs to delete (adjust if needed, Appwrite max limit)
+                ]
+            );
+
+            if (stockResponse.documents.length > 0) {
+                 // Delete each stock document
+                await Promise.all(stockResponse.documents.map(stockDoc =>
+                    databases.deleteDocument(
+                        DATABASE_ID,
+                        STOCK_COLLECTION_ID,
+                        stockDoc.$id
+                    )
+                ));
+                 console.log(`Deleted ${stockResponse.documents.length} stock entries for item ${id}`);
+            } else {
+                 console.log(`No stock entries found for item ${id} to delete.`);
+            }
+
             // Then delete the main item
-            const { error: itemError } = await supabase
-                .from('items')
-                .delete()
-                .eq('id', id);
-    
-            if (itemError) throw itemError;
-    
-            setItems(prevItems => prevItems.filter(item => item.id !== id));
-            alertsManagerRef.current.showAlert('success', 'Item deleted successfully');
-    
-        } catch (error) {
-            console.error('Delete error:', error);
-            alertsManagerRef.current.showAlert('error', 'Error deleting item', error.message);
+            console.log(`Attempting to delete item ${id}`);
+            await databases.deleteDocument(
+                DATABASE_ID,
+                ITEMS_COLLECTION_ID,
+                id
+            );
+             console.log(`Successfully deleted item ${id}`);
+
+            // State update is handled by the real-time listener, but can force it here too
+            // setItems(prevItems => prevItems.filter(item => item.id !== id));
+            showAlert('success', `Item "${name}" deleted successfully`);
+
+        } catch (err) {
+            console.error(`Delete error for item ${id}:`, err);
+            showAlert('error', `Error deleting item "${name}"`, err.message);
         }
+    };
+
+    // --- 8. Redirect Handler ---
+    const handleRedirect = (id) => {
+        // Using relative path which is generally safer with React Router
+        navigate(`../item/${id}`); // Go up one level (from /items) then to /item/:id
+    };
+
+    // --- Loading and Error States ---
+     if (loading) {
+        return (
+            <StyledPaper style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+                <CircularProgress />
+            </StyledPaper>
+        );
     }
 
-    const handleRedirect = (id) => {
-        const baseUrl = import.meta.env.BASE_URL || '/'; //  Important: Use import.meta.env.BASE_URL
-        const targetUrl = `${baseUrl}item/${id}`;
-    
-        navigate(targetUrl);
+    if (error) {
+        return (
+             <StyledPaper style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', padding: '20px' }}>
+                <Typography color="error">Error loading items: {error}</Typography>
+            </StyledPaper>
+        );
     }
-    
+
+    // --- 9. Render Table ---
     return (
-            <TableContainer component={StyledPaper}>
-            <AlertsManager ref={alertsManagerRef} />
-                <Table >
-                    <TableHead>
-                        <TableRow >
-                            <TableCell>ID</TableCell>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Stückzahl</TableCell>
-                            <TableCell>Lagerort</TableCell>
-                            <TableCell>Lagerposition</TableCell>
+        <TableContainer component={StyledPaper}>
+            {/* Render AlertsManager via context, assuming it's provided higher up */}
+            {/* <AlertsManager ref={alertsManagerRef} /> */}
+            <Table stickyHeader size="small">
+                <TableHead>
+                    <TableRow>
+                        {/* Adjust headers based on your actual item attributes */}
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>ID</TableCell>
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Name</TableCell>
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Stock</TableCell>
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Lagerort</TableCell>
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Lagerposition</TableCell>
+                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Actions</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {items.length === 0 && !loading ? (
+                        <TableRow>
+                            <TableCell colSpan={6} align="center">No items found.</TableCell>
                         </TableRow>
-                    </TableHead>
-                    <TableBody>
-                       {items.map((item) => (
-                            <TableRow key={item.id}>
-                                <TableCell >
-                                       {item.id}
+                    ) : (
+                        items.map((item) => (
+                            <TableRow key={item.id} hover>
+                                <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {item.id}
                                 </TableCell>
-                                <TableCell >
-                                       {item.name}
-                                </TableCell>
+                                <TableCell>{item.name ?? 'N/A'}</TableCell> {/* Use nullish coalescing for safety */}
                                 <TableCell>
-                                       {JSON.stringify(item?.stock[0]?.stock)}
+                                    {/* --- 10. Display latest stock value --- */}
+                                    {item.latestStock ? item.latestStock.count : 'N/A'}
                                 </TableCell>
+                                <TableCell>{item.location ?? 'N/A'}</TableCell>
+                                <TableCell>{item.position ?? 'N/A'}</TableCell>
                                 <TableCell>
-                                        {item.location}
-                                </TableCell>
-                                <TableCell>
-                                        {item.position}
-                                </TableCell>
-                                <TableCell>
-                                    <Stack  direction="row"
-                                            spacing={0}
-                                            alignItems="start">
-                                        <IconButton variant="contained" color="info" onClick={( )=> handleRedirect(item.id)}><LaunchIcon/></IconButton>
-                                        <AddEntry action={"update"} ItemToModify={item}/>
-                                        <IconButton variant="contained" onClick={() => handleDelete(item.id)} color="error"><DeleteIcon/></IconButton>
+                                    <Stack direction="row" spacing={0} alignItems="center">
+                                        <IconButton title="View Details" size="small" color="info" onClick={() => handleRedirect(item.id)}><LaunchIcon/></IconButton>
+                                        {/* <AddEntry action={"update"} ItemToModify={item}/> */}
+                                        <IconButton title="Delete Item" size="small" onClick={() => handleDelete(item.id, item.name)} color="error"><DeleteIcon/></IconButton>
                                     </Stack>
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-
-                </Table>
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', marginBottom: '20px' }}>
-                    <AddEntry action={"add"} />
-                </div>
-                {/* <pre>{JSON.stringify(items, null, 2)}</pre> */}
-                </TableContainer>
+                        ))
+                    )}
+                </TableBody>
+            </Table>
+            {/* Add pagination controls here if needed */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+            <pre>{JSON.stringify(items, null, 2)}</pre>
+                {/* Add button or component for adding new items */}
+                <AddEntry action={"add"} />
+            </div>
+        </TableContainer>
     );
 };
 

@@ -1,14 +1,9 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Client, Account } from "appwrite";
-
-// Initialize Appwrite client
-const client = new Client()
-  .setEndpoint("http://192.168.0.115/v1") // Replace with your Appwrite endpoint
-  .setProject("67a52c90002b79ca0975"); // Replace with your Appwrite project ID
-
-const account = new Account(client);
+import { ID } from "appwrite";
+import { account } from "src/utils/appwriteClient"
 
 const AuthContext = createContext();
+const UserContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -86,7 +81,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithAuthentik, logout, account, client }}>
+    <AuthContext.Provider value={{ user, loading, loginWithAuthentik, logout, account }}>
       {children}
     </AuthContext.Provider>
   );
