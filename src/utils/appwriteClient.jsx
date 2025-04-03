@@ -5,5 +5,8 @@ client
     .setEndpoint('http://192.168.0.115/v1')
     .setProject('67a52c90002b79ca0975');
 
+
 export const account = new Account(client);
 export const databases = new Databases(client);
+
+export { ID } from 'appwrite'

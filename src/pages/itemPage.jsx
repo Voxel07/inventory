@@ -20,12 +20,12 @@ import QRCodeGenerator from "src/components/QrCode";
 
 // --- Appwrite Configuration (Replace with your actual IDs) ---
 // It's highly recommended to store these in environment variables
-const DATABASE_ID = 'YOUR_DATABASE_ID'; // <-- REPLACE
-const ITEMS_COLLECTION_ID = 'items'; // <-- REPLACE or confirm collection name/ID
-const STOCK_COLLECTION_ID = 'stock'; // <-- REPLACE or confirm collection name/ID
+const DATABASE_ID = '67a54e42001855e41827'; // <-- REPLACE
+const ITEMS_COLLECTION_ID = '67ef0bb20039030dc0da'; // <-- REPLACE or confirm collection name/ID
+const STOCK_COLLECTION_ID = '67ef0c050009ca72b3c8'; // <-- REPLACE or confirm collection name/ID
 // Assumes the 'stock' collection has an attribute (e.g., 'itemId')
 // that stores the ID of the related item document.
-const STOCK_ITEM_ID_ATTRIBUTE = 'itemId'; // <-- REPLACE with the actual attribute name if different
+const STOCK_ITEM_ID_ATTRIBUTE = 'item'; // <-- REPLACE with the actual attribute name if different
 // -------------------------------------------------------------
 
 const StyledPaper = styled(Paper)(() => ({

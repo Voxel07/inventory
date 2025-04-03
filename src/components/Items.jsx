@@ -19,10 +19,10 @@ import { AlertsManager, AlertsContext } from 'src/utils/AlertsManager';
 
 // --- 2. Appwrite Configuration (Replace or use Environment Variables) ---
 const DATABASE_ID = '67a54e42001855e41827'; // <-- REPLACE
-const ITEMS_COLLECTION_ID = '67a54e8000209a02158f';
-const STOCK_COLLECTION_ID = '67a54f6a001085d2c8de';
+const ITEMS_COLLECTION_ID = '67ef0bb20039030dc0da';
+const STOCK_COLLECTION_ID = '67ef0c050009ca72b3c8';
 const STOCK_ITEM_ID_ATTRIBUTE = 'item'; // <-- REPLACE with the actual attribute linking stock to items (e.g., 'itemId', 'item')
-const STOCK_CREATED_AT_ATTRIBUTE = '$createdAt'; // Use '$createdAt' or your custom date attribute for sorting stock
+const STOCK_CREATED_AT_ATTRIBUTE = 'timestamp'; // Use '$timestamp' or your custom date attribute for sorting stock
 const ITEM_STOCK_VALUE_ATTRIBUTE = 'stock'; // <-- REPLACE with the actual attribute name holding the stock count in the 'stock' collection
 // --------------------------------------------------------------------
 
@@ -72,14 +72,14 @@ const Items = () => {
                 [
                     Query.equal(STOCK_ITEM_ID_ATTRIBUTE, itemId),
                     Query.orderDesc(STOCK_CREATED_AT_ATTRIBUTE), // Sort by creation date/time
-                    Query.limit(20) // Limit to latest 20 entries (adjust as needed)
+                    Query.limit(1)
                 ]
             );
             // Map needed fields, assuming ITEM_STOCK_VALUE_ATTRIBUTE holds the count
             return response.documents.map(doc => ({
                 ...doc, // Include all doc fields if needed elsewhere
                 stockValue: doc[ITEM_STOCK_VALUE_ATTRIBUTE], // Map the specific stock value field
-                created_at: doc.$createdAt // Keep track of creation time if needed
+                timestamp: doc.$timestamp // Keep track of creation time if needed
             }));
         } catch (error) {
             console.error(`Error fetching stock data for item ${itemId}:`, error);
@@ -286,7 +286,6 @@ const Items = () => {
                 <TableHead>
                     <TableRow>
                         {/* Adjust headers based on your actual item attributes */}
-                        <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>ID</TableCell>
                         <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Name</TableCell>
                         <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Stock</TableCell>
                         <TableCell sx={{ color: '#F5F0F3', backgroundColor: '#1a1d21' }}>Lagerort</TableCell>
@@ -302,13 +301,10 @@ const Items = () => {
                     ) : (
                         items.map((item) => (
                             <TableRow key={item.id} hover>
-                                <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {item.id}
-                                </TableCell>
                                 <TableCell>{item.name ?? 'N/A'}</TableCell> {/* Use nullish coalescing for safety */}
                                 <TableCell>
                                     {/* --- 10. Display latest stock value --- */}
-                                    {item.latestStock ? item.latestStock.count : 'N/A'}
+                                    {item.latestStock ? item.latestStock.stock : 'N/A'}
                                 </TableCell>
                                 <TableCell>{item.location ?? 'N/A'}</TableCell>
                                 <TableCell>{item.position ?? 'N/A'}</TableCell>
@@ -326,7 +322,7 @@ const Items = () => {
             </Table>
             {/* Add pagination controls here if needed */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-            <pre>{JSON.stringify(items, null, 2)}</pre>
+            {/* <pre>{JSON.stringify(items, null, 2)}</pre> */}
                 {/* Add button or component for adding new items */}
                 <AddEntry action={"add"} />
             </div>

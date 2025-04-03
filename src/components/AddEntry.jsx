@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef, useContext } from 'react'; // Added useContext
-
+import Fade from '@mui/material/Fade';
 // Form
 import { Formik, Field, Form } from 'formik';
 import * as yup from 'yup';
 
 // MUI
 import TextField from '@mui/material/TextField';
-import Grid from '@mui/material/Grid2'; // Ensure you are using Grid v2 if specified
+import Grid from '@mui/material/Grid';
 import Backdrop from '@mui/material/Backdrop';
 import Modal from '@mui/material/Modal';
 import Button from '@mui/material/Button';
@@ -23,16 +23,15 @@ import { IconButton } from '@mui/material/';
 // import { createTheme, ThemeProvider } from '@mui/material'; // Theme not applied here, remove if unused
 
 // --- 1. Appwrite Imports ---
-import { databases } from 'src/utils/appwriteClient'; // Adjust path as needed
-import { ID } from 'appwrite'
+import { databases, ID } from 'src/utils/appwriteClient'; // Adjust path as needed
 
 // Feedback
 import { AlertsManager, AlertsContext } from 'src/utils/AlertsManager';
 
 // --- 2. Appwrite Configuration (Use Constants or Environment Variables) ---
 const DATABASE_ID = '67a54e42001855e41827'; // <-- REPLACE
-const ITEMS_COLLECTION_ID = '67a54e8000209a02158f'; // <-- REPLACE or confirm collection ID
-const STOCK_COLLECTION_ID = '67a54f6a001085d2c8de'; // <-- REPLACE or confirm collection ID
+const ITEMS_COLLECTION_ID = '67ef0bb20039030dc0da';
+const STOCK_COLLECTION_ID = '67ef0c050009ca72b3c8';
 // Attribute in 'stock' collection linking to an item's $id
 const STOCK_ITEM_ID_ATTRIBUTE = 'item'; // <-- REPLACE if different
 // Attribute in 'stock' collection holding the stock count
@@ -91,6 +90,8 @@ const AddEntry = ({ action, ItemToModify }) => {
         const newStockData = {
             [STOCK_ITEM_ID_ATTRIBUTE]: itemId, // e.g., itemId: "..."
             [ITEM_STOCK_VALUE_ATTRIBUTE]: stockValue, // e.g., stock: 10
+            timestamp: (new Date()).toISOString(),
+            reason:"restock"
             // Add any other required fields for the stock collection here
         };
 
@@ -117,7 +118,6 @@ const AddEntry = ({ action, ItemToModify }) => {
         const newItemData = {
             name: values.name,
             location: values.location,
-            reason: 'restock',
             position: values.position,
             // Add any other required fields for the items collection
         };
@@ -324,11 +324,10 @@ const AddEntry = ({ action, ItemToModify }) => {
 
                             <Form noValidate> {/* Add noValidate to prevent browser default validation */}
                                 <Grid container spacing={2}>
-                                    <Grid xs={12} sm={6}> {/* Use xs/sm for responsiveness */}
+                                    <Grid xs={8}> {/* Use xs/sm for responsiveness */}
                                         <Field
                                             inputRef={nameRef} // Ref for focusing
                                             as={TextField} // Use 'as' prop
-                                            fullWidth
                                             variant="outlined"
                                             label="Name"
                                             name="name"
@@ -337,10 +336,10 @@ const AddEntry = ({ action, ItemToModify }) => {
                                             helperText={touched.name && errors.name ? String(errors.name) : ' '}
                                         />
                                     </Grid>
-                                    <Grid xs={12} sm={6}>
+                                    <Grid xs={4} >
                                         <Field
                                             as={TextField}
-                                            fullWidth
+                                            
                                             variant="outlined"
                                             label="Stock Count"
                                             name="stock"
@@ -350,10 +349,10 @@ const AddEntry = ({ action, ItemToModify }) => {
                                             helperText={touched.stock && errors.stock ? String(errors.stock) : ' '}
                                         />
                                     </Grid>
-                                    <Grid xs={12} sm={6}>
+                                    <Grid xs={6}>
                                         <Field
                                             as={TextField}
-                                            fullWidth
+                                            
                                             variant="outlined"
                                             label="Location" // Use consistent labels if possible
                                             name="location"
@@ -361,10 +360,10 @@ const AddEntry = ({ action, ItemToModify }) => {
                                             helperText={touched.location && errors.location ? String(errors.location) : ' '}
                                         />
                                     </Grid>
-                                    <Grid xs={12} sm={6}>
+                                    <Grid xs={6}>
                                         <Field
                                             as={TextField}
-                                            fullWidth
+                                            
                                             variant="outlined"
                                             label="Position" // Use consistent labels
                                             name="position"
@@ -389,7 +388,6 @@ const AddEntry = ({ action, ItemToModify }) => {
                                                 type='submit'
                                                 startIcon={<SaveIcon />}
                                                 fullWidth // Take full width on small screens
-                                                sx={{ mb: { xs: 1, sm: 0 } }} // Margin bottom on small screens
                                                 >
                                                 {action === "add" ? "Add Item" : "Update Item"}
                                             </Button>
