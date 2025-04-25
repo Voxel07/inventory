@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useContext, useCallback } from 'react'; // Added useContext, useCallback
 import { TableCell, Table, TableBody, TableContainer, TableHead, TableRow, CircularProgress, Typography } from '@mui/material'; // Added loading/error components
-import { IconButton, Paper } from '@mui/material/';
+import { IconButton, Paper } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LaunchIcon from '@mui/icons-material/Launch';
 import { styled } from '@mui/system';

@@ -32,11 +32,11 @@ const Login = () => {
 
   return (
     <div>
-      <h2>Login with Authentik</h2>
+      <h2>Login</h2>
       {error && <p style={{ color: "red" }}>{error}</p>}
       <form onSubmit={handleLogin}>
         <button type="submit" disabled={loading}>
-          {loading ? "Connecting..." : "Login with Authentik"}
+          {loading ? "Connecting..." : "Login"}
         </button>
       </form>
     </div>

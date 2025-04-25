@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Paper, CircularProgress, Typography } from '@mui/material'; // Added loading/error components
 
 //layout
-import Grid from '@mui/material/Grid2';
+import Grid from '@mui/material/Grid';
 
 //styles
 import { styled } from '@mui/system';

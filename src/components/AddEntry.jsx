@@ -18,7 +18,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import Stack from "@mui/material/Stack";
 // import Autocomplete from '@mui/material/Autocomplete'; // Not used in form
 import CloseIcon from '@mui/icons-material/Close';
-import { IconButton } from '@mui/material/';
+import { IconButton } from '@mui/material';
 // import ClearIcon from '@mui/icons-material/Clear'; // Not used in form
 // import { createTheme, ThemeProvider } from '@mui/material'; // Theme not applied here, remove if unused
 
