@@ -19,16 +19,26 @@ export async function createItem(data: ItemFormData): Promise<Item> {
     status: 'available',
     qrCode: '',
   });
-  const qrCode = await generateQRCodeDataURL(item.id);
-  const updated = await pb.collection(COLLECTION).update<Item>(item.id, { qrCode });
 
-  await createTransaction({
-    itemId: updated.id,
-    transactionType: 'added',
-    quantityChanged: data.amount,
-    reason: 'Initial stock',
-    notes: '',
-  });
+  let updated = item;
+  try {
+    const qrCode = await generateQRCodeDataURL(item.id);
+    updated = await pb.collection(COLLECTION).update<Item>(item.id, { qrCode });
+  } catch (e) {
+    console.error('Failed to generate QR code:', e);
+  }
+
+  try {
+    await createTransaction({
+      itemId: updated.id,
+      transactionType: 'added',
+      quantityChanged: data.amount,
+      reason: 'Initial stock',
+      notes: '',
+    });
+  } catch (e) {
+    console.error('Failed to create initial transaction:', e);
+  }
 
   return updated;
 }

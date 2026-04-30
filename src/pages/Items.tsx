@@ -24,6 +24,9 @@ export function Items() {
 
     const storageLocations = [...new Set(items?.map((i) => i.storageLocation).filter(Boolean) ?? [])];
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
+    const positions = [...new Set(items?.map((i) => i.position).filter(Boolean) ?? [])];
+    const locations = [...new Set(items?.map((i) => i.location).filter(Boolean) ?? [])];
+    const allNames = items?.map((i) => i.name) ?? [];
 
     function handleCreate(data: ItemFormData) {
         createItem.mutate(data, {
@@ -86,7 +89,7 @@ export function Items() {
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Create New Item</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <ItemForm onSubmit={handleCreate} isLoading={createItem.isPending} storageLocations={storageLocations} categories={categories} />
+                    <ItemForm onSubmit={handleCreate} isLoading={createItem.isPending} storageLocations={storageLocations} categories={categories} positions={positions} locations={locations} existingNames={allNames} />
                 </DialogContent>
             </Dialog>
 
@@ -95,7 +98,7 @@ export function Items() {
                 <DialogTitle>Edit Item</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingItem && (
-                        <ItemForm initialData={editingItem} onSubmit={handleUpdate} isLoading={updateItem.isPending} storageLocations={storageLocations} categories={categories} />
+                        <ItemForm initialData={editingItem} onSubmit={handleUpdate} isLoading={updateItem.isPending} storageLocations={storageLocations} categories={categories} positions={positions} locations={locations} existingNames={allNames.filter((n) => n !== editingItem.name)} />
                     )}
                 </DialogContent>
             </Dialog>
