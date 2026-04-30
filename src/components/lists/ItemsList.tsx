@@ -14,6 +14,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import { useNavigate } from 'react-router-dom';
 import type { Item, StockTransaction } from '../../types';
 
 interface Props {
@@ -44,6 +45,7 @@ function getCheckedOut(itemId: string, transactions: StockTransaction[] | undefi
 }
 
 export function ItemsList({ items, transactions, isLoading, onEdit, onDelete, onShowQR }: Props) {
+    const navigate = useNavigate();
     if (isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
@@ -86,7 +88,12 @@ export function ItemsList({ items, transactions, isLoading, onEdit, onDelete, on
                         const remaining = item.amount - checkedOut;
                         const totalValue = (item.value ?? 0) * item.amount;
                         return (
-                            <TableRow key={item.id} hover>
+                            <TableRow
+                                key={item.id}
+                                hover
+                                onClick={() => navigate(`/items/${item.id}`)}
+                                sx={{ cursor: 'pointer' }}
+                            >
                                 <TableCell>{item.name}</TableCell>
                                 <TableCell>{item.category}</TableCell>
                                 <TableCell align="right">{item.amount}</TableCell>
@@ -103,7 +110,7 @@ export function ItemsList({ items, transactions, isLoading, onEdit, onDelete, on
                                         size="small"
                                     />
                                 </TableCell>
-                                <TableCell align="right">
+                                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                     <IconButton size="small" onClick={() => onShowQR(item)} aria-label="show QR code">
                                         <QrCode2Icon />
                                     </IconButton>

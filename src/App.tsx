@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, Container } from '@mui/material';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Items } from './pages/Items';
+import { ItemDetail } from './pages/ItemDetail';
 import { Assemblies } from './pages/Assemblies';
 import { QRCheckout } from './pages/QRCheckout';
 import { TransactionHistoryPage } from './pages/TransactionHistory';
@@ -52,17 +53,20 @@ function AppContent() {
         }}
       >
         <Toolbar />
-        <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/items" element={<Items />} />
-            <Route path="/assemblies" element={<Assemblies />} />
-            <Route path="/checkout" element={<QRCheckout />} />
-            <Route path="/checkout/:itemId" element={<QRCheckout />} />
-            <Route path="/transactions" element={<TransactionHistoryPage />} />
-            <Route path="/damage-reports" element={<DamageReportsPage />} />
-          </Routes>
-        </ErrorBoundary>
+        <Container maxWidth="xl" disableGutters>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/items" element={<Items />} />
+              <Route path="/items/:itemId" element={<ItemDetail />} />
+              <Route path="/assemblies" element={<Assemblies />} />
+              <Route path="/checkout" element={<QRCheckout />} />
+              <Route path="/checkout/:itemId" element={<QRCheckout />} />
+              <Route path="/transactions" element={<TransactionHistoryPage />} />
+              <Route path="/damage-reports" element={<DamageReportsPage />} />
+            </Routes>
+          </ErrorBoundary>
+        </Container>
       </Box>
       <Snackbar
         open={snackbar.open}

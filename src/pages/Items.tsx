@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
@@ -20,6 +20,7 @@ export function Items() {
     const [formOpen, setFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Item | undefined>();
     const [qrItem, setQrItem] = useState<Item | undefined>();
+    const [deletingId, setDeletingId] = useState<string | undefined>();
 
     const storageLocations = [...new Set(items?.map((i) => i.storageLocation).filter(Boolean) ?? [])];
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
@@ -49,9 +50,16 @@ export function Items() {
     }
 
     function handleDelete(id: string) {
-        if (!window.confirm('Are you sure you want to delete this item?')) return;
-        deleteItem.mutate(id, {
-            onSuccess: () => showSnackbar('Item deleted', 'success'),
+        setDeletingId(id);
+    }
+
+    function handleDeleteConfirm() {
+        if (!deletingId) return;
+        deleteItem.mutate(deletingId, {
+            onSuccess: () => {
+                setDeletingId(undefined);
+                showSnackbar('Item deleted', 'success');
+            },
             onError: () => showSnackbar('Failed to delete item', 'error'),
         });
     }
@@ -98,6 +106,20 @@ export function Items() {
                 <DialogContent>
                     {qrItem && <QRCodeGenerator itemId={qrItem.id} itemName={qrItem.name} />}
                 </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
+                <DialogTitle>Delete Item</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>Are you sure you want to delete this item? This action cannot be undone.</DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
+                    <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
+                        Delete
+                    </Button>
+                </DialogActions>
             </Dialog>
         </Box>
     );
