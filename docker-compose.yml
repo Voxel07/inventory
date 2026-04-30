@@ -1,0 +1,8 @@
+services:
+  inventory-app:
+    build: .
+    ports:
+      - "3333:80"
+    environment:
+      - POCKETBASE_URL=http://pb.matzeschneider.de
+    restart: unless-stopped
