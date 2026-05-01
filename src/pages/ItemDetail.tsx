@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { useItem, useItems, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
@@ -75,6 +76,7 @@ export function ItemDetail() {
     const { data: item, isLoading } = useItem(itemId ?? '');
     const { data: allItems } = useItems();
     const { data: allTransactions } = useTransactions();
+    const { data: itemDamageReports } = useDamageReports(itemId);
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -105,6 +107,12 @@ export function ItemDetail() {
         }
         return Math.max(0, net);
     }, [itemTransactions]);
+
+    const damaged = useMemo(() => {
+        return (itemDamageReports ?? [])
+            .filter((report) => report.status === 'reported' || report.status === 'in_review')
+            .reduce((sum, report) => sum + (report.amount ?? 0), 0);
+    }, [itemDamageReports]);
 
     const stockHistory = useMemo(
         () => buildStockHistory(itemTransactions, item?.amount ?? 0),
@@ -157,12 +165,12 @@ export function ItemDetail() {
         );
     }
 
-    const remaining = item.amount - checkedOut;
+    const remaining = Math.max(0, item.amount - checkedOut - damaged);
     const totalValue = (item.value ?? 0) * item.amount;
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
                 <IconButton onClick={() => navigate('/items')}>
                     <ArrowBackIcon />
                 </IconButton>
@@ -177,54 +185,54 @@ export function ItemDetail() {
                 </IconButton>
             </Box>
 
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
                 {/* Info Cards */}
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Status
-                        </Typography>
-                        <Chip
-                            label={item.status.replace('_', ' ')}
-                            color={statusColors[item.status] ?? 'default'}
-                            sx={{ mt: 0.5 }}
-                        />
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Status</Typography>
+                        <Box sx={{ mt: 0.5 }}>
+                            <Chip
+                                label={item.status.replace('_', ' ')}
+                                color={statusColors[item.status] ?? 'default'}
+                                size="small"
+                            />
+                        </Box>
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Total Stock
-                        </Typography>
-                        <Typography variant="h5">{item.amount}</Typography>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Total Stock</Typography>
+                        <Typography variant="h6">{item.amount}</Typography>
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Checked Out
-                        </Typography>
-                        <Typography variant="h5" color="warning.main">
-                            {checkedOut}
-                        </Typography>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Checked Out</Typography>
+                        <Typography variant="h6" color="warning.main">{checkedOut}</Typography>
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Remaining
-                        </Typography>
-                        <Typography variant="h5" color="success.main">
-                            {remaining}
-                        </Typography>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Damaged</Typography>
+                        <Typography variant="h6" color="error.main">{damaged}</Typography>
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, md: 2 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Unit Value
-                        </Typography>
-                        <Typography variant="h5">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Remaining</Typography>
+                        <Typography variant="h6" color="success.main">{remaining}</Typography>
+                    </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Min Stock</Typography>
+                        <Typography variant="h6">{item.minStock ?? 5}</Typography>
+                    </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Unit Value</Typography>
+                        <Typography variant="h6">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
                     </Paper>
                 </Grid>
 
@@ -277,22 +285,52 @@ export function ItemDetail() {
 
                 {/* Checkout card */}
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h6" sx={{ mb: 2 }}>
-                            Quick Checkout
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Check out or return this item directly.
-                        </Typography>
+                    <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="subtitle2">Quick Checkout</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Check out or return this item
+                            </Typography>
+                        </Box>
                         <Button
                             variant="contained"
+                            size="small"
                             onClick={() => setCheckoutOpen(true)}
                             disabled={remaining <= 0}
                         >
-                            New Transaction
+                            Transaction
                         </Button>
                     </Paper>
                 </Grid>
+
+                {/* Container info */}
+                {(item.containerSize ?? 0) > 0 && (
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Container Info
+                            </Typography>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Units / Container</Typography>
+                                    <Typography variant="body2">{item.containerSize}</Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Containers</Typography>
+                                    <Typography variant="body2">{item.containerCount ?? 0}</Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Opened</Typography>
+                                    <Typography variant="body2">{item.containersOpened ?? 0}</Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Open Container</Typography>
+                                    <Typography variant="body2">{item.containerRemainingPercent ?? 100}% remaining</Typography>
+                                </Box>
+                            </Box>
+                        </Paper>
+                    </Grid>
+                )}
 
                 {/* Stock History Graph */}
                 <Grid size={12}>

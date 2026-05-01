@@ -14,6 +14,8 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useNavigate } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
 
 interface Props {
@@ -25,6 +27,8 @@ interface Props {
 }
 
 export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete }: Props) {
+    const navigate = useNavigate();
+
     if (isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
@@ -43,24 +47,24 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
         );
     }
 
-    function getItemNames(itemIds: string[] | undefined | null) {
-        if (!Array.isArray(itemIds)) return [];
-        return itemIds
-            .map((id) => items?.find((i) => i.id === id)?.name)
-            .filter(Boolean);
+    function getExpandedItems(assembly: Assembly): Item[] {
+        if (assembly.expand?.itemIds?.length) return assembly.expand.itemIds;
+        if (!Array.isArray(assembly.itemIds) || !items) return [];
+        return assembly.itemIds
+            .map((id) => items.find((i) => i.id === id))
+            .filter((i): i is Item => !!i);
     }
 
-    function getAssemblyTotalValue(itemIds: string[] | undefined | null) {
-        if (!Array.isArray(itemIds)) return 0;
-        return itemIds.reduce((sum, id) => {
-            const item = items?.find((i) => i.id === id);
-            return sum + (item ? item.value : 0);
-        }, 0);
+    function getAssemblyTotalValue(assembly: Assembly): number {
+        const quantities = assembly.itemQuantities ?? {};
+        return getExpandedItems(assembly).reduce(
+            (sum, item) => sum + (item.value ?? 0) * (quantities[item.id] ?? 1), 0,
+        );
     }
 
     return (
-        <TableContainer component={Paper}>
-            <Table>
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
                 <TableHead>
                     <TableRow>
                         <TableCell>Name</TableCell>
@@ -71,30 +75,49 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {assemblies.map((assembly) => (
-                        <TableRow key={assembly.id} hover>
-                            <TableCell>{assembly.name}</TableCell>
-                            <TableCell>{assembly.description}</TableCell>
-                            <TableCell>
-                                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
-                                    {getItemNames(assembly.itemIds).map((name) => (
-                                        <Chip key={name} label={name} size="small" variant="outlined" />
-                                    ))}
-                                </Stack>
-                            </TableCell>
-                            <TableCell align="right">
-                                {getAssemblyTotalValue(assembly.itemIds).toFixed(2)} €
-                            </TableCell>
-                            <TableCell align="right">
-                                <IconButton size="small" onClick={() => onEdit(assembly)} aria-label="edit assembly">
-                                    <EditIcon />
-                                </IconButton>
-                                <IconButton size="small" onClick={() => onDelete(assembly.id)} aria-label="delete assembly">
-                                    <DeleteIcon />
-                                </IconButton>
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    {assemblies.map((assembly) => {
+                        const assemblyItems = getExpandedItems(assembly);
+                        return (
+                            <TableRow
+                                key={assembly.id}
+                                hover
+                                onClick={() => navigate(`/assemblies/${assembly.id}`)}
+                                sx={{ cursor: 'pointer' }}
+                            >
+                                <TableCell>{assembly.name}</TableCell>
+                                <TableCell>{assembly.description}</TableCell>
+                                <TableCell>
+                                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
+                                        {assemblyItems.map((item) => {
+                                            const qty = assembly.itemQuantities?.[item.id] ?? 1;
+                                            return (
+                                                <Chip
+                                                    key={item.id}
+                                                    label={qty > 1 ? `${qty}× ${item.name}` : item.name}
+                                                    size="small"
+                                                    variant="outlined"
+                                                />
+                                            );
+                                        })}
+                                    </Stack>
+                                </TableCell>
+                                <TableCell align="right">
+                                    {getAssemblyTotalValue(assembly).toFixed(2)} €
+                                </TableCell>
+                                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                                    <IconButton size="small" onClick={() => navigate(`/assemblies/${assembly.id}`)} aria-label="view assembly">
+                                        <VisibilityIcon />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => onEdit(assembly)} aria-label="edit assembly">
+                                        <EditIcon />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => onDelete(assembly.id)} aria-label="delete assembly">
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
                 </TableBody>
             </Table>
         </TableContainer>

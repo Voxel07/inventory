@@ -57,7 +57,7 @@ export function Assemblies() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Assemblies</Typography>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
                     Add Assembly

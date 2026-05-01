@@ -34,7 +34,7 @@ export function TransactionHistoryPage() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Transaction History</Typography>
                 <Button variant="contained" onClick={() => setShowForm(!showForm)}>
                     {showForm ? 'Hide Form' : 'New Transaction'}

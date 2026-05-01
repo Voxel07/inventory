@@ -6,12 +6,14 @@ import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
+import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import type { Item, ItemFormData } from '../types';
 
 export function Items() {
     const { data: items, isLoading } = useItems();
     const { data: transactions } = useTransactions();
+    const { data: damageReports } = useDamageReports();
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
     const deleteItem = useDeleteItem();
@@ -69,7 +71,7 @@ export function Items() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Items</Typography>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
                     Add Item
@@ -79,10 +81,10 @@ export function Items() {
             <ItemsList
                 items={items}
                 transactions={transactions}
+                damageReports={damageReports}
                 isLoading={isLoading}
                 onEdit={setEditingItem}
                 onDelete={handleDelete}
-                onShowQR={setQrItem}
             />
 
             {/* Create Dialog */}

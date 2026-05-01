@@ -71,6 +71,27 @@ export async function bulkCheckin(
   return results;
 }
 
+export async function assemblyCheckout(
+  itemQuantities: Record<string, number>,
+  assemblyName: string,
+  reason: string,
+  notes: string,
+): Promise<StockTransaction[]> {
+  const results: StockTransaction[] = [];
+  for (const [itemId, quantity] of Object.entries(itemQuantities)) {
+    if (quantity <= 0) continue;
+    const tx = await createTransaction({
+      itemId,
+      transactionType: 'checkout',
+      quantityChanged: quantity,
+      reason: reason || `Assembly checkout: ${assemblyName}`,
+      notes,
+    });
+    results.push(tx);
+  }
+  return results;
+}
+
 export function subscribeToTransactions(
   callback: (data: { action: string; record: StockTransaction }) => void,
 ) {

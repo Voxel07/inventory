@@ -13,7 +13,10 @@ import {
     Paper,
     Typography,
     Chip,
+    IconButton,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import type { AssemblyFormData, Assembly, Item } from '../../types';
 
 interface Props {
@@ -27,6 +30,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
     const [formData, setFormData] = useState<AssemblyFormData>({
         name: initialData?.name ?? '',
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
+        itemQuantities: initialData?.itemQuantities ?? {},
         description: initialData?.description ?? '',
     });
     const [search, setSearch] = useState('');
@@ -45,12 +49,23 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
     function handleToggle(itemId: string) {
         setFormData((prev) => {
             const selected = new Set(prev.itemIds);
+            const quantities = { ...prev.itemQuantities };
             if (selected.has(itemId)) {
                 selected.delete(itemId);
+                delete quantities[itemId];
             } else {
                 selected.add(itemId);
+                quantities[itemId] = 1;
             }
-            return { ...prev, itemIds: [...selected] };
+            return { ...prev, itemIds: [...selected], itemQuantities: quantities };
+        });
+    }
+
+    function handleQuantityChange(itemId: string, delta: number) {
+        setFormData((prev) => {
+            const current = prev.itemQuantities[itemId] ?? 1;
+            const newQty = Math.max(1, current + delta);
+            return { ...prev, itemQuantities: { ...prev.itemQuantities, [itemId]: newQty } };
         });
     }
 
@@ -81,16 +96,32 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                 />
 
                 {selectedItems.length > 0 && (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selectedItems.map((item) => (
-                            <Chip
-                                key={item.id}
-                                label={item.name}
-                                size="small"
-                                onDelete={() => handleToggle(item.id)}
-                            />
-                        ))}
-                    </Box>
+                    <Paper variant="outlined" sx={{ p: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                            Selected Items
+                        </Typography>
+                        <Stack spacing={0.5}>
+                            {selectedItems.map((item) => (
+                                <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip
+                                        label={item.name}
+                                        size="small"
+                                        onDelete={() => handleToggle(item.id)}
+                                        sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
+                                    />
+                                    <IconButton size="small" onClick={() => handleQuantityChange(item.id, -1)}>
+                                        <RemoveIcon fontSize="small" />
+                                    </IconButton>
+                                    <Typography variant="body2" sx={{ minWidth: 20, textAlign: 'center' }}>
+                                        {formData.itemQuantities[item.id] ?? 1}
+                                    </Typography>
+                                    <IconButton size="small" onClick={() => handleQuantityChange(item.id, 1)}>
+                                        <AddIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                            ))}
+                        </Stack>
+                    </Paper>
                 )}
 
                 <TextField

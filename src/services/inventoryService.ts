@@ -16,6 +16,7 @@ export async function getItem(id: string): Promise<Item> {
 export async function createItem(data: ItemFormData): Promise<Item> {
   const item = await pb.collection(COLLECTION).create<Item>({
     ...data,
+    minStock: data.minStock,
     status: 'available',
     qrCode: '',
   });

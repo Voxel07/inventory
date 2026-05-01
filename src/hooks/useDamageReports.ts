@@ -44,6 +44,7 @@ export function useUpdateDamageReportStatus() {
       updateDamageReportStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
   });
 }

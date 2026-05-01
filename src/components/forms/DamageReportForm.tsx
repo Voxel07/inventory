@@ -25,6 +25,7 @@ const SEVERITIES: { value: DamageSeverity; label: string }[] = [
 export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading }: Props) {
     const [formData, setFormData] = useState<DamageReportFormData>({
         itemId: preselectedItemId ?? '',
+        amount: 1,
         description: '',
         severity: 'medium',
     });
@@ -68,6 +69,20 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     ))}
                 </TextField>
                 <TextField
+                    label="Amount"
+                    type="number"
+                    value={formData.amount}
+                    onChange={(e) =>
+                        setFormData((prev) => ({
+                            ...prev,
+                            amount: Math.max(1, Number(e.target.value) || 1),
+                        }))
+                    }
+                    slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                    required
+                    fullWidth
+                />
+                <TextField
                     label="Description"
                     value={formData.description}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
@@ -80,7 +95,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     type="submit"
                     variant="contained"
                     color="error"
-                    disabled={isLoading || !formData.itemId || !formData.description}
+                    disabled={isLoading || !formData.itemId || !formData.description || formData.amount < 1}
                 >
                     Submit Damage Report
                 </Button>

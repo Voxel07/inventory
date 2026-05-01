@@ -38,7 +38,7 @@ export function DamageReportsPage() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Damage Reports</Typography>
                 <Button variant="contained" color="error" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
                     Report Damage

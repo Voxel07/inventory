@@ -1,7 +1,8 @@
 import pb from './pocketbaseClient';
-import type { DamageReport, DamageReportFormData } from '../types';
+import type { DamageReport, DamageReportFormData, DamageStatus } from '../types';
 
 const COLLECTION = 'inventory_damage_reports';
+const ITEMS_COLLECTION = 'inventory_items';
 
 export async function getDamageReports(itemId?: string): Promise<DamageReport[]> {
   const filter = itemId ? `itemId = "${itemId}"` : undefined;
@@ -23,8 +24,17 @@ export async function createDamageReport(data: DamageReportFormData): Promise<Da
 
 export async function updateDamageReportStatus(
   id: string,
-  status: DamageReport['status'],
+  status: DamageStatus,
 ): Promise<DamageReport> {
+  const report = await pb.collection(COLLECTION).getOne<DamageReport>(id);
+
+  // When written off, permanently reduce the item's total stock
+  if (status === 'written_off') {
+    const item = await pb.collection(ITEMS_COLLECTION).getOne(report.itemId);
+    const newAmount = Math.max(0, (item.amount ?? 0) - (report.amount ?? 0));
+    await pb.collection(ITEMS_COLLECTION).update(report.itemId, { amount: newAmount });
+  }
+
   return pb.collection(COLLECTION).update<DamageReport>(id, { status });
 }
 

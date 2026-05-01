@@ -28,9 +28,17 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
     critical: 'error',
 };
 
-const statuses: DamageStatus[] = ['reported', 'in_review', 'resolved', 'written_off'];
+const statusTransitions: Record<DamageStatus, DamageStatus[]> = {
+    reported: ['in_review', 'repaired', 'written_off'],
+    in_review: ['repaired', 'written_off'],
+    repaired: [],
+    written_off: [],
+};
 
 export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }: Props) {
+    const visibleReports = reports?.filter(
+        (r) => r.status === 'reported' || r.status === 'in_review',
+    );
     if (isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
@@ -41,7 +49,7 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
         );
     }
 
-    if (!reports?.length) {
+    if (!visibleReports?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <Typography color="text.secondary">No damage reports found</Typography>
@@ -54,22 +62,24 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
     }
 
     return (
-        <TableContainer component={Paper}>
-            <Table>
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
                 <TableHead>
                     <TableRow>
                         <TableCell>Date</TableCell>
                         <TableCell>Item</TableCell>
+                        <TableCell align="right">Amount</TableCell>
                         <TableCell>Severity</TableCell>
                         <TableCell>Description</TableCell>
                         <TableCell>Status</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {reports.map((report) => (
+                    {visibleReports.map((report) => (
                         <TableRow key={report.id} hover>
                             <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell>
                             <TableCell>{getItemName(report.itemId)}</TableCell>
+                            <TableCell align="right">{report.amount}</TableCell>
                             <TableCell>
                                 <Chip
                                     label={report.severity}
@@ -79,13 +89,16 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
                             </TableCell>
                             <TableCell>{report.description}</TableCell>
                             <TableCell>
-                                {onUpdateStatus ? (
+                                {onUpdateStatus && statusTransitions[report.status].length > 0 ? (
                                     <Select
                                         value={report.status}
                                         size="small"
                                         onChange={(e) => onUpdateStatus(report.id, e.target.value as DamageStatus)}
                                     >
-                                        {statuses.map((s) => (
+                                        <MenuItem value={report.status}>
+                                            {report.status.replace('_', ' ')}
+                                        </MenuItem>
+                                        {statusTransitions[report.status].map((s) => (
                                             <MenuItem key={s} value={s}>
                                                 {s.replace('_', ' ')}
                                             </MenuItem>

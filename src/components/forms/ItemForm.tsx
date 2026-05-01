@@ -5,6 +5,8 @@ import {
     Button,
     Stack,
     Autocomplete,
+    Typography,
+    Divider,
 } from '@mui/material';
 import type { ItemFormData, Item } from '../../types';
 
@@ -32,17 +34,25 @@ export function ItemForm({
     const [formData, setFormData] = useState<ItemFormData>({
         name: initialData?.name ?? '',
         amount: initialData?.amount ?? 0,
+        minStock: initialData?.minStock ?? 5,
         value: initialData?.value ?? 0,
         category: initialData?.category ?? '',
         storageLocation: initialData?.storageLocation ?? '',
         position: initialData?.position ?? '',
         location: initialData?.location ?? '',
+        containerSize: initialData?.containerSize ?? undefined,
+        containerCount: initialData?.containerCount ?? undefined,
+        containersOpened: initialData?.containersOpened ?? undefined,
+        containerRemainingPercent: initialData?.containerRemainingPercent ?? undefined,
     });
     const [nameError, setNameError] = useState('');
 
+    const isContainer = (formData.containerSize ?? 0) > 0;
+
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
-            const value = field === 'amount' || field === 'value' ? Number(e.target.value) : e.target.value;
+            const numFields: (keyof ItemFormData)[] = ['amount', 'value', 'minStock', 'containerSize', 'containerCount', 'containersOpened', 'containerRemainingPercent'];
+            const value = numFields.includes(field) ? Number(e.target.value) : e.target.value;
             if (field === 'name') {
                 const trimmed = (value as string).trim().toLowerCase();
                 const isDuplicate = existingNames.some((n) => n.toLowerCase() === trimmed);
@@ -55,7 +65,11 @@ export function ItemForm({
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (nameError) return;
-        onSubmit(formData);
+        const submitData = { ...formData };
+        if (isContainer) {
+            submitData.amount = (submitData.containerCount ?? 0) * (submitData.containerSize ?? 0);
+        }
+        onSubmit(submitData);
     }
 
     const isDisabled = isLoading || !formData.name || !!nameError;
@@ -77,6 +91,17 @@ export function ItemForm({
                     type="number"
                     value={formData.amount}
                     onChange={handleChange('amount')}
+                    required
+                    fullWidth
+                    disabled={isContainer}
+                    helperText={isContainer ? `Auto-calculated: ${(formData.containerCount ?? 0) * (formData.containerSize ?? 0)} units` : undefined}
+                    slotProps={{ htmlInput: { min: 0 } }}
+                />
+                <TextField
+                    label="Min Stock"
+                    type="number"
+                    value={formData.minStock}
+                    onChange={handleChange('minStock')}
                     required
                     fullWidth
                     slotProps={{ htmlInput: { min: 0 } }}
@@ -125,6 +150,50 @@ export function ItemForm({
                         <TextField {...params} label="Location" fullWidth />
                     )}
                 />
+
+                <Divider />
+                <Typography variant="subtitle2" color="text.secondary">
+                    Container / Bulk Packaging (optional)
+                </Typography>
+                <TextField
+                    label="Units per Container"
+                    type="number"
+                    value={formData.containerSize ?? ''}
+                    onChange={handleChange('containerSize')}
+                    fullWidth
+                    helperText="e.g. 500 screws per box"
+                    slotProps={{ htmlInput: { min: 0 } }}
+                />
+                {isContainer && (
+                    <>
+                        <TextField
+                            label="Number of Containers"
+                            type="number"
+                            value={formData.containerCount ?? ''}
+                            onChange={handleChange('containerCount')}
+                            fullWidth
+                            slotProps={{ htmlInput: { min: 0 } }}
+                        />
+                        <TextField
+                            label="Containers Opened"
+                            type="number"
+                            value={formData.containersOpened ?? ''}
+                            onChange={handleChange('containersOpened')}
+                            fullWidth
+                            slotProps={{ htmlInput: { min: 0 } }}
+                        />
+                        <TextField
+                            label="Open Container Remaining %"
+                            type="number"
+                            value={formData.containerRemainingPercent ?? ''}
+                            onChange={handleChange('containerRemainingPercent')}
+                            fullWidth
+                            helperText="How full is the currently open container (0-100)"
+                            slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                        />
+                    </>
+                )}
+
                 <Button type="submit" variant="contained" disabled={isDisabled}>
                     {initialData ? 'Update Item' : 'Create Item'}
                 </Button>

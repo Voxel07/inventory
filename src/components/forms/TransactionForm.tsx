@@ -20,6 +20,7 @@ const REASONS = [
     'Maintenance',
     'Testing',
     'Return after use',
+    'Restocking',
     'Inventory correction',
     'Other',
 ];
@@ -70,6 +71,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading 
                 >
                     <MenuItem value="checkout">Check Out</MenuItem>
                     <MenuItem value="checkin">Check In</MenuItem>
+                    <MenuItem value="added">Add Stock</MenuItem>
                 </TextField>
                 <TextField
                     label="Quantity"

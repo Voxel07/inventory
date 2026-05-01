@@ -17,6 +17,6 @@ export const TRANSACTION_REASONS = [
 
 export const SEVERITY_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
 
-export const DAMAGE_STATUSES = ['reported', 'in_review', 'resolved', 'written_off'] as const;
+export const DAMAGE_STATUSES = ['reported', 'in_review', 'repaired', 'written_off'] as const;
 
 export const ITEM_STATUSES = ['available', 'checked_out', 'damaged', 'retired'] as const;

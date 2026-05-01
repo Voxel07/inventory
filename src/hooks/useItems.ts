@@ -42,6 +42,7 @@ export function useCreateItem() {
     mutationFn: (data: ItemFormData) => createItem(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
   });
 }

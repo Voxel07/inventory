@@ -42,8 +42,8 @@ export function TransactionHistory({ transactions, items, isLoading }: Props) {
     }
 
     return (
-        <TableContainer component={Paper}>
-            <Table>
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
                 <TableHead>
                     <TableRow>
                         <TableCell>Date</TableCell>

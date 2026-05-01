@@ -98,6 +98,19 @@
                 }
             },
             {
+                "id": "pbc_items_minStock",
+                "name": "minStock",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
                 "id": "pbc_items_value",
                 "name": "value",
                 "type": "number",
@@ -193,6 +206,58 @@
                 }
             },
             {
+                "id": "pbc_items_containerSize",
+                "name": "containerSize",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
+                "id": "pbc_items_containerCount",
+                "name": "containerCount",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
+                "id": "pbc_items_containersOpened",
+                "name": "containersOpened",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
+                "id": "pbc_items_containerRemainingPercent",
+                "name": "containerRemainingPercent",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": 100,
+                    "noDecimal": false
+                }
+            },
+            {
                 "id": "pbc_items_created",
                 "name": "created",
                 "type": "autodate",
@@ -255,6 +320,17 @@
                     "minSelect": null,
                     "maxSelect": null,
                     "displayFields": null
+                }
+            },
+            {
+                "id": "pbc_assemblies_itemQuantities",
+                "name": "itemQuantities",
+                "type": "json",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "maxSize": 65536
                 }
             },
             {
@@ -485,6 +561,19 @@
                 }
             },
             {
+                "id": "pbc_dmg_amount",
+                "name": "amount",
+                "type": "number",
+                "system": false,
+                "required": true,
+                "presentable": false,
+                "options": {
+                    "min": 1,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
                 "id": "pbc_dmg_severity",
                 "name": "severity",
                 "type": "select",
@@ -513,7 +602,7 @@
                     "values": [
                         "reported",
                         "in_review",
-                        "resolved",
+                        "repaired",
                         "written_off"
                     ]
                 }
