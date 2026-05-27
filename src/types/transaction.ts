@@ -1,3 +1,5 @@
+import type { User } from './user';
+
 export interface StockTransaction {
   id: string;
   itemId: string;
@@ -9,7 +11,11 @@ export interface StockTransaction {
   timestamp: string;
   created: string;
   updated: string;
+  expand?: {
+    userId?: User;
+  };
 }
+
 
 export type TransactionType = 'checkout' | 'checkin' | 'added';
 

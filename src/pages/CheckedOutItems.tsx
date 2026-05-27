@@ -11,6 +11,7 @@ import {
     TableRow,
     Button,
     Skeleton,
+    Tooltip,
 } from '@mui/material';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
@@ -47,7 +48,12 @@ export function CheckedOutItemsPage() {
                     id: item.id,
                     name: item.name,
                     category: item.category,
-                    storageLocation: item.storageLocation,
+                    storageLocation: (() => {
+                        const loc = item.expand?.storageLocation;
+                        return loc
+                            ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
+                            : item.storageLocation || '—';
+                    })(),
                     checkedOut: Math.max(0, checkedOut),
                 };
             })
@@ -111,14 +117,18 @@ export function CheckedOutItemsPage() {
                                     <TableCell>{row.storageLocation}</TableCell>
                                     <TableCell align="right">{row.checkedOut}</TableCell>
                                     <TableCell align="right">
-                                        <Button
-                                            size="small"
-                                            variant="contained"
-                                            onClick={() => handleQuickReturn(row.id)}
-                                            disabled={createTransaction.isPending}
-                                        >
-                                            Quick Return
-                                        </Button>
+                                        <Tooltip title="Quickly return 1 unit of this item" arrow>
+                                            <span>
+                                                <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    onClick={() => handleQuickReturn(row.id)}
+                                                    disabled={createTransaction.isPending}
+                                                >
+                                                    Quick Return
+                                                </Button>
+                                            </span>
+                                        </Tooltip>
                                     </TableCell>
                                 </TableRow>
                             ))}

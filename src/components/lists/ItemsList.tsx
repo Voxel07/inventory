@@ -8,7 +8,6 @@ import {
     TableRow,
     TableSortLabel,
     Paper,
-    IconButton,
     Chip,
     Skeleton,
     Typography,
@@ -18,7 +17,9 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate } from 'react-router-dom';
+import { TooltipButton } from '../shared/TooltipButton';
 import type { DamageReport, Item, StockTransaction } from '../../types';
+import { calculateItemStock } from '../../utils/stock';
 
 interface Props {
     items: Item[] | undefined;
@@ -36,28 +37,6 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
     retired: 'default',
 };
 
-function getCheckedOut(itemId: string, transactions: StockTransaction[] | undefined): number {
-    if (!transactions) return 0;
-    let net = 0;
-    for (const tx of transactions) {
-        if (tx.itemId !== itemId) continue;
-        if (tx.transactionType === 'checkout') net += tx.quantityChanged;
-        else if (tx.transactionType === 'checkin') net -= tx.quantityChanged;
-    }
-    return Math.max(0, net);
-}
-
-function getDamaged(itemId: string, reports: DamageReport[] | undefined): number {
-    if (!reports) return 0;
-    return reports
-        .filter(
-            (report) =>
-                report.itemId === itemId &&
-                (report.status === 'reported' || report.status === 'in_review'),
-        )
-        .reduce((sum, report) => sum + (report.amount ?? 0), 0);
-}
-
 type SortField = 'value' | 'stock' | null;
 type SortDir = 'asc' | 'desc';
 
@@ -70,10 +49,8 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const enrichedItems = useMemo(() => {
         if (!items) return [];
         return items.map((item) => {
-            const checkedOut = getCheckedOut(item.id, transactions);
-            const damaged = getDamaged(item.id, damageReports);
-            const remaining = Math.max(0, item.amount - checkedOut - damaged);
-            return { item, checkedOut, damaged, remaining };
+            const { totalStock, checkedOut, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports);
+            return { item, totalStock, checkedOut, damaged, remaining };
         });
     }, [items, transactions, damageReports]);
 
@@ -168,7 +145,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filteredAndSorted.map(({ item, checkedOut, damaged, remaining }) => {
+                        {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
                             const minStock = item.minStock ?? 5;
                             const isLowStock = remaining <= minStock;
                             return (
@@ -179,7 +156,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     sx={{ cursor: 'pointer' }}
                                 >
                                     <TableCell>{item.name}</TableCell>
-                                    <TableCell>{item.category}</TableCell>
+                                    <TableCell>
+                                        {item.category}
+                                        {item.subcategory && (
+                                            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                {item.subcategory}
+                                            </Typography>
+                                        )}
+                                    </TableCell>
                                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                         <Typography
                                             variant="body2"
@@ -188,7 +172,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                             {remaining}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary" noWrap>
-                                            {item.amount} total{checkedOut > 0 ? ` · ${checkedOut} out` : ''}{damaged > 0 ? ` · ${damaged} dmg` : ''}
+                                            {totalStock} total{checkedOut > 0 ? ` · ${checkedOut} out` : ''}{damaged > 0 ? ` · ${damaged} dmg` : ''}
                                             {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} boxes`}
                                         </Typography>
                                         {(item.containerSize ?? 0) > 0 && (item.containersOpened ?? 0) > 0 && (
@@ -198,7 +182,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         )}
                                     </TableCell>
                                     <TableCell align="right">{item.value?.toFixed(2) ?? '0.00'} €</TableCell>
-                                    <TableCell>{[item.storageLocation, item.position].filter(Boolean).join(' / ')}</TableCell>
+                                    <TableCell>
+                                        {(() => {
+                                            const loc = item.expand?.storageLocation;
+                                            return loc
+                                                ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
+                                                : item.storageLocation || '—';
+                                        })()}
+                                    </TableCell>
                                     <TableCell>
                                         <Chip
                                             label={item.status.replace('_', ' ')}
@@ -207,12 +198,21 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         />
                                     </TableCell>
                                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                        <IconButton size="small" onClick={() => onEdit(item)} aria-label="edit item">
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton size="small" onClick={() => onDelete(item.id)} aria-label="delete item">
-                                            <DeleteIcon />
-                                        </IconButton>
+                                        <TooltipButton
+                                            variant="icon"
+                                            tooltipText="Edit Item details"
+                                            icon={<EditIcon />}
+                                            size="small"
+                                            onClick={() => onEdit(item)}
+                                        />
+                                        <TooltipButton
+                                            variant="icon"
+                                            tooltipText="Delete Item"
+                                            icon={<DeleteIcon />}
+                                            size="small"
+                                            color="error"
+                                            onClick={() => onDelete(item.id)}
+                                        />
                                     </TableCell>
                                 </TableRow>
                             );

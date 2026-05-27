@@ -1,10 +1,11 @@
-import { Box, Typography, Stack, TextField, MenuItem, Button } from '@mui/material';
+import { Box, Typography, Stack, TextField, MenuItem, Button, Tooltip, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
-import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useTransactions, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
-import type { TransactionFormData } from '../types';
+import { TooltipButton } from '../components/shared/TooltipButton';
+import type { TransactionFormData, StockTransaction } from '../types';
 import { useState } from 'react';
 
 export function TransactionHistoryPage() {
@@ -20,7 +21,9 @@ export function TransactionHistoryPage() {
     const { data: transactions, isLoading } = useTransactions(filters);
     const { data: items } = useItems();
     const createTransaction = useCreateTransaction();
+    const updateTransaction = useUpdateTransaction();
     const [showForm, setShowForm] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<StockTransaction | null>(null);
 
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
@@ -32,13 +35,30 @@ export function TransactionHistoryPage() {
         });
     }
 
+    function handleUpdate(data: TransactionFormData) {
+        if (!editingTransaction) return;
+        updateTransaction.mutate(
+            { id: editingTransaction.id, data },
+            {
+                onSuccess: () => {
+                    setEditingTransaction(null);
+                    showSnackbar('Transaction updated successfully', 'success');
+                },
+                onError: () => showSnackbar('Failed to update transaction', 'error'),
+            },
+        );
+    }
+
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Transaction History</Typography>
-                <Button variant="contained" onClick={() => setShowForm(!showForm)}>
-                    {showForm ? 'Hide Form' : 'New Transaction'}
-                </Button>
+                <TooltipButton
+                    tooltipText={showForm ? "Hide the transaction creation form" : "Log a new check-out or check-in transaction"}
+                    label={showForm ? 'Hide Form' : 'New Transaction'}
+                    variant="contained"
+                    onClick={() => setShowForm(!showForm)}
+                />
             </Box>
 
             {showForm && (
@@ -97,12 +117,41 @@ export function TransactionHistoryPage() {
                     size="small"
                     slotProps={{ inputLabel: { shrink: true } }}
                 />
-                <Button variant="outlined" onClick={resetTransactionFilters} size="small">
-                    Reset
-                </Button>
+                <Tooltip title="Reset all filters to default" arrow>
+                    <Button variant="outlined" onClick={resetTransactionFilters} size="small">
+                        Reset
+                    </Button>
+                </Tooltip>
             </Stack>
 
-            <TransactionHistoryList transactions={transactions} items={items} isLoading={isLoading} />
+            <TransactionHistoryList
+                transactions={transactions}
+                items={items}
+                isLoading={isLoading}
+                onEdit={setEditingTransaction}
+            />
+
+            {/* Edit Transaction Dialog */}
+            <Dialog
+                open={Boolean(editingTransaction)}
+                onClose={() => setEditingTransaction(null)}
+                keepMounted
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Edit Transaction</DialogTitle>
+                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
+                    {editingTransaction && (
+                        <TransactionForm
+                            key={editingTransaction.id}
+                            items={items ?? []}
+                            initialData={editingTransaction}
+                            onSubmit={handleUpdate}
+                            isLoading={updateTransaction.isPending}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

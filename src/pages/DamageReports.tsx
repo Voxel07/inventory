@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Box, Typography, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { DamageReportsList } from '../components/lists/DamageReportsList';
 import { useDamageReports, useCreateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
+import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportFormData, DamageStatus } from '../types';
 
 export function DamageReportsPage() {
@@ -40,9 +41,14 @@ export function DamageReportsPage() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Damage Reports</Typography>
-                <Button variant="contained" color="error" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
-                    Report Damage
-                </Button>
+                <TooltipButton
+                    tooltipText="Report a damaged or broken item"
+                    icon={<AddIcon />}
+                    label="Report Damage"
+                    variant="contained"
+                    color="error"
+                    onClick={() => setFormOpen(true)}
+                />
             </Box>
 
             <DamageReportsList

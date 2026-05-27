@@ -4,7 +4,9 @@ import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeScanner } from '../components/qr/QRCodeScanner';
 import { useItem } from '../hooks/useItems';
 import { useItems } from '../hooks/useItems';
-import { useCreateTransaction } from '../hooks/useTransactions';
+import { useCreateTransaction, useTransactions } from '../hooks/useTransactions';
+import { useDamageReports } from '../hooks/useDamageReports';
+import { calculateItemStock } from '../utils/stock';
 import { useUIStore } from '../store/uiStore';
 import type { TransactionFormData } from '../types';
 
@@ -12,8 +14,14 @@ export function QRCheckout() {
     const { itemId } = useParams<{ itemId: string }>();
     const { data: item } = useItem(itemId ?? '');
     const { data: items } = useItems();
+    const { data: transactions } = useTransactions();
+    const { data: damageReports } = useDamageReports();
     const createTransaction = useCreateTransaction();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
+
+    const { remaining } = item
+        ? calculateItemStock(item.id, transactions, damageReports)
+        : { remaining: 0 };
 
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
@@ -44,7 +52,7 @@ export function QRCheckout() {
             {item && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="subtitle1" color="text.secondary">
-                        Item: {item.name} | Available: {item.amount} | Location: {item.storageLocation}
+                        Item: {item.name} | Available: {remaining} | Location: {item.expand?.storageLocation?.name || item.storageLocation}
                     </Typography>
                 </Paper>
             )}

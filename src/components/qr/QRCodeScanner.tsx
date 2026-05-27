@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Box, Button, Typography, Alert } from '@mui/material';
+import { Box, Button, Typography, Alert, Tooltip } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 
 interface Props {
@@ -65,9 +65,13 @@ export function QRCodeScanner({ onScan }: Props) {
                         style={{ width: '100%', maxWidth: 400, borderRadius: 8 }}
                     />
                     <Box sx={{ mt: 2 }}>
-                        <Button variant="outlined" color="error" onClick={stopScanning}>
-                            Stop Scanning
-                        </Button>
+                        <Tooltip title="Stop camera and cancel scanning" arrow>
+                            <span>
+                                <Button variant="outlined" color="error" onClick={stopScanning}>
+                                    Stop Scanning
+                                </Button>
+                            </span>
+                        </Tooltip>
                     </Box>
                 </Box>
             ) : (
@@ -75,17 +79,25 @@ export function QRCodeScanner({ onScan }: Props) {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         Scan a QR code to quickly check out or view an item.
                     </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<CameraAltIcon />}
-                        onClick={startScanning}
-                        sx={{ mr: 1 }}
-                    >
-                        Start Camera
-                    </Button>
-                    <Button variant="outlined" onClick={handleManualInput}>
-                        Enter ID Manually
-                    </Button>
+                    <Tooltip title="Access camera to scan QR codes" arrow>
+                        <span>
+                            <Button
+                                variant="contained"
+                                startIcon={<CameraAltIcon />}
+                                onClick={startScanning}
+                                sx={{ mr: 1 }}
+                            >
+                                Start Camera
+                            </Button>
+                        </span>
+                    </Tooltip>
+                    <Tooltip title="Manually type in an item or scan ID" arrow>
+                        <span>
+                            <Button variant="outlined" onClick={handleManualInput}>
+                                Enter ID Manually
+                            </Button>
+                        </span>
+                    </Tooltip>
                 </Box>
             )}
         </Box>

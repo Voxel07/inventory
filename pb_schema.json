@@ -1,7 +1,7 @@
 [
     {
-        "id": "pbc_users",
-        "name": "inventory_users",
+        "id": "_pb_users_auth_",
+        "name": "users",
         "type": "auth",
         "system": false,
         "fields": [
@@ -66,6 +66,108 @@
         "deleteRule": ""
     },
     {
+        "id": "pbc_storage_locations",
+        "name": "inventory_storage_locations",
+        "type": "base",
+        "system": false,
+        "fields": [
+            {
+                "id": "pbc_storage_name",
+                "name": "name",
+                "type": "text",
+                "system": false,
+                "required": true,
+                "presentable": true,
+                "options": {
+                    "min": 1,
+                    "max": 255,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_storage_description",
+                "name": "description",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 2000,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_storage_area",
+                "name": "area",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 255,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_storage_location",
+                "name": "location",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 255,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_storage_position",
+                "name": "position",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 255,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_storage_created",
+                "name": "created",
+                "type": "autodate",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "onCreate": true,
+                    "onUpdate": false
+                }
+            },
+            {
+                "id": "pbc_storage_updated",
+                "name": "updated",
+                "type": "autodate",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "onCreate": true,
+                    "onUpdate": true
+                }
+            }
+        ],
+        "listRule": "",
+        "viewRule": "",
+        "createRule": "",
+        "updateRule": "",
+        "deleteRule": ""
+    },
+    {
         "id": "pbc_items",
         "name": "inventory_items",
         "type": "base",
@@ -82,19 +184,6 @@
                     "min": 1,
                     "max": 255,
                     "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_amount",
-                "name": "amount",
-                "type": "number",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": false
                 }
             },
             {
@@ -139,14 +228,16 @@
             {
                 "id": "pbc_items_storageLocation",
                 "name": "storageLocation",
-                "type": "text",
+                "type": "relation",
                 "system": false,
                 "required": false,
                 "presentable": false,
                 "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
+                    "collectionId": "pbc_storage_locations",
+                    "cascadeDelete": false,
+                    "minSelect": null,
+                    "maxSelect": 1,
+                    "displayFields": null
                 }
             },
             {
@@ -435,7 +526,7 @@
                 "required": false,
                 "presentable": false,
                 "options": {
-                    "collectionId": "pbc_users",
+                    "collectionId": "_pb_users_auth_",
                     "cascadeDelete": false,
                     "minSelect": null,
                     "maxSelect": 1,
@@ -540,7 +631,7 @@
                 "required": false,
                 "presentable": false,
                 "options": {
-                    "collectionId": "pbc_users",
+                    "collectionId": "_pb_users_auth_",
                     "cascadeDelete": false,
                     "minSelect": null,
                     "maxSelect": 1,

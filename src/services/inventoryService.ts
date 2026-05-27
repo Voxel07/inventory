@@ -6,16 +6,23 @@ import { createTransaction } from './transactionService';
 const COLLECTION = 'inventory_items';
 
 export async function getItems(): Promise<Item[]> {
-  return pb.collection(COLLECTION).getFullList<Item>({ sort: '-created' });
+  return pb.collection(COLLECTION).getFullList<Item>({
+    sort: '-created',
+    expand: 'storageLocation',
+  });
 }
 
 export async function getItem(id: string): Promise<Item> {
-  return pb.collection(COLLECTION).getOne<Item>(id);
+  return pb.collection(COLLECTION).getOne<Item>(id, {
+    expand: 'storageLocation',
+  });
 }
 
 export async function createItem(data: ItemFormData): Promise<Item> {
+  const { amount, ...rest } = data;
   const item = await pb.collection(COLLECTION).create<Item>({
-    ...data,
+    ...rest,
+    amount,
     minStock: data.minStock,
     status: 'available',
     qrCode: '',
@@ -29,23 +36,26 @@ export async function createItem(data: ItemFormData): Promise<Item> {
     console.error('Failed to generate QR code:', e);
   }
 
-  try {
-    await createTransaction({
-      itemId: updated.id,
-      transactionType: 'added',
-      quantityChanged: data.amount,
-      reason: 'Initial stock',
-      notes: '',
-    });
-  } catch (e) {
-    console.error('Failed to create initial transaction:', e);
+  if (amount !== undefined && amount > 0) {
+    try {
+      await createTransaction({
+        itemId: updated.id,
+        transactionType: 'added',
+        quantityChanged: amount,
+        reason: 'Initial stock',
+        notes: '',
+      });
+    } catch (e) {
+      console.error('Failed to create initial transaction:', e);
+    }
   }
 
   return updated;
 }
 
 export async function updateItem(id: string, data: Partial<ItemFormData>): Promise<Item> {
-  return pb.collection(COLLECTION).update<Item>(id, data);
+  const { amount, ...rest } = data;
+  return pb.collection(COLLECTION).update<Item>(id, rest);
 }
 
 export async function deleteItem(id: string): Promise<boolean> {
@@ -55,6 +65,8 @@ export async function deleteItem(id: string): Promise<boolean> {
 export function subscribeToItems(callback: (data: { action: string; record: Item }) => void) {
   pb.collection(COLLECTION).subscribe<Item>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).catch((err) => {
+    console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
     pb.collection(COLLECTION).unsubscribe('*');

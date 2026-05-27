@@ -6,16 +6,16 @@ import {
     Paper,
     Grid,
     Chip,
-    Button,
-    IconButton,
     Dialog,
     DialogTitle,
     DialogContent,
     Skeleton,
 } from '@mui/material';
+import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import {
     ResponsiveContainer,
     LineChart,
@@ -26,8 +26,10 @@ import {
     Tooltip,
 } from 'recharts';
 import { useItem, useItems, useUpdateItem } from '../hooks/useItems';
-import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useTransactions, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
+import { calculateItemStock } from '../utils/stock';
+import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
@@ -79,16 +81,29 @@ export function ItemDetail() {
     const { data: itemDamageReports } = useDamageReports(itemId);
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
+    const updateTransaction = useUpdateTransaction();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<StockTransaction | null>(null);
 
-    const storageLocations = useMemo(
-        () => [...new Set(allItems?.map((i) => i.storageLocation).filter(Boolean) ?? [])],
-        [allItems],
-    );
+    function handleUpdateTransaction(data: TransactionFormData) {
+        if (!editingTransaction) return;
+        updateTransaction.mutate(
+            { id: editingTransaction.id, data },
+            {
+                onSuccess: () => {
+                    setEditingTransaction(null);
+                    showSnackbar('Transaction updated successfully', 'success');
+                },
+                onError: () => showSnackbar('Failed to update transaction', 'error'),
+            },
+        );
+    }
+
+    const { data: storageLocations } = useStorageLocations();
     const categories = useMemo(
         () => [...new Set(allItems?.map((i) => i.category).filter(Boolean) ?? [])],
         [allItems],
@@ -99,24 +114,13 @@ export function ItemDetail() {
         [allTransactions, itemId],
     );
 
-    const checkedOut = useMemo(() => {
-        let net = 0;
-        for (const tx of itemTransactions) {
-            if (tx.transactionType === 'checkout') net += tx.quantityChanged;
-            else if (tx.transactionType === 'checkin') net -= tx.quantityChanged;
-        }
-        return Math.max(0, net);
-    }, [itemTransactions]);
-
-    const damaged = useMemo(() => {
-        return (itemDamageReports ?? [])
-            .filter((report) => report.status === 'reported' || report.status === 'in_review')
-            .reduce((sum, report) => sum + (report.amount ?? 0), 0);
-    }, [itemDamageReports]);
+    const { totalStock, checkedOut, damaged, remaining } = useMemo(() => {
+        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports);
+    }, [itemId, allTransactions, itemDamageReports]);
 
     const stockHistory = useMemo(
-        () => buildStockHistory(itemTransactions, item?.amount ?? 0),
-        [itemTransactions, item?.amount],
+        () => buildStockHistory(itemTransactions, totalStock),
+        [itemTransactions, totalStock],
     );
 
     function handleUpdate(data: ItemFormData) {
@@ -155,9 +159,13 @@ export function ItemDetail() {
     if (!item) {
         return (
             <Box>
-                <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')}>
-                    Back to Items
-                </Button>
+                <TooltipButton
+                    tooltipText="Back to Items list"
+                    icon={<ArrowBackIcon />}
+                    label="Back to Items"
+                    variant="text"
+                    onClick={() => navigate('/items')}
+                />
                 <Typography variant="h5" sx={{ mt: 2 }}>
                     Item not found
                 </Typography>
@@ -165,75 +173,79 @@ export function ItemDetail() {
         );
     }
 
-    const remaining = Math.max(0, item.amount - checkedOut - damaged);
-    const totalValue = (item.value ?? 0) * item.amount;
+    const totalValue = (item.value ?? 0) * totalStock;
 
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                <IconButton onClick={() => navigate('/items')}>
-                    <ArrowBackIcon />
-                </IconButton>
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Back to Items list"
+                    icon={<ArrowBackIcon />}
+                    onClick={() => navigate('/items')}
+                />
                 <Typography variant="h4" sx={{ flexGrow: 1 }}>
                     {item.name}
                 </Typography>
-                <IconButton onClick={() => setQrOpen(true)}>
-                    <QrCode2Icon />
-                </IconButton>
-                <IconButton onClick={() => setEditOpen(true)}>
-                    <EditIcon />
-                </IconButton>
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Generate and View QR Code"
+                    icon={<QrCode2Icon />}
+                    onClick={() => setQrOpen(true)}
+                />
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Perform check out / check in transaction"
+                    icon={<ShoppingCartCheckoutIcon />}
+                    onClick={() => setCheckoutOpen(true)}
+                />
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Edit Item details"
+                    icon={<EditIcon />}
+                    onClick={() => setEditOpen(true)}
+                />
             </Box>
 
             <Grid container spacing={2}>
                 {/* Info Cards */}
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Status</Typography>
-                        <Box sx={{ mt: 0.5 }}>
-                            <Chip
-                                label={item.status.replace('_', ' ')}
-                                color={statusColors[item.status] ?? 'default'}
-                                size="small"
-                            />
-                        </Box>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Total Stock</Typography>
-                        <Typography variant="h6">{item.amount}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Checked Out</Typography>
-                        <Typography variant="h6" color="warning.main">{checkedOut}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Damaged</Typography>
-                        <Typography variant="h6" color="error.main">{damaged}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Remaining</Typography>
-                        <Typography variant="h6" color="success.main">{remaining}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Min Stock</Typography>
-                        <Typography variant="h6">{item.minStock ?? 5}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Unit Value</Typography>
-                        <Typography variant="h6">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
-                    </Paper>
+                <Grid size={12}>
+                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', '& > *': { flex: 1, minWidth: 90 } }}>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Status</Typography>
+                            <Box sx={{ mt: 0.5 }}>
+                                <Chip
+                                    label={item.status.replace('_', ' ')}
+                                    color={statusColors[item.status] ?? 'default'}
+                                    size="small"
+                                />
+                            </Box>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Total Stock</Typography>
+                            <Typography variant="h6">{totalStock}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Checked Out</Typography>
+                            <Typography variant="h6" color="warning.main">{checkedOut}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Damaged</Typography>
+                            <Typography variant="h6" color="error.main">{damaged}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Remaining</Typography>
+                            <Typography variant="h6" color="success.main">{remaining}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Min Stock</Typography>
+                            <Typography variant="h6">{item.minStock ?? 5}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">Unit Value</Typography>
+                            <Typography variant="h6">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
+                        </Paper>
+                    </Box>
                 </Grid>
 
                 {/* Details */}
@@ -251,21 +263,27 @@ export function ItemDetail() {
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
+                                    Subcategory
+                                </Typography>
+                                <Typography>{item.subcategory || '—'}</Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="subtitle2" color="text.secondary">
                                     Storage Location
                                 </Typography>
-                                <Typography>{item.storageLocation || '—'}</Typography>
+                                <Typography>{item.expand?.storageLocation?.name || item.storageLocation || '—'}</Typography>
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
                                     Position
                                 </Typography>
-                                <Typography>{item.position || '—'}</Typography>
+                                <Typography>{item.expand?.storageLocation?.position || '—'}</Typography>
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
                                     Location
                                 </Typography>
-                                <Typography>{item.location || '—'}</Typography>
+                                <Typography>{item.expand?.storageLocation?.location || '—'}</Typography>
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
@@ -292,14 +310,14 @@ export function ItemDetail() {
                                 Check out or return this item
                             </Typography>
                         </Box>
-                        <Button
+                        <TooltipButton
+                            tooltipText="Perform check out / check in transaction"
+                            label="Transaction"
                             variant="contained"
                             size="small"
                             onClick={() => setCheckoutOpen(true)}
                             disabled={remaining <= 0}
-                        >
-                            Transaction
-                        </Button>
+                        />
                     </Paper>
                 </Grid>
 
@@ -347,11 +365,14 @@ export function ItemDetail() {
                                     <XAxis dataKey="date" stroke="#aaa" fontSize={12} />
                                     <YAxis stroke="#aaa" fontSize={12} allowDecimals={false} />
                                     <Tooltip
+                                        isAnimationActive={false}
                                         contentStyle={{
-                                            backgroundColor: '#333',
-                                            border: '1px solid #555',
-                                            borderRadius: 4,
+                                            backgroundColor: '#131920',
+                                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                                            borderRadius: 8,
                                         }}
+                                        labelStyle={{ color: '#fff', fontWeight: 600 }}
+                                        itemStyle={{ color: '#90caf9' }}
                                     />
                                     <Line
                                         type="monotone"
@@ -359,6 +380,7 @@ export function ItemDetail() {
                                         stroke="#90caf9"
                                         strokeWidth={2}
                                         dot={{ fill: '#90caf9', r: 4 }}
+                                        activeDot={{ r: 6, fill: '#90caf9' }}
                                     />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -384,6 +406,7 @@ export function ItemDetail() {
                                             <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #555' }}>Qty</th>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>Reason</th>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>Notes</th>
+                                            <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #555', width: '80px' }}>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -406,6 +429,15 @@ export function ItemDetail() {
                                                     </td>
                                                     <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>{tx.reason}</td>
                                                     <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>{tx.notes}</td>
+                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333', textAlign: 'center' }}>
+                                                        <TooltipButton
+                                                            variant="icon"
+                                                            tooltipText="Edit Transaction"
+                                                            icon={<EditIcon sx={{ fontSize: 18 }} />}
+                                                            onClick={() => setEditingTransaction(tx)}
+                                                            size="small"
+                                                        />
+                                                    </td>
                                                 </tr>
                                             ))}
                                     </tbody>
@@ -424,7 +456,7 @@ export function ItemDetail() {
                         initialData={item}
                         onSubmit={handleUpdate}
                         isLoading={updateItem.isPending}
-                        storageLocations={storageLocations}
+                        storageLocations={storageLocations ?? []}
                         categories={categories}
                     />
                 </DialogContent>
@@ -438,8 +470,36 @@ export function ItemDetail() {
                 </DialogContent>
             </Dialog>
 
+            {/* Edit Transaction Dialog */}
+            <Dialog
+                open={Boolean(editingTransaction)}
+                onClose={() => setEditingTransaction(null)}
+                keepMounted
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Edit Transaction</DialogTitle>
+                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
+                    {editingTransaction && (
+                        <TransactionForm
+                            key={editingTransaction.id}
+                            items={allItems ?? []}
+                            initialData={editingTransaction}
+                            onSubmit={handleUpdateTransaction}
+                            isLoading={updateTransaction.isPending}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
             {/* Checkout Dialog */}
-            <Dialog open={checkoutOpen} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog
+                open={checkoutOpen}
+                onClose={() => setCheckoutOpen(false)}
+                keepMounted
+                maxWidth="sm"
+                fullWidth
+            >
                 <DialogTitle>New Transaction</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <TransactionForm

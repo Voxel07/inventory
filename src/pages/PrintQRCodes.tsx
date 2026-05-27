@@ -10,6 +10,7 @@ import {
     ToggleButton,
     Autocomplete,
     TextField,
+    Tooltip,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { jsPDF } from 'jspdf';
@@ -151,14 +152,18 @@ export function PrintQRCodesPage() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">QR Codes</Typography>
-                <Button
-                    variant="contained"
-                    startIcon={<PictureAsPdfIcon />}
-                    onClick={handleGeneratePDF}
-                    disabled={filteredEntries.length === 0 || pdfGenerating}
-                >
-                    {pdfGenerating ? 'Generating…' : 'Download PDF'}
-                </Button>
+                <Tooltip title="Generate and download PDF with selected QR codes" arrow>
+                    <span>
+                        <Button
+                            variant="contained"
+                            startIcon={<PictureAsPdfIcon />}
+                            onClick={handleGeneratePDF}
+                            disabled={filteredEntries.length === 0 || pdfGenerating}
+                        >
+                            {pdfGenerating ? 'Generating…' : 'Download PDF'}
+                        </Button>
+                    </span>
+                </Tooltip>
             </Box>
 
             <Paper sx={{ p: 2, mb: 3 }}>

@@ -21,16 +21,39 @@ export async function getTransactions(filters?: {
   return pb.collection(COLLECTION).getFullList<StockTransaction>({
     sort: '-timestamp',
     filter: filterParts.join(' && ') || undefined,
+    expand: 'userId',
   });
 }
 
 export async function createTransaction(data: TransactionFormData): Promise<StockTransaction> {
-  const userId = pb.authStore.record?.id || '';
-  return pb.collection(COLLECTION).create<StockTransaction>({
+  let userId = pb.authStore.record?.id;
+  if (!userId) {
+    try {
+      const users = await pb.collection('users').getList(1, 1);
+      if (users.items.length > 0) {
+        userId = users.items[0].id;
+      }
+    } catch (err) {
+      console.warn('Could not fetch fallback user:', err);
+    }
+  }
+
+  const payload: any = {
     ...data,
-    userId,
     timestamp: new Date().toISOString(),
-  });
+  };
+  if (userId) {
+    payload.userId = userId;
+  }
+
+  return pb.collection(COLLECTION).create<StockTransaction>(payload);
+}
+
+export async function updateTransaction(
+  id: string,
+  data: Partial<TransactionFormData>,
+): Promise<StockTransaction> {
+  return pb.collection(COLLECTION).update<StockTransaction>(id, data);
 }
 
 export async function bulkCheckout(
@@ -97,6 +120,8 @@ export function subscribeToTransactions(
 ) {
   pb.collection(COLLECTION).subscribe<StockTransaction>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).catch((err) => {
+    console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
     pb.collection(COLLECTION).unsubscribe('*');

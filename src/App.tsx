@@ -14,6 +14,10 @@ import { TransactionHistoryPage } from './pages/TransactionHistory';
 import { DamageReportsPage } from './pages/DamageReports';
 import { CheckedOutItemsPage } from './pages/CheckedOutItems';
 import { PrintQRCodesPage } from './pages/PrintQRCodes';
+import { UserDashboard } from './pages/UserDashboard';
+import { StorageLocations } from './pages/StorageLocations';
+import { LoginPage } from './pages/LoginPage';
+import { usePocketBase } from './hooks/usePocketBase';
 import { useUIStore } from './store/uiStore';
 import { useEffect } from 'react';
 
@@ -105,6 +109,7 @@ const theme = createTheme({
 });
 
 function AppContent() {
+  const { isAuthenticated } = usePocketBase();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const snackbar = useUIStore((s) => s.snackbar);
@@ -114,6 +119,24 @@ function AppContent() {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile, setSidebarOpen]);
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage />
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={hideSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled" sx={{ borderRadius: 2 }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </>
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -125,8 +148,10 @@ function AppContent() {
           flexGrow: 1,
           p: { xs: 2, sm: 3 },
           width: !isMobile && sidebarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
-          ml: !isMobile && sidebarOpen ? `${DRAWER_WIDTH}px` : 0,
-          transition: 'margin 225ms cubic-bezier(0, 0, 0.2, 1), width 225ms cubic-bezier(0, 0, 0.2, 1)',
+          transition: (theme) => theme.transitions.create('width', {
+            easing: !isMobile && sidebarOpen ? theme.transitions.easing.easeOut : theme.transitions.easing.sharp,
+            duration: !isMobile && sidebarOpen ? theme.transitions.duration.enteringScreen : theme.transitions.duration.leavingScreen,
+          }),
           maxWidth: '100%',
           overflow: 'hidden',
         }}
@@ -134,7 +159,8 @@ function AppContent() {
         <Toolbar />
         <ErrorBoundary>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<UserDashboard />} />
+            <Route path="/global-dashboard" element={<Dashboard />} />
             <Route path="/items" element={<Items />} />
             <Route path="/items/:itemId" element={<ItemDetail />} />
             <Route path="/assemblies" element={<Assemblies />} />
@@ -145,6 +171,7 @@ function AppContent() {
             <Route path="/checked-out" element={<CheckedOutItemsPage />} />
             <Route path="/print-qr" element={<PrintQRCodesPage />} />
             <Route path="/damage-reports" element={<DamageReportsPage />} />
+            <Route path="/storage-locations" element={<StorageLocations />} />
           </Routes>
         </ErrorBoundary>
       </Box>

@@ -3,7 +3,7 @@ export const COLLECTIONS = {
   ASSEMBLIES: 'inventory_assemblies',
   STOCK_TRANSACTIONS: 'inventory_stock_transactions',
   DAMAGE_REPORTS: 'inventory_damage_reports',
-  USERS: 'inventory_users',
+  USERS: 'users',
 } as const;
 
 export const TRANSACTION_REASONS = [

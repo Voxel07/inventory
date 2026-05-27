@@ -7,22 +7,30 @@ import {
     Toolbar,
     useMediaQuery,
     useTheme,
+    Divider,
+    Box,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import RoomIcon from '@mui/icons-material/Room';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import CategoryIcon from '@mui/icons-material/Category';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
+import { usePocketBase } from '../../hooks/usePocketBase';
 
 const DRAWER_WIDTH = 260;
 
 const navItems = [
-    { label: 'Dashboard', path: '/', icon: <DashboardIcon /> },
+    { label: 'My Dashboard', path: '/', icon: <DashboardIcon /> },
+    { label: 'Global Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
     { label: 'Items', path: '/items', icon: <InventoryIcon /> },
+    { label: 'Storage Locations', path: '/storage-locations', icon: <RoomIcon /> },
     { label: 'Assemblies', path: '/assemblies', icon: <CategoryIcon /> },
     { label: 'Transactions', path: '/transactions', icon: <ReceiptLongIcon /> },
     { label: 'Checked Out', path: '/checked-out', icon: <AssignmentReturnIcon /> },
@@ -37,41 +45,65 @@ export function Navigation() {
     const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const { logout } = usePocketBase();
 
     const drawerContent = (
-        <>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Toolbar />
-            <List sx={{ px: 1, pt: 1 }}>
-                {navItems.map((item) => {
-                    const isActive = item.path === '/'
-                        ? location.pathname === '/'
-                        : location.pathname.startsWith(item.path);
-                    return (
-                        <ListItemButton
-                            key={item.path}
-                            selected={isActive}
-                            onClick={() => {
-                                navigate(item.path);
-                                if (isMobile) setSidebarOpen(false);
-                            }}
-                            sx={{
-                                borderRadius: 2,
-                                mb: 0.5,
-                                '&.Mui-selected': {
-                                    backgroundColor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                    '&:hover': { backgroundColor: 'primary.dark' },
-                                    '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-                                },
-                            }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                            <ListItemText primary={item.label} />
-                        </ListItemButton>
-                    );
-                })}
+            <List sx={{ px: 1, pt: 1, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ flexGrow: 1 }}>
+                    {navItems.map((item) => {
+                        const isActive = item.path === '/'
+                            ? location.pathname === '/'
+                            : location.pathname.startsWith(item.path);
+                        return (
+                            <ListItemButton
+                                key={item.path}
+                                selected={isActive}
+                                onClick={() => {
+                                    navigate(item.path);
+                                    if (isMobile) setSidebarOpen(false);
+                                }}
+                                sx={{
+                                    borderRadius: 2,
+                                    mb: 0.5,
+                                    '&.Mui-selected': {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                        '&:hover': { backgroundColor: 'primary.dark' },
+                                        '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
+                                    },
+                                }}
+                            >
+                                <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+                                <ListItemText primary={item.label} />
+                            </ListItemButton>
+                        );
+                    })}
+                </Box>
+                <Box sx={{ p: 1 }}>
+                    <Divider sx={{ mb: 1 }} />
+                    <ListItemButton
+                        onClick={() => {
+                            logout();
+                            navigate('/');
+                        }}
+                        sx={{
+                            borderRadius: 2,
+                            color: 'error.main',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 82, 82, 0.08)',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 40, color: 'error.main' }}>
+                            <LogoutIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Log Out" />
+                    </ListItemButton>
+                </Box>
             </List>
-        </>
+        </Box>
     );
 
     if (isMobile) {
@@ -99,7 +131,12 @@ export function Navigation() {
             open={sidebarOpen}
             sx={{
                 width: sidebarOpen ? DRAWER_WIDTH : 0,
+                transition: (theme) => theme.transitions.create('width', {
+                    easing: sidebarOpen ? theme.transitions.easing.easeOut : theme.transitions.easing.sharp,
+                    duration: sidebarOpen ? theme.transitions.duration.enteringScreen : theme.transitions.duration.leavingScreen,
+                }),
                 flexShrink: 0,
+                overflow: 'hidden',
                 '& .MuiDrawer-paper': {
                     width: DRAWER_WIDTH,
                     boxSizing: 'border-box',

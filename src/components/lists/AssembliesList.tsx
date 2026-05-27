@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
     Table,
     TableBody,
@@ -6,16 +7,24 @@ import {
     TableHead,
     TableRow,
     Paper,
-    IconButton,
     Chip,
     Skeleton,
     Typography,
     Stack,
+    Menu,
+    MenuItem,
+    IconButton,
+    ListItemIcon,
+    ListItemText,
+    Tooltip,
+    Box,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from 'react-router-dom';
+import { TooltipButton } from '../shared/TooltipButton';
 import type { Assembly, Item } from '../../types';
 
 interface Props {
@@ -28,6 +37,40 @@ interface Props {
 
 export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete }: Props) {
     const navigate = useNavigate();
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
+
+    const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, assembly: Assembly) => {
+        event.stopPropagation();
+        setAnchorEl(event.currentTarget);
+        setSelectedAssembly(assembly);
+    };
+
+    const handleCloseMenu = () => {
+        setAnchorEl(null);
+        setSelectedAssembly(null);
+    };
+
+    const handleView = () => {
+        if (selectedAssembly) {
+            navigate(`/assemblies/${selectedAssembly.id}`);
+        }
+        handleCloseMenu();
+    };
+
+    const handleEdit = () => {
+        if (selectedAssembly) {
+            onEdit(selectedAssembly);
+        }
+        handleCloseMenu();
+    };
+
+    const handleDelete = () => {
+        if (selectedAssembly) {
+            onDelete(selectedAssembly.id);
+        }
+        handleCloseMenu();
+    };
 
     if (isLoading) {
         return (
@@ -68,8 +111,8 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                 <TableHead>
                     <TableRow>
                         <TableCell>Name</TableCell>
-                        <TableCell>Description</TableCell>
-                        <TableCell>Items</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Description</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Items</TableCell>
                         <TableCell align="right">Total Value</TableCell>
                         <TableCell align="right">Actions</TableCell>
                     </TableRow>
@@ -85,8 +128,10 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                 sx={{ cursor: 'pointer' }}
                             >
                                 <TableCell>{assembly.name}</TableCell>
-                                <TableCell>{assembly.description}</TableCell>
-                                <TableCell>
+                                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                                    {assembly.description}
+                                </TableCell>
+                                <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
                                         {assemblyItems.map((item) => {
                                             const qty = assembly.itemQuantities?.[item.id] ?? 1;
@@ -105,21 +150,77 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                     {getAssemblyTotalValue(assembly).toFixed(2)} €
                                 </TableCell>
                                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                    <IconButton size="small" onClick={() => navigate(`/assemblies/${assembly.id}`)} aria-label="view assembly">
-                                        <VisibilityIcon />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => onEdit(assembly)} aria-label="edit assembly">
-                                        <EditIcon />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => onDelete(assembly.id)} aria-label="delete assembly">
-                                        <DeleteIcon />
-                                    </IconButton>
+                                    {/* Burger menu for small screens (xs) */}
+                                    <Box sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
+                                        <Tooltip title="Actions" arrow>
+                                            <IconButton
+                                                onClick={(e) => handleOpenMenu(e, assembly)}
+                                                size="small"
+                                            >
+                                                <MenuIcon />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Box>
+
+                                    {/* Individual buttons for larger screens (sm and up) */}
+                                    <Box sx={{ display: { xs: 'none', sm: 'inline-flex' }, gap: 0.5 }}>
+                                        <TooltipButton
+                                            variant="icon"
+                                            tooltipText="View Assembly details"
+                                            icon={<VisibilityIcon />}
+                                            size="small"
+                                            color="info"
+                                            onClick={() => navigate(`/assemblies/${assembly.id}`)}
+                                        />
+                                        <TooltipButton
+                                            variant="icon"
+                                            tooltipText="Edit Assembly details"
+                                            icon={<EditIcon />}
+                                            size="small"
+                                            color="warning"
+                                            onClick={() => onEdit(assembly)}
+                                        />
+                                        <TooltipButton
+                                            variant="icon"
+                                            tooltipText="Delete Assembly"
+                                            icon={<DeleteIcon />}
+                                            size="small"
+                                            color="error"
+                                            onClick={() => onDelete(assembly.id)}
+                                        />
+                                    </Box>
                                 </TableCell>
                             </TableRow>
                         );
                     })}
                 </TableBody>
             </Table>
+
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleCloseMenu}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <MenuItem onClick={handleView}>
+                    <ListItemIcon>
+                        <VisibilityIcon fontSize="small" color="info" />
+                    </ListItemIcon>
+                    <ListItemText>View Details</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleEdit}>
+                    <ListItemIcon>
+                        <EditIcon fontSize="small" color="warning" />
+                    </ListItemIcon>
+                    <ListItemText>Edit</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleDelete}>
+                    <ListItemIcon>
+                        <DeleteIcon fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText>Delete</ListItemText>
+                </MenuItem>
+            </Menu>
         </TableContainer>
     );
 }

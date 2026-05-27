@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem } from '../hooks/useItems';
+import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
+import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
 
 export function Items() {
@@ -24,10 +26,8 @@ export function Items() {
     const [qrItem, setQrItem] = useState<Item | undefined>();
     const [deletingId, setDeletingId] = useState<string | undefined>();
 
-    const storageLocations = [...new Set(items?.map((i) => i.storageLocation).filter(Boolean) ?? [])];
+    const { data: storageLocations } = useStorageLocations();
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
-    const positions = [...new Set(items?.map((i) => i.position).filter(Boolean) ?? [])];
-    const locations = [...new Set(items?.map((i) => i.location).filter(Boolean) ?? [])];
     const allNames = items?.map((i) => i.name) ?? [];
 
     function handleCreate(data: ItemFormData) {
@@ -73,9 +73,13 @@ export function Items() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Items</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
-                    Add Item
-                </Button>
+                <TooltipButton
+                    tooltipText="Create a new inventory item"
+                    icon={<AddIcon />}
+                    label="Add Item"
+                    variant="contained"
+                    onClick={() => setFormOpen(true)}
+                />
             </Box>
 
             <ItemsList
@@ -91,7 +95,13 @@ export function Items() {
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Create New Item</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <ItemForm onSubmit={handleCreate} isLoading={createItem.isPending} storageLocations={storageLocations} categories={categories} positions={positions} locations={locations} existingNames={allNames} />
+                    <ItemForm
+                        onSubmit={handleCreate}
+                        isLoading={createItem.isPending}
+                        storageLocations={storageLocations ?? []}
+                        categories={categories}
+                        existingNames={allNames}
+                    />
                 </DialogContent>
             </Dialog>
 
@@ -100,7 +110,14 @@ export function Items() {
                 <DialogTitle>Edit Item</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingItem && (
-                        <ItemForm initialData={editingItem} onSubmit={handleUpdate} isLoading={updateItem.isPending} storageLocations={storageLocations} categories={categories} positions={positions} locations={locations} existingNames={allNames.filter((n) => n !== editingItem.name)} />
+                        <ItemForm
+                            initialData={editingItem}
+                            onSubmit={handleUpdate}
+                            isLoading={updateItem.isPending}
+                            storageLocations={storageLocations ?? []}
+                            categories={categories}
+                            existingNames={allNames.filter((n) => n !== editingItem.name)}
+                        />
                     )}
                 </DialogContent>
             </Dialog>
@@ -120,10 +137,14 @@ export function Items() {
                     <DialogContentText>Are you sure you want to delete this item? This action cannot be undone.</DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
-                    <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
-                        Delete
-                    </Button>
+                    <Tooltip title="Cancel delete action" arrow>
+                        <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
+                    </Tooltip>
+                    <Tooltip title="Permanently delete this item" arrow>
+                        <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
+                            Delete
+                        </Button>
+                    </Tooltip>
                 </DialogActions>
             </Dialog>
         </Box>

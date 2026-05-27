@@ -10,15 +10,18 @@ import {
     Skeleton,
     Typography,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import { TooltipButton } from '../shared/TooltipButton';
 import type { StockTransaction, Item } from '../../types';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
     items: Item[] | undefined;
     isLoading: boolean;
+    onEdit?: (tx: StockTransaction) => void;
 }
 
-export function TransactionHistory({ transactions, items, isLoading }: Props) {
+export function TransactionHistory({ transactions, items, isLoading, onEdit }: Props) {
     if (isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
@@ -49,9 +52,11 @@ export function TransactionHistory({ transactions, items, isLoading }: Props) {
                         <TableCell>Date</TableCell>
                         <TableCell>Item</TableCell>
                         <TableCell>Type</TableCell>
+                        <TableCell>User</TableCell>
                         <TableCell align="right">Quantity</TableCell>
                         <TableCell>Reason</TableCell>
                         <TableCell>Notes</TableCell>
+                        {onEdit && <TableCell align="center">Actions</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -66,9 +71,21 @@ export function TransactionHistory({ transactions, items, isLoading }: Props) {
                                     size="small"
                                 />
                             </TableCell>
+                            <TableCell>{tx.expand?.userId?.name || 'N/A'}</TableCell>
                             <TableCell align="right">{tx.quantityChanged}</TableCell>
                             <TableCell>{tx.reason}</TableCell>
                             <TableCell>{tx.notes}</TableCell>
+                            {onEdit && (
+                                <TableCell align="center">
+                                    <TooltipButton
+                                        variant="icon"
+                                        tooltipText="Edit Transaction"
+                                        icon={<EditIcon sx={{ fontSize: 18 }} />}
+                                        onClick={() => onEdit(tx)}
+                                        size="small"
+                                    />
+                                </TableCell>
+                            )}
                         </TableRow>
                     ))}
                 </TableBody>

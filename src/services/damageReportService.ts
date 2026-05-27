@@ -2,7 +2,6 @@ import pb from './pocketbaseClient';
 import type { DamageReport, DamageReportFormData, DamageStatus } from '../types';
 
 const COLLECTION = 'inventory_damage_reports';
-const ITEMS_COLLECTION = 'inventory_items';
 
 export async function getDamageReports(itemId?: string): Promise<DamageReport[]> {
   const filter = itemId ? `itemId = "${itemId}"` : undefined;
@@ -13,27 +12,35 @@ export async function getDamageReports(itemId?: string): Promise<DamageReport[]>
 }
 
 export async function createDamageReport(data: DamageReportFormData): Promise<DamageReport> {
-  const reportedBy = pb.authStore.record?.id || '';
-  return pb.collection(COLLECTION).create<DamageReport>({
+  let reportedBy = pb.authStore.record?.id;
+  if (!reportedBy) {
+    try {
+      const users = await pb.collection('users').getList(1, 1);
+      if (users.items.length > 0) {
+        reportedBy = users.items[0].id;
+      }
+    } catch (err) {
+      console.warn('Could not fetch fallback user for damage report:', err);
+    }
+  }
+
+  const payload: any = {
     ...data,
-    reportedBy,
     status: 'reported',
     timestamp: new Date().toISOString(),
-  });
+  };
+  if (reportedBy) {
+    payload.reportedBy = reportedBy;
+  }
+
+  return pb.collection(COLLECTION).create<DamageReport>(payload);
 }
 
 export async function updateDamageReportStatus(
   id: string,
   status: DamageStatus,
 ): Promise<DamageReport> {
-  const report = await pb.collection(COLLECTION).getOne<DamageReport>(id);
-
-  // When written off, permanently reduce the item's total stock
-  if (status === 'written_off') {
-    const item = await pb.collection(ITEMS_COLLECTION).getOne(report.itemId);
-    const newAmount = Math.max(0, (item.amount ?? 0) - (report.amount ?? 0));
-    await pb.collection(ITEMS_COLLECTION).update(report.itemId, { amount: newAmount });
-  }
+  // When written off, dynamic calculations will subtract report.amount from total stock.
 
   return pb.collection(COLLECTION).update<DamageReport>(id, { status });
 }
@@ -43,6 +50,8 @@ export function subscribeToDamageReports(
 ) {
   pb.collection(COLLECTION).subscribe<DamageReport>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).catch((err) => {
+    console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
     pb.collection(COLLECTION).unsubscribe('*');

@@ -5,6 +5,7 @@ import {
     Button,
     Stack,
     MenuItem,
+    Tooltip,
 } from '@mui/material';
 import type { DamageReportFormData, Item, DamageSeverity } from '../../types';
 
@@ -91,14 +92,18 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     required
                     fullWidth
                 />
-                <Button
-                    type="submit"
-                    variant="contained"
-                    color="error"
-                    disabled={isLoading || !formData.itemId || !formData.description || formData.amount < 1}
-                >
-                    Submit Damage Report
-                </Button>
+                <Tooltip title="Log and submit a new damage report" arrow>
+                    <span>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            color="error"
+                            disabled={isLoading || !formData.itemId || !formData.description || formData.amount < 1}
+                        >
+                            Submit Damage Report
+                        </Button>
+                    </span>
+                </Tooltip>
             </Stack>
         </Box>
     );

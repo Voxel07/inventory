@@ -29,6 +29,8 @@ export async function deleteAssembly(id: string): Promise<boolean> {
 export function subscribeToAssemblies(callback: (data: { action: string; record: Assembly }) => void) {
   pb.collection(COLLECTION).subscribe<Assembly>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).catch((err) => {
+    console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
     pb.collection(COLLECTION).unsubscribe('*');

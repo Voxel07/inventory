@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Stack, Typography, Tooltip } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import { generateQRCodeDataURL } from '../../services/qrCodeService';
 
@@ -48,9 +48,13 @@ export function QRCodeGenerator({ itemId, itemName }: Props) {
                 alt={`QR code for ${itemName}`}
                 sx={{ width: 256, height: 256 }}
             />
-            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
-                Download QR Code
-            </Button>
+            <Tooltip title="Save QR code image file to your device" arrow>
+                <span>
+                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
+                        Download QR Code
+                    </Button>
+                </span>
+            </Tooltip>
         </Stack>
     );
 }

@@ -1,4 +1,4 @@
-export type { Item, ItemStatus, ItemFormData } from './item';
+export type { Item, ItemStatus, ItemFormData, StorageLocation } from './item';
 export type { Assembly, AssemblyFormData } from './assembly';
 export type {
   StockTransaction,

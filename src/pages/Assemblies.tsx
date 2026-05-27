@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
 import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
+import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
 
 export function Assemblies() {
@@ -59,9 +60,13 @@ export function Assemblies() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">Assemblies</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>
-                    Add Assembly
-                </Button>
+                <TooltipButton
+                    tooltipText="Create a new assembly"
+                    icon={<AddIcon />}
+                    label="Add Assembly"
+                    variant="contained"
+                    onClick={() => setFormOpen(true)}
+                />
             </Box>
 
             <AssembliesList
@@ -104,10 +109,14 @@ export function Assemblies() {
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
-                    <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-                        Delete
-                    </Button>
+                    <Tooltip title="Cancel delete action" arrow>
+                        <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
+                    </Tooltip>
+                    <Tooltip title="Permanently delete this assembly" arrow>
+                        <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+                            Delete
+                        </Button>
+                    </Tooltip>
                 </DialogActions>
             </Dialog>
         </Box>

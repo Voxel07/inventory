@@ -4,7 +4,6 @@ import {
     Box,
     Typography,
     Paper,
-    IconButton,
     Button,
     Table,
     TableBody,
@@ -21,9 +20,13 @@ import {
     Skeleton,
     Alert,
     TextField,
+    Tooltip,
+    Autocomplete,
 } from '@mui/material';
+import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
@@ -33,6 +36,7 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { useUIStore } from '../store/uiStore';
 import type { AssemblyFormData, Item } from '../types';
+import { calculateItemStock } from '../utils/stock';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -55,6 +59,7 @@ export function AssemblyDetail() {
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [checkoutReason, setCheckoutReason] = useState('');
     const [checkoutNotes, setCheckoutNotes] = useState('');
+    const [checkoutAmount, setCheckoutAmount] = useState(1);
 
     function handleUpdate(data: AssemblyFormData) {
         if (!assembly) return;
@@ -73,16 +78,16 @@ export function AssemblyDetail() {
     function handleCheckout() {
         if (!assembly) return;
         const quantities = assembly.itemQuantities ?? {};
-        // Build full quantities map including items with default qty 1
+        // Build full quantities map including items with default qty 1, multiplied by checkoutAmount
         const fullQuantities: Record<string, number> = {};
         for (const id of assembly.itemIds ?? []) {
-            fullQuantities[id] = quantities[id] ?? 1;
+            fullQuantities[id] = (quantities[id] ?? 1) * checkoutAmount;
         }
         checkoutAssembly.mutate(
             {
                 itemQuantities: fullQuantities,
                 assemblyName: assembly.name,
-                reason: checkoutReason || `Assembly checkout: ${assembly.name}`,
+                reason: checkoutReason || `Assembly checkout: ${assembly.name} (Amount: ${checkoutAmount})`,
                 notes: checkoutNotes,
             },
             {
@@ -90,10 +95,53 @@ export function AssemblyDetail() {
                     setCheckoutOpen(false);
                     setCheckoutReason('');
                     setCheckoutNotes('');
+                    setCheckoutAmount(1);
                     showSnackbar('Assembly checked out successfully', 'success');
                 },
                 onError: () => showSnackbar('Failed to checkout assembly', 'error'),
             },
+        );
+    }
+
+    function handleAddItem(itemId: string) {
+        if (!assembly) return;
+        const updatedItemIds = [...(assembly.itemIds ?? []), itemId];
+        const updatedQuantities = {
+            ...(assembly.itemQuantities ?? {}),
+            [itemId]: 1, // Default quantity to 1
+        };
+        updateAssembly.mutate(
+            {
+                id: assembly.id,
+                data: {
+                    itemIds: updatedItemIds,
+                    itemQuantities: updatedQuantities,
+                },
+            },
+            {
+                onSuccess: () => showSnackbar('Item added to assembly', 'success'),
+                onError: () => showSnackbar('Failed to add item', 'error'),
+            }
+        );
+    }
+
+    function handleRemoveItem(itemId: string) {
+        if (!assembly) return;
+        const updatedItemIds = (assembly.itemIds ?? []).filter((id) => id !== itemId);
+        const updatedQuantities = { ...(assembly.itemQuantities ?? {}) };
+        delete updatedQuantities[itemId];
+        updateAssembly.mutate(
+            {
+                id: assembly.id,
+                data: {
+                    itemIds: updatedItemIds,
+                    itemQuantities: updatedQuantities,
+                },
+            },
+            {
+                onSuccess: () => showSnackbar('Item removed from assembly', 'success'),
+                onError: () => showSnackbar('Failed to remove item', 'error'),
+            }
         );
     }
 
@@ -102,17 +150,8 @@ export function AssemblyDetail() {
         if (!items || !transactions) return new Map<string, number>();
         const map = new Map<string, number>();
         for (const item of items) {
-            const checkedOut = (transactions ?? [])
-                .filter((tx) => tx.itemId === item.id)
-                .reduce((count, tx) => {
-                    if (tx.transactionType === 'checkout') return count + tx.quantityChanged;
-                    if (tx.transactionType === 'checkin') return count - tx.quantityChanged;
-                    return count;
-                }, 0);
-            const damaged = (damageReports ?? [])
-                .filter((r) => r.itemId === item.id && (r.status === 'reported' || r.status === 'in_review'))
-                .reduce((sum, r) => sum + (r.amount ?? 0), 0);
-            map.set(item.id, Math.max(0, item.amount - checkedOut - damaged));
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports);
+            map.set(item.id, remaining);
         }
         return map;
     }, [items, transactions, damageReports]);
@@ -129,9 +168,13 @@ export function AssemblyDetail() {
     if (!assembly) {
         return (
             <Box>
-                <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/assemblies')}>
-                    Back to Assemblies
-                </Button>
+                <TooltipButton
+                    tooltipText="Back to Assemblies list"
+                    icon={<ArrowBackIcon />}
+                    label="Back to Assemblies"
+                    variant="text"
+                    onClick={() => navigate('/assemblies')}
+                />
                 <Typography variant="h5" sx={{ mt: 2 }}>
                     Assembly not found
                 </Typography>
@@ -158,26 +201,52 @@ export function AssemblyDetail() {
 
     const canCheckout = insufficientItems.length === 0 && assemblyItems.length > 0;
 
+    const maxAssembliesPossible = useMemo(() => {
+        if (assemblyItems.length === 0) return 0;
+        let minPossible = Infinity;
+        for (const item of assemblyItems) {
+            const needed = assembly.itemQuantities?.[item.id] ?? 1;
+            const available = stockInfo.get(item.id) ?? 0;
+            const possible = Math.floor(available / needed);
+            if (possible < minPossible) {
+                minPossible = possible;
+            }
+        }
+        return minPossible === Infinity ? 0 : minPossible;
+    }, [assemblyItems, assembly.itemQuantities, stockInfo]);
+
+    const availableItemsToAdd = useMemo(() => {
+        if (!items || !assembly) return [];
+        return items.filter((item) => !(assembly.itemIds ?? []).includes(item.id));
+    }, [items, assembly]);
+
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                <IconButton onClick={() => navigate('/assemblies')}>
-                    <ArrowBackIcon />
-                </IconButton>
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Back to Assemblies list"
+                    icon={<ArrowBackIcon />}
+                    onClick={() => navigate('/assemblies')}
+                />
                 <Typography variant="h4" sx={{ flexGrow: 1 }}>
                     {assembly.name}
                 </Typography>
-                <Button
+                <TooltipButton
+                    variant="icon"
+                    tooltipText="Edit Assembly details"
+                    icon={<EditIcon />}
+                    onClick={() => setEditOpen(true)}
+                />
+                <TooltipButton
+                    tooltipText="Check out all items in this assembly"
+                    icon={<ShoppingCartCheckoutIcon />}
+                    label="Checkout"
                     variant="contained"
-                    startIcon={<ShoppingCartCheckoutIcon />}
                     onClick={() => setCheckoutOpen(true)}
                     disabled={!canCheckout}
-                >
-                    Checkout
-                </Button>
-                <IconButton onClick={() => setEditOpen(true)}>
-                    <EditIcon />
-                </IconButton>
+                />
+
             </Box>
 
             {insufficientItems.length > 0 && (
@@ -206,14 +275,34 @@ export function AssemblyDetail() {
                     <Typography variant="h6">{totalValue.toFixed(2)} €</Typography>
                 </Paper>
                 <Paper sx={{ p: 2 }}>
+                    <Typography variant="caption" color="text.secondary">Available for Checkout</Typography>
+                    <Typography variant="h6" color={maxAssembliesPossible > 0 ? "success.main" : "text.secondary"}>
+                        {maxAssembliesPossible}
+                    </Typography>
+                </Paper>
+                <Paper sx={{ p: 2 }}>
                     <Typography variant="caption" color="text.secondary">Created</Typography>
                     <Typography variant="h6">{new Date(assembly.created).toLocaleDateString()}</Typography>
                 </Paper>
             </Box>
 
-            <Typography variant="h6" sx={{ mb: 2 }}>
-                Items in this Assembly
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+                <Typography variant="h6">
+                    Items in this Assembly
+                </Typography>
+                <Autocomplete
+                    options={availableItemsToAdd}
+                    getOptionLabel={(option) => option.name}
+                    onChange={(_e, newItem) => {
+                        if (newItem) handleAddItem(newItem.id);
+                    }}
+                    renderInput={(params) => (
+                        <TextField {...params} label="Quick Add Item" size="small" />
+                    )}
+                    sx={{ minWidth: 250, maxWidth: 350 }}
+                    value={null}
+                />
+            </Box>
 
             {assemblyItems.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
@@ -231,6 +320,7 @@ export function AssemblyDetail() {
                                 <TableCell>Location</TableCell>
                                 <TableCell align="right">Value</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -267,7 +357,12 @@ export function AssemblyDetail() {
                                         </TableCell>
                                         <TableCell>{item.category || '—'}</TableCell>
                                         <TableCell>
-                                            {[item.storageLocation, item.position].filter(Boolean).join(' / ') || '—'}
+                                            {(() => {
+                                                const loc = item.expand?.storageLocation;
+                                                return loc
+                                                    ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
+                                                    : item.storageLocation || '—';
+                                            })()}
                                         </TableCell>
                                         <TableCell align="right">{((item.value ?? 0) * qty).toFixed(2)} €</TableCell>
                                         <TableCell>
@@ -275,6 +370,16 @@ export function AssemblyDetail() {
                                                 label={item.status.replace('_', ' ')}
                                                 color={statusColors[item.status] ?? 'default'}
                                                 size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                                            <TooltipButton
+                                                variant="icon"
+                                                tooltipText="Remove item from assembly"
+                                                icon={<DeleteIcon />}
+                                                size="small"
+                                                color="error"
+                                                onClick={() => handleRemoveItem(item.id)}
                                             />
                                         </TableCell>
                                     </TableRow>
@@ -293,6 +398,18 @@ export function AssemblyDetail() {
                         This will check out all items in "{assembly.name}" with their specified quantities.
                     </DialogContentText>
                     <TextField
+                        label="Amount to Checkout"
+                        type="number"
+                        value={checkoutAmount}
+                        onChange={(e) => {
+                            const val = Math.max(1, Math.min(maxAssembliesPossible, Number(e.target.value) || 1));
+                            setCheckoutAmount(val);
+                        }}
+                        fullWidth
+                        sx={{ mb: 2 }}
+                        slotProps={{ htmlInput: { min: 1, max: maxAssembliesPossible } }}
+                    />
+                    <TextField
                         label="Reason"
                         value={checkoutReason}
                         onChange={(e) => setCheckoutReason(e.target.value)}
@@ -309,14 +426,18 @@ export function AssemblyDetail() {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setCheckoutOpen(false)}>Cancel</Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleCheckout}
-                        disabled={checkoutAssembly.isPending}
-                    >
-                        Checkout All Items
-                    </Button>
+                    <Tooltip title="Cancel checkout action" arrow>
+                        <Button onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+                    </Tooltip>
+                    <Tooltip title="Permanently check out all items in this assembly" arrow>
+                        <Button
+                            variant="contained"
+                            onClick={handleCheckout}
+                            disabled={checkoutAssembly.isPending}
+                        >
+                            Checkout All Items
+                        </Button>
+                    </Tooltip>
                 </DialogActions>
             </Dialog>
 

@@ -6,7 +6,7 @@ export function validateItemForm(data: ItemFormData): Record<string, string> {
   if (!data.name.trim()) {
     errors.name = 'Name is required';
   }
-  if (data.amount < 0) {
+  if (data.amount !== undefined && data.amount < 0) {
     errors.amount = 'Amount cannot be negative';
   }
 

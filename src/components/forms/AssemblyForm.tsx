@@ -14,6 +14,7 @@ import {
     Typography,
     Chip,
     IconButton,
+    Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -109,15 +110,19 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                                         onDelete={() => handleToggle(item.id)}
                                         sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
                                     />
-                                    <IconButton size="small" onClick={() => handleQuantityChange(item.id, -1)}>
-                                        <RemoveIcon fontSize="small" />
-                                    </IconButton>
+                                    <Tooltip title="Decrease quantity" arrow>
+                                        <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, -1)}>
+                                            <RemoveIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                     <Typography variant="body2" sx={{ minWidth: 20, textAlign: 'center' }}>
                                         {formData.itemQuantities[item.id] ?? 1}
                                     </Typography>
-                                    <IconButton size="small" onClick={() => handleQuantityChange(item.id, 1)}>
-                                        <AddIcon fontSize="small" />
-                                    </IconButton>
+                                    <Tooltip title="Increase quantity" arrow>
+                                        <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, 1)}>
+                                            <AddIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                 </Box>
                             ))}
                         </Stack>
@@ -161,9 +166,13 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     )}
                 </Paper>
 
-                <Button type="submit" variant="contained" disabled={isLoading || !formData.name}>
-                    {initialData ? 'Update Assembly' : 'Create Assembly'}
-                </Button>
+                <Tooltip title={initialData ? "Save changes to this assembly" : "Create new assembly"} arrow>
+                    <span>
+                        <Button type="submit" variant="contained" disabled={isLoading || !formData.name}>
+                            {initialData ? 'Update Assembly' : 'Create Assembly'}
+                        </Button>
+                    </span>
+                </Tooltip>
             </Stack>
         </Box>
     );
