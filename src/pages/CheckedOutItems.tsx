@@ -67,12 +67,12 @@ export function CheckedOutItemsPage() {
                 itemId,
                 transactionType: 'checkin',
                 quantityChanged: 1,
-                reason: 'Return after use',
-                notes: 'Quick return from checked-out items view',
+                reason: 'Rückgabe nach Nutzung',
+                notes: 'Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel',
             },
             {
-                onSuccess: () => showSnackbar('Item returned', 'success'),
-                onError: () => showSnackbar('Failed to return item', 'error'),
+                onSuccess: () => showSnackbar('Artikel zurückgegeben', 'success'),
+                onError: () => showSnackbar('Fehler bei der Rückgabe des Artikels', 'error'),
             },
         );
     }
@@ -90,12 +90,12 @@ export function CheckedOutItemsPage() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
-                Checked Out Items
+                Ausgeliehene Artikel
             </Typography>
 
             {checkedOutRows.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">No checked out items right now</Typography>
+                    <Typography color="text.secondary">Derzeit sind keine Artikel ausgeliehen.</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
@@ -103,10 +103,10 @@ export function CheckedOutItemsPage() {
                         <TableHead>
                             <TableRow>
                                 <TableCell>Name</TableCell>
-                                <TableCell>Category</TableCell>
-                                <TableCell>Storage Location</TableCell>
-                                <TableCell align="right">Checked Out</TableCell>
-                                <TableCell align="right">Action</TableCell>
+                                <TableCell>Kategorie</TableCell>
+                                <TableCell>Lagerort</TableCell>
+                                <TableCell align="right">Ausgeliehen</TableCell>
+                                <TableCell align="right">Aktion</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -117,7 +117,7 @@ export function CheckedOutItemsPage() {
                                     <TableCell>{row.storageLocation}</TableCell>
                                     <TableCell align="right">{row.checkedOut}</TableCell>
                                     <TableCell align="right">
-                                        <Tooltip title="Quickly return 1 unit of this item" arrow>
+                                        <Tooltip title="Schnelle Rückgabe von 1 Einheit dieses Artikels" arrow>
                                             <span>
                                                 <Button
                                                     size="small"
@@ -125,7 +125,7 @@ export function CheckedOutItemsPage() {
                                                     onClick={() => handleQuickReturn(row.id)}
                                                     disabled={createTransaction.isPending}
                                                 >
-                                                    Quick Return
+                                                    Schnellrückgabe
                                                 </Button>
                                             </span>
                                         </Tooltip>

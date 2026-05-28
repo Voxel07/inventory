@@ -33,7 +33,7 @@ export function QRCodeScanner({ onScan }: Props) {
             setScanning(true);
             setError('');
         } catch {
-            setError('Unable to access camera. Please check permissions.');
+            setError('Zugriff auf Kamera nicht möglich. Bitte überprüfen Sie die Berechtigungen.');
         }
     }
 
@@ -47,7 +47,7 @@ export function QRCodeScanner({ onScan }: Props) {
 
     // Manual input fallback for environments without camera
     function handleManualInput() {
-        const id = window.prompt('Enter item ID or scan URL:');
+        const id = window.prompt('Geben Sie die Artikel-ID oder die Scan-URL ein:');
         if (id) {
             // Extract item ID from URL if full URL pasted
             const match = id.match(/\/checkout\/(.+)$/);
@@ -65,10 +65,10 @@ export function QRCodeScanner({ onScan }: Props) {
                         style={{ width: '100%', maxWidth: 400, borderRadius: 8 }}
                     />
                     <Box sx={{ mt: 2 }}>
-                        <Tooltip title="Stop camera and cancel scanning" arrow>
+                        <Tooltip title="Kamera stoppen und Scannen abbrechen" arrow>
                             <span>
                                 <Button variant="outlined" color="error" onClick={stopScanning}>
-                                    Stop Scanning
+                                    Scannen stoppen
                                 </Button>
                             </span>
                         </Tooltip>
@@ -77,9 +77,9 @@ export function QRCodeScanner({ onScan }: Props) {
             ) : (
                 <Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Scan a QR code to quickly check out or view an item.
+                        Scannen Sie einen QR-Code, um einen Artikel schnell auszuleihen oder anzuzeigen.
                     </Typography>
-                    <Tooltip title="Access camera to scan QR codes" arrow>
+                    <Tooltip title="Auf Kamera zugreifen, um QR-Codes zu scannen" arrow>
                         <span>
                             <Button
                                 variant="contained"
@@ -87,14 +87,14 @@ export function QRCodeScanner({ onScan }: Props) {
                                 onClick={startScanning}
                                 sx={{ mr: 1 }}
                             >
-                                Start Camera
+                                Kamera starten
                             </Button>
                         </span>
                     </Tooltip>
-                    <Tooltip title="Manually type in an item or scan ID" arrow>
+                    <Tooltip title="Artikel- oder Scan-ID manuell eingeben" arrow>
                         <span>
                             <Button variant="outlined" onClick={handleManualInput}>
-                                Enter ID Manually
+                                ID manuell eingeben
                             </Button>
                         </span>
                     </Tooltip>

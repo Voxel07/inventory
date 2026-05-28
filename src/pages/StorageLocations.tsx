@@ -37,6 +37,7 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { calculateItemStock } from '../utils/stock';
+import { formatStatus } from '../utils/formatters';
 
 export function StorageLocations() {
     const navigate = useNavigate();
@@ -129,9 +130,9 @@ export function StorageLocations() {
                 {
                     onSuccess: () => {
                         setDialogOpen(false);
-                        showSnackbar('Storage location updated successfully', 'success');
+                        showSnackbar('Lagerort erfolgreich aktualisiert', 'success');
                     },
-                    onError: () => showSnackbar('Failed to update storage location', 'error'),
+                    onError: () => showSnackbar('Fehler beim Aktualisieren des Lagerorts', 'error'),
                 }
             );
         } else {
@@ -139,9 +140,9 @@ export function StorageLocations() {
                 onSuccess: (newLoc) => {
                     setDialogOpen(false);
                     setSelectedLocId(newLoc.id);
-                    showSnackbar('Storage location created successfully', 'success');
+                    showSnackbar('Lagerort erfolgreich erstellt', 'success');
                 },
-                onError: () => showSnackbar('Failed to create storage location', 'error'),
+                onError: () => showSnackbar('Fehler beim Erstellen des Lagerorts', 'error'),
             });
         }
     }
@@ -152,9 +153,9 @@ export function StorageLocations() {
             onSuccess: () => {
                 setDeleteConfirmOpen(false);
                 setSelectedLocId(null);
-                showSnackbar('Storage location deleted', 'success');
+                showSnackbar('Lagerort gelöscht', 'success');
             },
-            onError: () => showSnackbar('Failed to delete storage location', 'error'),
+            onError: () => showSnackbar('Fehler beim Löschen des Lagerorts', 'error'),
         });
     }
 
@@ -162,14 +163,14 @@ export function StorageLocations() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    Storage Locations
+                    Lagerorte
                 </Typography>
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={handleOpenCreate}
                 >
-                    Add Location
+                    Lagerort hinzufügen
                 </Button>
             </Box>
 
@@ -178,7 +179,7 @@ export function StorageLocations() {
                 <Grid size={{ xs: 12, md: 4 }}>
                     <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', overflow: 'hidden' }}>
                         <TextField
-                            label="Search locations"
+                            label="Lagerorte suchen"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             size="small"
@@ -187,10 +188,10 @@ export function StorageLocations() {
                         />
 
                         {locationsLoading ? (
-                            <Typography sx={{ p: 2 }}>Loading locations...</Typography>
+                            <Typography sx={{ p: 2 }}>Lagerorte werden geladen...</Typography>
                         ) : filteredLocations.length === 0 ? (
                             <Typography sx={{ p: 2 }} color="text.secondary">
-                                No locations found
+                                Keine Lagerorte gefunden
                             </Typography>
                         ) : (
                             <List sx={{ overflowY: 'auto', flexGrow: 1, px: 0 }}>
@@ -220,10 +221,10 @@ export function StorageLocations() {
                                                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                                             {loc.name}
                                                         </Typography>
-                                                        <Chip label={`${count} items`} size="small" variant="outlined" />
+                                                        <Chip label={count === 1 ? '1 Artikel' : `${count} Artikel`} size="small" variant="outlined" />
                                                     </Box>
                                                 }
-                                                secondary={loc.area || 'No area specified'}
+                                                secondary={loc.area || 'Kein Bereich angegeben'}
                                             />
                                             <Box sx={{ display: 'flex', ml: 1 }} onClick={(e) => e.stopPropagation()}>
                                                 <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
@@ -254,12 +255,12 @@ export function StorageLocations() {
                                     <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
                                         {activeLocation.area && (
                                             <Typography variant="subtitle2" color="text.secondary">
-                                                Area/Section: {activeLocation.area}
+                                                Bereich/Sektion: {activeLocation.area}
                                             </Typography>
                                         )}
                                         {activeLocation.location && (
                                             <Typography variant="subtitle2" color="text.secondary">
-                                                Location: {activeLocation.location}
+                                                Ort: {activeLocation.location}
                                             </Typography>
                                         )}
                                         {activeLocation.position && (
@@ -280,25 +281,25 @@ export function StorageLocations() {
                             <Divider sx={{ mb: 3 }} />
 
                             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                Items Stored Here
+                                Hier gelagerte Artikel
                             </Typography>
 
                             {itemsLoading ? (
-                                <Typography sx={{ p: 2 }}>Loading items...</Typography>
+                                <Typography sx={{ p: 2 }}>Artikel werden geladen...</Typography>
                             ) : enrichedStoredItems.length === 0 ? (
                                 <Box sx={{ p: 4, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-                                    <Typography color="text.secondary">No items stored in this location yet.</Typography>
+                                    <Typography color="text.secondary">In diesem Lagerort sind noch keine Artikel gelagert.</Typography>
                                 </Box>
                             ) : (
                                 <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
                                     <Table size="small">
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell>Item Name</TableCell>
-                                                <TableCell>Category</TableCell>
-                                                <TableCell align="right">Available Stock</TableCell>
+                                                <TableCell>Artikelname</TableCell>
+                                                <TableCell>Kategorie</TableCell>
+                                                <TableCell align="right">Verfügbarer Bestand</TableCell>
                                                 <TableCell>Status</TableCell>
-                                                <TableCell align="right">Actions</TableCell>
+                                                <TableCell align="right">Aktionen</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -316,12 +317,12 @@ export function StorageLocations() {
                                                             {remaining}
                                                         </Typography>
                                                         <Typography variant="caption" color="text.secondary">
-                                                            {totalStock} total {checkedOut > 0 && `(${checkedOut} out)`}
+                                                            {totalStock} gesamt {checkedOut > 0 && `(${checkedOut} ausgeliehen)`}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Chip
-                                                            label={item.status.replace('_', ' ')}
+                                                            label={formatStatus(item.status)}
                                                             color={
                                                                 item.status === 'available'
                                                                     ? 'success'
@@ -360,7 +361,7 @@ export function StorageLocations() {
                             <Box sx={{ textAlign: 'center' }}>
                                 <RoomIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                                 <Typography color="text.secondary" variant="subtitle1">
-                                    Select a storage location from the list to view its stored items
+                                    Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen
                                 </Typography>
                             </Box>
                         </Paper>
@@ -370,12 +371,12 @@ export function StorageLocations() {
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{editingLoc ? 'Edit Storage Location' : 'New Storage Location'}</DialogTitle>
+                <DialogTitle>{editingLoc ? 'Lagerort bearbeiten' : 'Neuer Lagerort'}</DialogTitle>
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
                             <TextField
-                                label="Location Name"
+                                label="Name des Lagerorts"
                                 value={formData.name}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                                 required
@@ -383,28 +384,28 @@ export function StorageLocations() {
                                 autoFocus
                             />
                             <TextField
-                                        label="Area / Section"
-                                        placeholder="e.g. Shelf A, Room 204"
+                                        label="Bereich / Sektion"
+                                        placeholder="z. B. Regal A, Raum 204"
                                         value={formData.area}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, area: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label="Location / Building"
-                                        placeholder="e.g. Building B, Room 204"
+                                        label="Ort / Gebäude"
+                                        placeholder="z. B. Gebäude B, Raum 204"
                                         value={formData.location}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label="Position / Shelf"
-                                        placeholder="e.g. Rack 3, Shelf 2"
+                                        label="Position / Regal"
+                                        placeholder="z. B. Reihe 3, Fach 2"
                                         value={formData.position}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                                         fullWidth
                                     />
                             <TextField
-                                label="Description"
+                                label="Beschreibung"
                                 value={formData.description}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                                 multiline
@@ -415,14 +416,14 @@ export function StorageLocations() {
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
                         <Button onClick={() => setDialogOpen(false)} color="inherit">
-                            Cancel
+                            Abbrechen
                         </Button>
                         <Button
                             type="submit"
                             variant="contained"
                             disabled={createMutation.isPending || updateMutation.isPending || !formData.name}
                         >
-                            Save
+                            Speichern
                         </Button>
                     </DialogActions>
                 </Box>
@@ -430,18 +431,18 @@ export function StorageLocations() {
 
             {/* Delete Confirmation */}
             <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-                <DialogTitle>Delete Storage Location?</DialogTitle>
+                <DialogTitle>Lagerort löschen?</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Are you sure you want to delete this storage location? Linked items will lose their location reference. This action cannot be undone.
+                        Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={() => setDeleteConfirmOpen(false)} color="inherit">
-                        Cancel
+                        Abbrechen
                     </Button>
                     <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteMutation.isPending}>
-                        Delete
+                        Löschen
                     </Button>
                 </DialogActions>
             </Dialog>

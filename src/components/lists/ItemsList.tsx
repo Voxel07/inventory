@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { DamageReport, Item, StockTransaction } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
+import { formatStatus } from '../../utils/formatters';
 
 interface Props {
     items: Item[] | undefined;
@@ -100,7 +101,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     if (!items?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No items found</Typography>
+                <Typography color="text.secondary">Keine Artikel gefunden</Typography>
             </Paper>
         );
     }
@@ -108,7 +109,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     return (
         <Box>
             <TextField
-                label="Search by name or category"
+                label="Nach Name oder Kategorie suchen"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -120,14 +121,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     <TableHead>
                         <TableRow>
                             <TableCell>Name</TableCell>
-                            <TableCell>Category</TableCell>
+                            <TableCell>Kategorie</TableCell>
                             <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>
                                 <TableSortLabel
                                     active={sortField === 'stock'}
                                     direction={sortField === 'stock' ? sortDir : 'asc'}
                                     onClick={() => handleSort('stock')}
                                 >
-                                    Stock
+                                    Bestand
                                 </TableSortLabel>
                             </TableCell>
                             <TableCell align="right">
@@ -136,12 +137,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     direction={sortField === 'value' ? sortDir : 'asc'}
                                     onClick={() => handleSort('value')}
                                 >
-                                    Unit Value
+                                    Einzelwert
                                 </TableSortLabel>
                             </TableCell>
-                            <TableCell>Location</TableCell>
+                            <TableCell>Lagerort</TableCell>
                             <TableCell>Status</TableCell>
-                            <TableCell align="right">Actions</TableCell>
+                            <TableCell align="right">Aktionen</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -172,12 +173,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                             {remaining}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary" noWrap>
-                                            {totalStock} total{checkedOut > 0 ? ` · ${checkedOut} out` : ''}{damaged > 0 ? ` · ${damaged} dmg` : ''}
-                                            {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} boxes`}
+                                            {totalStock} gesamt{checkedOut > 0 ? ` · ${checkedOut} ausgeliehen` : ''}{damaged > 0 ? ` · ${damaged} defekt` : ''}
+                                            {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} Kartons`}
                                         </Typography>
                                         {(item.containerSize ?? 0) > 0 && (item.containersOpened ?? 0) > 0 && (
                                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                                                {item.containersOpened} opened · {item.containerRemainingPercent ?? 100}%
+                                                {item.containersOpened} geöffnet · {item.containerRemainingPercent ?? 100}%
                                             </Typography>
                                         )}
                                     </TableCell>
@@ -192,7 +193,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     </TableCell>
                                     <TableCell>
                                         <Chip
-                                            label={item.status.replace('_', ' ')}
+                                            label={formatStatus(item.status)}
                                             color={statusColors[item.status] ?? 'default'}
                                             size="small"
                                         />
@@ -200,14 +201,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Edit Item details"
+                                            tooltipText="Artikeldetails bearbeiten"
                                             icon={<EditIcon />}
                                             size="small"
                                             onClick={() => onEdit(item)}
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Delete Item"
+                                            tooltipText="Artikel löschen"
                                             icon={<DeleteIcon />}
                                             size="small"
                                             color="error"

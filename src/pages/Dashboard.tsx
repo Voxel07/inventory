@@ -16,7 +16,7 @@ export function Dashboard() {
             </Typography>
             <StockMetrics items={items} transactions={transactions} damageReports={damageReports} />
             <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-                Recent Transactions
+                Kürzliche Transaktionen
             </Typography>
             <TransactionHistory
                 transactions={transactions?.slice(0, 10)}

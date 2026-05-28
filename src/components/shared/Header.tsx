@@ -20,13 +20,13 @@ export function Header() {
                     edge="start"
                     onClick={toggleSidebar}
                     sx={{ mr: 2 }}
-                    aria-label="toggle navigation"
+                    aria-label="Navigation umschalten"
                 >
                     <MenuIcon />
                 </IconButton>
                 <InventoryIcon sx={{ mr: 1.5, color: 'primary.main' }} />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
-                    Inventory
+                    Inventar
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
             </Toolbar>

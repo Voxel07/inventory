@@ -7,12 +7,12 @@ export const COLLECTIONS = {
 } as const;
 
 export const TRANSACTION_REASONS = [
-  'Project use',
-  'Maintenance',
-  'Testing',
-  'Return after use',
-  'Inventory correction',
-  'Other',
+  'Projektnutzung',
+  'Wartung',
+  'Testen',
+  'Rückgabe nach Nutzung',
+  'Bestandskorrektur',
+  'Sonstiges',
 ] as const;
 
 export const SEVERITY_LEVELS = ['low', 'medium', 'high', 'critical'] as const;

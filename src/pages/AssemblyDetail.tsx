@@ -37,6 +37,7 @@ import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { useUIStore } from '../store/uiStore';
 import type { AssemblyFormData, Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
+import { formatStatus } from '../utils/formatters';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -68,9 +69,9 @@ export function AssemblyDetail() {
             {
                 onSuccess: () => {
                     setEditOpen(false);
-                    showSnackbar('Assembly updated', 'success');
+                    showSnackbar('Baugruppe aktualisiert', 'success');
                 },
-                onError: () => showSnackbar('Failed to update assembly', 'error'),
+                onError: () => showSnackbar('Fehler beim Aktualisieren der Baugruppe', 'error'),
             },
         );
     }
@@ -96,9 +97,9 @@ export function AssemblyDetail() {
                     setCheckoutReason('');
                     setCheckoutNotes('');
                     setCheckoutAmount(1);
-                    showSnackbar('Assembly checked out successfully', 'success');
+                    showSnackbar('Baugruppe erfolgreich ausgecheckt', 'success');
                 },
-                onError: () => showSnackbar('Failed to checkout assembly', 'error'),
+                onError: () => showSnackbar('Fehler beim Auschecken der Baugruppe', 'error'),
             },
         );
     }
@@ -119,8 +120,8 @@ export function AssemblyDetail() {
                 },
             },
             {
-                onSuccess: () => showSnackbar('Item added to assembly', 'success'),
-                onError: () => showSnackbar('Failed to add item', 'error'),
+                onSuccess: () => showSnackbar('Artikel zur Baugruppe hinzugefügt', 'success'),
+                onError: () => showSnackbar('Fehler beim Hinzufügen des Artikels', 'error'),
             }
         );
     }
@@ -139,8 +140,8 @@ export function AssemblyDetail() {
                 },
             },
             {
-                onSuccess: () => showSnackbar('Item removed from assembly', 'success'),
-                onError: () => showSnackbar('Failed to remove item', 'error'),
+                onSuccess: () => showSnackbar('Artikel aus der Baugruppe entfernt', 'success'),
+                onError: () => showSnackbar('Fehler beim Entfernen des Artikels', 'error'),
             }
         );
     }
@@ -169,14 +170,14 @@ export function AssemblyDetail() {
         return (
             <Box>
                 <TooltipButton
-                    tooltipText="Back to Assemblies list"
+                    tooltipText="Zurück zur Baugruppenübersicht"
                     icon={<ArrowBackIcon />}
-                    label="Back to Assemblies"
+                    label="Zurück zu den Baugruppen"
                     variant="text"
                     onClick={() => navigate('/assemblies')}
                 />
                 <Typography variant="h5" sx={{ mt: 2 }}>
-                    Assembly not found
+                    Baugruppe nicht gefunden
                 </Typography>
             </Box>
         );
@@ -225,7 +226,7 @@ export function AssemblyDetail() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
                 <TooltipButton
                     variant="icon"
-                    tooltipText="Back to Assemblies list"
+                    tooltipText="Zurück zur Baugruppenübersicht"
                     icon={<ArrowBackIcon />}
                     onClick={() => navigate('/assemblies')}
                 />
@@ -234,14 +235,14 @@ export function AssemblyDetail() {
                 </Typography>
                 <TooltipButton
                     variant="icon"
-                    tooltipText="Edit Assembly details"
+                    tooltipText="Baugruppendetails bearbeiten"
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
                 />
                 <TooltipButton
-                    tooltipText="Check out all items in this assembly"
+                    tooltipText="Alle Artikel dieser Baugruppe ausleihen"
                     icon={<ShoppingCartCheckoutIcon />}
-                    label="Checkout"
+                    label="Ausleihen"
                     variant="contained"
                     onClick={() => setCheckoutOpen(true)}
                     disabled={!canCheckout}
@@ -251,10 +252,10 @@ export function AssemblyDetail() {
 
             {insufficientItems.length > 0 && (
                 <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
-                    Insufficient stock for: {insufficientItems.map((i) => {
+                    Unzureichender Bestand für: {insufficientItems.map((i) => {
                         const needed = assembly.itemQuantities?.[i.id] ?? 1;
                         const available = stockInfo.get(i.id) ?? 0;
-                        return `${i.name} (need ${needed}, have ${available})`;
+                        return `${i.name} (benötigt: ${needed}, vorhanden: ${available})`;
                     }).join(', ')}
                 </Alert>
             )}
@@ -267,28 +268,28 @@ export function AssemblyDetail() {
 
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Items</Typography>
+                    <Typography variant="caption" color="text.secondary">Komponenten</Typography>
                     <Typography variant="h6">{assemblyItems.length}</Typography>
                 </Paper>
                 <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Total Value</Typography>
+                    <Typography variant="caption" color="text.secondary">Gesamtwert</Typography>
                     <Typography variant="h6">{totalValue.toFixed(2)} €</Typography>
                 </Paper>
                 <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Available for Checkout</Typography>
+                    <Typography variant="caption" color="text.secondary">Für Ausleihe verfügbar</Typography>
                     <Typography variant="h6" color={maxAssembliesPossible > 0 ? "success.main" : "text.secondary"}>
                         {maxAssembliesPossible}
                     </Typography>
                 </Paper>
                 <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Created</Typography>
+                    <Typography variant="caption" color="text.secondary">Erstellt</Typography>
                     <Typography variant="h6">{new Date(assembly.created).toLocaleDateString()}</Typography>
                 </Paper>
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6">
-                    Items in this Assembly
+                    Komponenten in dieser Baugruppe
                 </Typography>
                 <Autocomplete
                     options={availableItemsToAdd}
@@ -297,7 +298,7 @@ export function AssemblyDetail() {
                         if (newItem) handleAddItem(newItem.id);
                     }}
                     renderInput={(params) => (
-                        <TextField {...params} label="Quick Add Item" size="small" />
+                        <TextField {...params} label="Artikel schnell hinzufügen" size="small" />
                     )}
                     sx={{ minWidth: 250, maxWidth: 350 }}
                     value={null}
@@ -306,7 +307,7 @@ export function AssemblyDetail() {
 
             {assemblyItems.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">No items in this assembly</Typography>
+                    <Typography color="text.secondary">Keine Komponenten in dieser Baugruppe</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
@@ -314,13 +315,13 @@ export function AssemblyDetail() {
                         <TableHead>
                             <TableRow>
                                 <TableCell>Name</TableCell>
-                                <TableCell align="right">Qty</TableCell>
-                                <TableCell align="right">Available</TableCell>
-                                <TableCell>Category</TableCell>
-                                <TableCell>Location</TableCell>
-                                <TableCell align="right">Value</TableCell>
+                                <TableCell align="right">Menge</TableCell>
+                                <TableCell align="right">Verfügbar</TableCell>
+                                <TableCell>Kategorie</TableCell>
+                                <TableCell>Lagerort</TableCell>
+                                <TableCell align="right">Wert</TableCell>
                                 <TableCell>Status</TableCell>
-                                <TableCell align="right">Actions</TableCell>
+                                <TableCell align="right">Aktionen</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -367,7 +368,7 @@ export function AssemblyDetail() {
                                         <TableCell align="right">{((item.value ?? 0) * qty).toFixed(2)} €</TableCell>
                                         <TableCell>
                                             <Chip
-                                                label={item.status.replace('_', ' ')}
+                                                label={formatStatus(item.status)}
                                                 color={statusColors[item.status] ?? 'default'}
                                                 size="small"
                                             />
@@ -375,7 +376,7 @@ export function AssemblyDetail() {
                                         <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                             <TooltipButton
                                                 variant="icon"
-                                                tooltipText="Remove item from assembly"
+                                                tooltipText="Artikel aus Baugruppe entfernen"
                                                 icon={<DeleteIcon />}
                                                 size="small"
                                                 color="error"
@@ -392,13 +393,13 @@ export function AssemblyDetail() {
 
             {/* Checkout Dialog */}
             <Dialog open={checkoutOpen} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Checkout Assembly</DialogTitle>
+                <DialogTitle>Baugruppe ausleihen</DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{ mb: 2 }}>
-                        This will check out all items in "{assembly.name}" with their specified quantities.
+                        Dies leiht alle Artikel in „{assembly.name}“ mit den angegebenen Mengen aus.
                     </DialogContentText>
                     <TextField
-                        label="Amount to Checkout"
+                        label="Auszuleihende Menge"
                         type="number"
                         value={checkoutAmount}
                         onChange={(e) => {
@@ -410,14 +411,14 @@ export function AssemblyDetail() {
                         slotProps={{ htmlInput: { min: 1, max: maxAssembliesPossible } }}
                     />
                     <TextField
-                        label="Reason"
+                        label="Grund"
                         value={checkoutReason}
                         onChange={(e) => setCheckoutReason(e.target.value)}
                         fullWidth
                         sx={{ mb: 2 }}
                     />
                     <TextField
-                        label="Notes (optional)"
+                        label="Anmerkungen (optional)"
                         value={checkoutNotes}
                         onChange={(e) => setCheckoutNotes(e.target.value)}
                         fullWidth
@@ -426,16 +427,16 @@ export function AssemblyDetail() {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Tooltip title="Cancel checkout action" arrow>
-                        <Button onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+                    <Tooltip title="Ausleihvorgang abbrechen" arrow>
+                        <Button onClick={() => setCheckoutOpen(false)}>Abbrechen</Button>
                     </Tooltip>
-                    <Tooltip title="Permanently check out all items in this assembly" arrow>
+                    <Tooltip title="Alle Artikel in dieser Baugruppe dauerhaft ausleihen" arrow>
                         <Button
                             variant="contained"
                             onClick={handleCheckout}
                             disabled={checkoutAssembly.isPending}
                         >
-                            Checkout All Items
+                            Alle Artikel ausleihen
                         </Button>
                     </Tooltip>
                 </DialogActions>
@@ -443,7 +444,7 @@ export function AssemblyDetail() {
 
             {/* Edit Dialog */}
             <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit Assembly</DialogTitle>
+                <DialogTitle>Baugruppe bearbeiten</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <AssemblyForm
                         initialData={assembly}

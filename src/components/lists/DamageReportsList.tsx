@@ -13,6 +13,7 @@ import {
     Select,
 } from '@mui/material';
 import type { DamageReport, DamageStatus, Item } from '../../types';
+import { formatStatus } from '../../utils/formatters';
 
 interface Props {
     reports: DamageReport[] | undefined;
@@ -52,7 +53,7 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
     if (!visibleReports?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No damage reports found</Typography>
+                <Typography color="text.secondary">Keine Schadensberichte gefunden</Typography>
             </Paper>
         );
     }
@@ -66,11 +67,11 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Item</TableCell>
-                        <TableCell align="right">Amount</TableCell>
-                        <TableCell>Severity</TableCell>
-                        <TableCell>Description</TableCell>
+                        <TableCell>Datum</TableCell>
+                        <TableCell>Artikel</TableCell>
+                        <TableCell align="right">Menge</TableCell>
+                        <TableCell>Schweregrad</TableCell>
+                        <TableCell>Beschreibung</TableCell>
                         <TableCell>Status</TableCell>
                     </TableRow>
                 </TableHead>
@@ -82,7 +83,7 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
                             <TableCell align="right">{report.amount}</TableCell>
                             <TableCell>
                                 <Chip
-                                    label={report.severity}
+                                    label={formatStatus(report.severity)}
                                     color={severityColors[report.severity] ?? 'default'}
                                     size="small"
                                 />
@@ -96,16 +97,16 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
                                         onChange={(e) => onUpdateStatus(report.id, e.target.value as DamageStatus)}
                                     >
                                         <MenuItem value={report.status}>
-                                            {report.status.replace('_', ' ')}
+                                            {formatStatus(report.status)}
                                         </MenuItem>
                                         {statusTransitions[report.status].map((s) => (
                                             <MenuItem key={s} value={s}>
-                                                {s.replace('_', ' ')}
+                                                {formatStatus(s)}
                                             </MenuItem>
                                         ))}
                                     </Select>
                                 ) : (
-                                    <Chip label={report.status.replace('_', ' ')} size="small" />
+                                    <Chip label={formatStatus(report.status)} size="small" />
                                 )}
                             </TableCell>
                         </TableRow>

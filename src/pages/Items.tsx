@@ -34,9 +34,9 @@ export function Items() {
         createItem.mutate(data, {
             onSuccess: () => {
                 setFormOpen(false);
-                showSnackbar('Item created successfully', 'success');
+                showSnackbar('Artikel erfolgreich erstellt', 'success');
             },
-            onError: () => showSnackbar('Failed to create item', 'error'),
+            onError: () => showSnackbar('Fehler beim Erstellen des Artikels', 'error'),
         });
     }
 
@@ -47,9 +47,9 @@ export function Items() {
             {
                 onSuccess: () => {
                     setEditingItem(undefined);
-                    showSnackbar('Item updated successfully', 'success');
+                    showSnackbar('Artikel erfolgreich aktualisiert', 'success');
                 },
-                onError: () => showSnackbar('Failed to update item', 'error'),
+                onError: () => showSnackbar('Fehler beim Aktualisieren des Artikels', 'error'),
             },
         );
     }
@@ -63,20 +63,20 @@ export function Items() {
         deleteItem.mutate(deletingId, {
             onSuccess: () => {
                 setDeletingId(undefined);
-                showSnackbar('Item deleted', 'success');
+                showSnackbar('Artikel gelöscht', 'success');
             },
-            onError: () => showSnackbar('Failed to delete item', 'error'),
+            onError: () => showSnackbar('Fehler beim Löschen des Artikels', 'error'),
         });
     }
 
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Items</Typography>
+                <Typography variant="h4">Artikel</Typography>
                 <TooltipButton
-                    tooltipText="Create a new inventory item"
+                    tooltipText="Neuen Inventarartikel erstellen"
                     icon={<AddIcon />}
-                    label="Add Item"
+                    label="Artikel hinzufügen"
                     variant="contained"
                     onClick={() => setFormOpen(true)}
                 />
@@ -93,7 +93,7 @@ export function Items() {
 
             {/* Create Dialog */}
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Create New Item</DialogTitle>
+                <DialogTitle>Neuen Artikel erstellen</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <ItemForm
                         onSubmit={handleCreate}
@@ -107,7 +107,7 @@ export function Items() {
 
             {/* Edit Dialog */}
             <Dialog open={!!editingItem} onClose={() => setEditingItem(undefined)} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit Item</DialogTitle>
+                <DialogTitle>Artikel bearbeiten</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingItem && (
                         <ItemForm
@@ -124,7 +124,7 @@ export function Items() {
 
             {/* QR Code Dialog */}
             <Dialog open={!!qrItem} onClose={() => setQrItem(undefined)} maxWidth="xs" fullWidth>
-                <DialogTitle>QR Code</DialogTitle>
+                <DialogTitle>QR-Code</DialogTitle>
                 <DialogContent>
                     {qrItem && <QRCodeGenerator itemId={qrItem.id} itemName={qrItem.name} />}
                 </DialogContent>
@@ -132,17 +132,17 @@ export function Items() {
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
-                <DialogTitle>Delete Item</DialogTitle>
+                <DialogTitle>Artikel löschen</DialogTitle>
                 <DialogContent>
-                    <DialogContentText>Are you sure you want to delete this item? This action cannot be undone.</DialogContentText>
+                    <DialogContentText>Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.</DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Tooltip title="Cancel delete action" arrow>
-                        <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
+                    <Tooltip title="Löschvorgang abbrechen" arrow>
+                        <Button onClick={() => setDeletingId(undefined)}>Abbrechen</Button>
                     </Tooltip>
-                    <Tooltip title="Permanently delete this item" arrow>
+                    <Tooltip title="Diesen Artikel dauerhaft löschen" arrow>
                         <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
-                            Delete
+                            Löschen
                         </Button>
                     </Tooltip>
                 </DialogActions>

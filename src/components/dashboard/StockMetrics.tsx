@@ -29,11 +29,11 @@ export function StockMetrics({ items, transactions, damageReports }: Props) {
         damageReports?.filter((r) => r.status === 'reported' || r.status === 'in_review').length ?? 0;
 
     const metrics = [
-        { label: 'Total Items', value: totalItems, icon: <InventoryIcon />, color: '#7c4dff' },
-        { label: 'Total Stock', value: totalStock, icon: <InventoryIcon />, color: '#00e676' },
-        { label: 'Low Stock', value: lowStockItems, icon: <WarningIcon />, color: '#ffab00' },
-        { label: 'Recent Transactions', value: recentTransactions, icon: <SwapHorizIcon />, color: '#448aff' },
-        { label: 'Open Damage Reports', value: openDamageReports, icon: <ReportProblemIcon />, color: '#ff5252' },
+        { label: 'Artikel insgesamt', value: totalItems, icon: <InventoryIcon />, color: '#7c4dff' },
+        { label: 'Gesamtbestand', value: totalStock, icon: <InventoryIcon />, color: '#00e676' },
+        { label: 'Geringer Bestand', value: lowStockItems, icon: <WarningIcon />, color: '#ffab00' },
+        { label: 'Kürzliche Transaktionen', value: recentTransactions, icon: <SwapHorizIcon />, color: '#448aff' },
+        { label: 'Offene Schadensberichte', value: openDamageReports, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
     return (

@@ -89,20 +89,20 @@ export function UserDashboard() {
     }, [damageReports, currentUser]);
 
     const metrics = [
-        { label: 'My Checked Out Items', value: totalUniqueCheckedOut, icon: <ShoppingBagIcon />, color: '#7c4dff' },
-        { label: 'Total Units Checked Out', value: totalUnitsCheckedOut, icon: <AssignmentReturnIcon />, color: '#00e676' },
-        { label: 'My Total Logs', value: totalUserTransactionsCount, icon: <ListAltIcon />, color: '#448aff' },
-        { label: 'My Open Damage Reports', value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
+        { label: 'Meine ausgeliehenen Artikel', value: totalUniqueCheckedOut, icon: <ShoppingBagIcon />, color: '#7c4dff' },
+        { label: 'Einheiten insgesamt ausgeliehen', value: totalUnitsCheckedOut, icon: <AssignmentReturnIcon />, color: '#00e676' },
+        { label: 'Meine Protokolle', value: totalUserTransactionsCount, icon: <ListAltIcon />, color: '#448aff' },
+        { label: 'Meine offenen Schadensberichte', value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
     function handleReturnSubmit(data: any) {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setReturnItem(null);
-                showSnackbar('Item returned successfully', 'success');
+                showSnackbar('Artikel erfolgreich zurückgegeben', 'success');
             },
             onError: () => {
-                showSnackbar('Failed to log return transaction', 'error');
+                showSnackbar('Fehler beim Erfassen der Rückgabe', 'error');
             }
         });
     }
@@ -110,10 +110,10 @@ export function UserDashboard() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 700 }}>
-                Hello, {currentUser?.name || 'User'}
+                Hallo, {currentUser?.name || 'Benutzer'}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                Here is a summary of your current checkouts and recent activity.
+                Hier ist eine Übersicht Ihrer aktuellen Ausleihen und Aktivitäten.
             </Typography>
 
             {/* Personalized Metrics */}
@@ -137,22 +137,22 @@ export function UserDashboard() {
 
             {/* Currently Checked Out Items */}
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                My Checked Out Items
+                Meine ausgeliehenen Artikel
             </Typography>
             {checkedOutItems.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center', mb: 4 }}>
-                    <Typography color="text.secondary">You don't have any items checked out at the moment.</Typography>
+                    <Typography color="text.secondary">Sie haben derzeit keine Artikel ausgeliehen.</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto', mb: 4 }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Item Name</TableCell>
-                                <TableCell>Category</TableCell>
-                                <TableCell align="right">Qty Checked Out</TableCell>
-                                <TableCell>Storage Location</TableCell>
-                                <TableCell align="right">Actions</TableCell>
+                                <TableCell>Artikelname</TableCell>
+                                <TableCell>Kategorie</TableCell>
+                                <TableCell align="right">Ausgeliehene Menge</TableCell>
+                                <TableCell>Lagerort</TableCell>
+                                <TableCell align="right">Aktionen</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -179,7 +179,7 @@ export function UserDashboard() {
                                             startIcon={<AssignmentReturnIcon />}
                                             onClick={() => setReturnItem({ item, quantity })}
                                         >
-                                            Return
+                                            Zurückgeben
                                         </Button>
                                     </TableCell>
                                 </TableRow>
@@ -192,14 +192,14 @@ export function UserDashboard() {
             {/* My Recent Activity */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    My Recent Transactions
+                    Meine kürzlichen Transaktionen
                 </Typography>
                 <Button
                     endIcon={<KeyboardArrowRightIcon />}
                     onClick={() => navigate('/transactions')}
                     sx={{ textTransform: 'none' }}
                 >
-                    View All
+                    Alle anzeigen
                 </Button>
             </Box>
             <TransactionHistory
@@ -216,7 +216,7 @@ export function UserDashboard() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Return {returnItem?.item.name}</DialogTitle>
+                <DialogTitle>{returnItem?.item.name} zurückgeben</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {returnItem && (
                         <TransactionForm
@@ -229,7 +229,7 @@ export function UserDashboard() {
                                 itemId: returnItem.item.id,
                                 transactionType: 'checkin',
                                 quantityChanged: returnItem.quantity,
-                                reason: 'Return after use',
+                                reason: 'Rückgabe nach Nutzung',
                                 notes: '',
                             }}
                         />

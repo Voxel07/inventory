@@ -85,7 +85,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
     if (!assemblies?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No assemblies found</Typography>
+                <Typography color="text.secondary">Keine Baugruppen gefunden</Typography>
             </Paper>
         );
     }
@@ -111,10 +111,10 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                 <TableHead>
                     <TableRow>
                         <TableCell>Name</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Description</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Items</TableCell>
-                        <TableCell align="right">Total Value</TableCell>
-                        <TableCell align="right">Actions</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Beschreibung</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Komponenten</TableCell>
+                        <TableCell align="right">Gesamtwert</TableCell>
+                        <TableCell align="right">Aktionen</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -152,7 +152,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                     {/* Burger menu for small screens (xs) */}
                                     <Box sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
-                                        <Tooltip title="Actions" arrow>
+                                        <Tooltip title="Aktionen" arrow>
                                             <IconButton
                                                 onClick={(e) => handleOpenMenu(e, assembly)}
                                                 size="small"
@@ -166,7 +166,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                     <Box sx={{ display: { xs: 'none', sm: 'inline-flex' }, gap: 0.5 }}>
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="View Assembly details"
+                                            tooltipText="Baugruppendetails anzeigen"
                                             icon={<VisibilityIcon />}
                                             size="small"
                                             color="info"
@@ -174,7 +174,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Edit Assembly details"
+                                            tooltipText="Baugruppe bearbeiten"
                                             icon={<EditIcon />}
                                             size="small"
                                             color="warning"
@@ -182,7 +182,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Delete Assembly"
+                                            tooltipText="Baugruppe löschen"
                                             icon={<DeleteIcon />}
                                             size="small"
                                             color="error"
@@ -206,19 +206,19 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                     <ListItemIcon>
                         <VisibilityIcon fontSize="small" color="info" />
                     </ListItemIcon>
-                    <ListItemText>View Details</ListItemText>
+                    <ListItemText>Details anzeigen</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleEdit}>
                     <ListItemIcon>
                         <EditIcon fontSize="small" color="warning" />
                     </ListItemIcon>
-                    <ListItemText>Edit</ListItemText>
+                    <ListItemText>Bearbeiten</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleDelete}>
                     <ListItemIcon>
                         <DeleteIcon fontSize="small" color="error" />
                     </ListItemIcon>
-                    <ListItemText>Delete</ListItemText>
+                    <ListItemText>Löschen</ListItemText>
                 </MenuItem>
             </Menu>
         </TableContainer>

@@ -25,8 +25,8 @@ export function QRCheckout() {
 
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
-            onSuccess: () => showSnackbar('Transaction completed', 'success'),
-            onError: () => showSnackbar('Transaction failed', 'error'),
+            onSuccess: () => showSnackbar('Transaktion abgeschlossen', 'success'),
+            onError: () => showSnackbar('Transaktion fehlgeschlagen', 'error'),
         });
     }
 
@@ -37,13 +37,13 @@ export function QRCheckout() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
-                {item ? `Checkout: ${item.name}` : 'QR Checkout'}
+                {item ? `Ausleihe: ${item.name}` : 'QR-Ausleihe / Rückgabe'}
             </Typography>
 
             {!itemId && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                        Scan QR Code
+                        QR-Code scannen
                     </Typography>
                     <QRCodeScanner onScan={handleScan} />
                 </Paper>
@@ -52,14 +52,14 @@ export function QRCheckout() {
             {item && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="subtitle1" color="text.secondary">
-                        Item: {item.name} | Available: {remaining} | Location: {item.expand?.storageLocation?.name || item.storageLocation}
+                        Artikel: {item.name} | Verfügbar: {remaining} | Lagerort: {item.expand?.storageLocation?.name || item.storageLocation}
                     </Typography>
                 </Paper>
             )}
 
             <Paper sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
-                    Log Transaction
+                    Transaktion erfassen
                 </Typography>
                 <TransactionForm
                     items={items ?? []}

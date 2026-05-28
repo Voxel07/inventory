@@ -13,6 +13,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { StockTransaction, Item } from '../../types';
+import { formatStatus } from '../../utils/formatters';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
@@ -35,7 +36,7 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
     if (!transactions?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No transactions found</Typography>
+                <Typography color="text.secondary">Keine Transaktionen gefunden</Typography>
             </Paper>
         );
     }
@@ -49,14 +50,14 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Item</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>User</TableCell>
-                        <TableCell align="right">Quantity</TableCell>
-                        <TableCell>Reason</TableCell>
-                        <TableCell>Notes</TableCell>
-                        {onEdit && <TableCell align="center">Actions</TableCell>}
+                        <TableCell>Datum</TableCell>
+                        <TableCell>Artikel</TableCell>
+                        <TableCell>Typ</TableCell>
+                        <TableCell>Benutzer</TableCell>
+                        <TableCell align="right">Menge</TableCell>
+                        <TableCell>Grund</TableCell>
+                        <TableCell>Anmerkungen</TableCell>
+                        {onEdit && <TableCell align="center">Aktionen</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -66,7 +67,7 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
                             <TableCell>{getItemName(tx.itemId)}</TableCell>
                             <TableCell>
                                 <Chip
-                                    label={tx.transactionType === 'checkout' ? 'Check Out' : tx.transactionType === 'added' ? 'Added' : 'Check In'}
+                                    label={formatStatus(tx.transactionType)}
                                     color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'}
                                     size="small"
                                 />
@@ -79,7 +80,7 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
                                 <TableCell align="center">
                                     <TooltipButton
                                         variant="icon"
-                                        tooltipText="Edit Transaction"
+                                        tooltipText="Transaktion bearbeiten"
                                         icon={<EditIcon sx={{ fontSize: 18 }} />}
                                         onClick={() => onEdit(tx)}
                                         size="small"

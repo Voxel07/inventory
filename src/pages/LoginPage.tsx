@@ -21,10 +21,10 @@ export function LoginPage() {
         try {
             // pocketbase JS SDK authWithOAuth2 triggers the Authentik provider login via popup
             await pb.collection('users').authWithOAuth2({ provider: 'oidc' });
-            showSnackbar('Logged in successfully', 'success');
+            showSnackbar('Erfolgreich angemeldet', 'success');
         } catch (err: any) {
             console.error('OAuth2 error:', err);
-            showSnackbar(err.message || 'OAuth2 login failed.', 'error');
+            showSnackbar(err.message || 'OAuth2-Anmeldung fehlgeschlagen.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -67,10 +67,10 @@ export function LoginPage() {
                         <ShieldIcon sx={{ fontSize: 28 }} />
                     </Box>
                     <Typography component="h1" variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
-                        Inventory Management
+                        Inventarverwaltung
                     </Typography>
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 4 }}>
-                        Sign in using your organization account to manage and check out items.
+                        Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.
                     </Typography>
 
                     <Button
@@ -85,7 +85,7 @@ export function LoginPage() {
                             fontWeight: 600,
                         }}
                     >
-                        {isLoading ? 'Connecting...' : 'Sign in with Authentik'}
+                        {isLoading ? 'Verbindung wird hergestellt...' : 'Mit Authentik anmelden'}
                     </Button>
                 </Paper>
             </Container>

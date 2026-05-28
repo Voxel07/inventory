@@ -48,10 +48,10 @@ export function QRCodeGenerator({ itemId, itemName }: Props) {
                 alt={`QR code for ${itemName}`}
                 sx={{ width: 256, height: 256 }}
             />
-            <Tooltip title="Save QR code image file to your device" arrow>
+            <Tooltip title="QR-Code-Bilddatei auf Ihrem Gerät speichern" arrow>
                 <span>
                     <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
-                        Download QR Code
+                        QR-Code herunterladen
                     </Button>
                 </span>
             </Tooltip>

@@ -69,7 +69,7 @@ export function ItemForm({
             if (field === 'name') {
                 const trimmed = (value as string).trim().toLowerCase();
                 const isDuplicate = existingNames.some((n) => n.toLowerCase() === trimmed);
-                setNameError(isDuplicate ? 'An item with this name already exists' : '');
+                setNameError(isDuplicate ? 'Ein Artikel mit diesem Namen existiert bereits' : '');
             }
             setFormData((prev) => ({ ...prev, [field]: value }));
         };
@@ -83,10 +83,10 @@ export function ItemForm({
                 setFormData((prev) => ({ ...prev, storageLocation: newLoc.id }));
                 setAddLocationOpen(false);
                 setNewLocData({ name: '', area: '', location: '', position: '', description: '' });
-                showSnackbar('Storage location created successfully', 'success');
+                showSnackbar('Lagerort erfolgreich erstellt', 'success');
             },
             onError: () => {
-                showSnackbar('Failed to create storage location', 'error');
+                showSnackbar('Fehler beim Erstellen des Lagerorts', 'error');
             }
         });
     }
@@ -117,19 +117,19 @@ export function ItemForm({
                 />
                 {!initialData && (
                     <TextField
-                        label="Amount"
+                        label="Menge"
                         type="number"
                         value={formData.amount}
                         onChange={handleChange('amount')}
                         required
                         fullWidth
                         disabled={isContainer}
-                        helperText={isContainer ? `Auto-calculated: ${(formData.containerCount ?? 0) * (formData.containerSize ?? 0)} units` : undefined}
+                        helperText={isContainer ? `Automatisch berechnet: ${(formData.containerCount ?? 0) * (formData.containerSize ?? 0)} Einheiten` : undefined}
                         slotProps={{ htmlInput: { min: 0 } }}
                     />
                 )}
                 <TextField
-                    label="Min Stock"
+                    label="Mindestbestand"
                     type="number"
                     value={formData.minStock}
                     onChange={handleChange('minStock')}
@@ -138,7 +138,7 @@ export function ItemForm({
                     slotProps={{ htmlInput: { min: 0 } }}
                 />
                 <TextField
-                    label="Unit Value (€)"
+                    label="Einzelwert (€)"
                     type="number"
                     value={formData.value}
                     onChange={handleChange('value')}
@@ -151,11 +151,11 @@ export function ItemForm({
                     value={formData.category}
                     onInputChange={(_e, newValue) => setFormData((prev) => ({ ...prev, category: newValue }))}
                     renderInput={(params) => (
-                        <TextField {...params} label="Category" fullWidth />
+                        <TextField {...params} label="Kategorie" fullWidth />
                     )}
                 />
                 <TextField
-                    label="Subcategory (optional)"
+                    label="Unterkategorie (optional)"
                     value={formData.subcategory ?? ''}
                     onChange={handleChange('subcategory')}
                     fullWidth
@@ -168,7 +168,7 @@ export function ItemForm({
                         value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
                         onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, storageLocation: newValue ? newValue.id : '' }))}
                         renderInput={(params) => (
-                            <TextField {...params} label="Storage Location" fullWidth />
+                            <TextField {...params} label="Lagerort" fullWidth />
                         )}
                         sx={{ flexGrow: 1 }}
                     />
@@ -183,21 +183,21 @@ export function ItemForm({
 
                 <Divider />
                 <Typography variant="subtitle2" color="text.secondary">
-                    Container / Bulk Packaging (optional)
+                    Behälter / Großgebinde (optional)
                 </Typography>
                 <TextField
-                    label="Units per Container"
+                    label="Einheiten pro Behälter"
                     type="number"
                     value={formData.containerSize ?? ''}
                     onChange={handleChange('containerSize')}
                     fullWidth
-                    helperText="e.g. 500 screws per box"
+                    helperText="z. B. 500 Schrauben pro Box"
                     slotProps={{ htmlInput: { min: 0 } }}
                 />
                 {isContainer && (
                     <>
                         <TextField
-                            label="Number of Containers"
+                            label="Anzahl der Behälter"
                             type="number"
                             value={formData.containerCount ?? ''}
                             onChange={handleChange('containerCount')}
@@ -205,7 +205,7 @@ export function ItemForm({
                             slotProps={{ htmlInput: { min: 0 } }}
                         />
                         <TextField
-                            label="Containers Opened"
+                            label="Geöffnete Behälter"
                             type="number"
                             value={formData.containersOpened ?? ''}
                             onChange={handleChange('containersOpened')}
@@ -213,21 +213,21 @@ export function ItemForm({
                             slotProps={{ htmlInput: { min: 0 } }}
                         />
                         <TextField
-                            label="Open Container Remaining %"
+                            label="Verbleibender Inhalt im geöffneten Behälter (%)"
                             type="number"
                             value={formData.containerRemainingPercent ?? ''}
                             onChange={handleChange('containerRemainingPercent')}
                             fullWidth
-                            helperText="How full is the currently open container (0-100)"
+                            helperText="Wie voll ist der aktuell geöffnete Behälter (0-100)"
                             slotProps={{ htmlInput: { min: 0, max: 100 } }}
                         />
                     </>
                 )}
 
-                <Tooltip title={initialData ? "Save changes to this item" : "Create new item in inventory"} arrow>
+                <Tooltip title={initialData ? "Änderungen an diesem Artikel speichern" : "Neuen Artikel im Inventar erstellen"} arrow>
                     <span>
                         <Button type="submit" variant="contained" disabled={isDisabled}>
-                            {initialData ? 'Update Item' : 'Create Item'}
+                            {initialData ? 'Artikel aktualisieren' : 'Artikel erstellen'}
                         </Button>
                     </span>
                 </Tooltip>
@@ -235,7 +235,7 @@ export function ItemForm({
 
             {/* Quick Add Storage Location Dialog */}
             <Dialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>Add Storage Location</DialogTitle>
+                <DialogTitle>Lagerort hinzufügen</DialogTitle>
                 <DialogContent>
                     <Box component="form" onSubmit={handleCreateLocSubmit} noValidate sx={{ mt: 1 }}>
                         <Stack spacing={2}>
@@ -248,13 +248,13 @@ export function ItemForm({
                                 autoFocus
                             />
                             <TextField
-                                label="Area (optional)"
+                                label="Bereich (optional)"
                                 value={newLocData.area}
                                 onChange={(e) => setNewLocData((prev) => ({ ...prev, area: e.target.value }))}
                                 fullWidth
                             />
                             <TextField
-                                label="Location (optional)"
+                                label="Ort (optional)"
                                 value={newLocData.location}
                                 onChange={(e) => setNewLocData((prev) => ({ ...prev, location: e.target.value }))}
                                 fullWidth
@@ -266,7 +266,7 @@ export function ItemForm({
                                 fullWidth
                             />
                             <TextField
-                                label="Description (optional)"
+                                label="Beschreibung (optional)"
                                 value={newLocData.description}
                                 onChange={(e) => setNewLocData((prev) => ({ ...prev, description: e.target.value }))}
                                 fullWidth
@@ -277,13 +277,13 @@ export function ItemForm({
                     </Box>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setAddLocationOpen(false)}>Cancel</Button>
+                    <Button onClick={() => setAddLocationOpen(false)}>Abbrechen</Button>
                     <Button
                         onClick={handleCreateLocSubmit}
                         variant="contained"
                         disabled={createLoc.isPending || !newLocData.name.trim()}
                     >
-                        {createLoc.isPending ? 'Creating...' : 'Create'}
+                        {createLoc.isPending ? 'Wird erstellt...' : 'Erstellen'}
                     </Button>
                 </DialogActions>
             </Dialog>

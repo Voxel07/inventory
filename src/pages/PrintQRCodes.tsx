@@ -98,12 +98,12 @@ export function PrintQRCodesPage() {
             // Title
             const title =
                 filterMode === 'all'
-                    ? 'All QR Codes'
+                    ? 'Alle QR-Codes'
                     : filterMode === 'items'
-                        ? 'Item QR Codes'
+                        ? 'Artikel-QR-Codes'
                         : filterMode === 'assemblies'
-                            ? 'Assembly QR Codes'
-                            : 'QR Code';
+                            ? 'Baugruppen-QR-Codes'
+                            : 'QR-Code';
             doc.setFontSize(16);
             doc.text(title, pageWidth / 2, y + 5, { align: 'center' });
             y += 15;
@@ -143,7 +143,7 @@ export function PrintQRCodesPage() {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>Generating QR codes...</Typography>
+                <Typography sx={{ ml: 2 }}>QR-Codes werden generiert...</Typography>
             </Box>
         );
     }
@@ -151,8 +151,8 @@ export function PrintQRCodesPage() {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4">QR Codes</Typography>
-                <Tooltip title="Generate and download PDF with selected QR codes" arrow>
+                <Typography variant="h4">QR-Codes</Typography>
+                <Tooltip title="PDF mit ausgewählten QR-Codes generieren und herunterladen" arrow>
                     <span>
                         <Button
                             variant="contained"
@@ -160,7 +160,7 @@ export function PrintQRCodesPage() {
                             onClick={handleGeneratePDF}
                             disabled={filteredEntries.length === 0 || pdfGenerating}
                         >
-                            {pdfGenerating ? 'Generating…' : 'Download PDF'}
+                            {pdfGenerating ? 'Wird generiert…' : 'PDF herunterladen'}
                         </Button>
                     </span>
                 </Tooltip>
@@ -179,20 +179,20 @@ export function PrintQRCodesPage() {
                         }}
                         size="small"
                     >
-                        <ToggleButton value="all">All</ToggleButton>
-                        <ToggleButton value="items">Items Only</ToggleButton>
-                        <ToggleButton value="assemblies">Assemblies Only</ToggleButton>
-                        <ToggleButton value="single">Single</ToggleButton>
+                        <ToggleButton value="all">Alle</ToggleButton>
+                        <ToggleButton value="items">Nur Artikel</ToggleButton>
+                        <ToggleButton value="assemblies">Nur Baugruppen</ToggleButton>
+                        <ToggleButton value="single">Einzeln</ToggleButton>
                     </ToggleButtonGroup>
 
                     {filterMode === 'single' && (
                         <Autocomplete
                             options={allOptions}
-                            getOptionLabel={(option) => `${option.name} (${option.type})`}
+                            getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? 'Artikel' : 'Baugruppe'})`}
                             value={allOptions.find((o) => o.id === selectedId) ?? null}
                             onChange={(_e, newValue) => setSelectedId(newValue?.id ?? null)}
                             renderInput={(params) => (
-                                <TextField {...params} label="Select item or assembly" size="small" />
+                                <TextField {...params} label="Artikel oder Baugruppe auswählen" size="small" />
                             )}
                             sx={{ minWidth: 280 }}
                         />
@@ -204,8 +204,8 @@ export function PrintQRCodesPage() {
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <Typography color="text.secondary">
                         {filterMode === 'single' && !selectedId
-                            ? 'Select an item or assembly above'
-                            : 'No QR codes to display'}
+                            ? 'Wählen Sie oben einen Artikel oder eine Baugruppe aus'
+                            : 'Keine QR-Codes zum Anzeigen'}
                     </Typography>
                 </Paper>
             ) : (
@@ -226,7 +226,7 @@ export function PrintQRCodesPage() {
                                     {entry.name}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {entry.type}
+                                    {entry.type === 'item' ? 'Artikel' : 'Baugruppe'}
                                 </Typography>
                             </Paper>
                         </Grid>

@@ -21,13 +21,13 @@ interface Props {
 }
 
 const REASONS = [
-    'Project use',
-    'Maintenance',
-    'Testing',
-    'Return after use',
-    'Restocking',
-    'Inventory correction',
-    'Other',
+    'Projektnutzung',
+    'Wartung',
+    'Testen',
+    'Rückgabe nach Nutzung',
+    'Lageraufstockung',
+    'Bestandskorrektur',
+    'Sonstiges',
 ];
 
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
@@ -51,7 +51,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             <Stack spacing={2}>
                 <TextField
                     select
-                    label="Item"
+                    label="Artikel"
                     value={formData.itemId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value }))}
                     required
@@ -61,14 +61,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         const { remaining } = calculateItemStock(item.id, transactions, damageReports);
                         return (
                             <MenuItem key={item.id} value={item.id}>
-                                {item.name} (Available: {remaining})
+                                {item.name} (Verfügbar: {remaining})
                             </MenuItem>
                         );
                     })}
                 </TextField>
                 <TextField
                     select
-                    label="Transaction Type"
+                    label="Transaktionstyp"
                     value={formData.transactionType}
                     onChange={(e) =>
                         setFormData((prev) => ({
@@ -79,12 +79,12 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     required
                     fullWidth
                 >
-                    <MenuItem value="checkout">Check Out</MenuItem>
-                    <MenuItem value="checkin">Check In</MenuItem>
-                    <MenuItem value="added">Add Stock</MenuItem>
+                    <MenuItem value="checkout">Ausleihe (Entnehmen)</MenuItem>
+                    <MenuItem value="checkin">Rückgabe (Zurückgeben)</MenuItem>
+                    <MenuItem value="added">Bestand hinzufügen</MenuItem>
                 </TextField>
                 <TextField
-                    label="Quantity"
+                    label="Menge"
                     type="number"
                     value={formData.quantityChanged}
                     onChange={(e) =>
@@ -96,7 +96,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                 />
                 <TextField
                     select
-                    label="Reason"
+                    label="Grund"
                     value={formData.reason}
                     onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                     required
@@ -109,7 +109,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     ))}
                 </TextField>
                 <TextField
-                    label="Notes"
+                    label="Anmerkungen"
                     value={formData.notes}
                     onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                     multiline
@@ -129,16 +129,16 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         })}
                         disabled={isLoading}
                     >
-                        Clear Fields
+                        Felder leeren
                     </Button>
-                    <Tooltip title="Log and submit this transaction" arrow>
+                    <Tooltip title="Diese Transaktion buchen" arrow>
                         <span>
                             <Button
                                 type="submit"
                                 variant="contained"
                                 disabled={isLoading || !formData.itemId || !formData.reason}
                             >
-                                Submit Transaction
+                                Transaktion buchen
                             </Button>
                         </span>
                     </Tooltip>

@@ -25,9 +25,9 @@ export function Assemblies() {
         createAssembly.mutate(data, {
             onSuccess: () => {
                 setFormOpen(false);
-                showSnackbar('Assembly created successfully', 'success');
+                showSnackbar('Baugruppe erfolgreich erstellt', 'success');
             },
-            onError: () => showSnackbar('Failed to create assembly', 'error'),
+            onError: () => showSnackbar('Fehler beim Erstellen der Baugruppe', 'error'),
         });
     }
 
@@ -38,9 +38,9 @@ export function Assemblies() {
             {
                 onSuccess: () => {
                     setEditingAssembly(undefined);
-                    showSnackbar('Assembly updated successfully', 'success');
+                    showSnackbar('Baugruppe erfolgreich aktualisiert', 'success');
                 },
-                onError: () => showSnackbar('Failed to update assembly', 'error'),
+                onError: () => showSnackbar('Fehler beim Aktualisieren der Baugruppe', 'error'),
             },
         );
     }
@@ -50,20 +50,20 @@ export function Assemblies() {
         deleteAssembly.mutate(deletingId, {
             onSuccess: () => {
                 setDeletingId(undefined);
-                showSnackbar('Assembly deleted', 'success');
+                showSnackbar('Baugruppe gelöscht', 'success');
             },
-            onError: () => showSnackbar('Failed to delete assembly', 'error'),
+            onError: () => showSnackbar('Fehler beim Löschen der Baugruppe', 'error'),
         });
     }
 
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Assemblies</Typography>
+                <Typography variant="h4">Baugruppen</Typography>
                 <TooltipButton
-                    tooltipText="Create a new assembly"
+                    tooltipText="Eine neue Baugruppe erstellen"
                     icon={<AddIcon />}
-                    label="Add Assembly"
+                    label="Baugruppe hinzufügen"
                     variant="contained"
                     onClick={() => setFormOpen(true)}
                 />
@@ -79,7 +79,7 @@ export function Assemblies() {
 
             {/* Create Dialog */}
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Create New Assembly</DialogTitle>
+                <DialogTitle>Neue Baugruppe erstellen</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <AssemblyForm items={items ?? []} onSubmit={handleCreate} isLoading={createAssembly.isPending} />
                 </DialogContent>
@@ -87,7 +87,7 @@ export function Assemblies() {
 
             {/* Edit Dialog */}
             <Dialog open={!!editingAssembly} onClose={() => setEditingAssembly(undefined)} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit Assembly</DialogTitle>
+                <DialogTitle>Baugruppe bearbeiten</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingAssembly && (
                         <AssemblyForm
@@ -102,19 +102,19 @@ export function Assemblies() {
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
-                <DialogTitle>Delete Assembly</DialogTitle>
+                <DialogTitle>Baugruppe löschen</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Are you sure you want to delete this assembly? This action cannot be undone.
+                        Sind Sie sicher, dass Sie diese Baugruppe löschen möchten? Dies kann nicht rückgängig gemacht werden.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Tooltip title="Cancel delete action" arrow>
-                        <Button onClick={() => setDeletingId(undefined)}>Cancel</Button>
+                    <Tooltip title="Löschvorgang abbrechen" arrow>
+                        <Button onClick={() => setDeletingId(undefined)}>Abbrechen</Button>
                     </Tooltip>
-                    <Tooltip title="Permanently delete this assembly" arrow>
+                    <Tooltip title="Diese Baugruppe dauerhaft löschen" arrow>
                         <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-                            Delete
+                            Löschen
                         </Button>
                     </Tooltip>
                 </DialogActions>

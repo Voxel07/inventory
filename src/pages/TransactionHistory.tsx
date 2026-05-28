@@ -29,9 +29,9 @@ export function TransactionHistoryPage() {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setShowForm(false);
-                showSnackbar('Transaction logged', 'success');
+                showSnackbar('Transaktion erfasst', 'success');
             },
-            onError: () => showSnackbar('Failed to log transaction', 'error'),
+            onError: () => showSnackbar('Fehler beim Erfassen der Transaktion', 'error'),
         });
     }
 
@@ -42,9 +42,9 @@ export function TransactionHistoryPage() {
             {
                 onSuccess: () => {
                     setEditingTransaction(null);
-                    showSnackbar('Transaction updated successfully', 'success');
+                    showSnackbar('Transaktion erfolgreich aktualisiert', 'success');
                 },
-                onError: () => showSnackbar('Failed to update transaction', 'error'),
+                onError: () => showSnackbar('Fehler beim Aktualisieren der Transaktion', 'error'),
             },
         );
     }
@@ -52,10 +52,10 @@ export function TransactionHistoryPage() {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Transaction History</Typography>
+                <Typography variant="h4">Transaktionsverlauf</Typography>
                 <TooltipButton
-                    tooltipText={showForm ? "Hide the transaction creation form" : "Log a new check-out or check-in transaction"}
-                    label={showForm ? 'Hide Form' : 'New Transaction'}
+                    tooltipText={showForm ? "Formular ausblenden" : "Neue Ausleihe oder Rückgabe erfassen"}
+                    label={showForm ? 'Formular ausblenden' : 'Neue Transaktion'}
                     variant="contained"
                     onClick={() => setShowForm(!showForm)}
                 />
@@ -75,13 +75,13 @@ export function TransactionHistoryPage() {
             <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }} useFlexGap>
                 <TextField
                     select
-                    label="Item"
+                    label="Artikel"
                     value={transactionFilters.itemId}
                     onChange={(e) => setTransactionFilters({ itemId: e.target.value })}
                     size="small"
                     sx={{ minWidth: 150 }}
                 >
-                    <MenuItem value="">All Items</MenuItem>
+                    <MenuItem value="">Alle Artikel</MenuItem>
                     {items?.map((item) => (
                         <MenuItem key={item.id} value={item.id}>
                             {item.name}
@@ -90,19 +90,19 @@ export function TransactionHistoryPage() {
                 </TextField>
                 <TextField
                     select
-                    label="Type"
+                    label="Typ"
                     value={transactionFilters.transactionType}
                     onChange={(e) => setTransactionFilters({ transactionType: e.target.value })}
                     size="small"
                     sx={{ minWidth: 120 }}
                 >
-                    <MenuItem value="">All</MenuItem>
-                    <MenuItem value="checkout">Check Out</MenuItem>
-                    <MenuItem value="checkin">Check In</MenuItem>
-                    <MenuItem value="added">Added</MenuItem>
+                    <MenuItem value="">Alle</MenuItem>
+                    <MenuItem value="checkout">Ausleihe</MenuItem>
+                    <MenuItem value="checkin">Rückgabe</MenuItem>
+                    <MenuItem value="added">Hinzugefügt</MenuItem>
                 </TextField>
                 <TextField
-                    label="Start Date"
+                    label="Startdatum"
                     type="date"
                     value={transactionFilters.startDate}
                     onChange={(e) => setTransactionFilters({ startDate: e.target.value })}
@@ -110,16 +110,16 @@ export function TransactionHistoryPage() {
                     slotProps={{ inputLabel: { shrink: true } }}
                 />
                 <TextField
-                    label="End Date"
+                    label="Enddatum"
                     type="date"
                     value={transactionFilters.endDate}
                     onChange={(e) => setTransactionFilters({ endDate: e.target.value })}
                     size="small"
                     slotProps={{ inputLabel: { shrink: true } }}
                 />
-                <Tooltip title="Reset all filters to default" arrow>
+                <Tooltip title="Alle Filter zurücksetzen" arrow>
                     <Button variant="outlined" onClick={resetTransactionFilters} size="small">
-                        Reset
+                        Zurücksetzen
                     </Button>
                 </Tooltip>
             </Stack>
@@ -139,7 +139,7 @@ export function TransactionHistoryPage() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Edit Transaction</DialogTitle>
+                <DialogTitle>Transaktion bearbeiten</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingTransaction && (
                         <TransactionForm

@@ -21,9 +21,9 @@ export function DamageReportsPage() {
         createReport.mutate(data, {
             onSuccess: () => {
                 setFormOpen(false);
-                showSnackbar('Damage report submitted', 'success');
+                showSnackbar('Schadensbericht übermittelt', 'success');
             },
-            onError: () => showSnackbar('Failed to submit report', 'error'),
+            onError: () => showSnackbar('Fehler beim Übermitteln des Schadensberichts', 'error'),
         });
     }
 
@@ -31,8 +31,8 @@ export function DamageReportsPage() {
         updateStatus.mutate(
             { id, status },
             {
-                onSuccess: () => showSnackbar('Status updated', 'success'),
-                onError: () => showSnackbar('Failed to update status', 'error'),
+                onSuccess: () => showSnackbar('Status aktualisiert', 'success'),
+                onError: () => showSnackbar('Fehler beim Aktualisieren des Status', 'error'),
             },
         );
     }
@@ -40,11 +40,11 @@ export function DamageReportsPage() {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Damage Reports</Typography>
+                <Typography variant="h4">Schadensberichte</Typography>
                 <TooltipButton
-                    tooltipText="Report a damaged or broken item"
+                    tooltipText="Einen beschädigten oder defekten Artikel melden"
                     icon={<AddIcon />}
-                    label="Report Damage"
+                    label="Schaden melden"
                     variant="contained"
                     color="error"
                     onClick={() => setFormOpen(true)}
@@ -59,7 +59,7 @@ export function DamageReportsPage() {
             />
 
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Report Damage</DialogTitle>
+                <DialogTitle>Schaden melden</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <DamageReportForm items={items ?? []} onSubmit={handleSubmit} isLoading={createReport.isPending} />
                 </DialogContent>

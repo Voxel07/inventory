@@ -17,10 +17,10 @@ interface Props {
 }
 
 const SEVERITIES: { value: DamageSeverity; label: string }[] = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'critical', label: 'Critical' },
+    { value: 'low', label: 'Niedrig' },
+    { value: 'medium', label: 'Mittel' },
+    { value: 'high', label: 'Hoch' },
+    { value: 'critical', label: 'Kritisch' },
 ];
 
 export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading }: Props) {
@@ -41,7 +41,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
             <Stack spacing={2}>
                 <TextField
                     select
-                    label="Item"
+                    label="Artikel"
                     value={formData.itemId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value }))}
                     required
@@ -55,7 +55,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                 </TextField>
                 <TextField
                     select
-                    label="Severity"
+                    label="Schweregrad"
                     value={formData.severity}
                     onChange={(e) =>
                         setFormData((prev) => ({ ...prev, severity: e.target.value as DamageSeverity }))
@@ -70,7 +70,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     ))}
                 </TextField>
                 <TextField
-                    label="Amount"
+                    label="Menge"
                     type="number"
                     value={formData.amount}
                     onChange={(e) =>
@@ -84,7 +84,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     fullWidth
                 />
                 <TextField
-                    label="Description"
+                    label="Beschreibung"
                     value={formData.description}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                     multiline
@@ -92,7 +92,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     required
                     fullWidth
                 />
-                <Tooltip title="Log and submit a new damage report" arrow>
+                <Tooltip title="Neuen Schadensbericht einreichen" arrow>
                     <span>
                         <Button
                             type="submit"
@@ -100,7 +100,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                             color="error"
                             disabled={isLoading || !formData.itemId || !formData.description || formData.amount < 1}
                         >
-                            Submit Damage Report
+                            Schadensbericht einreichen
                         </Button>
                     </span>
                 </Tooltip>

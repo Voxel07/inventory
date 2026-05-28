@@ -27,15 +27,15 @@ import { usePocketBase } from '../../hooks/usePocketBase';
 const DRAWER_WIDTH = 260;
 
 const navItems = [
-    { label: 'My Dashboard', path: '/', icon: <DashboardIcon /> },
-    { label: 'Global Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
-    { label: 'Items', path: '/items', icon: <InventoryIcon /> },
-    { label: 'Storage Locations', path: '/storage-locations', icon: <RoomIcon /> },
-    { label: 'Assemblies', path: '/assemblies', icon: <CategoryIcon /> },
-    { label: 'Transactions', path: '/transactions', icon: <ReceiptLongIcon /> },
-    { label: 'Checked Out', path: '/checked-out', icon: <AssignmentReturnIcon /> },
-    { label: 'QR Codes', path: '/print-qr', icon: <QrCode2Icon /> },
-    { label: 'Damage Reports', path: '/damage-reports', icon: <ReportProblemIcon /> },
+    { label: 'Mein Dashboard', path: '/', icon: <DashboardIcon /> },
+    { label: 'Globales Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
+    { label: 'Artikel', path: '/items', icon: <InventoryIcon /> },
+    { label: 'Lagerorte', path: '/storage-locations', icon: <RoomIcon /> },
+    { label: 'Baugruppen', path: '/assemblies', icon: <CategoryIcon /> },
+    { label: 'Transaktionen', path: '/transactions', icon: <ReceiptLongIcon /> },
+    { label: 'Ausgeliehen', path: '/checked-out', icon: <AssignmentReturnIcon /> },
+    { label: 'QR-Codes', path: '/print-qr', icon: <QrCode2Icon /> },
+    { label: 'Schadensberichte', path: '/damage-reports', icon: <ReportProblemIcon /> },
 ];
 
 export function Navigation() {
@@ -99,7 +99,7 @@ export function Navigation() {
                         <ListItemIcon sx={{ minWidth: 40, color: 'error.main' }}>
                             <LogoutIcon />
                         </ListItemIcon>
-                        <ListItemText primary="Log Out" />
+                        <ListItemText primary="Abmelden" />
                     </ListItemButton>
                 </Box>
             </List>
