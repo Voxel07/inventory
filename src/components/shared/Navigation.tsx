@@ -27,8 +27,8 @@ import { usePocketBase } from '../../hooks/usePocketBase';
 const DRAWER_WIDTH = 260;
 
 const navItems = [
-    { label: 'Mein Dashboard', path: '/', icon: <DashboardIcon /> },
     { label: 'Globales Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
+    { label: 'Mein Dashboard', path: '/', icon: <DashboardIcon /> },
     { label: 'Artikel', path: '/items', icon: <InventoryIcon /> },
     { label: 'Lagerorte', path: '/storage-locations', icon: <RoomIcon /> },
     { label: 'Baugruppen', path: '/assemblies', icon: <CategoryIcon /> },
