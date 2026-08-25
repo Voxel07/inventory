@@ -1,5 +1,6 @@
 import pb from './pocketbaseClient';
-import type { StockTransaction, TransactionFormData } from '../types';
+import type { DamageReport, StockTransaction, TransactionFormData } from '../types';
+import { calculateItemStock } from '../utils/stock';
 
 const COLLECTION = 'inventory_stock_transactions';
 
@@ -12,11 +13,11 @@ export async function getTransactions(filters?: {
 }): Promise<StockTransaction[]> {
   const filterParts: string[] = [];
 
-  if (filters?.itemId) filterParts.push(`itemId = "${filters.itemId}"`);
-  if (filters?.userId) filterParts.push(`userId = "${filters.userId}"`);
-  if (filters?.transactionType) filterParts.push(`transactionType = "${filters.transactionType}"`);
-  if (filters?.startDate) filterParts.push(`timestamp >= "${filters.startDate}"`);
-  if (filters?.endDate) filterParts.push(`timestamp <= "${filters.endDate}"`);
+  if (filters?.itemId) filterParts.push(pb.filter('itemId = {:value}', { value: filters.itemId }));
+  if (filters?.userId) filterParts.push(pb.filter('userId = {:value}', { value: filters.userId }));
+  if (filters?.transactionType) filterParts.push(pb.filter('transactionType = {:value}', { value: filters.transactionType }));
+  if (filters?.startDate) filterParts.push(pb.filter('timestamp >= {:value}', { value: filters.startDate }));
+  if (filters?.endDate) filterParts.push(pb.filter('timestamp <= {:value}', { value: filters.endDate }));
 
   return pb.collection(COLLECTION).getFullList<StockTransaction>({
     sort: '-timestamp',
@@ -26,25 +27,27 @@ export async function getTransactions(filters?: {
 }
 
 export async function createTransaction(data: TransactionFormData): Promise<StockTransaction> {
-  let userId = pb.authStore.record?.id;
-  if (!userId) {
-    try {
-      const users = await pb.collection('users').getList(1, 1);
-      if (users.items.length > 0) {
-        userId = users.items[0].id;
-      }
-    } catch (err) {
-      console.warn('Could not fetch fallback user:', err);
-    }
+  const userId = pb.authStore.record?.id;
+  if (!userId) throw new Error('Authentication required');
+  if (!Number.isInteger(data.quantityChanged) || data.quantityChanged < 1) throw new Error('Quantity must be a positive integer');
+
+  const [transactions, damageReports] = await Promise.all([
+    getTransactions({ itemId: data.itemId }),
+    pb.collection('inventory_damage_reports').getFullList<DamageReport>({ filter: pb.filter('itemId = {:id}', { id: data.itemId }) }),
+  ]);
+  const stock = calculateItemStock(data.itemId, transactions, damageReports);
+  if (data.transactionType === 'checkout' && data.quantityChanged > stock.remaining) {
+    throw new Error(`Only ${stock.remaining} available`);
+  }
+  if (data.transactionType === 'checkin' && data.quantityChanged > stock.checkedOut) {
+    throw new Error(`Only ${stock.checkedOut} currently checked out`);
   }
 
-  const payload: any = {
+  const payload: TransactionFormData & { timestamp: string; userId: string } = {
     ...data,
     timestamp: new Date().toISOString(),
+    userId,
   };
-  if (userId) {
-    payload.userId = userId;
-  }
 
   return pb.collection(COLLECTION).create<StockTransaction>(payload);
 }
@@ -118,12 +121,18 @@ export async function assemblyCheckout(
 export function subscribeToTransactions(
   callback: (data: { action: string; record: StockTransaction }) => void,
 ) {
+  let disposed = false;
+  let unsubscribe: (() => Promise<void>) | undefined;
   pb.collection(COLLECTION).subscribe<StockTransaction>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).then((cleanup) => {
+    if (disposed) void cleanup().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
+    else unsubscribe = cleanup;
   }).catch((err) => {
     console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
-    pb.collection(COLLECTION).unsubscribe('*');
+    disposed = true;
+    void unsubscribe?.().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
   };
 }

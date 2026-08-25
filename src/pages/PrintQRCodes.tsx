@@ -46,10 +46,9 @@ export function PrintQRCodesPage() {
 
         if (allEntries.length === 0) return;
 
-        setGenerating(true);
         Promise.all(
             allEntries.map(async (entry) => {
-                const qrDataUrl = await generateQRCodeDataURL(entry.id);
+                const qrDataUrl = await generateQRCodeDataURL(entry.id, entry.type);
                 return { ...entry, qrDataUrl };
             }),
         ).then((results) => {

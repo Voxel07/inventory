@@ -18,11 +18,13 @@ import CategoryIcon from '@mui/icons-material/Category';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { usePocketBase } from '../../hooks/usePocketBase';
+import { LanguageSelector } from './LanguageSelector';
 
 const DRAWER_WIDTH = 260;
 
@@ -30,11 +32,12 @@ const navItems = [
     { label: 'Globales Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
     { label: 'Mein Dashboard', path: '/', icon: <DashboardIcon /> },
     { label: 'Artikel', path: '/items', icon: <InventoryIcon /> },
+    { label: 'QR scannen', path: '/checkout', icon: <QrCodeScannerIcon /> },
     { label: 'Lagerorte', path: '/storage-locations', icon: <RoomIcon /> },
     { label: 'Baugruppen', path: '/assemblies', icon: <CategoryIcon /> },
     { label: 'Transaktionen', path: '/transactions', icon: <ReceiptLongIcon /> },
     { label: 'Ausgeliehen', path: '/checked-out', icon: <AssignmentReturnIcon /> },
-    { label: 'QR-Codes', path: '/print-qr', icon: <QrCode2Icon /> },
+    { label: 'QR-Codes drucken', path: '/print-qr', icon: <QrCode2Icon /> },
     { label: 'Schadensberichte', path: '/damage-reports', icon: <ReportProblemIcon /> },
 ];
 
@@ -83,6 +86,7 @@ export function Navigation() {
                 </Box>
                 <Box sx={{ p: 1 }}>
                     <Divider sx={{ mb: 1 }} />
+                    <Box sx={{ px: 1, pb: 1.5 }}><LanguageSelector /></Box>
                     <ListItemButton
                         onClick={() => {
                             logout();

@@ -202,7 +202,7 @@ export function AssemblyDetail() {
 
     const canCheckout = insufficientItems.length === 0 && assemblyItems.length > 0;
 
-    const maxAssembliesPossible = useMemo(() => {
+    const maxAssembliesPossible = (() => {
         if (assemblyItems.length === 0) return 0;
         let minPossible = Infinity;
         for (const item of assemblyItems) {
@@ -214,12 +214,12 @@ export function AssemblyDetail() {
             }
         }
         return minPossible === Infinity ? 0 : minPossible;
-    }, [assemblyItems, assembly.itemQuantities, stockInfo]);
+    })();
 
-    const availableItemsToAdd = useMemo(() => {
+    const availableItemsToAdd = (() => {
         if (!items || !assembly) return [];
         return items.filter((item) => !(assembly.itemIds ?? []).includes(item.id));
-    }, [items, assembly]);
+    })();
 
     return (
         <Box>

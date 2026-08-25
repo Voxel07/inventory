@@ -6,15 +6,6 @@ export const COLLECTIONS = {
   USERS: 'users',
 } as const;
 
-export const TRANSACTION_REASONS = [
-  'Projektnutzung',
-  'Wartung',
-  'Testen',
-  'Rückgabe nach Nutzung',
-  'Bestandskorrektur',
-  'Sonstiges',
-] as const;
-
 export const SEVERITY_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
 
 export const DAMAGE_STATUSES = ['reported', 'in_review', 'repaired', 'written_off'] as const;

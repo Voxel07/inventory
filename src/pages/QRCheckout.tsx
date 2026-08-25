@@ -1,5 +1,5 @@
-import { useParams } from 'react-router-dom';
-import { Box, Typography, Paper } from '@mui/material';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Alert, Box, Button, Typography, Paper } from '@mui/material';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeScanner } from '../components/qr/QRCodeScanner';
 import { useItem } from '../hooks/useItems';
@@ -9,10 +9,13 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { calculateItemStock } from '../utils/stock';
 import { useUIStore } from '../store/uiStore';
 import type { TransactionFormData } from '../types';
+import { useNames } from '../utils/naming';
 
 export function QRCheckout() {
+    const names = useNames();
     const { itemId } = useParams<{ itemId: string }>();
-    const { data: item } = useItem(itemId ?? '');
+    const navigate = useNavigate();
+    const { data: item, isLoading: itemLoading, isError: itemError } = useItem(itemId ?? '');
     const { data: items } = useItems();
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
@@ -26,18 +29,24 @@ export function QRCheckout() {
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
             onSuccess: () => showSnackbar('Transaktion abgeschlossen', 'success'),
-            onError: () => showSnackbar('Transaktion fehlgeschlagen', 'error'),
+            onError: (error) => showSnackbar(error instanceof Error ? error.message : 'Transaktion fehlgeschlagen', 'error'),
         });
     }
 
     function handleScan(scannedId: string) {
-        window.location.href = `/checkout/${scannedId}`;
+        const url = new URL(scannedId, window.location.origin);
+        if (url.pathname.startsWith('/assemblies/')) {
+            navigate(url.pathname);
+            return;
+        }
+        const id = url.pathname.match(/\/checkout\/([^/]+)/)?.[1] ?? scannedId;
+        navigate(`/checkout/${encodeURIComponent(id)}`);
     }
 
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
-                {item ? `Ausleihe: ${item.name}` : 'QR-Ausleihe / Rückgabe'}
+                {item ? `${names.transactionType.checkout}: ${item.name}` : `QR: ${names.transactionType.checkout} / ${names.transactionType.checkin}`}
             </Typography>
 
             {!itemId && (
@@ -49,6 +58,12 @@ export function QRCheckout() {
                 </Paper>
             )}
 
+            {itemId && !itemLoading && (itemError || !item) && (
+                <Alert severity="error" sx={{ mb: 3 }} action={<Button color="inherit" onClick={() => navigate('/checkout')}>{names.action.scanAgain}</Button>}>
+                    Artikel nicht gefunden. Der QR-Code ist möglicherweise ungültig.
+                </Alert>
+            )}
+
             {item && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="subtitle1" color="text.secondary">
@@ -57,7 +72,7 @@ export function QRCheckout() {
                 </Paper>
             )}
 
-            <Paper sx={{ p: 3 }}>
+            {(!itemId || item) && <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
                     Transaktion erfassen
                 </Typography>
@@ -67,7 +82,7 @@ export function QRCheckout() {
                     onSubmit={handleSubmit}
                     isLoading={createTransaction.isPending}
                 />
-            </Paper>
+            </Paper>}
         </Box>
     );
 }

@@ -8,6 +8,8 @@ import {
     Tooltip,
 } from '@mui/material';
 import type { DamageReportFormData, Item, DamageSeverity } from '../../types';
+import { nameFor, useAppLanguage } from '../../utils/naming';
+import { SEVERITY_LEVELS } from '../../utils/constants';
 
 interface Props {
     items: Item[];
@@ -16,14 +18,9 @@ interface Props {
     isLoading?: boolean;
 }
 
-const SEVERITIES: { value: DamageSeverity; label: string }[] = [
-    { value: 'low', label: 'Niedrig' },
-    { value: 'medium', label: 'Mittel' },
-    { value: 'high', label: 'Hoch' },
-    { value: 'critical', label: 'Kritisch' },
-];
-
 export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading }: Props) {
+    useAppLanguage();
+    const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
     const [formData, setFormData] = useState<DamageReportFormData>({
         itemId: preselectedItemId ?? '',
         amount: 1,
@@ -63,7 +60,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     required
                     fullWidth
                 >
-                    {SEVERITIES.map((s) => (
+                    {severities.map((s) => (
                         <MenuItem key={s.value} value={s.value}>
                             {s.label}
                         </MenuItem>

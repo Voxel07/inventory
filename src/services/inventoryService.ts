@@ -22,7 +22,6 @@ export async function createItem(data: ItemFormData): Promise<Item> {
   const { amount, ...rest } = data;
   const item = await pb.collection(COLLECTION).create<Item>({
     ...rest,
-    amount,
     minStock: data.minStock,
     status: 'available',
     qrCode: '',
@@ -54,7 +53,8 @@ export async function createItem(data: ItemFormData): Promise<Item> {
 }
 
 export async function updateItem(id: string, data: Partial<ItemFormData>): Promise<Item> {
-  const { amount, ...rest } = data;
+  const rest = { ...data };
+  delete rest.amount;
   return pb.collection(COLLECTION).update<Item>(id, rest);
 }
 
@@ -63,12 +63,18 @@ export async function deleteItem(id: string): Promise<boolean> {
 }
 
 export function subscribeToItems(callback: (data: { action: string; record: Item }) => void) {
+  let disposed = false;
+  let unsubscribe: (() => Promise<void>) | undefined;
   pb.collection(COLLECTION).subscribe<Item>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).then((cleanup) => {
+    if (disposed) void cleanup().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
+    else unsubscribe = cleanup;
   }).catch((err) => {
     console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
-    pb.collection(COLLECTION).unsubscribe('*');
+    disposed = true;
+    void unsubscribe?.().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
   };
 }

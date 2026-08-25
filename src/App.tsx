@@ -20,6 +20,7 @@ import { LoginPage } from './pages/LoginPage';
 import { usePocketBase } from './hooks/usePocketBase';
 import { useUIStore } from './store/uiStore';
 import { useEffect } from 'react';
+import { useAppLanguage } from './utils/naming';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,6 +110,7 @@ const theme = createTheme({
 });
 
 function AppContent() {
+  useAppLanguage();
   const { isAuthenticated } = usePocketBase();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);

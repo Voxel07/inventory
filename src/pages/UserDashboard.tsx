@@ -28,9 +28,11 @@ import { usePocketBase } from '../hooks/usePocketBase';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
-import type { Item } from '../types';
+import type { Item, TransactionFormData } from '../types';
+import { useNames } from '../utils/naming';
 
 export function UserDashboard() {
+    const names = useNames();
     const navigate = useNavigate();
     const { user: currentUser } = usePocketBase();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -95,7 +97,7 @@ export function UserDashboard() {
         { label: 'Meine offenen Schadensberichte', value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
-    function handleReturnSubmit(data: any) {
+    function handleReturnSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setReturnItem(null);
@@ -179,7 +181,7 @@ export function UserDashboard() {
                                             startIcon={<AssignmentReturnIcon />}
                                             onClick={() => setReturnItem({ item, quantity })}
                                         >
-                                            Zurückgeben
+                                            {names.action.checkin}
                                         </Button>
                                     </TableCell>
                                 </TableRow>
@@ -229,7 +231,7 @@ export function UserDashboard() {
                                 itemId: returnItem.item.id,
                                 transactionType: 'checkin',
                                 quantityChanged: returnItem.quantity,
-                                reason: 'Rückgabe nach Nutzung',
+                                reason: names.reason.returnAfterUse,
                                 notes: '',
                             }}
                         />

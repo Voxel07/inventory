@@ -10,6 +10,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import LoginIcon from '@mui/icons-material/Login';
 import { usePocketBase } from '../hooks/usePocketBase';
 import { useUIStore } from '../store/uiStore';
+import { LanguageSelector } from '../components/shared/LanguageSelector';
 
 export function LoginPage() {
     const { pb } = usePocketBase();
@@ -22,9 +23,9 @@ export function LoginPage() {
             // pocketbase JS SDK authWithOAuth2 triggers the Authentik provider login via popup
             await pb.collection('users').authWithOAuth2({ provider: 'oidc' });
             showSnackbar('Erfolgreich angemeldet', 'success');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('OAuth2 error:', err);
-            showSnackbar(err.message || 'OAuth2-Anmeldung fehlgeschlagen.', 'error');
+            showSnackbar(err instanceof Error ? err.message : 'OAuth2-Anmeldung fehlgeschlagen.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -87,6 +88,7 @@ export function LoginPage() {
                     >
                         {isLoading ? 'Verbindung wird hergestellt...' : 'Mit Authentik anmelden'}
                     </Button>
+                    <Box sx={{ mt: 3 }}><LanguageSelector compact /></Box>
                 </Paper>
             </Container>
         </Box>

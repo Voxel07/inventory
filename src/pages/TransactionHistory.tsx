@@ -7,8 +7,10 @@ import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { TransactionFormData, StockTransaction } from '../types';
 import { useState } from 'react';
+import { nameFor, useNames } from '../utils/naming';
 
 export function TransactionHistoryPage() {
+    const names = useNames();
     const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const filters = {
@@ -97,9 +99,9 @@ export function TransactionHistoryPage() {
                     sx={{ minWidth: 120 }}
                 >
                     <MenuItem value="">Alle</MenuItem>
-                    <MenuItem value="checkout">Ausleihe</MenuItem>
-                    <MenuItem value="checkin">Rückgabe</MenuItem>
-                    <MenuItem value="added">Hinzugefügt</MenuItem>
+                    {(['checkout', 'checkin', 'added'] as const).map((type) => (
+                        <MenuItem key={type} value={type}>{nameFor('transactionType', type)}</MenuItem>
+                    ))}
                 </TextField>
                 <TextField
                     label="Startdatum"
@@ -119,7 +121,7 @@ export function TransactionHistoryPage() {
                 />
                 <Tooltip title="Alle Filter zurücksetzen" arrow>
                     <Button variant="outlined" onClick={resetTransactionFilters} size="small">
-                        Zurücksetzen
+                        {names.action.reset}
                     </Button>
                 </Tooltip>
             </Stack>

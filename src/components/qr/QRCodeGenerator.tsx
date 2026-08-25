@@ -14,7 +14,6 @@ export function QRCodeGenerator({ itemId, itemName }: Props) {
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
         generateQRCodeDataURL(itemId).then((url) => {
             if (!cancelled) {
                 setQrDataUrl(url);

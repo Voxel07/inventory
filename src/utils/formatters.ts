@@ -1,3 +1,5 @@
+import { getNames, nameFor } from './naming';
+
 export function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -17,32 +19,9 @@ export function formatDateTime(dateStr: string): string {
 }
 
 export function formatStatus(status: string): string {
-  const statusTranslations: Record<string, string> = {
-    // Item statuses
-    'available': 'Verfügbar',
-    'checked_out': 'Ausgeliehen',
-    'damaged': 'Beschädigt',
-    'retired': 'Ausgemustert',
-    
-    // Damage statuses
-    'reported': 'Gemeldet',
-    'in_review': 'In Prüfung',
-    'repaired': 'Repariert',
-    'written_off': 'Abgeschrieben',
-    
-    // Severity levels
-    'low': 'Niedrig',
-    'medium': 'Mittel',
-    'high': 'Hoch',
-    'critical': 'Kritisch',
-
-    // Transaction types
-    'checkout': 'Ausleihe',
-    'checkin': 'Rückgabe',
-    'added': 'Hinzugefügt',
-  };
-
-  return statusTranslations[status.toLowerCase()] || status
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const value = status.toLowerCase();
+  for (const group of ['itemStatus', 'damageStatus', 'severity', 'transactionType'] as const) {
+    if (value in getNames()[group]) return nameFor(group, value);
+  }
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }

@@ -1,9 +1,35 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import pb from '../services/pocketbaseClient';
 
+type AuthSnapshot = {
+  token: string;
+  record: typeof pb.authStore.record;
+};
+
+let authSnapshot: AuthSnapshot = {
+  token: pb.authStore.token,
+  record: pb.authStore.record,
+};
+const authListeners = new Set<() => void>();
+
+pb.authStore.onChange((token, record) => {
+  authSnapshot = { token, record };
+  authListeners.forEach((listener) => listener());
+}, false);
+
+function subscribeToAuth(listener: () => void) {
+  authListeners.add(listener);
+  return () => authListeners.delete(listener);
+}
+
+function getAuthSnapshot() {
+  return authSnapshot;
+}
+
 export function usePocketBase() {
-  const isAuthenticated = pb.authStore.isValid;
-  const user = pb.authStore.record;
+  const auth = useSyncExternalStore(subscribeToAuth, getAuthSnapshot, getAuthSnapshot);
+  const isAuthenticated = pb.authStore.isValid && !!auth.record;
+  const user = auth.record;
 
   async function login(email: string, password: string) {
     return pb.collection('users').authWithPassword(email, password);
@@ -11,8 +37,6 @@ export function usePocketBase() {
 
   function logout() {
     pb.authStore.clear();
-    // Delete the pb_auth cookie by setting its expiration to the past
-    document.cookie = 'pb_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
   }
 
   return { pb, isAuthenticated, user, login, logout };
@@ -23,14 +47,19 @@ export function useRealtimeSubscription<T>(
   callback: (data: { action: string; record: T }) => void,
 ) {
   useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => Promise<void>) | undefined;
     pb.collection(collection).subscribe<T>('*', (e) => {
       callback({ action: e.action, record: e.record });
+    }).then((cleanup) => {
+      if (disposed) void cleanup().catch((err) => console.warn(`Failed to clean up ${collection} subscription:`, err));
+      else unsubscribe = cleanup;
     }).catch((err) => {
       console.warn(`Failed to subscribe to realtime updates for ${collection}:`, err);
     });
     return () => {
-      pb.collection(collection).unsubscribe('*');
+      disposed = true;
+      void unsubscribe?.().catch((err) => console.warn(`Failed to clean up ${collection} subscription:`, err));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collection]);
+  }, [collection, callback]);
 }

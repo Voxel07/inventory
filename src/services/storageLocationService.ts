@@ -43,12 +43,21 @@ export async function deleteStorageLocation(id: string): Promise<boolean> {
 export function subscribeToStorageLocations(
   callback: (data: { action: string; record: StorageLocation }) => void,
 ) {
+  let disposed = false;
+  let unsubscribe: (() => Promise<void>) | undefined;
   pb.collection(COLLECTION).subscribe<StorageLocation>('*', (e) => {
     callback({ action: e.action, record: e.record });
+  }).then((cleanup) => {
+    if (disposed) {
+      void cleanup().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
+    } else {
+      unsubscribe = cleanup;
+    }
   }).catch((err) => {
     console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
   });
   return () => {
-    pb.collection(COLLECTION).unsubscribe('*');
+    disposed = true;
+    void unsubscribe?.().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
   };
 }

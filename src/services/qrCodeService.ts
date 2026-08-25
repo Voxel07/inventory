@@ -1,9 +1,10 @@
 import QRCode from 'qrcode';
 
-const BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+const BASE_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+export type QRResourceType = 'item' | 'assembly';
 
-export async function generateQRCodeDataURL(itemId: string): Promise<string> {
-  const checkoutUrl = `${BASE_URL}/checkout/${itemId}`;
+export async function generateQRCodeDataURL(itemId: string, type: QRResourceType = 'item'): Promise<string> {
+  const checkoutUrl = getCheckoutUrl(itemId, type);
   return QRCode.toDataURL(checkoutUrl, {
     width: 256,
     margin: 2,
@@ -11,11 +12,11 @@ export async function generateQRCodeDataURL(itemId: string): Promise<string> {
   });
 }
 
-export async function generateQRCodeSVG(itemId: string): Promise<string> {
-  const checkoutUrl = `${BASE_URL}/checkout/${itemId}`;
+export async function generateQRCodeSVG(itemId: string, type: QRResourceType = 'item'): Promise<string> {
+  const checkoutUrl = getCheckoutUrl(itemId, type);
   return QRCode.toString(checkoutUrl, { type: 'svg', margin: 2 });
 }
 
-export function getCheckoutUrl(itemId: string): string {
-  return `${BASE_URL}/checkout/${itemId}`;
+export function getCheckoutUrl(itemId: string, type: QRResourceType = 'item'): string {
+  return type === 'assembly' ? `${BASE_URL}/assemblies/${itemId}` : `${BASE_URL}/checkout/${itemId}`;
 }

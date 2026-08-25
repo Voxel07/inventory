@@ -16,6 +16,7 @@ import {
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useUIStore } from '../store/uiStore';
+import { useNames } from '../utils/naming';
 
 interface CheckedOutRow {
     id: string;
@@ -26,6 +27,7 @@ interface CheckedOutRow {
 }
 
 export function CheckedOutItemsPage() {
+    const names = useNames();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const createTransaction = useCreateTransaction();
@@ -67,7 +69,7 @@ export function CheckedOutItemsPage() {
                 itemId,
                 transactionType: 'checkin',
                 quantityChanged: 1,
-                reason: 'Rückgabe nach Nutzung',
+                reason: names.reason.returnAfterUse,
                 notes: 'Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel',
             },
             {
@@ -117,7 +119,7 @@ export function CheckedOutItemsPage() {
                                     <TableCell>{row.storageLocation}</TableCell>
                                     <TableCell align="right">{row.checkedOut}</TableCell>
                                     <TableCell align="right">
-                                        <Tooltip title="Schnelle Rückgabe von 1 Einheit dieses Artikels" arrow>
+                                        <Tooltip title={`${names.action.checkin}: 1 Einheit`} arrow>
                                             <span>
                                                 <Button
                                                     size="small"

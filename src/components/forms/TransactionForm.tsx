@@ -11,6 +11,7 @@ import type { TransactionFormData, Item, TransactionType } from '../../types';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useDamageReports } from '../../hooks/useDamageReports';
 import { calculateItemStock } from '../../utils/stock';
+import { nameFor, useNames } from '../../utils/naming';
 
 interface Props {
     items: Item[];
@@ -20,17 +21,9 @@ interface Props {
     initialData?: TransactionFormData;
 }
 
-const REASONS = [
-    'Projektnutzung',
-    'Wartung',
-    'Testen',
-    'Rückgabe nach Nutzung',
-    'Lageraufstockung',
-    'Bestandskorrektur',
-    'Sonstiges',
-];
-
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
+    const names = useNames();
+    const transactionReasons = Object.values(names.reason);
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
     const [formData, setFormData] = useState<TransactionFormData>({
@@ -79,9 +72,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     required
                     fullWidth
                 >
-                    <MenuItem value="checkout">Ausleihe (Entnehmen)</MenuItem>
-                    <MenuItem value="checkin">Rückgabe (Zurückgeben)</MenuItem>
-                    <MenuItem value="added">Bestand hinzufügen</MenuItem>
+                    {(['checkout', 'checkin', 'added'] as TransactionType[]).map((type) => (
+                        <MenuItem key={type} value={type}>{nameFor('transactionType', type)}</MenuItem>
+                    ))}
                 </TextField>
                 <TextField
                     label="Menge"
@@ -102,7 +95,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     required
                     fullWidth
                 >
-                    {REASONS.map((reason) => (
+                    {transactionReasons.map((reason) => (
                         <MenuItem key={reason} value={reason}>
                             {reason}
                         </MenuItem>
