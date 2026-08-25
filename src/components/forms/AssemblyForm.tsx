@@ -19,6 +19,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import type { AssemblyFormData, Assembly, Item } from '../../types';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     initialData?: Assembly;
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props) {
+    const t = useTranslate();
     const [formData, setFormData] = useState<AssemblyFormData>({
         name: initialData?.name ?? '',
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
@@ -81,14 +83,14 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
                 <TextField
-                    label="Baugruppenname"
+                    label={t('Baugruppenname', 'Assembly name')}
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     required
                     fullWidth
                 />
                 <TextField
-                    label="Beschreibung"
+                    label={t('Beschreibung', 'Description')}
                     value={formData.description}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                     multiline
@@ -99,7 +101,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                 {selectedItems.length > 0 && (
                     <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                            Ausgewählte Artikel
+                            {t('Ausgewählte Artikel', 'Selected items')}
                         </Typography>
                         <Stack spacing={0.5}>
                             {selectedItems.map((item) => (
@@ -110,7 +112,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                                         onDelete={() => handleToggle(item.id)}
                                         sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
                                     />
-                                    <Tooltip title="Menge verringern" arrow>
+                                    <Tooltip title={t('Menge verringern', 'Decrease quantity')} arrow>
                                         <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, -1)}>
                                             <RemoveIcon fontSize="small" />
                                         </IconButton>
@@ -118,7 +120,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                                     <Typography variant="body2" sx={{ minWidth: 20, textAlign: 'center' }}>
                                         {formData.itemQuantities[item.id] ?? 1}
                                     </Typography>
-                                    <Tooltip title="Menge erhöhen" arrow>
+                                    <Tooltip title={t('Menge erhöhen', 'Increase quantity')} arrow>
                                         <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, 1)}>
                                             <AddIcon fontSize="small" />
                                         </IconButton>
@@ -130,7 +132,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                 )}
 
                 <TextField
-                    label="Artikel suchen..."
+                    label={t('Artikel suchen...', 'Search items...')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     fullWidth
@@ -140,7 +142,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                 <Paper variant="outlined" sx={{ maxHeight: 250, overflow: 'auto' }}>
                     {filteredItems.length === 0 ? (
                         <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                            Keine Artikel gefunden
+                            {t('Keine Artikel gefunden', 'No items found')}
                         </Typography>
                     ) : (
                         <List dense disablePadding>
@@ -166,10 +168,10 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     )}
                 </Paper>
 
-                <Tooltip title={initialData ? "Änderungen an dieser Baugruppe speichern" : "Neue Baugruppe erstellen"} arrow>
+                <Tooltip title={initialData ? t('Änderungen an dieser Baugruppe speichern', 'Save changes to this assembly') : t('Neue Baugruppe erstellen', 'Create a new assembly')} arrow>
                     <span>
                         <Button type="submit" variant="contained" disabled={isLoading || !formData.name}>
-                            {initialData ? 'Baugruppe aktualisieren' : 'Baugruppe erstellen'}
+                            {initialData ? t('Baugruppe aktualisieren', 'Update assembly') : t('Baugruppe erstellen', 'Create assembly')}
                         </Button>
                     </span>
                 </Tooltip>

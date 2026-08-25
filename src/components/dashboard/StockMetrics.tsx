@@ -5,6 +5,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import type { Item, StockTransaction, DamageReport } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     items: Item[] | undefined;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function StockMetrics({ items, transactions, damageReports }: Props) {
+    const t = useTranslate();
     const totalItems = items?.length ?? 0;
     const totalStock =
         items?.reduce((sum, item) => {
@@ -29,11 +31,11 @@ export function StockMetrics({ items, transactions, damageReports }: Props) {
         damageReports?.filter((r) => r.status === 'reported' || r.status === 'in_review').length ?? 0;
 
     const metrics = [
-        { label: 'Artikel insgesamt', value: totalItems, icon: <InventoryIcon />, color: '#7c4dff' },
-        { label: 'Gesamtbestand', value: totalStock, icon: <InventoryIcon />, color: '#00e676' },
-        { label: 'Geringer Bestand', value: lowStockItems, icon: <WarningIcon />, color: '#ffab00' },
-        { label: 'Kürzliche Transaktionen', value: recentTransactions, icon: <SwapHorizIcon />, color: '#448aff' },
-        { label: 'Offene Schadensberichte', value: openDamageReports, icon: <ReportProblemIcon />, color: '#ff5252' },
+        { label: t('Artikel insgesamt', 'Total items'), value: totalItems, icon: <InventoryIcon />, color: '#7c4dff' },
+        { label: t('Gesamtbestand', 'Total stock'), value: totalStock, icon: <InventoryIcon />, color: '#00e676' },
+        { label: t('Geringer Bestand', 'Low stock'), value: lowStockItems, icon: <WarningIcon />, color: '#ffab00' },
+        { label: t('Kürzliche Transaktionen', 'Recent transactions'), value: recentTransactions, icon: <SwapHorizIcon />, color: '#448aff' },
+        { label: t('Offene Schadensberichte', 'Open damage reports'), value: openDamageReports, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
     return (

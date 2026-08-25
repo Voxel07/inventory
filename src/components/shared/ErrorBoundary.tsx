@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { Box, Typography, Button } from '@mui/material';
+import { translate } from '../../utils/naming';
 
 interface Props {
     children: ReactNode;
@@ -22,13 +23,13 @@ export class ErrorBoundary extends Component<Props, State> {
             return (
                 <Box sx={{ p: 4, textAlign: 'center' }}>
                     <Typography variant="h5" color="error" gutterBottom>
-                        Etwas ist schiefgelaufen
+                        {translate('Etwas ist schiefgelaufen', 'Something went wrong')}
                     </Typography>
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                         {this.state.error?.message}
                     </Typography>
                     <Button variant="contained" onClick={() => this.setState({ hasError: false, error: null })}>
-                        Erneut versuchen
+                        {translate('Erneut versuchen', 'Try again')}
                     </Button>
                 </Box>
             );

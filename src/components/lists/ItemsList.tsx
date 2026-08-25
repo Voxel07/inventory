@@ -13,14 +13,16 @@ import {
     Typography,
     TextField,
     Box,
+    MenuItem,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
-import type { DamageReport, Item, StockTransaction } from '../../types';
+import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTransaction } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
 import { formatStatus } from '../../utils/formatters';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     items: Item[] | undefined;
@@ -43,7 +45,9 @@ type SortDir = 'asc' | 'desc';
 
 export function ItemsList({ items, transactions, damageReports, isLoading, onEdit, onDelete }: Props) {
     const navigate = useNavigate();
+    const t = useTranslate();
     const [search, setSearch] = useState('');
+    const [eventFilter, setEventFilter] = useState<EventType | ''>('');
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -67,6 +71,10 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
             );
         }
 
+        if (eventFilter) {
+            result = result.filter(({ item }) => item.eventTypes?.includes(eventFilter));
+        }
+
         if (sortField) {
             result = [...result].sort((a, b) => {
                 let cmp = 0;
@@ -77,7 +85,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
         }
 
         return result;
-    }, [enrichedItems, search, sortField, sortDir]);
+    }, [enrichedItems, search, eventFilter, sortField, sortDir]);
 
     function handleSort(field: SortField) {
         if (sortField === field) {
@@ -101,34 +109,46 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     if (!items?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Keine Artikel gefunden</Typography>
+                <Typography color="text.secondary">{t('Keine Artikel gefunden', 'No items found')}</Typography>
             </Paper>
         );
     }
 
     return (
         <Box>
-            <TextField
-                label="Nach Name oder Kategorie suchen"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                size="small"
-                fullWidth
-                sx={{ mb: 2 }}
-            />
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                <TextField
+                    label={t('Nach Name oder Kategorie suchen', 'Search by name or category')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    size="small"
+                    sx={{ flex: '1 1 280px' }}
+                />
+                <TextField
+                    select
+                    label={t('Event filtern', 'Filter event')}
+                    value={eventFilter}
+                    onChange={(event) => setEventFilter(event.target.value as EventType | '')}
+                    size="small"
+                    sx={{ minWidth: 170 }}
+                >
+                    <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
+                    {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
+                </TextField>
+            </Box>
             <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                 <Table size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Kategorie</TableCell>
+                            <TableCell>{t('Name', 'Name')}</TableCell>
+                            <TableCell>{t('Kategorie', 'Category')}</TableCell>
                             <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>
                                 <TableSortLabel
                                     active={sortField === 'stock'}
                                     direction={sortField === 'stock' ? sortDir : 'asc'}
                                     onClick={() => handleSort('stock')}
                                 >
-                                    Bestand
+                                    {t('Bestand', 'Stock')}
                                 </TableSortLabel>
                             </TableCell>
                             <TableCell align="right">
@@ -137,12 +157,13 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     direction={sortField === 'value' ? sortDir : 'asc'}
                                     onClick={() => handleSort('value')}
                                 >
-                                    Einzelwert
+                                    {t('Einzelwert', 'Unit value')}
                                 </TableSortLabel>
                             </TableCell>
-                            <TableCell>Lagerort</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell align="right">Aktionen</TableCell>
+                            <TableCell>{t('Events', 'Events')}</TableCell>
+                            <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
+                            <TableCell>{t('Status', 'Status')}</TableCell>
+                            <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -173,12 +194,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                             {remaining}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary" noWrap>
-                                            {totalStock} gesamt{checkedOut > 0 ? ` · ${checkedOut} ausgeliehen` : ''}{damaged > 0 ? ` · ${damaged} defekt` : ''}
-                                            {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} Kartons`}
+                                            {totalStock} {t('gesamt', 'total')}{checkedOut > 0 ? ` · ${checkedOut} ${t('ausgeliehen', 'checked out')}` : ''}{damaged > 0 ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}
+                                            {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} ${t('Kartons', 'containers')}`}
                                         </Typography>
                                         {(item.containerSize ?? 0) > 0 && (item.containersOpened ?? 0) > 0 && (
                                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                                                {item.containersOpened} geöffnet · {item.containerRemainingPercent ?? 100}%
+                                                {item.containersOpened} {t('geöffnet', 'opened')} · {item.containerRemainingPercent ?? 100}%
                                             </Typography>
                                         )}
                                     </TableCell>
@@ -192,6 +213,11 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         })()}
                                     </TableCell>
                                     <TableCell>
+                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                            {item.eventTypes?.map((type) => <Chip key={type} label={type} size="small" variant="outlined" />)}
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>
                                         <Chip
                                             label={formatStatus(item.status)}
                                             color={statusColors[item.status] ?? 'default'}
@@ -201,14 +227,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Artikeldetails bearbeiten"
+                                            tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')}
                                             icon={<EditIcon />}
                                             size="small"
                                             onClick={() => onEdit(item)}
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Artikel löschen"
+                                            tooltipText={t('Artikel löschen', 'Delete item')}
                                             icon={<DeleteIcon />}
                                             size="small"
                                             color="error"
@@ -218,6 +244,9 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                 </TableRow>
                             );
                         })}
+                        {filteredAndSorted.length === 0 && (
+                            <TableRow><TableCell colSpan={8}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
+                        )}
                     </TableBody>
                 </Table>
             </TableContainer>

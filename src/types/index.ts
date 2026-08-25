@@ -12,3 +12,5 @@ export type {
   DamageReportFormData,
 } from './damageReport';
 export type { User, UserRole } from './user';
+export { EVENT_TYPES } from './event';
+export type { EventType, EventReportStatus, EventReport, EventReportFormData } from './event';

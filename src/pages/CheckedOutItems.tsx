@@ -16,7 +16,7 @@ import {
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useUIStore } from '../store/uiStore';
-import { useNames } from '../utils/naming';
+import { useNames, useTranslate } from '../utils/naming';
 
 interface CheckedOutRow {
     id: string;
@@ -28,6 +28,7 @@ interface CheckedOutRow {
 
 export function CheckedOutItemsPage() {
     const names = useNames();
+    const t = useTranslate();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const createTransaction = useCreateTransaction();
@@ -70,11 +71,11 @@ export function CheckedOutItemsPage() {
                 transactionType: 'checkin',
                 quantityChanged: 1,
                 reason: names.reason.returnAfterUse,
-                notes: 'Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel',
+                notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
             },
             {
-                onSuccess: () => showSnackbar('Artikel zurückgegeben', 'success'),
-                onError: () => showSnackbar('Fehler bei der Rückgabe des Artikels', 'error'),
+                onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
+                onError: () => showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error'),
             },
         );
     }
@@ -92,23 +93,23 @@ export function CheckedOutItemsPage() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
-                Ausgeliehene Artikel
+                {t('Ausgeliehene Artikel', 'Checked-out items')}
             </Typography>
 
             {checkedOutRows.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">Derzeit sind keine Artikel ausgeliehen.</Typography>
+                    <Typography color="text.secondary">{t('Derzeit sind keine Artikel ausgeliehen.', 'No items are currently checked out.')}</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Kategorie</TableCell>
-                                <TableCell>Lagerort</TableCell>
-                                <TableCell align="right">Ausgeliehen</TableCell>
-                                <TableCell align="right">Aktion</TableCell>
+                                <TableCell>{t('Name', 'Name')}</TableCell>
+                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
+                                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
+                                <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
+                                <TableCell align="right">{t('Aktion', 'Action')}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -119,7 +120,7 @@ export function CheckedOutItemsPage() {
                                     <TableCell>{row.storageLocation}</TableCell>
                                     <TableCell align="right">{row.checkedOut}</TableCell>
                                     <TableCell align="right">
-                                        <Tooltip title={`${names.action.checkin}: 1 Einheit`} arrow>
+                                        <Tooltip title={`${names.action.checkin}: 1 ${t('Einheit', 'unit')}`} arrow>
                                             <span>
                                                 <Button
                                                     size="small"
@@ -127,7 +128,7 @@ export function CheckedOutItemsPage() {
                                                     onClick={() => handleQuickReturn(row.id)}
                                                     disabled={createTransaction.isPending}
                                                 >
-                                                    Schnellrückgabe
+                                                    {t('Schnellrückgabe', 'Quick return')}
                                                 </Button>
                                             </span>
                                         </Tooltip>

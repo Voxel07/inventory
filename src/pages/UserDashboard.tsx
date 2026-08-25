@@ -29,10 +29,11 @@ import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import type { Item, TransactionFormData } from '../types';
-import { useNames } from '../utils/naming';
+import { useNames, useTranslate } from '../utils/naming';
 
 export function UserDashboard() {
     const names = useNames();
+    const t = useTranslate();
     const navigate = useNavigate();
     const { user: currentUser } = usePocketBase();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -91,20 +92,20 @@ export function UserDashboard() {
     }, [damageReports, currentUser]);
 
     const metrics = [
-        { label: 'Meine ausgeliehenen Artikel', value: totalUniqueCheckedOut, icon: <ShoppingBagIcon />, color: '#7c4dff' },
-        { label: 'Einheiten insgesamt ausgeliehen', value: totalUnitsCheckedOut, icon: <AssignmentReturnIcon />, color: '#00e676' },
-        { label: 'Meine Protokolle', value: totalUserTransactionsCount, icon: <ListAltIcon />, color: '#448aff' },
-        { label: 'Meine offenen Schadensberichte', value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
+        { label: t('Meine ausgeliehenen Artikel', 'My checked-out items'), value: totalUniqueCheckedOut, icon: <ShoppingBagIcon />, color: '#7c4dff' },
+        { label: t('Einheiten insgesamt ausgeliehen', 'Total units checked out'), value: totalUnitsCheckedOut, icon: <AssignmentReturnIcon />, color: '#00e676' },
+        { label: t('Meine Protokolle', 'My records'), value: totalUserTransactionsCount, icon: <ListAltIcon />, color: '#448aff' },
+        { label: t('Meine offenen Schadensberichte', 'My open damage reports'), value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
     function handleReturnSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setReturnItem(null);
-                showSnackbar('Artikel erfolgreich zurückgegeben', 'success');
+                showSnackbar(t('Artikel erfolgreich zurückgegeben', 'Item returned successfully'), 'success');
             },
             onError: () => {
-                showSnackbar('Fehler beim Erfassen der Rückgabe', 'error');
+                showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not record return'), 'error');
             }
         });
     }
@@ -112,10 +113,10 @@ export function UserDashboard() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 700 }}>
-                Hallo, {currentUser?.name || 'Benutzer'}
+                {t('Hallo', 'Hello')}, {currentUser?.name || t('Benutzer', 'User')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                Hier ist eine Übersicht Ihrer aktuellen Ausleihen und Aktivitäten.
+                {t('Hier ist eine Übersicht Ihrer aktuellen Ausleihen und Aktivitäten.', 'Here is an overview of your current checkouts and activity.')}
             </Typography>
 
             {/* Personalized Metrics */}
@@ -139,22 +140,22 @@ export function UserDashboard() {
 
             {/* Currently Checked Out Items */}
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Meine ausgeliehenen Artikel
+                {t('Meine ausgeliehenen Artikel', 'My checked-out items')}
             </Typography>
             {checkedOutItems.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center', mb: 4 }}>
-                    <Typography color="text.secondary">Sie haben derzeit keine Artikel ausgeliehen.</Typography>
+                    <Typography color="text.secondary">{t('Sie haben derzeit keine Artikel ausgeliehen.', 'You currently have no items checked out.')}</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto', mb: 4 }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Artikelname</TableCell>
-                                <TableCell>Kategorie</TableCell>
-                                <TableCell align="right">Ausgeliehene Menge</TableCell>
-                                <TableCell>Lagerort</TableCell>
-                                <TableCell align="right">Aktionen</TableCell>
+                                <TableCell>{t('Artikelname', 'Item name')}</TableCell>
+                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
+                                <TableCell align="right">{t('Ausgeliehene Menge', 'Quantity checked out')}</TableCell>
+                                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
+                                <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -194,14 +195,14 @@ export function UserDashboard() {
             {/* My Recent Activity */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Meine kürzlichen Transaktionen
+                    {t('Meine kürzlichen Transaktionen', 'My recent transactions')}
                 </Typography>
                 <Button
                     endIcon={<KeyboardArrowRightIcon />}
                     onClick={() => navigate('/transactions')}
                     sx={{ textTransform: 'none' }}
                 >
-                    Alle anzeigen
+                    {t('Alle anzeigen', 'View all')}
                 </Button>
             </Box>
             <TransactionHistory
@@ -218,7 +219,7 @@ export function UserDashboard() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>{returnItem?.item.name} zurückgeben</DialogTitle>
+                <DialogTitle>{t(`${returnItem?.item.name ?? ''} zurückgeben`, `Return ${returnItem?.item.name ?? ''}`)}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {returnItem && (
                         <TransactionForm

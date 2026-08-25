@@ -11,8 +11,10 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
+import { useTranslate } from '../utils/naming';
 
 export function Items() {
+    const t = useTranslate();
     const { data: items, isLoading } = useItems();
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
@@ -34,9 +36,9 @@ export function Items() {
         createItem.mutate(data, {
             onSuccess: () => {
                 setFormOpen(false);
-                showSnackbar('Artikel erfolgreich erstellt', 'success');
+                showSnackbar(t('Artikel erfolgreich erstellt', 'Item created successfully'), 'success');
             },
-            onError: () => showSnackbar('Fehler beim Erstellen des Artikels', 'error'),
+            onError: () => showSnackbar(t('Fehler beim Erstellen des Artikels', 'Could not create item'), 'error'),
         });
     }
 
@@ -47,9 +49,9 @@ export function Items() {
             {
                 onSuccess: () => {
                     setEditingItem(undefined);
-                    showSnackbar('Artikel erfolgreich aktualisiert', 'success');
+                    showSnackbar(t('Artikel erfolgreich aktualisiert', 'Item updated successfully'), 'success');
                 },
-                onError: () => showSnackbar('Fehler beim Aktualisieren des Artikels', 'error'),
+                onError: () => showSnackbar(t('Fehler beim Aktualisieren des Artikels', 'Could not update item'), 'error'),
             },
         );
     }
@@ -63,20 +65,20 @@ export function Items() {
         deleteItem.mutate(deletingId, {
             onSuccess: () => {
                 setDeletingId(undefined);
-                showSnackbar('Artikel gelöscht', 'success');
+                showSnackbar(t('Artikel gelöscht', 'Item deleted'), 'success');
             },
-            onError: () => showSnackbar('Fehler beim Löschen des Artikels', 'error'),
+            onError: () => showSnackbar(t('Fehler beim Löschen des Artikels', 'Could not delete item'), 'error'),
         });
     }
 
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Artikel</Typography>
+                <Typography variant="h4">{t('Artikel', 'Items')}</Typography>
                 <TooltipButton
-                    tooltipText="Neuen Inventarartikel erstellen"
+                    tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
                     icon={<AddIcon />}
-                    label="Artikel hinzufügen"
+                    label={t('Artikel hinzufügen', 'Add item')}
                     variant="contained"
                     onClick={() => setFormOpen(true)}
                 />
@@ -93,7 +95,7 @@ export function Items() {
 
             {/* Create Dialog */}
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Neuen Artikel erstellen</DialogTitle>
+                <DialogTitle>{t('Neuen Artikel erstellen', 'Create new item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <ItemForm
                         onSubmit={handleCreate}
@@ -107,7 +109,7 @@ export function Items() {
 
             {/* Edit Dialog */}
             <Dialog open={!!editingItem} onClose={() => setEditingItem(undefined)} maxWidth="sm" fullWidth>
-                <DialogTitle>Artikel bearbeiten</DialogTitle>
+                <DialogTitle>{t('Artikel bearbeiten', 'Edit item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingItem && (
                         <ItemForm
@@ -132,17 +134,17 @@ export function Items() {
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
-                <DialogTitle>Artikel löschen</DialogTitle>
+                <DialogTitle>{t('Artikel löschen', 'Delete item')}</DialogTitle>
                 <DialogContent>
-                    <DialogContentText>Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.</DialogContentText>
+                    <DialogContentText>{t('Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this item? This cannot be undone.')}</DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Tooltip title="Löschvorgang abbrechen" arrow>
-                        <Button onClick={() => setDeletingId(undefined)}>Abbrechen</Button>
+                    <Tooltip title={t('Löschvorgang abbrechen', 'Cancel deletion')} arrow>
+                        <Button onClick={() => setDeletingId(undefined)}>{t('Abbrechen', 'Cancel')}</Button>
                     </Tooltip>
-                    <Tooltip title="Diesen Artikel dauerhaft löschen" arrow>
+                    <Tooltip title={t('Diesen Artikel dauerhaft löschen', 'Permanently delete this item')} arrow>
                         <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
-                            Löschen
+                            {t('Löschen', 'Delete')}
                         </Button>
                     </Tooltip>
                 </DialogActions>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, Stack, Typography, Tooltip } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import { generateQRCodeDataURL } from '../../services/qrCodeService';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     itemId: string;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function QRCodeGenerator({ itemId, itemName }: Props) {
+    const t = useTranslate();
     const [qrDataUrl, setQrDataUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
 
@@ -44,13 +46,13 @@ export function QRCodeGenerator({ itemId, itemName }: Props) {
             <Box
                 component="img"
                 src={qrDataUrl}
-                alt={`QR code for ${itemName}`}
+                alt={t(`QR-Code für ${itemName}`, `QR code for ${itemName}`)}
                 sx={{ width: 256, height: 256 }}
             />
-            <Tooltip title="QR-Code-Bilddatei auf Ihrem Gerät speichern" arrow>
+            <Tooltip title={t('QR-Code-Bilddatei auf Ihrem Gerät speichern', 'Save the QR code image on your device')} arrow>
                 <span>
                     <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
-                        QR-Code herunterladen
+                        {t('QR-Code herunterladen', 'Download QR code')}
                     </Button>
                 </span>
             </Tooltip>

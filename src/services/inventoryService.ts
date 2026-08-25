@@ -20,9 +20,14 @@ export async function getItem(id: string): Promise<Item> {
 
 export async function createItem(data: ItemFormData): Promise<Item> {
   const { amount, ...rest } = data;
+  if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+    throw new Error('Amount must be zero or a positive number');
+  }
   const item = await pb.collection(COLLECTION).create<Item>({
     ...rest,
-    minStock: data.minStock,
+    amount: amount ?? 0,
+    minStock: Number(data.minStock),
+    value: Number(data.value),
     status: 'available',
     qrCode: '',
   });

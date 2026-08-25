@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import type { DamageReport, DamageStatus, Item } from '../../types';
 import { formatStatus } from '../../utils/formatters';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     reports: DamageReport[] | undefined;
@@ -37,6 +38,7 @@ const statusTransitions: Record<DamageStatus, DamageStatus[]> = {
 };
 
 export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }: Props) {
+    const t = useTranslate();
     const visibleReports = reports?.filter(
         (r) => r.status === 'reported' || r.status === 'in_review',
     );
@@ -53,7 +55,7 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
     if (!visibleReports?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Keine Schadensberichte gefunden</Typography>
+                <Typography color="text.secondary">{t('Keine Schadensberichte gefunden', 'No damage reports found')}</Typography>
             </Paper>
         );
     }
@@ -67,12 +69,12 @@ export function DamageReportsList({ reports, items, isLoading, onUpdateStatus }:
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Datum</TableCell>
-                        <TableCell>Artikel</TableCell>
-                        <TableCell align="right">Menge</TableCell>
-                        <TableCell>Schweregrad</TableCell>
-                        <TableCell>Beschreibung</TableCell>
-                        <TableCell>Status</TableCell>
+                        <TableCell>{t('Datum', 'Date')}</TableCell>
+                        <TableCell>{t('Artikel', 'Item')}</TableCell>
+                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                        <TableCell>{t('Schweregrad', 'Severity')}</TableCell>
+                        <TableCell>{t('Beschreibung', 'Description')}</TableCell>
+                        <TableCell>{t('Status', 'Status')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>

@@ -16,6 +16,7 @@ import { CheckedOutItemsPage } from './pages/CheckedOutItems';
 import { PrintQRCodesPage } from './pages/PrintQRCodes';
 import { UserDashboard } from './pages/UserDashboard';
 import { StorageLocations } from './pages/StorageLocations';
+import { Events } from './pages/Events';
 import { LoginPage } from './pages/LoginPage';
 import { usePocketBase } from './hooks/usePocketBase';
 import { useUIStore } from './store/uiStore';
@@ -167,6 +168,7 @@ function AppContent() {
             <Route path="/items/:itemId" element={<ItemDetail />} />
             <Route path="/assemblies" element={<Assemblies />} />
             <Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} />
+            <Route path="/events" element={<Events />} />
             <Route path="/checkout" element={<QRCheckout />} />
             <Route path="/checkout/:itemId" element={<QRCheckout />} />
             <Route path="/transactions" element={<TransactionHistoryPage />} />

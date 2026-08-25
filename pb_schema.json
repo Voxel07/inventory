@@ -187,6 +187,19 @@
                 }
             },
             {
+                "id": "pbc_items_amount",
+                "name": "amount",
+                "type": "number",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": 0,
+                    "max": null,
+                    "noDecimal": true
+                }
+            },
+            {
                 "id": "pbc_items_minStock",
                 "name": "minStock",
                 "type": "number",
@@ -223,6 +236,37 @@
                     "min": null,
                     "max": 255,
                     "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_items_subcategory",
+                "name": "subcategory",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 255,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_items_eventTypes",
+                "name": "eventTypes",
+                "type": "select",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "maxSelect": 5,
+                    "values": [
+                        "DE",
+                        "TNO",
+                        "LS",
+                        "M24",
+                        "ASD"
+                    ]
                 }
             },
             {
@@ -451,6 +495,153 @@
             },
             {
                 "id": "pbc_assemblies_updated",
+                "name": "updated",
+                "type": "autodate",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "onCreate": true,
+                    "onUpdate": true
+                }
+            }
+        ],
+        "listRule": "@request.auth.id != ''",
+        "viewRule": "@request.auth.id != ''",
+        "createRule": "@request.auth.id != ''",
+        "updateRule": "@request.auth.id != ''",
+        "deleteRule": "@request.auth.id != ''"
+    },
+    {
+        "id": "pbc_event_reports",
+        "name": "inventory_event_reports",
+        "type": "base",
+        "system": false,
+        "fields": [
+            {
+                "id": "pbc_event_type",
+                "name": "eventType",
+                "type": "select",
+                "system": false,
+                "required": true,
+                "presentable": true,
+                "options": {
+                    "maxSelect": 1,
+                    "values": [
+                        "DE",
+                        "TNO",
+                        "LS",
+                        "M24",
+                        "ASD"
+                    ]
+                }
+            },
+            {
+                "id": "pbc_event_date",
+                "name": "eventDate",
+                "type": "date",
+                "system": false,
+                "required": true,
+                "presentable": false,
+                "options": {
+                    "min": "",
+                    "max": ""
+                }
+            },
+            {
+                "id": "pbc_event_status",
+                "name": "status",
+                "type": "select",
+                "system": false,
+                "required": true,
+                "presentable": false,
+                "options": {
+                    "maxSelect": 1,
+                    "values": [
+                        "planned",
+                        "completed"
+                    ]
+                }
+            },
+            {
+                "id": "pbc_event_itemIds",
+                "name": "itemIds",
+                "type": "relation",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "collectionId": "pbc_items",
+                    "cascadeDelete": false,
+                    "minSelect": null,
+                    "maxSelect": null,
+                    "displayFields": null
+                }
+            },
+            {
+                "id": "pbc_event_planned",
+                "name": "plannedQuantities",
+                "type": "json",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "maxSize": 65536
+                }
+            },
+            {
+                "id": "pbc_event_used",
+                "name": "usedQuantities",
+                "type": "json",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "maxSize": 65536
+                }
+            },
+            {
+                "id": "pbc_event_notes",
+                "name": "notes",
+                "type": "text",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "min": null,
+                    "max": 5000,
+                    "pattern": ""
+                }
+            },
+            {
+                "id": "pbc_event_createdBy",
+                "name": "createdBy",
+                "type": "relation",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "collectionId": "_pb_users_auth_",
+                    "cascadeDelete": false,
+                    "minSelect": null,
+                    "maxSelect": 1,
+                    "displayFields": null
+                }
+            },
+            {
+                "id": "pbc_event_created",
+                "name": "created",
+                "type": "autodate",
+                "system": false,
+                "required": false,
+                "presentable": false,
+                "options": {
+                    "onCreate": true,
+                    "onUpdate": false
+                }
+            },
+            {
+                "id": "pbc_event_updated",
                 "name": "updated",
                 "type": "autodate",
                 "system": false,

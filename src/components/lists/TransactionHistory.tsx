@@ -14,6 +14,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { StockTransaction, Item } from '../../types';
 import { formatStatus } from '../../utils/formatters';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function TransactionHistory({ transactions, items, isLoading, onEdit }: Props) {
+    const t = useTranslate();
     if (isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
@@ -36,7 +38,7 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
     if (!transactions?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Keine Transaktionen gefunden</Typography>
+                <Typography color="text.secondary">{t('Keine Transaktionen gefunden', 'No transactions found')}</Typography>
             </Paper>
         );
     }
@@ -50,14 +52,14 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Datum</TableCell>
-                        <TableCell>Artikel</TableCell>
-                        <TableCell>Typ</TableCell>
-                        <TableCell>Benutzer</TableCell>
-                        <TableCell align="right">Menge</TableCell>
-                        <TableCell>Grund</TableCell>
-                        <TableCell>Anmerkungen</TableCell>
-                        {onEdit && <TableCell align="center">Aktionen</TableCell>}
+                        <TableCell>{t('Datum', 'Date')}</TableCell>
+                        <TableCell>{t('Artikel', 'Item')}</TableCell>
+                        <TableCell>{t('Typ', 'Type')}</TableCell>
+                        <TableCell>{t('Benutzer', 'User')}</TableCell>
+                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                        <TableCell>{t('Grund', 'Reason')}</TableCell>
+                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                        {onEdit && <TableCell align="center">{t('Aktionen', 'Actions')}</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -80,7 +82,7 @@ export function TransactionHistory({ transactions, items, isLoading, onEdit }: P
                                 <TableCell align="center">
                                     <TooltipButton
                                         variant="icon"
-                                        tooltipText="Transaktion bearbeiten"
+                                        tooltipText={t('Transaktion bearbeiten', 'Edit transaction')}
                                         icon={<EditIcon sx={{ fontSize: 18 }} />}
                                         onClick={() => onEdit(tx)}
                                         size="small"

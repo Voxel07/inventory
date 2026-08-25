@@ -25,23 +25,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { usePocketBase } from '../../hooks/usePocketBase';
 import { LanguageSelector } from './LanguageSelector';
+import { useTranslate } from '../../utils/naming';
+import EventIcon from '@mui/icons-material/Event';
 
 const DRAWER_WIDTH = 260;
 
-const navItems = [
-    { label: 'Globales Dashboard', path: '/global-dashboard', icon: <AssessmentIcon /> },
-    { label: 'Mein Dashboard', path: '/', icon: <DashboardIcon /> },
-    { label: 'Artikel', path: '/items', icon: <InventoryIcon /> },
-    { label: 'QR scannen', path: '/checkout', icon: <QrCodeScannerIcon /> },
-    { label: 'Lagerorte', path: '/storage-locations', icon: <RoomIcon /> },
-    { label: 'Baugruppen', path: '/assemblies', icon: <CategoryIcon /> },
-    { label: 'Transaktionen', path: '/transactions', icon: <ReceiptLongIcon /> },
-    { label: 'Ausgeliehen', path: '/checked-out', icon: <AssignmentReturnIcon /> },
-    { label: 'QR-Codes drucken', path: '/print-qr', icon: <QrCode2Icon /> },
-    { label: 'Schadensberichte', path: '/damage-reports', icon: <ReportProblemIcon /> },
-];
-
 export function Navigation() {
+    const t = useTranslate();
     const navigate = useNavigate();
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -49,6 +39,19 @@ export function Navigation() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout } = usePocketBase();
+    const navItems = [
+        { label: t('Globales Dashboard', 'Global dashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
+        { label: t('Mein Dashboard', 'My dashboard'), path: '/', icon: <DashboardIcon /> },
+        { label: t('Artikel', 'Items'), path: '/items', icon: <InventoryIcon /> },
+        { label: t('QR scannen', 'Scan QR code'), path: '/checkout', icon: <QrCodeScannerIcon /> },
+        { label: t('Lagerorte', 'Storage locations'), path: '/storage-locations', icon: <RoomIcon /> },
+        { label: t('Baugruppen', 'Assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
+        { label: t('Events', 'Events'), path: '/events', icon: <EventIcon /> },
+        { label: t('Transaktionen', 'Transactions'), path: '/transactions', icon: <ReceiptLongIcon /> },
+        { label: t('Ausgeliehen', 'Checked out'), path: '/checked-out', icon: <AssignmentReturnIcon /> },
+        { label: t('QR-Codes drucken', 'Print QR codes'), path: '/print-qr', icon: <QrCode2Icon /> },
+        { label: t('Schadensberichte', 'Damage reports'), path: '/damage-reports', icon: <ReportProblemIcon /> },
+    ];
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -103,7 +106,7 @@ export function Navigation() {
                         <ListItemIcon sx={{ minWidth: 40, color: 'error.main' }}>
                             <LogoutIcon />
                         </ListItemIcon>
-                        <ListItemText primary="Abmelden" />
+                        <ListItemText primary={t('Abmelden', 'Sign out')} />
                     </ListItemButton>
                 </Box>
             </List>

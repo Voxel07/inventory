@@ -9,10 +9,11 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { calculateItemStock } from '../utils/stock';
 import { useUIStore } from '../store/uiStore';
 import type { TransactionFormData } from '../types';
-import { useNames } from '../utils/naming';
+import { useNames, useTranslate } from '../utils/naming';
 
 export function QRCheckout() {
     const names = useNames();
+    const t = useTranslate();
     const { itemId } = useParams<{ itemId: string }>();
     const navigate = useNavigate();
     const { data: item, isLoading: itemLoading, isError: itemError } = useItem(itemId ?? '');
@@ -28,8 +29,8 @@ export function QRCheckout() {
 
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
-            onSuccess: () => showSnackbar('Transaktion abgeschlossen', 'success'),
-            onError: (error) => showSnackbar(error instanceof Error ? error.message : 'Transaktion fehlgeschlagen', 'error'),
+            onSuccess: () => showSnackbar(t('Transaktion abgeschlossen', 'Transaction completed'), 'success'),
+            onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Transaktion fehlgeschlagen', 'Transaction failed'), 'error'),
         });
     }
 
@@ -52,7 +53,7 @@ export function QRCheckout() {
             {!itemId && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                        QR-Code scannen
+                        {t('QR-Code scannen', 'Scan QR code')}
                     </Typography>
                     <QRCodeScanner onScan={handleScan} />
                 </Paper>
@@ -60,21 +61,21 @@ export function QRCheckout() {
 
             {itemId && !itemLoading && (itemError || !item) && (
                 <Alert severity="error" sx={{ mb: 3 }} action={<Button color="inherit" onClick={() => navigate('/checkout')}>{names.action.scanAgain}</Button>}>
-                    Artikel nicht gefunden. Der QR-Code ist möglicherweise ungültig.
+                    {t('Artikel nicht gefunden. Der QR-Code ist möglicherweise ungültig.', 'Item not found. The QR code may be invalid.')}
                 </Alert>
             )}
 
             {item && (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="subtitle1" color="text.secondary">
-                        Artikel: {item.name} | Verfügbar: {remaining} | Lagerort: {item.expand?.storageLocation?.name || item.storageLocation}
+                        {t('Artikel', 'Item')}: {item.name} | {t('Verfügbar', 'Available')}: {remaining} | {t('Lagerort', 'Storage location')}: {item.expand?.storageLocation?.name || item.storageLocation}
                     </Typography>
                 </Paper>
             )}
 
             {(!itemId || item) && <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
-                    Transaktion erfassen
+                    {t('Transaktion erfassen', 'Record transaction')}
                 </Typography>
                 <TransactionForm
                     items={items ?? []}

@@ -17,6 +17,7 @@ import { jsPDF } from 'jspdf';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../services/qrCodeService';
+import { useTranslate } from '../utils/naming';
 
 type FilterMode = 'all' | 'items' | 'assemblies' | 'single';
 
@@ -28,6 +29,7 @@ interface QREntry {
 }
 
 export function PrintQRCodesPage() {
+    const t = useTranslate();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: assemblies, isLoading: assembliesLoading } = useAssemblies();
     const [entries, setEntries] = useState<QREntry[]>([]);
@@ -97,11 +99,11 @@ export function PrintQRCodesPage() {
             // Title
             const title =
                 filterMode === 'all'
-                    ? 'Alle QR-Codes'
+                    ? t('Alle QR-Codes', 'All QR codes')
                     : filterMode === 'items'
-                        ? 'Artikel-QR-Codes'
+                        ? t('Artikel-QR-Codes', 'Item QR codes')
                         : filterMode === 'assemblies'
-                            ? 'Baugruppen-QR-Codes'
+                            ? t('Baugruppen-QR-Codes', 'Assembly QR codes')
                             : 'QR-Code';
             doc.setFontSize(16);
             doc.text(title, pageWidth / 2, y + 5, { align: 'center' });
@@ -142,7 +144,7 @@ export function PrintQRCodesPage() {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>QR-Codes werden generiert...</Typography>
+                <Typography sx={{ ml: 2 }}>{t('QR-Codes werden generiert...', 'Generating QR codes...')}</Typography>
             </Box>
         );
     }
@@ -151,7 +153,7 @@ export function PrintQRCodesPage() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">QR-Codes</Typography>
-                <Tooltip title="PDF mit ausgewählten QR-Codes generieren und herunterladen" arrow>
+                <Tooltip title={t('PDF mit ausgewählten QR-Codes generieren und herunterladen', 'Generate and download a PDF with the selected QR codes')} arrow>
                     <span>
                         <Button
                             variant="contained"
@@ -159,7 +161,7 @@ export function PrintQRCodesPage() {
                             onClick={handleGeneratePDF}
                             disabled={filteredEntries.length === 0 || pdfGenerating}
                         >
-                            {pdfGenerating ? 'Wird generiert…' : 'PDF herunterladen'}
+                            {pdfGenerating ? t('Wird generiert…', 'Generating…') : t('PDF herunterladen', 'Download PDF')}
                         </Button>
                     </span>
                 </Tooltip>
@@ -167,7 +169,7 @@ export function PrintQRCodesPage() {
 
             <Paper sx={{ p: 2, mb: 3 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Filter
+                    {t('Filter', 'Filter')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
                     <ToggleButtonGroup
@@ -178,20 +180,20 @@ export function PrintQRCodesPage() {
                         }}
                         size="small"
                     >
-                        <ToggleButton value="all">Alle</ToggleButton>
-                        <ToggleButton value="items">Nur Artikel</ToggleButton>
-                        <ToggleButton value="assemblies">Nur Baugruppen</ToggleButton>
-                        <ToggleButton value="single">Einzeln</ToggleButton>
+                        <ToggleButton value="all">{t('Alle', 'All')}</ToggleButton>
+                        <ToggleButton value="items">{t('Nur Artikel', 'Items only')}</ToggleButton>
+                        <ToggleButton value="assemblies">{t('Nur Baugruppen', 'Assemblies only')}</ToggleButton>
+                        <ToggleButton value="single">{t('Einzeln', 'Single')}</ToggleButton>
                     </ToggleButtonGroup>
 
                     {filterMode === 'single' && (
                         <Autocomplete
                             options={allOptions}
-                            getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? 'Artikel' : 'Baugruppe'})`}
+                            getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
                             value={allOptions.find((o) => o.id === selectedId) ?? null}
                             onChange={(_e, newValue) => setSelectedId(newValue?.id ?? null)}
                             renderInput={(params) => (
-                                <TextField {...params} label="Artikel oder Baugruppe auswählen" size="small" />
+                                <TextField {...params} label={t('Artikel oder Baugruppe auswählen', 'Select item or assembly')} size="small" />
                             )}
                             sx={{ minWidth: 280 }}
                         />
@@ -203,8 +205,8 @@ export function PrintQRCodesPage() {
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <Typography color="text.secondary">
                         {filterMode === 'single' && !selectedId
-                            ? 'Wählen Sie oben einen Artikel oder eine Baugruppe aus'
-                            : 'Keine QR-Codes zum Anzeigen'}
+                            ? t('Wählen Sie oben einen Artikel oder eine Baugruppe aus', 'Select an item or assembly above')
+                            : t('Keine QR-Codes zum Anzeigen', 'No QR codes to display')}
                     </Typography>
                 </Paper>
             ) : (
@@ -225,7 +227,7 @@ export function PrintQRCodesPage() {
                                     {entry.name}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {entry.type === 'item' ? 'Artikel' : 'Baugruppe'}
+                                    {entry.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')}
                                 </Typography>
                             </Paper>
                         </Grid>

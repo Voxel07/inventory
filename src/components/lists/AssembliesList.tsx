@@ -26,6 +26,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { Assembly, Item } from '../../types';
+import { useTranslate } from '../../utils/naming';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete }: Props) {
+    const t = useTranslate();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
@@ -85,7 +87,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
     if (!assemblies?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Keine Baugruppen gefunden</Typography>
+                <Typography color="text.secondary">{t('Keine Baugruppen gefunden', 'No assemblies found')}</Typography>
             </Paper>
         );
     }
@@ -110,11 +112,11 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Beschreibung</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Komponenten</TableCell>
-                        <TableCell align="right">Gesamtwert</TableCell>
-                        <TableCell align="right">Aktionen</TableCell>
+                        <TableCell>{t('Name', 'Name')}</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
+                        <TableCell align="right">{t('Gesamtwert', 'Total value')}</TableCell>
+                        <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -152,7 +154,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                     {/* Burger menu for small screens (xs) */}
                                     <Box sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
-                                        <Tooltip title="Aktionen" arrow>
+                                        <Tooltip title={t('Aktionen', 'Actions')} arrow>
                                             <IconButton
                                                 onClick={(e) => handleOpenMenu(e, assembly)}
                                                 size="small"
@@ -166,7 +168,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                     <Box sx={{ display: { xs: 'none', sm: 'inline-flex' }, gap: 0.5 }}>
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Baugruppendetails anzeigen"
+                                            tooltipText={t('Baugruppendetails anzeigen', 'View assembly details')}
                                             icon={<VisibilityIcon />}
                                             size="small"
                                             color="info"
@@ -174,7 +176,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Baugruppe bearbeiten"
+                                            tooltipText={t('Baugruppe bearbeiten', 'Edit assembly')}
                                             icon={<EditIcon />}
                                             size="small"
                                             color="warning"
@@ -182,7 +184,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                         />
                                         <TooltipButton
                                             variant="icon"
-                                            tooltipText="Baugruppe löschen"
+                                            tooltipText={t('Baugruppe löschen', 'Delete assembly')}
                                             icon={<DeleteIcon />}
                                             size="small"
                                             color="error"
@@ -206,19 +208,19 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                     <ListItemIcon>
                         <VisibilityIcon fontSize="small" color="info" />
                     </ListItemIcon>
-                    <ListItemText>Details anzeigen</ListItemText>
+                    <ListItemText>{t('Details anzeigen', 'View details')}</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleEdit}>
                     <ListItemIcon>
                         <EditIcon fontSize="small" color="warning" />
                     </ListItemIcon>
-                    <ListItemText>Bearbeiten</ListItemText>
+                    <ListItemText>{t('Bearbeiten', 'Edit')}</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleDelete}>
                     <ListItemIcon>
                         <DeleteIcon fontSize="small" color="error" />
                     </ListItemIcon>
-                    <ListItemText>Löschen</ListItemText>
+                    <ListItemText>{t('Löschen', 'Delete')}</ListItemText>
                 </MenuItem>
             </Menu>
         </TableContainer>

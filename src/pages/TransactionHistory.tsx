@@ -7,10 +7,11 @@ import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { TransactionFormData, StockTransaction } from '../types';
 import { useState } from 'react';
-import { nameFor, useNames } from '../utils/naming';
+import { nameFor, useNames, useTranslate } from '../utils/naming';
 
 export function TransactionHistoryPage() {
     const names = useNames();
+    const t = useTranslate();
     const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const filters = {
@@ -31,9 +32,9 @@ export function TransactionHistoryPage() {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setShowForm(false);
-                showSnackbar('Transaktion erfasst', 'success');
+                showSnackbar(t('Transaktion erfasst', 'Transaction recorded'), 'success');
             },
-            onError: () => showSnackbar('Fehler beim Erfassen der Transaktion', 'error'),
+            onError: () => showSnackbar(t('Fehler beim Erfassen der Transaktion', 'Could not record transaction'), 'error'),
         });
     }
 
@@ -44,9 +45,9 @@ export function TransactionHistoryPage() {
             {
                 onSuccess: () => {
                     setEditingTransaction(null);
-                    showSnackbar('Transaktion erfolgreich aktualisiert', 'success');
+                    showSnackbar(t('Transaktion erfolgreich aktualisiert', 'Transaction updated successfully'), 'success');
                 },
-                onError: () => showSnackbar('Fehler beim Aktualisieren der Transaktion', 'error'),
+                onError: () => showSnackbar(t('Fehler beim Aktualisieren der Transaktion', 'Could not update transaction'), 'error'),
             },
         );
     }
@@ -54,10 +55,10 @@ export function TransactionHistoryPage() {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Transaktionsverlauf</Typography>
+                <Typography variant="h4">{t('Transaktionsverlauf', 'Transaction history')}</Typography>
                 <TooltipButton
-                    tooltipText={showForm ? "Formular ausblenden" : "Neue Ausleihe oder Rückgabe erfassen"}
-                    label={showForm ? 'Formular ausblenden' : 'Neue Transaktion'}
+                    tooltipText={showForm ? t('Formular ausblenden', 'Hide form') : t('Neue Ausleihe oder Rückgabe erfassen', 'Record a new checkout or return')}
+                    label={showForm ? t('Formular ausblenden', 'Hide form') : t('Neue Transaktion', 'New transaction')}
                     variant="contained"
                     onClick={() => setShowForm(!showForm)}
                 />
@@ -77,13 +78,13 @@ export function TransactionHistoryPage() {
             <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }} useFlexGap>
                 <TextField
                     select
-                    label="Artikel"
+                    label={t('Artikel', 'Item')}
                     value={transactionFilters.itemId}
                     onChange={(e) => setTransactionFilters({ itemId: e.target.value })}
                     size="small"
                     sx={{ minWidth: 150 }}
                 >
-                    <MenuItem value="">Alle Artikel</MenuItem>
+                    <MenuItem value="">{t('Alle Artikel', 'All items')}</MenuItem>
                     {items?.map((item) => (
                         <MenuItem key={item.id} value={item.id}>
                             {item.name}
@@ -92,19 +93,19 @@ export function TransactionHistoryPage() {
                 </TextField>
                 <TextField
                     select
-                    label="Typ"
+                    label={t('Typ', 'Type')}
                     value={transactionFilters.transactionType}
                     onChange={(e) => setTransactionFilters({ transactionType: e.target.value })}
                     size="small"
                     sx={{ minWidth: 120 }}
                 >
-                    <MenuItem value="">Alle</MenuItem>
+                    <MenuItem value="">{t('Alle', 'All')}</MenuItem>
                     {(['checkout', 'checkin', 'added'] as const).map((type) => (
                         <MenuItem key={type} value={type}>{nameFor('transactionType', type)}</MenuItem>
                     ))}
                 </TextField>
                 <TextField
-                    label="Startdatum"
+                    label={t('Startdatum', 'Start date')}
                     type="date"
                     value={transactionFilters.startDate}
                     onChange={(e) => setTransactionFilters({ startDate: e.target.value })}
@@ -112,14 +113,14 @@ export function TransactionHistoryPage() {
                     slotProps={{ inputLabel: { shrink: true } }}
                 />
                 <TextField
-                    label="Enddatum"
+                    label={t('Enddatum', 'End date')}
                     type="date"
                     value={transactionFilters.endDate}
                     onChange={(e) => setTransactionFilters({ endDate: e.target.value })}
                     size="small"
                     slotProps={{ inputLabel: { shrink: true } }}
                 />
-                <Tooltip title="Alle Filter zurücksetzen" arrow>
+                <Tooltip title={t('Alle Filter zurücksetzen', 'Reset all filters')} arrow>
                     <Button variant="outlined" onClick={resetTransactionFilters} size="small">
                         {names.action.reset}
                     </Button>
@@ -141,7 +142,7 @@ export function TransactionHistoryPage() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Transaktion bearbeiten</DialogTitle>
+                <DialogTitle>{t('Transaktion bearbeiten', 'Edit transaction')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingTransaction && (
                         <TransactionForm

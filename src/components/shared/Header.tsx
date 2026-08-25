@@ -8,9 +8,11 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
 import { useUIStore } from '../../store/uiStore';
+import { useTranslate } from '../../utils/naming';
 
 export function Header() {
     const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+    const t = useTranslate();
 
     return (
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
@@ -20,13 +22,13 @@ export function Header() {
                     edge="start"
                     onClick={toggleSidebar}
                     sx={{ mr: 2 }}
-                    aria-label="Navigation umschalten"
+                    aria-label={t('Navigation umschalten', 'Toggle navigation')}
                 >
                     <MenuIcon />
                 </IconButton>
                 <InventoryIcon sx={{ mr: 1.5, color: 'primary.main' }} />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
-                    Inventar
+                    {t('Inventar', 'Inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
             </Toolbar>

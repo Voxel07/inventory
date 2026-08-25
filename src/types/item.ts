@@ -1,6 +1,7 @@
 export interface StorageLocation {
   id: string;
   name: string;
+  amount?: number;
   description?: string;
   area?: string;
   location?: string;
@@ -16,6 +17,7 @@ export interface Item {
   value: number;
   category: string;
   subcategory?: string;
+  eventTypes?: EventType[];
   storageLocation: string;
   status: ItemStatus;
   qrCode: string;
@@ -39,9 +41,12 @@ export interface ItemFormData {
   value: number;
   category: string;
   subcategory?: string;
+  eventTypes?: EventType[];
   storageLocation: string;
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
   containerRemainingPercent?: number;
 }
+
+import type { EventType } from './event';

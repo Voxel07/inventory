@@ -11,8 +11,10 @@ import LoginIcon from '@mui/icons-material/Login';
 import { usePocketBase } from '../hooks/usePocketBase';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
+import { useTranslate } from '../utils/naming';
 
 export function LoginPage() {
+    const t = useTranslate();
     const { pb } = usePocketBase();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [isLoading, setIsLoading] = useState(false);
@@ -22,10 +24,10 @@ export function LoginPage() {
         try {
             // pocketbase JS SDK authWithOAuth2 triggers the Authentik provider login via popup
             await pb.collection('users').authWithOAuth2({ provider: 'oidc' });
-            showSnackbar('Erfolgreich angemeldet', 'success');
+            showSnackbar(t('Erfolgreich angemeldet', 'Signed in successfully'), 'success');
         } catch (err: unknown) {
             console.error('OAuth2 error:', err);
-            showSnackbar(err instanceof Error ? err.message : 'OAuth2-Anmeldung fehlgeschlagen.', 'error');
+            showSnackbar(err instanceof Error ? err.message : t('OAuth2-Anmeldung fehlgeschlagen.', 'OAuth2 sign-in failed.'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -68,10 +70,10 @@ export function LoginPage() {
                         <ShieldIcon sx={{ fontSize: 28 }} />
                     </Box>
                     <Typography component="h1" variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
-                        Inventarverwaltung
+                        {t('Inventarverwaltung', 'Inventory management')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 4 }}>
-                        Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.
+                        {t('Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.', 'Sign in with your organization account to manage and check out items.')}
                     </Typography>
 
                     <Button
@@ -86,7 +88,7 @@ export function LoginPage() {
                             fontWeight: 600,
                         }}
                     >
-                        {isLoading ? 'Verbindung wird hergestellt...' : 'Mit Authentik anmelden'}
+                        {isLoading ? t('Verbindung wird hergestellt...', 'Connecting...') : t('Mit Authentik anmelden', 'Sign in with Authentik')}
                     </Button>
                     <Box sx={{ mt: 3 }}><LanguageSelector compact /></Box>
                 </Paper>

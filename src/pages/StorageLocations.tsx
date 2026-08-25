@@ -38,8 +38,10 @@ import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
+import { useTranslate } from '../utils/naming';
 
 export function StorageLocations() {
+    const t = useTranslate();
     const navigate = useNavigate();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
@@ -130,9 +132,9 @@ export function StorageLocations() {
                 {
                     onSuccess: () => {
                         setDialogOpen(false);
-                        showSnackbar('Lagerort erfolgreich aktualisiert', 'success');
+                        showSnackbar(t('Lagerort erfolgreich aktualisiert', 'Storage location updated successfully'), 'success');
                     },
-                    onError: () => showSnackbar('Fehler beim Aktualisieren des Lagerorts', 'error'),
+                    onError: () => showSnackbar(t('Fehler beim Aktualisieren des Lagerorts', 'Could not update storage location'), 'error'),
                 }
             );
         } else {
@@ -140,9 +142,9 @@ export function StorageLocations() {
                 onSuccess: (newLoc) => {
                     setDialogOpen(false);
                     setSelectedLocId(newLoc.id);
-                    showSnackbar('Lagerort erfolgreich erstellt', 'success');
+                    showSnackbar(t('Lagerort erfolgreich erstellt', 'Storage location created successfully'), 'success');
                 },
-                onError: () => showSnackbar('Fehler beim Erstellen des Lagerorts', 'error'),
+                onError: () => showSnackbar(t('Fehler beim Erstellen des Lagerorts', 'Could not create storage location'), 'error'),
             });
         }
     }
@@ -153,9 +155,9 @@ export function StorageLocations() {
             onSuccess: () => {
                 setDeleteConfirmOpen(false);
                 setSelectedLocId(null);
-                showSnackbar('Lagerort gelöscht', 'success');
+                showSnackbar(t('Lagerort gelöscht', 'Storage location deleted'), 'success');
             },
-            onError: () => showSnackbar('Fehler beim Löschen des Lagerorts', 'error'),
+            onError: () => showSnackbar(t('Fehler beim Löschen des Lagerorts', 'Could not delete storage location'), 'error'),
         });
     }
 
@@ -163,14 +165,14 @@ export function StorageLocations() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    Lagerorte
+                    {t('Lagerorte', 'Storage locations')}
                 </Typography>
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={handleOpenCreate}
                 >
-                    Lagerort hinzufügen
+                    {t('Lagerort hinzufügen', 'Add storage location')}
                 </Button>
             </Box>
 
@@ -179,7 +181,7 @@ export function StorageLocations() {
                 <Grid size={{ xs: 12, md: 4 }}>
                     <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', overflow: 'hidden' }}>
                         <TextField
-                            label="Lagerorte suchen"
+                            label={t('Lagerorte suchen', 'Search storage locations')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             size="small"
@@ -188,10 +190,10 @@ export function StorageLocations() {
                         />
 
                         {locationsLoading ? (
-                            <Typography sx={{ p: 2 }}>Lagerorte werden geladen...</Typography>
+                            <Typography sx={{ p: 2 }}>{t('Lagerorte werden geladen...', 'Loading storage locations...')}</Typography>
                         ) : filteredLocations.length === 0 ? (
                             <Typography sx={{ p: 2 }} color="text.secondary">
-                                Keine Lagerorte gefunden
+                                {t('Keine Lagerorte gefunden', 'No storage locations found')}
                             </Typography>
                         ) : (
                             <List sx={{ overflowY: 'auto', flexGrow: 1, px: 0 }}>
@@ -221,7 +223,7 @@ export function StorageLocations() {
                                                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                                             {loc.name}
                                                         </Typography>
-                                                        <Chip label={count === 1 ? '1 Artikel' : `${count} Artikel`} size="small" variant="outlined" />
+                                                        <Chip label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)} size="small" variant="outlined" />
                                                     </Box>
                                                 }
                                                 secondary={loc.area || 'Kein Bereich angegeben'}
@@ -281,25 +283,25 @@ export function StorageLocations() {
                             <Divider sx={{ mb: 3 }} />
 
                             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                Hier gelagerte Artikel
+                                {t('Hier gelagerte Artikel', 'Items stored here')}
                             </Typography>
 
                             {itemsLoading ? (
-                                <Typography sx={{ p: 2 }}>Artikel werden geladen...</Typography>
+                                <Typography sx={{ p: 2 }}>{t('Artikel werden geladen...', 'Loading items...')}</Typography>
                             ) : enrichedStoredItems.length === 0 ? (
                                 <Box sx={{ p: 4, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-                                    <Typography color="text.secondary">In diesem Lagerort sind noch keine Artikel gelagert.</Typography>
+                                    <Typography color="text.secondary">{t('In diesem Lagerort sind noch keine Artikel gelagert.', 'No items are stored at this location yet.')}</Typography>
                                 </Box>
                             ) : (
                                 <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
                                     <Table size="small">
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell>Artikelname</TableCell>
-                                                <TableCell>Kategorie</TableCell>
-                                                <TableCell align="right">Verfügbarer Bestand</TableCell>
-                                                <TableCell>Status</TableCell>
-                                                <TableCell align="right">Aktionen</TableCell>
+                                                <TableCell>{t('Artikelname', 'Item name')}</TableCell>
+                                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
+                                                <TableCell align="right">{t('Verfügbarer Bestand', 'Available stock')}</TableCell>
+                                                <TableCell>{t('Status', 'Status')}</TableCell>
+                                                <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -361,7 +363,7 @@ export function StorageLocations() {
                             <Box sx={{ textAlign: 'center' }}>
                                 <RoomIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                                 <Typography color="text.secondary" variant="subtitle1">
-                                    Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen
+                                    {t('Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen', 'Select a storage location from the list to view its items')}
                                 </Typography>
                             </Box>
                         </Paper>
@@ -371,12 +373,12 @@ export function StorageLocations() {
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{editingLoc ? 'Lagerort bearbeiten' : 'Neuer Lagerort'}</DialogTitle>
+                <DialogTitle>{editingLoc ? t('Lagerort bearbeiten', 'Edit storage location') : t('Neuer Lagerort', 'New storage location')}</DialogTitle>
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
                             <TextField
-                                label="Name des Lagerorts"
+                                label={t('Name des Lagerorts', 'Storage location name')}
                                 value={formData.name}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                                 required
@@ -384,28 +386,28 @@ export function StorageLocations() {
                                 autoFocus
                             />
                             <TextField
-                                        label="Bereich / Sektion"
-                                        placeholder="z. B. Regal A, Raum 204"
+                                        label={t('Bereich / Sektion', 'Area / section')}
+                                        placeholder={t('z. B. Regal A, Raum 204', 'e.g. shelf A, room 204')}
                                         value={formData.area}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, area: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label="Ort / Gebäude"
-                                        placeholder="z. B. Gebäude B, Raum 204"
+                                        label={t('Ort / Gebäude', 'Location / building')}
+                                        placeholder={t('z. B. Gebäude B, Raum 204', 'e.g. building B, room 204')}
                                         value={formData.location}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label="Position / Regal"
-                                        placeholder="z. B. Reihe 3, Fach 2"
+                                        label={t('Position / Regal', 'Position / shelf')}
+                                        placeholder={t('z. B. Reihe 3, Fach 2', 'e.g. row 3, compartment 2')}
                                         value={formData.position}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                                         fullWidth
                                     />
                             <TextField
-                                label="Beschreibung"
+                                label={t('Beschreibung', 'Description')}
                                 value={formData.description}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                                 multiline
@@ -416,14 +418,14 @@ export function StorageLocations() {
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
                         <Button onClick={() => setDialogOpen(false)} color="inherit">
-                            Abbrechen
+                            {t('Abbrechen', 'Cancel')}
                         </Button>
                         <Button
                             type="submit"
                             variant="contained"
                             disabled={createMutation.isPending || updateMutation.isPending || !formData.name}
                         >
-                            Speichern
+                            {t('Speichern', 'Save')}
                         </Button>
                     </DialogActions>
                 </Box>
@@ -431,18 +433,18 @@ export function StorageLocations() {
 
             {/* Delete Confirmation */}
             <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-                <DialogTitle>Lagerort löschen?</DialogTitle>
+                <DialogTitle>{t('Lagerort löschen?', 'Delete storage location?')}</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.
+                        {t('Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this storage location? Linked items will lose their location reference. This cannot be undone.')}
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={() => setDeleteConfirmOpen(false)} color="inherit">
-                        Abbrechen
+                        {t('Abbrechen', 'Cancel')}
                     </Button>
                     <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteMutation.isPending}>
-                        Löschen
+                        {t('Löschen', 'Delete')}
                     </Button>
                 </DialogActions>
             </Dialog>

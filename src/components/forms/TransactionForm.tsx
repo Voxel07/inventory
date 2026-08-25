@@ -11,7 +11,7 @@ import type { TransactionFormData, Item, TransactionType } from '../../types';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useDamageReports } from '../../hooks/useDamageReports';
 import { calculateItemStock } from '../../utils/stock';
-import { nameFor, useNames } from '../../utils/naming';
+import { nameFor, useNames, useTranslate } from '../../utils/naming';
 
 interface Props {
     items: Item[];
@@ -23,6 +23,7 @@ interface Props {
 
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
     const names = useNames();
+    const t = useTranslate();
     const transactionReasons = Object.values(names.reason);
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
@@ -33,10 +34,12 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         reason: initialData?.reason ?? '',
         notes: initialData?.notes ?? '',
     });
+    const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        onSubmit(formData);
+        if (quantityInput === '' || Number(quantityInput) < 1) return;
+        onSubmit({ ...formData, quantityChanged: Number(quantityInput) });
     }
 
     return (
@@ -44,7 +47,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             <Stack spacing={2}>
                 <TextField
                     select
-                    label="Artikel"
+                    label={t('Artikel', 'Item')}
                     value={formData.itemId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value }))}
                     required
@@ -54,14 +57,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         const { remaining } = calculateItemStock(item.id, transactions, damageReports);
                         return (
                             <MenuItem key={item.id} value={item.id}>
-                                {item.name} (Verfügbar: {remaining})
+                                {item.name} ({t('Verfügbar', 'Available')}: {remaining})
                             </MenuItem>
                         );
                     })}
                 </TextField>
                 <TextField
                     select
-                    label="Transaktionstyp"
+                    label={t('Transaktionstyp', 'Transaction type')}
                     value={formData.transactionType}
                     onChange={(e) =>
                         setFormData((prev) => ({
@@ -77,19 +80,17 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     ))}
                 </TextField>
                 <TextField
-                    label="Menge"
+                    label={t('Menge', 'Quantity')}
                     type="number"
-                    value={formData.quantityChanged}
-                    onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, quantityChanged: Number(e.target.value) }))
-                    }
+                    value={quantityInput}
+                    onChange={(e) => setQuantityInput(e.target.value)}
                     required
                     fullWidth
                     slotProps={{ htmlInput: { min: 1 } }}
                 />
                 <TextField
                     select
-                    label="Grund"
+                    label={t('Grund', 'Reason')}
                     value={formData.reason}
                     onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                     required
@@ -102,7 +103,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     ))}
                 </TextField>
                 <TextField
-                    label="Anmerkungen"
+                    label={t('Anmerkungen', 'Notes')}
                     value={formData.notes}
                     onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                     multiline
@@ -113,25 +114,28 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     <Button
                         variant="outlined"
                         color="inherit"
-                        onClick={() => setFormData({
-                            itemId: initialData?.itemId ?? preselectedItemId ?? '',
-                            transactionType: initialData?.transactionType ?? 'checkout',
-                            quantityChanged: initialData?.quantityChanged ?? 1,
-                            reason: initialData?.reason ?? '',
-                            notes: initialData?.notes ?? '',
-                        })}
+                        onClick={() => {
+                            setFormData({
+                                itemId: initialData?.itemId ?? preselectedItemId ?? '',
+                                transactionType: initialData?.transactionType ?? 'checkout',
+                                quantityChanged: initialData?.quantityChanged ?? 1,
+                                reason: initialData?.reason ?? '',
+                                notes: initialData?.notes ?? '',
+                            });
+                            setQuantityInput(String(initialData?.quantityChanged ?? 1));
+                        }}
                         disabled={isLoading}
                     >
-                        Felder leeren
+                        {t('Felder zurücksetzen', 'Reset fields')}
                     </Button>
-                    <Tooltip title="Diese Transaktion buchen" arrow>
+                    <Tooltip title={t('Diese Transaktion buchen', 'Post this transaction')} arrow>
                         <span>
                             <Button
                                 type="submit"
                                 variant="contained"
-                                disabled={isLoading || !formData.itemId || !formData.reason}
+                                disabled={isLoading || !formData.itemId || !formData.reason || quantityInput === '' || Number(quantityInput) < 1}
                             >
-                                Transaktion buchen
+                                {t('Transaktion buchen', 'Post transaction')}
                             </Button>
                         </span>
                     </Tooltip>

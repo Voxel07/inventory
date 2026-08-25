@@ -55,6 +55,15 @@ export function useNames() {
   return NAMING[useAppLanguage()];
 }
 
+export function translate(de: string, en: string): string {
+  return activeLanguage === 'de' ? de : en;
+}
+
+export function useTranslate() {
+  const language = useAppLanguage();
+  return (de: string, en: string): string => language === 'de' ? de : en;
+}
+
 export type NamingGroup = 'itemStatus' | 'damageStatus' | 'severity' | 'transactionType' | 'action' | 'reason';
 
 export function nameFor(group: NamingGroup, value: string): string {

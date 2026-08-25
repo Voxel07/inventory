@@ -8,7 +8,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import type { DamageReportFormData, Item, DamageSeverity } from '../../types';
-import { nameFor, useAppLanguage } from '../../utils/naming';
+import { nameFor, useAppLanguage, useTranslate } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
 
 export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading }: Props) {
     useAppLanguage();
+    const t = useTranslate();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
     const [formData, setFormData] = useState<DamageReportFormData>({
         itemId: preselectedItemId ?? '',
@@ -27,10 +28,12 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
         description: '',
         severity: 'medium',
     });
+    const [amountInput, setAmountInput] = useState('1');
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        onSubmit(formData);
+        if (amountInput === '' || Number(amountInput) < 1) return;
+        onSubmit({ ...formData, amount: Number(amountInput) });
     }
 
     return (
@@ -38,7 +41,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
             <Stack spacing={2}>
                 <TextField
                     select
-                    label="Artikel"
+                    label={t('Artikel', 'Item')}
                     value={formData.itemId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value }))}
                     required
@@ -52,7 +55,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                 </TextField>
                 <TextField
                     select
-                    label="Schweregrad"
+                    label={t('Schweregrad', 'Severity')}
                     value={formData.severity}
                     onChange={(e) =>
                         setFormData((prev) => ({ ...prev, severity: e.target.value as DamageSeverity }))
@@ -67,21 +70,16 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     ))}
                 </TextField>
                 <TextField
-                    label="Menge"
+                    label={t('Menge', 'Quantity')}
                     type="number"
-                    value={formData.amount}
-                    onChange={(e) =>
-                        setFormData((prev) => ({
-                            ...prev,
-                            amount: Math.max(1, Number(e.target.value) || 1),
-                        }))
-                    }
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value)}
                     slotProps={{ htmlInput: { min: 1, step: 1 } }}
                     required
                     fullWidth
                 />
                 <TextField
-                    label="Beschreibung"
+                    label={t('Beschreibung', 'Description')}
                     value={formData.description}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                     multiline
@@ -89,15 +87,15 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     required
                     fullWidth
                 />
-                <Tooltip title="Neuen Schadensbericht einreichen" arrow>
+                <Tooltip title={t('Neuen Schadensbericht einreichen', 'Submit a new damage report')} arrow>
                     <span>
                         <Button
                             type="submit"
                             variant="contained"
                             color="error"
-                            disabled={isLoading || !formData.itemId || !formData.description || formData.amount < 1}
+                            disabled={isLoading || !formData.itemId || !formData.description || amountInput === '' || Number(amountInput) < 1}
                         >
-                            Schadensbericht einreichen
+                            {t('Schadensbericht einreichen', 'Submit damage report')}
                         </Button>
                     </span>
                 </Tooltip>

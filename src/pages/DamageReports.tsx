@@ -8,8 +8,10 @@ import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportFormData, DamageStatus } from '../types';
+import { useTranslate } from '../utils/naming';
 
 export function DamageReportsPage() {
+    const t = useTranslate();
     const { data: reports, isLoading } = useDamageReports();
     const { data: items } = useItems();
     const createReport = useCreateDamageReport();
@@ -21,9 +23,9 @@ export function DamageReportsPage() {
         createReport.mutate(data, {
             onSuccess: () => {
                 setFormOpen(false);
-                showSnackbar('Schadensbericht übermittelt', 'success');
+                showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
             },
-            onError: () => showSnackbar('Fehler beim Übermitteln des Schadensberichts', 'error'),
+            onError: () => showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error'),
         });
     }
 
@@ -31,8 +33,8 @@ export function DamageReportsPage() {
         updateStatus.mutate(
             { id, status },
             {
-                onSuccess: () => showSnackbar('Status aktualisiert', 'success'),
-                onError: () => showSnackbar('Fehler beim Aktualisieren des Status', 'error'),
+                onSuccess: () => showSnackbar(t('Status aktualisiert', 'Status updated'), 'success'),
+                onError: () => showSnackbar(t('Fehler beim Aktualisieren des Status', 'Could not update status'), 'error'),
             },
         );
     }
@@ -40,11 +42,11 @@ export function DamageReportsPage() {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">Schadensberichte</Typography>
+                <Typography variant="h4">{t('Schadensberichte', 'Damage reports')}</Typography>
                 <TooltipButton
-                    tooltipText="Einen beschädigten oder defekten Artikel melden"
+                    tooltipText={t('Einen beschädigten oder defekten Artikel melden', 'Report a damaged or defective item')}
                     icon={<AddIcon />}
-                    label="Schaden melden"
+                    label={t('Schaden melden', 'Report damage')}
                     variant="contained"
                     color="error"
                     onClick={() => setFormOpen(true)}
@@ -59,7 +61,7 @@ export function DamageReportsPage() {
             />
 
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Schaden melden</DialogTitle>
+                <DialogTitle>{t('Schaden melden', 'Report damage')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <DamageReportForm items={items ?? []} onSubmit={handleSubmit} isLoading={createReport.isPending} />
                 </DialogContent>
