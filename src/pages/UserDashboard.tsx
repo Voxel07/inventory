@@ -14,7 +14,11 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
+    Stack,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import ListAltIcon from '@mui/icons-material/ListAlt';
@@ -23,27 +27,34 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import { useNavigate } from 'react-router-dom';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
+import { useDamageReports, useCreateDamageReport } from '../hooks/useDamageReports';
 import { usePocketBase } from '../hooks/usePocketBase';
+import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
-import type { Item, TransactionFormData } from '../types';
+import { DamageReportForm } from '../components/forms/DamageReportForm';
+import type { DamageReportFormData, Item, TransactionFormData } from '../types';
 import { useNames, useTranslate } from '../utils/naming';
 
 export function UserDashboard() {
     const names = useNames();
     const t = useTranslate();
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user: currentUser } = usePocketBase();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: allTransactions, isLoading: txLoading } = useTransactions();
     const { data: damageReports } = useDamageReports();
+    const { data: users } = useUsers();
     const createTransaction = useCreateTransaction();
+    const createDamageReport = useCreateDamageReport();
 
     const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number } | null>(null);
+    const [damageItem, setDamageItem] = useState<{ item: Item; quantity: number } | null>(null);
 
     // 1. Transactions belonging to this user
     const userTransactions = useMemo(() => {
@@ -110,20 +121,39 @@ export function UserDashboard() {
         });
     }
 
+    function handleDamageSubmit(data: DamageReportFormData) {
+        createDamageReport.mutate(data, {
+            onSuccess: () => {
+                setDamageItem(null);
+                showSnackbar(t('Schaden erfolgreich gemeldet', 'Damage reported successfully'), 'success');
+            },
+            onError: () => showSnackbar(t('Schaden konnte nicht gemeldet werden', 'Could not report damage'), 'error'),
+        });
+    }
+
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 700 }}>
                 {t('Hallo', 'Hello')}, {currentUser?.name || t('Benutzer', 'User')}
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: { xs: 2, sm: 4 } }}>
                 {t('Hier ist eine Übersicht Ihrer aktuellen Ausleihen und Aktivitäten.', 'Here is an overview of your current checkouts and activity.')}
             </Typography>
 
+            <Stack direction="row" spacing={1.5} sx={{ mb: 3, display: { xs: 'flex', md: 'none' } }}>
+                <Button fullWidth variant="contained" size="large" startIcon={<QrCodeScannerIcon />} onClick={() => navigate('/checkout')} sx={{ minHeight: 52 }}>
+                    {t('QR scannen', 'Scan QR')}
+                </Button>
+                <Button fullWidth variant="outlined" color="success" size="large" startIcon={<AssignmentReturnIcon />} onClick={() => navigate('/checked-out')} sx={{ minHeight: 52 }}>
+                    {t('Rückgabe', 'Return')}
+                </Button>
+            </Stack>
+
             {/* Personalized Metrics */}
-            <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid container spacing={{ xs: 1, sm: 2 }} sx={{ mb: { xs: 3, sm: 4 } }}>
                 {metrics.map((metric) => (
                     <Grid size={{ xs: 6, sm: 6, md: 3 }} key={metric.label}>
-                        <Paper sx={{ p: 2.5, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                        <Paper sx={{ p: { xs: 1.5, sm: 2.5 }, minHeight: { xs: 142, sm: 'auto' }, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
                             <Box sx={{ color: metric.color, mb: 1, '& .MuiSvgIcon-root': { fontSize: 32 } }}>
                                 {metric.icon}
                             </Box>
@@ -147,7 +177,28 @@ export function UserDashboard() {
                     <Typography color="text.secondary">{t('Sie haben derzeit keine Artikel ausgeliehen.', 'You currently have no items checked out.')}</Typography>
                 </Paper>
             ) : (
-                <TableContainer component={Paper} sx={{ overflowX: 'auto', mb: 4 }}>
+                isMobile ? (
+                    <Stack spacing={1.5} sx={{ mb: 4 }}>
+                        {checkedOutItems.map(({ item, quantity }) => (
+                            <Paper key={item.id} sx={{ p: 2 }}>
+                                <Box onClick={() => navigate(`/items/${item.id}`)} sx={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                                        <Typography variant="body2" color="text.secondary">{item.category || '—'} · {item.expand?.storageLocation?.name || item.storageLocation || '—'}</Typography>
+                                    </Box>
+                                    <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
+                                        <Typography variant="h5" color="warning.main">{quantity}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
+                                    </Box>
+                                </Box>
+                                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                                    <Button fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => setReturnItem({ item, quantity })} sx={{ minHeight: 48 }}>{names.action.checkin}</Button>
+                                    <Button fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => setDamageItem({ item, quantity })} sx={{ minHeight: 48 }}>{t('Schaden', 'Damage')}</Button>
+                                </Stack>
+                            </Paper>
+                        ))}
+                    </Stack>
+                ) : <TableContainer component={Paper} sx={{ overflowX: 'auto', mb: 4 }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
@@ -175,15 +226,10 @@ export function UserDashboard() {
                                         {item.expand?.storageLocation?.name || item.storageLocation || '—'}
                                     </TableCell>
                                     <TableCell align="right">
-                                        <Button
-                                            variant="outlined"
-                                            color="success"
-                                            size="small"
-                                            startIcon={<AssignmentReturnIcon />}
-                                            onClick={() => setReturnItem({ item, quantity })}
-                                        >
-                                            {names.action.checkin}
-                                        </Button>
+                                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                                            <Button variant="outlined" color="success" size="small" startIcon={<AssignmentReturnIcon />} onClick={() => setReturnItem({ item, quantity })}>{names.action.checkin}</Button>
+                                            <Button variant="outlined" color="error" size="small" startIcon={<ReportProblemIcon />} onClick={() => setDamageItem({ item, quantity })}>{t('Schaden melden', 'Report damage')}</Button>
+                                        </Stack>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -208,6 +254,7 @@ export function UserDashboard() {
             <TransactionHistory
                 transactions={userTransactions.slice(0, 5)}
                 items={items}
+                users={users}
                 isLoading={txLoading || itemsLoading}
             />
 
@@ -218,6 +265,7 @@ export function UserDashboard() {
                 keepMounted
                 maxWidth="sm"
                 fullWidth
+                fullScreen={isMobile}
             >
                 <DialogTitle>{t(`${returnItem?.item.name ?? ''} zurückgeben`, `Return ${returnItem?.item.name ?? ''}`)}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
@@ -235,6 +283,22 @@ export function UserDashboard() {
                                 reason: names.reason.returnAfterUse,
                                 notes: '',
                             }}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={Boolean(damageItem)} onClose={() => setDamageItem(null)} keepMounted maxWidth="sm" fullWidth fullScreen={isMobile}>
+                <DialogTitle>{t(`Schaden an ${damageItem?.item.name ?? ''} melden`, `Report damage to ${damageItem?.item.name ?? ''}`)}</DialogTitle>
+                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
+                    {damageItem && (
+                        <DamageReportForm
+                            key={damageItem.item.id}
+                            items={items ?? []}
+                            preselectedItemId={damageItem.item.id}
+                            maxAmount={damageItem.quantity}
+                            onSubmit={handleDamageSubmit}
+                            isLoading={createDamageReport.isPending}
                         />
                     )}
                 </DialogContent>

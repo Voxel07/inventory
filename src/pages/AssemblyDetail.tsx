@@ -278,7 +278,7 @@ export function AssemblyDetail() {
                     <Typography variant="h6">{totalValue.toFixed(2)} €</Typography>
                 </Paper>
                 <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">{t('Für Ausleihe verfügbar', 'Available for checkout')}</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available for checkout')}</Typography>
                     <Typography variant="h6" color={maxAssembliesPossible > 0 ? "success.main" : "text.secondary"}>
                         {maxAssembliesPossible}
                     </Typography>

@@ -21,12 +21,12 @@ export function Header() {
                     color="inherit"
                     edge="start"
                     onClick={toggleSidebar}
-                    sx={{ mr: 2 }}
+                    sx={{ mr: { xs: 1, sm: 2 } }}
                     aria-label={t('Navigation umschalten', 'Toggle navigation')}
                 >
                     <MenuIcon />
                 </IconButton>
-                <InventoryIcon sx={{ mr: 1.5, color: 'primary.main' }} />
+                <InventoryIcon sx={{ mr: 1.5, color: 'primary.main', display: { xs: 'none', sm: 'block' } }} />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
                     {t('Inventar', 'Inventory')}
                 </Typography>

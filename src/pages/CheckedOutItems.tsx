@@ -12,7 +12,11 @@ import {
     Button,
     Skeleton,
     Tooltip,
+    Stack,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useUIStore } from '../store/uiStore';
@@ -29,6 +33,8 @@ interface CheckedOutRow {
 export function CheckedOutItemsPage() {
     const names = useNames();
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const createTransaction = useCreateTransaction();
@@ -101,7 +107,35 @@ export function CheckedOutItemsPage() {
                     <Typography color="text.secondary">{t('Derzeit sind keine Artikel ausgeliehen.', 'No items are currently checked out.')}</Typography>
                 </Paper>
             ) : (
-                <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+                isMobile ? (
+                    <Stack spacing={1.5}>
+                        {checkedOutRows.map((row) => (
+                            <Paper key={row.id} sx={{ p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{row.name}</Typography>
+                                        <Typography variant="body2" color="text.secondary">{row.category || '—'} · {row.storageLocation}</Typography>
+                                    </Box>
+                                    <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
+                                        <Typography variant="h5" color="warning.main">{row.checkedOut}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
+                                    </Box>
+                                </Box>
+                                <Button
+                                    fullWidth
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<AssignmentReturnIcon />}
+                                    onClick={() => handleQuickReturn(row.id)}
+                                    disabled={createTransaction.isPending}
+                                    sx={{ mt: 2, minHeight: 48 }}
+                                >
+                                    {t('1 Einheit zurückgeben', 'Return 1 unit')}
+                                </Button>
+                            </Paper>
+                        ))}
+                    </Stack>
+                ) : <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>

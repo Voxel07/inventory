@@ -143,7 +143,7 @@
       },
       {
         "cascadeDelete": false,
-        "collectionId": "pbc_users",
+        "collectionId": "_pb_users_auth_",
         "help": "",
         "hidden": false,
         "id": "pbc_dmg_reportedBy",
@@ -154,6 +154,42 @@
         "required": false,
         "system": false,
         "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "_pb_users_auth_",
+        "help": "User who last handled this damage report",
+        "hidden": false,
+        "id": "pbc_dmg_handledBy",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "handledBy",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "help": "Timestamp of the latest status change",
+        "hidden": false,
+        "id": "pbc_dmg_handledAt",
+        "max": "",
+        "min": "",
+        "name": "handledAt",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_dmg_statusHistory",
+        "maxSize": 65536,
+        "name": "statusHistory",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
       },
       {
         "autogeneratePattern": "",
@@ -177,9 +213,35 @@
         "max": null,
         "min": 1,
         "name": "amount",
-        "onlyInt": false,
+        "onlyInt": true,
         "presentable": false,
         "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "Quantity from this report that has been repaired",
+        "hidden": false,
+        "id": "pbc_dmg_repairedAmount",
+        "max": null,
+        "min": 0,
+        "name": "repairedAmount",
+        "onlyInt": true,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "Quantity from this report that has been written off",
+        "hidden": false,
+        "id": "pbc_dmg_writtenOffAmount",
+        "max": null,
+        "min": 0,
+        "name": "writtenOffAmount",
+        "onlyInt": true,
+        "presentable": false,
+        "required": false,
         "system": false,
         "type": "number"
       },
@@ -214,7 +276,8 @@
           "reported",
           "in_review",
           "repaired",
-          "written_off"
+          "written_off",
+          "resolved"
         ]
       },
       {
@@ -653,7 +716,7 @@
       },
       {
         "cascadeDelete": false,
-        "collectionId": "pbc_users",
+        "collectionId": "_pb_users_auth_",
         "help": "",
         "hidden": false,
         "id": "pbc_event_createdBy",
@@ -741,7 +804,9 @@
         "values": [
           "checkout",
           "checkin",
-          "added"
+          "added",
+          "repaired",
+          "written_off"
         ]
       },
       {
@@ -759,13 +824,27 @@
       },
       {
         "cascadeDelete": false,
-        "collectionId": "pbc_users",
+        "collectionId": "_pb_users_auth_",
         "help": "",
         "hidden": false,
         "id": "relation1689669068",
         "maxSelect": 1,
         "minSelect": 0,
         "name": "userId",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_damage_reports",
+        "help": "Damage report that generated this stock-history entry",
+        "hidden": false,
+        "id": "pbc_tx_damageReportId",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "damageReportId",
         "presentable": false,
         "required": false,
         "system": false,

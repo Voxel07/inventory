@@ -6,6 +6,7 @@ export interface StockTransaction {
   transactionType: TransactionType;
   quantityChanged: number;
   userId: string;
+  damageReportId?: string;
   reason: string;
   notes: string;
   timestamp: string;
@@ -17,7 +18,7 @@ export interface StockTransaction {
 }
 
 
-export type TransactionType = 'checkout' | 'checkin' | 'added';
+export type TransactionType = 'checkout' | 'checkin' | 'added' | 'repaired' | 'written_off';
 
 export interface TransactionFormData {
   itemId: string;

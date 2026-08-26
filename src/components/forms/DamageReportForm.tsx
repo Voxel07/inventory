@@ -16,9 +16,10 @@ interface Props {
     preselectedItemId?: string;
     onSubmit: (data: DamageReportFormData) => void;
     isLoading?: boolean;
+    maxAmount?: number;
 }
 
-export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading }: Props) {
+export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading, maxAmount }: Props) {
     useAppLanguage();
     const t = useTranslate();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
@@ -39,7 +40,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
-                <TextField
+                {!preselectedItemId && <TextField
                     select
                     label={t('Artikel', 'Item')}
                     value={formData.itemId}
@@ -52,7 +53,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                             {item.name}
                         </MenuItem>
                     ))}
-                </TextField>
+                </TextField>}
                 <TextField
                     select
                     label={t('Schweregrad', 'Severity')}
@@ -74,7 +75,7 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                     type="number"
                     value={amountInput}
                     onChange={(e) => setAmountInput(e.target.value)}
-                    slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                    slotProps={{ htmlInput: { min: 1, max: maxAmount, step: 1 } }}
                     required
                     fullWidth
                 />
@@ -93,7 +94,8 @@ export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading
                             type="submit"
                             variant="contained"
                             color="error"
-                            disabled={isLoading || !formData.itemId || !formData.description || amountInput === '' || Number(amountInput) < 1}
+                            disabled={isLoading || !formData.itemId || !formData.description || amountInput === '' || Number(amountInput) < 1 || (maxAmount !== undefined && Number(amountInput) > maxAmount)}
+                            sx={{ minHeight: 48 }}
                         >
                             {t('Schadensbericht einreichen', 'Submit damage report')}
                         </Button>

@@ -68,6 +68,14 @@ const theme = createTheme({
           borderRadius: 8,
           textTransform: 'none',
           fontWeight: 600,
+          '@media (max-width: 599.95px)': { minHeight: 44 },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 599.95px)': { minWidth: 44, minHeight: 44 },
         },
       },
     },
@@ -132,6 +140,7 @@ function AppContent() {
           autoHideDuration={4000}
           onClose={hideSnackbar}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          sx={{ bottom: { xs: 80, md: 24 } }}
         >
           <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled" sx={{ borderRadius: 2 }}>
             {snackbar.message}
@@ -150,13 +159,14 @@ function AppContent() {
         sx={{
           flexGrow: 1,
           p: { xs: 2, sm: 3 },
+          pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 3 },
           width: !isMobile && sidebarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
           transition: (theme) => theme.transitions.create('width', {
             easing: !isMobile && sidebarOpen ? theme.transitions.easing.easeOut : theme.transitions.easing.sharp,
             duration: !isMobile && sidebarOpen ? theme.transitions.duration.enteringScreen : theme.transitions.duration.leavingScreen,
           }),
           maxWidth: '100%',
-          overflow: 'hidden',
+          overflowX: 'hidden',
         }}
       >
         <Toolbar />
@@ -184,6 +194,7 @@ function AppContent() {
         autoHideDuration={4000}
         onClose={hideSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        sx={{ bottom: { xs: 80, md: 24 } }}
       >
         <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled" sx={{ borderRadius: 2 }}>
           {snackbar.message}

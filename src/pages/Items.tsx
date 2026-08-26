@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
@@ -15,6 +15,8 @@ import { useTranslate } from '../utils/naming';
 
 export function Items() {
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading } = useItems();
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
@@ -94,7 +96,7 @@ export function Items() {
             />
 
             {/* Create Dialog */}
-            <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t('Neuen Artikel erstellen', 'Create new item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <ItemForm
@@ -108,7 +110,7 @@ export function Items() {
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editingItem} onClose={() => setEditingItem(undefined)} maxWidth="sm" fullWidth>
+            <Dialog open={!!editingItem} onClose={() => setEditingItem(undefined)} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t('Artikel bearbeiten', 'Edit item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingItem && (

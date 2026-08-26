@@ -43,11 +43,13 @@ export function calculateItemStock(
   if (damageReports) {
     for (const report of damageReports) {
       if (report.itemId !== itemId) continue;
-      if (report.status === 'reported' || report.status === 'in_review') {
-        damaged += report.amount ?? 0;
-      } else if (report.status === 'written_off') {
-        writtenOff += report.amount ?? 0;
-      }
+      const storedRepaired = report.repairedAmount ?? 0;
+      const storedWrittenOff = report.writtenOffAmount ?? 0;
+      const hasStoredResolution = storedRepaired + storedWrittenOff > 0;
+      const repairedAmount = !hasStoredResolution && report.status === 'repaired' ? report.amount : storedRepaired;
+      const writtenOffAmount = !hasStoredResolution && report.status === 'written_off' ? report.amount : storedWrittenOff;
+      damaged += Math.max(0, (report.amount ?? 0) - repairedAmount - writtenOffAmount);
+      writtenOff += writtenOffAmount;
     }
   }
 

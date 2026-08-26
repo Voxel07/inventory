@@ -105,20 +105,20 @@ export function QRCodeScanner({ onScan }: Props) {
             <video ref={videoRef} playsInline muted style={{ width: '100%', borderRadius: 12, display: 'block' }} />
             {starting && <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', bgcolor: 'rgba(0,0,0,.45)', borderRadius: 3 }}><CircularProgress /></Box>}
         </Box>
-        <Box sx={{ my: 2, display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <Box sx={{ my: 2, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, justifyContent: 'center' }}>
             {scanning
                 ? <Button variant="outlined" color="error" onClick={stopScanning}>{t('Scannen stoppen', 'Stop scanning')}</Button>
-                : <Button variant="contained" size="large" startIcon={<CameraAltIcon />} onClick={() => void startScanning()}>{t('QR-Code scannen', 'Scan QR code')}</Button>}
-            <Button variant="outlined" startIcon={<ImageSearchIcon />} onClick={() => fileRef.current?.click()}>{t('Bild auswählen', 'Select image')}</Button>
+                : <Button variant="contained" size="large" sx={{ minHeight: 52 }} startIcon={<CameraAltIcon />} onClick={() => void startScanning()}>{t('Kamera öffnen', 'Open camera')}</Button>}
+            <Button variant="outlined" sx={{ minHeight: 48 }} startIcon={<ImageSearchIcon />} onClick={() => fileRef.current?.click()}>{t('Bild auswählen', 'Select image')}</Button>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void scanImage(file);
             }} />
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('Alternativ Artikel-ID oder QR-Link einfügen', 'Alternatively paste an item ID or QR link')}</Typography>
-        <Box sx={{ display: 'flex', gap: 1, maxWidth: 520, mx: 'auto' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, maxWidth: 520, mx: 'auto' }}>
             <TextField size="small" fullWidth value={manualValue} onChange={(e) => setManualValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitManual()} label={t('ID oder QR-Link', 'ID or QR link')} />
-            <Button variant="outlined" onClick={submitManual} disabled={!manualValue.trim()}>{t('Öffnen', 'Open')}</Button>
+            <Button variant="outlined" sx={{ minHeight: 44 }} onClick={submitManual} disabled={!manualValue.trim()}>{t('Öffnen', 'Open')}</Button>
         </Box>
     </Box>;
 }

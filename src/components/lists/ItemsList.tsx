@@ -14,6 +14,9 @@ import {
     TextField,
     Box,
     MenuItem,
+    Stack,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -46,6 +49,8 @@ type SortDir = 'asc' | 'desc';
 export function ItemsList({ items, transactions, damageReports, isLoading, onEdit, onDelete }: Props) {
     const navigate = useNavigate();
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [search, setSearch] = useState('');
     const [eventFilter, setEventFilter] = useState<EventType | ''>('');
     const [sortField, setSortField] = useState<SortField>(null);
@@ -130,13 +135,50 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     value={eventFilter}
                     onChange={(event) => setEventFilter(event.target.value as EventType | '')}
                     size="small"
-                    sx={{ minWidth: 170 }}
+                    sx={{ minWidth: { xs: '100%', sm: 170 } }}
                 >
                     <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
                     {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
                 </TextField>
             </Box>
-            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            {isMobile ? (
+                <Stack spacing={1.5}>
+                    {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
+                        const minStock = item.minStock ?? 5;
+                        const isLowStock = remaining <= minStock;
+                        const location = item.expand?.storageLocation
+                            ? [item.expand.storageLocation.name, item.expand.storageLocation.location, item.expand.storageLocation.position].filter(Boolean).join(' / ')
+                            : item.storageLocation || '—';
+                        return (
+                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ p: 2, cursor: 'pointer' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                                        <Typography variant="body2" color="text.secondary">{item.category || t('Ohne Kategorie', 'No category')}</Typography>
+                                    </Box>
+                                    <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" />
+                                </Box>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, my: 1.5 }}>
+                                    <Box>
+                                        <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available')}</Typography>
+                                        <Typography variant="h5" sx={{ color: isLowStock ? 'warning.main' : 'inherit' }}>{remaining}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{totalStock} {t('gesamt', 'total')}{checkedOut ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}{damaged ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}</Typography>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="caption" color="text.secondary">{t('Lagerort', 'Storage location')}</Typography>
+                                        <Typography variant="body2">{location}</Typography>
+                                    </Box>
+                                </Box>
+                                <Box onClick={(event) => event.stopPropagation()} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, pt: 0.5 }}>
+                                    <TooltipButton variant="icon" tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')} icon={<EditIcon />} onClick={() => onEdit(item)} />
+                                    <TooltipButton variant="icon" tooltipText={t('Artikel löschen', 'Delete item')} icon={<DeleteIcon />} color="error" onClick={() => onDelete(item.id)} />
+                                </Box>
+                            </Paper>
+                        );
+                    })}
+                    {filteredAndSorted.length === 0 && <Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper>}
+                </Stack>
+            ) : <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                 <Table size="small">
                     <TableHead>
                         <TableRow>
@@ -160,8 +202,8 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                     {t('Einzelwert', 'Unit value')}
                                 </TableSortLabel>
                             </TableCell>
-                            <TableCell>{t('Events', 'Events')}</TableCell>
                             <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
+                            <TableCell>{t('Events', 'Events')}</TableCell>
                             <TableCell>{t('Status', 'Status')}</TableCell>
                             <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                         </TableRow>
@@ -249,7 +291,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                         )}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </TableContainer>}
         </Box>
     );
 }

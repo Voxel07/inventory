@@ -33,6 +33,7 @@ export function useCreateDamageReport() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
   });
 }
@@ -40,11 +41,12 @@ export function useCreateDamageReport() {
 export function useUpdateDamageReportStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: DamageStatus }) =>
-      updateDamageReportStatus(id, status),
+    mutationFn: ({ id, status, amount }: { id: string; status: DamageStatus; amount?: number }) =>
+      updateDamageReportStatus(id, status, amount),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
   });
 }

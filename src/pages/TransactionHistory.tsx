@@ -3,6 +3,7 @@ import { TransactionHistory as TransactionHistoryList } from '../components/list
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { useTransactions, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { useItems } from '../hooks/useItems';
+import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { TransactionFormData, StockTransaction } from '../types';
@@ -23,6 +24,7 @@ export function TransactionHistoryPage() {
     };
     const { data: transactions, isLoading } = useTransactions(filters);
     const { data: items } = useItems();
+    const { data: users } = useUsers();
     const createTransaction = useCreateTransaction();
     const updateTransaction = useUpdateTransaction();
     const [showForm, setShowForm] = useState(false);
@@ -93,6 +95,21 @@ export function TransactionHistoryPage() {
                 </TextField>
                 <TextField
                     select
+                    label={t('Benutzer', 'User')}
+                    value={transactionFilters.userId}
+                    onChange={(e) => setTransactionFilters({ userId: e.target.value })}
+                    size="small"
+                    sx={{ minWidth: 150 }}
+                >
+                    <MenuItem value="">{t('Alle Benutzer', 'All users')}</MenuItem>
+                    {users?.map((user) => (
+                        <MenuItem key={user.id} value={user.id}>
+                            {user.name?.trim() || user.username || user.email || user.id}
+                        </MenuItem>
+                    ))}
+                </TextField>
+                <TextField
+                    select
                     label={t('Typ', 'Type')}
                     value={transactionFilters.transactionType}
                     onChange={(e) => setTransactionFilters({ transactionType: e.target.value })}
@@ -100,7 +117,7 @@ export function TransactionHistoryPage() {
                     sx={{ minWidth: 120 }}
                 >
                     <MenuItem value="">{t('Alle', 'All')}</MenuItem>
-                    {(['checkout', 'checkin', 'added'] as const).map((type) => (
+                    {(['checkout', 'checkin', 'added', 'repaired', 'written_off'] as const).map((type) => (
                         <MenuItem key={type} value={type}>{nameFor('transactionType', type)}</MenuItem>
                     ))}
                 </TextField>
@@ -130,6 +147,7 @@ export function TransactionHistoryPage() {
             <TransactionHistoryList
                 transactions={transactions}
                 items={items}
+                users={users}
                 isLoading={isLoading}
                 onEdit={setEditingTransaction}
             />

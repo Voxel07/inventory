@@ -29,6 +29,9 @@ export async function getTransactions(filters?: {
 export async function createTransaction(data: TransactionFormData): Promise<StockTransaction> {
   const userId = pb.authStore.record?.id;
   if (!userId) throw new Error('Authentication required');
+  if (data.transactionType === 'repaired' || data.transactionType === 'written_off') {
+    throw new Error('Damage resolution transactions are created from damage reports');
+  }
   if (!Number.isInteger(data.quantityChanged) || data.quantityChanged < 1) throw new Error('Quantity must be a positive integer');
 
   const [transactions, damageReports, item] = await Promise.all([

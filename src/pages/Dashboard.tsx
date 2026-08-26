@@ -4,6 +4,7 @@ import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
+import { useUsers } from '../hooks/useUsers';
 import { useTranslate } from '../utils/naming';
 
 export function Dashboard() {
@@ -11,6 +12,7 @@ export function Dashboard() {
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: damageReports } = useDamageReports();
+    const { data: users } = useUsers();
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
@@ -23,6 +25,7 @@ export function Dashboard() {
             <TransactionHistory
                 transactions={transactions?.slice(0, 10)}
                 items={items}
+                users={users}
                 isLoading={txLoading || itemsLoading}
             />
         </Box>

@@ -9,6 +9,9 @@ import {
     useTheme,
     Divider,
     Box,
+    BottomNavigation,
+    BottomNavigationAction,
+    Paper,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -27,6 +30,7 @@ import { usePocketBase } from '../../hooks/usePocketBase';
 import { LanguageSelector } from './LanguageSelector';
 import { useTranslate } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 
 const DRAWER_WIDTH = 260;
 
@@ -115,20 +119,59 @@ export function Navigation() {
 
     if (isMobile) {
         return (
-            <Drawer
-                variant="temporary"
-                open={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-                ModalProps={{ keepMounted: true }}
-                sx={{
-                    '& .MuiDrawer-paper': {
-                        width: DRAWER_WIDTH,
-                        boxSizing: 'border-box',
-                    },
-                }}
-            >
-                {drawerContent}
-            </Drawer>
+            <>
+                <Drawer
+                    variant="temporary"
+                    open={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                    ModalProps={{ keepMounted: true }}
+                    sx={{
+                        '& .MuiDrawer-paper': {
+                            width: 'min(86vw, 320px)',
+                            boxSizing: 'border-box',
+                        },
+                    }}
+                >
+                    {drawerContent}
+                </Drawer>
+                <Paper
+                    elevation={10}
+                    className="no-print"
+                    sx={{
+                        position: 'fixed',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: (muiTheme) => muiTheme.zIndex.appBar,
+                        borderRadius: 0,
+                        borderInline: 0,
+                        borderBottom: 0,
+                        pb: 'env(safe-area-inset-bottom)',
+                    }}
+                >
+                    <BottomNavigation
+                        showLabels
+                        value={
+                            location.pathname === '/' ? '/' :
+                            location.pathname.startsWith('/checkout') ? '/checkout' :
+                            location.pathname.startsWith('/items') ? '/items' :
+                            location.pathname.startsWith('/checked-out') ? '/checked-out' :
+                            false
+                        }
+                        onChange={(_, value) => {
+                            if (value === 'more') setSidebarOpen(true);
+                            else navigate(value);
+                        }}
+                        sx={{ height: 64 }}
+                    >
+                        <BottomNavigationAction label={t('Start', 'Home')} value="/" icon={<DashboardIcon />} />
+                        <BottomNavigationAction label={t('Scannen', 'Scan')} value="/checkout" icon={<QrCodeScannerIcon />} />
+                        <BottomNavigationAction label={t('Artikel', 'Items')} value="/items" icon={<InventoryIcon />} />
+                        <BottomNavigationAction label={t('Rückgabe', 'Return')} value="/checked-out" icon={<AssignmentReturnIcon />} />
+                        <BottomNavigationAction label={t('Mehr', 'More')} value="more" icon={<MoreHorizIcon />} />
+                    </BottomNavigation>
+                </Paper>
+            </>
         );
     }
 

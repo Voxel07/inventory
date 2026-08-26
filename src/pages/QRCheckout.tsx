@@ -29,7 +29,10 @@ export function QRCheckout() {
 
     function handleSubmit(data: TransactionFormData) {
         createTransaction.mutate(data, {
-            onSuccess: () => showSnackbar(t('Transaktion abgeschlossen', 'Transaction completed'), 'success'),
+            onSuccess: () => {
+                showSnackbar(t('Transaktion abgeschlossen – bereit für den nächsten Scan', 'Transaction completed — ready for the next scan'), 'success');
+                if (itemId) navigate('/checkout', { replace: true });
+            },
             onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Transaktion fehlgeschlagen', 'Transaction failed'), 'error'),
         });
     }
@@ -46,14 +49,17 @@ export function QRCheckout() {
 
     return (
         <Box>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-                {item ? `${names.transactionType.checkout}: ${item.name}` : `QR: ${names.transactionType.checkout} / ${names.transactionType.checkin}`}
+            <Typography variant="h4" sx={{ mb: { xs: 2, sm: 3 }, fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
+                {item ? item.name : t('Scannen oder Artikel wählen', 'Scan or choose an item')}
             </Typography>
 
             {!itemId && (
-                <Paper sx={{ p: 3, mb: 3 }}>
+                <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         {t('QR-Code scannen', 'Scan QR code')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {t('Scannen Sie den Code am Artikel. Danach wählen Sie Ausleihe oder Rückgabe.', 'Scan the code on the item, then choose checkout or return.')}
                     </Typography>
                     <QRCodeScanner onScan={handleScan} />
                 </Paper>
@@ -66,9 +72,10 @@ export function QRCheckout() {
             )}
 
             {item && (
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="subtitle1" color="text.secondary">
-                        {t('Artikel', 'Item')}: {item.name} | {t('Verfügbar', 'Available')}: {remaining} | {t('Lagerort', 'Storage location')}: {item.expand?.storageLocation?.name || item.storageLocation}
+                <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 2, borderColor: 'primary.main' }}>
+                    <Typography variant="h6">{item.name}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {t('Verfügbar', 'Available')}: <strong>{remaining}</strong> · {t('Lagerort', 'Storage location')}: {item.expand?.storageLocation?.name || item.storageLocation || '—'}
                     </Typography>
                 </Paper>
             )}
