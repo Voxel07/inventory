@@ -1,7 +1,6 @@
 export interface StorageLocation {
   id: string;
   name: string;
-  amount?: number;
   description?: string;
   area?: string;
   location?: string;
@@ -13,6 +12,7 @@ export interface StorageLocation {
 export interface Item {
   id: string;
   name: string;
+  amount?: number;
   minStock?: number;
   value: number;
   category: string;

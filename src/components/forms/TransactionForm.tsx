@@ -54,7 +54,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                 >
                     {items.map((item) => {
-                        const { remaining } = calculateItemStock(item.id, transactions, damageReports);
+                        const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
                         return (
                             <MenuItem key={item.id} value={item.id}>
                                 {item.name} ({t('Verfügbar', 'Available')}: {remaining})

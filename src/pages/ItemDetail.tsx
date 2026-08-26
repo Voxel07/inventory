@@ -50,7 +50,8 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
     );
 
-    let stock = 0;
+    const hasAddedTransaction = transactions.some((tx) => tx.transactionType === 'added');
+    let stock = hasAddedTransaction ? 0 : initialAmount;
     const data: { date: string; stock: number }[] = [];
 
     for (const tx of sorted) {
@@ -118,12 +119,12 @@ export function ItemDetail() {
     );
 
     const { totalStock, checkedOut, damaged, remaining } = useMemo(() => {
-        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports);
-    }, [itemId, allTransactions, itemDamageReports]);
+        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports, item?.amount ?? 0);
+    }, [itemId, item?.amount, allTransactions, itemDamageReports]);
 
     const stockHistory = useMemo(
-        () => buildStockHistory(itemTransactions, totalStock),
-        [itemTransactions, totalStock],
+        () => buildStockHistory(itemTransactions, item?.amount ?? 0),
+        [itemTransactions, item?.amount],
     );
 
     function handleUpdate(data: ItemFormData) {

@@ -1,5 +1,5 @@
 import pb from './pocketbaseClient';
-import type { DamageReport, StockTransaction, TransactionFormData } from '../types';
+import type { DamageReport, Item, StockTransaction, TransactionFormData } from '../types';
 import { calculateItemStock } from '../utils/stock';
 
 const COLLECTION = 'inventory_stock_transactions';
@@ -31,11 +31,12 @@ export async function createTransaction(data: TransactionFormData): Promise<Stoc
   if (!userId) throw new Error('Authentication required');
   if (!Number.isInteger(data.quantityChanged) || data.quantityChanged < 1) throw new Error('Quantity must be a positive integer');
 
-  const [transactions, damageReports] = await Promise.all([
+  const [transactions, damageReports, item] = await Promise.all([
     getTransactions({ itemId: data.itemId }),
     pb.collection('inventory_damage_reports').getFullList<DamageReport>({ filter: pb.filter('itemId = {:id}', { id: data.itemId }) }),
+    pb.collection('inventory_items').getOne<Item>(data.itemId),
   ]);
-  const stock = calculateItemStock(data.itemId, transactions, damageReports);
+  const stock = calculateItemStock(data.itemId, transactions, damageReports, item.amount ?? 0);
   if (data.transactionType === 'checkout' && data.quantityChanged > stock.remaining) {
     throw new Error(`Only ${stock.remaining} available`);
   }

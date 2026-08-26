@@ -78,7 +78,7 @@ export function Events() {
   }
 
   function stockFor(item: Item) {
-    return calculateItemStock(item.id, transactions, damageReports).remaining;
+    return calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0).remaining;
   }
 
   function save(status: EventReportStatus) {

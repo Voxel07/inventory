@@ -153,7 +153,7 @@ export function AssemblyDetail() {
         if (!items || !transactions) return new Map<string, number>();
         const map = new Map<string, number>();
         for (const item of items) {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports);
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
             map.set(item.id, remaining);
         }
         return map;

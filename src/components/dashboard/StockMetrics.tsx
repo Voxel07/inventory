@@ -18,12 +18,12 @@ export function StockMetrics({ items, transactions, damageReports }: Props) {
     const totalItems = items?.length ?? 0;
     const totalStock =
         items?.reduce((sum, item) => {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports);
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
             return sum + remaining;
         }, 0) ?? 0;
     const lowStockItems =
         items?.filter((item) => {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports);
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
             return remaining <= (item.minStock ?? 5);
         }).length ?? 0;
     const recentTransactions = transactions?.slice(0, 10).length ?? 0;

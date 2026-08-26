@@ -10,18 +10,17 @@ export interface StockCalculation {
 export function calculateItemStock(
   itemId: string,
   transactions: StockTransaction[] | undefined,
-  damageReports: DamageReport[] | undefined
+  damageReports: DamageReport[] | undefined,
+  initialAmount = 0,
 ): StockCalculation {
-  if (!transactions) {
-    return { totalStock: 0, checkedOut: 0, damaged: 0, remaining: 0 };
-  }
-
   let totalAdded = 0;
   let checkedOut = 0;
+  let hasAddedTransaction = false;
 
-  for (const tx of transactions) {
+  for (const tx of transactions ?? []) {
     if (tx.itemId !== itemId) continue;
     if (tx.transactionType === 'added') {
+      hasAddedTransaction = true;
       totalAdded += tx.quantityChanged;
     } else if (tx.transactionType === 'checkout') {
       checkedOut += tx.quantityChanged;
@@ -30,6 +29,13 @@ export function calculateItemStock(
     }
   }
   checkedOut = Math.max(0, checkedOut);
+
+  // New items store their opening stock on the item record as well as in an
+  // initial transaction. Use the record value until that transaction exists,
+  // but never add both values and double-count the opening stock.
+  if (!hasAddedTransaction) {
+    totalAdded = Math.max(0, initialAmount);
+  }
 
   let damaged = 0;
   let writtenOff = 0;

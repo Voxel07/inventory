@@ -24,7 +24,7 @@ export function QRCheckout() {
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const { remaining } = item
-        ? calculateItemStock(item.id, transactions, damageReports)
+        ? calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0)
         : { remaining: 0 };
 
     function handleSubmit(data: TransactionFormData) {

@@ -23,6 +23,7 @@ import {
     Stack,
     Divider,
     IconButton,
+    Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -92,7 +93,7 @@ export function StorageLocations() {
     // Enriched items with checkouts and damage calculations
     const enrichedStoredItems = useMemo(() => {
         return storedItems.map((item) => {
-            const { totalStock, remaining, checkedOut } = calculateItemStock(item.id, transactions, damageReports);
+            const { totalStock, remaining, checkedOut } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
             return { item, totalStock, remaining, checkedOut };
         });
     }, [storedItems, transactions, damageReports]);
@@ -209,6 +210,9 @@ export function StorageLocations() {
                                                 mb: 1,
                                                 border: '1px solid transparent',
                                                 borderColor: selectedLocId === loc.id ? 'primary.main' : 'rgba(255, 255, 255, 0.04)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
                                                 '&.Mui-selected': {
                                                     backgroundColor: 'rgba(124, 77, 255, 0.08)',
                                                     '&:hover': {
@@ -218,23 +222,34 @@ export function StorageLocations() {
                                             }}
                                         >
                                             <ListItemText
+                                                sx={{ my: 0, mr: 1, minWidth: 0 }}
                                                 primary={
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                                            {loc.name}
-                                                        </Typography>
-                                                        <Chip label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)} size="small" variant="outlined" />
-                                                    </Box>
+                                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+                                                        {loc.name}
+                                                    </Typography>
                                                 }
-                                                secondary={loc.area || 'Kein Bereich angegeben'}
+                                                secondary={
+                                                    <Typography variant="body2" color="text.secondary" noWrap>
+                                                        {loc.area || t('Kein Bereich angegeben', 'No area specified')}
+                                                    </Typography>
+                                                }
                                             />
-                                            <Box sx={{ display: 'flex', ml: 1 }} onClick={(e) => e.stopPropagation()}>
-                                                <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
-                                                    <EditIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton size="small" color="error" onClick={(e) => handleOpenDelete(loc.id, e)}>
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                                                <Chip
+                                                    label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)}
+                                                    size="small"
+                                                    variant="outlined"
+                                                />
+                                                <Tooltip title={t('Bearbeiten', 'Edit')} arrow>
+                                                    <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title={t('Löschen', 'Delete')} arrow>
+                                                    <IconButton size="small" color="error" onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </Box>
                                         </ListItemButton>
                                     );

@@ -1,935 +1,964 @@
 [
-    {
-        "id": "_pb_users_auth_",
-        "name": "users",
-        "type": "auth",
+  {
+    "id": "pbc_assemblies",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_assemblies",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_assemblies_name",
+        "max": 255,
+        "min": 1,
+        "name": "name",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_users_name",
-                "name": "name",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": true,
-                "options": {
-                    "min": 1,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_users_role",
-                "name": "role",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "admin",
-                        "manager",
-                        "user"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_users_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_users_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "",
-        "viewRule": "",
-        "createRule": "",
-        "updateRule": "",
-        "deleteRule": ""
-    },
-    {
-        "id": "pbc_storage_locations",
-        "name": "inventory_storage_locations",
-        "type": "base",
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_items",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_assemblies_itemIds",
+        "maxSelect": 10,
+        "minSelect": 0,
+        "name": "itemIds",
+        "presentable": false,
+        "required": false,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_storage_name",
-                "name": "name",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": true,
-                "options": {
-                    "min": 1,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_storage_description",
-                "name": "description",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 2000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_storage_area",
-                "name": "area",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_storage_location",
-                "name": "location",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_storage_position",
-                "name": "position",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_storage_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_storage_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    },
-    {
-        "id": "pbc_items",
-        "name": "inventory_items",
-        "type": "base",
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_assemblies_itemQuantities",
+        "maxSize": 65536,
+        "name": "itemQuantities",
+        "presentable": false,
+        "required": false,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_items_name",
-                "name": "name",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": true,
-                "options": {
-                    "min": 1,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_amount",
-                "name": "amount",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_items_minStock",
-                "name": "minStock",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_items_value",
-                "name": "value",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": false
-                }
-            },
-            {
-                "id": "pbc_items_category",
-                "name": "category",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_subcategory",
-                "name": "subcategory",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_eventTypes",
-                "name": "eventTypes",
-                "type": "select",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 5,
-                    "values": [
-                        "DE",
-                        "TNO",
-                        "LS",
-                        "M24",
-                        "ASD"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_items_storageLocation",
-                "name": "storageLocation",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "pbc_storage_locations",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_items_position",
-                "name": "position",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_location",
-                "name": "location",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_status",
-                "name": "status",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "available",
-                        "checked_out",
-                        "damaged",
-                        "retired"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_items_qrCode",
-                "name": "qrCode",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 10000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_items_containerSize",
-                "name": "containerSize",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_items_containerCount",
-                "name": "containerCount",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_items_containersOpened",
-                "name": "containersOpened",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_items_containerRemainingPercent",
-                "name": "containerRemainingPercent",
-                "type": "number",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": 0,
-                    "max": 100,
-                    "noDecimal": false
-                }
-            },
-            {
-                "id": "pbc_items_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_items_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    },
-    {
-        "id": "pbc_assemblies",
-        "name": "inventory_assemblies",
-        "type": "base",
+        "type": "json"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_assemblies_description",
+        "max": 2000,
+        "min": 0,
+        "name": "description",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_assemblies_name",
-                "name": "name",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": true,
-                "options": {
-                    "min": 1,
-                    "max": 255,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_assemblies_itemIds",
-                "name": "itemIds",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "pbc_items",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": null,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_assemblies_itemQuantities",
-                "name": "itemQuantities",
-                "type": "json",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "maxSize": 65536
-                }
-            },
-            {
-                "id": "pbc_assemblies_description",
-                "name": "description",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 2000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_assemblies_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_assemblies_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    },
-    {
-        "id": "pbc_event_reports",
-        "name": "inventory_event_reports",
-        "type": "base",
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_assemblies_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_event_type",
-                "name": "eventType",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": true,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "DE",
-                        "TNO",
-                        "LS",
-                        "M24",
-                        "ASD"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_event_date",
-                "name": "eventDate",
-                "type": "date",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": "",
-                    "max": ""
-                }
-            },
-            {
-                "id": "pbc_event_status",
-                "name": "status",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "planned",
-                        "completed"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_event_itemIds",
-                "name": "itemIds",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "pbc_items",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": null,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_event_planned",
-                "name": "plannedQuantities",
-                "type": "json",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "maxSize": 65536
-                }
-            },
-            {
-                "id": "pbc_event_used",
-                "name": "usedQuantities",
-                "type": "json",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "maxSize": 65536
-                }
-            },
-            {
-                "id": "pbc_event_notes",
-                "name": "notes",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 5000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_event_createdBy",
-                "name": "createdBy",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "_pb_users_auth_",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_event_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_event_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    },
-    {
-        "id": "pbc_stock_transactions",
-        "name": "inventory_stock_transactions",
-        "type": "base",
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_assemblies_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_tx_itemId",
-                "name": "itemId",
-                "type": "relation",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "collectionId": "pbc_items",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_tx_transactionType",
-                "name": "transactionType",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "checkout",
-                        "checkin",
-                        "added"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_tx_quantityChanged",
-                "name": "quantityChanged",
-                "type": "number",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": 1,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_tx_userId",
-                "name": "userId",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "_pb_users_auth_",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_tx_reason",
-                "name": "reason",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 500,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_tx_notes",
-                "name": "notes",
-                "type": "text",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "min": null,
-                    "max": 2000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_tx_timestamp",
-                "name": "timestamp",
-                "type": "date",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": "",
-                    "max": ""
-                }
-            },
-            {
-                "id": "pbc_tx_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_tx_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    },
-    {
-        "id": "pbc_damage_reports",
-        "name": "inventory_damage_reports",
-        "type": "base",
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_damage_reports",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_damage_reports",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_items",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_itemId",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "itemId",
+        "presentable": false,
+        "required": true,
         "system": false,
-        "fields": [
-            {
-                "id": "pbc_dmg_itemId",
-                "name": "itemId",
-                "type": "relation",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "collectionId": "pbc_items",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_dmg_reportedBy",
-                "name": "reportedBy",
-                "type": "relation",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "collectionId": "_pb_users_auth_",
-                    "cascadeDelete": false,
-                    "minSelect": null,
-                    "maxSelect": 1,
-                    "displayFields": null
-                }
-            },
-            {
-                "id": "pbc_dmg_description",
-                "name": "description",
-                "type": "text",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": 1,
-                    "max": 5000,
-                    "pattern": ""
-                }
-            },
-            {
-                "id": "pbc_dmg_amount",
-                "name": "amount",
-                "type": "number",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": 1,
-                    "max": null,
-                    "noDecimal": true
-                }
-            },
-            {
-                "id": "pbc_dmg_severity",
-                "name": "severity",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_dmg_status",
-                "name": "status",
-                "type": "select",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "maxSelect": 1,
-                    "values": [
-                        "reported",
-                        "in_review",
-                        "repaired",
-                        "written_off"
-                    ]
-                }
-            },
-            {
-                "id": "pbc_dmg_timestamp",
-                "name": "timestamp",
-                "type": "date",
-                "system": false,
-                "required": true,
-                "presentable": false,
-                "options": {
-                    "min": "",
-                    "max": ""
-                }
-            },
-            {
-                "id": "pbc_dmg_created",
-                "name": "created",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": false
-                }
-            },
-            {
-                "id": "pbc_dmg_updated",
-                "name": "updated",
-                "type": "autodate",
-                "system": false,
-                "required": false,
-                "presentable": false,
-                "options": {
-                    "onCreate": true,
-                    "onUpdate": true
-                }
-            }
-        ],
-        "listRule": "@request.auth.id != ''",
-        "viewRule": "@request.auth.id != ''",
-        "createRule": "@request.auth.id != ''",
-        "updateRule": "@request.auth.id != ''",
-        "deleteRule": "@request.auth.id != ''"
-    }
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_users",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_reportedBy",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "reportedBy",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_description",
+        "max": 5000,
+        "min": 1,
+        "name": "description",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_amount",
+        "max": null,
+        "min": 1,
+        "name": "amount",
+        "onlyInt": false,
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_severity",
+        "maxSelect": 1,
+        "name": "severity",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_status",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "reported",
+          "in_review",
+          "repaired",
+          "written_off"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_dmg_timestamp",
+        "max": "",
+        "min": "",
+        "name": "timestamp",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_dmg_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_dmg_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_items",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_items",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_name",
+        "max": 255,
+        "min": 1,
+        "name": "name",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_storage_locations",
+        "help": "",
+        "hidden": false,
+        "id": "relation2761701762",
+        "maxSelect": 0,
+        "minSelect": 0,
+        "name": "storageLocation",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_position",
+        "max": 255,
+        "min": 0,
+        "name": "position",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_location",
+        "max": 255,
+        "min": 0,
+        "name": "location",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_amount",
+        "max": null,
+        "min": 0,
+        "name": "amount",
+        "onlyInt": false,
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_minStock",
+        "max": null,
+        "min": 0,
+        "name": "minStock",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_value",
+        "max": null,
+        "min": 0,
+        "name": "value",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_category",
+        "max": 255,
+        "min": 0,
+        "name": "category",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text3169056664",
+        "max": 255,
+        "min": 0,
+        "name": "subcategory",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_eventTypes",
+        "maxSelect": 5,
+        "name": "eventTypes",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "DE",
+          "TNO",
+          "LS",
+          "M24",
+          "ASD"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_status",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "available",
+          "checked_out",
+          "damaged",
+          "retired"
+        ]
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_qrCode",
+        "max": 10000,
+        "min": 0,
+        "name": "qrCode",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_containerSize",
+        "max": null,
+        "min": 0,
+        "name": "containerSize",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_containerCount",
+        "max": null,
+        "min": 0,
+        "name": "containerCount",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_containersOpened",
+        "max": null,
+        "min": 0,
+        "name": "containersOpened",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_items_containerRemainingPercent",
+        "max": 100,
+        "min": 0,
+        "name": "containerRemainingPercent",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_items_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_items_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_eventreport",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_event_reports",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_type",
+        "maxSelect": 1,
+        "name": "eventType",
+        "presentable": true,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "DE",
+          "TNO",
+          "LS",
+          "M24",
+          "ASD"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_date",
+        "max": "",
+        "min": "",
+        "name": "eventDate",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_status",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "planned",
+          "completed"
+        ]
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_items",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_itemIds",
+        "maxSelect": 999,
+        "minSelect": 0,
+        "name": "itemIds",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_event_planned",
+        "maxSize": 65536,
+        "name": "plannedQuantities",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_event_used",
+        "maxSize": 65536,
+        "name": "usedQuantities",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_notes",
+        "max": 5000,
+        "min": 0,
+        "name": "notes",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_users",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_event_createdBy",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "createdBy",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_event_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_event_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_stock_transactions",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_stock_transactions",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_items",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_itemId",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "itemId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_transactionType",
+        "maxSelect": 1,
+        "name": "transactionType",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "checkout",
+          "checkin",
+          "added"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_quantityChanged",
+        "max": null,
+        "min": 1,
+        "name": "quantityChanged",
+        "onlyInt": false,
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_users",
+        "help": "",
+        "hidden": false,
+        "id": "relation1689669068",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "userId",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_reason",
+        "max": 500,
+        "min": 0,
+        "name": "reason",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_notes",
+        "max": 2000,
+        "min": 0,
+        "name": "notes",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_tx_timestamp",
+        "max": "",
+        "min": "",
+        "name": "timestamp",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_tx_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_tx_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_storage_locations",
+    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "name": "inventory_storage_locations",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_storage_name",
+        "max": 0,
+        "min": 0,
+        "name": "name",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_storage_description",
+        "max": 0,
+        "min": 0,
+        "name": "description",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pbc_storage_area",
+        "max": 0,
+        "min": 0,
+        "name": "area",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text1587448267",
+        "max": 0,
+        "min": 0,
+        "name": "location",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text1177347317",
+        "max": 0,
+        "min": 0,
+        "name": "position",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": false,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  }
 ]

@@ -54,7 +54,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const enrichedItems = useMemo(() => {
         if (!items) return [];
         return items.map((item) => {
-            const { totalStock, checkedOut, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports);
+            const { totalStock, checkedOut, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
             return { item, totalStock, checkedOut, damaged, remaining };
         });
     }, [items, transactions, damageReports]);
