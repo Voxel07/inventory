@@ -22,7 +22,7 @@ export async function getTransactions(filters?: {
   return pb.collection(COLLECTION).getFullList<StockTransaction>({
     sort: '-timestamp',
     filter: filterParts.join(' && ') || undefined,
-    expand: 'userId',
+    expand: 'userId,factionOrderId',
   });
 }
 

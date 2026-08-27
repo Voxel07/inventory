@@ -19,6 +19,7 @@ import { TooltipButton } from '../shared/TooltipButton';
 import type { StockTransaction, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { useTranslate } from '../../utils/naming';
+import { Link } from 'react-router-dom';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
@@ -80,7 +81,23 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
         if (type === 'written_off') return 'error';
         return 'success';
     };
-    const canEdit = (tx: StockTransaction) => onEdit && !tx.damageReportId && tx.transactionType !== 'repaired' && tx.transactionType !== 'written_off';
+    const canEdit = (tx: StockTransaction) => onEdit && !tx.damageReportId && !tx.factionOrderId && tx.transactionType !== 'repaired' && tx.transactionType !== 'written_off';
+
+    function orderChip(tx: StockTransaction) {
+        if (!tx.factionOrderId) return null;
+        const order = tx.expand?.factionOrderId;
+        return (
+            <Chip
+                component={Link}
+                clickable
+                to={`/events/orders/${tx.factionOrderId}`}
+                size="small"
+                variant="outlined"
+                color="primary"
+                label={order ? `${order.eventType} · ${order.faction}` : t('Fraktionsliste', 'Faction list')}
+            />
+        );
+    }
 
     if (isMobile) return (
         <Stack spacing={1.25}>
@@ -99,6 +116,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                         <Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
+                    {tx.factionOrderId && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
                     {canEdit(tx) && <Box sx={{ textAlign: 'right', mt: 0.5 }}><TooltipButton variant="icon" tooltipText={t('Transaktion bearbeiten', 'Edit transaction')} icon={<EditIcon />} onClick={() => onEdit?.(tx)} /></Box>}
                 </Paper>
             ))}
@@ -134,7 +152,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                             </TableCell>
                             <TableCell>{getUserName(tx)}</TableCell>
                             <TableCell align="right">{tx.quantityChanged}</TableCell>
-                            <TableCell>{tx.reason}</TableCell>
+                            <TableCell><Stack spacing={0.5}><span>{tx.reason}</span>{orderChip(tx)}</Stack></TableCell>
                             <TableCell>{tx.notes}</TableCell>
                             {onEdit && (
                                 <TableCell align="center">

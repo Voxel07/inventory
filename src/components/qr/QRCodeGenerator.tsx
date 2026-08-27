@@ -1,29 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, Stack, Typography, Tooltip } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
-import { generateQRCodeDataURL } from '../../services/qrCodeService';
+import { generateQRCodeDataURL, type QRResourceType } from '../../services/qrCodeService';
 import { useTranslate } from '../../utils/naming';
 
 interface Props {
     itemId: string;
     itemName: string;
+    resourceType?: QRResourceType;
 }
 
-export function QRCodeGenerator({ itemId, itemName }: Props) {
+export function QRCodeGenerator({ itemId, itemName, resourceType = 'item' }: Props) {
     const t = useTranslate();
     const [qrDataUrl, setQrDataUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
-        generateQRCodeDataURL(itemId).then((url) => {
+        generateQRCodeDataURL(itemId, resourceType).then((url) => {
             if (!cancelled) {
                 setQrDataUrl(url);
                 setLoading(false);
             }
         });
         return () => { cancelled = true; };
-    }, [itemId]);
+    }, [itemId, resourceType]);
 
     function handleDownload() {
         const link = document.createElement('a');

@@ -7,6 +7,7 @@ export interface StockTransaction {
   quantityChanged: number;
   userId: string;
   damageReportId?: string;
+  factionOrderId?: string;
   reason: string;
   notes: string;
   timestamp: string;
@@ -14,6 +15,11 @@ export interface StockTransaction {
   updated: string;
   expand?: {
     userId?: User;
+    factionOrderId?: {
+      id: string;
+      eventType: string;
+      faction: string;
+    };
   };
 }
 

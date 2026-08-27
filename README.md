@@ -1,4 +1,34 @@
-# React + TypeScript + Vite
+# ASH Inventory
+
+Responsive inventory management for items, assemblies, damage reports, event planning, and faction order lists.
+
+## Development
+
+This project uses Bun (not npm):
+
+```bash
+bun install
+bun run dev
+bun run build
+```
+
+The PocketBase URL is read from `window.__ENV__.POCKETBASE_URL` or `VITE_POCKETBASE_URL`.
+
+## PocketBase schema
+
+Import `pb_schema.json` into PocketBase before using the application. The faction-order feature requires the new `inventory_faction_orders` collection and the optional `factionOrderId` relation on `inventory_stock_transactions`. Existing Authentik/OIDC users remain in the external PocketBase auth collection referenced by the schema.
+
+## Faction order workflow
+
+Open **Events → Faction lists** to create a dated list for a faction. A draft can copy the previous list and display changes. Its lifecycle is:
+
+```text
+draft → preparing → ready → picked up → returned
+```
+
+Prepared quantities reserve available stock from other open lists. Pickup and return create batched stock transactions, while the list history records the acting users and timestamps. The downloadable list QR always opens the current state and its next valid action.
+
+## Vite template notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

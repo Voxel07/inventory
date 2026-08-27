@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -18,6 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import GroupsIcon from '@mui/icons-material/Groups';
 import SaveIcon from '@mui/icons-material/Save';
 import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
@@ -43,6 +45,7 @@ function toQuantities(values: QuantityInputs): Record<string, number> {
 }
 
 export function Events() {
+  const navigate = useNavigate();
   const t = useTranslate();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
@@ -118,13 +121,20 @@ export function Events() {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4">{t('Eventplanung', 'Event planning')}</Typography>
-        <Typography color="text.secondary">
-          {t(
-            'Verfügbare Artikel planen und den Verbrauch vergangener Events vergleichen.',
-            'Plan available items and compare usage from previous events.',
-          )}
-        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
+          <Box>
+            <Typography variant="h4">{t('Eventplanung', 'Event planning')}</Typography>
+            <Typography color="text.secondary">
+              {t(
+                'Verfügbare Artikel planen und den Verbrauch vergangener Events vergleichen.',
+                'Plan available items and compare usage from previous events.',
+              )}
+            </Typography>
+          </Box>
+          <Button variant="contained" startIcon={<GroupsIcon />} onClick={() => navigate('/events/orders')} sx={{ alignSelf: { sm: 'flex-start' } }}>
+            {t('Fraktionslisten', 'Faction lists')}
+          </Button>
+        </Stack>
       </Box>
 
       <ToggleButtonGroup

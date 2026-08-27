@@ -43,6 +43,10 @@ export function QRCheckout() {
             navigate(url.pathname);
             return;
         }
+        if (url.pathname.startsWith('/events/orders/')) {
+            navigate(url.pathname);
+            return;
+        }
         const id = url.pathname.match(/\/checkout\/([^/]+)/)?.[1] ?? scannedId;
         navigate(`/checkout/${encodeURIComponent(id)}`);
     }

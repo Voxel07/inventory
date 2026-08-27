@@ -17,6 +17,8 @@ import { PrintQRCodesPage } from './pages/PrintQRCodes';
 import { UserDashboard } from './pages/UserDashboard';
 import { StorageLocations } from './pages/StorageLocations';
 import { Events } from './pages/Events';
+import { FactionOrders } from './pages/FactionOrders';
+import { FactionOrderDetail } from './pages/FactionOrderDetail';
 import { LoginPage } from './pages/LoginPage';
 import { usePocketBase } from './hooks/usePocketBase';
 import { useUIStore } from './store/uiStore';
@@ -179,6 +181,8 @@ function AppContent() {
             <Route path="/assemblies" element={<Assemblies />} />
             <Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} />
             <Route path="/events" element={<Events />} />
+            <Route path="/events/orders" element={<FactionOrders />} />
+            <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
             <Route path="/checkout" element={<QRCheckout />} />
             <Route path="/checkout/:itemId" element={<QRCheckout />} />
             <Route path="/transactions" element={<TransactionHistoryPage />} />
