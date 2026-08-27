@@ -1,4 +1,5 @@
 import type { Item } from './item';
+import type { Assembly } from './assembly';
 import type { EventType } from './event';
 import type { User } from './user';
 
@@ -27,6 +28,7 @@ export interface FactionOrderHistoryEntry {
   userName: string;
   timestamp: string;
   quantities?: Record<string, number>;
+  assemblyQuantities?: Record<string, number>;
   note?: string;
 }
 
@@ -39,6 +41,9 @@ export interface FactionOrder {
   itemIds: string[];
   requestedQuantities: Record<string, number>;
   preparedQuantities: Record<string, number>;
+  assemblyIds: string[];
+  requestedAssemblyQuantities: Record<string, number>;
+  preparedAssemblyQuantities: Record<string, number>;
   notes?: string;
   createdBy: string;
   preparedBy?: string;
@@ -54,6 +59,7 @@ export interface FactionOrder {
   updated: string;
   expand?: {
     itemIds?: Item[];
+    assemblyIds?: Assembly[];
     createdBy?: User;
     preparedBy?: User;
     readyBy?: User;
@@ -68,10 +74,11 @@ export interface FactionOrderFormData {
   eventDate: string;
   itemIds: string[];
   requestedQuantities: Record<string, number>;
+  assemblyIds: string[];
+  requestedAssemblyQuantities: Record<string, number>;
   notes?: string;
 }
 
 export function isFactionForEvent(eventType: EventType, faction: string): boolean {
   return FACTIONS_BY_EVENT[eventType].includes(faction);
 }
-

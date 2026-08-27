@@ -27,6 +27,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import CategoryIcon from '@mui/icons-material/Category';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
@@ -47,11 +48,13 @@ import {
 } from '../hooks/useFactionOrders';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { useTransactions } from '../hooks/useTransactions';
 import { useUIStore } from '../store/uiStore';
-import type { FactionOrderHistoryAction, FactionOrderStatus, Item } from '../types';
+import type { Assembly, FactionOrderHistoryAction, FactionOrderStatus, Item } from '../types';
 import { useAppLanguage, useTranslate } from '../utils/naming';
 import { calculateItemStock } from '../utils/stock';
+import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
 
 type ConfirmAction = 'pickup' | 'return' | 'cancel' | null;
 
@@ -70,6 +73,7 @@ export function FactionOrderDetail() {
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const { data: allOrders = [] } = useFactionOrders(order?.eventType);
   const { data: items = [] } = useItems();
+  const { data: assemblies = [] } = useAssemblies();
   const { data: transactions } = useTransactions();
   const { data: damageReports } = useDamageReports();
   const updateOrder = useUpdateFactionOrder();
@@ -80,6 +84,7 @@ export function FactionOrderDetail() {
   const returnOrder = useReturnFactionOrder();
   const cancelOrder = useCancelFactionOrder();
   const [prepared, setPrepared] = useState<Record<string, string>>({});
+  const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
   const [editOpen, setEditOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -88,23 +93,30 @@ export function FactionOrderDetail() {
     setPrepared(Object.fromEntries(
       Object.entries(order?.preparedQuantities ?? {}).map(([id, value]) => [id, String(value)]),
     ));
-  }, [order?.id, order?.preparedQuantities, order?.updated]);
+    setPreparedAssemblies(Object.fromEntries(
+      Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
+    ));
+  }, [order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const assemblyMap = useMemo(() => new Map(assemblies.map((assembly) => [assembly.id, assembly])), [assemblies]);
   const orderItems = useMemo(() => Object.keys(order?.requestedQuantities ?? {})
     .map((id) => itemMap.get(id))
     .filter((item): item is Item => Boolean(item)), [itemMap, order?.requestedQuantities]);
+  const orderAssemblies = useMemo(() => Object.keys(order?.requestedAssemblyQuantities ?? {})
+    .map((id) => assemblyMap.get(id))
+    .filter((assembly): assembly is Assembly => Boolean(assembly)), [assemblyMap, order?.requestedAssemblyQuantities]);
 
   const reservedByOthers = useMemo(() => {
     const result: Record<string, number> = {};
     for (const candidate of allOrders) {
       if (candidate.id === order?.id || !['preparing', 'ready'].includes(candidate.status)) continue;
-      for (const [itemId, quantity] of Object.entries(candidate.preparedQuantities ?? {})) {
+      for (const [itemId, quantity] of Object.entries(expandFactionOrderComponents(candidate, assemblies, 'prepared'))) {
         result[itemId] = (result[itemId] ?? 0) + quantity;
       }
     }
     return result;
-  }, [allOrders, order?.id]);
+  }, [allOrders, assemblies, order?.id]);
 
   const previousOrder = useMemo(() => allOrders.find((candidate) => (
     candidate.id !== order?.id
@@ -116,13 +128,24 @@ export function FactionOrderDetail() {
   const comparison = useMemo(() => {
     if (!order || !previousOrder) return [];
     const ids = new Set([...Object.keys(order.requestedQuantities), ...Object.keys(previousOrder.requestedQuantities)]);
-    return [...ids].flatMap((itemId) => {
+    const itemChanges = [...ids].flatMap((itemId) => {
       const before = previousOrder.requestedQuantities[itemId] ?? 0;
       const after = order.requestedQuantities[itemId] ?? 0;
       if (before === after) return [];
-      return [{ itemId, before, after, name: itemMap.get(itemId)?.name ?? itemId }];
+      return [{ resourceKey: `item-${itemId}`, before, after, name: itemMap.get(itemId)?.name ?? itemId }];
     });
-  }, [itemMap, order, previousOrder]);
+    const assemblyIds = new Set([
+      ...Object.keys(order.requestedAssemblyQuantities ?? {}),
+      ...Object.keys(previousOrder.requestedAssemblyQuantities ?? {}),
+    ]);
+    const assemblyChanges = [...assemblyIds].flatMap((assemblyId) => {
+      const before = previousOrder.requestedAssemblyQuantities?.[assemblyId] ?? 0;
+      const after = order.requestedAssemblyQuantities?.[assemblyId] ?? 0;
+      if (before === after) return [];
+      return [{ resourceKey: `assembly-${assemblyId}`, before, after, name: assemblyMap.get(assemblyId)?.name ?? assemblyId }];
+    });
+    return [...assemblyChanges, ...itemChanges];
+  }, [assemblyMap, itemMap, order, previousOrder]);
 
   if (isLoading) return <LinearProgress />;
   if (isError || !order) {
@@ -134,10 +157,14 @@ export function FactionOrderDetail() {
   }
 
   const currentOrder = order;
-  const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0);
-  const preparedTotal = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0);
+  const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
+    + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
+  const preparedTotal = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0)
+    + Object.values(order.preparedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
   const preparationComplete = requestedTotal > 0 && requestedTotal === preparedTotal;
   const progress = requestedTotal ? Math.round((preparedTotal / requestedTotal) * 100) : 0;
+  const componentUnitTotal = Object.values(expandFactionOrderComponents(order, assemblies, 'prepared'))
+    .reduce((sum, value) => sum + value, 0);
 
   function statusLabel(status: FactionOrderStatus) {
     const labels: Record<FactionOrderStatus, string> = {
@@ -174,24 +201,51 @@ export function FactionOrderDetail() {
     return labels[action];
   }
 
-  function availableFor(item: Item) {
+  function availableForItemId(itemId: string) {
+    const item = itemMap.get(itemId);
+    if (!item) return 0;
     const current = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0).remaining;
     return Math.max(0, current - (reservedByOthers[item.id] ?? 0));
   }
 
+  function availableFor(item: Item) {
+    return availableForItemId(item.id);
+  }
+
+  function availableAssemblies(assembly: Assembly) {
+    return assemblyAvailability(assembly, availableForItemId);
+  }
+
   function savePrepared() {
     const values = Object.fromEntries(Object.entries(prepared).map(([id, value]) => [id, Number(value) || 0]));
-    savePreparation.mutate({ id: currentOrder.id, values }, {
+    const assemblyValues = Object.fromEntries(Object.entries(preparedAssemblies).map(([id, value]) => [id, Number(value) || 0]));
+    savePreparation.mutate({ id: currentOrder.id, values, assemblyValues }, {
       onSuccess: () => showSnackbar(t('Vorbereitung gespeichert', 'Preparation saved'), 'success'),
       onError: handleError,
     });
   }
 
   function fillAvailable() {
-    setPrepared(Object.fromEntries(orderItems.map((item) => [
-      item.id,
-      String(Math.min(currentOrder.requestedQuantities[item.id] ?? 0, availableFor(item))),
-    ])));
+    const remaining = Object.fromEntries(items.map((item) => [item.id, availableFor(item)]));
+    const nextItems: Record<string, string> = {};
+    for (const item of orderItems) {
+      const amount = Math.min(currentOrder.requestedQuantities[item.id] ?? 0, remaining[item.id] ?? 0);
+      nextItems[item.id] = String(amount);
+      remaining[item.id] = Math.max(0, (remaining[item.id] ?? 0) - amount);
+    }
+    const nextAssemblies: Record<string, string> = {};
+    for (const assembly of orderAssemblies) {
+      const amount = Math.min(
+        currentOrder.requestedAssemblyQuantities?.[assembly.id] ?? 0,
+        assemblyAvailability(assembly, (itemId) => remaining[itemId] ?? 0),
+      );
+      nextAssemblies[assembly.id] = String(amount);
+      for (const [itemId, perAssembly] of Object.entries(assembly.itemQuantities ?? {})) {
+        remaining[itemId] = Math.max(0, (remaining[itemId] ?? 0) - amount * perAssembly);
+      }
+    }
+    setPrepared(nextItems);
+    setPreparedAssemblies(nextAssemblies);
   }
 
   function handleError(error: unknown) {
@@ -256,6 +310,46 @@ export function FactionOrderDetail() {
     );
   }
 
+  function assemblyRow(assembly: Assembly) {
+    const requested = currentOrder.requestedAssemblyQuantities?.[assembly.id] ?? 0;
+    const storedPrepared = currentOrder.preparedAssemblyQuantities?.[assembly.id] ?? 0;
+    const available = availableAssemblies(assembly);
+    const components = Object.entries(assembly.itemQuantities ?? {})
+      .map(([itemId, quantity]) => `${quantity}× ${itemMap.get(itemId)?.name ?? itemId}`)
+      .join(', ');
+    return (
+      <Card key={assembly.id} variant="outlined" sx={{ borderColor: 'primary.dark', bgcolor: 'rgba(124, 77, 255, 0.06)' }}>
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <CategoryIcon color="primary" fontSize="small" />
+                <Typography sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+              </Stack>
+              <Typography variant="body2" color="text.secondary">{components || t('Keine Komponenten', 'No components')}</Typography>
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
+              <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
+              <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
+              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
+            </Stack>
+            {currentOrder.status === 'preparing' && (
+              <TextField
+                type="number"
+                size="small"
+                label={t('Vorbereitet', 'Prepared')}
+                value={preparedAssemblies[assembly.id] ?? ''}
+                onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
+                slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
+                sx={{ width: { xs: '100%', sm: 125 } }}
+              />
+            )}
+          </Stack>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/events/orders')} sx={{ mb: 1 }}>
@@ -269,7 +363,7 @@ export function FactionOrderDetail() {
             <Chip color={statusColor(order.status)} label={statusLabel(order.status)} />
           </Stack>
           <Typography color="text.secondary">
-            {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItems.length} {t('Positionen', 'lines')} · {requestedTotal} {t('Einheiten', 'units')}
+            {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItems.length + orderAssemblies.length} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -294,9 +388,22 @@ export function FactionOrderDetail() {
         <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Abgeholt von', 'Picked up by')}</Typography><Typography sx={{ fontWeight: 700 }}>{relationName(order.expand?.pickedUpBy)}</Typography><Typography variant="caption">{order.pickedUpAt ? new Date(order.pickedUpAt).toLocaleString() : '—'}</Typography></Paper>
       </Box>
 
+      {!!orderAssemblies.length && (
+        <>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+            <CategoryIcon color="primary" />
+            <Typography variant="h6">{t('Baugruppen', 'Assemblies')}</Typography>
+          </Stack>
+          <Stack spacing={1.25} sx={{ mb: 2 }}>{orderAssemblies.map(assemblyRow)}</Stack>
+        </>
+      )}
+      {!!orderItems.length && <Typography variant="h6" sx={{ mb: 1 }}>{t('Einzelartikel', 'Individual items')}</Typography>}
       <Stack spacing={1.25} sx={{ mb: 2 }}>{orderItems.map(itemRow)}</Stack>
       {orderItems.length !== Object.keys(order.requestedQuantities).length && (
         <Alert severity="warning" sx={{ mb: 2 }}>{t('Mindestens ein Artikel dieser Liste existiert nicht mehr im Lager.', 'At least one item on this list no longer exists in inventory.')}</Alert>
+      )}
+      {orderAssemblies.length !== Object.keys(order.requestedAssemblyQuantities ?? {}).length && (
+        <Alert severity="warning" sx={{ mb: 2 }}>{t('Mindestens eine Baugruppe dieser Liste existiert nicht mehr.', 'At least one assembly on this list no longer exists.')}</Alert>
       )}
 
       <Paper sx={{ p: 2, mb: 3, position: { xs: 'sticky', md: 'static' }, bottom: { xs: 76, md: 'auto' }, zIndex: 2 }}>
@@ -355,7 +462,7 @@ export function FactionOrderDetail() {
           ) : (
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {comparison.map((change) => (
-                <Chip key={change.itemId} label={`${change.name}: ${change.before} → ${change.after}`} color={change.after > change.before ? 'primary' : 'default'} />
+                <Chip key={change.resourceKey} label={`${change.name}: ${change.before} → ${change.after}`} color={change.after > change.before ? 'primary' : 'default'} />
               ))}
             </Stack>
           )}
@@ -388,6 +495,7 @@ export function FactionOrderDetail() {
         <DialogContent dividers>
           <FactionOrderForm
             items={items}
+            assemblies={assemblies}
             orders={allOrders}
             initialData={order}
             submitLabel={t('Änderungen speichern', 'Save changes')}
@@ -419,8 +527,8 @@ export function FactionOrderDetail() {
         </DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">
-            {confirmAction === 'pickup' && t(`${preparedTotal} Einheiten werden auf Sie ausgeliehen.`, `${preparedTotal} units will be checked out to you.`)}
-            {confirmAction === 'return' && t(`${preparedTotal} Einheiten werden zurückgebucht. Schäden bitte anschließend separat melden.`, `${preparedTotal} units will be checked in. Report any damage separately afterwards.`)}
+            {confirmAction === 'pickup' && t(`${componentUnitTotal} Komponenten werden auf Sie ausgeliehen.`, `${componentUnitTotal} component units will be checked out to you.`)}
+            {confirmAction === 'return' && t(`${componentUnitTotal} Komponenten werden zurückgebucht. Schäden bitte anschließend separat melden.`, `${componentUnitTotal} component units will be checked in. Report any damage separately afterwards.`)}
             {confirmAction === 'cancel' && t('Die Liste bleibt im Verlauf sichtbar, kann aber nicht weiter bearbeitet werden.', 'The list remains in history but can no longer be edited.')}
           </Typography>
         </DialogContent>

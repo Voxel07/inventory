@@ -22,6 +22,7 @@ import {
     TextField,
     Tooltip,
     Autocomplete,
+    Stack,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -251,6 +252,14 @@ export function AssemblyDetail() {
                 />
 
             </Box>
+
+            {!!assembly.eventTypes?.length && (
+                <Stack direction="row" spacing={0.75} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
+                    {assembly.eventTypes.map((eventType) => (
+                        <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" />
+                    ))}
+                </Stack>
+            )}
 
             {insufficientItems.length > 0 && (
                 <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>

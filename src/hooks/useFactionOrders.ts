@@ -65,7 +65,15 @@ export function useStartFactionOrderPreparation() {
 }
 
 export function useSaveFactionOrderPreparation() {
-  return useOrderMutation(({ id, values }: { id: string; values: Record<string, number> }) => saveFactionOrderPreparation(id, values));
+  return useOrderMutation(({
+    id,
+    values,
+    assemblyValues,
+  }: {
+    id: string;
+    values: Record<string, number>;
+    assemblyValues: Record<string, number>;
+  }) => saveFactionOrderPreparation(id, values, assemblyValues));
 }
 
 export function useMarkFactionOrderReady() {

@@ -20,13 +20,13 @@ Import `pb_schema.json` into PocketBase before using the application. The factio
 
 ## Faction order workflow
 
-Open **Events → Faction lists** to create a dated list for a faction. A draft can copy the previous list and display changes. Its lifecycle is:
+Open **Events → Faction lists** to create a dated list for a faction. Individual items and assemblies can be selected; both are filtered by their event tags. A draft can copy the previous list and display changes. Its lifecycle is:
 
 ```text
 draft → preparing → ready → picked up → returned
 ```
 
-Prepared quantities reserve available stock from other open lists. Pickup and return create batched stock transactions, while the list history records the acting users and timestamps. The downloadable list QR always opens the current state and its next valid action.
+Prepared quantities reserve available stock from other open lists. Assembly quantities are expanded to their component requirements for availability, reservation, pickup, and return. Pickup and return create batched component stock transactions, while the list history records the acting users and timestamps. The downloadable list QR always opens the current state and its next valid action.
 
 ## Vite template notes
 

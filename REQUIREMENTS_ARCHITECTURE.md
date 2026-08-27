@@ -18,6 +18,7 @@ The first complete faction-order workflow is now implemented in the application:
 - fixed event-scoped faction catalogue;
 - responsive faction overview and dated order-list history;
 - create/edit drafts with any inventory item;
+- tag assemblies for events and add them to faction lists as component-aware quantities;
 - copy the most recent list and show quantity differences;
 - partial preparation with availability and reservations from other open lists;
 - ready, pickup, full-list return, cancellation, and actor/time history;
@@ -31,7 +32,7 @@ The current implementation deliberately uses one PocketBase aggregate collection
 ### Source baseline
 
 - Source tree: `src/`, `pb_schema.json`, `package.json`, Docker configuration, and runtime configuration.
-- Graphify snapshot: 84 files, 484 graph nodes, 1,344 edges, and 32 detected communities.
+- Graphify snapshot: 85 files, 487 graph nodes, 1,377 edges, and 31 detected communities.
 - Graphify output: `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json`, and `graphify-out/graph.html`.
 - Main graph hubs: translation, UI state, items, item queries, transactions, damage reports, navigation, assemblies, events, and storage locations.
 - No import cycles were reported by Graphify.
@@ -211,6 +212,9 @@ Desktop uses a persistent navigation drawer. Mobile uses a bottom navigation bar
 - [x] **ASM-005 — Quick editing.** Users shall be able to add or remove components from the detail view. **Implemented.**
 - [x] **ASM-006 — Bulk checkout.** Checking out an assembly shall create an individual checkout transaction for every component, multiplied by the requested assembly count. **Implemented.**
 - [x] **ASM-007 — Checkout validation.** Assembly checkout shall be blocked when any required component is unavailable. **Implemented.**
+- [x] **ASM-008 — Event tags.** Assemblies shall be taggable for DE, TNO, LS, M24, and ASD from the assembly form, with tags visible in assembly views. **Implemented.**
+- [x] **ASM-009 — Faction-list selection.** Event-tagged assemblies shall be selectable and quantity-controlled on faction order lists. **Implemented.**
+- [x] **ASM-010 — Component-aware orders.** Assembly quantities in faction lists shall reserve, check out, and check in each component multiplied by its per-assembly quantity. **Implemented.**
 
 ### 6.10 Damage reports
 
@@ -271,9 +275,9 @@ erDiagram
 | `inventory_items` | Item identity, location, amount/minimum/value, categories, event tags, status, QR, and container fields. |
 | `inventory_stock_transactions` | Item, transaction type, quantity, user, optional damage report, reason, notes, and timestamp. Types: checkout, checkin, added, repaired, written_off. |
 | `inventory_damage_reports` | Item, reporter, handler, handler time, description, severity, total/repaired/written-off quantities, status, and JSON status history. |
-| `inventory_assemblies` | Name, description, item relations, and JSON item quantities. |
+| `inventory_assemblies` | Name, description, event tags, item relations, and JSON item quantities. |
 | `inventory_event_reports` | Event type/date/status, item relations, JSON planned/used quantities, notes, and creator. |
-| `inventory_faction_orders` | Event/faction/date, status, requested/prepared quantity maps, item relations, milestone actors/times, notes, and lifecycle history. |
+| `inventory_faction_orders` | Event/faction/date, status, requested/prepared item and assembly quantity maps, item/assembly relations, milestone actors/times, notes, and lifecycle history. |
 | `inventory_storage_locations` | Name, description, area, location, position, and timestamps. |
 
 Relations to `users` are configured as external relations because the auth collection is not created by `pb_schema.json`.
@@ -308,7 +312,7 @@ Faction identity must be scoped to an event type. In particular, `Militär` appe
 ### 8.3 Faction-list creation and editing
 
 - [x] **LST-001 — Create list.** An authenticated inventory user can create a dated list for every configured faction. **Implemented.**
-- [x] **LST-002 — Add items.** A list contains inventory items, requested quantities, and list notes. **Implemented.**
+- [x] **LST-002 — Add items.** A list contains individual inventory items and/or assemblies, requested quantities, and list notes. **Implemented.**
 - [x] **LST-003 — Validation.** Requested quantities are positive integers stored once per item ID. **Implemented.**
 - [x] **LST-004 — Draft editing.** Draft lists can be edited without changing stock. **Implemented.**
 - [x] **LST-005 — Submission.** Starting preparation freezes draft editing and appends the transition to history. **Implemented as the draft-to-preparing transition.**

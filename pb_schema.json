@@ -79,6 +79,18 @@
         "type": "text"
       },
       {
+        "help": "Events for which this assembly can be selected",
+        "hidden": false,
+        "id": "pbc_assemblies_eventTypes",
+        "maxSelect": 5,
+        "name": "eventTypes",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": ["DE", "TNO", "LS", "M24", "ASD"]
+      },
+      {
         "hidden": false,
         "id": "pbc_assemblies_created",
         "name": "created",
@@ -835,10 +847,10 @@
         "hidden": false,
         "id": "pbc_order_itemIds",
         "maxSelect": 999,
-        "minSelect": 1,
+        "minSelect": 0,
         "name": "itemIds",
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "relation"
       },
@@ -857,6 +869,40 @@
         "id": "pbc_order_prepared",
         "maxSize": 65536,
         "name": "preparedQuantities",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_assemblies",
+        "help": "Assemblies requested by this faction",
+        "hidden": false,
+        "id": "pbc_order_assemblyIds",
+        "maxSelect": 999,
+        "minSelect": 0,
+        "name": "assemblyIds",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_order_requestedAssemblies",
+        "maxSize": 65536,
+        "name": "requestedAssemblyQuantities",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_order_preparedAssemblies",
+        "maxSize": 65536,
+        "name": "preparedAssemblyQuantities",
         "presentable": false,
         "required": false,
         "system": false,

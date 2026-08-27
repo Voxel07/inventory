@@ -1,6 +1,7 @@
 import pb from './pocketbaseClient';
 import type {
   DamageReport,
+  Assembly,
   FactionOrder,
   FactionOrderFormData,
   FactionOrderHistoryAction,
@@ -11,10 +12,11 @@ import type {
 } from '../types';
 import { isFactionForEvent } from '../types';
 import { calculateItemStock } from '../utils/stock';
+import { expandFactionOrderComponents } from '../utils/factionOrderQuantities';
 
 const COLLECTION = 'inventory_faction_orders';
 const TRANSACTIONS_COLLECTION = 'inventory_stock_transactions';
-const EXPAND = 'itemIds,createdBy,preparedBy,readyBy,pickedUpBy,returnedBy';
+const EXPAND = 'itemIds,assemblyIds,createdBy,preparedBy,readyBy,pickedUpBy,returnedBy';
 
 function currentActor(): { id: string; name: string } {
   const record = pb.authStore.record;
@@ -32,10 +34,11 @@ function timestamp(): string {
 function historyEntry(
   action: FactionOrderHistoryAction,
   quantities?: Record<string, number>,
+  assemblyQuantities?: Record<string, number>,
   note?: string,
 ): FactionOrderHistoryEntry {
   const actor = currentActor();
-  return { action, userId: actor.id, userName: actor.name, timestamp: timestamp(), quantities, note };
+  return { action, userId: actor.id, userName: actor.name, timestamp: timestamp(), quantities, assemblyQuantities, note };
 }
 
 function normalizedQuantities(values: Record<string, number>): Record<string, number> {
@@ -46,23 +49,37 @@ function normalizedQuantities(values: Record<string, number>): Record<string, nu
   );
 }
 
-function validateOrderData(data: FactionOrderFormData): Record<string, number> {
+function validateOrderData(data: FactionOrderFormData): {
+  requestedQuantities: Record<string, number>;
+  requestedAssemblyQuantities: Record<string, number>;
+} {
   if (!isFactionForEvent(data.eventType, data.faction)) throw new Error('Faction does not belong to the selected event');
-  const quantities = normalizedQuantities(data.requestedQuantities);
-  if (!Object.keys(quantities).length) throw new Error('Add at least one item to the order list');
+  const requestedQuantities = normalizedQuantities(data.requestedQuantities);
+  const requestedAssemblyQuantities = normalizedQuantities(data.requestedAssemblyQuantities ?? {});
+  if (!Object.keys(requestedQuantities).length && !Object.keys(requestedAssemblyQuantities).length) {
+    throw new Error('Add at least one item or assembly to the order list');
+  }
   if (!data.eventDate) throw new Error('Event date is required');
-  return quantities;
+  return { requestedQuantities, requestedAssemblyQuantities };
 }
 
 function previousHistory(order: FactionOrder): FactionOrderHistoryEntry[] {
   return Array.isArray(order.history) ? order.history : [];
 }
 
-function reservedByOtherOrders(orders: FactionOrder[], currentOrderId: string, itemId: string): number {
-  return orders.reduce((sum, candidate) => {
-    if (candidate.id === currentOrderId || !['preparing', 'ready'].includes(candidate.status)) return sum;
-    return sum + (candidate.preparedQuantities?.[itemId] ?? 0);
-  }, 0);
+function reservedByOtherOrders(
+  orders: FactionOrder[],
+  currentOrderId: string,
+  assemblies: Assembly[],
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const candidate of orders) {
+    if (candidate.id === currentOrderId || !['preparing', 'ready'].includes(candidate.status)) continue;
+    for (const [itemId, quantity] of Object.entries(expandFactionOrderComponents(candidate, assemblies, 'prepared'))) {
+      result[itemId] = (result[itemId] ?? 0) + quantity;
+    }
+  }
+  return result;
 }
 
 export async function getFactionOrders(filters?: { eventType?: string; faction?: string }): Promise<FactionOrder[]> {
@@ -82,15 +99,19 @@ export async function getFactionOrder(id: string): Promise<FactionOrder> {
 
 export async function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> {
   const actor = currentActor();
-  const requestedQuantities = validateOrderData(data);
+  const { requestedQuantities, requestedAssemblyQuantities } = validateOrderData(data);
   const itemIds = Object.keys(requestedQuantities);
-  const created = historyEntry('created', requestedQuantities);
+  const assemblyIds = Object.keys(requestedAssemblyQuantities);
+  const created = historyEntry('created', requestedQuantities, requestedAssemblyQuantities);
   return pb.collection(COLLECTION).create<FactionOrder>({
     ...data,
     eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
     itemIds,
+    assemblyIds,
     requestedQuantities,
+    requestedAssemblyQuantities,
     preparedQuantities: {},
+    preparedAssemblyQuantities: {},
     status: 'draft',
     createdBy: actor.id,
     history: [created],
@@ -100,14 +121,17 @@ export async function createFactionOrder(data: FactionOrderFormData): Promise<Fa
 export async function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   if (order.status !== 'draft') throw new Error('Only draft order lists can be edited');
-  const requestedQuantities = validateOrderData(data);
-  const entry = historyEntry('updated', requestedQuantities);
+  const { requestedQuantities, requestedAssemblyQuantities } = validateOrderData(data);
+  const entry = historyEntry('updated', requestedQuantities, requestedAssemblyQuantities);
   return pb.collection(COLLECTION).update<FactionOrder>(id, {
     ...data,
     eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
     itemIds: Object.keys(requestedQuantities),
+    assemblyIds: Object.keys(requestedAssemblyQuantities),
     requestedQuantities,
+    requestedAssemblyQuantities,
     preparedQuantities: {},
+    preparedAssemblyQuantities: {},
     history: [...previousHistory(order), entry],
   }, { expand: EXPAND });
 }
@@ -125,6 +149,7 @@ export async function startFactionOrderPreparation(id: string): Promise<FactionO
 export async function saveFactionOrderPreparation(
   id: string,
   values: Record<string, number>,
+  assemblyValues: Record<string, number>,
 ): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   if (order.status !== 'preparing') throw new Error('This order list is not being prepared');
@@ -136,24 +161,43 @@ export async function saveFactionOrderPreparation(
     }
     if (value > 0) preparedQuantities[itemId] = value;
   }
-  const [transactions, damageReports, items, orders] = await Promise.all([
+  const preparedAssemblyQuantities: Record<string, number> = {};
+  for (const [assemblyId, requested] of Object.entries(order.requestedAssemblyQuantities ?? {})) {
+    const value = assemblyValues[assemblyId] ?? 0;
+    if (!Number.isInteger(value) || value < 0 || value > requested) {
+      throw new Error(`Prepared assembly quantity must be between 0 and ${requested}`);
+    }
+    if (value > 0) preparedAssemblyQuantities[assemblyId] = value;
+  }
+  const [transactions, damageReports, items, assemblies, orders] = await Promise.all([
     pb.collection(TRANSACTIONS_COLLECTION).getFullList<StockTransaction>(),
     pb.collection('inventory_damage_reports').getFullList<DamageReport>(),
     pb.collection('inventory_items').getFullList<Item>(),
+    pb.collection('inventory_assemblies').getFullList<Assembly>(),
     getFactionOrders(),
   ]);
-  for (const [itemId, quantity] of Object.entries(preparedQuantities)) {
+  for (const assemblyId of Object.keys(preparedAssemblyQuantities)) {
+    if (!assemblies.some((assembly) => assembly.id === assemblyId)) throw new Error(`Assembly ${assemblyId} no longer exists`);
+  }
+  const proposedComponents = expandFactionOrderComponents({
+    ...order,
+    preparedQuantities,
+    preparedAssemblyQuantities,
+  }, assemblies, 'prepared');
+  const otherReservations = reservedByOtherOrders(orders, id, assemblies);
+  for (const [itemId, quantity] of Object.entries(proposedComponents)) {
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error(`Item ${itemId} no longer exists`);
     const remaining = calculateItemStock(itemId, transactions, damageReports, item.amount ?? 0).remaining;
-    const availableToPromise = Math.max(0, remaining - reservedByOtherOrders(orders, id, itemId));
+    const availableToPromise = Math.max(0, remaining - (otherReservations[itemId] ?? 0));
     if (quantity > availableToPromise) throw new Error(`${item.name}: only ${availableToPromise} available after other reservations`);
   }
   const actor = currentActor();
   const preparedAt = timestamp();
-  const entry = historyEntry('preparation_saved', preparedQuantities);
+  const entry = historyEntry('preparation_saved', preparedQuantities, preparedAssemblyQuantities);
   return pb.collection(COLLECTION).update<FactionOrder>(id, {
     preparedQuantities,
+    preparedAssemblyQuantities,
     preparedBy: actor.id,
     preparedAt,
     history: [...previousHistory(order), entry],
@@ -165,11 +209,13 @@ export async function markFactionOrderReady(id: string): Promise<FactionOrder> {
   if (order.status !== 'preparing') throw new Error('Only an order being prepared can be marked ready');
   const isComplete = Object.entries(order.requestedQuantities).every(
     ([itemId, requested]) => (order.preparedQuantities[itemId] ?? 0) === requested,
+  ) && Object.entries(order.requestedAssemblyQuantities ?? {}).every(
+    ([assemblyId, requested]) => (order.preparedAssemblyQuantities?.[assemblyId] ?? 0) === requested,
   );
   if (!isComplete) throw new Error('Prepare every requested item before marking the list ready');
   const actor = currentActor();
   const readyAt = timestamp();
-  const entry = historyEntry('ready', order.preparedQuantities);
+  const entry = historyEntry('ready', order.preparedQuantities, order.preparedAssemblyQuantities);
   return pb.collection(COLLECTION).update<FactionOrder>(id, {
     status: 'ready',
     readyBy: actor.id,
@@ -182,22 +228,28 @@ export async function pickUpFactionOrder(id: string): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   if (order.status !== 'ready') throw new Error('Only a ready order list can be picked up');
   const actor = currentActor();
-  const [transactions, damageReports, items, orders] = await Promise.all([
+  const [transactions, damageReports, items, assemblies, orders] = await Promise.all([
     pb.collection(TRANSACTIONS_COLLECTION).getFullList<StockTransaction>(),
     pb.collection('inventory_damage_reports').getFullList<DamageReport>(),
     pb.collection('inventory_items').getFullList<Item>(),
+    pb.collection('inventory_assemblies').getFullList<Assembly>(),
     getFactionOrders(),
   ]);
-  for (const [itemId, quantity] of Object.entries(order.preparedQuantities)) {
+  for (const assemblyId of Object.keys(order.preparedAssemblyQuantities ?? {})) {
+    if (!assemblies.some((assembly) => assembly.id === assemblyId)) throw new Error(`Assembly ${assemblyId} no longer exists`);
+  }
+  const componentQuantities = expandFactionOrderComponents(order, assemblies, 'prepared');
+  const otherReservations = reservedByOtherOrders(orders, id, assemblies);
+  for (const [itemId, quantity] of Object.entries(componentQuantities)) {
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error(`Item ${itemId} no longer exists`);
     const remaining = calculateItemStock(itemId, transactions, damageReports, item.amount ?? 0).remaining;
-    const available = Math.max(0, remaining - reservedByOtherOrders(orders, id, itemId));
+    const available = Math.max(0, remaining - (otherReservations[itemId] ?? 0));
     if (quantity > available) throw new Error(`${item.name}: only ${available} available`);
   }
 
   const pickedUpAt = timestamp();
-  const entry = historyEntry('picked_up', order.preparedQuantities);
+  const entry = historyEntry('picked_up', order.preparedQuantities, order.preparedAssemblyQuantities);
   const batch = pb.createBatch();
   batch.collection(COLLECTION).update(id, {
     status: 'picked_up',
@@ -205,7 +257,7 @@ export async function pickUpFactionOrder(id: string): Promise<FactionOrder> {
     pickedUpAt,
     history: [...previousHistory(order), entry],
   });
-  for (const [itemId, quantity] of Object.entries(order.preparedQuantities)) {
+  for (const [itemId, quantity] of Object.entries(componentQuantities)) {
     if (quantity < 1) continue;
     batch.collection(TRANSACTIONS_COLLECTION).create({
       itemId,
@@ -228,7 +280,12 @@ export async function returnFactionOrder(id: string): Promise<FactionOrder> {
   if (!order.pickedUpBy) throw new Error('The pickup user is missing from this order list');
   const actor = currentActor();
   const returnedAt = timestamp();
-  const entry = historyEntry('returned', order.preparedQuantities);
+  const assemblies = await pb.collection('inventory_assemblies').getFullList<Assembly>();
+  for (const assemblyId of Object.keys(order.preparedAssemblyQuantities ?? {})) {
+    if (!assemblies.some((assembly) => assembly.id === assemblyId)) throw new Error(`Assembly ${assemblyId} no longer exists`);
+  }
+  const componentQuantities = expandFactionOrderComponents(order, assemblies, 'prepared');
+  const entry = historyEntry('returned', order.preparedQuantities, order.preparedAssemblyQuantities);
   const batch = pb.createBatch();
   batch.collection(COLLECTION).update(id, {
     status: 'returned',
@@ -236,7 +293,7 @@ export async function returnFactionOrder(id: string): Promise<FactionOrder> {
     returnedAt,
     history: [...previousHistory(order), entry],
   });
-  for (const [itemId, quantity] of Object.entries(order.preparedQuantities)) {
+  for (const [itemId, quantity] of Object.entries(componentQuantities)) {
     if (quantity < 1) continue;
     batch.collection(TRANSACTIONS_COLLECTION).create({
       itemId,

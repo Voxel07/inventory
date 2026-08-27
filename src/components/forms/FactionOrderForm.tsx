@@ -14,13 +14,15 @@ import {
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CategoryIcon from '@mui/icons-material/Category';
 import SaveIcon from '@mui/icons-material/Save';
-import type { EventType, FactionOrder, FactionOrderFormData, Item } from '../../types';
+import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item } from '../../types';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import { useTranslate } from '../../utils/naming';
 
 interface Props {
   items: Item[];
+  assemblies: Assembly[];
   orders: FactionOrder[];
   initialData?: FactionOrder;
   defaultEventType?: EventType;
@@ -40,6 +42,7 @@ function numericValues(values: Record<string, string>): Record<string, number> {
 
 export function FactionOrderForm({
   items,
+  assemblies,
   orders,
   initialData,
   defaultEventType = 'DE',
@@ -60,6 +63,9 @@ export function FactionOrderForm({
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(initialData?.requestedQuantities ?? {}).map(([id, value]) => [id, String(value)])),
+  );
+  const [assemblyQuantities, setAssemblyQuantities] = useState<Record<string, string>>(
+    Object.fromEntries(Object.entries(initialData?.requestedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)])),
   );
   const [search, setSearch] = useState('');
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
@@ -89,23 +95,50 @@ export function FactionOrderForm({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [eventType, items, quantities, search]);
 
+  const visibleAssemblies = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return assemblies
+      .filter((assembly) => {
+        if (assemblyQuantities[assembly.id]) return true;
+        if (term) return `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term);
+        return assembly.eventTypes?.includes(eventType);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [assemblies, assemblyQuantities, eventType, search]);
+
   const currentQuantities = numericValues(quantities);
+  const currentAssemblyQuantities = numericValues(assemblyQuantities);
   const changes = useMemo(() => {
     if (!comparison) return [];
-    const ids = new Set([...Object.keys(comparison.requestedQuantities), ...Object.keys(currentQuantities)]);
-    return [...ids].flatMap((itemId) => {
+    const itemIds = new Set([...Object.keys(comparison.requestedQuantities), ...Object.keys(currentQuantities)]);
+    const itemChanges = [...itemIds].flatMap((itemId) => {
       const before = comparison.requestedQuantities[itemId] ?? 0;
       const after = currentQuantities[itemId] ?? 0;
       if (before === after) return [];
       const item = items.find((candidate) => candidate.id === itemId);
-      return [{ itemId, name: item?.name ?? itemId, before, after }];
+      return [{ resourceKey: `item-${itemId}`, name: item?.name ?? itemId, before, after }];
     });
-  }, [comparison, currentQuantities, items]);
+    const assemblyIds = new Set([
+      ...Object.keys(comparison.requestedAssemblyQuantities ?? {}),
+      ...Object.keys(currentAssemblyQuantities),
+    ]);
+    const assemblyChanges = [...assemblyIds].flatMap((assemblyId) => {
+      const before = comparison.requestedAssemblyQuantities?.[assemblyId] ?? 0;
+      const after = currentAssemblyQuantities[assemblyId] ?? 0;
+      if (before === after) return [];
+      const assembly = assemblies.find((candidate) => candidate.id === assemblyId);
+      return [{ resourceKey: `assembly-${assemblyId}`, name: assembly?.name ?? assemblyId, before, after }];
+    });
+    return [...assemblyChanges, ...itemChanges];
+  }, [assemblies, comparison, currentAssemblyQuantities, currentQuantities, items]);
 
   function copyPrevious() {
     if (!previousOrder) return;
     setQuantities(Object.fromEntries(
       Object.entries(previousOrder.requestedQuantities).map(([id, value]) => [id, String(value)]),
+    ));
+    setAssemblyQuantities(Object.fromEntries(
+      Object.entries(previousOrder.requestedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
     ));
     setComparison(previousOrder);
   }
@@ -113,12 +146,15 @@ export function FactionOrderForm({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const requestedQuantities = numericValues(quantities);
+    const requestedAssemblyQuantities = numericValues(assemblyQuantities);
     onSubmit({
       eventType,
       faction,
       eventDate,
       itemIds: Object.keys(requestedQuantities),
       requestedQuantities,
+      assemblyIds: Object.keys(requestedAssemblyQuantities),
+      requestedAssemblyQuantities,
       notes: notes.trim(),
     });
   }
@@ -181,7 +217,7 @@ export function FactionOrderForm({
               <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
                 {changes.map((change) => (
                   <Chip
-                    key={change.itemId}
+                    key={change.resourceKey}
                     size="small"
                     label={`${change.name}: ${change.before} → ${change.after}`}
                     color={change.after > change.before ? 'primary' : 'default'}
@@ -194,21 +230,58 @@ export function FactionOrderForm({
 
         <Divider />
         <Box>
-          <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
+          <Typography variant="h6">{t('Baugruppen und Artikel', 'Assemblies and items')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             {t(
-              'Event-markierte Artikel werden direkt angezeigt. Über die Suche können Sie jeden Lagerartikel hinzufügen.',
-              'Event-tagged items are shown directly. Use search to add any inventory item.',
+              'Für dieses Event markierte Einträge werden direkt angezeigt. Über die Suche können Sie weitere hinzufügen.',
+              'Entries tagged for this event are shown directly. Use search to add others.',
             )}
           </Typography>
           <TextField
             fullWidth
             size="small"
-            label={t('Artikel suchen', 'Search items')}
+            label={t('Baugruppen oder Artikel suchen', 'Search assemblies or items')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            sx={{ mb: 1.5 }}
           />
+        </Box>
+
+        <Box>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+            <CategoryIcon color="primary" />
+            <Typography variant="h6">{t('Benötigte Baugruppen', 'Requested assemblies')}</Typography>
+          </Stack>
+          <Stack spacing={1} sx={{ maxHeight: { xs: '36vh', sm: 300 }, overflowY: 'auto', pr: 0.5 }}>
+            {visibleAssemblies.map((assembly) => (
+              <Stack
+                key={assembly.id}
+                direction="row"
+                spacing={1.5}
+                sx={{ p: 1.25, border: 1, borderColor: 'primary.dark', bgcolor: 'rgba(124, 77, 255, 0.06)', borderRadius: 2, alignItems: 'center' }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 700 }} noWrap>{assembly.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')}
+                  </Typography>
+                </Box>
+                <TextField
+                  type="number"
+                  size="small"
+                  label={t('Menge', 'Qty')}
+                  value={assemblyQuantities[assembly.id] ?? ''}
+                  onChange={(event) => setAssemblyQuantities((current) => ({ ...current, [assembly.id]: event.target.value }))}
+                  slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
+                  sx={{ width: 96 }}
+                />
+              </Stack>
+            ))}
+            {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          </Stack>
+        </Box>
+
+        <Box>
+          <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
           <Stack spacing={1} sx={{ maxHeight: { xs: '48vh', sm: 420 }, overflowY: 'auto', pr: 0.5 }}>
             {visibleItems.map((item) => (
               <Stack
@@ -248,7 +321,7 @@ export function FactionOrderForm({
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
-          disabled={isLoading || Object.keys(currentQuantities).length === 0}
+          disabled={isLoading || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
         >
           {submitLabel ?? t('Bestellliste erstellen', 'Create order list')}
         </Button>

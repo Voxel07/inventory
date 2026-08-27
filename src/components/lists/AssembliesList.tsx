@@ -129,7 +129,14 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                 onClick={() => navigate(`/assemblies/${assembly.id}`)}
                                 sx={{ cursor: 'pointer' }}
                             >
-                                <TableCell>{assembly.name}</TableCell>
+                                <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+                                    {!!assembly.eventTypes?.length && (
+                                        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
+                                            {assembly.eventTypes.map((eventType) => <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} size="small" color="primary" variant="outlined" />)}
+                                        </Stack>
+                                    )}
+                                </TableCell>
                                 <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                                     {assembly.description}
                                 </TableCell>

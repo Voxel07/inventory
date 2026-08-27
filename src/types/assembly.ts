@@ -1,4 +1,5 @@
 import type { Item } from './item';
+import type { EventType } from './event';
 
 export interface Assembly {
   id: string;
@@ -6,6 +7,7 @@ export interface Assembly {
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;
+  eventTypes?: EventType[];
   created: string;
   updated: string;
   expand?: {
@@ -18,4 +20,5 @@ export interface AssemblyFormData {
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;
+  eventTypes?: EventType[];
 }

@@ -28,6 +28,7 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
 import { useItems } from '../hooks/useItems';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useAppLanguage, useTranslate } from '../utils/naming';
@@ -52,6 +53,7 @@ export function FactionOrders() {
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT.DE[0]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: items = [] } = useItems();
+  const { data: assemblies = [] } = useAssemblies();
   const { data: orders = [], isLoading, isError } = useFactionOrders(eventType);
   const createOrder = useCreateFactionOrder();
 
@@ -85,7 +87,9 @@ export function FactionOrders() {
   function progress(order: FactionOrder) {
     const requested = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0);
     const prepared = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0);
-    return { requested, prepared };
+    const requestedAssemblies = Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
+    const preparedAssemblies = Object.values(order.preparedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
+    return { requested: requested + requestedAssemblies, prepared: prepared + preparedAssemblies };
   }
 
   return (
@@ -147,7 +151,7 @@ export function FactionOrders() {
                       {new Date(latest.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length} {t('Positionen', 'lines')}
+                      {t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
@@ -217,6 +221,7 @@ export function FactionOrders() {
         <DialogContent dividers>
           <FactionOrderForm
             items={items}
+            assemblies={assemblies}
             orders={orders}
             defaultEventType={eventType}
             defaultFaction={selectedFaction}

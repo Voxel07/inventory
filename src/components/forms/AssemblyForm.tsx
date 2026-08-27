@@ -15,10 +15,11 @@ import {
     Chip,
     IconButton,
     Tooltip,
+    Autocomplete,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
-import type { AssemblyFormData, Assembly, Item } from '../../types';
+import { EVENT_TYPES, type AssemblyFormData, type Assembly, type Item } from '../../types';
 import { useTranslate } from '../../utils/naming';
 
 interface Props {
@@ -35,6 +36,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
         itemQuantities: initialData?.itemQuantities ?? {},
         description: initialData?.description ?? '',
+        eventTypes: initialData?.eventTypes ?? [],
     });
     const [search, setSearch] = useState('');
 
@@ -96,6 +98,14 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     multiline
                     rows={3}
                     fullWidth
+                />
+
+                <Autocomplete
+                    multiple
+                    options={[...EVENT_TYPES]}
+                    value={formData.eventTypes ?? []}
+                    onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
+                    renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
                 />
 
                 {selectedItems.length > 0 && (
