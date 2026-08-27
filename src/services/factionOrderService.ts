@@ -204,7 +204,7 @@ export async function saveFactionOrderPreparation(
   }, { expand: EXPAND });
 }
 
-export async function markFactionOrderReady(id: string): Promise<FactionOrder> {
+export async function markFactionOrderReady(id: string, note?: string): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   if (order.status !== 'preparing') throw new Error('Only an order being prepared can be marked ready');
   const isComplete = Object.entries(order.requestedQuantities).every(
@@ -215,11 +215,28 @@ export async function markFactionOrderReady(id: string): Promise<FactionOrder> {
   if (!isComplete) throw new Error('Prepare every requested item before marking the list ready');
   const actor = currentActor();
   const readyAt = timestamp();
-  const entry = historyEntry('ready', order.preparedQuantities, order.preparedAssemblyQuantities);
+  const entry = historyEntry('ready', order.preparedQuantities, order.preparedAssemblyQuantities, note?.trim() || undefined);
   return pb.collection(COLLECTION).update<FactionOrder>(id, {
     status: 'ready',
     readyBy: actor.id,
     readyAt,
+    history: [...previousHistory(order), entry],
+  }, { expand: EXPAND });
+}
+
+export async function reopenFactionOrderPreparation(id: string, note?: string): Promise<FactionOrder> {
+  const order = await getFactionOrder(id);
+  if (order.status !== 'ready') throw new Error('Only a ready order list can be moved back to preparation');
+  const entry = historyEntry(
+    'preparation_reopened',
+    order.preparedQuantities,
+    order.preparedAssemblyQuantities,
+    note?.trim() || undefined,
+  );
+  return pb.collection(COLLECTION).update<FactionOrder>(id, {
+    status: 'preparing',
+    readyBy: null,
+    readyAt: null,
     history: [...previousHistory(order), entry],
   }, { expand: EXPAND });
 }

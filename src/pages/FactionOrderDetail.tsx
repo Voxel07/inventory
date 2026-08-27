@@ -41,6 +41,7 @@ import {
   useFactionOrders,
   useMarkFactionOrderReady,
   usePickUpFactionOrder,
+  useReopenFactionOrderPreparation,
   useReturnFactionOrder,
   useSaveFactionOrderPreparation,
   useStartFactionOrderPreparation,
@@ -57,6 +58,7 @@ import { calculateItemStock } from '../utils/stock';
 import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
 
 type ConfirmAction = 'pickup' | 'return' | 'cancel' | null;
+type StateTransition = 'ready' | 'preparing' | null;
 
 function relationName(value: { name?: string; username?: string; email?: string } | undefined, fallback?: string) {
   return value?.name || value?.username || value?.email || fallback || '—';
@@ -80,6 +82,7 @@ export function FactionOrderDetail() {
   const startPreparation = useStartFactionOrderPreparation();
   const savePreparation = useSaveFactionOrderPreparation();
   const markReady = useMarkFactionOrderReady();
+  const reopenPreparation = useReopenFactionOrderPreparation();
   const pickUp = usePickUpFactionOrder();
   const returnOrder = useReturnFactionOrder();
   const cancelOrder = useCancelFactionOrder();
@@ -88,6 +91,8 @@ export function FactionOrderDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const [stateTransition, setStateTransition] = useState<StateTransition>(null);
+  const [transitionNote, setTransitionNote] = useState('');
 
   useEffect(() => {
     setPrepared(Object.fromEntries(
@@ -193,6 +198,7 @@ export function FactionOrderDetail() {
       updated: t('Liste geändert', 'List updated'),
       preparation_started: t('Vorbereitung begonnen', 'Preparation started'),
       preparation_saved: t('Vorbereitung gespeichert', 'Preparation saved'),
+      preparation_reopened: t('Zur Vorbereitung zurückgesetzt', 'Moved back to preparation'),
       ready: t('Als abholbereit markiert', 'Marked ready'),
       picked_up: t('Liste abgeholt', 'List picked up'),
       returned: t('Liste zurückgegeben', 'List returned'),
@@ -268,6 +274,32 @@ export function FactionOrderDetail() {
     } else if (action === 'cancel') {
       cancelOrder.mutate(currentOrder.id, {
         onSuccess: () => showSnackbar(t('Liste storniert', 'List cancelled'), 'success'),
+        onError: handleError,
+      });
+    }
+  }
+
+  function closeStateTransition() {
+    setStateTransition(null);
+    setTransitionNote('');
+  }
+
+  function runStateTransition() {
+    const note = transitionNote.trim() || undefined;
+    if (stateTransition === 'ready') {
+      markReady.mutate({ id: currentOrder.id, note }, {
+        onSuccess: () => {
+          closeStateTransition();
+          showSnackbar(t('Liste ist abholbereit', 'List is ready for pickup'), 'success');
+        },
+        onError: handleError,
+      });
+    } else if (stateTransition === 'preparing') {
+      reopenPreparation.mutate({ id: currentOrder.id, note }, {
+        onSuccess: () => {
+          closeStateTransition();
+          showSnackbar(t('Liste ist wieder in Vorbereitung', 'List moved back to preparation'), 'success');
+        },
         onError: handleError,
       });
     }
@@ -427,16 +459,26 @@ export function FactionOrderDetail() {
                 color="success"
                 startIcon={<CheckCircleIcon />}
                 disabled={!preparationComplete || markReady.isPending}
-                onClick={() => markReady.mutate(order.id, { onSuccess: () => showSnackbar(t('Liste ist abholbereit', 'List is ready for pickup'), 'success'), onError: handleError })}
+                onClick={() => setStateTransition('ready')}
               >
                 {t('Abholbereit', 'Mark ready')}
               </Button>
             </>
           )}
           {order.status === 'ready' && (
-            <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={() => setConfirmAction('pickup')}>
-              {t('Komplette Liste abholen', 'Pick up complete list')}
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<ReplayIcon />}
+                onClick={() => setStateTransition('preparing')}
+                disabled={reopenPreparation.isPending}
+              >
+                {t('Zurück in Vorbereitung', 'Back to preparation')}
+              </Button>
+              <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={() => setConfirmAction('pickup')}>
+                {t('Komplette Liste abholen', 'Pick up complete list')}
+              </Button>
+            </>
           )}
           {order.status === 'picked_up' && (
             <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setConfirmAction('return')}>
@@ -517,6 +559,40 @@ export function FactionOrderDetail() {
           <QRCodeGenerator itemId={order.id} itemName={`${order.eventType}-${order.faction}`} resourceType="faction-order" />
         </DialogContent>
         <DialogActions><Button onClick={() => setQrOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(stateTransition)} onClose={closeStateTransition} fullWidth maxWidth="xs">
+        <DialogTitle>
+          {stateTransition === 'ready'
+            ? t('Liste als abholbereit markieren', 'Mark list ready')
+            : t('Zur Vorbereitung zurücksetzen', 'Move back to preparation')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
+            {stateTransition === 'ready'
+              ? t('Die Liste kann danach abgeholt werden.', 'The list can be picked up afterwards.')
+              : t('Die vorbereiteten Mengen bleiben erhalten und können wieder bearbeitet werden.', 'Prepared quantities are kept and can be edited again.')}
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label={t('Erklärung (optional)', 'Explanation (optional)')}
+            value={transitionNote}
+            onChange={(event) => setTransitionNote(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeStateTransition}>{t('Abbrechen', 'Cancel')}</Button>
+          <Button
+            variant="contained"
+            onClick={runStateTransition}
+            disabled={markReady.isPending || reopenPreparation.isPending}
+          >
+            {t('Status ändern', 'Change status')}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={Boolean(confirmAction)} onClose={() => setConfirmAction(null)} fullWidth maxWidth="xs">

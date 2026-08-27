@@ -6,15 +6,18 @@ import {
   Chip,
   Divider,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CategoryIcon from '@mui/icons-material/Category';
+import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item } from '../../types';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
@@ -88,7 +91,7 @@ export function FactionOrderForm({
     const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
-        if (quantities[item.id]) return true;
+        if (Number(quantities[item.id]) > 0) return true;
         if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
         return item.eventTypes?.includes(eventType);
       })
@@ -99,7 +102,7 @@ export function FactionOrderForm({
     const term = search.trim().toLocaleLowerCase();
     return assemblies
       .filter((assembly) => {
-        if (assemblyQuantities[assembly.id]) return true;
+        if (Number(assemblyQuantities[assembly.id]) > 0) return true;
         if (term) return `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term);
         return assembly.eventTypes?.includes(eventType);
       })
@@ -233,8 +236,8 @@ export function FactionOrderForm({
           <Typography variant="h6">{t('Baugruppen und Artikel', 'Assemblies and items')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             {t(
-              'Für dieses Event markierte Einträge werden direkt angezeigt. Über die Suche können Sie weitere hinzufügen.',
-              'Entries tagged for this event are shown directly. Use search to add others.',
+              'Für dieses Event markierte Einträge werden direkt angezeigt. Nur Einträge mit einer Menge größer als 0 werden bestellt.',
+              'Entries tagged for this event are shown directly. Only entries with a quantity greater than 0 are ordered.',
             )}
           </Typography>
           <TextField
@@ -252,7 +255,9 @@ export function FactionOrderForm({
             <Typography variant="h6">{t('Benötigte Baugruppen', 'Requested assemblies')}</Typography>
           </Stack>
           <Stack spacing={1} sx={{ maxHeight: { xs: '36vh', sm: 300 }, overflowY: 'auto', pr: 0.5 }}>
-            {visibleAssemblies.map((assembly) => (
+            {visibleAssemblies.map((assembly) => {
+              const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
+              return (
               <Stack
                 key={assembly.id}
                 direction="row"
@@ -274,8 +279,24 @@ export function FactionOrderForm({
                   slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
                   sx={{ width: 96 }}
                 />
+                {isSelected && (
+                  <Tooltip title={t('Von der Liste entfernen', 'Remove from list')}>
+                    <IconButton
+                      color="error"
+                      aria-label={t(`${assembly.name} von der Liste entfernen`, `Remove ${assembly.name} from list`)}
+                      onClick={() => setAssemblyQuantities((current) => {
+                        const next = { ...current };
+                        delete next[assembly.id];
+                        return next;
+                      })}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Stack>
-            ))}
+              );
+            })}
             {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
           </Stack>
         </Box>
@@ -283,7 +304,9 @@ export function FactionOrderForm({
         <Box>
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
           <Stack spacing={1} sx={{ maxHeight: { xs: '48vh', sm: 420 }, overflowY: 'auto', pr: 0.5 }}>
-            {visibleItems.map((item) => (
+            {visibleItems.map((item) => {
+              const isSelected = Number(quantities[item.id]) > 0;
+              return (
               <Stack
                 key={item.id}
                 direction="row"
@@ -303,8 +326,24 @@ export function FactionOrderForm({
                   slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
                   sx={{ width: 96 }}
                 />
+                {isSelected && (
+                  <Tooltip title={t('Von der Liste entfernen', 'Remove from list')}>
+                    <IconButton
+                      color="error"
+                      aria-label={t(`${item.name} von der Liste entfernen`, `Remove ${item.name} from list`)}
+                      onClick={() => setQuantities((current) => {
+                        const next = { ...current };
+                        delete next[item.id];
+                        return next;
+                      })}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Stack>
-            ))}
+              );
+            })}
             {!visibleItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
           </Stack>
         </Box>

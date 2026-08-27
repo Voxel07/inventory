@@ -321,6 +321,7 @@ Faction identity must be scoped to an event type. In particular, `Militär` appe
 - [ ] **LST-008 — Select older baseline.** A user shall be able to choose an older completed occurrence when the most recent list is not the right baseline. **Required.**
 - [x] **LST-009 — Explicit diff.** Copy/edit and detail views show before/after quantities for changed lines. **Implemented.**
 - [x] **LST-010 — Immutable old events.** Copying creates a new faction-order record and does not modify its source. **Implemented.**
+- [x] **LST-011 — Independent resources.** Items and assemblies can be removed individually; a valid list may contain only items or only assemblies. **Implemented.**
 
 ### 8.4 Availability, preparation, and readiness
 
@@ -334,6 +335,7 @@ Faction identity must be scoped to an event type. In particular, `Militär` appe
 - [x] **PREP-008 — Ready information.** The list displays preparer, ready actor/time, and lifecycle history. **Implemented.**
 - [x] **PREP-009 — Storage guidance.** Each preparation line displays the item's expanded storage location. **Implemented.**
 - [ ] **PREP-010 — Efficient ordering.** Lines shall be sortable/groupable by storage location and position. **Required.**
+- [x] **PREP-011 — Reversible readiness.** Lists can move between preparing and ready in either direction; each transition records its actor, time, quantity snapshot, and an optional explanation. **Implemented.**
 
 ### 8.5 Pickup, return, and stock history
 

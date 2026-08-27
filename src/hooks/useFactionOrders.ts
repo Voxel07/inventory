@@ -7,6 +7,7 @@ import {
   getFactionOrders,
   markFactionOrderReady,
   pickUpFactionOrder,
+  reopenFactionOrderPreparation,
   returnFactionOrder,
   saveFactionOrderPreparation,
   startFactionOrderPreparation,
@@ -77,7 +78,11 @@ export function useSaveFactionOrderPreparation() {
 }
 
 export function useMarkFactionOrderReady() {
-  return useOrderMutation((id: string) => markFactionOrderReady(id));
+  return useOrderMutation(({ id, note }: { id: string; note?: string }) => markFactionOrderReady(id, note));
+}
+
+export function useReopenFactionOrderPreparation() {
+  return useOrderMutation(({ id, note }: { id: string; note?: string }) => reopenFactionOrderPreparation(id, note));
 }
 
 export function usePickUpFactionOrder() {

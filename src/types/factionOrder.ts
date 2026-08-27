@@ -17,6 +17,7 @@ export type FactionOrderHistoryAction =
   | 'updated'
   | 'preparation_started'
   | 'preparation_saved'
+  | 'preparation_reopened'
   | 'ready'
   | 'picked_up'
   | 'returned'
