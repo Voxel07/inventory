@@ -1,9 +1,31 @@
 import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
+import { execFileSync } from 'node:child_process'
+
+function getGitTag() {
+  try {
+    return execFileSync('git', ['describe', '--tags', '--exact-match', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    try {
+      return execFileSync('git', ['describe', '--tags', '--abbrev=0'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
+    } catch {
+      return 'dev'
+    }
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(getGitTag()),
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] })
