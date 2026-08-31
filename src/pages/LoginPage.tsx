@@ -40,7 +40,8 @@ export function LoginPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'background.default',
+                backgroundColor: 'secondary.main',
+                backgroundImage: 'linear-gradient(135deg, rgba(227, 6, 19, 0.12), transparent 36%), repeating-linear-gradient(120deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 28px)',
                 py: 8,
             }}
         >
@@ -52,6 +53,9 @@ export function LoginPage() {
                         flexDirection: 'column',
                         alignItems: 'center',
                         backgroundColor: 'background.paper',
+                        borderTop: '4px solid',
+                        borderTopColor: 'primary.main',
+                        boxShadow: '0 22px 70px rgba(0, 0, 0, 0.28)',
                     }}
                 >
                     <Box
@@ -61,7 +65,7 @@ export function LoginPage() {
                             alignItems: 'center',
                             width: 56,
                             height: 56,
-                            borderRadius: '50%',
+                            borderRadius: 0.5,
                             backgroundColor: 'primary.main',
                             color: 'primary.contrastText',
                             mb: 2.5,

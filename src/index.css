@@ -17,6 +17,24 @@ body {
   overscroll-behavior-y: none;
 }
 
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eceef1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #9b9da3;
+  border: 2px solid #eceef1;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e30613;
+}
+
 button,
 a,
 input,

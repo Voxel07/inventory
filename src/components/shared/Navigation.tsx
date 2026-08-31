@@ -75,8 +75,12 @@ export function Navigation() {
                                     if (isMobile) setSidebarOpen(false);
                                 }}
                                 sx={{
-                                    borderRadius: 2,
+                                    borderRadius: 0.5,
                                     mb: 0.5,
+                                    '& .MuiListItemText-primary': {
+                                        fontWeight: 600,
+                                        letterSpacing: '0.025em',
+                                    },
                                     '&.Mui-selected': {
                                         backgroundColor: 'primary.main',
                                         color: 'primary.contrastText',
@@ -100,10 +104,10 @@ export function Navigation() {
                             navigate('/');
                         }}
                         sx={{
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                             color: 'error.main',
                             '&:hover': {
-                                backgroundColor: 'rgba(255, 82, 82, 0.08)',
+                                backgroundColor: 'rgba(227, 6, 19, 0.12)',
                             },
                         }}
                     >
