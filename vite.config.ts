@@ -4,6 +4,12 @@ import babel from '@rolldown/plugin-babel'
 import { execFileSync } from 'node:child_process'
 
 function getGitTag() {
+  if (process.env.APP_VERSION && process.env.APP_VERSION.trim() !== '') {
+    return process.env.APP_VERSION.trim()
+  }
+  if (process.env.VITE_APP_VERSION && process.env.VITE_APP_VERSION.trim() !== '') {
+    return process.env.VITE_APP_VERSION.trim()
+  }
   try {
     return execFileSync('git', ['describe', '--tags', '--exact-match', 'HEAD'], {
       encoding: 'utf8',

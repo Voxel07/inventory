@@ -19,7 +19,16 @@ Functions:
 - Faction orders should be perparable by other people and a notification should be send when the order is ready to be picked up
 - All transaction and actions should have a user to keep track who did what
 - All items, assemblies, orders should have a qr code so that they can be scanned and quickly checked out, or updated
-- 
+
+- Foto of the item
+- Hinweis feld, bzw Kommentar
+
+- Limit access to users for hq crew
+- Add unique code to order
+- Push benachrichtigungen
+- Materialliste druckbar
+
+- Benutzerverwaltung
 
 Acessability
 - Has to work on mobile and desktop

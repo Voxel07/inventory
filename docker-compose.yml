@@ -1,6 +1,9 @@
 services:
   inventory-app:
-    build: .
+    build:
+      context: .
+      args:
+        - APP_VERSION=${APP_VERSION:-dev}
     ports:
       - "3333:80"
     environment:
