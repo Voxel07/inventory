@@ -11,10 +11,13 @@ export const FACTIONS_BY_EVENT: Record<EventType, readonly string[]> = {
   M24: ['Hondra', 'Militär', 'Kartell'],
 };
 
-export type FactionOrderStatus = 'draft' | 'preparing' | 'ready' | 'picked_up' | 'returned' | 'cancelled';
+export type FactionOrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picked_up' | 'returned' | 'cancelled';
 export type FactionOrderHistoryAction =
   | 'created'
   | 'updated'
+  | 'historical_correction'
+  | 'submitted'
+  | 'submission_reopened'
   | 'preparation_started'
   | 'preparation_saved'
   | 'preparation_reopened'

@@ -19,7 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
-import GroupsIcon from '@mui/icons-material/Groups';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SaveIcon from '@mui/icons-material/Save';
 import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
@@ -49,7 +49,8 @@ export function Events() {
   const t = useTranslate();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
-  const [eventType, setEventType] = useState<EventType>('DE');
+  const eventType = useUIStore((state) => state.activeEventType);
+  const setEventType = useUIStore((state) => state.setActiveEventType);
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [used, setUsed] = useState<QuantityInputs>({});
@@ -121,20 +122,13 @@ export function Events() {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="h4">{t('Eventplanung', 'Event planning')}</Typography>
-            <Typography color="text.secondary">
-              {t(
-                'Verfügbare Artikel planen und den Verbrauch vergangener Events vergleichen.',
-                'Plan available items and compare usage from previous events.',
-              )}
-            </Typography>
-          </Box>
-          <Button variant="contained" startIcon={<GroupsIcon />} onClick={() => navigate('/events/orders')} sx={{ alignSelf: { sm: 'flex-start' } }}>
-            {t('Fraktionslisten', 'Faction lists')}
-          </Button>
-        </Stack>
+        <Typography variant="h4">{t('Eventplanung', 'Event planning')}</Typography>
+        <Typography color="text.secondary">
+          {t(
+            'Verfügbare Artikel planen und den Verbrauch vergangener Events vergleichen.',
+            'Plan available items and compare usage from previous events.',
+          )}
+        </Typography>
       </Box>
 
       <ToggleButtonGroup
@@ -158,6 +152,14 @@ export function Events() {
                 {t('Verwendete Artikel', 'Items used')}: {Object.values(lastCompleted.usedQuantities ?? {}).filter((value) => value > 0).length}
               </Typography>
               {lastCompleted.notes && <Typography sx={{ mt: 1 }}>{lastCompleted.notes}</Typography>}
+              <Button
+                size="small"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => navigate(`/events/${lastCompleted.id}`)}
+                sx={{ mt: 1.5 }}
+              >
+                {t('Event öffnen', 'Open event')}
+              </Button>
             </>
           ) : (
             <Typography color="text.secondary">{t('Noch kein abgeschlossener Bericht vorhanden.', 'No completed report yet.')}</Typography>
@@ -271,6 +273,7 @@ export function Events() {
               <TableCell>{t('Geplant', 'Planned')}</TableCell>
               <TableCell>{t('Verwendet', 'Used')}</TableCell>
               <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+              <TableCell align="right">{t('Details', 'Details')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -287,10 +290,15 @@ export function Events() {
                 <TableCell>{Object.entries(report.plannedQuantities ?? {}).filter(([, value]) => value > 0).map(([id, value]) => `${itemName(id)}: ${value}`).join(', ') || '—'}</TableCell>
                 <TableCell>{Object.entries(report.usedQuantities ?? {}).filter(([, value]) => value > 0).map(([id, value]) => `${itemName(id)}: ${value}`).join(', ') || '—'}</TableCell>
                 <TableCell>{report.notes || '—'}</TableCell>
+                <TableCell align="right">
+                  <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
+                    {t('Öffnen', 'Open')}
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {!reports?.length && (
-              <TableRow><TableCell colSpan={5}>{t('Noch keine Eventberichte vorhanden.', 'No event reports yet.')}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>{t('Noch keine Eventberichte vorhanden.', 'No event reports yet.')}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

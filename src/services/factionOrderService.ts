@@ -67,6 +67,17 @@ function previousHistory(order: FactionOrder): FactionOrderHistoryEntry[] {
   return Array.isArray(order.history) ? order.history : [];
 }
 
+function clampPreparedQuantities(
+  prepared: Record<string, number> | undefined,
+  requested: Record<string, number>,
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(requested)
+      .map(([id, maximum]) => [id, Math.min(prepared?.[id] ?? 0, maximum)] as const)
+      .filter(([, value]) => value > 0),
+  );
+}
+
 function reservedByOtherOrders(
   orders: FactionOrder[],
   currentOrderId: string,
@@ -120,25 +131,111 @@ export async function createFactionOrder(data: FactionOrderFormData): Promise<Fa
 
 export async function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
-  if (order.status !== 'draft') throw new Error('Only draft order lists can be edited');
+  if (order.status === 'picked_up') throw new Error('Return this order list before correcting it');
   const { requestedQuantities, requestedAssemblyQuantities } = validateOrderData(data);
-  const entry = historyEntry('updated', requestedQuantities, requestedAssemblyQuantities);
-  return pb.collection(COLLECTION).update<FactionOrder>(id, {
+  const isHistoricalCorrection = order.status === 'returned';
+  const reopensSubmission = order.status === 'submitted';
+  const shouldClearPreparation = ['draft', 'submitted', 'cancelled'].includes(order.status);
+  const preparedQuantities = isHistoricalCorrection
+    ? requestedQuantities
+    : shouldClearPreparation
+      ? {}
+      : clampPreparedQuantities(order.preparedQuantities, requestedQuantities);
+  const preparedAssemblyQuantities = isHistoricalCorrection
+    ? requestedAssemblyQuantities
+    : shouldClearPreparation
+      ? {}
+      : clampPreparedQuantities(order.preparedAssemblyQuantities, requestedAssemblyQuantities);
+  const preparationComplete = Object.entries(requestedQuantities).every(
+    ([itemId, requested]) => (preparedQuantities[itemId] ?? 0) === requested,
+  ) && Object.entries(requestedAssemblyQuantities).every(
+    ([assemblyId, requested]) => (preparedAssemblyQuantities[assemblyId] ?? 0) === requested,
+  );
+  const reopensPreparation = order.status === 'ready' && !preparationComplete;
+  const entry = historyEntry(
+    isHistoricalCorrection ? 'historical_correction' : 'updated',
+    requestedQuantities,
+    requestedAssemblyQuantities,
+  );
+  const nextHistory = [...previousHistory(order), entry];
+  if (reopensPreparation) {
+    nextHistory.push(historyEntry('preparation_reopened', preparedQuantities, preparedAssemblyQuantities));
+  }
+  if (reopensSubmission) {
+    nextHistory.push(historyEntry('submission_reopened', requestedQuantities, requestedAssemblyQuantities));
+  }
+  const updateData = {
     ...data,
     eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
     itemIds: Object.keys(requestedQuantities),
     assemblyIds: Object.keys(requestedAssemblyQuantities),
     requestedQuantities,
     requestedAssemblyQuantities,
-    preparedQuantities: {},
-    preparedAssemblyQuantities: {},
+    preparedQuantities,
+    preparedAssemblyQuantities,
+    ...(reopensSubmission ? { status: 'draft' } : {}),
+    ...(reopensPreparation ? { status: 'preparing', readyBy: null, readyAt: null } : {}),
+    history: nextHistory,
+  };
+  if (!isHistoricalCorrection) {
+    return pb.collection(COLLECTION).update<FactionOrder>(id, updateData, { expand: EXPAND });
+  }
+
+  const [assemblies, transactions] = await Promise.all([
+    pb.collection('inventory_assemblies').getFullList<Assembly>(),
+    pb.collection(TRANSACTIONS_COLLECTION).getFullList<StockTransaction>({
+      filter: pb.filter('factionOrderId = {:id}', { id }),
+    }),
+  ]);
+  const correctedComponents = expandFactionOrderComponents({ ...order, ...updateData }, assemblies, 'prepared');
+  const batch = pb.createBatch();
+  batch.collection(COLLECTION).update(id, updateData);
+  const transactionUserId = order.pickedUpBy || currentActor().id;
+  for (const transactionType of ['checkout', 'checkin'] as const) {
+    const existingByItem = new Map<string, StockTransaction[]>();
+    for (const transaction of transactions.filter((candidate) => candidate.transactionType === transactionType)) {
+      existingByItem.set(transaction.itemId, [...(existingByItem.get(transaction.itemId) ?? []), transaction]);
+    }
+    for (const [itemId, quantity] of Object.entries(correctedComponents)) {
+      const [existing, ...duplicates] = existingByItem.get(itemId) ?? [];
+      const transactionData = {
+        itemId,
+        transactionType,
+        quantityChanged: quantity,
+        userId: transactionUserId,
+        factionOrderId: id,
+        reason: `Faction order ${transactionType === 'checkout' ? 'pickup' : 'return'}: ${data.eventType} / ${data.faction}`,
+        notes: data.notes ?? '',
+        timestamp: transactionType === 'checkout'
+          ? order.pickedUpAt || order.eventDate
+          : order.returnedAt || order.eventDate,
+      };
+      if (existing) batch.collection(TRANSACTIONS_COLLECTION).update(existing.id, transactionData);
+      else batch.collection(TRANSACTIONS_COLLECTION).create(transactionData);
+      for (const duplicate of duplicates) batch.collection(TRANSACTIONS_COLLECTION).delete(duplicate.id);
+      existingByItem.delete(itemId);
+    }
+    for (const staleTransactions of existingByItem.values()) {
+      for (const stale of staleTransactions) batch.collection(TRANSACTIONS_COLLECTION).delete(stale.id);
+    }
+  }
+  await batch.send();
+  return getFactionOrder(id);
+}
+
+export async function submitFactionOrder(id: string): Promise<FactionOrder> {
+  const order = await getFactionOrder(id);
+  if (order.status !== 'draft') throw new Error('Only a draft can be submitted for processing');
+  const entry = historyEntry('submitted', order.requestedQuantities, order.requestedAssemblyQuantities);
+  return pb.collection(COLLECTION).update<FactionOrder>(id, {
+    status: 'submitted',
     history: [...previousHistory(order), entry],
   }, { expand: EXPAND });
 }
 
 export async function startFactionOrderPreparation(id: string): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
-  if (order.status !== 'draft') throw new Error('Only a draft can start preparation');
+  if (order.status !== 'submitted') throw new Error('Only an order submitted for processing can start preparation');
   const entry = historyEntry('preparation_started');
   return pb.collection(COLLECTION).update<FactionOrder>(id, {
     status: 'preparing',
@@ -331,7 +428,7 @@ export async function returnFactionOrder(id: string): Promise<FactionOrder> {
 
 export async function cancelFactionOrder(id: string): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
-  const cancellable: FactionOrderStatus[] = ['draft', 'preparing', 'ready'];
+  const cancellable: FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready'];
   if (!cancellable.includes(order.status)) throw new Error('This order list can no longer be cancelled');
   const entry = historyEntry('cancelled');
   return pb.collection(COLLECTION).update<FactionOrder>(id, {

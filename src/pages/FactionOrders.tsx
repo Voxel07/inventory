@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -21,7 +21,6 @@ import {
   useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
 import GroupsIcon from '@mui/icons-material/Groups';
@@ -35,6 +34,7 @@ import { useAppLanguage, useTranslate } from '../utils/naming';
 
 function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error' {
   if (status === 'draft') return 'default';
+  if (status === 'submitted') return 'info';
   if (status === 'preparing') return 'warning';
   if (status === 'ready') return 'success';
   if (status === 'picked_up') return 'secondary';
@@ -49,17 +49,28 @@ export function FactionOrders() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const showSnackbar = useUIStore((state) => state.showSnackbar);
-  const [eventType, setEventType] = useState<EventType>('DE');
-  const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT.DE[0]);
+  const eventType = useUIStore((state) => state.activeEventType);
+  const setEventType = useUIStore((state) => state.setActiveEventType);
+  const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
-  const { data: orders = [], isLoading, isError } = useFactionOrders(eventType);
+  const { data: allOrders = [], isLoading, isError } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
+  const orders = useMemo(
+    () => allOrders.filter((order) => order.eventType === eventType),
+    [allOrders, eventType],
+  );
 
   const ordersByFaction = useMemo(() => Object.fromEntries(
     FACTIONS_BY_EVENT[eventType].map((faction) => [faction, orders.filter((order) => order.faction === faction)]),
   ), [eventType, orders]);
+
+  useEffect(() => {
+    if (!FACTIONS_BY_EVENT[eventType].includes(selectedFaction)) {
+      setSelectedFaction(FACTIONS_BY_EVENT[eventType][0]);
+    }
+  }, [eventType, selectedFaction]);
 
   function selectEvent(value: EventType | null) {
     if (!value) return;
@@ -75,6 +86,7 @@ export function FactionOrders() {
   function statusLabel(status: FactionOrderStatus) {
     const labels: Record<FactionOrderStatus, string> = {
       draft: t('Entwurf', 'Draft'),
+      submitted: t('Bereit zur Bearbeitung', 'Ready for processing'),
       preparing: t('In Vorbereitung', 'Preparing'),
       ready: t('Abholbereit', 'Ready'),
       picked_up: t('Abgeholt', 'Picked up'),
@@ -96,9 +108,6 @@ export function FactionOrders() {
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
         <Box>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')} sx={{ mb: 1 }}>
-            {t('Zur Eventplanung', 'Back to event planning')}
-          </Button>
           <Typography variant="h4">{t('Fraktions-Bestelllisten', 'Faction order lists')}</Typography>
           <Typography color="text.secondary">
             {t(
@@ -151,7 +160,7 @@ export function FactionOrders() {
                       {new Date(latest.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
+                      {['picked_up', 'returned'].includes(latest.status) ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
@@ -199,7 +208,8 @@ export function FactionOrders() {
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 700 }}>{order.faction}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested} {t('vorbereitet', 'prepared')}
+                      {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
+                      {['picked_up', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
                     </Typography>
                   </Box>
                   <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
@@ -222,7 +232,7 @@ export function FactionOrders() {
           <FactionOrderForm
             items={items}
             assemblies={assemblies}
-            orders={orders}
+            orders={allOrders}
             defaultEventType={eventType}
             defaultFaction={selectedFaction}
             isLoading={createOrder.isPending}

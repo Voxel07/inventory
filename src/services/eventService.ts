@@ -11,10 +11,19 @@ export async function getEventReports(eventType?: EventType): Promise<EventRepor
   });
 }
 
+export async function getEventReport(id: string): Promise<EventReport> {
+  return pb.collection(COLLECTION).getOne<EventReport>(id, { expand: 'itemIds' });
+}
+
 export async function createEventReport(data: EventReportFormData): Promise<EventReport> {
   const createdBy = pb.authStore.record?.id;
   if (!createdBy) throw new Error('Authentication required');
   return pb.collection(COLLECTION).create<EventReport>({ ...data, createdBy });
+}
+
+export async function updateEventReport(id: string, data: EventReportFormData): Promise<EventReport> {
+  const itemIds = [...new Set(data.itemIds)];
+  return pb.collection(COLLECTION).update<EventReport>(id, { ...data, itemIds }, { expand: 'itemIds' });
 }
 
 export function subscribeToEventReports(callback: () => void) {

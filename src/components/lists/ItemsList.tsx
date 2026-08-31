@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
     Table,
     TableBody,
@@ -26,6 +26,7 @@ import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTr
 import { calculateItemStock } from '../../utils/stock';
 import { formatStatus } from '../../utils/formatters';
 import { useTranslate } from '../../utils/naming';
+import { useUIStore } from '../../store/uiStore';
 
 interface Props {
     items: Item[] | undefined;
@@ -51,10 +52,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const t = useTranslate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const activeEventType = useUIStore((state) => state.activeEventType);
+    const setActiveEventType = useUIStore((state) => state.setActiveEventType);
     const [search, setSearch] = useState('');
-    const [eventFilter, setEventFilter] = useState<EventType | ''>('');
+    const [eventFilter, setEventFilter] = useState<EventType | ''>(activeEventType);
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+    useEffect(() => setEventFilter(activeEventType), [activeEventType]);
 
     const enrichedItems = useMemo(() => {
         if (!items) return [];
@@ -133,7 +138,11 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     select
                     label={t('Event filtern', 'Filter event')}
                     value={eventFilter}
-                    onChange={(event) => setEventFilter(event.target.value as EventType | '')}
+                    onChange={(event) => {
+                        const value = event.target.value as EventType | '';
+                        setEventFilter(value);
+                        if (value) setActiveEventType(value);
+                    }}
                     size="small"
                     sx={{ minWidth: { xs: '100%', sm: 170 } }}
                 >

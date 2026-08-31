@@ -45,6 +45,7 @@ import {
   useReturnFactionOrder,
   useSaveFactionOrderPreparation,
   useStartFactionOrderPreparation,
+  useSubmitFactionOrder,
   useUpdateFactionOrder,
 } from '../hooks/useFactionOrders';
 import { useDamageReports } from '../hooks/useDamageReports';
@@ -52,10 +53,15 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useTransactions } from '../hooks/useTransactions';
 import { useUIStore } from '../store/uiStore';
-import type { Assembly, FactionOrderHistoryAction, FactionOrderStatus, Item } from '../types';
+import type { Assembly, FactionOrderHistoryAction, FactionOrderHistoryEntry, FactionOrderStatus, Item } from '../types';
 import { useAppLanguage, useTranslate } from '../utils/naming';
 import { calculateItemStock } from '../utils/stock';
 import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
+import {
+  factionOrderAssemblyBaseline,
+  factionOrderItemBaseline,
+  findPreviousFactionOrder,
+} from '../utils/factionOrderHistory';
 
 type ConfirmAction = 'pickup' | 'return' | 'cancel' | null;
 type StateTransition = 'ready' | 'preparing' | null;
@@ -73,12 +79,13 @@ export function FactionOrderDetail() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
-  const { data: allOrders = [] } = useFactionOrders(order?.eventType);
+  const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: transactions } = useTransactions();
   const { data: damageReports } = useDamageReports();
   const updateOrder = useUpdateFactionOrder();
+  const submitOrder = useSubmitFactionOrder();
   const startPreparation = useStartFactionOrderPreparation();
   const savePreparation = useSaveFactionOrderPreparation();
   const markReady = useMarkFactionOrderReady();
@@ -123,29 +130,33 @@ export function FactionOrderDetail() {
     return result;
   }, [allOrders, assemblies, order?.id]);
 
-  const previousOrder = useMemo(() => allOrders.find((candidate) => (
-    candidate.id !== order?.id
-    && candidate.faction === order?.faction
-    && candidate.status !== 'cancelled'
-    && new Date(candidate.eventDate).getTime() <= new Date(order?.eventDate ?? 0).getTime()
-  )), [allOrders, order?.eventDate, order?.faction, order?.id]);
+  const previousOrder = useMemo(() => order ? findPreviousFactionOrder(allOrders, {
+    eventType: order.eventType,
+    faction: order.faction,
+    eventDate: order.eventDate,
+    excludeId: order.id,
+  }) : undefined, [allOrders, order]);
 
   const comparison = useMemo(() => {
     if (!order || !previousOrder) return [];
-    const ids = new Set([...Object.keys(order.requestedQuantities), ...Object.keys(previousOrder.requestedQuantities)]);
+    const currentItems = factionOrderItemBaseline(order);
+    const previousItems = factionOrderItemBaseline(previousOrder);
+    const currentAssemblies = factionOrderAssemblyBaseline(order);
+    const previousAssemblies = factionOrderAssemblyBaseline(previousOrder);
+    const ids = new Set([...Object.keys(currentItems), ...Object.keys(previousItems)]);
     const itemChanges = [...ids].flatMap((itemId) => {
-      const before = previousOrder.requestedQuantities[itemId] ?? 0;
-      const after = order.requestedQuantities[itemId] ?? 0;
+      const before = previousItems[itemId] ?? 0;
+      const after = currentItems[itemId] ?? 0;
       if (before === after) return [];
       return [{ resourceKey: `item-${itemId}`, before, after, name: itemMap.get(itemId)?.name ?? itemId }];
     });
     const assemblyIds = new Set([
-      ...Object.keys(order.requestedAssemblyQuantities ?? {}),
-      ...Object.keys(previousOrder.requestedAssemblyQuantities ?? {}),
+      ...Object.keys(currentAssemblies),
+      ...Object.keys(previousAssemblies),
     ]);
     const assemblyChanges = [...assemblyIds].flatMap((assemblyId) => {
-      const before = previousOrder.requestedAssemblyQuantities?.[assemblyId] ?? 0;
-      const after = order.requestedAssemblyQuantities?.[assemblyId] ?? 0;
+      const before = previousAssemblies[assemblyId] ?? 0;
+      const after = currentAssemblies[assemblyId] ?? 0;
       if (before === after) return [];
       return [{ resourceKey: `assembly-${assemblyId}`, before, after, name: assemblyMap.get(assemblyId)?.name ?? assemblyId }];
     });
@@ -174,6 +185,7 @@ export function FactionOrderDetail() {
   function statusLabel(status: FactionOrderStatus) {
     const labels: Record<FactionOrderStatus, string> = {
       draft: t('Entwurf', 'Draft'),
+      submitted: t('Bereit zur Bearbeitung', 'Ready for processing'),
       preparing: t('In Vorbereitung', 'Preparing'),
       ready: t('Abholbereit', 'Ready'),
       picked_up: t('Abgeholt', 'Picked up'),
@@ -184,6 +196,7 @@ export function FactionOrderDetail() {
   }
 
   function statusColor(status: FactionOrderStatus): 'default' | 'warning' | 'success' | 'secondary' | 'info' | 'error' {
+    if (status === 'submitted') return 'info';
     if (status === 'preparing') return 'warning';
     if (status === 'ready') return 'success';
     if (status === 'picked_up') return 'secondary';
@@ -196,6 +209,9 @@ export function FactionOrderDetail() {
     const labels: Record<FactionOrderHistoryAction, string> = {
       created: t('Liste erstellt', 'List created'),
       updated: t('Liste geändert', 'List updated'),
+      historical_correction: t('Historische Verwendung korrigiert', 'Historical usage corrected'),
+      submitted: t('Bedarf zur Bearbeitung freigegeben', 'Request submitted for processing'),
+      submission_reopened: t('Freigabe durch Änderung zurückgenommen', 'Submission reopened by an edit'),
       preparation_started: t('Vorbereitung begonnen', 'Preparation started'),
       preparation_saved: t('Vorbereitung gespeichert', 'Preparation saved'),
       preparation_reopened: t('Zur Vorbereitung zurückgesetzt', 'Moved back to preparation'),
@@ -205,6 +221,33 @@ export function FactionOrderDetail() {
       cancelled: t('Liste storniert', 'List cancelled'),
     };
     return labels[action];
+  }
+
+  function historySnapshot(entry: FactionOrderHistoryEntry) {
+    const itemEntries = Object.entries(entry.quantities ?? {}).filter(([, quantity]) => quantity > 0);
+    const assemblyEntries = Object.entries(entry.assemblyQuantities ?? {}).filter(([, quantity]) => quantity > 0);
+    if (!itemEntries.length && !assemblyEntries.length) return null;
+    return (
+      <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
+        {assemblyEntries.map(([assemblyId, quantity]) => (
+          <Chip
+            key={`assembly-${assemblyId}`}
+            size="small"
+            color="primary"
+            variant="outlined"
+            label={`${quantity}× ${assemblyMap.get(assemblyId)?.name ?? assemblyId}`}
+          />
+        ))}
+        {itemEntries.map(([itemId, quantity]) => (
+          <Chip
+            key={`item-${itemId}`}
+            size="small"
+            variant="outlined"
+            label={`${quantity}× ${itemMap.get(itemId)?.name ?? itemId}`}
+          />
+        ))}
+      </Stack>
+    );
   }
 
   function availableForItemId(itemId: string) {
@@ -323,7 +366,7 @@ export function FactionOrderDetail() {
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
               <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
               <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
-              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
+              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
             </Stack>
             {currentOrder.status === 'preparing' && (
               <TextField
@@ -350,7 +393,7 @@ export function FactionOrderDetail() {
       .map(([itemId, quantity]) => `${quantity}× ${itemMap.get(itemId)?.name ?? itemId}`)
       .join(', ');
     return (
-      <Card key={assembly.id} variant="outlined" sx={{ borderColor: 'primary.dark', bgcolor: 'rgba(124, 77, 255, 0.06)' }}>
+      <Card key={assembly.id} variant="outlined" sx={{ borderColor: 'primary.dark', bgcolor: 'rgba(227, 6, 19, 0.045)' }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -363,7 +406,7 @@ export function FactionOrderDetail() {
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
               <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
               <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
-              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
+              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
             </Stack>
             {currentOrder.status === 'preparing' && (
               <TextField
@@ -400,13 +443,15 @@ export function FactionOrderDetail() {
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Listen-QR', 'List QR')}</Button>
-          {order.status === 'draft' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
+          {order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
-          <Typography sx={{ fontWeight: 700 }}>{t('Vorbereitung', 'Preparation')}</Typography>
+          <Typography sx={{ fontWeight: 700 }}>
+            {['picked_up', 'returned'].includes(order.status) ? t('Tatsächlich verwendet', 'Actually used') : t('Vorbereitung', 'Preparation')}
+          </Typography>
           <Typography>{preparedTotal}/{requestedTotal}</Typography>
         </Stack>
         <LinearProgress variant="determinate" value={progress} color={preparationComplete ? 'success' : 'primary'} sx={{ height: 10, borderRadius: 5 }} />
@@ -441,6 +486,16 @@ export function FactionOrderDetail() {
       <Paper sx={{ p: 2, mb: 3, position: { xs: 'sticky', md: 'static' }, bottom: { xs: 76, md: 'auto' }, zIndex: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           {order.status === 'draft' && (
+            <Button
+              variant="contained"
+              startIcon={<CheckCircleIcon />}
+              onClick={() => submitOrder.mutate(order.id, { onSuccess: () => showSnackbar(t('Bedarf ist bereit zur Bearbeitung', 'Request is ready for processing'), 'success'), onError: handleError })}
+              disabled={submitOrder.isPending}
+            >
+              {t('Bedarf vollständig', 'Request complete')}
+            </Button>
+          )}
+          {order.status === 'submitted' && (
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
@@ -485,7 +540,7 @@ export function FactionOrderDetail() {
               {t('Komplette Liste zurückgeben', 'Return complete list')}
             </Button>
           )}
-          {['draft', 'preparing', 'ready'].includes(order.status) && (
+          {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
             <Button color="error" startIcon={<CancelIcon />} onClick={() => setConfirmAction('cancel')} sx={{ ml: { sm: 'auto' } }}>
               {t('Stornieren', 'Cancel')}
             </Button>
@@ -493,11 +548,21 @@ export function FactionOrderDetail() {
         </Stack>
       </Paper>
 
+      {order.status === 'picked_up' && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t(
+            'Eine ausgegebene Liste kann erst nach der Rückgabe korrigiert werden, damit die Bestandsbuchungen konsistent bleiben.',
+            'A checked-out list can be corrected after it is returned so its stock transactions remain consistent.',
+          )}
+        </Alert>
+      )}
+
       {previousOrder && (
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="h6">{t('Änderungen zur vorherigen Liste', 'Changes from the previous list')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {new Date(previousOrder.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+            {t('Basis', 'Baseline')}: {new Date(previousOrder.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+            {['picked_up', 'returned'].includes(previousOrder.status) ? ` · ${t('tatsächlich verwendet', 'actually used')}` : ''}
           </Typography>
           {!comparison.length ? (
             <Alert severity="success">{t('Keine Mengenänderungen.', 'No quantity changes.')}</Alert>
@@ -508,6 +573,9 @@ export function FactionOrderDetail() {
               ))}
             </Stack>
           )}
+          <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate(`/events/orders/${previousOrder.id}`)}>
+            {t('Vorjahresliste öffnen', 'Open previous-year list')}
+          </Button>
         </Paper>
       )}
 
@@ -523,6 +591,7 @@ export function FactionOrderDetail() {
                   {entry.userName} · {new Date(entry.timestamp).toLocaleString(language === 'de' ? 'de-DE' : 'en-US')}
                 </Typography>
                 {entry.note && <Typography variant="body2">{entry.note}</Typography>}
+                {historySnapshot(entry)}
               </Box>
             </Stack>
           ))}
@@ -535,6 +604,30 @@ export function FactionOrderDetail() {
           <IconButton onClick={() => setEditOpen(false)} sx={{ position: 'absolute', right: 12, top: 8 }}><CloseIcon /></IconButton>
         </DialogTitle>
         <DialogContent dividers>
+          {order.status === 'returned' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t(
+                'Bei einer zurückgegebenen Liste bearbeiten Sie die tatsächlich verwendeten Mengen. Die ursprünglichen Mengen bleiben im Listenverlauf erhalten.',
+                'For a returned list, you are editing the quantities actually used. The original quantities remain in the list history.',
+              )}
+            </Alert>
+          )}
+          {order.status === 'submitted' && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t(
+                'Eine Änderung nimmt die Freigabe zurück. Der Bedarf muss danach erneut als vollständig markiert werden.',
+                'Editing reopens the draft. The request must be marked complete again afterwards.',
+              )}
+            </Alert>
+          )}
+          {['preparing', 'ready'].includes(order.status) && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t(
+                'Vorbereitete Mengen werden an den neuen Bedarf angepasst. Eine unvollständige abholbereite Liste wechselt zurück in die Vorbereitung.',
+                'Prepared quantities are adjusted to the new request. An incomplete ready list moves back to preparation.',
+              )}
+            </Alert>
+          )}
           <FactionOrderForm
             items={items}
             assemblies={assemblies}

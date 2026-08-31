@@ -12,6 +12,11 @@ import {
     BottomNavigation,
     BottomNavigationAction,
     Paper,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
+    Typography,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -30,7 +35,9 @@ import { usePocketBase } from '../../hooks/usePocketBase';
 import { LanguageSelector } from './LanguageSelector';
 import { useTranslate } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
+import GroupsIcon from '@mui/icons-material/Groups';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import { EVENT_TYPES, type EventType } from '../../types';
 
 const DRAWER_WIDTH = 260;
 
@@ -40,6 +47,8 @@ export function Navigation() {
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
     const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
+    const activeEventType = useUIStore((s) => s.activeEventType);
+    const setActiveEventType = useUIStore((s) => s.setActiveEventType);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout } = usePocketBase();
@@ -51,6 +60,7 @@ export function Navigation() {
         { label: t('Lagerorte', 'Storage locations'), path: '/storage-locations', icon: <RoomIcon /> },
         { label: t('Baugruppen', 'Assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
         { label: t('Events', 'Events'), path: '/events', icon: <EventIcon /> },
+        { label: t('Fraktionsbestellungen', 'Faction orders'), path: '/events/orders', icon: <GroupsIcon /> },
         { label: t('Transaktionen', 'Transactions'), path: '/transactions', icon: <ReceiptLongIcon /> },
         { label: t('Ausgeliehen', 'Checked out'), path: '/checked-out', icon: <AssignmentReturnIcon /> },
         { label: t('QR-Codes drucken', 'Print QR codes'), path: '/print-qr', icon: <QrCode2Icon /> },
@@ -60,11 +70,42 @@ export function Navigation() {
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Toolbar />
-            <List sx={{ px: 1, pt: 1, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ px: 2, pt: 1.5, pb: 2, borderBottom: '1px solid rgba(255, 255, 255, 0.14)' }}>
+                <Typography variant="overline" sx={{ display: 'block', mb: 0.75, color: 'rgba(255, 255, 255, 0.62)' }}>
+                    {t('Aktuelles Event', 'Current event')}
+                </Typography>
+                <FormControl fullWidth size="small">
+                    <InputLabel id="active-event-label" sx={{ color: 'rgba(255, 255, 255, 0.68)' }}>
+                        {t('Event', 'Event')}
+                    </InputLabel>
+                    <Select
+                        labelId="active-event-label"
+                        label={t('Event', 'Event')}
+                        value={activeEventType}
+                        onChange={(event) => setActiveEventType(event.target.value as EventType)}
+                        sx={{
+                            color: '#ffffff',
+                            bgcolor: 'rgba(255, 255, 255, 0.08)',
+                            '& .MuiSelect-icon': { color: 'rgba(255, 255, 255, 0.72)' },
+                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.3)' },
+                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.58)' },
+                        }}
+                    >
+                        {EVENT_TYPES.map((eventType) => (
+                            <MenuItem key={eventType} value={eventType}>
+                                {eventType === 'LS' ? 'LightSim' : eventType}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+            </Box>
+            <List sx={{ px: 1, pt: 1, flexGrow: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ flexGrow: 1 }}>
                     {navItems.map((item) => {
                         const isActive = item.path === '/'
                             ? location.pathname === '/'
+                            : item.path === '/events'
+                                ? location.pathname.startsWith('/events') && !location.pathname.startsWith('/events/orders')
                             : location.pathname.startsWith(item.path);
                         return (
                             <ListItemButton
@@ -116,6 +157,12 @@ export function Navigation() {
                         </ListItemIcon>
                         <ListItemText primary={t('Abmelden', 'Sign out')} />
                     </ListItemButton>
+                    <Typography
+                        variant="caption"
+                        sx={{ display: 'block', px: 1, pt: 1.25, color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'monospace' }}
+                    >
+                        {t('Version', 'Version')} {__APP_VERSION__}
+                    </Typography>
                 </Box>
             </List>
         </Box>

@@ -11,6 +11,7 @@ import {
   returnFactionOrder,
   saveFactionOrderPreparation,
   startFactionOrderPreparation,
+  submitFactionOrder,
   subscribeToFactionOrders,
   updateFactionOrder,
 } from '../services/factionOrderService';
@@ -63,6 +64,10 @@ export function useUpdateFactionOrder() {
 
 export function useStartFactionOrderPreparation() {
   return useOrderMutation((id: string) => startFactionOrderPreparation(id));
+}
+
+export function useSubmitFactionOrder() {
+  return useOrderMutation((id: string) => submitFactionOrder(id));
 }
 
 export function useSaveFactionOrderPreparation() {

@@ -838,7 +838,7 @@
         "required": true,
         "system": false,
         "type": "select",
-        "values": ["draft", "preparing", "ready", "picked_up", "returned", "cancelled"]
+        "values": ["draft", "submitted", "preparing", "ready", "picked_up", "returned", "cancelled"]
       },
       {
         "cascadeDelete": false,

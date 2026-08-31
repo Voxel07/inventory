@@ -22,6 +22,12 @@ import SaveIcon from '@mui/icons-material/Save';
 import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item } from '../../types';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import { useTranslate } from '../../utils/naming';
+import {
+  factionOrderAssemblyBaseline,
+  factionOrderItemBaseline,
+  findPreviousFactionOrder,
+} from '../../utils/factionOrderHistory';
+import { useUIStore } from '../../store/uiStore';
 
 interface Props {
   items: Item[];
@@ -55,6 +61,7 @@ export function FactionOrderForm({
   onSubmit,
 }: Props) {
   const t = useTranslate();
+  const setActiveEventType = useUIStore((state) => state.setActiveEventType);
   const initialEventType = initialData?.eventType ?? defaultEventType;
   const [eventType, setEventType] = useState<EventType>(initialEventType);
   const [faction, setFaction] = useState(
@@ -65,26 +72,36 @@ export function FactionOrderForm({
   );
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
-    Object.fromEntries(Object.entries(initialData?.requestedQuantities ?? {}).map(([id, value]) => [id, String(value)])),
+    Object.fromEntries(Object.entries(initialData ? factionOrderItemBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
   );
   const [assemblyQuantities, setAssemblyQuantities] = useState<Record<string, string>>(
-    Object.fromEntries(Object.entries(initialData?.requestedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)])),
+    Object.fromEntries(Object.entries(initialData ? factionOrderAssemblyBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
   );
   const [search, setSearch] = useState('');
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
+
+  useEffect(() => {
+    if (initialData) return;
+    setEventType(defaultEventType);
+    setFaction(
+      defaultFaction && FACTIONS_BY_EVENT[defaultEventType].includes(defaultFaction)
+        ? defaultFaction
+        : FACTIONS_BY_EVENT[defaultEventType][0],
+    );
+  }, [defaultEventType, defaultFaction, initialData]);
 
   useEffect(() => {
     if (!FACTIONS_BY_EVENT[eventType].includes(faction)) setFaction(FACTIONS_BY_EVENT[eventType][0]);
   }, [eventType, faction]);
 
   const previousOrder = useMemo(
-    () => orders.find((order) => (
-      order.id !== initialData?.id
-      && order.eventType === eventType
-      && order.faction === faction
-      && order.status !== 'cancelled'
-    )),
-    [eventType, faction, initialData?.id, orders],
+    () => findPreviousFactionOrder(orders, {
+      eventType,
+      faction,
+      eventDate,
+      excludeId: initialData?.id,
+    }),
+    [eventDate, eventType, faction, initialData?.id, orders],
   );
 
   const visibleItems = useMemo(() => {
@@ -113,20 +130,22 @@ export function FactionOrderForm({
   const currentAssemblyQuantities = numericValues(assemblyQuantities);
   const changes = useMemo(() => {
     if (!comparison) return [];
-    const itemIds = new Set([...Object.keys(comparison.requestedQuantities), ...Object.keys(currentQuantities)]);
+    const comparisonItems = factionOrderItemBaseline(comparison);
+    const comparisonAssemblies = factionOrderAssemblyBaseline(comparison);
+    const itemIds = new Set([...Object.keys(comparisonItems), ...Object.keys(currentQuantities)]);
     const itemChanges = [...itemIds].flatMap((itemId) => {
-      const before = comparison.requestedQuantities[itemId] ?? 0;
+      const before = comparisonItems[itemId] ?? 0;
       const after = currentQuantities[itemId] ?? 0;
       if (before === after) return [];
       const item = items.find((candidate) => candidate.id === itemId);
       return [{ resourceKey: `item-${itemId}`, name: item?.name ?? itemId, before, after }];
     });
     const assemblyIds = new Set([
-      ...Object.keys(comparison.requestedAssemblyQuantities ?? {}),
+      ...Object.keys(comparisonAssemblies),
       ...Object.keys(currentAssemblyQuantities),
     ]);
     const assemblyChanges = [...assemblyIds].flatMap((assemblyId) => {
-      const before = comparison.requestedAssemblyQuantities?.[assemblyId] ?? 0;
+      const before = comparisonAssemblies[assemblyId] ?? 0;
       const after = currentAssemblyQuantities[assemblyId] ?? 0;
       if (before === after) return [];
       const assembly = assemblies.find((candidate) => candidate.id === assemblyId);
@@ -137,11 +156,13 @@ export function FactionOrderForm({
 
   function copyPrevious() {
     if (!previousOrder) return;
+    const previousItems = factionOrderItemBaseline(previousOrder);
+    const previousAssemblies = factionOrderAssemblyBaseline(previousOrder);
     setQuantities(Object.fromEntries(
-      Object.entries(previousOrder.requestedQuantities).map(([id, value]) => [id, String(value)]),
+      Object.entries(previousItems).map(([id, value]) => [id, String(value)]),
     ));
     setAssemblyQuantities(Object.fromEntries(
-      Object.entries(previousOrder.requestedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
+      Object.entries(previousAssemblies).map(([id, value]) => [id, String(value)]),
     ));
     setComparison(previousOrder);
   }
@@ -171,7 +192,11 @@ export function FactionOrderForm({
             <Select
               label={t('Event', 'Event')}
               value={eventType}
-              onChange={(event) => setEventType(event.target.value as EventType)}
+              onChange={(event) => {
+                const value = event.target.value as EventType;
+                setEventType(value);
+                if (!initialData) setActiveEventType(value);
+              }}
             >
               {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
             </Select>
@@ -200,11 +225,16 @@ export function FactionOrderForm({
             onClick={copyPrevious}
             disabled={!previousOrder}
           >
-            {t('Letzte Liste übernehmen', 'Copy previous list')}
+            {previousOrder
+              ? t(`${new Date(previousOrder.eventDate).getUTCFullYear()} als Basis übernehmen`, `Use ${new Date(previousOrder.eventDate).getUTCFullYear()} as baseline`)
+              : t('Vorjahr als Basis übernehmen', 'Use previous year as baseline')}
           </Button>
           {previousOrder && (
             <Typography variant="body2" color="text.secondary">
-              {t('Vorlage vom', 'Template from')} {new Date(previousOrder.eventDate).toLocaleDateString()}
+              {['picked_up', 'returned'].includes(previousOrder.status)
+                ? t('Tatsächlich verwendete Mengen vom', 'Actual quantities used on')
+                : t('Geplante Mengen vom', 'Planned quantities from')}{' '}
+              {new Date(previousOrder.eventDate).toLocaleDateString()}
             </Typography>
           )}
         </Stack>
@@ -262,7 +292,7 @@ export function FactionOrderForm({
                 key={assembly.id}
                 direction="row"
                 spacing={1.5}
-                sx={{ p: 1.25, border: 1, borderColor: 'primary.dark', bgcolor: 'rgba(124, 77, 255, 0.06)', borderRadius: 2, alignItems: 'center' }}
+                sx={{ p: 1.25, border: 1, borderColor: 'primary.dark', bgcolor: 'rgba(227, 6, 19, 0.045)', borderRadius: 2, alignItems: 'center' }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700 }} noWrap>{assembly.name}</Typography>

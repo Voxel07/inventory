@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, Chip, useMediaQuery } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, useMediaQuery } from '@mui/material';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
@@ -17,6 +17,7 @@ import { PrintQRCodesPage } from './pages/PrintQRCodes';
 import { UserDashboard } from './pages/UserDashboard';
 import { StorageLocations } from './pages/StorageLocations';
 import { Events } from './pages/Events';
+import { EventDetail } from './pages/EventDetail';
 import { FactionOrders } from './pages/FactionOrders';
 import { FactionOrderDetail } from './pages/FactionOrderDetail';
 import { LoginPage } from './pages/LoginPage';
@@ -33,43 +34,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function VersionedAlert({
-  message,
-  severity,
-  onClose,
-}: {
-  message: string;
-  severity: 'success' | 'error' | 'info' | 'warning';
-  onClose: () => void;
-}) {
-  return (
-    <Alert onClose={onClose} severity={severity} variant="filled" sx={{ borderRadius: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-        <Box component="span">{message}</Box>
-        <Chip
-          component="span"
-          label={__APP_VERSION__}
-          size="small"
-          variant="outlined"
-          aria-label={`Version ${__APP_VERSION__}`}
-          sx={{
-            height: 22,
-            color: 'inherit',
-            borderColor: 'currentColor',
-            opacity: 0.82,
-            '& .MuiChip-label': {
-              px: 0.75,
-              fontFamily: 'monospace',
-              fontSize: '0.68rem',
-              letterSpacing: '0.02em',
-            },
-          }}
-        />
-      </Box>
-    </Alert>
-  );
-}
 
 const theme = createTheme({
   palette: {
@@ -350,7 +314,9 @@ function AppContent() {
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           sx={{ bottom: { xs: 80, md: 24 } }}
         >
-          <VersionedAlert message={snackbar.message} severity={snackbar.severity} onClose={hideSnackbar} />
+          <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled">
+            {snackbar.message}
+          </Alert>
         </Snackbar>
       </>
     );
@@ -385,6 +351,7 @@ function AppContent() {
             <Route path="/assemblies" element={<Assemblies />} />
             <Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} />
             <Route path="/events" element={<Events />} />
+            <Route path="/events/:reportId" element={<EventDetail />} />
             <Route path="/events/orders" element={<FactionOrders />} />
             <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
             <Route path="/checkout" element={<QRCheckout />} />
@@ -404,7 +371,9 @@ function AppContent() {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         sx={{ bottom: { xs: 80, md: 24 } }}
       >
-        <VersionedAlert message={snackbar.message} severity={snackbar.severity} onClose={hideSnackbar} />
+        <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled">
+          {snackbar.message}
+        </Alert>
       </Snackbar>
     </Box>
   );
