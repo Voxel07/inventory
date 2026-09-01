@@ -276,6 +276,12 @@ export function AssemblyDetail() {
                     <Typography variant="body1">{assembly.description}</Typography>
                 </Paper>
             )}
+            {assembly.hint && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                    <Typography sx={{ fontWeight: 700 }}>{t('Montagehinweis', 'Assembly instruction')}</Typography>
+                    {assembly.hint}
+                </Alert>
+            )}
 
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <Paper sx={{ p: 2 }}>

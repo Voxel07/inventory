@@ -33,6 +33,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ReplayIcon from '@mui/icons-material/Replay';
 import SaveIcon from '@mui/icons-material/Save';
+import PrintIcon from '@mui/icons-material/Print';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import { jsPDF } from 'jspdf';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import {
@@ -52,8 +55,9 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useTransactions } from '../hooks/useTransactions';
+import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
-import type { Assembly, FactionOrderHistoryAction, FactionOrderHistoryEntry, FactionOrderStatus, Item } from '../types';
+import type { Assembly, FactionOrderHistoryAction, FactionOrderHistoryEntry, FactionOrderStatus, Item, User } from '../types';
 import { useAppLanguage, useTranslate } from '../utils/naming';
 import { calculateItemStock } from '../utils/stock';
 import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
@@ -62,6 +66,9 @@ import {
   factionOrderItemBaseline,
   findPreviousFactionOrder,
 } from '../utils/factionOrderHistory';
+import { usePocketBase } from '../hooks/usePocketBase';
+import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
+import { generateQRCodeDataURL } from '../utils/qrCode';
 
 type ConfirmAction = 'pickup' | 'return' | 'cancel' | null;
 type StateTransition = 'ready' | 'preparing' | null;
@@ -78,12 +85,14 @@ export function FactionOrderDetail() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const showSnackbar = useUIStore((state) => state.showSnackbar);
+  const { user } = usePocketBase();
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: transactions } = useTransactions();
   const { data: damageReports } = useDamageReports();
+  const { data: storageLocations = [] } = useStorageLocations();
   const updateOrder = useUpdateFactionOrder();
   const submitOrder = useSubmitFactionOrder();
   const startPreparation = useStartFactionOrderPreparation();
@@ -171,14 +180,105 @@ export function FactionOrderDetail() {
       </Alert>
     );
   }
+  const currentUser = user as unknown as User;
+  if (!canAccessFaction(currentUser, order.eventType, order.faction)) {
+    return <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/events/orders')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>{t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}</Alert>;
+  }
 
   const currentOrder = order;
+  const pickupLocation = order.expand?.pickupLocation
+    ?? storageLocations.find((location) => location.id === order.pickupLocation);
+  const pickupLocationLabel = pickupLocation
+    ? [pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean).join(' · ')
+    : t('Nicht angegeben', 'Not specified');
+  const isManager = canManageInventory(currentUser);
+  const canEditOrder = isManager || order.createdBy === user?.id;
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
     + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
   const preparedTotal = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0)
     + Object.values(order.preparedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
   const preparationComplete = requestedTotal > 0 && requestedTotal === preparedTotal;
   const progress = requestedTotal ? Math.round((preparedTotal / requestedTotal) * 100) : 0;
+
+  async function printOrder() {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const qr = await generateQRCodeDataURL(currentOrder.id, 'faction-order', currentOrder.orderCode);
+    const rows = [
+      ...orderAssemblies.map((assembly) => ({
+        requested: currentOrder.requestedAssemblyQuantities[assembly.id] ?? 0,
+        name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
+        details: `${Object.keys(assembly.itemQuantities ?? {}).length} ${t('Komponenten', 'components')}`,
+      })),
+      ...orderItems.map((item) => ({
+        requested: currentOrder.requestedQuantities[item.id] ?? 0,
+        name: item.name,
+        details: [item.expand?.storageLocation?.name, item.expand?.storageLocation?.position, item.hint].filter(Boolean).join(' · '),
+      })),
+    ];
+    const x = [14, 26, 44, 66, 138, 196];
+    let y = 54;
+
+    function drawHeader(firstPage: boolean) {
+      doc.setFontSize(firstPage ? 17 : 12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${currentOrder.eventType} · ${currentOrder.faction}`, 14, firstPage ? 18 : 12);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      if (firstPage) {
+        doc.text(`${currentOrder.orderCode} · ${new Date(currentOrder.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}`, 14, 25);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${t('Abholort', 'Pickup location')}:`, 14, 32);
+        doc.setFont('helvetica', 'normal');
+        doc.text(doc.splitTextToSize(pickupLocationLabel, 132), 14, 37);
+        doc.addImage(qr, 'PNG', 166, 10, 30, 30);
+      } else {
+        doc.text(currentOrder.orderCode, 140, 12);
+      }
+      const tableY = firstPage ? 54 : 18;
+      doc.setFillColor(235, 235, 235);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      const headers = [t('Erledigt', 'Done'), t('Bedarf', 'Qty'), t('Vorbereitet', 'Prepared'), t('Artikel / Baugruppe', 'Item / assembly'), t('Lagerort / Hinweis', 'Location / instruction')];
+      for (let index = 0; index < headers.length; index += 1) {
+        doc.rect(x[index], tableY, x[index + 1] - x[index], 8, 'FD');
+        doc.text(headers[index], x[index] + 1.5, tableY + 5.2, { maxWidth: x[index + 1] - x[index] - 3 });
+      }
+      doc.setFont('helvetica', 'normal');
+      return tableY + 8;
+    }
+
+    y = drawHeader(true);
+    for (const row of rows) {
+      const nameLines = doc.splitTextToSize(row.name, x[4] - x[3] - 3).slice(0, 2);
+      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 3).slice(0, 2);
+      const rowHeight = Math.max(10, Math.max(nameLines.length, detailLines.length) * 4.2 + 3);
+      if (y + rowHeight > 282) {
+        doc.addPage();
+        y = drawHeader(false);
+      }
+      for (let index = 0; index < x.length - 1; index += 1) doc.rect(x[index], y, x[index + 1] - x[index], rowHeight);
+      doc.rect(x[0] + 4, y + (rowHeight - 4) / 2, 4, 4);
+      doc.setFontSize(9);
+      doc.text(String(row.requested), x[1] + 7, y + rowHeight / 2 + 1, { align: 'center' });
+      doc.line(x[2] + 3, y + rowHeight / 2 + 2, x[3] - 3, y + rowHeight / 2 + 2);
+      doc.text(nameLines, x[3] + 1.5, y + 4.5);
+      doc.text(detailLines, x[4] + 1.5, y + 4.5);
+      y += rowHeight;
+    }
+    if (y + 34 > 282) {
+      doc.addPage();
+      y = drawHeader(false);
+    }
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(t('Notizen / offene Punkte', 'Notes / open tasks'), 14, y);
+    doc.setFont('helvetica', 'normal');
+    y += 3;
+    doc.rect(14, y, 182, 26);
+    if (currentOrder.notes) doc.text(doc.splitTextToSize(currentOrder.notes, 176).slice(0, 5), 17, y + 5);
+    doc.save(`${currentOrder.orderCode}.pdf`);
+  }
   const componentUnitTotal = Object.values(expandFactionOrderComponents(order, assemblies, 'prepared'))
     .reduce((sum, value) => sum + value, 0);
 
@@ -440,12 +540,24 @@ export function FactionOrderDetail() {
           <Typography color="text.secondary">
             {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItems.length + orderAssemblies.length} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
           </Typography>
+          <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
+          </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Listen-QR', 'List QR')}</Button>
-          {order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
+          <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrder}>{t('Drucken', 'Print')}</Button>
+          {canEditOrder && order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
+
+      {order.status === 'ready' && (
+        <Alert severity="success" icon={<LocationOnIcon />} sx={{ mb: 2 }}>
+          <Typography sx={{ fontWeight: 800 }}>{t('Diese Bestellung kann abgeholt werden.', 'This order is ready for pickup.')}</Typography>
+          <Typography variant="body2">{t('Abholort', 'Pickup location')}: {pickupLocationLabel}</Typography>
+        </Alert>
+      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
@@ -485,7 +597,7 @@ export function FactionOrderDetail() {
 
       <Paper sx={{ p: 2, mb: 3, position: { xs: 'sticky', md: 'static' }, bottom: { xs: 76, md: 'auto' }, zIndex: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {order.status === 'draft' && (
+          {canEditOrder && order.status === 'draft' && (
             <Button
               variant="contained"
               startIcon={<CheckCircleIcon />}
@@ -495,7 +607,7 @@ export function FactionOrderDetail() {
               {t('Bedarf vollständig', 'Request complete')}
             </Button>
           )}
-          {order.status === 'submitted' && (
+          {isManager && order.status === 'submitted' && (
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
@@ -505,7 +617,7 @@ export function FactionOrderDetail() {
               {t('Vorbereitung starten', 'Start preparation')}
             </Button>
           )}
-          {order.status === 'preparing' && (
+          {isManager && order.status === 'preparing' && (
             <>
               <Button variant="outlined" startIcon={<InventoryIcon />} onClick={fillAvailable}>{t('Verfügbare Mengen füllen', 'Fill available amounts')}</Button>
               <Button variant="contained" startIcon={<SaveIcon />} onClick={savePrepared} disabled={savePreparation.isPending}>{t('Fortschritt speichern', 'Save progress')}</Button>
@@ -520,7 +632,7 @@ export function FactionOrderDetail() {
               </Button>
             </>
           )}
-          {order.status === 'ready' && (
+          {isManager && order.status === 'ready' && (
             <>
               <Button
                 variant="outlined"
@@ -535,12 +647,12 @@ export function FactionOrderDetail() {
               </Button>
             </>
           )}
-          {order.status === 'picked_up' && (
+          {isManager && order.status === 'picked_up' && (
             <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setConfirmAction('return')}>
               {t('Komplette Liste zurückgeben', 'Return complete list')}
             </Button>
           )}
-          {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+          {canEditOrder && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
             <Button color="error" startIcon={<CancelIcon />} onClick={() => setConfirmAction('cancel')} sx={{ ml: { sm: 'auto' } }}>
               {t('Stornieren', 'Cancel')}
             </Button>
@@ -598,7 +710,7 @@ export function FactionOrderDetail() {
         </Stack>
       </Paper>
 
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullScreen={isMobile} fullWidth maxWidth="md">
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
         <DialogTitle sx={{ pr: 7 }}>
           {t('Bestellliste bearbeiten', 'Edit order list')}
           <IconButton onClick={() => setEditOpen(false)} sx={{ position: 'absolute', right: 12, top: 8 }}><CloseIcon /></IconButton>
@@ -631,8 +743,10 @@ export function FactionOrderDetail() {
           <FactionOrderForm
             items={items}
             assemblies={assemblies}
+            storageLocations={storageLocations}
             orders={allOrders}
             initialData={order}
+            allowedFactionKeys={allowedFactionKeys(currentUser) ?? undefined}
             submitLabel={t('Änderungen speichern', 'Save changes')}
             isLoading={updateOrder.isPending}
             onSubmit={(data) => updateOrder.mutate({ id: order.id, data }, {
@@ -649,7 +763,7 @@ export function FactionOrderDetail() {
       <Dialog open={qrOpen} onClose={() => setQrOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>{t('QR-Code für die komplette Liste', 'QR code for the complete list')}</DialogTitle>
         <DialogContent>
-          <QRCodeGenerator itemId={order.id} itemName={`${order.eventType}-${order.faction}`} resourceType="faction-order" />
+          <QRCodeGenerator itemId={order.id} itemName={`${order.eventType}-${order.faction}`} resourceType="faction-order" textCode={order.orderCode} />
         </DialogContent>
         <DialogActions><Button onClick={() => setQrOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions>
       </Dialog>

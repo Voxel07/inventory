@@ -17,9 +17,18 @@ import {
     Stack,
     useMediaQuery,
     useTheme,
+    Grid,
+    Card,
+    CardMedia,
+    CardContent,
+    CardActions,
+    ToggleButton,
+    ToggleButtonGroup,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import GridViewIcon from '@mui/icons-material/GridView';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
 import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTransaction } from '../../types';
@@ -27,6 +36,7 @@ import { calculateItemStock } from '../../utils/stock';
 import { formatStatus } from '../../utils/formatters';
 import { useTranslate } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
+import { itemImageUrl } from '../../utils/itemImages';
 
 interface Props {
     items: Item[] | undefined;
@@ -58,6 +68,10 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const [eventFilter, setEventFilter] = useState<EventType | ''>(activeEventType);
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [viewMode, setViewMode] = useState<'list' | 'tiles'>(() => {
+        const saved = window.localStorage.getItem('inventory-item-view');
+        return saved === 'tiles' ? 'tiles' : 'list';
+    });
 
     useEffect(() => setEventFilter(activeEventType), [activeEventType]);
 
@@ -149,8 +163,59 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
                     {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
                 </TextField>
+                <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={viewMode}
+                    onChange={(_event, value: 'list' | 'tiles' | null) => {
+                        if (!value) return;
+                        setViewMode(value);
+                        window.localStorage.setItem('inventory-item-view', value);
+                    }}
+                    aria-label={t('Ansicht', 'View')}
+                >
+                    <ToggleButton value="list" aria-label={t('Listenansicht', 'List view')}><ViewListIcon /></ToggleButton>
+                    <ToggleButton value="tiles" aria-label={t('Kachelansicht', 'Tile view')}><GridViewIcon /></ToggleButton>
+                </ToggleButtonGroup>
             </Box>
-            {isMobile ? (
+            {viewMode === 'tiles' ? (
+                <Grid container spacing={{ xs: 1, sm: 1.5 }}>
+                    {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
+                        const image = itemImageUrl(item);
+                        const isLowStock = remaining <= (item.minStock ?? 5);
+                        return (
+                            <Grid key={item.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+                                <Card onClick={() => navigate(`/items/${item.id}`)} sx={{ height: '100%', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                                    {image ? (
+                                        <CardMedia component="img" image={image} alt={item.name} sx={{ height: { xs: 88, sm: 112 }, objectFit: 'cover', bgcolor: 'grey.100' }} />
+                                    ) : (
+                                        <Box sx={{ height: { xs: 88, sm: 112 }, bgcolor: 'grey.100', display: 'grid', placeItems: 'center' }}>
+                                            <GridViewIcon sx={{ fontSize: { xs: 30, sm: 38 }, color: 'text.disabled' }} />
+                                        </Box>
+                                    )}
+                                    <CardContent sx={{ flexGrow: 1, p: { xs: 1, sm: 1.25 }, '&:last-child': { pb: { xs: 0.5, sm: 0.75 } } }}>
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Typography sx={{ fontWeight: 700, fontSize: { xs: '0.85rem', sm: '0.95rem' }, lineHeight: 1.15 }} noWrap>{item.name}</Typography>
+                                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category || t('Ohne Kategorie', 'No category')}</Typography>
+                                            </Box>
+                                            <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" sx={{ alignSelf: 'flex-start', display: { xs: 'none', sm: 'inline-flex' } }} />
+                                        </Stack>
+                                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, alignItems: 'baseline' }}><Typography sx={{ fontWeight: 800, fontSize: { xs: '1.35rem', sm: '1.55rem' }, lineHeight: 1, color: isLowStock ? 'warning.main' : 'success.main' }}>{remaining}</Typography><Typography variant="caption" color="text.secondary">{t('verfügbar', 'available')}</Typography></Stack>
+                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.25 }}>{totalStock} {t('gesamt', 'total')}{checkedOut ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}{damaged ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}</Typography>
+                                        {item.hint && <Typography variant="caption" sx={{ mt: 0.5, display: { xs: 'none', sm: '-webkit-box' }, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} color="text.secondary">{item.hint}</Typography>}
+                                    </CardContent>
+                                    <CardActions onClick={(event) => event.stopPropagation()} sx={{ justifyContent: 'flex-end', p: 0.25, minHeight: 36, '& .MuiIconButton-root': { p: 0.65 } }}>
+                                        <TooltipButton variant="icon" tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')} icon={<EditIcon />} onClick={() => onEdit(item)} />
+                                        <TooltipButton variant="icon" tooltipText={t('Artikel löschen', 'Delete item')} icon={<DeleteIcon />} color="error" onClick={() => onDelete(item.id)} />
+                                    </CardActions>
+                                </Card>
+                            </Grid>
+                        );
+                    })}
+                    {filteredAndSorted.length === 0 && <Grid size={{ xs: 12 }}><Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper></Grid>}
+                </Grid>
+            ) : isMobile ? (
                 <Stack spacing={1.5}>
                     {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
                         const minStock = item.minStock ?? 5;

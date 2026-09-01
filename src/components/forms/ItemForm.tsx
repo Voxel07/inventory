@@ -12,11 +12,16 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    IconButton,
+    Chip,
 } from '@mui/material';
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useTranslate } from '../../utils/naming';
+import { itemImageUrl } from '../../utils/itemImages';
 
 interface Props {
     initialData?: Item;
@@ -45,6 +50,9 @@ export function ItemForm({
         subcategory: initialData?.subcategory ?? '',
         eventTypes: initialData?.eventTypes ?? [],
         storageLocation: initialData?.storageLocation ?? '',
+        hint: initialData?.hint ?? '',
+        imageFiles: [],
+        removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
         containerCount: initialData?.containerCount ?? undefined,
         containersOpened: initialData?.containersOpened ?? undefined,
@@ -60,6 +68,8 @@ export function ItemForm({
         containerRemainingPercent: initialData?.containerRemainingPercent == null ? '' : String(initialData.containerRemainingPercent),
     });
     const [nameError, setNameError] = useState('');
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [removedImages, setRemovedImages] = useState<string[]>([]);
     const [addLocationOpen, setAddLocationOpen] = useState(false);
     const [newLocData, setNewLocData] = useState({
         name: '',
@@ -114,6 +124,8 @@ export function ItemForm({
         const parseOptional = (value: string) => value === '' ? undefined : Number(value);
         const submitData: ItemFormData = {
             ...formData,
+            imageFiles,
+            removeImages: removedImages,
             amount: parseOptional(numericInputs.amount),
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
@@ -218,6 +230,58 @@ export function ItemForm({
                     onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
                     renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
                 />
+                <TextField
+                    label={t('Hinweis / besondere Anweisungen', 'Hint / special instructions')}
+                    value={formData.hint ?? ''}
+                    onChange={handleChange('hint')}
+                    multiline
+                    minRows={3}
+                    fullWidth
+                    helperText={t('Hinweise zur Verwendung, Vorbereitung oder Montage', 'Instructions for use, preparation, or assembly')}
+                />
+                <Box>
+                    <Button component="label" variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
+                        {t('Bilder hinzufügen', 'Add images')}
+                        <input
+                            hidden
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(event) => {
+                                const selected = Array.from(event.target.files ?? []);
+                                const existingCount = (initialData?.images?.length ?? 0) - removedImages.length;
+                                setImageFiles((current) => [...current, ...selected].slice(0, Math.max(0, 8 - existingCount)));
+                                event.target.value = '';
+                            }}
+                        />
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                        {t('Bis zu 8 Bilder; sie werden im PocketBase-Dateispeicher abgelegt.', 'Up to 8 images; they are stored in PocketBase file storage.')}
+                    </Typography>
+                    <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                        {initialData?.images?.filter((filename) => !removedImages.includes(filename)).map((filename) => (
+                            <Box key={filename} sx={{ position: 'relative', width: 96, height: 72 }}>
+                                <Box component="img" src={itemImageUrl(initialData, filename, '192x144')} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1 }} />
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    aria-label={t('Bild entfernen', 'Remove image')}
+                                    onClick={() => setRemovedImages((current) => [...current, filename])}
+                                    sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'background.paper' }}
+                                >
+                                    <DeleteIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                        ))}
+                        {imageFiles.map((file, index) => (
+                            <Chip
+                                key={`${file.name}-${file.lastModified}-${index}`}
+                                label={file.name}
+                                onDelete={() => setImageFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                            />
+                        ))}
+                    </Stack>
+                </Box>
 
                 <Divider />
                 <Typography variant="subtitle2" color="text.secondary">

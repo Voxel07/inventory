@@ -5,8 +5,29 @@ export interface StorageLocation {
   area?: string;
   location?: string;
   position?: string;
+  latitude?: number;
+  longitude?: number;
+  mapZoom?: number;
+  mapOverlay?: string;
+  overlayBounds?: MapBounds;
   created: string;
   updated: string;
+}
+
+export type MapBounds = [[number, number], [number, number]];
+
+export interface StorageLocationFormData {
+  name: string;
+  description?: string;
+  area?: string;
+  location?: string;
+  position?: string;
+  latitude?: number;
+  longitude?: number;
+  mapZoom?: number;
+  mapOverlayFile?: File;
+  removeMapOverlay?: boolean;
+  overlayBounds?: MapBounds;
 }
 
 export interface Item {
@@ -20,7 +41,8 @@ export interface Item {
   eventTypes?: EventType[];
   storageLocation: string;
   status: ItemStatus;
-  qrCode: string;
+  images?: string[];
+  hint?: string;
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
@@ -43,6 +65,9 @@ export interface ItemFormData {
   subcategory?: string;
   eventTypes?: EventType[];
   storageLocation: string;
+  hint?: string;
+  imageFiles?: File[];
+  removeImages?: string[];
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;

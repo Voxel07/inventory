@@ -16,7 +16,15 @@ The PocketBase URL is read from `window.__ENV__.POCKETBASE_URL` or `VITE_POCKETB
 
 ## PocketBase schema
 
-Import `pb_schema.json` into PocketBase before using the application. The faction-order feature requires the new `inventory_faction_orders` collection and the optional `factionOrderId` relation on `inventory_stock_transactions`. Existing Authentik/OIDC users remain in the external PocketBase auth collection referenced by the schema.
+Import `pb_schema.json` into PocketBase before using the application. The faction-order feature requires the new `inventory_faction_orders` collection and the optional `factionOrderId` relation on `inventory_stock_transactions`.
+
+Re-import the schema after updating this version. It adds PocketBase-backed item images and hints, storage-location map data/overlay files, sequential faction-order codes, pickup locations, and the existing `users` auth collection definition. The provided users definition preserves OAuth and password authentication while expanding the existing `role` and multi-select `faction` fields. New order codes use `event-faction-year-0001` and increment within that event/faction/year combination.
+
+Authorization comes directly from the normal PocketBase `users` collection—there is no separate access collection. OAuth may map the application role into `role`; `admin`, `Admin`, the existing `Admin ` value, `manager`, and `inventory_manager` receive full inventory access. Other authenticated roles (including the existing `User`, `banker`, and `player` values) are treated as faction leaders. Use **User management** to assign one or more values in the existing `faction` multi-select. Faction leaders only see those faction lists and can create, edit, submit, or cancel orders they created; inventory lifecycle actions remain manager-only.
+
+The users API rules allow managers to list and update all users. Users may still edit their own normal profile fields, but cannot change their own `role` or `faction`, which prevents self-promotion. Changes to either field are delivered through PocketBase realtime and take effect in active sessions without a page refresh.
+
+Item and order QR codes are generated on demand. QR image data is no longer stored in PocketBase.
 
 ## Faction order workflow
 

@@ -7,6 +7,7 @@ export interface Assembly {
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;
+  hint?: string;
   eventTypes?: EventType[];
   created: string;
   updated: string;
@@ -20,5 +21,6 @@ export interface AssemblyFormData {
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;
+  hint?: string;
   eventTypes?: EventType[];
 }

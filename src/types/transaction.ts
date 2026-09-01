@@ -19,6 +19,7 @@ export interface StockTransaction {
       id: string;
       eventType: string;
       faction: string;
+      orderCode?: string;
     };
   };
 }
@@ -32,4 +33,6 @@ export interface TransactionFormData {
   quantityChanged: number;
   reason: string;
   notes: string;
+  userId?: string;
+  factionOrderId?: string;
 }

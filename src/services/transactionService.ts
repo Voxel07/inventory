@@ -27,8 +27,8 @@ export async function getTransactions(filters?: {
 }
 
 export async function createTransaction(data: TransactionFormData): Promise<StockTransaction> {
-  const userId = pb.authStore.record?.id;
-  if (!userId) throw new Error('Authentication required');
+  const actor = pb.authStore.record;
+  if (!actor?.id) throw new Error('Authentication required');
   if (data.transactionType === 'repaired' || data.transactionType === 'written_off') {
     throw new Error('Damage resolution transactions are created from damage reports');
   }
@@ -47,10 +47,17 @@ export async function createTransaction(data: TransactionFormData): Promise<Stoc
     throw new Error(`Only ${stock.checkedOut} currently checked out`);
   }
 
+  let transactionUserId = actor.id;
+  if (data.userId && data.userId !== actor.id) {
+    const role = String(actor.role || '').trim().toLowerCase();
+    const canManage = role === 'admin' || role === 'manager' || role === 'inventory_manager';
+    if (!canManage) throw new Error('You cannot return inventory for another user');
+    transactionUserId = data.userId;
+  }
   const payload: TransactionFormData & { timestamp: string; userId: string } = {
     ...data,
     timestamp: new Date().toISOString(),
-    userId,
+    userId: transactionUserId,
   };
 
   return pb.collection(COLLECTION).create<StockTransaction>(payload);

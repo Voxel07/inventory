@@ -16,7 +16,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { jsPDF } from 'jspdf';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
-import { generateQRCodeDataURL } from '../services/qrCodeService';
+import { generateQRCodeDataURL } from '../utils/qrCode';
 import { useTranslate } from '../utils/naming';
 
 type FilterMode = 'all' | 'items' | 'assemblies' | 'single';
@@ -73,7 +73,7 @@ export function PrintQRCodesPage() {
             case 'assemblies':
                 return entries.filter((e) => e.type === 'assembly');
             case 'single':
-                return selectedId ? entries.filter((e) => e.id === selectedId) : [];
+                return selectedId ? entries.filter((e) => `${e.type}:${e.id}` === selectedId) : [];
             default:
                 return entries;
         }
@@ -190,8 +190,8 @@ export function PrintQRCodesPage() {
                         <Autocomplete
                             options={allOptions}
                             getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
-                            value={allOptions.find((o) => o.id === selectedId) ?? null}
-                            onChange={(_e, newValue) => setSelectedId(newValue?.id ?? null)}
+                            value={allOptions.find((o) => `${o.type}:${o.id}` === selectedId) ?? null}
+                            onChange={(_e, newValue) => setSelectedId(newValue ? `${newValue.type}:${newValue.id}` : null)}
                             renderInput={(params) => (
                                 <TextField {...params} label={t('Artikel oder Baugruppe auswählen', 'Select item or assembly')} size="small" />
                             )}

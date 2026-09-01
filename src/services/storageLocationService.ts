@@ -1,5 +1,5 @@
 import pb from './pocketbaseClient';
-import type { StorageLocation } from '../types';
+import type { StorageLocation, StorageLocationFormData } from '../types';
 
 const COLLECTION = 'inventory_storage_locations';
 
@@ -13,27 +13,25 @@ export async function getStorageLocation(id: string): Promise<StorageLocation> {
   return pb.collection(COLLECTION).getOne<StorageLocation>(id);
 }
 
-export async function createStorageLocation(data: {
-  name: string;
-  description?: string;
-  area?: string;
-  location?: string;
-  position?: string;
-}): Promise<StorageLocation> {
-  return pb.collection(COLLECTION).create<StorageLocation>(data);
+export async function createStorageLocation(data: StorageLocationFormData): Promise<StorageLocation> {
+  const { mapOverlayFile, removeMapOverlay: _removeMapOverlay, ...fields } = data;
+  return pb.collection(COLLECTION).create<StorageLocation>({
+    ...fields,
+    ...(mapOverlayFile ? { mapOverlay: mapOverlayFile } : {}),
+  });
 }
 
 export async function updateStorageLocation(
   id: string,
-  data: Partial<{
-    name: string;
-    description: string;
-    area: string;
-    location: string;
-    position: string;
-  }>,
+  data: Partial<StorageLocationFormData>,
 ): Promise<StorageLocation> {
-  return pb.collection(COLLECTION).update<StorageLocation>(id, data);
+  const { mapOverlayFile, removeMapOverlay, ...fields } = data;
+  const current = removeMapOverlay ? await getStorageLocation(id) : undefined;
+  return pb.collection(COLLECTION).update<StorageLocation>(id, {
+    ...fields,
+    ...(mapOverlayFile ? { mapOverlay: mapOverlayFile } : {}),
+    ...(removeMapOverlay && current?.mapOverlay ? { 'mapOverlay-': current.mapOverlay } : {}),
+  });
 }
 
 export async function deleteStorageLocation(id: string): Promise<boolean> {

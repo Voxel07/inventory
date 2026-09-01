@@ -9,8 +9,6 @@ import { Items } from './pages/Items';
 import { ItemDetail } from './pages/ItemDetail';
 import { Assemblies } from './pages/Assemblies';
 import { AssemblyDetail } from './pages/AssemblyDetail';
-import { QRCheckout } from './pages/QRCheckout';
-import { TransactionHistoryPage } from './pages/TransactionHistory';
 import { DamageReportsPage } from './pages/DamageReports';
 import { CheckedOutItemsPage } from './pages/CheckedOutItems';
 import { PrintQRCodesPage } from './pages/PrintQRCodes';
@@ -21,7 +19,13 @@ import { EventDetail } from './pages/EventDetail';
 import { FactionOrders } from './pages/FactionOrders';
 import { FactionOrderDetail } from './pages/FactionOrderDetail';
 import { LoginPage } from './pages/LoginPage';
-import { usePocketBase } from './hooks/usePocketBase';
+import { UserManagement } from './pages/UserManagement';
+import { TransactionHistoryPage } from './pages/TransactionHistory';
+import { InventoryManagerGuard } from './components/shared/AccessGuard';
+import { canManageInventory } from './utils/access';
+import type { User } from './types';
+import { Navigate } from 'react-router-dom';
+import { useCurrentUserRealtime, usePocketBase } from './hooks/usePocketBase';
 import { useUIStore } from './store/uiStore';
 import { useEffect } from 'react';
 import { useAppLanguage } from './utils/naming';
@@ -292,6 +296,7 @@ const theme = createTheme({
 
 function AppContent() {
   useAppLanguage();
+  useCurrentUserRealtime();
   const { isAuthenticated } = usePocketBase();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
@@ -344,23 +349,23 @@ function AppContent() {
         <Toolbar />
         <ErrorBoundary>
           <Routes>
-            <Route path="/" element={<UserDashboard />} />
-            <Route path="/global-dashboard" element={<Dashboard />} />
-            <Route path="/items" element={<Items />} />
-            <Route path="/items/:itemId" element={<ItemDetail />} />
-            <Route path="/assemblies" element={<Assemblies />} />
-            <Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/events/:reportId" element={<EventDetail />} />
+            <Route path="/" element={<HomeRoute />} />
+            <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
+            <Route path="/items" element={<InventoryManagerGuard><Items /></InventoryManagerGuard>} />
+            <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
+            <Route path="/assemblies" element={<InventoryManagerGuard><Assemblies /></InventoryManagerGuard>} />
+            <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
+            <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
+            <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
             <Route path="/events/orders" element={<FactionOrders />} />
             <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
-            <Route path="/checkout" element={<QRCheckout />} />
-            <Route path="/checkout/:itemId" element={<QRCheckout />} />
-            <Route path="/transactions" element={<TransactionHistoryPage />} />
-            <Route path="/checked-out" element={<CheckedOutItemsPage />} />
-            <Route path="/print-qr" element={<PrintQRCodesPage />} />
-            <Route path="/damage-reports" element={<DamageReportsPage />} />
-            <Route path="/storage-locations" element={<StorageLocations />} />
+            <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
+            <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
+            <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
+            <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
+            <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
+            <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ErrorBoundary>
       </Box>
@@ -377,6 +382,11 @@ function AppContent() {
       </Snackbar>
     </Box>
   );
+}
+
+function HomeRoute() {
+  const { user } = usePocketBase();
+  return canManageInventory(user as unknown as User) ? <UserDashboard /> : <Navigate to="/events/orders" replace />;
 }
 
 export default function App() {

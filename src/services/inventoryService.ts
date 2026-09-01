@@ -1,6 +1,5 @@
 import pb from './pocketbaseClient';
 import type { Item, ItemFormData } from '../types';
-import { generateQRCodeDataURL } from './qrCodeService';
 import { createTransaction } from './transactionService';
 
 const COLLECTION = 'inventory_items';
@@ -19,31 +18,23 @@ export async function getItem(id: string): Promise<Item> {
 }
 
 export async function createItem(data: ItemFormData): Promise<Item> {
-  const { amount, ...rest } = data;
+  const { amount, imageFiles = [], removeImages: _removeImages, ...rest } = data;
   if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
     throw new Error('Amount must be zero or a positive number');
   }
   const item = await pb.collection(COLLECTION).create<Item>({
     ...rest,
+    images: imageFiles,
     amount: amount ?? 0,
     minStock: Number(data.minStock),
     value: Number(data.value),
     status: 'available',
-    qrCode: '',
   });
-
-  let updated = item;
-  try {
-    const qrCode = await generateQRCodeDataURL(item.id);
-    updated = await pb.collection(COLLECTION).update<Item>(item.id, { qrCode });
-  } catch (e) {
-    console.error('Failed to generate QR code:', e);
-  }
 
   if (amount !== undefined && amount > 0) {
     try {
       await createTransaction({
-        itemId: updated.id,
+        itemId: item.id,
         transactionType: 'added',
         quantityChanged: amount,
         reason: 'Initial stock',
@@ -54,13 +45,17 @@ export async function createItem(data: ItemFormData): Promise<Item> {
     }
   }
 
-  return updated;
+  return item;
 }
 
 export async function updateItem(id: string, data: Partial<ItemFormData>): Promise<Item> {
-  const rest = { ...data };
+  const { imageFiles = [], removeImages = [], ...rest } = data;
   delete rest.amount;
-  return pb.collection(COLLECTION).update<Item>(id, rest);
+  return pb.collection(COLLECTION).update<Item>(id, {
+    ...rest,
+    ...(imageFiles.length ? { 'images+': imageFiles } : {}),
+    ...(removeImages.length ? { 'images-': removeImages } : {}),
+  });
 }
 
 export async function deleteItem(id: string): Promise<boolean> {

@@ -2,6 +2,7 @@ import type { Item } from './item';
 import type { Assembly } from './assembly';
 import type { EventType } from './event';
 import type { User } from './user';
+import type { StorageLocation } from './item';
 
 export const FACTIONS_BY_EVENT: Record<EventType, readonly string[]> = {
   DE: ['KGG', 'GOF', 'Enklave', 'Miliz'],
@@ -38,9 +39,12 @@ export interface FactionOrderHistoryEntry {
 
 export interface FactionOrder {
   id: string;
+  orderCode: string;
+  factionKey: string;
   eventType: EventType;
   faction: string;
   eventDate: string;
+  pickupLocation?: string;
   status: FactionOrderStatus;
   itemIds: string[];
   requestedQuantities: Record<string, number>;
@@ -69,6 +73,7 @@ export interface FactionOrder {
     readyBy?: User;
     pickedUpBy?: User;
     returnedBy?: User;
+    pickupLocation?: StorageLocation;
   };
 }
 
@@ -76,11 +81,16 @@ export interface FactionOrderFormData {
   eventType: EventType;
   faction: string;
   eventDate: string;
+  pickupLocation: string;
   itemIds: string[];
   requestedQuantities: Record<string, number>;
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
   notes?: string;
+}
+
+export function factionKey(eventType: EventType, faction: string): string {
+  return `${eventType}:${faction}`;
 }
 
 export function isFactionForEvent(eventType: EventType, faction: string): boolean {

@@ -36,6 +36,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
         itemQuantities: initialData?.itemQuantities ?? {},
         description: initialData?.description ?? '',
+        hint: initialData?.hint ?? '',
         eventTypes: initialData?.eventTypes ?? [],
     });
     const [search, setSearch] = useState('');
@@ -97,6 +98,14 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                     multiline
                     rows={3}
+                    fullWidth
+                />
+                <TextField
+                    label={t('Hinweis / Montageanweisung', 'Hint / assembly instructions')}
+                    value={formData.hint ?? ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, hint: e.target.value }))}
+                    multiline
+                    minRows={2}
                     fullWidth
                 />
 

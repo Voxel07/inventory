@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -40,6 +40,10 @@ import type { StorageLocation } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useTranslate } from '../utils/naming';
+import type { StorageLocationFormData } from '../types';
+import { StorageLocationMap } from '../components/maps/StorageLocationMap';
+import pb from '../services/pocketbaseClient';
+import MapIcon from '@mui/icons-material/Map';
 
 export function StorageLocations() {
     const t = useTranslate();
@@ -61,13 +65,20 @@ export function StorageLocations() {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
         area: '',
         description: '',
         location: '',
         position: '',
+        latitude: 52.375953,
+        longitude: 11.826278,
+        mapZoom: 19,
     });
+    const overlayPreview = useMemo(() => formData.mapOverlayFile ? URL.createObjectURL(formData.mapOverlayFile) : undefined, [formData.mapOverlayFile]);
+    useEffect(() => () => {
+        if (overlayPreview) URL.revokeObjectURL(overlayPreview);
+    }, [overlayPreview]);
 
     const activeLocation = useMemo(() => {
         return locations?.find((l) => l.id === selectedLocId) || null;
@@ -100,7 +111,7 @@ export function StorageLocations() {
 
     function handleOpenCreate() {
         setEditingLoc(null);
-        setFormData({ name: '', area: '', description: '', location: '', position: '' });
+        setFormData({ name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
         setDialogOpen(true);
     }
 
@@ -113,6 +124,10 @@ export function StorageLocations() {
             description: loc.description || '',
             location: loc.location || '',
             position: loc.position || '',
+            latitude: loc.latitude ?? 52.375953,
+            longitude: loc.longitude ?? 11.826278,
+            mapZoom: Math.max(loc.mapZoom ?? 19, 19),
+            overlayBounds: loc.overlayBounds,
         });
         setDialogOpen(true);
     }
@@ -295,6 +310,18 @@ export function StorageLocations() {
                                 </Typography>
                             )}
 
+                            {activeLocation.latitude != null && activeLocation.longitude != null && (
+                                <Box sx={{ mb: 3 }}>
+                                    <StorageLocationMap
+                                        latitude={activeLocation.latitude}
+                                        longitude={activeLocation.longitude}
+                                        zoom={activeLocation.mapZoom}
+                                        overlayBounds={activeLocation.overlayBounds}
+                                        overlayUrl={activeLocation.mapOverlay ? pb.files.getURL(activeLocation, activeLocation.mapOverlay) : undefined}
+                                    />
+                                </Box>
+                            )}
+
                             <Divider sx={{ mb: 3 }} />
 
                             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
@@ -387,7 +414,7 @@ export function StorageLocations() {
             </Grid>
 
             {/* Create/Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>{editingLoc ? t('Lagerort bearbeiten', 'Edit storage location') : t('Neuer Lagerort', 'New storage location')}</DialogTitle>
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
@@ -428,6 +455,47 @@ export function StorageLocations() {
                                 multiline
                                 rows={3}
                                 fullWidth
+                            />
+                            <Divider />
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                <MapIcon color="primary" />
+                                <Typography variant="h6">{t('OpenStreetMap und Kartenebene', 'OpenStreetMap and map overlay')}</Typography>
+                            </Stack>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                                <TextField
+                                    label={t('Breitengrad', 'Latitude')}
+                                    type="number"
+                                    value={formData.latitude ?? ''}
+                                    onChange={(event) => setFormData((current) => ({ ...current, latitude: Number(event.target.value) }))}
+                                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                                    fullWidth
+                                />
+                                <TextField
+                                    label={t('Längengrad', 'Longitude')}
+                                    type="number"
+                                    value={formData.longitude ?? ''}
+                                    onChange={(event) => setFormData((current) => ({ ...current, longitude: Number(event.target.value) }))}
+                                    slotProps={{ htmlInput: { step: 0.000001 } }}
+                                    fullWidth
+                                />
+                            </Stack>
+                            <Button component="label" variant="outlined">
+                                {t('Eigene Kartenebene hochladen', 'Upload custom map overlay')}
+                                <input hidden type="file" accept="image/*" onChange={(event) => setFormData((current) => ({ ...current, mapOverlayFile: event.target.files?.[0], removeMapOverlay: false }))} />
+                            </Button>
+                            {editingLoc?.mapOverlay && !formData.removeMapOverlay && (
+                                <Button color="error" onClick={() => setFormData((current) => ({ ...current, removeMapOverlay: true, mapOverlayFile: undefined }))}>
+                                    {t('Vorhandene Kartenebene entfernen', 'Remove existing map overlay')}
+                                </Button>
+                            )}
+                            <StorageLocationMap
+                                editable
+                                latitude={formData.latitude}
+                                longitude={formData.longitude}
+                                zoom={formData.mapZoom}
+                                overlayBounds={formData.overlayBounds}
+                                overlayUrl={overlayPreview || (editingLoc?.mapOverlay && !formData.removeMapOverlay ? pb.files.getURL(editingLoc, editingLoc.mapOverlay) : undefined)}
+                                onCenterChange={(latitude, longitude) => setFormData((current) => ({ ...current, latitude, longitude }))}
                             />
                         </Stack>
                     </DialogContent>

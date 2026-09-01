@@ -18,12 +18,10 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import { useNavigate } from 'react-router-dom';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
@@ -141,9 +139,6 @@ export function UserDashboard() {
             </Typography>
 
             <Stack direction="row" spacing={1.5} sx={{ mb: 3, display: { xs: 'flex', md: 'none' } }}>
-                <Button fullWidth variant="contained" size="large" startIcon={<QrCodeScannerIcon />} onClick={() => navigate('/checkout')} sx={{ minHeight: 52 }}>
-                    {t('QR scannen', 'Scan QR')}
-                </Button>
                 <Button fullWidth variant="outlined" color="success" size="large" startIcon={<AssignmentReturnIcon />} onClick={() => navigate('/checked-out')} sx={{ minHeight: 52 }}>
                     {t('Rückgabe', 'Return')}
                 </Button>
@@ -243,13 +238,6 @@ export function UserDashboard() {
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     {t('Meine kürzlichen Transaktionen', 'My recent transactions')}
                 </Typography>
-                <Button
-                    endIcon={<KeyboardArrowRightIcon />}
-                    onClick={() => navigate('/transactions')}
-                    sx={{ textTransform: 'none' }}
-                >
-                    {t('Alle anzeigen', 'View all')}
-                </Button>
             </Box>
             <TransactionHistory
                 transactions={userTransactions.slice(0, 5)}

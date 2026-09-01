@@ -42,6 +42,28 @@ export function usePocketBase() {
   return { pb, isAuthenticated, user, login, logout };
 }
 
+export function useCurrentUserRealtime() {
+  const { user } = usePocketBase();
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let disposed = false;
+    let unsubscribe: (() => Promise<void>) | undefined;
+    pb.collection('users').subscribe(user.id, (event) => {
+      if (event.action === 'delete') pb.authStore.clear();
+      else pb.authStore.save(pb.authStore.token, event.record);
+    }).then((cleanup) => {
+      if (disposed) void cleanup();
+      else unsubscribe = cleanup;
+    }).catch((error) => console.warn('Failed to subscribe to the current user:', error));
+
+    return () => {
+      disposed = true;
+      void unsubscribe?.();
+    };
+  }, [user?.id]);
+}
+
 export function useRealtimeSubscription<T>(
   collection: string,
   callback: (data: { action: string; record: T }) => void,

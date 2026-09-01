@@ -28,9 +28,14 @@ import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
+import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useAppLanguage, useTranslate } from '../utils/naming';
+import { usePocketBase } from '../hooks/usePocketBase';
+import { allowedFactionKeys, canManageInventory } from '../utils/access';
+import type { User } from '../types';
+import { FactionAccessNotice } from '../components/shared/AccessGuard';
 
 function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error' {
   if (status === 'draft') return 'default';
@@ -53,8 +58,16 @@ export function FactionOrders() {
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = usePocketBase();
+  const currentUser = user as unknown as User;
+  const isManager = canManageInventory(currentUser);
+  const allowedFactions = isManager ? null : (currentUser?.faction ?? []);
+  const allowedKeys = allowedFactionKeys(currentUser);
+  const selectableEvents = EVENT_TYPES.filter((type) => isManager || FACTIONS_BY_EVENT[type].some((faction) => allowedFactions?.includes(faction)));
+  const visibleFactions = FACTIONS_BY_EVENT[eventType].filter((faction) => isManager || allowedFactions?.includes(faction));
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
+  const { data: storageLocations = [] } = useStorageLocations();
   const { data: allOrders = [], isLoading, isError } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = useMemo(
@@ -63,23 +76,28 @@ export function FactionOrders() {
   );
 
   const ordersByFaction = useMemo(() => Object.fromEntries(
-    FACTIONS_BY_EVENT[eventType].map((faction) => [faction, orders.filter((order) => order.faction === faction)]),
-  ), [eventType, orders]);
+    visibleFactions.map((faction) => [faction, orders.filter((order) => order.faction === faction)]),
+  ), [orders, visibleFactions]);
 
   useEffect(() => {
-    if (!FACTIONS_BY_EVENT[eventType].includes(selectedFaction)) {
-      setSelectedFaction(FACTIONS_BY_EVENT[eventType][0]);
+    if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
+      setSelectedFaction(visibleFactions[0]);
     }
-  }, [eventType, selectedFaction]);
+  }, [selectedFaction, visibleFactions]);
+
+  useEffect(() => {
+    if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);
+  }, [eventType, selectableEvents, setEventType]);
 
   function selectEvent(value: EventType | null) {
     if (!value) return;
     setEventType(value);
-    setSelectedFaction(FACTIONS_BY_EVENT[value][0]);
+    const firstFaction = FACTIONS_BY_EVENT[value].find((candidate) => isManager || allowedFactions?.includes(candidate));
+    if (firstFaction) setSelectedFaction(firstFaction);
   }
 
   function openCreate(faction?: string) {
-    setSelectedFaction(faction ?? FACTIONS_BY_EVENT[eventType][0]);
+    setSelectedFaction(faction ?? visibleFactions[0]);
     setDialogOpen(true);
   }
 
@@ -104,6 +122,14 @@ export function FactionOrders() {
     return { requested: requested + requestedAssemblies, prepared: prepared + preparedAssemblies };
   }
 
+  function pickupLabel(order: FactionOrder) {
+    const location = order.expand?.pickupLocation
+      ?? storageLocations.find((candidate) => candidate.id === order.pickupLocation);
+    return location
+      ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
+      : '—';
+  }
+
   return (
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
@@ -116,10 +142,12 @@ export function FactionOrders() {
             )}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} sx={{ alignSelf: { sm: 'flex-start' } }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length} sx={{ alignSelf: { sm: 'flex-start' } }}>
           {t('Neue Liste', 'New list')}
         </Button>
       </Stack>
+
+      {!isManager && <Box sx={{ mb: 2 }}><FactionAccessNotice /></Box>}
 
       <ToggleButtonGroup
         exclusive
@@ -127,7 +155,7 @@ export function FactionOrders() {
         onChange={(_event, value: EventType | null) => selectEvent(value)}
         sx={{ mb: 3, flexWrap: 'wrap' }}
       >
-        {EVENT_TYPES.map((type) => <ToggleButton key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
+        {selectableEvents.map((type) => <ToggleButton key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
       </ToggleButtonGroup>
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
@@ -140,7 +168,7 @@ export function FactionOrders() {
           mb: 4,
         }}
       >
-        {FACTIONS_BY_EVENT[eventType].map((faction) => {
+        {visibleFactions.map((faction) => {
           const factionOrders = ordersByFaction[faction] ?? [];
           const latest = factionOrders[0];
           const totals = latest ? progress(latest) : undefined;
@@ -161,6 +189,9 @@ export function FactionOrders() {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {['picked_up', 'returned'].includes(latest.status) ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
+                    </Typography>
+                    <Typography variant="caption" color={latest.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block', mt: 0.5, fontWeight: latest.status === 'ready' ? 800 : 400 }}>
+                      {t('Abholort', 'Pickup location')}: {pickupLabel(latest)}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
@@ -211,6 +242,7 @@ export function FactionOrders() {
                       {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
                       {['picked_up', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
                     </Typography>
+                    <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: order.status === 'ready' ? 800 : 400 }}>{t('Abholort', 'Pickup location')}: {pickupLabel(order)}</Typography>
                   </Box>
                   <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
                   <ArrowForwardIcon fontSize="small" />
@@ -221,7 +253,7 @@ export function FactionOrders() {
         </Stack>
       </Paper>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="md">
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
         <DialogTitle sx={{ pr: 7 }}>
           {t('Neue Fraktions-Bestellliste', 'New faction order list')}
           <IconButton onClick={() => setDialogOpen(false)} sx={{ position: 'absolute', right: 12, top: 8 }} aria-label={t('Schließen', 'Close')}>
@@ -232,9 +264,11 @@ export function FactionOrders() {
           <FactionOrderForm
             items={items}
             assemblies={assemblies}
+            storageLocations={storageLocations}
             orders={allOrders}
             defaultEventType={eventType}
             defaultFaction={selectedFaction}
+            allowedFactionKeys={allowedKeys ?? undefined}
             isLoading={createOrder.isPending}
             onSubmit={(data) => createOrder.mutate(data, {
               onSuccess: (order) => {

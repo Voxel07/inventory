@@ -23,10 +23,8 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import RoomIcon from '@mui/icons-material/Room';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import CategoryIcon from '@mui/icons-material/Category';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -37,7 +35,11 @@ import { useTranslate } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
 import GroupsIcon from '@mui/icons-material/Groups';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import HistoryIcon from '@mui/icons-material/History';
 import { EVENT_TYPES, type EventType } from '../../types';
+import type { User } from '../../types';
+import { canManageInventory } from '../../utils/access';
 
 const DRAWER_WIDTH = 260;
 
@@ -51,21 +53,25 @@ export function Navigation() {
     const setActiveEventType = useUIStore((s) => s.setActiveEventType);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const { logout } = usePocketBase();
-    const navItems = [
+    const { logout, user } = usePocketBase();
+    const isManager = canManageInventory(user as unknown as User);
+    const managerNavItems = [
         { label: t('Globales Dashboard', 'Global dashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
         { label: t('Mein Dashboard', 'My dashboard'), path: '/', icon: <DashboardIcon /> },
         { label: t('Artikel', 'Items'), path: '/items', icon: <InventoryIcon /> },
-        { label: t('QR scannen', 'Scan QR code'), path: '/checkout', icon: <QrCodeScannerIcon /> },
         { label: t('Lagerorte', 'Storage locations'), path: '/storage-locations', icon: <RoomIcon /> },
         { label: t('Baugruppen', 'Assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
         { label: t('Events', 'Events'), path: '/events', icon: <EventIcon /> },
         { label: t('Fraktionsbestellungen', 'Faction orders'), path: '/events/orders', icon: <GroupsIcon /> },
-        { label: t('Transaktionen', 'Transactions'), path: '/transactions', icon: <ReceiptLongIcon /> },
         { label: t('Ausgeliehen', 'Checked out'), path: '/checked-out', icon: <AssignmentReturnIcon /> },
+        { label: t('Transaktionsverlauf', 'Transaction history'), path: '/transactions', icon: <HistoryIcon /> },
         { label: t('QR-Codes drucken', 'Print QR codes'), path: '/print-qr', icon: <QrCode2Icon /> },
         { label: t('Schadensberichte', 'Damage reports'), path: '/damage-reports', icon: <ReportProblemIcon /> },
+        { label: t('Benutzerverwaltung', 'User management'), path: '/users', icon: <ManageAccountsIcon /> },
     ];
+    const navItems = isManager
+        ? managerNavItems
+        : [{ label: t('Meine Fraktionsbestellungen', 'My faction orders'), path: '/events/orders', icon: <GroupsIcon /> }];
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -204,7 +210,6 @@ export function Navigation() {
                         showLabels
                         value={
                             location.pathname === '/' ? '/' :
-                            location.pathname.startsWith('/checkout') ? '/checkout' :
                             location.pathname.startsWith('/items') ? '/items' :
                             location.pathname.startsWith('/checked-out') ? '/checked-out' :
                             false
@@ -215,10 +220,10 @@ export function Navigation() {
                         }}
                         sx={{ height: 64 }}
                     >
-                        <BottomNavigationAction label={t('Start', 'Home')} value="/" icon={<DashboardIcon />} />
-                        <BottomNavigationAction label={t('Scannen', 'Scan')} value="/checkout" icon={<QrCodeScannerIcon />} />
-                        <BottomNavigationAction label={t('Artikel', 'Items')} value="/items" icon={<InventoryIcon />} />
-                        <BottomNavigationAction label={t('Rückgabe', 'Return')} value="/checked-out" icon={<AssignmentReturnIcon />} />
+                        {isManager && <BottomNavigationAction label={t('Start', 'Home')} value="/" icon={<DashboardIcon />} />}
+                        {isManager && <BottomNavigationAction label={t('Artikel', 'Items')} value="/items" icon={<InventoryIcon />} />}
+                        {isManager && <BottomNavigationAction label={t('Rückgabe', 'Return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
+                        {!isManager && <BottomNavigationAction label={t('Bestellungen', 'Orders')} value="/events/orders" icon={<GroupsIcon />} />}
                         <BottomNavigationAction label={t('Mehr', 'More')} value="more" icon={<MoreHorizIcon />} />
                     </BottomNavigation>
                 </Paper>

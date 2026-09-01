@@ -1,11 +1,292 @@
 [
   {
+    "id": "_pb_users_auth_",
+    "listRule": "@request.auth.id != \"\" && (id = @request.auth.id || (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\"))",
+    "viewRule": "@request.auth.id != \"\" && (id = @request.auth.id || (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\"))",
+    "createRule": "",
+    "updateRule": "@request.auth.id != \"\" && ((@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (id = @request.auth.id && @request.body.role:changed = false && @request.body.faction:changed = false))",
+    "deleteRule": "@request.auth.id != \"\" && (id = @request.auth.id || (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\"))",
+    "name": "users",
+    "type": "auth",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cost": 10,
+        "help": "",
+        "hidden": true,
+        "id": "password901924565",
+        "max": 0,
+        "min": 8,
+        "name": "password",
+        "pattern": "",
+        "presentable": false,
+        "required": true,
+        "system": true,
+        "type": "password"
+      },
+      {
+        "autogeneratePattern": "[a-zA-Z0-9_]{50}",
+        "help": "",
+        "hidden": true,
+        "id": "text2504183744",
+        "max": 60,
+        "min": 30,
+        "name": "tokenKey",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "exceptDomains": [],
+        "help": "",
+        "hidden": false,
+        "id": "email3885137012",
+        "name": "email",
+        "onlyDomains": [],
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "email"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "bool1547992806",
+        "name": "emailVisibility",
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "bool"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "bool256245529",
+        "name": "verified",
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "bool"
+      },
+      {
+        "autogeneratePattern": "users[0-9]{6}",
+        "help": "",
+        "hidden": false,
+        "id": "text4166911607",
+        "max": 150,
+        "min": 3,
+        "name": "username",
+        "pattern": "^[\\w][\\w\\.\\-]*$",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "users_name",
+        "max": 0,
+        "min": 0,
+        "name": "name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "users_avatar",
+        "maxSelect": 1,
+        "maxSize": 5242880,
+        "mimeTypes": [
+          "image/jpeg",
+          "image/png",
+          "image/svg+xml",
+          "image/gif",
+          "image/webp"
+        ],
+        "name": "avatar",
+        "presentable": false,
+        "protected": false,
+        "required": false,
+        "system": false,
+        "thumbs": [],
+        "type": "file"
+      },
+      {
+        "help": "OAuth-mapped application role. Admin, manager, and inventory_manager have full inventory access; all other authenticated roles are faction leaders.",
+        "hidden": false,
+        "id": "select1466534506",
+        "maxSelect": 1,
+        "name": "role",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "Admin ",
+          "Admin",
+          "User",
+          "banker",
+          "player",
+          "admin",
+          "manager",
+          "inventory_manager",
+          "faction_leader"
+        ]
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "help": "One or more factions this user may place and manage their own orders for.",
+        "hidden": false,
+        "id": "users_faction",
+        "maxSelect": 15,
+        "name": "faction",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "KGG",
+          "GOF",
+          "Enklave",
+          "Miliz",
+          "UCRF",
+          "TERA",
+          "Militär",
+          "Freiheit",
+          "Stalker",
+          "Banditen",
+          "Wissenschaftler",
+          "Delta",
+          "Ghost",
+          "Hondra",
+          "Kartell"
+        ]
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `__pb_users_auth__username_idx` ON `users` (username COLLATE NOCASE)",
+      "CREATE UNIQUE INDEX `__pb_users_auth__email_idx` ON `users` (`email`) WHERE `email` != ''",
+      "CREATE UNIQUE INDEX `__pb_users_auth__tokenKey_idx` ON `users` (`tokenKey`)"
+    ],
+    "system": false,
+    "authRule": "",
+    "manageRule": null,
+    "authAlert": {
+      "enabled": true,
+      "emailTemplate": {
+        "subject": "Login from a new location",
+        "body": "<p>Hello,</p>\n<p>We noticed a login to your {APP_NAME} account from a new location:</p>\n<p><em>{ALERT_INFO}</em></p>\n<p><strong>If this wasn't you, you should immediately change your {APP_NAME} account password to revoke access from all other locations.</strong></p>\n<p>If this was you, you may disregard this email.</p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+      }
+    },
+    "oauth2": {
+      "mappedFields": {
+        "id": "",
+        "name": "",
+        "username": "name",
+        "avatarURL": ""
+      },
+      "enabled": true
+    },
+    "passwordAuth": {
+      "enabled": true,
+      "identityFields": [
+        "email",
+        "username"
+      ]
+    },
+    "mfa": {
+      "enabled": false,
+      "duration": 1800,
+      "rule": ""
+    },
+    "otp": {
+      "enabled": false,
+      "duration": 180,
+      "length": 8,
+      "emailTemplate": {
+        "subject": "OTP for {APP_NAME}",
+        "body": "<p>Hello,</p>\n<p>Your one-time password is: <strong>{OTP}</strong></p>\n<p><i>If you didn't ask for the one-time password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+      }
+    },
+    "authToken": {
+      "duration": 1209600
+    },
+    "passwordResetToken": {
+      "duration": 1800
+    },
+    "emailChangeToken": {
+      "duration": 1800
+    },
+    "verificationToken": {
+      "duration": 604800
+    },
+    "fileToken": {
+      "duration": 120
+    },
+    "verificationTemplate": {
+      "subject": "Verify your {APP_NAME} email",
+      "body": "<p>Hello,</p>\n<p>Thank you for joining us at {APP_NAME}.</p>\n<p>Click on the button below to verify your email address.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-verification/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Verify</a>\n</p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    },
+    "resetPasswordTemplate": {
+      "subject": "Reset your {APP_NAME} password",
+      "body": "<p>Hello,</p>\n<p>Click on the button below to reset your password.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-password-reset/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Reset password</a>\n</p>\n<p><i>If you didn't ask to reset your password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    },
+    "confirmEmailChangeTemplate": {
+      "subject": "Confirm your {APP_NAME} new email address",
+      "body": "<p>Hello,</p>\n<p>Click on the button below to confirm your new email address.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-email-change/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Confirm new email</a>\n</p>\n<p><i>If you didn't ask to change your email address, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    }
+  },
+  {
     "id": "pbc_assemblies",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_assemblies",
     "type": "base",
     "fields": [
@@ -88,7 +369,28 @@
         "required": false,
         "system": false,
         "type": "select",
-        "values": ["DE", "TNO", "LS", "M24", "ASD"]
+        "values": [
+          "DE",
+          "TNO",
+          "LS",
+          "M24",
+          "ASD"
+        ]
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "Special preparation or assembly instructions",
+        "hidden": false,
+        "id": "pbc_assemblies_hint",
+        "max": 5000,
+        "min": 0,
+        "name": "hint",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -118,9 +420,9 @@
     "id": "pbc_damage_reports",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_damage_reports",
     "type": "base",
     "fields": [
@@ -332,9 +634,9 @@
     "id": "pbc_items",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_items",
     "type": "base",
     "fields": [
@@ -517,13 +819,37 @@
         ]
       },
       {
-        "autogeneratePattern": "",
-        "help": "",
+        "help": "Images stored by PocketBase",
         "hidden": false,
-        "id": "pbc_items_qrCode",
-        "max": 10000,
+        "id": "pbc_items_images",
+        "maxSelect": 8,
+        "maxSize": 10485760,
+        "mimeTypes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/gif"
+        ],
+        "name": "images",
+        "presentable": false,
+        "protected": false,
+        "required": false,
+        "system": false,
+        "thumbs": [
+          "192x144",
+          "600x400",
+          "900x600"
+        ],
+        "type": "file"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "Special use, preparation, or assembly instructions",
+        "hidden": false,
+        "id": "pbc_items_hint",
+        "max": 5000,
         "min": 0,
-        "name": "qrCode",
+        "name": "hint",
         "pattern": "",
         "presentable": false,
         "primaryKey": false,
@@ -611,9 +937,9 @@
     "id": "pbc_eventreport",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_event_reports",
     "type": "base",
     "fields": [
@@ -766,11 +1092,11 @@
   },
   {
     "id": "pbc_faction_orders",
-    "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "listRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (@request.auth.id != \"\" && @request.auth.faction ?= faction)",
+    "viewRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (@request.auth.id != \"\" && @request.auth.faction ?= faction)",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (@request.auth.id != \"\" && @request.body.createdBy = @request.auth.id && @request.auth.faction ?= @request.body.faction)",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (@request.auth.id != \"\" && createdBy = @request.auth.id && @request.body.createdBy:changed = false && @request.auth.faction ?= faction && (@request.body.faction:changed = false || @request.auth.faction ?= @request.body.faction))",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\") || (@request.auth.id != \"\" && createdBy = @request.auth.id && @request.auth.faction ?= faction)",
     "name": "inventory_faction_orders",
     "type": "base",
     "fields": [
@@ -799,7 +1125,43 @@
         "required": true,
         "system": false,
         "type": "select",
-        "values": ["DE", "TNO", "LS", "M24", "ASD"]
+        "values": [
+          "DE",
+          "TNO",
+          "LS",
+          "M24",
+          "ASD"
+        ]
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "Unique printable order code: event-faction-year-0001",
+        "hidden": false,
+        "id": "pbc_order_orderCode",
+        "max": 255,
+        "min": 0,
+        "name": "orderCode",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "Stable event:faction authorization key",
+        "hidden": false,
+        "id": "pbc_order_factionKey",
+        "max": 255,
+        "min": 0,
+        "name": "factionKey",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "autogeneratePattern": "",
@@ -829,6 +1191,20 @@
         "type": "date"
       },
       {
+        "cascadeDelete": false,
+        "collectionId": "pbc_storage_locations",
+        "help": "Location where this order can be picked up",
+        "hidden": false,
+        "id": "pbc_order_pickupLocation",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "pickupLocation",
+        "presentable": true,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
         "help": "",
         "hidden": false,
         "id": "pbc_order_status",
@@ -838,7 +1214,15 @@
         "required": true,
         "system": false,
         "type": "select",
-        "values": ["draft", "submitted", "preparing", "ready", "picked_up", "returned", "cancelled"]
+        "values": [
+          "draft",
+          "submitted",
+          "preparing",
+          "ready",
+          "picked_up",
+          "returned",
+          "cancelled"
+        ]
       },
       {
         "cascadeDelete": false,
@@ -1072,16 +1456,18 @@
         "type": "autodate"
       }
     ],
-    "indexes": [],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_faction_order_code` ON `inventory_faction_orders` (`orderCode`) WHERE `orderCode` != ''"
+    ],
     "system": false
   },
   {
     "id": "pbc_stock_transactions",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_stock_transactions",
     "type": "base",
     "fields": [
@@ -1257,9 +1643,9 @@
     "id": "pbc_storage_locations",
     "listRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
     "viewRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "createRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "updateRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
-    "deleteRule": "@request.auth.id != \"\" && @request.auth.role != \"\"",
+    "createRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "updateRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
+    "deleteRule": "@request.auth.id != \"\" && (@request.auth.role = \"admin\" || @request.auth.role = \"Admin\" || @request.auth.role = \"Admin \" || @request.auth.role = \"manager\" || @request.auth.role = \"inventory_manager\")",
     "name": "inventory_storage_locations",
     "type": "base",
     "fields": [
@@ -1352,6 +1738,74 @@
         "required": false,
         "system": false,
         "type": "text"
+      },
+      {
+        "help": "OpenStreetMap center latitude",
+        "hidden": false,
+        "id": "pbc_storage_latitude",
+        "max": 90,
+        "min": -90,
+        "name": "latitude",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "OpenStreetMap center longitude",
+        "hidden": false,
+        "id": "pbc_storage_longitude",
+        "max": 180,
+        "min": -180,
+        "name": "longitude",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "pbc_storage_mapZoom",
+        "max": 20,
+        "min": 1,
+        "name": "mapZoom",
+        "onlyInt": true,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "Optional custom image overlay",
+        "hidden": false,
+        "id": "pbc_storage_mapOverlay",
+        "maxSelect": 1,
+        "maxSize": 15728640,
+        "mimeTypes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ],
+        "name": "mapOverlay",
+        "presentable": false,
+        "protected": false,
+        "required": false,
+        "system": false,
+        "thumbs": [],
+        "type": "file"
+      },
+      {
+        "hidden": false,
+        "id": "pbc_storage_overlayBounds",
+        "maxSize": 8192,
+        "name": "overlayBounds",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
       },
       {
         "hidden": false,

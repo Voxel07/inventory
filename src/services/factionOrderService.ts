@@ -10,13 +10,13 @@ import type {
   Item,
   StockTransaction,
 } from '../types';
-import { isFactionForEvent } from '../types';
+import { factionKey, isFactionForEvent } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { expandFactionOrderComponents } from '../utils/factionOrderQuantities';
 
 const COLLECTION = 'inventory_faction_orders';
 const TRANSACTIONS_COLLECTION = 'inventory_stock_transactions';
-const EXPAND = 'itemIds,assemblyIds,createdBy,preparedBy,readyBy,pickedUpBy,returnedBy';
+const EXPAND = 'itemIds,itemIds.storageLocation,assemblyIds,createdBy,preparedBy,readyBy,pickedUpBy,returnedBy,pickupLocation';
 
 function currentActor(): { id: string; name: string } {
   const record = pb.authStore.record;
@@ -25,6 +25,52 @@ function currentActor(): { id: string; name: string } {
     id: record.id,
     name: String(record.name || record.username || record.email || record.id),
   };
+}
+
+function currentAccess(): { manager: boolean; factions: string[] } {
+  const record = pb.authStore.record;
+  if (!record?.id) throw new Error('Authentication required');
+  const role = String(record.role || '').trim().toLowerCase();
+  if (role === 'admin' || role === 'manager' || role === 'inventory_manager') {
+    return { manager: true, factions: [] };
+  }
+  return {
+    manager: false,
+    factions: Array.isArray(record.faction) ? record.faction : [],
+  };
+}
+
+async function assertFactionAccess(_eventType: string, faction: string): Promise<void> {
+  const access = await currentAccess();
+  if (!access.manager && !access.factions.includes(faction)) {
+    throw new Error('You do not have access to this faction');
+  }
+}
+
+async function assertInventoryManager(): Promise<void> {
+  if (!(await currentAccess()).manager) throw new Error('Inventory manager access required');
+}
+
+function orderCodePrefix(eventType: string, faction: string, eventDate: string): string {
+  const year = new Date(eventDate).getUTCFullYear();
+  const factionPart = faction.normalize('NFKD').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
+  return `${eventType}-${factionPart}-${year}`;
+}
+
+async function nextOrderCode(eventType: string, faction: string, eventDate: string): Promise<string> {
+  const prefix = orderCodePrefix(eventType, faction, eventDate);
+  const records = await pb.collection(COLLECTION).getFullList<{ orderCode?: string }>({ fields: 'orderCode' });
+  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d{4})$`, 'i');
+  const sequence = records.reduce((highest, record) => {
+    const match = record.orderCode?.match(pattern);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0) + 1;
+  return `${prefix}-${String(sequence).padStart(4, '0')}`;
+}
+
+function withOrderCode(order: FactionOrder): FactionOrder {
+  if (order.orderCode) return order;
+  return { ...order, orderCode: `${orderCodePrefix(order.eventType, order.faction, order.eventDate)}-${order.id.slice(-4).toUpperCase()}`, factionKey: order.factionKey || factionKey(order.eventType, order.faction) };
 }
 
 function timestamp(): string {
@@ -60,6 +106,7 @@ function validateOrderData(data: FactionOrderFormData): {
     throw new Error('Add at least one item or assembly to the order list');
   }
   if (!data.eventDate) throw new Error('Event date is required');
+  if (!data.pickupLocation) throw new Error('Pickup location is required');
   return { requestedQuantities, requestedAssemblyQuantities };
 }
 
@@ -97,40 +144,56 @@ export async function getFactionOrders(filters?: { eventType?: string; faction?:
   const parts: string[] = [];
   if (filters?.eventType) parts.push(pb.filter('eventType = {:eventType}', { eventType: filters.eventType }));
   if (filters?.faction) parts.push(pb.filter('faction = {:faction}', { faction: filters.faction }));
-  return pb.collection(COLLECTION).getFullList<FactionOrder>({
+  const orders = (await pb.collection(COLLECTION).getFullList<FactionOrder>({
     sort: '-eventDate,-created',
     filter: parts.join(' && ') || undefined,
     expand: EXPAND,
-  });
+  })).map(withOrderCode);
+  const access = await currentAccess();
+  return access.manager ? orders : orders.filter((order) => access.factions.includes(order.faction));
 }
 
 export async function getFactionOrder(id: string): Promise<FactionOrder> {
-  return pb.collection(COLLECTION).getOne<FactionOrder>(id, { expand: EXPAND });
+  return withOrderCode(await pb.collection(COLLECTION).getOne<FactionOrder>(id, { expand: EXPAND }));
 }
 
 export async function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> {
   const actor = currentActor();
+  await assertFactionAccess(data.eventType, data.faction);
   const { requestedQuantities, requestedAssemblyQuantities } = validateOrderData(data);
   const itemIds = Object.keys(requestedQuantities);
   const assemblyIds = Object.keys(requestedAssemblyQuantities);
   const created = historyEntry('created', requestedQuantities, requestedAssemblyQuantities);
-  return pb.collection(COLLECTION).create<FactionOrder>({
-    ...data,
-    eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
-    itemIds,
-    assemblyIds,
-    requestedQuantities,
-    requestedAssemblyQuantities,
-    preparedQuantities: {},
-    preparedAssemblyQuantities: {},
-    status: 'draft',
-    createdBy: actor.id,
-    history: [created],
-  }, { expand: EXPAND });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const orderCode = await nextOrderCode(data.eventType, data.faction, data.eventDate);
+    try {
+      return await pb.collection(COLLECTION).create<FactionOrder>({
+        ...data,
+        orderCode,
+        factionKey: factionKey(data.eventType, data.faction),
+        eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
+        itemIds,
+        assemblyIds,
+        requestedQuantities,
+        requestedAssemblyQuantities,
+        preparedQuantities: {},
+        preparedAssemblyQuantities: {},
+        status: 'draft',
+        createdBy: actor.id,
+        history: [created],
+      }, { expand: EXPAND });
+    } catch (error) {
+      if (attempt === 4) throw error;
+    }
+  }
+  throw new Error('Could not allocate an order code');
 }
 
 export async function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
+  const access = await currentAccess();
+  if (!access.manager && order.createdBy !== currentActor().id) throw new Error('Faction leaders can only edit their own orders');
+  await assertFactionAccess(data.eventType, data.faction);
   if (order.status === 'picked_up') throw new Error('Return this order list before correcting it');
   const { requestedQuantities, requestedAssemblyQuantities } = validateOrderData(data);
   const isHistoricalCorrection = order.status === 'returned';
@@ -166,6 +229,7 @@ export async function updateFactionOrder(id: string, data: FactionOrderFormData)
   }
   const updateData = {
     ...data,
+    factionKey: factionKey(data.eventType, data.faction),
     eventDate: new Date(`${data.eventDate.slice(0, 10)}T12:00:00.000Z`).toISOString(),
     itemIds: Object.keys(requestedQuantities),
     assemblyIds: Object.keys(requestedAssemblyQuantities),
@@ -234,6 +298,7 @@ export async function submitFactionOrder(id: string): Promise<FactionOrder> {
 }
 
 export async function startFactionOrderPreparation(id: string): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'submitted') throw new Error('Only an order submitted for processing can start preparation');
   const entry = historyEntry('preparation_started');
@@ -248,6 +313,7 @@ export async function saveFactionOrderPreparation(
   values: Record<string, number>,
   assemblyValues: Record<string, number>,
 ): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'preparing') throw new Error('This order list is not being prepared');
   const preparedQuantities: Record<string, number> = {};
@@ -302,6 +368,7 @@ export async function saveFactionOrderPreparation(
 }
 
 export async function markFactionOrderReady(id: string, note?: string): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'preparing') throw new Error('Only an order being prepared can be marked ready');
   const isComplete = Object.entries(order.requestedQuantities).every(
@@ -322,6 +389,7 @@ export async function markFactionOrderReady(id: string, note?: string): Promise<
 }
 
 export async function reopenFactionOrderPreparation(id: string, note?: string): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'ready') throw new Error('Only a ready order list can be moved back to preparation');
   const entry = historyEntry(
@@ -339,6 +407,7 @@ export async function reopenFactionOrderPreparation(id: string, note?: string): 
 }
 
 export async function pickUpFactionOrder(id: string): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'ready') throw new Error('Only a ready order list can be picked up');
   const actor = currentActor();
@@ -389,6 +458,7 @@ export async function pickUpFactionOrder(id: string): Promise<FactionOrder> {
 }
 
 export async function returnFactionOrder(id: string): Promise<FactionOrder> {
+  await assertInventoryManager();
   const order = await getFactionOrder(id);
   if (order.status !== 'picked_up') throw new Error('Only a picked-up order list can be returned');
   if (!order.pickedUpBy) throw new Error('The pickup user is missing from this order list');
@@ -428,6 +498,8 @@ export async function returnFactionOrder(id: string): Promise<FactionOrder> {
 
 export async function cancelFactionOrder(id: string): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
+  const access = await currentAccess();
+  if (!access.manager && order.createdBy !== currentActor().id) throw new Error('Faction leaders can only cancel their own orders');
   const cancellable: FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready'];
   if (!cancellable.includes(order.status)) throw new Error('This order list can no longer be cancelled');
   const entry = historyEntry('cancelled');

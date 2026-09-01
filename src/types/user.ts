@@ -4,8 +4,16 @@ export interface User {
   username?: string;
   email: string;
   role: UserRole;
+  faction?: string[];
   created: string;
   updated: string;
 }
 
-export type UserRole = 'admin' | 'manager' | 'user';
+export type UserRole = 'Admin ' | 'Admin' | 'User' | 'admin' | 'manager' | 'inventory_manager' | 'faction_leader' | 'user' | 'banker' | 'player';
+
+export type AccessRole = 'admin' | 'inventory_manager' | 'faction_leader';
+
+export interface UserPermissionsFormData {
+  role: AccessRole;
+  faction: string[];
+}

@@ -8,6 +8,7 @@ import {
   subscribeToStorageLocations,
 } from '../services/storageLocationService';
 import { useEffect } from 'react';
+import type { StorageLocationFormData } from '../types';
 
 export function useStorageLocations() {
   const queryClient = useQueryClient();
@@ -38,13 +39,7 @@ export function useStorageLocation(id: string) {
 export function useCreateStorageLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      name: string;
-      description?: string;
-      area?: string;
-      location?: string;
-      position?: string;
-    }) => createStorageLocation(data),
+    mutationFn: (data: StorageLocationFormData) => createStorageLocation(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
     },
@@ -59,13 +54,7 @@ export function useUpdateStorageLocation() {
       data,
     }: {
       id: string;
-      data: Partial<{
-        name: string;
-        description: string;
-        area: string;
-        location: string;
-        position: string;
-      }>;
+      data: Partial<StorageLocationFormData>;
     }) => updateStorageLocation(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['storageLocations'] });

@@ -10,6 +10,7 @@ import {
     DialogTitle,
     DialogContent,
     Skeleton,
+    Alert,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -37,6 +38,7 @@ import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
 import { useTranslate } from '../utils/naming';
+import { itemImageUrl } from '../utils/itemImages';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -210,6 +212,15 @@ export function ItemDetail() {
                     onClick={() => setEditOpen(true)}
                 />
             </Box>
+
+            {!!item.images?.length && (
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5, mb: 2 }}>
+                    {item.images.map((filename) => (
+                        <Box key={filename} component="img" src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 1, border: 1, borderColor: 'divider' }} />
+                    ))}
+                </Box>
+            )}
+            {item.hint && <Alert severity="info" sx={{ mb: 2 }}><Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>{item.hint}</Alert>}
 
             <Grid container spacing={2}>
                 {/* Info Cards */}
@@ -408,6 +419,7 @@ export function ItemDetail() {
                                         <tr>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Datum', 'Date')}</th>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Typ', 'Type')}</th>
+                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Benutzer', 'User')}</th>
                                             <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #555' }}>{t('Menge', 'Quantity')}</th>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Grund', 'Reason')}</th>
                                             <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Anmerkungen', 'Notes')}</th>
@@ -428,6 +440,9 @@ export function ItemDetail() {
                                                             color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'}
                                                             size="small"
                                                         />
+                                                    </td>
+                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>
+                                                        {tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}
                                                     </td>
                                                     <td style={{ padding: '8px', borderBottom: '1px solid #333', textAlign: 'right' }}>
                                                         {tx.quantityChanged}
