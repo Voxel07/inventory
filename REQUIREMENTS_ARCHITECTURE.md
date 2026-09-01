@@ -1,775 +1,518 @@
-# Inventory Application Requirements and Architecture
+# Airsoft Inventory Management System — Requirements & Architecture Specification
 
-> Living implementation checklist generated from the application source and its refreshed Graphify graph on 2026-08-27.
+> **Status:** Architecture Refinement & Evaluation Baseline  
+> **Document Purpose:** Clear, structured specification for coding agents and human engineers to evaluate the application's current state, assess feature gaps, compare tech stacks against industry standards, and guide migration from PocketBase to an enterprise-grade REST backend (PostgreSQL + Java 25 LTS / Quarkus).
 
-## 1. Purpose
+---
 
-This document has two clearly separated purposes:
+## 1. Executive Summary & Domain Context
 
-1. Record the functionality that is currently implemented and visible in the application.
-2. Track the requested faction event-list workflow, including what is now implemented and what remains.
+### 1.1 Business Goal
+The primary objective is to provide a **clean, fast, rock-solid inventory and logistics management system** tailored for organizing large-scale **Airsoft events and festival-like scenarios** (e.g., Dark Emergency / DE, LightSim / LS, The Nemesis Operation / TNO, ASD, Mahlwinkel / M24).
 
-The requirement IDs are intended to be used in issues, pull requests, tests, and release checklists. A requirement is only complete when its acceptance criteria are met on both desktop and mobile where applicable.
+Airsoft events present a unique operational challenge:
+1. **Internal Field Infrastructure:** Heavy operational assets managed exclusively by internal HQ crew (power generators, distribution boxes, mobile toilets/sanitary units, perimeter lighting, PA sound systems, radios, tools).
+2. **In-Game Assets & Electronics:** High-value or delicate tech deployed during the game (mission computers, interactive prop terminals, simulated bomb crates, sound/smoke effects, electronic flags).
+3. **Customer / Faction Handover:** Gear handed over to external faction leaders, marshals, or trusted players. These individuals are **not internal employees**, so **strict traceability, custody records, and condition verification** upon checkout and check-in are critical.
+4. **Consumables vs. Returnables:** High-turnover consumables (BBs, CO2/Gas cartridges, smoke grenades, pyrotechnics, cable ties, tape) must be tracked for depletion, whereas returnable assets must be tracked for physical custody and condition.
+5. **Yearly Event Cycles:** Major events occur annually. Planning should not start from scratch: teams need to duplicate previous years' faction lists as a baseline and adapt them.
 
-### Implementation update — 2026-08-28
-
-The first complete faction-order workflow is now implemented in the application:
-
-- fixed event-scoped faction catalogue;
-- responsive faction overview and dated order-list history;
-- create/edit drafts with any inventory item;
-- tag assemblies for events and add them to faction lists as component-aware quantities;
-- copy the most recent list and show quantity differences;
-- partial preparation with availability and reservations from other open lists;
-- ready, pickup, full-list return, cancellation, and actor/time history;
-- list QR generation and state-aware routing through the existing scanner;
-- atomic pickup/return stock transactions linked back to the faction order.
-
-The current implementation deliberately uses one PocketBase aggregate collection, `inventory_faction_orders`, with JSON quantity maps and history. Section 10 retains the normalized target architecture for future fine-grained line audit, partial returns, damage-at-return, opaque QR tokens, stronger permissions, and backend-enforced idempotency.
-
-## 2. Sources and status legend
-
-### Source baseline
-
-- Source tree: `src/`, `pb_schema.json`, `package.json`, Docker configuration, and runtime configuration.
-- Graphify snapshot: 85 files, 487 graph nodes, 1,377 edges, and 31 detected communities.
-- Graphify output: `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json`, and `graphify-out/graph.html`.
-- Main graph hubs: translation, UI state, items, item queries, transactions, damage reports, navigation, assemblies, events, and storage locations.
-- No import cycles were reported by Graphify.
-
-### Status legend
-
-| Status | Meaning |
-|---|---|
-| **Implemented** | Present in the current source and user interface. |
-| **Partial** | Some supporting behavior exists, but the complete requirement does not. |
-| **Required** | New behavior requested for the faction event-list workflow. |
-| **Known gap** | Current behavior that should be corrected or deliberately accepted. |
-
-## 3. Product scope and terminology
-
-- **Item**: An inventory type with a total quantity, rather than one serialized physical unit.
-- **Transaction**: A quantity-changing checkout, check-in, stock addition, repair, or write-off.
-- **Assembly**: A reusable set of inventory items and their required quantities.
-- **Damage report**: A report against a quantity of one item, which can be handled in parts.
-- **Event type**: One of DE, LightSim (`LS` in current data), TNO, ASD, or M24.
-- **Event occurrence**: One dated instance of an event type.
-- **Faction**: A group participating in an event type.
-- **Faction list**: The inventory request belonging to one faction for one event occurrence.
-- **Prepared**: Physical items have been gathered and verified for the list.
-- **Ready**: Preparation is complete and the list can be picked up.
-- **Picked up**: Custody has passed to the collecting user and checkout transactions have been recorded.
-
-## 4. Current system overview
-
+### 1.2 Core Operational Workflow
 ```mermaid
 flowchart LR
-    U[Authenticated user] --> UI[React responsive UI]
-    UI --> R[React Router pages]
-    R --> Q[TanStack Query hooks]
-    R --> Z[Zustand UI state]
-    Q --> S[Typed services]
-    S --> PB[(PocketBase)]
-    PB -- realtime collection events --> Q
-    Q -- cache invalidation --> UI
-    UI --> QR[ZXing camera/image QR scanner]
-    UI --> PDF[QR and PDF generation]
+    A[Yearly Event Planning] --> B[Faction Order Draft]
+    B --> C[Warehouse Commissioning & Packing]
+    C --> D[Ready for Pickup + Notification]
+    D --> E[Custody Handover via QR Scan]
+    E --> F[In-Game Deployment]
+    F --> G[Return & Condition Reconciliation]
+    G --> H[Damage / Loss Reporting or Restock]
 ```
 
-### Current technology and deployment
+---
 
-| Concern | Current implementation |
-|---|---|
-| Runtime/package manager | Bun |
-| Front end | React 19, TypeScript, Vite |
-| Component system | Material UI |
-| Routing | React Router |
-| Server state | TanStack Query with PocketBase realtime invalidation |
-| Local UI state | Zustand |
-| Backend | PocketBase |
-| QR scanning | ZXing browser scanner, camera, and uploaded images |
-| QR/PDF output | QR code generation and jsPDF |
-| Charts | Recharts |
-| Authentication | PocketBase OAuth2 through Authentik/OIDC |
-| Container deployment | Bun build stage and Nginx runtime image |
-| Runtime backend URL | `window.__ENV__.POCKETBASE_URL` with build-time fallback |
+## 2. Current Implementation State vs. Target Requirements
 
-## 5. Current navigation and screens
+This matrix evaluates the current codebase against the requirements defined in [`requirments.md`](file:///d:/Code/ASH/inventory/requirments.md) and real-world field operations:
 
-| Route | Screen | Current purpose | Status |
+| Feature / Capability | Handwritten Requirement | Current App State | Gap / Target Architecture |
 |---|---|---|---|
-| `/` | User dashboard | Personal loans, quick return, direct damage reporting, and recent activity | Implemented |
-| `/global-dashboard` | Global dashboard | Inventory-wide metrics, alerts, and recent activity | Implemented |
-| `/items` | Items | Search, filter, view, create, edit, and delete inventory | Implemented |
-| `/items/:itemId` | Item detail | Stock, history, QR, transactions, metadata, and editing | Implemented |
-| `/assemblies` | Assemblies | Search and manage reusable item sets | Implemented |
-| `/assemblies/:assemblyId` | Assembly detail | Inspect components and perform assembly checkout | Implemented |
-| `/events` | Events | Event-type planning, completed reports, and entry to faction lists | Implemented |
-| `/events/orders` | Faction orders | Event/faction overview, create list, and previous-list history | Implemented |
-| `/events/orders/:orderId` | Faction order detail | Edit, prepare, mark ready, scan/print QR, pick up, return, and audit | Implemented |
-| `/checkout` | QR checkout | Scan an item or assembly QR code | Implemented |
-| `/checkout/:itemId` | Scanned item action | Perform an item transaction after scanning | Implemented |
-| `/transactions` | Transaction history | Filter and inspect all stock transactions | Implemented |
-| `/checked-out` | Checked-out items | Inspect outstanding loans and return items | Implemented |
-| `/print-qr` | Print QR codes | Select inventory and create printable QR sheets | Implemented |
-| `/damage-reports` | Damage reports | Report, review, partially repair/write off, and audit damage | Implemented |
-| `/storage-locations` | Storage locations | Manage locations and inspect their items | Implemented |
+| **Item Management** | Categories, subcategories, event filters, images, hints | **Implemented** (`src/pages/Items.tsx`, `ItemDetail.tsx`) | Images stored in PocketBase; target Garage S3 on VPS 3. |
+| **Assemblies / Bundles** | Group items together to check out at once | **Implemented** (`src/pages/Assemblies.tsx`, `AssemblyDetail.tsx`) | Ready; component breakdown works during checkout. |
+| **Consumables vs. Returnables** | Track items expected to return vs. used up | **Partial** (`containerSize`, container remaining %, but no explicit consumable flag) | Needs explicit item classification (`consumable` vs. `returnable`). |
+| **Stock Tracking & Alerts** | Alerts when stock runs low | **Partial** (`minStock` exists, flagged in UI dashboard) | Needs automated alerts / push notifications / email warnings. |
+| **Event History & Baselines** | History of orders and what was actually used; copy last year's baseline | **Implemented** (`src/pages/FactionOrders.tsx`, copy previous list) | Baseline copying exists; needs cross-year event occurrence scoping. |
+| **Faction Orders** | Factions state what they need; editable drafts | **Implemented** (`src/pages/FactionOrderDetail.tsx`) | JSON aggregate map in PocketBase; needs normalized relational lines. |
+| **Packing & Readiness Notification** | Packing by warehouse crew; notification when ready | **Partial** (status flow exists: `draft -> preparing -> ready`) | Notification system missing (WebPush, email, or in-app push). |
+| **Damage & Loss Tracking** | Menu to track broken or lost items | **Implemented** (`src/pages/DamageReports.tsx`) | Partial repair/write-off works; needs direct linking to return scans. |
+| **User Traceability** | Track who performed each action | **Implemented** (records user ID on transactions and order milestones) | Needs server-enforced audit immutability and tamper-proof logs. |
+| **QR Code Scanning & Printing** | QR on items, assemblies, orders; camera scan & print sheets | **Implemented** (`ZXing` scanner, `/print-qr` with `jsPDF`) | Works well on desktop and mobile; needs short manual code fallback. |
+| **Order Identification** | Unique human-readable code per order | **Partial** (uses auto-generated PB IDs or order codes) | Needs structured code format (e.g. `DE26-KGG-01`). |
+| **Printable Paper Sheets** | Paper commissioning lists to check off by hand in warehouse | **Missing / Minimal** (browser print CSS only) | Needs dedicated printable PDF packing slip with checkboxes and QR header. |
+| **Demand & Reorder View** | See what is more ordered than in stock & what needs reordering | **Missing** | Dedicated procurement view calculating `Demand - Available Stock = Deficit`. |
+| **Incomplete Kit Check-in** | Handle missing kit components separately upon return | **Missing** | Itemized return checklist keeping unreturned kit parts assigned to customer. |
+| **Safety & Maintenance Cycles** | Periodic test schedules (DGUV V3, generator hours, battery health) | **Missing** | Certification schedules with automated checkout blocking for overdue gear. |
+| **Offline Field Mode (PWA)** | Scan and operate in bunkers/forests with zero cellular signal | **Missing** | Service Worker + IndexedDB queue with automated sync and idempotency keys. |
+| **Access Control & HQ Crew Limit** | Limit access to HQ crew, separate faction leaders | **Partial** (`role` field on user, but PB collection rules are currently broad) | Server-side RBAC (HQ Admin, Warehouse Packer, Faction Leader). |
+| **High Availability & Storage** | Redundant nodes, S3 storage, and off-site backup | **Missing** (Single container on 1 host) | Cloudflare Workers LB -> 2 App VPS + 3rd VPS Garage S3 & Storage Box. |
+| **Cross-Device Usability** | Mobile & desktop responsive, simple fast UI | **Implemented** (MUI responsive drawers, mobile bottom bars, card layouts) | Responsive layouts active; PWA offline layer planned. |
 
-Desktop uses a persistent navigation drawer. Mobile uses a bottom navigation bar with primary Home, Scan, Items, Return, and More destinations. The layout includes safe-area and touch-target adjustments, and print-specific styling.
+---
 
-## 6. Current functional requirements
+## 3. Detailed Functional Domain Specification
 
-### 6.1 Authentication, identity, and language
+### 3.1 Item & Asset Catalog
+- **Hierarchy:** Primary Categories (e.g., *Infrastructure, Comms, Props, Pyro, Medical, Tools*) and Subcategories (*Generators, Cabling, Sound, Radios, Defusal Kits*).
+- **Event Scope Tagging:** Items can be flagged for specific events (e.g. `DE`, `LS`, `TNO`, `ASD`, `M24`).
+- **Media & Guidance:**
+  - Multiple image attachments for visual identification.
+  - Field instructions / operational hints (e.g. *"Requires 2-stroke oil mix 1:50"*, *"PIN code for keypad is 4081"*).
+- **Container / Partial Stock Tracking:** Container size, container count, opened containers, and % remaining for bulk goods (e.g. gas, fog machine fluid, cable rolls).
+- **Storage Locations & OpenStreetMap (OSM) Overlay:**
+  - **Hierarchical Addressing:** Building, Area, Shelf, Bin, and position details.
+  - **Interactive OpenStreetMap Marking:** Every storage location can be pinpointed with precise GPS coordinates (`latitude`, `longitude`, `mapZoom`) on an interactive Leaflet/OpenStreetMap interface.
+  - **Custom Field / Aerial Map Overlays:** Supports uploading custom high-resolution drone/aerial maps or hangar floorplans rendered directly over the base OSM map using geo-referenced bounding coordinates (`overlayBounds: [[south, west], [north, east]]`).
+  - Warehouse pickers and marshals can tap a location to view its exact physical position on the field map.
 
-- [x] **AUTH-001 — Authenticated access.** The application shall prevent the inventory routes from rendering until a PocketBase user is authenticated. **Implemented.**
-- [x] **AUTH-002 — Single sign-on.** A user shall be able to sign in with the configured Authentik/OIDC OAuth2 provider. **Implemented.**
-- [x] **AUTH-003 — Sign out.** An authenticated user shall be able to sign out from the application shell. **Implemented.**
-- [x] **AUTH-004 — Actor identity.** Transactions, damage actions, and event reports shall retain a relation to the acting user where the current schema supports it. **Implemented.**
-- [x] **I18N-001 — Languages.** The interface shall support German and English. **Implemented.**
-- [x] **I18N-002 — Persistence.** The selected language shall survive navigation and reloads through persisted client configuration. **Implemented.**
-- [ ] **AUTH-005 — Enforced authorization.** Admin, manager, and user roles exist, but collection rules currently grant broad access to any authenticated account with a non-empty role. Fine-grained role or faction permissions are a **known gap**.
+### 3.2 Assemblies / Kit Bundles
+- Predefined kits composed of multiple inventory items and fixed quantities (e.g., *"Faction HQ Power Kit"* = 1x Inverter Generator, 2x 25m Cable Drums, 4x Multi-socket outlets, 2x 50W LED floodlights).
+- **One-Tap Commissioning:** Checking out an assembly checks out each underlying component stock item atomically.
+- Shortage detection: Warns if a full assembly cannot be assembled due to individual missing items.
 
-### 6.2 Navigation and cross-device UX
+### 3.3 Event Occurrence & Faction Order Lifecycle
+The core operational lifecycle consists of strict status transitions:
 
-- [x] **NAV-001 — Desktop navigation.** All primary modules shall be reachable through the desktop drawer. **Implemented.**
-- [x] **NAV-002 — Mobile navigation.** High-frequency actions shall be reachable through a mobile bottom bar, with secondary destinations under More. **Implemented.**
-- [x] **NAV-003 — Responsive records.** Dense desktop tables shall switch to readable mobile cards or responsive layouts on narrow screens. **Implemented across the main lists.**
-- [x] **NAV-004 — Feedback.** Successful and failed operations shall show user-visible snackbar feedback. **Implemented.**
-- [x] **NAV-005 — Error containment.** Rendering failures shall be caught by an application error boundary. **Implemented.**
-- [x] **NAV-006 — Touch use.** Interactive mobile controls shall account for touch targets and device safe areas. **Implemented.**
+```text
+[DRAFT] -> [SUBMITTED] -> [PREPARING / PACKING] -> [READY] -> [PICKED UP] -> [PARTIALLY_RETURNED / RETURNED] -> [CLOSED]
+   \            \                   \                  \             \
+    +------------+-------------------+------------------+-------------+--> [CANCELLED]
+```
 
-### 6.3 User dashboard
+1. **Draft / Baseline Creation:**
+   - Faction leader or HQ planner creates the list for the upcoming event occurrence.
+   - **Designated Pickup Location:** Order specifies a designated **Pickup / Handover Location** (linked to a physical storage/staging location, e.g. *"HQ Main Supply Tent"*, *"Armory West Container"*, *"Checkpoint Charlie"*).
+   - Option to prefill using last year's event order as baseline.
+   - Shows diff (added, removed, increased, decreased quantities).
+2. **Warehouse Commissioning (Packing & Staging):**
+   - Internal warehouse crew opens the order on mobile or prints a physical check-off sheet.
+   - Lines display exact storage locations (Shelf/Bin + OSM map pin) for rapid picking across warehouse zones.
+   - Items are marked as prepared; prepared quantities are **reserved** from available stock so other orders cannot claim them.
+   - Prepared gear is staged at the designated order pickup location.
+   - Shortages are clearly highlighted.
+3. **Readiness & Notification:**
+   - Once all items are assembled (or shortages explicitly acknowledged), status moves to `READY`.
+   - Automated push notification / email / SMS sent to the designated collector with the **exact pickup location and OpenStreetMap pin**.
+4. **Custody Handover (Pickup):**
+   - The collector presents the printed or digital Order QR code at the designated pickup location.
+   - The order detail screen renders the interactive OpenStreetMap pin showing where to collect the gear.
+   - Warehouse marshal scans the QR code, confirms collector identity.
+   - System atomically creates checkout transactions transferring custody to the collector.
+5. **Return & Condition Check (Reconciliation):**
+   - Post-game return: Marshal scans the order QR code at the designated return/intake point.
+   - Items are inspected:
+     - Undamaged returnable items are checked back into inventory.
+     - Consumable items are marked as used/depleted.
+     - Incomplete assembly components are flagged as missing (Section 3.6).
+     - Broken items spawn a **Damage / Loss Report** linked to the order and the customer.
+   - Order cannot be closed until all outstanding units are reconciled (returned, consumed, or written off).
 
-- [x] **UD-001 — Personal summary.** A user shall see the number of distinct items and total units currently checked out to them. **Implemented.**
-- [x] **UD-002 — Personal activity.** A user shall see their recent transactions and be able to open the full history. **Implemented.**
-- [x] **UD-003 — Personal open damage.** A user shall see their relevant open damage-report count. **Implemented.**
-- [x] **UD-004 — Outstanding items.** A user shall see the items and quantities currently checked out to them. **Implemented.**
-- [x] **UD-005 — Direct return.** A user shall be able to return a checked-out item from the dashboard. **Implemented.**
-- [x] **UD-006 — Direct damage reporting.** A user shall be able to report damage next to the return action, limited to the quantity they currently hold. **Implemented.**
-- [x] **UD-007 — Mobile quick actions.** Scan and return shall be prominent actions on mobile. **Implemented.**
+### 3.4 Traceability, Custody & Audit Trails
+- **Tamper-proof Ledger:** Every quantity change, custody handover, or status change writes an immutable audit record containing:
+  - `actor_id` (authenticated user)
+  - `timestamp` (server-generated UTC)
+  - `action` (e.g. `PREPARED`, `CUSTODY_HANDOVER`, `RETURNED`, `DAMAGE_REPORTED`)
+  - `delta_snapshot` (item IDs, previous quantity, new quantity)
+- **Customer Accountability:** Because faction leaders and marshals are external customers, the system records explicit sign-off timestamps and actor IDs at checkout and check-in.
 
-### 6.4 Global dashboard
+### 3.5 Demand Forecasting, Stock Deficits & Reorder Planning View
+To prevent field shortages before major events, the system provides a dedicated **Shortage & Procurement Planning View**:
+- **Core Formula:**
+  $$\text{Net Deficit} = \sum(\text{Requested Quantities across Active Upcoming Orders}) - (\text{Total Physical Stock} - \text{Damaged/Written-off})$$
+- **Key Capabilities:**
+  - **Scope Filtering:** Filter demand across a single upcoming event occurrence (e.g. "DE 2026") or all planned events in the season.
+  - **Item Classification Split:**
+    - *Consumables Deficit:* Flags consumable goods (BBs, gas, smoke grenades, batteries, cable ties) that must be **purchased** from suppliers.
+    - *Asset / Equipment Deficit:* Flags durable gear (power generators, radios, floodlights) where demand exceeds warehouse inventory, signaling a need for **external rental or equipment purchase**.
+  - **Supplier Grouping & Export:** Group deficit items by supplier/vendor with one-click export (CSV / PDF) for purchase orders.
+  - **Direct Alert Indicators:** Highlights shortage badges directly on the Global Dashboard and within Event Planning screens.
 
-- [x] **GD-001 — Stock metrics.** The global dashboard shall show inventory item count, available stock, low-stock count, recent transaction count, and open damage count. **Implemented.**
-- [x] **GD-002 — Recent activity.** The global dashboard shall show the ten most recent transactions. **Implemented.**
-- [x] **GD-003 — Operational links.** Dashboard cards and alerts shall link to the relevant working views. **Implemented.**
+### 3.6 Incomplete Kit / Assembly Check-in & Return Workflow
+When an assembly (e.g., *"Faction HQ Power Kit"* composed of 1 generator, 2 cable drums, 4 multi-sockets, and 2 floodlights) is returned, components are often missing or returned separately.
+- **Component-Level Return Checklist:** The marshal scans the order QR code, which displays an itemized visual checklist of all components within the checked-out assembly.
+- **Partial Assembly Reconciliation:**
+  - Undamaged returned components are checked back into available warehouse stock immediately.
+  - Missing components (e.g., 1 cable drum not returned) are flagged as **`MISSING_UNRETURNED`**.
+  - Custody for the missing item remains assigned to the collecting customer/faction.
+  - The order status transitions to **`PARTIALLY_RETURNED`** (preventing premature order closure).
+- **Resolution Outcomes:**
+  1. *Late Return:* Customer returns the missing item later $\rightarrow$ marshal scans the item back in $\rightarrow$ order closes.
+  2. *Declared Lost / Replaced:* Customer pays replacement fee or signs loss waiver $\rightarrow$ item is written off with replacement invoice note $\rightarrow$ order closes.
 
-### 6.5 Inventory items
+### 3.7 Periodic Safety & Maintenance Cycles (DGUV V3, Generator Hours, Battery Health)
+Critical infrastructure and game gear require systematic maintenance and regulatory safety certifications:
+- **German DGUV V3 Electrical Safety Testing:**
+  - Mandatory annual inspection for 230V portable electrical equipment (generators, cable drums, distribution boxes, floodlights).
+  - Tracks: Last Test Date, Next Due Date, Inspector ID, Certificate / Protocol Number, and Pass/Fail result.
+  - **Checkout Blocker:** If an item's DGUV V3 test is `OVERDUE`, the system displays a prominent warning and blocks adding it to an order or checking it out until recertified.
+- **Operating Hours & Runtime Logging:**
+  - Dedicated runtime counter for engine-driven assets (inverter generators, compressors).
+  - Prompts for runtime hours upon check-in (e.g. *"Generator ran 18 hours at DE 2026"*).
+  - Automated service triggers (e.g. oil change & spark plug service due every 50 hours).
+- **Battery Health & Airsoft Chrono Logs:**
+  - Prop and radio battery cycle count, internal resistance, and storage charge state.
+  - Chronograph / FPS logs for event-owned loaner airsoft replicas (Joules / FPS history and safety tag).
+- **Status Lifecycle:** `CERTIFIED` $\rightarrow$ `DUE_SOON` (within 30 days) $\rightarrow$ `OVERDUE` (locked from checkout) $\rightarrow$ `IN_MAINTENANCE`.
 
-- [x] **INV-001 — Browse.** Users shall be able to view inventory in desktop-table and mobile-card forms. **Implemented.**
-- [x] **INV-002 — Search.** Users shall be able to search by item name and category. **Implemented.**
-- [x] **INV-003 — Filter.** Users shall be able to filter items by event type. **Implemented.**
-- [x] **INV-004 — Sort.** Users shall be able to sort by stock and value. **Implemented.**
-- [x] **INV-005 — Create/edit/delete.** Users shall be able to create, edit, and delete an item. **Implemented.**
-- [x] **INV-006 — Duplicate validation.** Item names shall be checked to prevent accidental duplicates. **Implemented.**
-- [x] **INV-007 — Core metadata.** An item shall store name, base amount, minimum stock, monetary value, category, subcategory, event tags, and status. **Implemented.**
-- [x] **INV-008 — Location metadata.** An item shall be assignable to a storage location and carry free-form position/location details used by the current UI. **Implemented.**
-- [x] **INV-009 — Container quantities.** An item may use container size, container count, opened-container count, and remaining percentage to calculate its amount. **Implemented.**
-- [x] **INV-010 — Stock presentation.** Item lists and details shall show total, checked-out, damaged, and remaining quantities. **Implemented.**
-- [x] **INV-011 — Low stock.** Remaining stock shall be compared with minimum stock and visibly flagged. **Implemented.**
-- [x] **INV-012 — Item detail.** A detail page shall show metadata, storage, value, container information, stock metrics, QR, and history. **Implemented.**
-- [x] **INV-013 — Quick location creation.** A storage location may be created while editing an item. **Implemented.**
+### 3.8 Offline Field Mode (Progressive Web App with Local Sync Queue)
+Airsoft events are hosted on remote military training areas, dense forests, or underground bunker facilities with poor or non-existent 4G/5G cellular coverage.
+- **PWA Service Worker Caching:**
+  - The web application installs as a PWA on mobile devices (iOS / Android / Rugged Android scanners).
+  - Caches the application shell, item catalog (names, storage locations, photos, hints), and all active event orders and pick-lists in browser **IndexedDB**.
+- **Offline Scanner & Commissioning Operations:**
+  - Marshals can scan QR codes, check off items during warehouse picking, confirm readiness, and record return condition without any internet connection.
+- **Append-Only Sync Queue & Conflict Resolution:**
+  - Every offline scan/action appends an immutable event into IndexedDB with a client-generated UUID idempotency key and local timestamp.
+  - Visual status indicator in the UI: *"Offline — 7 actions queued"*.
+  - When connection is re-established (e.g. returning to HQ Wi-Fi), the queue automatically replays against the Quarkus REST API.
+  - Server-side idempotency keys prevent duplicate checkouts or duplicate check-ins even if synced multiple times.
 
-### 6.6 Stock calculation and transactions
+---
 
-- [x] **STK-001 — Central calculation.** All primary inventory views shall use the shared stock calculator. **Implemented.**
-- [x] **STK-002 — Added stock.** Added transactions increase total stock. If no added transaction exists, the item's stored initial amount is the starting total. **Implemented.**
-- [x] **STK-003 — Checkout balance.** Outstanding checkout equals checkout quantities minus check-in quantities. **Implemented.**
-- [x] **STK-004 — Damage balance.** Unresolved damaged quantities reduce available stock. **Implemented.**
-- [x] **STK-005 — Repair.** A repaired damaged quantity returns to available stock and is recorded as a repaired stock transaction. **Implemented.**
-- [x] **STK-006 — Write-off.** A written-off damaged quantity permanently reduces total stock and is recorded as a written-off stock transaction. **Implemented.**
-- [x] **TX-001 — Manual operations.** Users shall be able to check out, check in, and add stock manually. **Implemented.**
-- [x] **TX-002 — Quantity validation.** Quantities shall be positive integers; checkout cannot exceed remaining stock; check-in cannot exceed the user's outstanding quantity. **Implemented.**
-- [x] **TX-003 — Transaction context.** A transaction shall capture item, type, quantity, user, reason, notes, and timestamp. **Implemented.**
-- [x] **TX-004 — History filtering.** Transaction history shall be filterable by item, user, type, and date. **Implemented.**
-- [x] **TX-005 — Safe editing.** Normal transactions may be edited; system-generated repair/write-off transactions shall not be edited through the normal transaction form. **Implemented.**
-- [x] **TX-006 — Realtime.** Item and transaction views shall refresh following PocketBase realtime changes. **Implemented.**
-- [ ] **STK-007 — Complete chart calculation.** The item stock chart currently applies additions, checkouts, and check-ins, but not repair/write-off changes. This is a **known gap** even though those changes appear in transaction history and the current stock calculation.
+## 4. Feature & Architecture Comparison vs. Industry-Leading Solutions
 
-### 6.7 QR workflows
+To ensure the inventory system is a comprehensive, production-grade tool for event organizers, we benchmarked current features against industry standards (**Rentman** for AV/event production logistics, **Snipe-IT** for enterprise asset tracking, and **Sortly** for visual mobile inventory).
 
-- [x] **QR-001 — Camera scan.** Users shall be able to scan with an environment-facing camera. **Implemented.**
-- [x] **QR-002 — Image scan.** Users shall be able to scan a QR code from an uploaded or captured image. **Implemented.**
-- [x] **QR-003 — Manual fallback.** Users shall be able to enter an item identifier or supported link manually. **Implemented.**
-- [x] **QR-004 — Resource routing.** A valid item QR shall open the scanned item transaction flow; a recognized assembly link shall open the assembly. **Implemented.**
-- [x] **QR-005 — Repeated use.** After a successful scanned transaction, the scan screen shall be ready for the next item. **Implemented.**
-- [x] **QR-006 — Item QR output.** Users shall be able to view and download an item's QR code. **Implemented.**
-- [x] **QR-007 — Bulk printing.** Users shall be able to search/select inventory and create printable QR-code PDF sheets. **Implemented.**
+### 4.1 Feature Matrix & Scope
 
-### 6.8 Checked-out inventory
+| Capability | Ash Inventory (Current) | Industry Benchmark (Rentman / Snipe-IT / Sortly) | Status in Specification |
+|---|---|---|---|
+| **Faction / Event Orders** | **Core Strength:** Event-scoped faction lists, copy previous year baseline, diff view. | Typically generic sub-rentals; lacks airsoft/scenario faction workflows. | **Implemented & Core Feature** |
+| **Assemblies / Bundles** | **Implemented:** Predefined kits, component quantity breakdown. | Standard in Rentman & Snipe-IT ("Kits / Bundles"). | **Implemented & Core Feature** |
+| **Visual Warehouse & Maps** | **Implemented:** Leaflet map overlay for field/warehouse positioning. | Rare in standard tools (usually text-only shelf/bin). | **Implemented & Enhanced** |
+| **Mobile QR Scanning** | **Implemented:** ZXing camera & file scanner on desktop/mobile. | Standard across all mobile inventory apps. | **Implemented** |
+| **Demand vs. Stock Deficit** | **Added (Section 3.5):** Procurement & reorder deficit view across upcoming events. | **Rentman Gold Standard:** Real-time shortage planner showing required vs. available gear across dates. | **Included (Target Build)** |
+| **Incomplete Kit Check-in** | **Added (Section 3.6):** Component-level checklist tracking missing kit parts upon return. | Rentman tracks "missing kit components" with replacement billing/follow-up. | **Included (Target Build)** |
+| **Periodic Maintenance & Inspection** | **Added (Section 3.7):** DGUV V3 safety testing, generator runtime hours, battery health. | Standard (DGUV V3 safety testing, periodic inspection dates, calibration, warranty). | **Included (Target Build)** |
+| **Offline Field Mode (PWA)** | **Added (Section 3.8):** IndexedDB local queue for remote dead-zone scanning & sync. | High-end field logistics apps support offline queueing with sync. | **Included (Target Build)** |
+| **Transport Manifests / CMR** | Paper packing lists for vehicles with hazard weights. | Standard export of vehicle packing manifests and CMR transport papers. | **Deferred (Skipped for now per requirements)** |
 
-- [x] **OUT-001 — Outstanding calculation.** The checked-out view shall calculate outstanding quantities from checkout and check-in transactions. **Implemented.**
-- [x] **OUT-002 — Global visibility.** Users shall be able to inspect currently checked-out inventory across users. **Implemented.**
-- [x] **OUT-003 — Quick return.** Users shall be able to return one unit quickly from the checked-out view. **Implemented.**
-- [x] **OUT-004 — Responsive display.** Outstanding items shall use a table on desktop and cards on mobile. **Implemented.**
+### 4.2 High-Value Features Included in Target Scope
 
-### 6.9 Assemblies
+1. **Demand Forecasting & Procurement Reorder View (Section 3.5):**
+   - Real-time stock shortage calculations across upcoming event occurrences with 1-click supplier purchase order export.
+2. **Incomplete Kit / Assembly Return Checklist (Section 3.6):**
+   - Enables checking in undamaged kit components while keeping missing individual parts (e.g. 1 cable drum or adapter) assigned to the customer.
+3. **Periodic Maintenance & Inspection Cycles (Section 3.7):**
+   - Tracks legal electrical safety tests (**DGUV V3**), generator operating hours (service alarms every 50h), and prop battery health, automatically blocking overdue gear from checkout.
+4. **Offline Field Mode via PWA (Section 3.8):**
+   - Service Worker caching and IndexedDB offline queueing with idempotency keys for zero-signal bunker/forest scanning.
 
-- [x] **ASM-001 — Assembly CRUD.** Users shall be able to create, edit, view, search, and delete assemblies. **Implemented.**
-- [x] **ASM-002 — Components.** An assembly shall contain selected item IDs and a quantity per component. **Implemented.**
-- [x] **ASM-003 — Summary.** The assembly list/detail shall show component count and total value. **Implemented.**
-- [x] **ASM-004 — Availability.** Assembly detail shall show component stock, shortages, and the maximum number of complete assemblies currently possible. **Implemented.**
-- [x] **ASM-005 — Quick editing.** Users shall be able to add or remove components from the detail view. **Implemented.**
-- [x] **ASM-006 — Bulk checkout.** Checking out an assembly shall create an individual checkout transaction for every component, multiplied by the requested assembly count. **Implemented.**
-- [x] **ASM-007 — Checkout validation.** Assembly checkout shall be blocked when any required component is unavailable. **Implemented.**
-- [x] **ASM-008 — Event tags.** Assemblies shall be taggable for DE, TNO, LS, M24, and ASD from the assembly form, with tags visible in assembly views. **Implemented.**
-- [x] **ASM-009 — Faction-list selection.** Event-tagged assemblies shall be selectable and quantity-controlled on faction order lists. **Implemented.**
-- [x] **ASM-010 — Component-aware orders.** Assembly quantities in faction lists shall reserve, check out, and check in each component multiplied by its per-assembly quantity. **Implemented.**
+*(Note: Transport manifests / CMR documents are explicitly deferred for a future iteration).*
 
-### 6.10 Damage reports
+---
 
-- [x] **DMG-001 — Create report.** Users shall be able to report an item, quantity, severity, and description. **Implemented.**
-- [x] **DMG-002 — Reporter identity.** A report shall record and display who reported it. **Implemented.**
-- [x] **DMG-003 — Handler identity.** Handling actions shall record and display who handled the report and when. **Implemented.**
-- [x] **DMG-004 — Workflow.** Reports shall support reported, in-review, repaired, written-off, and resolved outcomes. **Implemented.**
-- [x] **DMG-005 — Partial repair.** A handler shall be able to repair only part of a report's still-open quantity. **Implemented.**
-- [x] **DMG-006 — Partial write-off.** A handler shall be able to write off only part of a report's still-open quantity. **Implemented.**
-- [x] **DMG-007 — Mixed resolution.** The same report may contain both repaired and written-off portions and shall close only when no quantity remains unresolved. **Implemented.**
-- [x] **DMG-008 — Atomic stock history.** Repair/write-off shall update the damage report and create the corresponding stock transaction as one backend batch. **Implemented.**
-- [x] **DMG-009 — Report history.** Users shall be able to see open reports separately from completed history, including the status/action history. **Implemented.**
-- [x] **DMG-010 — Responsive handling.** Damage reports and actions shall be usable from desktop tables and mobile cards/dialogs. **Implemented.**
+## 5. Target Architecture & Technology Recommendations
 
-### 6.11 Storage locations
+### 5.1 Database: PostgreSQL 18+ (The Foundation)
+**Verdict:** PostgreSQL 18+ replaces SQLite/PocketBase to guarantee ACID compliance, transactional integrity, and scalable multi-user operations.
 
-- [x] **LOC-001 — Location CRUD.** Users shall be able to create, edit, search, and delete storage locations. **Implemented.**
-- [x] **LOC-002 — Location fields.** A location shall store name, description, area, location, and position. **Implemented.**
-- [x] **LOC-003 — Contents.** Users shall see the number of linked items and inspect those items with stock/status information. **Implemented.**
-- [x] **LOC-004 — Navigation.** A listed location item shall link to its item detail. **Implemented.**
-- [x] **LOC-005 — Delete warning.** Deleting a location shall warn that links from items will be removed. **Implemented.**
+- **ACID Transactions & Row-Level Locking:** Prevents race conditions and double-checkouts when multiple marshals scan items simultaneously.
+- **Relational Integrity:** Foreign keys enforce that order histories, audit trails, and item references remain intact even if master records are deactivated.
+- **Fuzzy Search:** Built-in `pg_trgm` extension enables typo-tolerant search for German/English gear names on mobile devices.
+- **Disaster Recovery:** Point-in-Time Recovery (PITR) via continuous Write-Ahead Log (WAL) archiving.
 
-### 6.12 Existing event reports
+### 5.2 Backend Architecture: Java 25 (LTS) & Quarkus (Finalized Target Backend)
 
-- [x] **EVT-001 — Event types.** Planning shall support DE, TNO, LS, M24, and ASD. **Implemented.**
-- [x] **EVT-002 — Event-tagged inventory.** Selecting an event type shall show items tagged for that event. **Implemented.**
-- [x] **EVT-003 — Planning quantities.** Users shall be able to enter a planned quantity for each event item. **Implemented.**
-- [x] **EVT-004 — Used quantities.** Users shall be able to record actual used quantities for a completed event. **Implemented.**
-- [x] **EVT-005 — Previous baseline.** The most recent completed event shall prefill the next plan from its used quantities, falling back to its planned quantities. **Implemented.**
-- [x] **EVT-006 — Event report history.** Users shall see past report date, status, planned total, used total, and notes. **Implemented.**
-- [x] **EVT-007 — Event report author.** An event report shall record the user who created it. **Implemented in the schema/service.**
-- [ ] **EVT-008 — Event occurrences.** Current records are event-type-wide planning reports, not a first-class event occurrence with factions and operational list states. **Required.**
-- [x] **EVT-009 — Faction lists.** Event-scoped factions and dated faction order lists are available. **Implemented.**
-- [x] **EVT-010 — Preparation and pickup.** Lists record readiness, preparer, pickup actor, and milestone timestamps. **Implemented.**
-- [x] **EVT-011 — List QR.** A complete faction list has its own QR route and state-aware detail screen. **Implemented.**
-- [x] **EVT-012 — Previous-list comparison.** Lists can copy the most recent same-faction list and display item quantity differences. **Implemented.**
+The backend is implemented as a high-performance, containerized REST API using **Quarkus with Java 25 (current LTS)**.
 
-## 7. Current data model
+```mermaid
+flowchart TD
+    subgraph QuarkusApp [Quarkus Java 25 LTS REST API]
+        R[RESTEasy Reactive - Non-Blocking REST Endpoints]
+        OIDC[SmallRye JWT / OIDC - Authentik Token Validation]
+        ORM[Hibernate ORM with Panache - Active Record & Repositories]
+        FLY[Flyway - Automated PostgreSQL DB Migrations]
+        OTEL[Quarkus OpenTelemetry - OTLP Logs, Traces & Metrics]
+        OPENAPI[SmallRye OpenAPI - Auto-generated OpenAPI 3.1 & Swagger UI]
+    end
+
+    Client[Frontend / Scanner PWA] --> R
+    R --> OIDC
+    R --> ORM
+    ORM --> DB[(PostgreSQL 18)]
+    FLY --> DB
+    OTEL --> OO[OpenObserver OTLP]
+```
+
+*Why Quarkus fits this application best:*
+1. **Low Resource Footprint:** Runs in JVM mode (~90MB RAM) or compiled to a **GraalVM Native Binary (<40MB RAM)** with sub-second cold starts.
+2. **Hibernate with Panache:** High developer velocity with type-safe queries, active-record style helpers, and built-in transaction management (`@Transactional`).
+3. **Database Migrations:** Automated version-controlled schema evolution using **Flyway**.
+4. **Built-in Security:** First-class OpenID Connect integration (`quarkus-oidc`) verifying JWTs issued by Authentik/Keycloak.
+5. **Native Observability:** `quarkus-opentelemetry` automatically streams structured traces, DB query timings, and logs directly to OpenObserver via standard OTLP.
+
+---
+
+### 5.3 Multi-VPS Hosting Architecture: Cloudflare Workers + 2 App Nodes + 1 Storage Node
+
+To ensure high availability, redundancy, and independent storage scaling without the complexity of Kubernetes, the infrastructure uses a **3-node VPS architecture** coordinated by **Cloudflare Workers**:
+
+```mermaid
+flowchart TD
+    User[Client Desktop / Mobile] --> CF[Cloudflare Edge DNS / WAF / DDoS]
+    CF --> CW[Cloudflare Worker L7 Load Balancer]
+
+    subgraph VPS1 [VPS 1: Primary Application Node]
+        T1[Traefik Proxy]
+        FE1[React 19 Vite Static Container]
+        BE1[Quarkus REST API Primary]
+        DB1[(PostgreSQL 18 Primary)]
+        OO1[OpenObserver Node]
+        T1 --> FE1
+        T1 --> BE1
+        BE1 --> DB1
+    end
+
+    subgraph VPS2 [VPS 2: Secondary Application Node]
+        T2[Traefik Proxy]
+        FE2[React 19 Vite Static Container]
+        BE2[Quarkus REST API Secondary]
+        DB2[(PostgreSQL 18 Streaming Replica)]
+        T2 --> FE2
+        T2 --> BE2
+        BE2 --> DB1
+    end
+
+    subgraph VPS3 [VPS 3: Storage Node - Smaller VPS]
+        G_S3[Garage S3 Cluster Node]
+        BOX[(Hetzner Storage Box Backup)]
+        G_S3 -- Automated Daily Encrypted Sync --> BOX
+    end
+
+    CW -- Health-Checked Routing (Primary / Failover) --> T1
+    CW -- Health-Checked Routing (Active / Failover) --> T2
+    DB1 -- Streaming Replication --> DB2
+    BE1 -- Image / PDF Storage S3 API --> G_S3
+    BE2 -- Image / PDF Storage S3 API --> G_S3
+```
+
+#### Infrastructure Specifications
+
+| Node | Hardware Spec | Services Deployed | Purpose |
+|---|---|---|---|
+| **Cloudflare Edge** | Cloudflare Global Anycast | Cloudflare DNS, WAF, DDoS Protection, **Cloudflare Worker** | Smart L7 edge load balancer with active health probing (`/q/health/live`), SSL termination, and instant failover. |
+| **VPS 1** (App Node 1) | 4 vCPUs, 8–16 GB RAM (e.g. Hetzner Nuremberg) | Traefik, React 19 SPA, Quarkus REST API, PostgreSQL 16 (Primary), OpenObserver | Primary application execution, master database writes, centralized logging. |
+| **VPS 2** (App Node 2) | 4 vCPUs, 8–16 GB RAM (e.g. Hetzner Falkenstein) | Traefik, React 19 SPA, Quarkus REST API, PostgreSQL 16 (Hot Standby Replica) | Redundant application node, read-scaling, and instant hot-standby failover. |
+| **VPS 3** (Storage Node) | 2 vCPUs, 4 GB RAM (Small VPS) | **Garage S3** (Rust-based lightweight S3 storage engine) | Dedicated S3-compatible object storage for item photos, QR codes, and generated PDF slips. |
+| **Hetzner Storage Box** | Managed 1 TB Storage (CIFS/SSH) | Storage Box mount / `rclone` target | Encrypted off-site disaster recovery target for PostgreSQL WAL archives and Garage S3 data. |
+
+#### Why Garage S3 + Hetzner Storage Box?
+- **Garage S3 (https://garagehq.deuxfleurs.fr/):**
+  - Ultra-lightweight, geo-distributed open-source S3 implementation written in Rust.
+  - Consumes <50MB RAM, supports standard AWS S3 SDK calls, and handles low-bandwidth network connections gracefully.
+  - Keeps media storage independent from the application servers, allowing VPS 1 and VPS 2 to remain completely stateless.
+- **Hetzner Storage Box Integration:**
+  - Inexpensive (€3.50/mo for 1TB), highly durable off-site storage in ISO-27001 certified German data centers.
+  - Backed up nightly from VPS 3 using `rclone` or `borgbackup` with client-side encryption.
+
+---
+
+### 5.4 Traceability & Observability (OpenObserver)
+- **OpenObserver Integration:**
+  - Lightweight, open-source alternative to Datadog / Elasticsearch deployed on VPS 1.
+  - Quarkus backend and React frontend emit standard **OpenTelemetry (OTel)** logs, metrics, and distributed traces.
+  - Ingests:
+    1. **Audit Logs:** Dedicated JSON stream logging every inventory movement with user ID, IP, order ID, and before/after stock delta.
+    2. **Application Performance Metrics:** API endpoint latencies (especially QR scanner endpoints).
+    3. **Error Traces:** Detailed stack traces and client-side unhandled errors from mobile field devices.
+
+---
+
+### 5.5 Hosting Capacity & The "When Does k3s Make Sense?" Evaluation
+
+#### 5.5.1 The 2-VPS + Cloudflare Worker Setup Capacity
+With two 4-core application nodes and a Cloudflare Worker edge:
+- **Throughput:** Capable of handling **10,000+ requests/sec** and over **5,000 active concurrent users**.
+- **Redundancy:** If VPS 1 undergoes maintenance or suffers a hardware outage, the Cloudflare Worker detects the health-check failure in <2 seconds and directs 100% of traffic to VPS 2.
+- **Resource Utilization:** Average CPU usage across both nodes will remain under 10% during standard operations, providing immense headroom for peak event surges.
+
+#### 5.5.2 At Which Point Does k3s Actually Make Sense?
+Even with 2 VPS instances, running Docker Compose + Traefik with Cloudflare Workers is significantly simpler and more reliable than maintaining a Kubernetes cluster.
+
+**k3s becomes sensible ONLY when you encounter these specific organizational triggers:**
+1. **Automated Cross-Node Pod Rescheduling:** If you acquire 3+ application nodes and want Kubernetes to dynamically shift workloads when a node dies without configuring manual DNS/reverse proxy failover.
+2. **GitOps CD Pipeline (ArgoCD):** When multiple engineers push code daily and require automated blue/green or canary rollouts across a fleet.
+3. **Multi-Tenant Country Fleets:** When expanding to 5+ international regions and requiring Kubernetes namespaces, ingress controllers, and resource quotas to isolate regional event instances.
+
+Until those operational complexities arise, **Docker Compose + Cloudflare Workers + Traefik provides 99.99% uptime with near-zero administrative overhead.**
+
+#### 5.5.3 Backup & Disaster Recovery Strategy
+1. **PostgreSQL Streaming & WAL Archiving:** Continuous WAL shipping from PostgreSQL Primary on VPS 1 to Hetzner Storage Box via `pgBackRest` or `wal-g` (Recovery Point Objective / RPO < 5 minutes).
+2. **Database Snapshots:** Daily full database dump encrypted with GPG and stored off-site.
+3. **Garage S3 Sync:** Daily incremental block sync from VPS 3 to Hetzner Storage Box.
+4. **Recovery Time Objective (RTO):** Full application rebuild from scratch on new servers in < 30 minutes via checked-in Docker Compose files and Flyway migrations.
+
+
+
+---
+
+## 6. Target Relational Database Schema (PostgreSQL)
+
+To replace the denormalized PocketBase collections, the target schema is structured as follows:
 
 ```mermaid
 erDiagram
     USERS ||--o{ STOCK_TRANSACTIONS : performs
     USERS ||--o{ DAMAGE_REPORTS : reports
     USERS ||--o{ DAMAGE_REPORTS : handles
-    USERS ||--o{ EVENT_REPORTS : creates
-    STORAGE_LOCATIONS ||--o{ ITEMS : stores
+    USERS ||--o{ FACTION_ORDERS : creates
+    USERS ||--o{ MAINTENANCE_RECORDS : inspects
+    STORAGE_LOCATIONS ||--o{ ITEMS : locates
+    STORAGE_LOCATIONS ||--o{ FACTION_ORDERS : stages_at
+    ITEMS ||--o{ ITEM_IMAGES : has
+    ITEMS ||--o{ ASSEMBLY_ITEMS : component_of
+    ASSEMBLIES ||--o{ ASSEMBLY_ITEMS : contains
+    ITEMS ||--o{ FACTION_ORDER_LINES : requested_as
     ITEMS ||--o{ STOCK_TRANSACTIONS : changes
-    ITEMS ||--o{ DAMAGE_REPORTS : has
-    ITEMS }o--o{ ASSEMBLIES : component_of
-    ITEMS }o--o{ EVENT_REPORTS : planned_for
+    ITEMS ||--o{ DAMAGE_REPORTS : affected_by
+    ITEMS ||--o{ MAINTENANCE_RECORDS : maintained_by
+    EVENT_OCCURRENCES ||--o{ FACTION_ORDERS : belongs_to
+    FACTIONS ||--o{ FACTION_ORDERS : requests
+    FACTION_ORDERS ||--|{ FACTION_ORDER_LINES : contains
+    FACTION_ORDERS ||--o{ FACTION_ORDER_HISTORY : logs
 ```
 
-### Current collections
+### Table Definitions
 
-| Collection | Important fields and behavior |
-|---|---|
-| `users` | PocketBase auth record: name, username/email, and `admin \| manager \| user` role. |
-| `inventory_items` | Item identity, location, amount/minimum/value, categories, event tags, status, QR, and container fields. |
-| `inventory_stock_transactions` | Item, transaction type, quantity, user, optional damage report, reason, notes, and timestamp. Types: checkout, checkin, added, repaired, written_off. |
-| `inventory_damage_reports` | Item, reporter, handler, handler time, description, severity, total/repaired/written-off quantities, status, and JSON status history. |
-| `inventory_assemblies` | Name, description, event tags, item relations, and JSON item quantities. |
-| `inventory_event_reports` | Event type/date/status, item relations, JSON planned/used quantities, notes, and creator. |
-| `inventory_faction_orders` | Event/faction/date, status, requested/prepared item and assembly quantity maps, item/assembly relations, milestone actors/times, notes, and lifecycle history. |
-| `inventory_storage_locations` | Name, description, area, location, position, and timestamps. |
+1. **`storage_locations` (OpenStreetMap Georeferenced)**
+   - `id` (UUID, PK), `name` (VARCHAR), `description` (TEXT), `area` (VARCHAR), `location` (VARCHAR), `position` (VARCHAR)
+   - **OpenStreetMap & Map Overlay Fields:**
+     - `latitude` (DOUBLE PRECISION, NULLABLE), `longitude` (DOUBLE PRECISION, NULLABLE), `map_zoom` (INT, default 16)
+     - `map_overlay_url` (VARCHAR, NULLABLE — custom aerial drone photo or floorplan stored in Garage S3)
+     - `overlay_bounds` (JSONB, NULLABLE — GPS coordinate bounding box `[[south, west], [north, east]]` anchored to OSM)
+   - `created_at`, `updated_at` (TIMESTAMPTZ)
 
-Relations to `users` are configured as external relations because the auth collection is not created by `pb_schema.json`.
+2. **`items`**
+   - `id` (UUID, PK), `sku` (VARCHAR, UNIQUE), `name` (VARCHAR), `description` (TEXT), `category_id` (UUID), `subcategory_id` (UUID)
+   - `is_consumable` (BOOLEAN, default FALSE)
+   - `base_amount` (INT), `min_stock` (INT), `unit_value_cents` (INT)
+   - `storage_location_id` (UUID, FK), `position_details` (VARCHAR)
+   - `hint` (TEXT — field handling instructions)
+   - `container_size` (NUMERIC), `container_count` (INT), `containers_opened` (INT), `container_remaining_pct` (INT)
+   - **Maintenance Fields:** `maintenance_interval_days` (INT, NULLABLE), `next_maintenance_due` (DATE, NULLABLE), `current_operating_hours` (NUMERIC, default 0), `maintenance_status` (ENUM: `certified`, `due_soon`, `overdue`, `in_service`)
+   - `created_at`, `updated_at` (TIMESTAMPTZ)
 
-## 8. Required event, faction, and list functionality
+3. **`maintenance_records` (DGUV V3, Generator Hours, Battery & Chrono Logs)**
+   - `id` (UUID, PK), `item_id` (UUID, FK), `type` (ENUM: `dguv_v3`, `generator_service`, `battery_test`, `chrono_fps`)
+   - `inspector_user_id` (UUID, FK), `performed_at` (TIMESTAMPTZ), `next_due_at` (TIMESTAMPTZ)
+   - `operating_hours` (NUMERIC, NULLABLE), `result` (ENUM: `passed`, `failed`, `advisory`)
+   - `certificate_number` (VARCHAR, NULLABLE), `notes` (TEXT)
+   - `created_at` (TIMESTAMPTZ)
 
-### 8.1 Faction catalogue
+4. **`assemblies` & `assembly_items`**
+   - `assemblies`: `id` (UUID, PK), `name` (VARCHAR), `description` (TEXT), `event_tags` (TEXT[])
+   - `assembly_items`: `assembly_id` (UUID, FK), `item_id` (UUID, FK), `quantity` (INT), PK(`assembly_id`, `item_id`)
 
-Faction identity must be scoped to an event type. In particular, `Militär` appears in both TNO and M24 and must not be treated as one global faction.
+5. **`event_occurrences` & `factions`**
+   - `factions`: `id` (UUID, PK), `event_type` (VARCHAR — DE, LS, TNO, ASD, M24), `name` (VARCHAR), `slug` (VARCHAR), `is_active` (BOOLEAN)
+   - `event_occurrences`: `id` (UUID, PK), `event_type` (VARCHAR), `name` (VARCHAR e.g. "DE 2026"), `start_date` (DATE), `end_date` (DATE), `status` (VARCHAR)
 
-| Event type | Canonical code | Factions |
-|---|---|---|
-| DE | `DE` | KGG, GOF, Enklave, Miliz |
-| LightSim | `LS` | UCRF, TERA |
-| TNO | `TNO` | Militär, Freiheit, Stalker, Banditen, Wissenschaftler |
-| ASD | `ASD` | Delta, Ghost |
-| M24 | `M24` | Hondra, Militär, Kartell |
+6. **`faction_orders` & `faction_order_lines`**
+   - `faction_orders`:
+     - `id` (UUID, PK), `order_code` (VARCHAR, UNIQUE, e.g. `DE26-KGG-01`)
+     - `event_occurrence_id` (UUID, FK), `faction_id` (UUID, FK)
+     - **Designated Pickup Location:** `pickup_location_id` (UUID, FK to `storage_locations`, NULLABLE — georeferenced OSM handover point)
+     - `status` (ENUM: `draft`, `submitted`, `preparing`, `ready`, `picked_up`, `partially_returned`, `returned`, `closed`, `cancelled`)
+     - `created_by` (UUID, FK), `prepared_by` (UUID, FK), `ready_by` (UUID, FK), `picked_up_by` (UUID, FK), `returned_by` (UUID, FK)
+     - `notes` (TEXT), `created_at`, `updated_at`
+   - `faction_order_lines`:
+     - `id` (UUID, PK), `faction_order_id` (UUID, FK)
+     - `item_id` (UUID, FK), `source_assembly_id` (UUID, FK, NULLABLE)
+     - `requested_quantity` (INT), `prepared_quantity` (INT, default 0)
+     - `picked_up_quantity` (INT, default 0), `returned_quantity` (INT, default 0)
+     - **Incomplete Return Tracking:** `missing_quantity` (INT, default 0), `damaged_quantity` (INT, default 0)
+     - `notes` (TEXT)
+     - UNIQUE(`faction_order_id`, `item_id`, `source_assembly_id`)
 
-- [x] **FAC-001 — Seed catalogue.** The application exposes all specified event/faction combinations from the typed catalogue. **Implemented.**
-- [x] **FAC-002 — Scoped uniqueness.** Factions are selected and compared within an event type, so the two `Militär` factions remain distinct. **Implemented.**
-- [ ] **FAC-003 — Configurability.** Authorized users shall be able to activate/deactivate factions or add future factions without changing application code. **Required.**
-- [ ] **FAC-004 — Historic integrity.** Deactivating a faction shall not delete or rename its old lists and audit records. **Required.**
+7. **`faction_order_history` (Append-Only Audit Ledger)**
+   - `id` (BIGSERIAL, PK), `faction_order_id` (UUID, FK)
+   - `actor_id` (UUID, FK), `action` (VARCHAR), `occurred_at` (TIMESTAMPTZ, server default NOW())
+   - `from_status` (VARCHAR), `to_status` (VARCHAR)
+   - `delta_snapshot` (JSONB — records exact line state changes)
+   - `idempotency_key` (UUID, UNIQUE — supports offline PWA sync deduplication)
+   - `notes` (TEXT)
 
-### 8.2 Event occurrences
+8. **`stock_transactions`**
+   - `id` (UUID, PK), `item_id` (UUID, FK), `user_id` (UUID, FK)
+   - `type` (ENUM: `checkout`, `checkin`, `added`, `repaired`, `written_off`)
+   - `quantity` (INT), `faction_order_id` (UUID, FK, NULLABLE), `damage_report_id` (UUID, FK, NULLABLE)
+   - `reason` (VARCHAR), `notes` (TEXT), `timestamp` (TIMESTAMPTZ)
 
-- [ ] **EVO-001 — Dated occurrence.** Users shall be able to create a named and dated occurrence of an event type. **Required.**
-- [ ] **EVO-002 — Occurrence states.** An occurrence shall support `planned`, `preparing`, `ready`, `in_progress`, `completed`, and `cancelled`. **Required.**
-- [ ] **EVO-003 — Faction overview.** An event occurrence shall show every configured faction and the state of its list. **Required.**
-- [ ] **EVO-004 — Operational summary.** The overview shall show requested, prepared, shortage, picked-up, and returned quantities, plus the last relevant actor/time. **Required.**
-- [ ] **EVO-005 — Completion guard.** Completing an occurrence shall require all non-cancelled lists to be closed or an explicit authorized override with a reason. **Required.**
+9. **`damage_reports`**
+   - `id` (UUID, PK), `item_id` (UUID, FK), `reporter_id` (UUID, FK), `handler_id` (UUID, FK, NULLABLE)
+   - `faction_order_id` (UUID, FK, NULLABLE)
+   - `quantity` (INT), `repaired_quantity` (INT, default 0), `written_off_quantity` (INT, default 0)
+   - `severity` (ENUM: `low`, `medium`, `high`, `total_loss`)
+   - `status` (ENUM: `reported`, `in_review`, `repaired`, `written_off`, `resolved`)
+   - `description` (TEXT), `resolution_notes` (TEXT)
 
-### 8.3 Faction-list creation and editing
+---
 
-- [x] **LST-001 — Create list.** An authenticated inventory user can create a dated list for every configured faction. **Implemented.**
-- [x] **LST-002 — Add items.** A list contains individual inventory items and/or assemblies, requested quantities, and list notes. **Implemented.**
-- [x] **LST-003 — Validation.** Requested quantities are positive integers stored once per item ID. **Implemented.**
-- [x] **LST-004 — Draft editing.** Draft lists can be edited without changing stock. **Implemented.**
-- [x] **LST-005 — Submission.** Starting preparation freezes draft editing and appends the transition to history. **Implemented as the draft-to-preparing transition.**
-- [x] **LST-006 — Controlled changes.** Non-draft item changes are blocked; preparation and lifecycle changes are actor-audited. **Implemented.**
-- [x] **LST-007 — Copy previous.** The most recent compatible same-event/same-faction list can be copied. **Implemented.**
-- [ ] **LST-008 — Select older baseline.** A user shall be able to choose an older completed occurrence when the most recent list is not the right baseline. **Required.**
-- [x] **LST-009 — Explicit diff.** Copy/edit and detail views show before/after quantities for changed lines. **Implemented.**
-- [x] **LST-010 — Immutable old events.** Copying creates a new faction-order record and does not modify its source. **Implemented.**
-- [x] **LST-011 — Independent resources.** Items and assemblies can be removed individually; a valid list may contain only items or only assemblies. **Implemented.**
-
-### 8.4 Availability, preparation, and readiness
-
-- [ ] **PREP-001 — Line state.** Each list line shall expose requested, available-to-promise, prepared, shortage, picked-up, and returned quantities. **Required.**
-- [x] **PREP-002 — Availability snapshot.** Preparation uses the shared stock calculator and displays shortages. **Implemented.**
-- [x] **PREP-003 — Reservations.** Prepared quantities on other preparing/ready lists reduce the amount another list may prepare. **Implemented.**
-- [x] **PREP-004 — Availability formula.** `availableToPromise = currentRemaining - quantitiesReservedForOtherOpenLists`. **Implemented.**
-- [x] **PREP-005 — Partial preparation.** Prepared quantities can be saved independently below the requested amount. **Implemented.**
-- [x] **PREP-006 — Actor audit.** Preparation saves record actor, time, and the complete prepared quantity snapshot. **Implemented.**
-- [x] **PREP-007 — Ready guard.** Ready is blocked until every requested quantity is fully prepared; shortage overrides remain outstanding. **Implemented without overrides.**
-- [x] **PREP-008 — Ready information.** The list displays preparer, ready actor/time, and lifecycle history. **Implemented.**
-- [x] **PREP-009 — Storage guidance.** Each preparation line displays the item's expanded storage location. **Implemented.**
-- [ ] **PREP-010 — Efficient ordering.** Lines shall be sortable/groupable by storage location and position. **Required.**
-- [x] **PREP-011 — Reversible readiness.** Lists can move between preparing and ready in either direction; each transition records its actor, time, quantity snapshot, and an optional explanation. **Implemented.**
-
-### 8.5 Pickup, return, and stock history
-
-- [x] **PICK-001 — Pickup guard.** Pickup is only shown/accepted for a ready list. **Implemented.**
-- [x] **PICK-002 — Identity and time.** Pickup records the authenticated collecting user and timestamp. **Implemented.**
-- [x] **PICK-003 — Atomic checkout.** A PocketBase batch updates the list and creates all checkout transactions. **Implemented.**
-- [x] **PICK-004 — Traceable transactions.** Generated checkout/check-in records carry `factionOrderId` and link to the list from stock history. **Implemented.**
-- [ ] **PICK-005 — Idempotency.** Repeating the same scan or retrying after a network interruption shall not create duplicate stock transactions. **Required.**
-- [x] **RET-001 — List return.** A picked-up list supports a confirmed full-list check-in through its detail/QR route. **Implemented.**
-- [ ] **RET-002 — Partial return.** Returns shall support partial quantities and retain outstanding quantities per line. **Required.**
-- [ ] **RET-003 — Damage during return.** The return workflow shall allow damaged quantities to create linked damage reports while undamaged quantities are checked in. **Required.**
-- [ ] **RET-004 — Close guard.** A list can close when all picked-up quantities are returned, linked to an open damage report, or resolved by an authorized write-off/exception. **Required.**
-
-### 8.6 List QR workflow
-
-- [x] **LQR-001 — One list QR.** Each faction list has one stable, downloadable QR URL distinct from item/assembly routes. **Implemented.**
-- [ ] **LQR-002 — Safe token.** The QR shall contain an opaque list token or application URL, not mutable quantities or trusted action instructions. **Required.**
-- [x] **LQR-003 — Authentication.** Application route gating requires authentication before the list loads. **Implemented.**
-- [x] **LQR-004 — State-aware landing.** The list detail exposes only actions valid for its current lifecycle state. **Implemented.**
-- [x] **LQR-005 — Preparation scan.** The scanned list shows its pick checklist, locations, availability, and preparation inputs. **Implemented.**
-- [x] **LQR-006 — Pickup scan.** A ready scan shows preparation/ready identity and a prominent pickup confirmation. **Implemented.**
-- [x] **LQR-007 — Return scan.** The same QR opens full-list return after pickup. **Implemented.**
-- [x] **LQR-008 — Closed scan.** Returned/cancelled lists are read-only and retain their summary/history. **Implemented.**
-- [ ] **LQR-009 — Manual fallback.** A short human-readable list code shall allow lookup when the camera or printed QR is unavailable. **Required.**
+## 7. Migration & Modernization Roadmap
 
 ```mermaid
-flowchart TD
-    S[Scan faction-list QR] --> A{Authenticated?}
-    A -- no --> L[Sign in, then resume target]
-    A -- yes --> R[Resolve opaque token]
-    L --> R
-    R --> C{Current list state}
-    C -- draft/submitted --> E[View or edit according to permission]
-    C -- preparing --> P[Prepare items and record shortages]
-    C -- ready --> K[Confirm pickup]
-    C -- picked_up --> I[Check items back in / report damage]
-    C -- closed/cancelled --> H[Read-only summary and history]
-    P --> B[Atomic list update + activity]
-    K --> T[Atomic list update + checkout transactions + activity]
-    I --> U[Atomic check-ins/damage reports + activity]
+gantt
+    title Migration & Modernization Plan
+    dateFormat  YYYY-MM-DD
+    section Phase 1: API & DB Specification
+    PostgreSQL Schema & Flyway           :p1_1, 2026-09-05, 7d
+    OpenAPI 3.1 REST Specification       :p1_2, after p1_1, 5d
+    section Phase 2: Quarkus Java 25 Backend
+    Quarkus Service & Panache Entities   :p2_1, after p1_2, 7d
+    Auth (Authentik JWT) & RBAC          :p2_2, after p2_1, 5d
+    Inventory, Orders & Shortage API     :p2_3, after p2_2, 7d
+    Incomplete Kit Return & Maintenance  :p2_4, after p2_3, 6d
+    Faction Order Lifecycle & Audit      :p2_5, after p2_4, 6d
+    OpenObserver Logging & Tracing       :p2_6, after p2_5, 4d
+    section Phase 3: Frontend & PWA
+    Generate Typed API Client            :p3_1, after p2_5, 4d
+    Replace PocketBase Services          :p3_2, after p3_1, 7d
+    Printable Order Sheet & Shortage UI  :p3_3, after p3_2, 5d
+    Offline PWA & IndexedDB Sync         :p3_4, after p3_3, 7d
+    Push Notifications (WebPush/SSE)     :p3_5, after p3_4, 5d
+    section Phase 4: Production Hardening
+    2-VPS Docker + Cloudflare Worker     :p4_1, after p3_2, 5d
+    Garage S3 on VPS 3 + Storage Box     :p4_2, after p4_1, 4d
+    Automated WAL Backups to Storage Box :p4_3, after p4_2, 3d
+    End-to-End Field Validation Testing  :p4_4, after p4_3, 5d
 ```
 
-### 8.7 History and comparison
-
-- [ ] **HIS-001 — Append-only activity.** Every list transition and quantity change shall append an immutable history entry. **Required.**
-- [x] **HIS-002 — Actor and time.** Each implemented lifecycle entry displays actor and timestamp. **Implemented.**
-- [ ] **HIS-003 — Before/after.** Quantity/status changes shall retain before and after values plus a reason when required. **Required.**
-- [ ] **HIS-004 — Full lifecycle.** History shall include creation, submission, edits, preparation, shortage acceptance, ready, pickup, return, damage links, closure, and cancellation. **Required.**
-- [x] **HIS-005 — Previous events.** Event/faction views retain dated lists in descending order. **Implemented.**
-- [x] **HIS-006 — Comparison.** The current list is compared line-by-line with the most recent compatible list. **Implemented for the automatic previous baseline.**
-- [ ] **HIS-007 — Change categories.** Comparison shall distinguish added, removed, increased, decreased, and unchanged lines. **Required.**
-- [ ] **HIS-008 — Export/print.** A list and its QR shall have a print-friendly representation; history export is desirable but not required for the first release. **Required/optional as stated.**
-
-## 9. Proposed lifecycle
-
-### Event occurrence
-
-```text
-planned -> preparing -> ready -> in_progress -> completed
-    \          \          \          \
-     +----------+----------+-----------> cancelled
-```
-
-### Faction list
-
-```text
-draft -> submitted -> preparing -> ready -> picked_up -> returned -> closed
-  \          \           \         \          \
-   +----------+-----------+---------+-----------> cancelled
-```
-
-Rules:
-
-1. `draft` is editable and does not reserve inventory.
-2. `submitted` is the comparison/audit baseline.
-3. `preparing` allows partial preparation and reservations.
-4. `ready` means preparation is complete or shortages were explicitly accepted.
-5. `picked_up` is coupled to atomic checkout transactions.
-6. `returned` means no ordinary return action remains, but closure checks may still be pending.
-7. `closed` is read-only except for an explicitly audited administrative correction.
-
-## 10. Proposed data architecture
-
-The existing `inventory_event_reports` collection can be migrated into the event-occurrence aggregate. Keeping old report IDs during migration reduces broken references and preserves history.
-
-```mermaid
-erDiagram
-    EVENT_OCCURRENCES ||--o{ EVENT_LISTS : contains
-    EVENT_FACTIONS ||--o{ EVENT_LISTS : owns
-    EVENT_LISTS ||--|{ EVENT_LIST_ITEMS : requests
-    ITEMS ||--o{ EVENT_LIST_ITEMS : requested_as
-    EVENT_LISTS ||--o{ EVENT_LIST_ACTIVITY : audited_by
-    EVENT_LIST_ITEMS ||--o{ EVENT_LIST_ACTIVITY : may_reference
-    USERS ||--o{ EVENT_LIST_ACTIVITY : performs
-    USERS ||--o{ EVENT_LISTS : creates
-    USERS ||--o{ EVENT_LISTS : readies
-    USERS ||--o{ EVENT_LISTS : picks_up
-    EVENT_LISTS ||--o{ STOCK_TRANSACTIONS : generates
-    EVENT_LISTS ||--o{ DAMAGE_REPORTS : may_generate
-```
-
-### 10.1 `inventory_event_factions` — new
-
-| Field | Type | Notes |
-|---|---|---|
-| `eventType` | select | DE, LS, TNO, ASD, M24 |
-| `name` | text | Display name including umlauts |
-| `slug` | text | Stable URL-safe identifier |
-| `active` | bool | Hidden from new occurrences when false |
-| `sortOrder` | number | Stable display order |
-| `created`, `updated` | timestamps | PocketBase managed |
-
-Unique index: `(eventType, slug)`.
-
-### 10.2 `inventory_event_reports` → event occurrence — evolve
-
-| New/evolved field | Type | Notes |
-|---|---|---|
-| `name` | text | Human-readable event occurrence name |
-| `eventType` | select | Existing field retained |
-| `startsAt`, `endsAt` | date/time | Replace or extend the single event date |
-| `status` | select | Expanded occurrence lifecycle |
-| `createdBy` | user relation | Existing field retained |
-| `notes` | text | Existing field retained |
-| `legacyPlannedQuantities`, `legacyUsedQuantities` | JSON or migration archive | Preserve old data until line migration is verified |
-
-The current many-item relation and JSON quantity maps should be migrated to typed list-line records. JSON maps cannot safely enforce uniqueness, relations, per-line audit, or concurrent partial updates.
-
-### 10.3 `inventory_event_lists` — new
-
-| Field | Type | Notes |
-|---|---|---|
-| `eventReportId` | relation | Parent event occurrence |
-| `factionId` | relation | Event-scoped faction |
-| `name` | text | Defaults to faction name; allows an explicit operational label |
-| `listCode` | text | Short unique manual lookup code |
-| `qrTokenHash` | text | Store a token hash if bearer-style QR tokens are used |
-| `status` | select | List lifecycle |
-| `revision` | number | Optimistic concurrency/version display |
-| `createdBy`, `submittedBy`, `readyBy`, `pickedUpBy`, `returnedBy`, `closedBy` | user relations | Summary actors |
-| matching `...At` fields | date/time | Server timestamps for summary milestones |
-| `shortageAcceptedBy`, `shortageAcceptedAt`, `shortageReason` | relation/date/text | Required when readiness has shortages |
-| `notes` | text | List-wide notes |
-| `created`, `updated` | timestamps | PocketBase managed |
-
-Recommended unique index for the first release: `(eventReportId, factionId)`, meaning one primary list per faction per occurrence. If multiple lists are later needed, replace it with `(eventReportId, factionId, name)` and retain a primary-list marker.
-
-### 10.4 `inventory_event_list_items` — new
-
-| Field | Type | Notes |
-|---|---|---|
-| `listId` | relation | Parent faction list |
-| `itemId` | relation | Inventory item |
-| `requestedQuantity` | number | Required amount |
-| `preparedQuantity` | number | Currently reserved/prepared |
-| `pickedUpQuantity` | number | Quantity checked out through pickup |
-| `returnedQuantity` | number | Quantity checked in through list return |
-| `damagedReturnQuantity` | number | Quantity linked to return damage reports |
-| `status` | select | Derived/cacheable line state |
-| `note` | text | Faction or preparation note |
-| `substitutionForItemId` | optional relation | Makes substitutions explicit |
-| `created`, `updated` | timestamps | PocketBase managed |
-
-Unique index: `(listId, itemId)` unless explicit substitute lines require a separate stable line ID and duplicate item policy.
-
-### 10.5 `inventory_event_list_activity` — new, append-only
-
-| Field | Type | Notes |
-|---|---|---|
-| `listId` | relation | Required parent list |
-| `listItemId` | optional relation | Present for a line action |
-| `action` | select/text | Machine-readable event name |
-| `actorId` | user relation | Authenticated actor |
-| `occurredAt` | date/time | Server timestamp |
-| `fromStatus`, `toStatus` | text | Transition when applicable |
-| `quantity` | number | Delta/affected quantity when applicable |
-| `reason` | text | Required for exceptions and post-submit edits |
-| `metadata` | JSON | Before/after snapshot and transaction/damage IDs |
-| `idempotencyKey` | text | Unique key for retry-safe scan actions |
-
-Clients shall not update or delete these records. Corrections append compensating activity.
-
-### 10.6 Existing collection changes
-
-- Add optional `eventListId` and `eventListItemId` relations to `inventory_stock_transactions`.
-- Add optional `eventListId` and `eventListItemId` relations to `inventory_damage_reports`.
-- Keep `damageReportId` on stock transactions for the current repair/write-off trace.
-- Retain existing records and null relations for transactions that predate faction lists.
-
-## 11. Proposed application architecture
-
-### Pages and routes
-
-| Route | Purpose |
-|---|---|
-| `/events` | Event-occurrence list, create action, and cross-event history |
-| `/events/:eventId` | Event overview with faction cards, progress, shortages, and ready/pickup state |
-| `/events/:eventId/factions/:factionId/list` | Edit/prepare/operate the faction list |
-| `/event-lists/:listId/history` | Full lifecycle audit and previous-event comparison |
-| `/event-list-scan/:token` | State-aware QR entry point |
-| `/event-lists/:listId/print` | Print-friendly pick list and QR |
-
-### Front-end modules
-
-```text
-src/
-  pages/
-    Events.tsx
-    EventOccurrenceDetail.tsx
-    EventFactionList.tsx
-    EventListHistory.tsx
-    EventListScan.tsx
-  components/events/
-    EventOccurrenceForm.tsx
-    FactionStatusCard.tsx
-    FactionListEditor.tsx
-    PreparationChecklist.tsx
-    PickupConfirmation.tsx
-    ListReturnForm.tsx
-    EventListDiff.tsx
-    EventListTimeline.tsx
-    EventListQRCode.tsx
-  hooks/
-    useEventOccurrences.ts
-    useEventFactions.ts
-    useEventLists.ts
-    useEventListActivity.ts
-  services/
-    eventOccurrenceService.ts
-    eventFactionService.ts
-    eventListService.ts
-  types/
-    event.ts
-    eventFaction.ts
-    eventList.ts
-```
-
-The exact file split may change, but state transitions and atomic mutations must live in service/domain functions, not be duplicated across pages.
-
-### Query and realtime behavior
-
-- Event overview queries subscribe to occurrence, list, list-line, transaction, and relevant damage changes.
-- Mutations invalidate the occurrence, list detail, items, transactions, checked-out inventory, and dashboards as applicable.
-- Realtime events are a refresh mechanism, not the authority for transition validation.
-- Mutation responses return the authoritative server state so the scanning user receives immediate confirmation.
-
-### Atomic operations
-
-The following operations must be server-validated and atomic, using PocketBase batch support or backend hooks/endpoints:
-
-1. Reserve or release a prepared quantity.
-2. Mark a list ready and append activity.
-3. Pick up a list, create all checkout transactions, update lines, update the list, and append activity.
-4. Return list quantities, create check-ins and optional damage reports, update lines/list, and append activity.
-5. Cancel a prepared list and release its reservations.
-
-Client-side validation improves UX but is not sufficient for stock correctness because two preparers may act concurrently.
-
-## 12. Permissions and audit requirements
-
-Recommended capability model:
-
-| Capability | User/faction member | Manager | Admin |
-|---|---:|---:|---:|
-| View permitted event/list data | Yes | Yes | Yes |
-| Create/edit own faction draft | Yes | Yes | Yes |
-| Submit own faction list | Yes | Yes | Yes |
-| Prepare inventory | Optional assignment | Yes | Yes |
-| Accept shortage / mark ready | No by default | Yes | Yes |
-| Confirm pickup as collector | Yes | Yes | Yes |
-| Correct closed records | No | No by default | Append-only admin correction |
-| Configure factions | No | Optional | Yes |
-
-- [ ] **SEC-001 — Server enforcement.** PocketBase collection rules/hooks shall enforce every capability; hiding a button is not authorization. **Required.**
-- [ ] **SEC-002 — Faction membership.** If faction members should see/edit only their faction, introduce an explicit user-to-faction membership collection scoped to event type. **Required when restricted faction access is desired.**
-- [ ] **SEC-003 — Server timestamps.** Audit and custody timestamps shall be created by the backend, not trusted from the device clock. **Required.**
-- [ ] **SEC-004 — Immutable audit.** Normal clients shall not edit/delete list activity or system-created stock history. **Required.**
-- [ ] **SEC-005 — QR permission safety.** Possessing a QR token shall locate a list but shall not grant permissions. **Required.**
-
-## 13. Desktop and mobile UX requirements
-
-### Mobile-first operational flow
-
-- [ ] **UX-001 — Three-tap target.** From opening Scan, a user should reach the valid list action and its confirmation in no more than three intentional taps after a successful scan. **Required.**
-- [ ] **UX-002 — Primary action placement.** Prepare, Ready, Pick up, and Return actions shall be large, thumb-reachable, and state-specific; irrelevant actions shall not compete visually. **Required.**
-- [ ] **UX-003 — Scan continuity.** Authentication shall return the user to the scanned list rather than the home page. **Required.**
-- [ ] **UX-004 — Dense content.** Mobile list lines shall use cards or a compact checklist with item, quantity, location, shortage, and action visible without horizontal scrolling. **Required.**
-- [ ] **UX-005 — Sticky progress.** Preparation/pickup screens shall keep progress and the next primary action visible while scrolling. **Required.**
-- [ ] **UX-006 — Fast quantities.** Common actions shall offer one-unit plus/minus and “all remaining” controls, with a numeric input fallback. **Required.**
-- [ ] **UX-007 — Confirmation design.** Bulk pickup/return confirmation shall summarize affected line and unit counts without requiring the user to re-read every line. **Required.**
-- [ ] **UX-008 — Recovery.** Network errors shall preserve entered quantities and make retries safe through idempotency keys. **Required.**
-- [ ] **UX-009 — Accessible state.** Color shall not be the only indicator of ready, shortage, prepared, or overdue state. **Required.**
-- [ ] **UX-010 — Scanner fallback.** Camera permission failure shall immediately expose image upload and manual list-code entry. **Required.**
-
-### Desktop operational flow
-
-- [ ] **UX-011 — Overview density.** Desktop event overview shall show all factions, status, progress, shortages, preparer, ready time, collector, and pickup time without opening every list. **Required.**
-- [ ] **UX-012 — Bulk preparation.** Desktop preparation shall support efficient multi-line quantity entry and a single audited save. **Required.**
-- [ ] **UX-013 — Keyboard use.** Core list editing and quantity entry shall be keyboard operable with visible focus. **Required.**
-- [ ] **UX-014 — Responsive parity.** Every required operation shall be available on both desktop and mobile; layout may differ but capability shall not. **Required.**
-
-## 14. Non-functional requirements
-
-- [ ] **NFR-001 — Consistency.** Stock, reservations, list state, and activity must never partially commit. **Required.**
-- [ ] **NFR-002 — Concurrency.** Concurrent preparation/pickup attempts shall reject or safely reconcile stale revisions. **Required.**
-- [ ] **NFR-003 — Performance.** A list scan shall show its usable cached shell immediately and authoritative list data within a target of two seconds on a normal mobile connection. **Required target.**
-- [ ] **NFR-004 — Realtime.** Another user's preparation, readiness, pickup, or return shall appear without a full-page reload. **Required.**
-- [ ] **NFR-005 — Audit retention.** Completed occurrences, lists, activity, and linked stock transactions shall remain queryable after faction or item deactivation. **Required.**
-- [ ] **NFR-006 — Time display.** Timestamps shall be stored unambiguously and displayed in the user's locale/time zone. **Required.**
-- [ ] **NFR-007 — Translation.** All new event/list UI strings shall be available in German and English. **Required.**
-- [ ] **NFR-008 — Compatibility.** Existing items, transactions, assemblies, damage reports, event reports, and QR codes shall continue to work through migration. **Required.**
-- [ ] **NFR-009 — Testing.** Domain calculations and lifecycle guards require unit tests; atomic pickup/return and migration require integration tests; critical scan flows require mobile and desktop end-to-end tests. **Required.**
-- [ ] **NFR-010 — Bun workflow.** Installation, scripts, and CI commands shall use Bun and the checked-in Bun lockfile. **Required.**
-
-## 15. Acceptance scenarios
-
-### AC-01 — Copy and compare a previous list
-
-1. Create a new TNO occurrence.
-2. Open the Wissenschaftler faction.
-3. Copy its list from a previous completed TNO occurrence.
-4. Increase one quantity, remove one item, and add one item.
-5. Verify the diff labels the changes as increased, removed, and added.
-6. Save and verify the previous occurrence remains unchanged.
-
-### AC-02 — Partial preparation with a shortage
-
-1. Submit a faction list requesting ten units of an item with only six available-to-promise.
-2. Prepare six units.
-3. Verify the line shows requested 10, prepared 6, shortage 4.
-4. Verify the six units are unavailable to another open list.
-5. Verify actor, quantity, and timestamp appear in list history.
-6. Verify Ready is blocked until the shortage is resolved or accepted by an authorized user with a reason.
-
-### AC-03 — QR pickup
-
-1. Mark a fully prepared list ready.
-2. Scan its printed QR from a signed-in mobile device.
-3. Verify the screen shows faction, event, preparer, ready time, and list summary.
-4. Confirm pickup.
-5. Verify collector/time are recorded, checkout transactions are created once, stock changes, and the list becomes picked up.
-6. Repeat the confirmation request and verify no duplicate checkout is created.
-
-### AC-04 — QR return with damage
-
-1. Scan a picked-up list.
-2. Return some lines completely, one line partially, and mark part of another line damaged.
-3. Verify ordinary returned quantities create check-ins.
-4. Verify damaged quantities create linked damage reports with the authenticated reporter.
-5. Verify remaining outstanding quantities stay visible and the list cannot close prematurely.
-
-### AC-05 — Audit identities
-
-1. User A creates/submits a list.
-2. User B and User C prepare different lines.
-3. User B marks it ready.
-4. User D picks it up.
-5. Verify the list summary shows the final milestone actors/times and history shows every contributor/action in chronological order.
-
-### AC-06 — Cross-device usability
-
-Run AC-01 through AC-05 at a desktop viewport and at a representative narrow mobile viewport. No operation may require horizontal page scrolling, hover, or a desktop-only control.
-
-## 16. Migration and implementation sequence
-
-### Phase 1 — Correctness foundation
-
-- Add typed faction, occurrence, list, line, and activity models/collections.
-- Seed the faction catalogue.
-- Add event-list relations to transaction and damage records.
-- Implement server-authoritative lifecycle guards, reservations, activity, and idempotency.
-- Add tests for stock plus reservation calculations and concurrent operations.
-
-### Phase 2 — Planning and history
-
-- Build event occurrence and faction overview screens.
-- Build list editor, copy-previous, and diff views.
-- Migrate existing event reports into occurrence/history-compatible records.
-- Preserve original JSON quantities until migration verification is complete.
-
-### Phase 3 — Preparation and pickup
-
-- Build preparation checklist and ready transition.
-- Build list QR generation, printing, state-aware scan, and manual code fallback.
-- Implement atomic pickup/checkouts and identity/timestamp summaries.
-
-### Phase 4 — Returns and hardening
-
-- Build partial list return and linked damage reporting.
-- Add event/list dashboards and full history timeline.
-- Complete German/English strings, accessibility, mobile E2E coverage, and performance validation.
-- Correct the existing item stock chart so repair/write-off history is represented.
-
-## 17. Traceability checklist
-
-| Requested outcome | Requirements that verify it |
-|---|---|
-| Each event has the specified factions | FAC-001 to FAC-004 |
-| Each faction can create a list | LST-001 to LST-006 |
-| Reuse and compare previous events | LST-007 to LST-010, HIS-005 to HIS-007 |
-| See the state of every item/list | EVO-003 to EVO-004, PREP-001 to PREP-004 |
-| Know when a list is ready | PREP-007 to PREP-008 |
-| Know who prepared it and when | PREP-006, PREP-008, HIS-001 to HIS-004 |
-| Know who picked it up and when | PICK-001 to PICK-004, HIS-001 to HIS-004 |
-| Operate everything by scanning one list QR | LQR-001 to LQR-009 |
-| Return/check in from the list | RET-001 to RET-004 |
-| Mobile and desktop usability | UX-001 to UX-014, AC-06 |
-| Stock remains correct and auditable | PREP-003 to PREP-004, PICK-003 to PICK-005, NFR-001 to NFR-002 |
-
-## 18. Assumptions and decisions to confirm
-
-The architecture above makes these explicit assumptions so implementation does not silently invent product policy:
-
-1. **LightSim uses the existing `LS` database code.** The UI may display “LightSim”.
-2. **One primary list per faction per event occurrence** is recommended for the first release. Multiple revisions are represented by immutable activity and the submitted baseline, not duplicate active lists.
-3. **A list QR is stable across the lifecycle.** Its available action changes with state; the QR itself does not need reprinting.
-4. **Multiple people may prepare a list.** `readyBy/readyAt` summarizes the final approval, while the activity log records every contributor.
-5. **Pickup is list-wide in the first release.** Partial pickup can be supported by the proposed quantities, but enabling it should be a deliberate operational decision because it complicates custody and readiness.
-6. **List return is included.** Without it, a QR-driven pickup creates checkout transactions with no equally quick event-level way to check the same inventory back in.
-7. **Prepared stock is reserved, not checked out.** Checkout happens only when custody changes at pickup.
-8. **Previous-event history is immutable.** Corrections are append-only and never rewrite what users originally prepared or collected.
-
-## 19. Definition of done
-
-The faction event-list feature is complete when:
-
-- every Required checkbox relevant to the approved scope is implemented or explicitly deferred with a recorded reason;
-- the collection schema and migration preserve all current records;
-- the specified factions are seeded and event-scoped;
-- previous lists can be copied and compared without mutating history;
-- reservations prevent double preparation;
-- preparation, ready, pickup, return, and damage actions are atomic and audited;
-- list QR scanning provides the correct next action on authenticated desktop and mobile devices;
-- preparer, ready, collector, return, and exception identities/times are visible;
-- all generated stock transactions link back to their faction list;
-- German and English interfaces pass responsive and accessibility checks;
-- Bun-based typecheck, build, automated tests, and critical mobile/desktop end-to-end scenarios pass.
+### Phase 1: API Specification & Schema Design
+1. Formalize PostgreSQL DDL migrations using **Flyway** (including maintenance and incomplete return tables).
+2. Generate an **OpenAPI 3.1 contract** representing inventory, assemblies, transactions, damage, reorder deficits, maintenance cycles, and faction orders.
+
+### Phase 2: Quarkus (Java 25 LTS) Backend Development & Observability
+1. Implement the REST API using **Java 25 (LTS) & Quarkus** (RESTEasy Reactive + Hibernate ORM with Panache).
+2. Enforce atomic transactions:
+   - Reserving items during packing.
+   - Atomic checkout upon pickup.
+   - Component-level incomplete return handling (splitting undamaged vs. missing kit items).
+   - Real-time stock shortage & demand forecasting calculations.
+   - DGUV V3 / maintenance status checkout blockers.
+3. Configure `quarkus-opentelemetry` streaming traces and structured audit logs to **OpenObserver**.
+
+### Phase 3: Frontend Refactoring & Offline PWA Mode
+1. Run `openapi-typescript` or `orval` against the Quarkus OpenAPI contract to generate 100% type-safe React Query hooks.
+2. Replace `src/services/pocketbaseClient.ts` and PocketBase SDK calls with standard HTTP client (Axios or native `fetch`).
+3. Add dedicated printable PDF template with physical check-off boxes for warehouse commissioning.
+4. Add the Demand & Reorder Deficit view (`Demand - Available Stock = Reorder Quantity`).
+5. Implement **Offline Field Mode via PWA**:
+   - Service Worker caching of active orders and pick lists in **IndexedDB**.
+   - Offline scanning queue with client-side idempotency keys syncing back to Quarkus upon reconnection.
+6. Implement push notifications via Server-Sent Events (SSE) or WebPush API.
+
+### Phase 4: Production Hardening & Multi-VPS Deployment
+1. Deploy **Cloudflare Worker** as health-checked edge load balancer routing to VPS 1 and VPS 2.
+2. Setup **VPS 1 (Primary)** and **VPS 2 (Hot Standby)** running Traefik, React 19 SPA, Quarkus REST API, and PostgreSQL 18 streaming replication.
+3. Setup **VPS 3** running **Garage S3** for media/PDF storage and mount/sync to **Hetzner Storage Box** for encrypted off-site backups.
+4. Setup automated PostgreSQL WAL archiving (`pgBackRest` or `wal-g`) to Hetzner Storage Box.

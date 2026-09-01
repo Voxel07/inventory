@@ -20,15 +20,15 @@ Functions:
 - All transaction and actions should have a user to keep track who did what
 - All items, assemblies, orders should have a qr code so that they can be scanned and quickly checked out, or updated
 
-- Foto of the item
-- Hinweis feld, bzw Kommentar
+- Image of Items
+- Hint or special instructions for items
 
 - Limit access to users for hq crew
 - Add unique code to order
-- Push benachrichtigungen
-- Materialliste druckbar
+- Push notifications for users that are logged in
+- Printable orders that can be checked off by hand to keep track when commisioning the oder
 
-- Benutzerverwaltung
+- Usermanagement
 
 Acessability
 - Has to work on mobile and desktop
