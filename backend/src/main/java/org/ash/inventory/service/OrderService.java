@@ -2,26 +2,25 @@ package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
-import org.ash.inventory.api.ApiException;
-import org.ash.inventory.api.ApiModels;
-import org.ash.inventory.domain.Assembly;
-import org.ash.inventory.domain.AssemblyItem;
-import org.ash.inventory.domain.DamageReport;
-import org.ash.inventory.domain.DomainEnums;
-import org.ash.inventory.domain.EventOccurrence;
-import org.ash.inventory.domain.Faction;
-import org.ash.inventory.domain.FactionOrder;
-import org.ash.inventory.domain.FactionOrderHistory;
-import org.ash.inventory.domain.FactionOrderLine;
-import org.ash.inventory.domain.Item;
-import org.ash.inventory.domain.Notification;
-import org.ash.inventory.domain.StockTransaction;
-import org.ash.inventory.domain.StorageLocation;
-import org.ash.inventory.domain.UserAccount;
-import org.ash.inventory.security.ActorService;
+import org.ash.inventory.resource.ApiException;
+import org.ash.inventory.resource.ApiModels;
+import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssemblyItem;
+import org.ash.inventory.model.DamageReport;
+import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.EventOccurrence;
+import org.ash.inventory.model.Faction;
+import org.ash.inventory.model.FactionOrder;
+import org.ash.inventory.model.FactionOrderHistory;
+import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.Item;
+import org.ash.inventory.model.Notification;
+import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.model.StorageLocation;
+import org.ash.inventory.model.UserAccount;
+import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.orm.OrderOrm;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,7 +34,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
-    @Inject EntityManager entityManager;
+    @Inject OrderOrm orm;
     @Inject ActorService actors;
     @Inject CatalogService catalog;
     @Inject InventoryOperationsService inventory;
@@ -68,7 +67,7 @@ public class OrderService {
         order.notes = input.notes();
         order.createdBy = actor;
         order.orderCode = nextOrderCode(event, faction);
-        order.persist();
+        orm.persist(order);
         replaceLines(order, input);
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, null, input.notes(), lineSnapshot(order));
         return order;
@@ -97,7 +96,7 @@ public class OrderService {
         if (order.status == DomainEnums.OrderStatus.submitted) transition(order, DomainEnums.OrderStatus.preparing, null, "preparation_started", input.notes(), Map.of());
         else if (order.status != DomainEnums.OrderStatus.preparing) throw ApiException.conflict("Order must be submitted or preparing");
 
-        var lines = FactionOrderLine.<FactionOrderLine>list("order", order);
+        var lines = orm.lines(order);
         var requestedByItem = aggregate(lines, false);
         for (var entry : requestedByItem.entrySet()) {
             int prepared = input.preparedQuantities() == null ? 0 : input.preparedQuantities().getOrDefault(entry.getKey().id, 0);
@@ -122,7 +121,7 @@ public class OrderService {
         if (target != DomainEnums.OrderStatus.submitted && target != DomainEnums.OrderStatus.draft) actors.requireManager();
         else assertFactionAccess(actor, order.faction);
         if (target == DomainEnums.OrderStatus.ready) {
-            var lines = FactionOrderLine.<FactionOrderLine>list("order", order);
+            var lines = orm.lines(order);
             boolean nonePrepared = lines.stream().allMatch(line -> line.preparedQuantity == 0);
             if (nonePrepared) throw ApiException.conflict("An order cannot be ready before any items are prepared");
             order.readyBy = actor;
@@ -147,9 +146,9 @@ public class OrderService {
             throw ApiException.conflict("Order must be picked up before returns can be recorded");
         }
         var actor = actors.current();
-        var lines = FactionOrderLine.<FactionOrderLine>list("order", order);
+        var lines = orm.lines(order);
         for (var entry : input.lines().entrySet()) {
-            var item = entityManager.find(Item.class, entry.getKey(), LockModeType.PESSIMISTIC_WRITE);
+            var item = orm.findLocked(Item.class, entry.getKey());
             if (item == null) throw ApiException.notFound("Item not found");
             var relevant = lines.stream().filter(line -> line.item.id.equals(item.id)).toList();
             int outstanding = relevant.stream().mapToInt(line -> line.pickedUpQuantity - line.returnedQuantity - line.damagedQuantity).sum();
@@ -171,7 +170,7 @@ public class OrderService {
                 damage.quantity = outcome.damaged();
                 damage.severity = DomainEnums.DamageSeverity.high;
                 damage.description = outcome.notes() == null ? "Damage recorded during order return" : outcome.notes();
-                damage.persist();
+                orm.persist(damage);
             }
             if (outcome.operatingHours() != null && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
                 item.currentOperatingHours = outcome.operatingHours();
@@ -186,7 +185,7 @@ public class OrderService {
     @Transactional
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
         var order = lockedOrder(id);
-        var lines = FactionOrderLine.<FactionOrderLine>list("order", order);
+        var lines = orm.lines(order);
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet()) outcomes.put(entry.getKey().id,
                 new ApiModels.ReturnLine(entry.getValue(), 0, 0, null, "Full order return"));
@@ -198,9 +197,9 @@ public class OrderService {
     }
 
     private void pickup(FactionOrder order, UserAccount actor, UUID idempotencyKey) {
-        var lines = FactionOrderLine.<FactionOrderLine>list("order", order);
+        var lines = orm.lines(order);
         for (var entry : aggregatePrepared(lines).entrySet()) {
-            var item = entityManager.find(Item.class, entry.getKey().id, LockModeType.PESSIMISTIC_WRITE);
+            var item = orm.findLocked(Item.class, entry.getKey().id);
             inventory.assertCheckoutAllowed(item);
             int ownReservation = lines.stream().filter(line -> line.item.id.equals(item.id)).mapToInt(line -> line.preparedQuantity).sum();
             int available = inventory.stock(item).available() + ownReservation;
@@ -213,13 +212,13 @@ public class OrderService {
             transaction.quantity = entry.getValue();
             transaction.reason = "Faction order pickup " + order.orderCode;
             transaction.idempotencyKey = null;
-            transaction.persist();
+            orm.persist(transaction);
         }
         for (var line : lines) line.pickedUpQuantity = line.preparedQuantity;
     }
 
     private void replaceLines(FactionOrder order, ApiModels.OrderInput input) {
-        FactionOrderLine.delete("order", order);
+        orm.deleteLines(order);
         int count = 0;
         if (input.requestedQuantities() != null) {
             for (var entry : input.requestedQuantities().entrySet()) {
@@ -232,7 +231,7 @@ public class OrderService {
             for (var entry : input.requestedAssemblyQuantities().entrySet()) {
                 if (entry.getValue() == null || entry.getValue() < 1) continue;
                 var assembly = required(Assembly.class, entry.getKey(), "Assembly");
-                for (var component : AssemblyItem.<AssemblyItem>list("assembly", assembly)) {
+                for (var component : orm.assemblyItems(assembly)) {
                     addLine(order, component.item, assembly, component.quantity * entry.getValue());
                     count++;
                 }
@@ -247,7 +246,7 @@ public class OrderService {
         line.item = item;
         line.sourceAssembly = assembly;
         line.requestedQuantity = quantity;
-        line.persist();
+        orm.persist(line);
     }
 
     private void distributePrepared(List<FactionOrderLine> lines, Item item, int quantity) {
@@ -291,7 +290,7 @@ public class OrderService {
         transaction.reason = "Faction order return " + order.orderCode;
         transaction.notes = notes;
         transaction.idempotencyKey = idempotencyKey;
-        transaction.persist();
+        orm.persist(transaction);
     }
 
     private void transition(FactionOrder order, DomainEnums.OrderStatus target, UUID idempotencyKey, String action, String notes, Map<String, Object> delta) {
@@ -312,15 +311,15 @@ public class OrderService {
         history.idempotencyKey = idempotencyKey;
         history.notes = notes;
         history.deltaSnapshot = delta;
-        history.persist();
+        orm.persist(history);
     }
 
     private boolean idempotent(FactionOrder order, UUID key) {
-        return key != null && FactionOrderHistory.count("order = ?1 and idempotencyKey = ?2", order, key) > 0;
+        return key != null && orm.historyExists(order, key);
     }
 
     private boolean hasOutstanding(FactionOrder order) {
-        return FactionOrderLine.<FactionOrderLine>list("order", order).stream()
+        return orm.lines(order).stream()
                 .anyMatch(line -> line.pickedUpQuantity > line.returnedQuantity + line.damagedQuantity);
     }
 
@@ -338,7 +337,7 @@ public class OrderService {
 
     private Map<String, Object> lineSnapshot(FactionOrder order) {
         var rows = new ArrayList<Map<String, Object>>();
-        for (var line : FactionOrderLine.<FactionOrderLine>list("order", order)) {
+        for (var line : orm.lines(order)) {
             rows.add(Map.of("itemId", line.item.id, "requested", line.requestedQuantity, "prepared", line.preparedQuantity,
                     "pickedUp", line.pickedUpQuantity, "returned", line.returnedQuantity, "missing", line.missingQuantity, "damaged", line.damagedQuantity));
         }
@@ -348,7 +347,7 @@ public class OrderService {
     private String nextOrderCode(EventOccurrence event, Faction faction) {
         String factionPart = faction.slug.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(Locale.ROOT);
         String prefix = event.eventType.toUpperCase(Locale.ROOT) + String.format("%02d", event.startDate.getYear() % 100) + "-" + factionPart + "-";
-        long sequence = FactionOrder.count("orderCode like ?1", prefix + "%") + 1;
+        long sequence = orm.countOrderCodes(prefix + "%") + 1;
         return prefix + String.format("%02d", sequence);
     }
 
@@ -387,17 +386,17 @@ public class OrderService {
             if (order.pickupLocation.longitude != null) payload.put("longitude", order.pickupLocation.longitude);
         }
         notification.payload = payload;
-        notification.persist();
+        orm.persist(notification);
     }
 
     private FactionOrder lockedOrder(UUID id) {
-        var order = entityManager.find(FactionOrder.class, id, LockModeType.PESSIMISTIC_WRITE);
+        var order = orm.findLockedOrder(id);
         if (order == null) throw ApiException.notFound("Faction order not found");
         return order;
     }
 
     private <T> T required(Class<T> type, UUID id, String label) {
-        T value = entityManager.find(type, id);
+        T value = orm.find(type, id);
         if (value == null) throw ApiException.notFound(label + " not found");
         return value;
     }

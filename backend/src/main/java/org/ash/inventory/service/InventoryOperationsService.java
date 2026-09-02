@@ -2,21 +2,20 @@ package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
-import org.ash.inventory.api.ApiException;
-import org.ash.inventory.api.ApiModels;
-import org.ash.inventory.domain.DamageReport;
-import org.ash.inventory.domain.DomainEnums;
-import org.ash.inventory.domain.EventOccurrence;
-import org.ash.inventory.domain.FactionOrder;
-import org.ash.inventory.domain.FactionOrderLine;
-import org.ash.inventory.domain.Item;
-import org.ash.inventory.domain.MaintenanceRecord;
-import org.ash.inventory.domain.StockTransaction;
-import org.ash.inventory.domain.UserAccount;
-import org.ash.inventory.security.ActorService;
+import org.ash.inventory.resource.ApiException;
+import org.ash.inventory.resource.ApiModels;
+import org.ash.inventory.model.DamageReport;
+import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.EventOccurrence;
+import org.ash.inventory.model.FactionOrder;
+import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.Item;
+import org.ash.inventory.model.MaintenanceRecord;
+import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.model.UserAccount;
+import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.orm.OperationsOrm;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -31,7 +30,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class InventoryOperationsService {
-    @Inject EntityManager entityManager;
+    @Inject OperationsOrm orm;
     @Inject ActorService actors;
 
     public record StockState(int physical, int checkedOut, int damaged, int reserved, int available) {}
@@ -43,7 +42,7 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Damage resolution transactions must be created from a damage report");
         }
         if (input.idempotencyKey() != null) {
-            var existing = StockTransaction.<StockTransaction>find("idempotencyKey", input.idempotencyKey()).firstResult();
+            var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
             if (existing != null) return existing;
         }
         var item = lockedItem(input.itemId());
@@ -64,7 +63,7 @@ public class InventoryOperationsService {
         transaction.notes = input.notes();
         transaction.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null) transaction.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
-        transaction.persist();
+        orm.persist(transaction);
         return transaction;
     }
 
@@ -72,7 +71,7 @@ public class InventoryOperationsService {
         int physical = 0;
         boolean hasAddedTransaction = false;
         int checkedOut = 0;
-        for (var tx : StockTransaction.<StockTransaction>list("item", item)) {
+        for (var tx : orm.transactions(item)) {
             switch (tx.type) {
                 case added -> {
                     hasAddedTransaction = true;
@@ -87,12 +86,9 @@ public class InventoryOperationsService {
         if (!hasAddedTransaction) {
             physical += item.baseAmount;
         }
-        int damaged = DamageReport.<DamageReport>list("item = ?1 and status in ?2", item,
-                List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.in_review)).stream()
+        int damaged = orm.unresolvedDamage(item).stream()
                 .mapToInt(report -> Math.max(0, report.quantity - report.repairedQuantity - report.writtenOffQuantity)).sum();
-        int reserved = FactionOrderLine.<FactionOrderLine>list(
-                "item = ?1 and order.status in ?2", item,
-                List.of(DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready)).stream()
+        int reserved = orm.reservedLines(item).stream()
                 .mapToInt(line -> line.preparedQuantity).sum();
         return new StockState(Math.max(0, physical), Math.max(0, checkedOut), damaged, reserved,
                 Math.max(0, physical - damaged - reserved));
@@ -108,7 +104,7 @@ public class InventoryOperationsService {
     @Transactional
     public DamageReport createDamage(ApiModels.DamageInput input) {
         if (input.idempotencyKey() != null) {
-            var existing = DamageReport.<DamageReport>find("idempotencyKey", input.idempotencyKey()).firstResult();
+            var existing = orm.damageByIdempotencyKey(input.idempotencyKey());
             if (existing != null) return existing;
         }
         var report = new DamageReport();
@@ -119,13 +115,13 @@ public class InventoryOperationsService {
         report.severity = input.severity();
         report.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null) report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
-        report.persist();
+        orm.persist(report);
         return report;
     }
 
     @Transactional
     public DamageReport resolveDamage(UUID id, ApiModels.DamageResolutionInput input) {
-        var report = entityManager.find(DamageReport.class, id, LockModeType.PESSIMISTIC_WRITE);
+        var report = orm.findLockedDamage(id);
         if (report == null) throw ApiException.notFound("Damage report not found");
         var unresolved = report.quantity - report.repairedQuantity - report.writtenOffQuantity;
         if (input.amount() > unresolved) throw ApiException.badRequest("Resolution quantity exceeds unresolved damage quantity " + unresolved);
@@ -157,7 +153,7 @@ public class InventoryOperationsService {
         transaction.reason = input.status() == DomainEnums.DamageStatus.repaired ? "Damage repaired" : "Damage written off";
         transaction.notes = input.notes();
         transaction.idempotencyKey = input.idempotencyKey();
-        transaction.persist();
+        orm.persist(transaction);
         return report;
     }
 
@@ -174,7 +170,7 @@ public class InventoryOperationsService {
         record.result = input.result();
         record.certificateNumber = input.certificateNumber();
         record.notes = input.notes();
-        record.persist();
+        orm.persist(record);
         if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0) item.currentOperatingHours = input.operatingHours();
         item.nextMaintenanceDue = input.nextDueAt() == null ? null : input.nextDueAt().atZone(ZoneOffset.UTC).toLocalDate();
         item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
@@ -185,11 +181,9 @@ public class InventoryOperationsService {
     @Transactional
     public List<Map<String, Object>> deficits(UUID eventOccurrenceId) {
         actors.current();
-        List<FactionOrderLine> lines;
         var active = List.of(DomainEnums.OrderStatus.draft, DomainEnums.OrderStatus.submitted,
                 DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready);
-        if (eventOccurrenceId == null) lines = FactionOrderLine.list("order.status in ?1", active);
-        else lines = FactionOrderLine.list("order.status in ?1 and order.eventOccurrence.id = ?2", active, eventOccurrenceId);
+        List<FactionOrderLine> lines = orm.activeOrderLines(eventOccurrenceId, active);
         var demand = new LinkedHashMap<Item, Integer>();
         for (var line : lines) demand.merge(line.item, line.requestedQuantity, Integer::sum);
         var result = new ArrayList<Map<String, Object>>();
@@ -229,13 +223,13 @@ public class InventoryOperationsService {
     }
 
     private Item lockedItem(UUID id) {
-        var item = entityManager.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE);
+        var item = orm.findLockedItem(id);
         if (item == null || !item.active) throw ApiException.notFound("Item not found");
         return item;
     }
 
     private <T> T required(Class<T> type, UUID id, String label) {
-        T value = entityManager.find(type, id);
+        T value = orm.find(type, id);
         if (value == null) throw ApiException.notFound(label + " not found");
         return value;
     }

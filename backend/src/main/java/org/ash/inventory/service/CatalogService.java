@@ -1,23 +1,23 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
-import org.ash.inventory.api.ApiException;
-import org.ash.inventory.api.ApiModels;
-import org.ash.inventory.domain.Assembly;
-import org.ash.inventory.domain.AssemblyItem;
-import org.ash.inventory.domain.AssemblyItemId;
-import org.ash.inventory.domain.EventOccurrence;
-import org.ash.inventory.domain.Faction;
-import org.ash.inventory.domain.Item;
-import org.ash.inventory.domain.ItemImage;
-import org.ash.inventory.domain.StorageLocation;
+import org.ash.inventory.resource.ApiException;
+import org.ash.inventory.resource.ApiModels;
+import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssemblyItem;
+import org.ash.inventory.model.AssemblyItemId;
+import org.ash.inventory.model.EventOccurrence;
+import org.ash.inventory.model.Faction;
+import org.ash.inventory.model.Item;
+import org.ash.inventory.model.ItemImage;
+import org.ash.inventory.model.StorageLocation;
 
 import jakarta.inject.Inject;
-import org.ash.inventory.domain.DomainEnums;
-import org.ash.inventory.domain.StockTransaction;
-import org.ash.inventory.security.ActorService;
+import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.orm.CatalogOrm;
 
 import java.math.RoundingMode;
 import java.text.Normalizer;
@@ -31,12 +31,13 @@ import java.util.UUID;
 @ApplicationScoped
 public class CatalogService {
     @Inject ActorService actorService;
+    @Inject CatalogOrm orm;
 
     @Transactional
     public Item createItem(ApiModels.ItemInput input) {
         var item = new Item();
         apply(item, input);
-        item.persist();
+        orm.persist(item);
         persistImages(item, input.images());
         if (item.baseAmount > 0) {
             var tx = new StockTransaction();
@@ -48,7 +49,7 @@ public class CatalogService {
             tx.notes = "Initial stock on item creation";
             tx.idempotencyKey = UUID.randomUUID();
             tx.occurredAt = Instant.now();
-            tx.persist();
+            orm.persist(tx);
         }
         return item;
     }
@@ -58,7 +59,7 @@ public class CatalogService {
         var item = locked(Item.class, id, "Item");
         apply(item, input);
         if (input.images() != null) {
-            ItemImage.delete("item", item);
+            orm.deleteItemImages(item);
             persistImages(item, input.images());
         }
         return item;
@@ -99,7 +100,7 @@ public class CatalogService {
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
         var location = new StorageLocation();
         apply(location, input);
-        location.persist();
+        orm.persist(location);
         return location;
     }
 
@@ -113,8 +114,8 @@ public class CatalogService {
     @Transactional
     public void deleteLocation(UUID id) {
         var location = locked(StorageLocation.class, id, "Storage location");
-        if (Item.count("storageLocation", location) > 0) throw ApiException.conflict("Storage location is still assigned to inventory items");
-        location.delete();
+        if (orm.countItemsAt(location) > 0) throw ApiException.conflict("Storage location is still assigned to inventory items");
+        orm.remove(location);
     }
 
     private void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
@@ -134,7 +135,7 @@ public class CatalogService {
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
         var assembly = new Assembly();
         apply(assembly, input);
-        assembly.persist();
+        orm.persist(assembly);
         replaceComponents(assembly, input);
         return assembly;
     }
@@ -143,7 +144,7 @@ public class CatalogService {
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         var assembly = locked(Assembly.class, id, "Assembly");
         apply(assembly, input);
-        AssemblyItem.delete("assembly", assembly);
+        orm.deleteAssemblyItems(assembly);
         replaceComponents(assembly, input);
         return assembly;
     }
@@ -151,8 +152,8 @@ public class CatalogService {
     @Transactional
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
-        AssemblyItem.delete("assembly", assembly);
-        assembly.delete();
+        orm.deleteAssemblyItems(assembly);
+        orm.remove(assembly);
     }
 
     private void apply(Assembly target, ApiModels.AssemblyInput input) {
@@ -170,7 +171,7 @@ public class CatalogService {
             component.item = required(Item.class, entry.getKey(), "Item");
             component.id = new AssemblyItemId(assembly.id, component.item.id);
             component.quantity = entry.getValue();
-            component.persist();
+            orm.persist(component);
         }
     }
 
@@ -184,7 +185,7 @@ public class CatalogService {
         if (event.endDate.isBefore(event.startDate)) throw ApiException.badRequest("Event end date cannot be before its start date");
         event.status = input.status() == null ? "planned" : input.status();
         event.notes = input.notes();
-        event.persist();
+        orm.persist(event);
         return event;
     }
 
@@ -207,18 +208,18 @@ public class CatalogService {
         faction.name = input.name().trim();
         faction.slug = input.slug() == null || input.slug().isBlank() ? slug(input.name()) : slug(input.slug());
         faction.active = input.active() == null || input.active();
-        faction.persist();
+        orm.persist(faction);
         return faction;
     }
 
     public EventOccurrence findOrCreateEvent(String eventType, LocalDate date) {
-        var event = EventOccurrence.<EventOccurrence>find("eventType = ?1 and startDate = ?2", eventType.toUpperCase(Locale.ROOT), date).firstResult();
+        var event = orm.findEvent(eventType.toUpperCase(Locale.ROOT), date);
         if (event != null) return event;
         return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null));
     }
 
     public Faction findOrCreateFaction(String eventType, String name) {
-        var faction = Faction.<Faction>find("eventType = ?1 and lower(name) = ?2", eventType.toUpperCase(Locale.ROOT), name.toLowerCase(Locale.ROOT)).firstResult();
+        var faction = orm.findFaction(eventType.toUpperCase(Locale.ROOT), name.toLowerCase(Locale.ROOT));
         if (faction != null) return faction;
         return createFaction(new ApiModels.FactionInput(eventType, name, slug(name), true));
     }
@@ -232,7 +233,7 @@ public class CatalogService {
             image.item = item;
             image.objectKey = objectKey;
             image.displayOrder = order++;
-            image.persist();
+            orm.persist(image);
         }
     }
 
@@ -248,13 +249,13 @@ public class CatalogService {
     }
 
     private <T> T required(Class<T> type, UUID id, String label) {
-        T value = io.quarkus.hibernate.orm.panache.Panache.getEntityManager().find(type, id);
+        T value = orm.find(type, id);
         if (value == null) throw ApiException.notFound(label + " not found");
         return value;
     }
 
     private <T> T locked(Class<T> type, UUID id, String label) {
-        T value = io.quarkus.hibernate.orm.panache.Panache.getEntityManager().find(type, id, LockModeType.PESSIMISTIC_WRITE);
+        T value = orm.findLocked(type, id);
         if (value == null) throw ApiException.notFound(label + " not found");
         return value;
     }
