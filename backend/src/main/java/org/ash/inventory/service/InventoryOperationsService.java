@@ -69,15 +69,23 @@ public class InventoryOperationsService {
     }
 
     public StockState stock(Item item) {
-        int physical = item.baseAmount;
+        int physical = 0;
+        boolean hasAddedTransaction = false;
         int checkedOut = 0;
         for (var tx : StockTransaction.<StockTransaction>list("item", item)) {
             switch (tx.type) {
-                case added, repaired, checkin -> physical += tx.quantity;
+                case added -> {
+                    hasAddedTransaction = true;
+                    physical += tx.quantity;
+                }
+                case repaired, checkin -> physical += tx.quantity;
                 case checkout -> { physical -= tx.quantity; checkedOut += tx.quantity; }
                 case written_off, consumed -> physical -= tx.quantity;
             }
             if (tx.type == DomainEnums.TransactionType.checkin) checkedOut = Math.max(0, checkedOut - tx.quantity);
+        }
+        if (!hasAddedTransaction) {
+            physical += item.baseAmount;
         }
         int damaged = DamageReport.<DamageReport>list("item = ?1 and status in ?2", item,
                 List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.in_review)).stream()

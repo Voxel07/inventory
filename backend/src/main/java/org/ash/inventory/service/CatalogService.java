@@ -14,8 +14,14 @@ import org.ash.inventory.domain.Item;
 import org.ash.inventory.domain.ItemImage;
 import org.ash.inventory.domain.StorageLocation;
 
+import jakarta.inject.Inject;
+import org.ash.inventory.domain.DomainEnums;
+import org.ash.inventory.domain.StockTransaction;
+import org.ash.inventory.security.ActorService;
+
 import java.math.RoundingMode;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +30,26 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
+    @Inject ActorService actorService;
+
     @Transactional
     public Item createItem(ApiModels.ItemInput input) {
         var item = new Item();
         apply(item, input);
         item.persist();
         persistImages(item, input.images());
+        if (item.baseAmount > 0) {
+            var tx = new StockTransaction();
+            tx.item = item;
+            tx.user = actorService.current();
+            tx.type = DomainEnums.TransactionType.added;
+            tx.quantity = item.baseAmount;
+            tx.reason = "Initial stock";
+            tx.notes = "Initial stock on item creation";
+            tx.idempotencyKey = UUID.randomUUID();
+            tx.occurredAt = Instant.now();
+            tx.persist();
+        }
         return item;
     }
 

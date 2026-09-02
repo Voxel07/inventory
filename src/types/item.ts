@@ -32,6 +32,7 @@ export interface StorageLocationFormData {
 
 export interface Item {
   id: string;
+  sku?: string;
   name: string;
   amount?: number;
   minStock?: number;

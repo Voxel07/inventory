@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
+import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem } from '../hooks/useItems';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
@@ -18,6 +21,7 @@ export function Items() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading } = useItems();
+    const { data: assemblies } = useAssemblies();
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
     const createItem = useCreateItem();
@@ -26,6 +30,7 @@ export function Items() {
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [formOpen, setFormOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Item | undefined>();
     const [qrItem, setQrItem] = useState<Item | undefined>();
     const [deletingId, setDeletingId] = useState<string | undefined>();
@@ -77,13 +82,22 @@ export function Items() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">{t('Artikel', 'Items')}</Typography>
-                <TooltipButton
-                    tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
-                    icon={<AddIcon />}
-                    label={t('Artikel hinzufügen', 'Add item')}
-                    variant="contained"
-                    onClick={() => setFormOpen(true)}
-                />
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TooltipButton
+                        tooltipText={t('Artikel und Baugruppen aus CSV importieren', 'Import items and assemblies from CSV')}
+                        icon={<FileUploadIcon />}
+                        label={t('CSV Import', 'CSV import')}
+                        variant="outlined"
+                        onClick={() => setImportOpen(true)}
+                    />
+                    <TooltipButton
+                        tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
+                        icon={<AddIcon />}
+                        label={t('Artikel hinzufügen', 'Add item')}
+                        variant="contained"
+                        onClick={() => setFormOpen(true)}
+                    />
+                </Box>
             </Box>
 
             <ItemsList
@@ -151,6 +165,15 @@ export function Items() {
                     </Tooltip>
                 </DialogActions>
             </Dialog>
+
+            {/* CSV Import Dialog */}
+            <CsvImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                items={items ?? []}
+                assemblies={assemblies ?? []}
+                storageLocations={storageLocations ?? []}
+            />
         </Box>
     );
 }

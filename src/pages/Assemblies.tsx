@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
+import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
+import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
@@ -14,12 +17,14 @@ export function Assemblies() {
     const t = useTranslate();
     const { data: assemblies, isLoading } = useAssemblies();
     const { data: items } = useItems();
+    const { data: storageLocations } = useStorageLocations();
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
     const deleteAssembly = useDeleteAssembly();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [formOpen, setFormOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [editingAssembly, setEditingAssembly] = useState<Assembly | undefined>();
     const [deletingId, setDeletingId] = useState<string | undefined>();
 
@@ -62,13 +67,22 @@ export function Assemblies() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">{t('Baugruppen', 'Assemblies')}</Typography>
-                <TooltipButton
-                    tooltipText={t('Eine neue Baugruppe erstellen', 'Create a new assembly')}
-                    icon={<AddIcon />}
-                    label={t('Baugruppe hinzufügen', 'Add assembly')}
-                    variant="contained"
-                    onClick={() => setFormOpen(true)}
-                />
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TooltipButton
+                        tooltipText={t('Baugruppen und Artikel aus CSV importieren', 'Import assemblies and items from CSV')}
+                        icon={<FileUploadIcon />}
+                        label={t('CSV Import', 'CSV import')}
+                        variant="outlined"
+                        onClick={() => setImportOpen(true)}
+                    />
+                    <TooltipButton
+                        tooltipText={t('Eine neue Baugruppe erstellen', 'Create a new assembly')}
+                        icon={<AddIcon />}
+                        label={t('Baugruppe hinzufügen', 'Add assembly')}
+                        variant="contained"
+                        onClick={() => setFormOpen(true)}
+                    />
+                </Box>
             </Box>
 
             <AssembliesList
@@ -121,6 +135,15 @@ export function Assemblies() {
                     </Tooltip>
                 </DialogActions>
             </Dialog>
+
+            {/* CSV Import Dialog */}
+            <CsvImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                items={items ?? []}
+                assemblies={assemblies ?? []}
+                storageLocations={storageLocations ?? []}
+            />
         </Box>
     );
 }

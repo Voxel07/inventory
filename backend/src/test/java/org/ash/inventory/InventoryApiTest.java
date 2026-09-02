@@ -38,6 +38,14 @@ class InventoryApiTest {
                 .extract().path("id");
 
         request()
+                .get("/api/transactions?itemId=" + itemId)
+                .then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].transactionType", equalTo("added"))
+                .body("[0].quantityChanged", equalTo(2))
+                .body("[0].reason", equalTo("Initial stock"));
+
+        request()
                 .body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1, "reason", "test"))
                 .post("/api/transactions")
                 .then().statusCode(409)

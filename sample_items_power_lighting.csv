@@ -1,0 +1,15 @@
+Artikel;Kategorie;Bestand;Mindestbestand;Einzelwert;Lagerort;Unterkategorie;Lieferant;Verbrauchsmaterial;Events;Hinweis
+Inverter Stromerzeuger 2.2kW;Stromversorgung;4;2;649,00;Technik-Lager 1;Generatoren;Honda;Nein;DE,TNO,LS;Vor Betrieb Ölstand (10W-30) prüfen. Nur im Freien betreiben!
+Dieselgenerator 6.5kW 400V/230V;Stromversorgung;2;1;1850,00;Technik-Lager 1;Generatoren;Pramac;Nein;DE,TNO;Elektrostarter und Handstart. Wartungsintervall beachten.
+CEE 16A Stromverteiler IP44;Stromversorgung;6;2;139,00;Kabelkiste Strom;Verteiler;Brennenstuhl;Nein;DE,TNO,LS;1x CEE 16A Eingang auf 3x Schuko und 1x CEE 16A Ausgang
+Kabeltrommel 40m H07RN-F 3G2.5;Stromversorgung;12;4;79,90;Kabelkiste Strom;Kabel;Brennenstuhl;Nein;DE,TNO,LS;Schweres Gummikabel IP44. Bei Maximallast voll abrollen!
+CEE 16A Verlängerung 25m;Stromversorgung;8;3;85,00;Kabelkiste Strom;Kabel;Mennekes;Nein;DE,TNO;5x2.5mm² Gummischlauchleitung für Starkstrom
+Schuko Steckdosenleiste 6-fach IP44;Stromversorgung;18;6;19,50;Regal E1;Verteiler;Brennenstuhl;Nein;DE,TNO,LS,M24;Mit selbstschließenden Klappdeckeln für Feuchtraum/Outdoor
+Benzinkanister 20L Metall;Stromversorgung;8;4;34,00;Gefahrgutschrank;Treibstoff;Valpro;Nein;DE,TNO;UN-Zulassung. Nur für bleifreies Benzin verwenden.
+Ersatz-Sicherungsset 10A/16A;Stromversorgung;30;10;4,50;Kleinteilemagazin;Verbrauchsmaterial;Bussmann;Ja;DE,TNO,LS;Feinsicherungen und Schmelzeinsätze
+LED Baustrahler 100W IP65;Beleuchtung;14;4;48,00;Beleuchtungskiste 1;Scheinwerfer;Brennenstuhl;Nein;DE,TNO,LS;Kaltweiß 6500K, 10000 Lumen mit Tragegestell
+LED Akku-Flutlicht 50W mobil;Beleuchtung;6;2;89,00;Beleuchtungskiste 1;Akku-Leuchten;Scangrip;Nein;DE,TNO,LS,M24;Akkulaufzeit bis zu 6h. USB-C Ladekabel beiliegend.
+Kurbelstativ 3.8m Stahl;Beleuchtung;8;2;125,00;Stativlager;Stative;K&M;Nein;DE,TNO;Max. Belastung 30kg mit TV-Zapfen Aufnahme
+Traversen-Aufnahme TV-Zapfen 28mm;Beleuchtung;10;4;18,00;Stativlager;Zubehör;Global Truss;Nein;DE,TNO;Zur Montage von bis zu 4 Scheinwerfern auf Kurbelstativ
+Lichterkette 20m E27 Outdoor;Beleuchtung;10;3;39,90;Kiste Deko;Ambiente;Paulmann;Nein;DE,TNO,LS;Inkl. 20x warmweiße bruchfeste LED-Filamentbirnen IP44
+Kabelbrücke 2-Kanal 1m Gummi;Infrastruktur;16;6;32,00;Palettenlager;Kabelschutz;Defender;Nein;DE,TNO,LS;Belastbar bis 5t, gelb-schwarz reflektierend
