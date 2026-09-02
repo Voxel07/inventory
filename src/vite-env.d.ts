@@ -3,7 +3,8 @@
 declare const __APP_VERSION__: string;
 
 interface ImportMetaEnv {
-  readonly VITE_POCKETBASE_URL: string;
+  readonly VITE_API_URL: string;
+  readonly VITE_OIDC_LOGIN_URL?: string;
   readonly VITE_APP_URL: string;
 }
 

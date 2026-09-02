@@ -26,7 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useDamageReports, useCreateDamageReport } from '../hooks/useDamageReports';
-import { usePocketBase } from '../hooks/usePocketBase';
+import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
@@ -41,7 +41,7 @@ export function UserDashboard() {
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const { user: currentUser } = usePocketBase();
+    const { user: currentUser } = useAuth();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const { data: items, isLoading: itemsLoading } = useItems();

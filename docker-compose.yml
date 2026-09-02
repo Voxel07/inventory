@@ -1,4 +1,47 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
+    volumes:
+      - inventory-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  inventory-api:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/inventory
+      DB_USER: inventory
+      DB_PASSWORD: ${DB_PASSWORD:-inventory}
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-inventory-api}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-unused}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-true}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserver:5080/api/default}
+      MEDIA_MODE: ${MEDIA_MODE:-local}
+      MEDIA_LOCAL_DIRECTORY: /data/media
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-inventory}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - inventory-media:/data/media
+
   inventory-app:
     build:
       context: .
@@ -7,5 +50,13 @@ services:
     ports:
       - "3333:80"
     environment:
-      - POCKETBASE_URL=http://pb.matzeschneider.de
+      - API_URL=${PUBLIC_API_URL:-http://localhost:8080}
+      - OIDC_LOGIN_URL=${OIDC_LOGIN_URL:-}
+    depends_on:
+      inventory-api:
+        condition: service_started
     restart: unless-stopped
+
+volumes:
+  inventory-postgres:
+  inventory-media:

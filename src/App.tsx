@@ -21,11 +21,13 @@ import { FactionOrderDetail } from './pages/FactionOrderDetail';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagement } from './pages/UserManagement';
 import { TransactionHistoryPage } from './pages/TransactionHistory';
+import { Procurement } from './pages/Procurement';
+import { Maintenance } from './pages/Maintenance';
 import { InventoryManagerGuard } from './components/shared/AccessGuard';
 import { canManageInventory } from './utils/access';
 import type { User } from './types';
 import { Navigate } from 'react-router-dom';
-import { useCurrentUserRealtime, usePocketBase } from './hooks/usePocketBase';
+import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useEffect } from 'react';
 import { useAppLanguage } from './utils/naming';
@@ -296,8 +298,8 @@ const theme = createTheme({
 
 function AppContent() {
   useAppLanguage();
-  useCurrentUserRealtime();
-  const { isAuthenticated } = usePocketBase();
+  useCurrentUserRefresh();
+  const { isAuthenticated } = useAuth();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const snackbar = useUIStore((s) => s.snackbar);
@@ -363,6 +365,8 @@ function AppContent() {
             <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
             <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
             <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
+            <Route path="/procurement" element={<InventoryManagerGuard><Procurement /></InventoryManagerGuard>} />
+            <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
             <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
             <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -385,7 +389,7 @@ function AppContent() {
 }
 
 function HomeRoute() {
-  const { user } = usePocketBase();
+  const { user } = useAuth();
   return canManageInventory(user as unknown as User) ? <UserDashboard /> : <Navigate to="/events/orders" replace />;
 }
 

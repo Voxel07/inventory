@@ -38,15 +38,21 @@ export interface Item {
   value: number;
   category: string;
   subcategory?: string;
+  supplier?: string;
   eventTypes?: EventType[];
   storageLocation: string;
   status: ItemStatus;
   images?: string[];
   hint?: string;
+  isConsumable?: boolean;
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
   containerRemainingPercent?: number;
+  maintenanceIntervalDays?: number;
+  nextMaintenanceDue?: string;
+  currentOperatingHours?: number;
+  maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
   created: string;
   updated: string;
   expand?: {
@@ -63,15 +69,21 @@ export interface ItemFormData {
   value: number;
   category: string;
   subcategory?: string;
+  supplier?: string;
   eventTypes?: EventType[];
   storageLocation: string;
   hint?: string;
+  isConsumable?: boolean;
   imageFiles?: File[];
   removeImages?: string[];
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
   containerRemainingPercent?: number;
+  maintenanceIntervalDays?: number;
+  nextMaintenanceDue?: string;
+  currentOperatingHours?: number;
+  maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
 }
 
 import type { EventType } from './event';

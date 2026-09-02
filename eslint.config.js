@@ -18,5 +18,10 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Form editors intentionally mirror a selected record into draft state.
+      // The state reset belongs to selection-change effects, not render-time mutation.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

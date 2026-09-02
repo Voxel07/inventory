@@ -1,61 +1,24 @@
-import pb from './pocketbaseClient';
 import type { StorageLocation, StorageLocationFormData } from '../types';
+import { apiRequest, subscribeToApiChanges, uploadMedia } from './apiClient';
 
-const COLLECTION = 'inventory_storage_locations';
-
-export async function getStorageLocations(): Promise<StorageLocation[]> {
-  return pb.collection(COLLECTION).getFullList<StorageLocation>({
-    sort: '-created',
-  });
+function payload(data: Partial<StorageLocationFormData>) {
+  const fields = { ...data };
+  const removeMapOverlay = fields.removeMapOverlay;
+  delete fields.mapOverlayFile;
+  delete fields.removeMapOverlay;
+  return { ...fields, ...(removeMapOverlay ? { mapOverlay: null } : {}) };
 }
-
-export async function getStorageLocation(id: string): Promise<StorageLocation> {
-  return pb.collection(COLLECTION).getOne<StorageLocation>(id);
-}
-
+export function getStorageLocations(): Promise<StorageLocation[]> { return apiRequest('/api/storage-locations'); }
+export function getStorageLocation(id: string): Promise<StorageLocation> { return apiRequest(`/api/storage-locations/${id}`); }
 export async function createStorageLocation(data: StorageLocationFormData): Promise<StorageLocation> {
-  const { mapOverlayFile, removeMapOverlay: _removeMapOverlay, ...fields } = data;
-  return pb.collection(COLLECTION).create<StorageLocation>({
-    ...fields,
-    ...(mapOverlayFile ? { mapOverlay: mapOverlayFile } : {}),
-  });
+  const mapOverlay = data.mapOverlayFile ? await uploadMedia(data.mapOverlayFile) : undefined;
+  return apiRequest('/api/storage-locations', { method: 'POST', body: { ...payload(data), mapOverlay } });
 }
-
-export async function updateStorageLocation(
-  id: string,
-  data: Partial<StorageLocationFormData>,
-): Promise<StorageLocation> {
-  const { mapOverlayFile, removeMapOverlay, ...fields } = data;
-  const current = removeMapOverlay ? await getStorageLocation(id) : undefined;
-  return pb.collection(COLLECTION).update<StorageLocation>(id, {
-    ...fields,
-    ...(mapOverlayFile ? { mapOverlay: mapOverlayFile } : {}),
-    ...(removeMapOverlay && current?.mapOverlay ? { 'mapOverlay-': current.mapOverlay } : {}),
-  });
+export async function updateStorageLocation(id: string, data: Partial<StorageLocationFormData>): Promise<StorageLocation> {
+  const mapOverlay = data.mapOverlayFile ? await uploadMedia(data.mapOverlayFile) : data.removeMapOverlay ? null : undefined;
+  return apiRequest(`/api/storage-locations/${id}`, { method: 'PATCH', body: { ...payload(data), ...(mapOverlay !== undefined ? { mapOverlay } : {}) } });
 }
-
-export async function deleteStorageLocation(id: string): Promise<boolean> {
-  return pb.collection(COLLECTION).delete(id);
-}
-
-export function subscribeToStorageLocations(
-  callback: (data: { action: string; record: StorageLocation }) => void,
-) {
-  let disposed = false;
-  let unsubscribe: (() => Promise<void>) | undefined;
-  pb.collection(COLLECTION).subscribe<StorageLocation>('*', (e) => {
-    callback({ action: e.action, record: e.record });
-  }).then((cleanup) => {
-    if (disposed) {
-      void cleanup().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
-    } else {
-      unsubscribe = cleanup;
-    }
-  }).catch((err) => {
-    console.warn(`Failed to subscribe to ${COLLECTION} realtime updates:`, err);
-  });
-  return () => {
-    disposed = true;
-    void unsubscribe?.().catch((err) => console.warn(`Failed to clean up ${COLLECTION} subscription:`, err));
-  };
+export async function deleteStorageLocation(id: string): Promise<boolean> { await apiRequest(`/api/storage-locations/${id}`, { method: 'DELETE' }); return true; }
+export function subscribeToStorageLocations(callback: (data: { action: string; record: StorageLocation }) => void) {
+  return subscribeToApiChanges(() => callback({ action: 'refresh', record: {} as StorageLocation }));
 }

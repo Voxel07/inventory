@@ -29,7 +29,7 @@ export interface DamageReport {
   };
 }
 
-export type DamageSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type DamageSeverity = 'low' | 'medium' | 'high' | 'critical' | 'total_loss';
 
 export type DamageStatus = 'reported' | 'in_review' | 'repaired' | 'written_off' | 'resolved';
 

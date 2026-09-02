@@ -32,7 +32,7 @@ import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useAppLanguage, useTranslate } from '../utils/naming';
-import { usePocketBase } from '../hooks/usePocketBase';
+import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canManageInventory } from '../utils/access';
 import type { User } from '../types';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
@@ -43,7 +43,9 @@ function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning'
   if (status === 'preparing') return 'warning';
   if (status === 'ready') return 'success';
   if (status === 'picked_up') return 'secondary';
+  if (status === 'partially_returned') return 'warning';
   if (status === 'returned') return 'info';
+  if (status === 'closed') return 'success';
   return 'error';
 }
 
@@ -58,7 +60,7 @@ export function FactionOrders() {
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { user } = usePocketBase();
+  const { user } = useAuth();
   const currentUser = user as unknown as User;
   const isManager = canManageInventory(currentUser);
   const allowedFactions = isManager ? null : (currentUser?.faction ?? []);
@@ -108,7 +110,9 @@ export function FactionOrders() {
       preparing: t('In Vorbereitung', 'Preparing'),
       ready: t('Abholbereit', 'Ready'),
       picked_up: t('Abgeholt', 'Picked up'),
+      partially_returned: t('Teilweise zurück', 'Partially returned'),
       returned: t('Zurückgegeben', 'Returned'),
+      closed: t('Abgeschlossen', 'Closed'),
       cancelled: t('Storniert', 'Cancelled'),
     };
     return labels[status];

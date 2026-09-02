@@ -29,7 +29,7 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
-import { usePocketBase } from '../../hooks/usePocketBase';
+import { useAuth } from '../../hooks/useAuth';
 import { LanguageSelector } from './LanguageSelector';
 import { useTranslate } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
@@ -37,6 +37,8 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import HistoryIcon from '@mui/icons-material/History';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import BuildIcon from '@mui/icons-material/Build';
 import { EVENT_TYPES, type EventType } from '../../types';
 import type { User } from '../../types';
 import { canManageInventory } from '../../utils/access';
@@ -53,7 +55,7 @@ export function Navigation() {
     const setActiveEventType = useUIStore((s) => s.setActiveEventType);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const { logout, user } = usePocketBase();
+    const { logout, user } = useAuth();
     const isManager = canManageInventory(user as unknown as User);
     const managerNavItems = [
         { label: t('Globales Dashboard', 'Global dashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
@@ -67,6 +69,8 @@ export function Navigation() {
         { label: t('Transaktionsverlauf', 'Transaction history'), path: '/transactions', icon: <HistoryIcon /> },
         { label: t('QR-Codes drucken', 'Print QR codes'), path: '/print-qr', icon: <QrCode2Icon /> },
         { label: t('Schadensberichte', 'Damage reports'), path: '/damage-reports', icon: <ReportProblemIcon /> },
+        { label: t('Beschaffung', 'Procurement'), path: '/procurement', icon: <ShoppingCartIcon /> },
+        { label: t('Wartung & Prüfungen', 'Maintenance'), path: '/maintenance', icon: <BuildIcon /> },
         { label: t('Benutzerverwaltung', 'User management'), path: '/users', icon: <ManageAccountsIcon /> },
     ];
     const navItems = isManager

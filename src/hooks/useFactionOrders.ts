@@ -9,6 +9,7 @@ import {
   pickUpFactionOrder,
   reopenFactionOrderPreparation,
   returnFactionOrder,
+  returnFactionOrderItems,
   saveFactionOrderPreparation,
   startFactionOrderPreparation,
   submitFactionOrder,
@@ -96,6 +97,10 @@ export function usePickUpFactionOrder() {
 
 export function useReturnFactionOrder() {
   return useOrderMutation((id: string) => returnFactionOrder(id));
+}
+
+export function useReturnFactionOrderItems() {
+  return useOrderMutation(({ id, lines }: { id: string; lines: Record<string, { returned: number; missing: number; damaged: number; operatingHours?: number; notes?: string }> }) => returnFactionOrderItems(id, lines));
 }
 
 export function useCancelFactionOrder() {

@@ -8,7 +8,7 @@ import {
   subscribeToStorageLocations,
 } from '../services/storageLocationService';
 import { useEffect } from 'react';
-import type { StorageLocationFormData } from '../types';
+import type { StorageLocation, StorageLocationFormData } from '../types';
 
 export function useStorageLocations() {
   const queryClient = useQueryClient();
@@ -40,7 +40,12 @@ export function useCreateStorageLocation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: StorageLocationFormData) => createStorageLocation(data),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      queryClient.setQueryData<StorageLocation[]>(['storageLocations'], (current = []) =>
+        current.some((location) => location.id === created.id)
+          ? current.map((location) => location.id === created.id ? created : location)
+          : [...current, created]
+      );
       queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
     },
   });
@@ -56,7 +61,11 @@ export function useUpdateStorageLocation() {
       id: string;
       data: Partial<StorageLocationFormData>;
     }) => updateStorageLocation(id, data),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData<StorageLocation[]>(['storageLocations'], (current = []) =>
+        current.map((location) => location.id === updated.id ? updated : location)
+      );
+      queryClient.setQueryData(['storageLocations', updated.id], updated);
       queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
@@ -67,7 +76,11 @@ export function useDeleteStorageLocation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteStorageLocation(id),
-    onSuccess: () => {
+    onSuccess: (_deleted, id) => {
+      queryClient.setQueryData<StorageLocation[]>(['storageLocations'], (current = []) =>
+        current.filter((location) => location.id !== id)
+      );
+      queryClient.removeQueries({ queryKey: ['storageLocations', id] });
       queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },

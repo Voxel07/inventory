@@ -1,10 +1,10 @@
 # ASH Inventory
 
-Responsive inventory management for items, assemblies, damage reports, event planning, and faction order lists.
+Responsive inventory and custody management for event logistics. The repository contains the React PWA and its transactional Quarkus/PostgreSQL backend.
 
 ## Development
 
-This project uses Bun (not npm):
+Frontend (Bun):
 
 ```bash
 bun install
@@ -12,29 +12,40 @@ bun run dev
 bun run build
 ```
 
-The PocketBase URL is read from `window.__ENV__.POCKETBASE_URL` or `VITE_POCKETBASE_URL`.
+Backend (Java 25):
 
-## PocketBase schema
+```bash
+cd backend
+mvn quarkus:dev
+```
 
-Import `pb_schema.json` into PocketBase before using the application. The faction-order feature requires the new `inventory_faction_orders` collection and the optional `factionOrderId` relation on `inventory_stock_transactions`.
+Development mode uses an in-memory H2 database and does not require Docker,
+PostgreSQL, Grafana, or an OpenTelemetry collector. Production uses PostgreSQL
+and Flyway as configured in `docker-compose.yml`.
 
-Re-import the schema after updating this version. It adds PocketBase-backed item images and hints, storage-location map data/overlay files, sequential faction-order codes, pickup locations, and the existing `users` auth collection definition. The provided users definition preserves OAuth and password authentication while expanding the existing `role` and multi-select `faction` fields. New order codes use `event-faction-year-0001` and increment within that event/faction/year combination.
+Run the complete local stack with `docker compose up --build`. The frontend reads `window.__ENV__.API_URL` or `VITE_API_URL`. Production authentication uses Authentik bearer tokens validated by Quarkus OIDC; set `DEV_AUTH_ENABLED=false` in every deployed environment.
 
-Authorization comes directly from the normal PocketBase `users` collection—there is no separate access collection. OAuth may map the application role into `role`; `admin`, `Admin`, the existing `Admin ` value, `manager`, and `inventory_manager` receive full inventory access. Other authenticated roles (including the existing `User`, `banker`, and `player` values) are treated as faction leaders. Use **User management** to assign one or more values in the existing `faction` multi-select. Faction leaders only see those faction lists and can create, edit, submit, or cancel orders they created; inventory lifecycle actions remain manager-only.
+## PostgreSQL schema and API
 
-The users API rules allow managers to list and update all users. Users may still edit their own normal profile fields, but cannot change their own `role` or `faction`, which prevents self-promotion. Changes to either field are delivered through PocketBase realtime and take effect in active sessions without a page refresh.
+Flyway owns schema changes in `backend/src/main/resources/db/migration`. OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`.
 
-Item and order QR codes are generated on demand. QR image data is no longer stored in PocketBase.
+The legacy `pb_schema.json` remains only as a migration reference and is not used at runtime.
+
+Roles are enforced by the backend: `admin`, `inventory_manager`, `warehouse_packer`, and `faction_leader`. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
+
+## Offline field operation
+
+The production build installs as a PWA. Reads are cached by the service worker and operational writes use an IndexedDB append-only queue with UUID idempotency keys. The queue replays through `/api/sync` after connectivity returns and its status is shown in the header.
 
 ## Faction order workflow
 
 Open **Events → Faction lists** to create a dated list for a faction. Individual items and assemblies can be selected; both are filtered by their event tags. A draft can copy the previous list and display changes. Its lifecycle is:
 
 ```text
-draft → preparing → ready → picked up → returned
+draft → submitted → preparing → ready → picked up → partially returned/returned → closed
 ```
 
-Prepared quantities reserve available stock from other open lists. Assembly quantities are expanded to their component requirements for availability, reservation, pickup, and return. Pickup and return create batched component stock transactions, while the list history records the acting users and timestamps. The downloadable list QR always opens the current state and its next valid action.
+Prepared quantities reserve available stock from other open lists. Assembly quantities are normalized into component lines. Pickup and return run atomically under row locks, incomplete components retain customer custody, and the append-only order ledger records server time, actor, status, and line deltas.
 
 ## Vite template notes
 

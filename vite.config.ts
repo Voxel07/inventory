@@ -50,9 +50,6 @@ export default defineConfig({
             if (id.includes('recharts')) {
               return 'recharts-vendor';
             }
-            if (id.includes('pocketbase')) {
-              return 'pocketbase';
-            }
             if (id.includes('jspdf')) {
               return 'jspdf-vendor';
             }

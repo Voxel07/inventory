@@ -71,9 +71,9 @@ export function UserManagement() {
     <Box>
       <Typography variant="h4" sx={{ mb: 1 }}>{t('Benutzerverwaltung', 'User management')}</Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
-        {t('OAuth-Rollen und mehrere Fraktionszuordnungen direkt in bestehenden PocketBase-Benutzern verwalten.', 'Manage OAuth roles and multiple faction assignments directly on existing PocketBase users.')}
+        {t('Authentik-Rollen und mehrere Fraktionszuordnungen serverseitig verwalten.', 'Manage Authentik roles and multiple faction assignments on the server.')}
       </Typography>
-      {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Benutzer konnten nicht geladen werden. Prüfen Sie die API-Regeln der PocketBase-Benutzersammlung.', 'Users could not be loaded. Check the API rules of the PocketBase users collection.')}</Alert>}
+      {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Benutzer konnten nicht geladen werden. Prüfen Sie OIDC und die API-Berechtigungen.', 'Users could not be loaded. Check OIDC and API permissions.')}</Alert>}
       <Stack spacing={1.5}>
         {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : users.map((user) => <UserPermissionsEditor key={user.id} user={user} />)}
       </Stack>

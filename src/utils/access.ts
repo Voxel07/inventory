@@ -5,15 +5,16 @@ export function effectiveAccess(user: User | null | undefined): AccessRole | 'no
   const role = user?.role?.trim().toLowerCase();
   if (role === 'admin') return 'admin';
   if (role === 'manager' || role === 'inventory_manager') return 'inventory_manager';
+  if (role === 'warehouse_packer') return 'warehouse_packer';
   return user ? 'faction_leader' : 'none';
 }
 
 export function canManageInventory(user: User | null | undefined): boolean {
-  return ['admin', 'inventory_manager'].includes(effectiveAccess(user));
+  return ['admin', 'inventory_manager', 'warehouse_packer'].includes(effectiveAccess(user));
 }
 
 export function canManageUsers(user: User | null | undefined): boolean {
-  return canManageInventory(user);
+  return effectiveAccess(user) === 'admin';
 }
 
 export function canAccessFaction(

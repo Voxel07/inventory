@@ -25,7 +25,7 @@ export interface StockTransaction {
 }
 
 
-export type TransactionType = 'checkout' | 'checkin' | 'added' | 'repaired' | 'written_off';
+export type TransactionType = 'checkout' | 'checkin' | 'added' | 'repaired' | 'written_off' | 'consumed';
 
 export interface TransactionFormData {
   itemId: string;

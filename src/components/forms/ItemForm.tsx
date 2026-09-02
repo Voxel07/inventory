@@ -14,6 +14,8 @@ import {
     DialogActions,
     IconButton,
     Chip,
+    FormControlLabel,
+    Switch,
 } from '@mui/material';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -48,9 +50,11 @@ export function ItemForm({
         value: initialData?.value ?? 0,
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
+        supplier: initialData?.supplier ?? '',
         eventTypes: initialData?.eventTypes ?? [],
         storageLocation: initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
+        isConsumable: initialData?.isConsumable ?? false,
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
@@ -231,6 +235,16 @@ export function ItemForm({
                     renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
                 />
                 <TextField
+                    label={t('Lieferant (optional)', 'Supplier (optional)')}
+                    value={formData.supplier ?? ''}
+                    onChange={handleChange('supplier')}
+                    fullWidth
+                />
+                <FormControlLabel
+                    control={<Switch checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({ ...prev, isConsumable: event.target.checked }))} />}
+                    label={t('Verbrauchsmaterial (wird bei Rückgabe als verbraucht gebucht)', 'Consumable (record as consumed on return)')}
+                />
+                <TextField
                     label={t('Hinweis / besondere Anweisungen', 'Hint / special instructions')}
                     value={formData.hint ?? ''}
                     onChange={handleChange('hint')}
@@ -256,7 +270,7 @@ export function ItemForm({
                         />
                     </Button>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                        {t('Bis zu 8 Bilder; sie werden im PocketBase-Dateispeicher abgelegt.', 'Up to 8 images; they are stored in PocketBase file storage.')}
+                        {t('Bis zu 8 Bilder; sie werden im konfigurierten Garage-S3-Speicher abgelegt.', 'Up to 8 images; they are stored in the configured Garage S3 storage.')}
                     </Typography>
                     <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
                         {initialData?.images?.filter((filename) => !removedImages.includes(filename)).map((filename) => (

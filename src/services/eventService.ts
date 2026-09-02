@@ -1,40 +1,11 @@
-import pb from './pocketbaseClient';
 import type { EventReport, EventReportFormData, EventType } from '../types';
+import { apiRequest, subscribeToApiChanges } from './apiClient';
 
-const COLLECTION = 'inventory_event_reports';
-
-export async function getEventReports(eventType?: EventType): Promise<EventReport[]> {
-  return pb.collection(COLLECTION).getFullList<EventReport>({
-    sort: '-eventDate,-created',
-    filter: eventType ? pb.filter('eventType = {:eventType}', { eventType }) : undefined,
-    expand: 'itemIds',
-  });
+export function getEventReports(eventType?: EventType): Promise<EventReport[]> { return apiRequest('/api/events', { query: { eventType } }); }
+export function getEventReport(id: string): Promise<EventReport> { return apiRequest(`/api/events/${id}`); }
+function payload(data: EventReportFormData) {
+  return { eventType: data.eventType, name: `${data.eventType} ${new Date(data.eventDate).getUTCFullYear()}`, startDate: data.eventDate, endDate: data.eventDate, status: data.status, notes: data.notes };
 }
-
-export async function getEventReport(id: string): Promise<EventReport> {
-  return pb.collection(COLLECTION).getOne<EventReport>(id, { expand: 'itemIds' });
-}
-
-export async function createEventReport(data: EventReportFormData): Promise<EventReport> {
-  const createdBy = pb.authStore.record?.id;
-  if (!createdBy) throw new Error('Authentication required');
-  return pb.collection(COLLECTION).create<EventReport>({ ...data, createdBy });
-}
-
-export async function updateEventReport(id: string, data: EventReportFormData): Promise<EventReport> {
-  const itemIds = [...new Set(data.itemIds)];
-  return pb.collection(COLLECTION).update<EventReport>(id, { ...data, itemIds }, { expand: 'itemIds' });
-}
-
-export function subscribeToEventReports(callback: () => void) {
-  let disposed = false;
-  let unsubscribe: (() => Promise<void>) | undefined;
-  pb.collection(COLLECTION).subscribe<EventReport>('*', callback).then((cleanup) => {
-    if (disposed) void cleanup();
-    else unsubscribe = cleanup;
-  }).catch((error) => console.warn(`Failed to subscribe to ${COLLECTION}:`, error));
-  return () => {
-    disposed = true;
-    void unsubscribe?.();
-  };
-}
+export function createEventReport(data: EventReportFormData): Promise<EventReport> { return apiRequest('/api/events', { method: 'POST', body: payload(data) }); }
+export function updateEventReport(id: string, data: EventReportFormData): Promise<EventReport> { return apiRequest(`/api/events/${id}`, { method: 'PATCH', body: payload(data) }); }
+export function subscribeToEventReports(callback: () => void) { return subscribeToApiChanges(callback); }

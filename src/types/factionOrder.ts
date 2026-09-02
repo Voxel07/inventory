@@ -12,7 +12,7 @@ export const FACTIONS_BY_EVENT: Record<EventType, readonly string[]> = {
   M24: ['Hondra', 'Militär', 'Kartell'],
 };
 
-export type FactionOrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picked_up' | 'returned' | 'cancelled';
+export type FactionOrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picked_up' | 'partially_returned' | 'returned' | 'closed' | 'cancelled';
 export type FactionOrderHistoryAction =
   | 'created'
   | 'updated'
@@ -24,7 +24,9 @@ export type FactionOrderHistoryAction =
   | 'preparation_reopened'
   | 'ready'
   | 'picked_up'
+  | 'partially_returned'
   | 'returned'
+  | 'closed'
   | 'cancelled';
 
 export interface FactionOrderHistoryEntry {
@@ -52,6 +54,10 @@ export interface FactionOrder {
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
   preparedAssemblyQuantities: Record<string, number>;
+  pickedUpQuantities?: Record<string, number>;
+  returnedQuantities?: Record<string, number>;
+  missingQuantities?: Record<string, number>;
+  damagedQuantities?: Record<string, number>;
   notes?: string;
   createdBy: string;
   preparedBy?: string;

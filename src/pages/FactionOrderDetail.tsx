@@ -37,6 +37,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { jsPDF } from 'jspdf';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
+import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import {
   useCancelFactionOrder,
@@ -45,7 +46,7 @@ import {
   useMarkFactionOrderReady,
   usePickUpFactionOrder,
   useReopenFactionOrderPreparation,
-  useReturnFactionOrder,
+  useReturnFactionOrderItems,
   useSaveFactionOrderPreparation,
   useStartFactionOrderPreparation,
   useSubmitFactionOrder,
@@ -66,11 +67,11 @@ import {
   factionOrderItemBaseline,
   findPreviousFactionOrder,
 } from '../utils/factionOrderHistory';
-import { usePocketBase } from '../hooks/usePocketBase';
+import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { generateQRCodeDataURL } from '../utils/qrCode';
 
-type ConfirmAction = 'pickup' | 'return' | 'cancel' | null;
+type ConfirmAction = 'pickup' | 'cancel' | null;
 type StateTransition = 'ready' | 'preparing' | null;
 
 function relationName(value: { name?: string; username?: string; email?: string } | undefined, fallback?: string) {
@@ -85,7 +86,7 @@ export function FactionOrderDetail() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const showSnackbar = useUIStore((state) => state.showSnackbar);
-  const { user } = usePocketBase();
+  const { user } = useAuth();
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
@@ -100,12 +101,13 @@ export function FactionOrderDetail() {
   const markReady = useMarkFactionOrderReady();
   const reopenPreparation = useReopenFactionOrderPreparation();
   const pickUp = usePickUpFactionOrder();
-  const returnOrder = useReturnFactionOrder();
+  const returnOrderItems = useReturnFactionOrderItems();
   const cancelOrder = useCancelFactionOrder();
   const [prepared, setPrepared] = useState<Record<string, string>>({});
   const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
   const [editOpen, setEditOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [stateTransition, setStateTransition] = useState<StateTransition>(null);
   const [transitionNote, setTransitionNote] = useState('');
@@ -216,7 +218,7 @@ export function FactionOrderDetail() {
       })),
     ];
     const x = [14, 26, 44, 66, 138, 196];
-    let y = 54;
+    let y: number;
 
     function drawHeader(firstPage: boolean) {
       doc.setFontSize(firstPage ? 17 : 12);
@@ -289,7 +291,9 @@ export function FactionOrderDetail() {
       preparing: t('In Vorbereitung', 'Preparing'),
       ready: t('Abholbereit', 'Ready'),
       picked_up: t('Abgeholt', 'Picked up'),
+      partially_returned: t('Teilweise zurück', 'Partially returned'),
       returned: t('Zurückgegeben', 'Returned'),
+      closed: t('Abgeschlossen', 'Closed'),
       cancelled: t('Storniert', 'Cancelled'),
     };
     return labels[status];
@@ -300,7 +304,9 @@ export function FactionOrderDetail() {
     if (status === 'preparing') return 'warning';
     if (status === 'ready') return 'success';
     if (status === 'picked_up') return 'secondary';
+    if (status === 'partially_returned') return 'warning';
     if (status === 'returned') return 'info';
+    if (status === 'closed') return 'success';
     if (status === 'cancelled') return 'error';
     return 'default';
   }
@@ -317,7 +323,9 @@ export function FactionOrderDetail() {
       preparation_reopened: t('Zur Vorbereitung zurückgesetzt', 'Moved back to preparation'),
       ready: t('Als abholbereit markiert', 'Marked ready'),
       picked_up: t('Liste abgeholt', 'List picked up'),
+      partially_returned: t('Teilrückgabe erfasst', 'Partial return recorded'),
       returned: t('Liste zurückgegeben', 'List returned'),
+      closed: t('Liste abgeschlossen', 'List closed'),
       cancelled: t('Liste storniert', 'List cancelled'),
     };
     return labels[action];
@@ -407,11 +415,6 @@ export function FactionOrderDetail() {
     if (action === 'pickup') {
       pickUp.mutate(currentOrder.id, {
         onSuccess: () => showSnackbar(t('Liste ausgegeben und Bestand gebucht', 'List checked out and stock recorded'), 'success'),
-        onError: handleError,
-      });
-    } else if (action === 'return') {
-      returnOrder.mutate(currentOrder.id, {
-        onSuccess: () => showSnackbar(t('Liste zurückgenommen und Bestand gebucht', 'List checked in and stock recorded'), 'success'),
         onError: handleError,
       });
     } else if (action === 'cancel') {
@@ -647,9 +650,9 @@ export function FactionOrderDetail() {
               </Button>
             </>
           )}
-          {isManager && order.status === 'picked_up' && (
-            <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setConfirmAction('return')}>
-              {t('Komplette Liste zurückgeben', 'Return complete list')}
+          {isManager && ['picked_up', 'partially_returned'].includes(order.status) && (
+            <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setReturnOpen(true)}>
+              {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
             </Button>
           )}
           {canEditOrder && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
@@ -768,6 +771,27 @@ export function FactionOrderDetail() {
         <DialogActions><Button onClick={() => setQrOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions>
       </Dialog>
 
+      <Dialog open={returnOpen} onClose={() => setReturnOpen(false)} fullWidth maxWidth="md" fullScreen={isMobile}>
+        <DialogTitle>{t('Komponenten-Rückgabe', 'Component return reconciliation')}</DialogTitle>
+        <DialogContent dividers>
+          <OrderReturnChecklist
+            order={order}
+            items={items}
+            busy={returnOrderItems.isPending}
+            onCancel={() => setReturnOpen(false)}
+            onSubmit={(lines) => returnOrderItems.mutate({ id: order.id, lines }, {
+              onSuccess: (updated) => {
+                setReturnOpen(false);
+                showSnackbar(updated.status === 'partially_returned'
+                  ? t('Teilrückgabe erfasst; Fehlteile bleiben zugeordnet', 'Partial return recorded; missing units remain assigned')
+                  : t('Rückgabe vollständig erfasst', 'Return fully reconciled'), 'success');
+              },
+              onError: handleError,
+            })}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(stateTransition)} onClose={closeStateTransition} fullWidth maxWidth="xs">
         <DialogTitle>
           {stateTransition === 'ready'
@@ -805,13 +829,11 @@ export function FactionOrderDetail() {
       <Dialog open={Boolean(confirmAction)} onClose={() => setConfirmAction(null)} fullWidth maxWidth="xs">
         <DialogTitle>
           {confirmAction === 'pickup' && t('Liste wirklich abholen?', 'Pick up this list?')}
-          {confirmAction === 'return' && t('Liste vollständig zurückgeben?', 'Return the complete list?')}
           {confirmAction === 'cancel' && t('Liste wirklich stornieren?', 'Cancel this list?')}
         </DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">
             {confirmAction === 'pickup' && t(`${componentUnitTotal} Komponenten werden auf Sie ausgeliehen.`, `${componentUnitTotal} component units will be checked out to you.`)}
-            {confirmAction === 'return' && t(`${componentUnitTotal} Komponenten werden zurückgebucht. Schäden bitte anschließend separat melden.`, `${componentUnitTotal} component units will be checked in. Report any damage separately afterwards.`)}
             {confirmAction === 'cancel' && t('Die Liste bleibt im Verlauf sichtbar, kann aber nicht weiter bearbeitet werden.', 'The list remains in history but can no longer be edited.')}
           </Typography>
         </DialogContent>

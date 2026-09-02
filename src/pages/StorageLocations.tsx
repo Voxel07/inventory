@@ -42,7 +42,7 @@ import { formatStatus } from '../utils/formatters';
 import { useTranslate } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
-import pb from '../services/pocketbaseClient';
+import { apiFileUrl } from '../services/apiClient';
 import MapIcon from '@mui/icons-material/Map';
 
 export function StorageLocations() {
@@ -317,7 +317,7 @@ export function StorageLocations() {
                                         longitude={activeLocation.longitude}
                                         zoom={activeLocation.mapZoom}
                                         overlayBounds={activeLocation.overlayBounds}
-                                        overlayUrl={activeLocation.mapOverlay ? pb.files.getURL(activeLocation, activeLocation.mapOverlay) : undefined}
+                                        overlayUrl={apiFileUrl(activeLocation.mapOverlay)}
                                     />
                                 </Box>
                             )}
@@ -494,7 +494,7 @@ export function StorageLocations() {
                                 longitude={formData.longitude}
                                 zoom={formData.mapZoom}
                                 overlayBounds={formData.overlayBounds}
-                                overlayUrl={overlayPreview || (editingLoc?.mapOverlay && !formData.removeMapOverlay ? pb.files.getURL(editingLoc, editingLoc.mapOverlay) : undefined)}
+                                overlayUrl={overlayPreview || (!formData.removeMapOverlay ? apiFileUrl(editingLoc?.mapOverlay) : undefined)}
                                 onCenterChange={(latitude, longitude) => setFormData((current) => ({ ...current, latitude, longitude }))}
                             />
                         </Stack>

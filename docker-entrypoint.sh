@@ -4,7 +4,8 @@ set -e
 # Generate runtime config from environment variables
 cat <<EOF > /usr/share/nginx/html/config.js
 window.__ENV__ = {
-  POCKETBASE_URL: "${POCKETBASE_URL:-http://127.0.0.1:8090}"
+  API_URL: "${API_URL:-http://127.0.0.1:8080}",
+  OIDC_LOGIN_URL: "${OIDC_LOGIN_URL:-}"
 };
 EOF
 

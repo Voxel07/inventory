@@ -5,7 +5,7 @@ export const NAMING = {
     itemStatus: { available: 'Verfügbar', checked_out: 'Ausgeliehen', damaged: 'Beschädigt', retired: 'Ausgemustert' },
     damageStatus: { reported: 'Gemeldet', in_review: 'In Prüfung', repaired: 'Repariert', written_off: 'Abgeschrieben', resolved: 'Erledigt' },
     severity: { low: 'Niedrig', medium: 'Mittel', high: 'Hoch', critical: 'Kritisch' },
-    transactionType: { checkout: 'Ausgeliehen', checkin: 'Rückgabe', added: 'Bestand hinzufügen', repaired: 'Repariert', written_off: 'Abgeschrieben' },
+    transactionType: { checkout: 'Ausgeliehen', checkin: 'Rückgabe', added: 'Bestand hinzufügen', repaired: 'Repariert', written_off: 'Abgeschrieben', consumed: 'Verbraucht' },
     action: { checkout: 'Ausleihen', checkin: 'Zurückgeben', scanAgain: 'Neu scannen', reset: 'Zurücksetzen' },
     reason: {
       project: 'Projektnutzung', maintenance: 'Wartung', testing: 'Testen',
@@ -17,7 +17,7 @@ export const NAMING = {
     itemStatus: { available: 'Available', checked_out: 'Checked out', damaged: 'Damaged', retired: 'Retired' },
     damageStatus: { reported: 'Reported', in_review: 'In review', repaired: 'Repaired', written_off: 'Written off', resolved: 'Resolved' },
     severity: { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' },
-    transactionType: { checkout: 'Checkout', checkin: 'Return', added: 'Add stock', repaired: 'Repaired', written_off: 'Written off' },
+    transactionType: { checkout: 'Checkout', checkin: 'Return', added: 'Add stock', repaired: 'Repaired', written_off: 'Written off', consumed: 'Consumed' },
     action: { checkout: 'Check out', checkin: 'Return', scanAgain: 'Scan again', reset: 'Reset' },
     reason: {
       project: 'Project use', maintenance: 'Maintenance', testing: 'Testing',
