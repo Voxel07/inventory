@@ -1,0 +1,31 @@
+# Garage S3 Object Storage Configuration
+# Documentation: https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+# RPC configuration for cluster communication
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+# 32-byte hex secret key (64 characters). Replace with your own key (e.g. openssl rand -hex 32)
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.garage.localhost"
+index = "index.html"
+
+[admin]
+api_bind_addr = "[::]:3903"
+# Admin token required for Admin API and garage-webui (e.g. openssl rand -hex 16 or 32)
+admin_token = "00000000000000000000000000000000"
+

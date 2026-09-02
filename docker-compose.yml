@@ -13,6 +13,40 @@ services:
       timeout: 3s
       retries: 20
 
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: garage
+    restart: unless-stopped
+    ports:
+      - "3900:3900" # S3 API
+      - "3901:3901" # RPC
+      - "3902:3902" # S3 Web
+      - "3903:3903" # Admin API
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - inventory-garage-meta:/var/lib/garage/meta
+      - inventory-garage-data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  garage-webui:
+    image: khairul169/garage-webui:latest
+    container_name: garage-webui
+    restart: unless-stopped
+    ports:
+      - "3909:3909"
+    environment:
+      API_BASE_URL: "http://garage:3903"
+      S3_ENDPOINT_URL: "http://garage:3900"
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+    depends_on:
+      garage:
+        condition: service_started
+
   inventory-api:
     build: ./backend
     ports:
@@ -60,3 +94,5 @@ services:
 volumes:
   inventory-postgres:
   inventory-media:
+  inventory-garage-meta:
+  inventory-garage-data:
