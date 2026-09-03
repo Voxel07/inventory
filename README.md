@@ -25,6 +25,8 @@ and Flyway as configured in `docker-compose.yml`.
 
 Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
 
+The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required.
+
 ## PostgreSQL schema and API
 
 Flyway owns schema changes in `backend/src/main/resources/db/migration`. OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`.

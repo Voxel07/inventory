@@ -123,6 +123,11 @@ async function tokenRequest(parameters: URLSearchParams): Promise<TokenResponse>
   });
   const result = await response.json().catch(() => ({})) as TokenResponse;
   if (!response.ok || result.error) {
+    if (result.error === 'invalid_client' || response.status === 401) {
+      throw new Error(
+        'OIDC client authentication failed. Configure the Authentik OAuth2/OIDC provider as a Public client and verify that its Client ID matches this application.',
+      );
+    }
     throw new Error(result.error_description || result.error || `OIDC token request failed (${response.status})`);
   }
   if (!result.access_token) throw new Error('OIDC provider did not return an access token');

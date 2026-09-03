@@ -58,7 +58,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-inventory}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-inventory-api}
+      # A single public Authentik client mirrors the working WRW setup. The
+      # BACKEND/VITE-specific variables remain available for advanced setups.
+      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
@@ -92,7 +94,7 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
       VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY-}
-      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID-}
+      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3333/}
       VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-openid profile email offline_access}
     depends_on:
