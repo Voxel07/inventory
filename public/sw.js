@@ -1,4 +1,4 @@
-const CACHE = 'ash-inventory-shell-v2';
+const CACHE = 'ash-inventory-shell-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -20,11 +20,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE).then((cache) => cache.put(request, copy));
-      return response;
-    }).catch(() => caches.match(request)));
+    // Authenticated responses must never be stored in the shared Cache API.
+    // Returning without respondWith lets the browser perform the request
+    // directly and avoids stale failures or data crossing user sessions.
     return;
   }
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
