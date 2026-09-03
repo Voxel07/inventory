@@ -1,5 +1,5 @@
-const CACHE = 'ash-inventory-shell-v1';
-const SHELL = ['/', '/index.html', '/config.js', '/manifest.webmanifest', '/favicon.svg'];
+const CACHE = 'ash-inventory-shell-v2';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,6 +11,14 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  if (url.origin === self.location.origin && url.pathname === '/config.js') {
+    event.respondWith(fetch(request, { cache: 'no-store' }).then((response) => {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+      return response;
+    }).catch(() => caches.match(request)));
+    return;
+  }
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request).then((response) => {
       const copy = response.clone();

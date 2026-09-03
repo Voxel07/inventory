@@ -1,3 +1,6 @@
+import { API_URL } from '../config/runtimeConfig';
+import { getAuthorizationHeaders } from './authManager';
+
 export type OfflineAction = {
   idempotencyKey: string;
   type: string;
@@ -47,16 +50,18 @@ export async function flushOfflineQueue(): Promise<void> {
   if (!navigator.onLine) return;
   const actions = await getOfflineActions();
   if (!actions.length) return;
-  const token = localStorage.getItem('ash.inventory.accessToken') || '';
-  const user = JSON.parse(localStorage.getItem('ash.inventory.user') || 'null') as { name?: string; role?: string } | null;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` };
-  if (token.startsWith('dev:')) {
-    headers['X-Actor-Id'] = token.slice(4);
-    headers['X-Actor-Name'] = user?.name || 'Development Admin';
-    headers['X-Actor-Role'] = String(user?.role || 'admin').trim().toLowerCase();
+  let authorizationHeaders: Record<string, string>;
+  try {
+    authorizationHeaders = await getAuthorizationHeaders();
+  } catch {
+    return;
   }
-  const baseUrl = (window.__ENV__?.API_URL || import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
-  const response = await fetch(`${baseUrl}/api/sync`, { method: 'POST', headers, body: JSON.stringify({ actions }) });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    ...authorizationHeaders,
+  };
+  const response = await fetch(`${API_URL}/api/sync`, { method: 'POST', headers, body: JSON.stringify({ actions }) });
   if (!response.ok) return;
   const payload = await response.json() as { results: Array<{ idempotencyKey: string; status: string }> };
   const resolved = new Set(payload.results.filter((result) => result.status === 'applied').map((result) => result.idempotencyKey));

@@ -23,7 +23,7 @@ Development mode uses an in-memory H2 database and does not require Docker,
 PostgreSQL, Grafana, or an OpenTelemetry collector. Production uses PostgreSQL
 and Flyway as configured in `docker-compose.yml`.
 
-Run the complete local stack with `docker compose up --build`. The frontend reads `window.__ENV__.API_URL` or `VITE_API_URL`. Production authentication uses Authentik bearer tokens validated by Quarkus OIDC; set `DEV_AUTH_ENABLED=false` in every deployed environment.
+Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
 
 ## PostgreSQL schema and API
 

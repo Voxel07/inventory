@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+    Alert,
     Box,
     Paper,
     Typography,
@@ -15,7 +16,7 @@ import { useTranslate } from '../utils/naming';
 
 export function LoginPage() {
     const t = useTranslate();
-    const { login } = useAuth();
+    const { login, error: authError } = useAuth();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -78,6 +79,8 @@ export function LoginPage() {
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 4 }}>
                         {t('Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.', 'Sign in with your organization account to manage and check out items.')}
                     </Typography>
+
+                    {authError && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{authError}</Alert>}
 
                     <Button
                         variant="contained"

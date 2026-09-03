@@ -6,6 +6,7 @@ export function useAuth() {
   return {
     token: auth.token,
     user: auth.user,
+    error: auth.error,
     isAuthenticated: Boolean(auth.token && auth.user),
     login,
     logout,
