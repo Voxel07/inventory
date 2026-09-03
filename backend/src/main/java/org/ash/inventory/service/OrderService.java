@@ -63,6 +63,7 @@ public class OrderService {
         order.eventOccurrence = event;
         order.faction = faction;
         order.pickupLocation = input.pickupLocation() == null ? null : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
+        applyPickupPoint(order, input);
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         order.createdBy = actor;
@@ -81,6 +82,7 @@ public class OrderService {
             throw ApiException.conflict("Only draft or submitted orders can be edited");
         }
         order.pickupLocation = input.pickupLocation() == null ? order.pickupLocation : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
+        applyPickupPoint(order, input);
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         replaceLines(order, input);
@@ -362,6 +364,21 @@ public class OrderService {
             case cancelled -> "cancelled";
             default -> status.name();
         };
+    }
+
+    private void applyPickupPoint(FactionOrder order, ApiModels.OrderInput input) {
+        Double latitude = input.pickupLatitude() != null
+                ? input.pickupLatitude()
+                : order.pickupLatitude != null ? order.pickupLatitude : order.pickupLocation == null ? null : order.pickupLocation.latitude;
+        Double longitude = input.pickupLongitude() != null
+                ? input.pickupLongitude()
+                : order.pickupLongitude != null ? order.pickupLongitude : order.pickupLocation == null ? null : order.pickupLocation.longitude;
+        if (latitude == null || longitude == null) throw ApiException.badRequest("Select an exact pickup point on the map");
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            throw ApiException.badRequest("Pickup point coordinates are outside the valid range");
+        }
+        order.pickupLatitude = latitude;
+        order.pickupLongitude = longitude;
     }
 
     private void assertFactionAccess(UserAccount actor, Faction faction) {

@@ -47,6 +47,8 @@ export interface FactionOrder {
   faction: string;
   eventDate: string;
   pickupLocation?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
   status: FactionOrderStatus;
   itemIds: string[];
   requestedQuantities: Record<string, number>;
@@ -87,7 +89,9 @@ export interface FactionOrderFormData {
   eventType: EventType;
   faction: string;
   eventDate: string;
-  pickupLocation: string;
+  pickupLocation?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
   itemIds: string[];
   requestedQuantities: Record<string, number>;
   assemblyIds: string[];

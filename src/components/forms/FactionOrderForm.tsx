@@ -38,6 +38,8 @@ import { useDamageReports } from '../../hooks/useDamageReports';
 import { calculateItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
+import { StorageLocationMap } from '../maps/StorageLocationMap';
+import { apiFileUrl } from '../../services/apiClient';
 
 type ResourceViewMode = 'list' | 'tiles';
 
@@ -88,7 +90,11 @@ export function FactionOrderForm({
   const [eventDate, setEventDate] = useState(
     initialData?.eventDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
   );
-  const [pickupLocation, setPickupLocation] = useState(initialData?.pickupLocation ?? storageLocations[0]?.id ?? '');
+  const initialPickupLocation = initialData?.pickupLocation ?? storageLocations[0]?.id ?? '';
+  const initialPickupWaypoint = storageLocations.find((location) => location.id === initialPickupLocation);
+  const [pickupLocation, setPickupLocation] = useState(initialPickupLocation);
+  const [pickupLatitude, setPickupLatitude] = useState<number | undefined>(initialData?.pickupLatitude ?? initialPickupWaypoint?.latitude);
+  const [pickupLongitude, setPickupLongitude] = useState<number | undefined>(initialData?.pickupLongitude ?? initialPickupWaypoint?.longitude);
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(initialData ? factionOrderItemBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
@@ -97,13 +103,19 @@ export function FactionOrderForm({
     Object.fromEntries(Object.entries(initialData ? factionOrderAssemblyBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
   );
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
   const [viewMode, setViewMode] = useState<ResourceViewMode>(() => {
     const saved = window.localStorage.getItem('faction-order-resource-view');
-    return saved === 'list' ? 'list' : 'tiles';
+    return saved === 'tiles' ? 'tiles' : 'list';
   });
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
   const { data: transactions } = useTransactions();
   const { data: damageReports } = useDamageReports();
+  const categories = useMemo(() => [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
+  const selectedPickupWaypoint = useMemo(
+    () => storageLocations.find((location) => location.id === pickupLocation),
+    [pickupLocation, storageLocations],
+  );
 
   const availableByItem = useMemo(() => new Map(items.map((item) => [
     item.id,
@@ -121,8 +133,20 @@ export function FactionOrderForm({
   }, [defaultEventType, defaultFaction, initialData]);
 
   useEffect(() => {
-    if (!pickupLocation && storageLocations[0]) setPickupLocation(storageLocations[0].id);
-  }, [pickupLocation, storageLocations]);
+    if (!pickupLocation && storageLocations[0]) {
+      setPickupLocation(storageLocations[0].id);
+      setPickupLatitude(storageLocations[0].latitude);
+      setPickupLongitude(storageLocations[0].longitude);
+      return;
+    }
+    if (pickupLocation && (pickupLatitude == null || pickupLongitude == null)) {
+      const location = storageLocations.find((candidate) => candidate.id === pickupLocation);
+      if (location) {
+        setPickupLatitude(location.latitude);
+        setPickupLongitude(location.longitude);
+      }
+    }
+  }, [pickupLatitude, pickupLocation, pickupLongitude, storageLocations]);
 
   useEffect(() => {
     const options = allowedFactions(eventType);
@@ -143,12 +167,13 @@ export function FactionOrderForm({
     const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
-        if (Number(quantities[item.id]) > 0) return true;
+        if (category && item.category !== category) return false;
         if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
+        if (Number(quantities[item.id]) > 0) return true;
         return item.eventTypes?.includes(eventType);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [eventType, items, quantities, search]);
+  }, [category, eventType, items, quantities, search]);
 
   const visibleAssemblies = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
@@ -200,6 +225,8 @@ export function FactionOrderForm({
       Object.entries(previousAssemblies).map(([id, value]) => [id, String(value)]),
     ));
     if (previousOrder.pickupLocation) setPickupLocation(previousOrder.pickupLocation);
+    setPickupLatitude(previousOrder.pickupLatitude);
+    setPickupLongitude(previousOrder.pickupLongitude);
     setComparison(previousOrder);
   }
 
@@ -222,7 +249,9 @@ export function FactionOrderForm({
       eventType,
       faction,
       eventDate,
-      pickupLocation,
+      pickupLocation: pickupLocation || undefined,
+      pickupLatitude,
+      pickupLongitude,
       itemIds: Object.keys(requestedQuantities),
       requestedQuantities,
       assemblyIds: Object.keys(requestedAssemblyQuantities),
@@ -264,13 +293,20 @@ export function FactionOrderForm({
             slotProps={{ inputLabel: { shrink: true } }}
             required
           />
-          <FormControl fullWidth required>
-            <InputLabel>{t('Abholort', 'Pickup location')}</InputLabel>
+          <FormControl fullWidth>
+            <InputLabel>{t('Nahegelegener Lagerort (optional)', 'Nearby storage location (optional)')}</InputLabel>
             <Select
-              label={t('Abholort', 'Pickup location')}
+              label={t('Nahegelegener Lagerort (optional)', 'Nearby storage location (optional)')}
               value={pickupLocation}
-              onChange={(event) => setPickupLocation(event.target.value)}
+              onChange={(event) => {
+                const id = event.target.value;
+                const location = storageLocations.find((candidate) => candidate.id === id);
+                setPickupLocation(id);
+                setPickupLatitude(location?.latitude);
+                setPickupLongitude(location?.longitude);
+              }}
             >
+              <MenuItem value="">{t('Kein Lagerort', 'No storage location')}</MenuItem>
               {storageLocations.map((location) => (
                 <MenuItem key={location.id} value={location.id}>
                   {[location.name, location.area, location.position].filter(Boolean).join(' · ')}
@@ -279,6 +315,21 @@ export function FactionOrderForm({
             </Select>
           </FormControl>
         </Stack>
+
+        <StorageLocationMap
+          editable
+          compact
+          kind="pickup"
+          latitude={pickupLatitude}
+          longitude={pickupLongitude}
+          zoom={selectedPickupWaypoint?.mapZoom}
+          overlayBounds={selectedPickupWaypoint?.overlayBounds}
+          overlayUrl={apiFileUrl(selectedPickupWaypoint?.mapOverlay)}
+          onCenterChange={(latitude, longitude) => {
+            setPickupLatitude(latitude);
+            setPickupLongitude(longitude);
+          }}
+        />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
           <Button
@@ -332,7 +383,7 @@ export function FactionOrderForm({
               'Entries tagged for this event are shown directly. Only entries with a quantity greater than 0 are ordered.',
             )}
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
             <TextField
               fullWidth
               size="small"
@@ -340,6 +391,13 @@ export function FactionOrderForm({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+              <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
+              <Select label={t('Kategorie', 'Category')} value={category} onChange={(event) => setCategory(event.target.value)}>
+                <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+                {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+              </Select>
+            </FormControl>
             <ToggleButtonGroup
               exclusive
               size="small"
@@ -388,14 +446,14 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack spacing={0.75} sx={{ maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
+            <Stack spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
               {visibleAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
-                  <Paper key={assembly.id} variant="outlined" sx={{ p: 0.75, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
+                  <Paper key={assembly.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Box sx={{ width: 44, height: 44, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" /></Box>
+                       <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" fontSize="small" /></Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{assembly.name}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')} · {t('Verfügbar', 'Available')}: {available}</Typography>
@@ -440,16 +498,16 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack spacing={0.75} sx={{ maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
+            <Stack spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
               {visibleItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
                 return (
-                  <Paper key={item.id} variant="outlined" sx={{ p: 0.75, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
+                  <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       {image
-                        ? <Box component="img" src={image} alt={item.name} sx={{ width: 48, height: 48, flexShrink: 0, objectFit: 'cover', borderRadius: 0.75 }} />
-                        : <Box sx={{ width: 48, height: 48, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" /></Box>}
+                        ? <Box component="img" src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'cover', borderRadius: 0.75 }} />
+                        : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category} · {t('Verfügbar', 'Available')}: {availableByItem.get(item.id) ?? 0}</Typography>
@@ -480,7 +538,7 @@ export function FactionOrderForm({
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
-          disabled={isLoading || !pickupLocation || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
+          disabled={isLoading || pickupLatitude == null || pickupLongitude == null || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
         >
           {submitLabel ?? t('Bestellliste erstellen', 'Create order list')}
         </Button>

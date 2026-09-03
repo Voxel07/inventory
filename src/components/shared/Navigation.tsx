@@ -64,7 +64,7 @@ export function Navigation() {
         { label: t('Lagerorte', 'Storage locations'), path: '/storage-locations', icon: <RoomIcon /> },
         { label: t('Baugruppen', 'Assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
         { label: t('Events', 'Events'), path: '/events', icon: <EventIcon /> },
-        { label: t('Fraktionsbestellungen', 'Faction orders'), path: '/events/orders', icon: <GroupsIcon /> },
+        { label: t('Bestellungen', 'Orders'), path: '/orders', icon: <GroupsIcon /> },
         { label: t('Ausgeliehen', 'Checked out'), path: '/checked-out', icon: <AssignmentReturnIcon /> },
         { label: t('Transaktionsverlauf', 'Transaction history'), path: '/transactions', icon: <HistoryIcon /> },
         { label: t('QR-Codes drucken', 'Print QR codes'), path: '/print-qr', icon: <QrCode2Icon /> },
@@ -75,7 +75,7 @@ export function Navigation() {
     ];
     const navItems = isManager
         ? managerNavItems
-        : [{ label: t('Meine Fraktionsbestellungen', 'My faction orders'), path: '/events/orders', icon: <GroupsIcon /> }];
+        : [{ label: t('Bestellungen', 'Orders'), path: '/orders', icon: <GroupsIcon /> }];
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -216,6 +216,7 @@ export function Navigation() {
                             location.pathname === '/' ? '/' :
                             location.pathname.startsWith('/items') ? '/items' :
                             location.pathname.startsWith('/checked-out') ? '/checked-out' :
+                            location.pathname.startsWith('/orders') ? '/orders' :
                             false
                         }
                         onChange={(_, value) => {
@@ -227,7 +228,7 @@ export function Navigation() {
                         {isManager && <BottomNavigationAction label={t('Start', 'Home')} value="/" icon={<DashboardIcon />} />}
                         {isManager && <BottomNavigationAction label={t('Artikel', 'Items')} value="/items" icon={<InventoryIcon />} />}
                         {isManager && <BottomNavigationAction label={t('Rückgabe', 'Return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
-                        {!isManager && <BottomNavigationAction label={t('Bestellungen', 'Orders')} value="/events/orders" icon={<GroupsIcon />} />}
+                        {!isManager && <BottomNavigationAction label={t('Bestellungen', 'Orders')} value="/orders" icon={<GroupsIcon />} />}
                         <BottomNavigationAction label={t('Mehr', 'More')} value="more" icon={<MoreHorizIcon />} />
                     </BottomNavigation>
                 </Paper>

@@ -62,7 +62,7 @@ export function Header() {
     function openNotification(notification: AppNotification) {
         setNotificationAnchor(null);
         markRead.mutate([notification.id]);
-        if (notification.orderId) navigate(`/events/orders/${notification.orderId}`);
+        if (notification.orderId) navigate(`/orders/faction/${notification.orderId}`);
     }
 
     function dismissAllNotifications() {

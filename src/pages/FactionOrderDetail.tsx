@@ -12,9 +12,13 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   IconButton,
+  InputLabel,
   LinearProgress,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -35,6 +39,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import SaveIcon from '@mui/icons-material/Save';
 import PrintIcon from '@mui/icons-material/Print';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import SearchIcon from '@mui/icons-material/Search';
 import { jsPDF } from 'jspdf';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
@@ -70,6 +75,8 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { generateQRCodeDataURL } from '../utils/qrCode';
+import { StorageLocationMap } from '../components/maps/StorageLocationMap';
+import { apiFileUrl } from '../services/apiClient';
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 type StateTransition = 'ready' | 'preparing' | null;
@@ -111,6 +118,8 @@ export function FactionOrderDetail() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [stateTransition, setStateTransition] = useState<StateTransition>(null);
   const [transitionNote, setTransitionNote] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
 
   useEffect(() => {
     setPrepared(Object.fromEntries(
@@ -129,6 +138,17 @@ export function FactionOrderDetail() {
   const orderAssemblies = useMemo(() => Object.keys(order?.requestedAssemblyQuantities ?? {})
     .map((id) => assemblyMap.get(id))
     .filter((assembly): assembly is Assembly => Boolean(assembly)), [assemblyMap, order?.requestedAssemblyQuantities]);
+  const orderItemCategories = useMemo(
+    () => [...new Set(orderItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [orderItems],
+  );
+  const visibleOrderItems = useMemo(() => {
+    const term = itemSearch.trim().toLocaleLowerCase();
+    return orderItems.filter((item) => {
+      if (itemCategory && item.category !== itemCategory) return false;
+      return !term || `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`.toLocaleLowerCase().includes(term);
+    });
+  }, [itemCategory, itemSearch, orderItems]);
 
   const reservedByOthers = useMemo(() => {
     const result: Record<string, number> = {};
@@ -177,22 +197,25 @@ export function FactionOrderDetail() {
   if (isLoading) return <LinearProgress />;
   if (isError || !order) {
     return (
-      <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/events/orders')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
+      <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Bestellliste nicht gefunden.', 'Order list not found.')}
       </Alert>
     );
   }
   const currentUser = user as unknown as User;
   if (!canAccessFaction(currentUser, order.eventType, order.faction)) {
-    return <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/events/orders')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>{t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}</Alert>;
+    return <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>{t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}</Alert>;
   }
 
   const currentOrder = order;
   const pickupLocation = order.expand?.pickupLocation
     ?? storageLocations.find((location) => location.id === order.pickupLocation);
+  const pickupPoint = order.pickupLatitude != null && order.pickupLongitude != null
+    ? `${order.pickupLatitude.toFixed(6)}, ${order.pickupLongitude.toFixed(6)}`
+    : undefined;
   const pickupLocationLabel = pickupLocation
-    ? [pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean).join(' · ')
-    : t('Nicht angegeben', 'Not specified');
+    ? [...[pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean), pickupPoint].filter(Boolean).join(' · ')
+    : pickupPoint ?? t('Nicht angegeben', 'Not specified');
   const isManager = canManageInventory(currentUser);
   const canEditOrder = isManager || order.createdBy === user?.id;
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
@@ -457,8 +480,8 @@ export function FactionOrderDetail() {
     const available = availableFor(item);
     return (
       <Card key={item.id} variant="outlined">
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+        <CardContent sx={{ px: 1.25, py: 0.75, '&:last-child': { pb: 0.75 } }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -466,7 +489,7 @@ export function FactionOrderDetail() {
                 {item.category ? ` · ${item.category}` : ''}
               </Typography>
             </Box>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
               <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
               {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
@@ -479,7 +502,7 @@ export function FactionOrderDetail() {
                 value={prepared[item.id] ?? ''}
                 onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
                 slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ width: { xs: '100%', sm: 125 } }}
+                sx={{ width: 110 }}
               />
             )}
           </Stack>
@@ -530,7 +553,7 @@ export function FactionOrderDetail() {
 
   return (
     <Box>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/events/orders')} sx={{ mb: 1 }}>
+      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/orders?tab=faction')} sx={{ mb: 1 }}>
         {t('Alle Fraktionslisten', 'All faction lists')}
       </Button>
 
@@ -562,6 +585,21 @@ export function FactionOrderDetail() {
         </Alert>
       )}
 
+      {order.pickupLatitude != null && order.pickupLongitude != null && (
+        <Paper sx={{ p: 1.5, mb: 2 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
+          <StorageLocationMap
+            compact
+            kind="pickup"
+            latitude={order.pickupLatitude}
+            longitude={order.pickupLongitude}
+            zoom={pickupLocation?.mapZoom}
+            overlayBounds={pickupLocation?.overlayBounds}
+            overlayUrl={apiFileUrl(pickupLocation?.mapOverlay)}
+          />
+        </Paper>
+      )}
+
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
           <Typography sx={{ fontWeight: 700 }}>
@@ -589,8 +627,30 @@ export function FactionOrderDetail() {
           <Stack spacing={1.25} sx={{ mb: 2 }}>{orderAssemblies.map(assemblyRow)}</Stack>
         </>
       )}
-      {!!orderItems.length && <Typography variant="h6" sx={{ mb: 1 }}>{t('Einzelartikel', 'Individual items')}</Typography>}
-      <Stack spacing={1.25} sx={{ mb: 2 }}>{orderItems.map(itemRow)}</Stack>
+      {!!orderItems.length && (
+        <>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('Einzelartikel', 'Individual items')}</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.25 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('Artikel suchen', 'Search items')}
+              value={itemSearch}
+              onChange={(event) => setItemSearch(event.target.value)}
+              slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
+            />
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+              <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
+              <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
+                <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+                {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Stack>
+          <Stack spacing={0.5} sx={{ mb: 2 }}>{visibleOrderItems.map(itemRow)}</Stack>
+          {!visibleOrderItems.length && <Typography color="text.secondary" sx={{ mb: 2 }}>{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+        </>
+      )}
       {orderItems.length !== Object.keys(order.requestedQuantities).length && (
         <Alert severity="warning" sx={{ mb: 2 }}>{t('Mindestens ein Artikel dieser Liste existiert nicht mehr im Lager.', 'At least one item on this list no longer exists in inventory.')}</Alert>
       )}
@@ -688,7 +748,7 @@ export function FactionOrderDetail() {
               ))}
             </Stack>
           )}
-          <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate(`/events/orders/${previousOrder.id}`)}>
+          <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate(`/orders/faction/${previousOrder.id}`)}>
             {t('Vorjahresliste öffnen', 'Open previous-year list')}
           </Button>
         </Paper>

@@ -44,8 +44,10 @@ public final class ApiModels {
 
     public record OrderInput(
             String eventType, String faction, LocalDate eventDate, UUID eventOccurrenceId, UUID factionId,
-            UUID pickupLocation, String collectorName, String notes,
+            UUID pickupLocation, Double pickupLatitude, Double pickupLongitude, String collectorName, String notes,
             Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities) {}
+
+    public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose) {}
 
     public record PreparationInput(Map<UUID, Integer> preparedQuantities, boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
     public record ReturnLine(@Min(0) int returned, @Min(0) int missing, @Min(0) int damaged, BigDecimal operatingHours, String notes) {}

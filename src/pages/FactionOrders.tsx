@@ -129,9 +129,12 @@ export function FactionOrders() {
   function pickupLabel(order: FactionOrder) {
     const location = order.expand?.pickupLocation
       ?? storageLocations.find((candidate) => candidate.id === order.pickupLocation);
+    const point = order.pickupLatitude != null && order.pickupLongitude != null
+      ? `${order.pickupLatitude.toFixed(5)}, ${order.pickupLongitude.toFixed(5)}`
+      : undefined;
     return location
-      ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
-      : '—';
+      ? [...[location.name, location.area, location.location, location.position].filter(Boolean), point].filter(Boolean).join(' · ')
+      : point ?? '—';
   }
 
   return (
@@ -179,7 +182,7 @@ export function FactionOrders() {
           return (
             <Card key={`${eventType}-${faction}`} sx={{ borderColor: latest?.status === 'ready' ? 'success.main' : 'divider' }}>
               {latest ? (
-                <CardActionArea onClick={() => navigate(`/events/orders/${latest.id}`)} sx={{ height: '100%' }}>
+                <CardActionArea onClick={() => navigate(`/orders/faction/${latest.id}`)} sx={{ height: '100%' }}>
                   <CardContent>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <Box>
@@ -236,7 +239,7 @@ export function FactionOrders() {
               <Button
                 key={order.id}
                 color="inherit"
-                onClick={() => navigate(`/events/orders/${order.id}`)}
+                onClick={() => navigate(`/orders/faction/${order.id}`)}
                 sx={{ p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}
               >
                 <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center' }}>
@@ -278,7 +281,7 @@ export function FactionOrders() {
               onSuccess: (order) => {
                 setDialogOpen(false);
                 showSnackbar(t('Bestellliste erstellt', 'Order list created'), 'success');
-                navigate(`/events/orders/${order.id}`);
+                navigate(`/orders/faction/${order.id}`);
               },
               onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Liste konnte nicht erstellt werden', 'Could not create list'), 'error'),
             })}

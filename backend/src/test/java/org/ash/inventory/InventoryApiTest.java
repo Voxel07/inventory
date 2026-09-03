@@ -20,6 +20,13 @@ class InventoryApiTest {
                 .header("X-Actor-Role", "admin");
     }
 
+    private static io.restassured.specification.RequestSpecification factionLeaderRequest() {
+        return given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-faction-leader")
+                .header("X-Actor-Name", "Test Faction Leader")
+                .header("X-Actor-Role", "faction_leader");
+    }
+
     @Test
     void catalogAndMaintenanceBlockerFlow() {
         String locationId = request()
@@ -37,7 +44,7 @@ class InventoryApiTest {
                 .then().statusCode(200).body("name", equalTo("Test Generator"))
                 .extract().path("id");
 
-        request()
+        factionLeaderRequest()
                 .get("/api/transactions?itemId=" + itemId)
                 .then().statusCode(200)
                 .body("size()", equalTo(1))
@@ -50,5 +57,22 @@ class InventoryApiTest {
                 .post("/api/transactions")
                 .then().statusCode(409)
                 .body("error", org.hamcrest.Matchers.containsString("maintenance status is overdue"));
+    }
+
+    @Test
+    void everyAuthenticatedUserCanCreateAGeneralOrder() {
+        factionLeaderRequest()
+                .body(Map.of("name", "Sponsor tent", "purpose", "Provide a covered sponsor area"))
+                .post("/api/general-orders")
+                .then().statusCode(200)
+                .body("name", equalTo("Sponsor tent"))
+                .body("purpose", equalTo("Provide a covered sponsor area"))
+                .body("createdBy", notNullValue())
+                .body("expand.createdBy.name", equalTo("Test Faction Leader"));
+
+        factionLeaderRequest()
+                .get("/api/general-orders")
+                .then().statusCode(200)
+                .body("[0].name", equalTo("Sponsor tent"));
     }
 }

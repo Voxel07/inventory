@@ -10,7 +10,7 @@ export function InventoryManagerGuard({ children }: { children: ReactNode }) {
   const t = useTranslate();
   const { user } = useAuth();
   if (!canManageInventory(user as unknown as User)) {
-    return <Navigate to="/events/orders" replace state={{ accessDenied: t('Zugriff verweigert', 'Access denied') }} />;
+    return <Navigate to="/orders?tab=faction" replace state={{ accessDenied: t('Zugriff verweigert', 'Access denied') }} />;
   }
   return children;
 }

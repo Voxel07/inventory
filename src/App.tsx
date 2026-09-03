@@ -16,7 +16,7 @@ import { UserDashboard } from './pages/UserDashboard';
 import { StorageLocations } from './pages/StorageLocations';
 import { Events } from './pages/Events';
 import { EventDetail } from './pages/EventDetail';
-import { FactionOrders } from './pages/FactionOrders';
+import { Orders } from './pages/Orders';
 import { FactionOrderDetail } from './pages/FactionOrderDetail';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagement } from './pages/UserManagement';
@@ -359,7 +359,9 @@ function AppContent() {
             <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
             <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
             <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
-            <Route path="/events/orders" element={<FactionOrders />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
+            <Route path="/events/orders" element={<Navigate to="/orders?tab=faction" replace />} />
             <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
             <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
             <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
@@ -390,7 +392,7 @@ function AppContent() {
 
 function HomeRoute() {
   const { user } = useAuth();
-  return canManageInventory(user as unknown as User) ? <UserDashboard /> : <Navigate to="/events/orders" replace />;
+  return canManageInventory(user as unknown as User) ? <UserDashboard /> : <Navigate to="/orders?tab=faction" replace />;
 }
 
 export default function App() {

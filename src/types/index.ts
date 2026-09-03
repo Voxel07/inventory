@@ -13,6 +13,7 @@ export type {
   DamageStatusHistoryEntry,
 } from './damageReport';
 export type { User, UserRole, AccessRole, UserPermissionsFormData } from './user';
+export type { GeneralOrder, GeneralOrderFormData } from './order';
 export { EVENT_TYPES } from './event';
 export type { EventType, EventReportStatus, EventReport, EventReportFormData } from './event';
 export { FACTIONS_BY_EVENT, isFactionForEvent, factionKey } from './factionOrder';

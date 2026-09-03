@@ -48,6 +48,8 @@ interface Props {
   overlayBounds?: MapBounds;
   editable?: boolean;
   onCenterChange?: (latitude: number, longitude: number) => void;
+  kind?: 'storage' | 'pickup';
+  compact?: boolean;
 }
 
 export function StorageLocationMap({
@@ -58,6 +60,8 @@ export function StorageLocationMap({
   overlayBounds,
   editable = false,
   onCenterChange,
+  kind = 'storage',
+  compact = false,
 }: Props) {
   const t = useTranslate();
   const center: Coordinate = [latitude ?? DEFAULT_CENTER[0], longitude ?? DEFAULT_CENTER[1]];
@@ -68,10 +72,12 @@ export function StorageLocationMap({
     <Stack spacing={1.5}>
       {editable && (
         <Typography variant="body2" color="text.secondary">
-          {t('Klicken Sie auf die Karte, um den Lagerort zu setzen.', 'Click the map to set the storage location.')}
+          {kind === 'pickup'
+            ? t('Klicken Sie auf die Karte, um den genauen Abholpunkt zu setzen.', 'Click the map to set the exact pickup point.')
+            : t('Klicken Sie auf die Karte, um den Lagerort zu setzen.', 'Click the map to set the storage location.')}
         </Typography>
       )}
-      <Box sx={{ height: { xs: 320, md: 420 }, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+      <Box sx={{ height: compact ? { xs: 240, md: 300 } : { xs: 320, md: 420 }, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
         <MapContainer center={center} zoom={effectiveZoom} style={{ width: '100%', height: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -81,7 +87,7 @@ export function StorageLocationMap({
           <ClickHandler onSelect={editable ? onCenterChange : undefined} />
           {overlayUrl && <ImageOverlay url={overlayUrl} bounds={bounds} opacity={0.62} />}
           <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#e30613', fillOpacity: 1, weight: 2 }}>
-            <Popup>{t('Lagerort', 'Storage location')}</Popup>
+            <Popup>{kind === 'pickup' ? t('Abholpunkt', 'Pickup point') : t('Lagerort', 'Storage location')}</Popup>
           </CircleMarker>
         </MapContainer>
       </Box>

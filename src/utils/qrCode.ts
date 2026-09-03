@@ -10,7 +10,7 @@ export function getQRUrl(id: string, type: QRResourceType = 'item', textCode?: s
   const url = type === 'assembly'
     ? `${baseUrl()}/assemblies/${id}`
     : type === 'faction-order'
-      ? `${baseUrl()}/events/orders/${id}`
+      ? `${baseUrl()}/orders/faction/${id}`
       : `${baseUrl()}/items/${id}`;
   if (!textCode) return url;
   const result = new URL(url);

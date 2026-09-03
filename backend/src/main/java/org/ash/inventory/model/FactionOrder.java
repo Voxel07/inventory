@@ -16,6 +16,8 @@ public class FactionOrder extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "event_occurrence_id") public EventOccurrence eventOccurrence;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_id") public Faction faction;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "pickup_location_id") public StorageLocation pickupLocation;
+    @Column(name = "pickup_latitude") public Double pickupLatitude;
+    @Column(name = "pickup_longitude") public Double pickupLongitude;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.OrderStatus status = DomainEnums.OrderStatus.draft;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "created_by") public UserAccount createdBy;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "prepared_by") public UserAccount preparedBy;

@@ -12,6 +12,7 @@ import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderHistory;
 import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.GeneralOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.ItemImage;
 import org.ash.inventory.model.MaintenanceRecord;
@@ -37,6 +38,15 @@ public class ApiMapper {
         put(result, "email", value.email);
         put(result, "role", value.role.name());
         result.put("faction", value.factions == null ? List.of() : value.factions);
+        return result;
+    }
+
+    public Map<String, Object> generalOrder(GeneralOrder value) {
+        var result = base(value.id, value.createdAt, value.updatedAt);
+        result.put("name", value.name);
+        result.put("purpose", value.purpose);
+        result.put("createdBy", value.createdBy.id.toString());
+        result.put("expand", Map.of("createdBy", user(value.createdBy)));
         return result;
     }
 
@@ -152,6 +162,8 @@ public class ApiMapper {
         result.putAll(orderSummary(value));
         result.put("factionKey", value.faction.eventType + ":" + value.faction.name);
         put(result, "pickupLocation", value.pickupLocation == null ? null : value.pickupLocation.id.toString());
+        put(result, "pickupLatitude", value.pickupLatitude);
+        put(result, "pickupLongitude", value.pickupLongitude);
         put(result, "collectorName", value.collectorName);
         put(result, "notes", value.notes);
         put(result, "createdBy", value.createdBy == null ? null : value.createdBy.id.toString());

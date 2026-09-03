@@ -90,7 +90,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
             <Chip
                 component={Link}
                 clickable
-                to={`/events/orders/${tx.factionOrderId}`}
+                to={`/orders/faction/${tx.factionOrderId}`}
                 size="small"
                 variant="outlined"
                 color="primary"
