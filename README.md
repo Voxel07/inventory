@@ -27,6 +27,17 @@ Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs,
 
 The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required.
 
+Authentik supplies application roles through its `groups` claim. Use these namespaced group names so they cannot be confused with roles belonging to another application:
+
+| Authentik group | Inventory role |
+| --- | --- |
+| `inventory_admin` | `admin` |
+| `inventory_manager` | `inventory_manager` |
+| `inventory_warehouse_packer` | `warehouse_packer` |
+| `inventory_faction_leader` | `faction_leader` |
+
+The Authentik group is authoritative at sign-in; the corresponding internal role is stored in `app_users`. A token without a recognized inventory group receives the least-privileged `faction_leader` role.
+
 ## PostgreSQL schema and API
 
 Flyway owns schema changes in `backend/src/main/resources/db/migration`. OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`.

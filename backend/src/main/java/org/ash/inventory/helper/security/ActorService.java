@@ -86,10 +86,11 @@ public class ActorService {
         return value == null ? fallback : value.toString();
     }
 
-    private DomainEnums.UserRole roleFrom(Set<String> roles) {
-        if (roles.contains("admin")) return DomainEnums.UserRole.admin;
+    static DomainEnums.UserRole roleFrom(Set<String> roles) {
+        if (roles.contains("inventory_admin")) return DomainEnums.UserRole.admin;
         if (roles.contains("inventory_manager")) return DomainEnums.UserRole.inventory_manager;
-        if (roles.contains("warehouse_packer")) return DomainEnums.UserRole.warehouse_packer;
+        if (roles.contains("inventory_warehouse_packer")) return DomainEnums.UserRole.warehouse_packer;
+        if (roles.contains("inventory_faction_leader")) return DomainEnums.UserRole.faction_leader;
         return DomainEnums.UserRole.faction_leader;
     }
 
