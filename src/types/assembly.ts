@@ -8,6 +8,7 @@ export interface Assembly {
   itemQuantities: Record<string, number>;
   description: string;
   hint?: string;
+  image?: string;
   eventTypes?: EventType[];
   created: string;
   updated: string;
@@ -17,6 +18,8 @@ export interface Assembly {
 }
 
 export interface AssemblyFormData {
+  imageFile?: File;
+  removeImage?: boolean;
   name: string;
   itemIds: string[];
   itemQuantities: Record<string, number>;

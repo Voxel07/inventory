@@ -1,3 +1,4 @@
+import { MediaImage } from '../components/common/MediaImage';
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -216,7 +217,7 @@ export function ItemDetail() {
             {!!item.images?.length && (
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5, mb: 2 }}>
                     {item.images.map((filename) => (
-                        <Box key={filename} component="img" src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 1, border: 1, borderColor: 'divider' }} />
+                        <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 1, border: 1, borderColor: 'divider' }} />
                     ))}
                 </Box>
             )}

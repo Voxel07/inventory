@@ -76,6 +76,7 @@ export interface ItemFormData {
   hint?: string;
   isConsumable?: boolean;
   imageFiles?: File[];
+  imageReplacements?: Record<string, File>;
   removeImages?: string[];
   containerSize?: number;
   containerCount?: number;

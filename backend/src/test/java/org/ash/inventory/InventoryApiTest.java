@@ -13,6 +13,53 @@ import static org.hamcrest.Matchers.notNullValue;
 
 @QuarkusTest
 class InventoryApiTest {
+    @Test
+    void uploadedImagesAreNamedForTheItemAndServedWithoutRedirects() {
+        byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
+        String first = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", bytes, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        String second = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", bytes, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        var item = request().body(Map.of("name", "Image test", "category", "Equipment", "value", 0,
+                        "images", java.util.List.of(first, second)))
+                .post("/api/items").then().statusCode(200).extract().jsonPath();
+        String id = item.getString("id");
+        java.util.List<String> images = item.getList("images", String.class);
+        org.junit.jupiter.api.Assertions.assertEquals(2, images.size());
+        org.junit.jupiter.api.Assertions.assertNotEquals(images.get(0), images.get(1));
+        for (String key : images) {
+            org.junit.jupiter.api.Assertions.assertTrue(key.matches("items/[0-9a-f-]{36}/" + id + "\\.webp"));
+            byte[] served = request().get("/api/media/" + key).then().statusCode(200)
+                    .contentType("image/webp").header("Cache-Control", "private, max-age=3600")
+                    .extract().asByteArray();
+            org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, served);
+        }
+        request().get("/api/media/" + first).then().statusCode(404);
+        request().get("/api/media/" + second).then().statusCode(404);
+        request().body(Map.of("name", "Image test", "category", "Equipment", "value", 0,
+                        "images", java.util.List.of(images.get(1))))
+                .patch("/api/items/" + id).then().statusCode(200)
+                .body("images[0]", equalTo(images.get(1))).body("images.size()", equalTo(1));
+    }
+
+    @Test
+    void failedImageAttachmentKeepsTheUploadForRetry() {
+        String staged = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", new byte[]{1, 2, 3}, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        String missing = "2026-00000000-0000-0000-0000-000000000000-image.webp";
+        request().body(Map.of("name", "Failed images", "category", "Equipment", "value", 0,
+                        "images", java.util.List.of(staged, missing)))
+                .post("/api/items").then().statusCode(404);
+        request().get("/api/media/" + staged).then().statusCode(200);
+        request().body(Map.of("name", "Retried images", "category", "Equipment", "value", 0,
+                        "images", java.util.List.of(staged)))
+                .post("/api/items").then().statusCode(200).body("images.size()", equalTo(1));
+        request().get("/api/media/" + staged).then().statusCode(404);
+    }
+
     private static io.restassured.specification.RequestSpecification request() {
         return given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-admin")

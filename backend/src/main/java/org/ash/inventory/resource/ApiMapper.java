@@ -28,6 +28,7 @@ import java.util.Map;
 
 @ApplicationScoped
 public class ApiMapper {
+    @Inject org.ash.inventory.helper.storage.MediaService media;
     @Inject CatalogOrm catalogOrm;
     @Inject OrderOrm orderOrm;
 
@@ -60,7 +61,7 @@ public class ApiMapper {
         put(result, "latitude", value.latitude);
         put(result, "longitude", value.longitude);
         put(result, "mapZoom", value.mapZoom);
-        put(result, "mapOverlay", value.mapOverlayUrl);
+        put(result, "mapOverlay", media.mediaReference(value.mapOverlayUrl));
         put(result, "overlayBounds", value.overlayBounds);
         return result;
     }
@@ -80,7 +81,7 @@ public class ApiMapper {
         result.put("isConsumable", value.consumable);
         put(result, "storageLocation", value.storageLocation == null ? null : value.storageLocation.id.toString());
         result.put("status", value.active ? "available" : "retired");
-        var images = catalogOrm.itemImages(value).stream().map(image -> image.objectKey).toList();
+        var images = catalogOrm.itemImages(value).stream().map(image -> media.mediaReference(image.objectKey)).toList();
         result.put("images", images);
         put(result, "hint", value.hint);
         put(result, "positionDetails", value.positionDetails);
@@ -101,6 +102,7 @@ public class ApiMapper {
         result.put("name", value.name);
         put(result, "description", value.description);
         put(result, "hint", value.hint);
+        put(result, "image", media.mediaReference(value.imageObjectKey));
         result.put("eventTypes", value.eventTags == null ? List.of() : value.eventTags);
         var components = catalogOrm.assemblyItems(value);
         var quantities = new LinkedHashMap<String, Integer>();

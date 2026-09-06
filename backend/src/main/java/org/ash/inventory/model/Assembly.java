@@ -15,6 +15,8 @@ public class Assembly extends BaseEntity {
     @Column(nullable = false) public String name;
     public String description;
     public String hint;
+    @Column(name = "image_object_key", length = 1024)
+    public String imageObjectKey;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "event_tags", columnDefinition = "jsonb", nullable = false)
     public List<String> eventTags = new ArrayList<>();

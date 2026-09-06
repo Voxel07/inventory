@@ -11,7 +11,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.helper.storage.MediaService;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 
@@ -22,7 +21,6 @@ import java.nio.file.Files;
 public class MediaResource {
     @Inject MediaService media;
     @Inject ActorService actors;
-    @ConfigProperty(name = "inventory.media.mode") String mode;
 
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
@@ -36,9 +34,13 @@ public class MediaResource {
         } catch (IOException exception) { throw new ApiException(500, "Could not read uploaded file"); }
     }
 
-    @GET @Path("/{key}")
+    @GET @Path("/{key:.+}")
     public Response get(@PathParam("key") String key) {
-        if ("s3".equalsIgnoreCase(mode)) return Response.temporaryRedirect(java.net.URI.create(media.publicUrl(key))).build();
-        return Response.ok(media.readLocal(key)).type(MediaType.APPLICATION_OCTET_STREAM).build();
+        actors.current();
+        var content = media.read(key);
+        return Response.ok(content.bytes()).type(content.contentType())
+                .header("Cache-Control", "private, max-age=3600")
+                .header("Vary", "Authorization")
+                .header("X-Content-Type-Options", "nosniff").build();
     }
 }

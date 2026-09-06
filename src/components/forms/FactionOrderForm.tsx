@@ -1,3 +1,4 @@
+import { MediaImage } from '../common/MediaImage';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -485,7 +486,7 @@ export function FactionOrderForm({
                     variant="outlined"
                     sx={{ p: 1, borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
                   >
-                    {image ? <Box component="img" src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'cover', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
+                    {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'cover', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
                     <Typography variant="caption" color={availableByItem.get(item.id) ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {availableByItem.get(item.id) ?? 0}</Typography>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -506,7 +507,7 @@ export function FactionOrderForm({
                   <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       {image
-                        ? <Box component="img" src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'cover', borderRadius: 0.75 }} />
+                        ? <MediaImage src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'cover', borderRadius: 0.75 }} />
                         : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>

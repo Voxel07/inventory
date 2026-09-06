@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useMediaUrl } from '../../hooks/useMediaUrl';
 import { Box, Stack, Typography } from '@mui/material';
 import {
   CircleMarker,
@@ -64,6 +65,7 @@ export function StorageLocationMap({
   compact = false,
 }: Props) {
   const t = useTranslate();
+  const resolvedOverlayUrl = useMediaUrl(overlayUrl);
   const center: Coordinate = [latitude ?? DEFAULT_CENTER[0], longitude ?? DEFAULT_CENTER[1]];
   const bounds = (overlayBounds ?? derivedBounds(center)) as LatLngBoundsExpression;
   const effectiveZoom = Math.max(zoom, DEFAULT_ZOOM);
@@ -85,7 +87,7 @@ export function StorageLocationMap({
           />
           <ViewSync center={center} zoom={effectiveZoom} />
           <ClickHandler onSelect={editable ? onCenterChange : undefined} />
-          {overlayUrl && <ImageOverlay url={overlayUrl} bounds={bounds} opacity={0.62} />}
+          {resolvedOverlayUrl && <ImageOverlay url={resolvedOverlayUrl} bounds={bounds} opacity={0.62} />}
           <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#e30613', fillOpacity: 1, weight: 2 }}>
             <Popup>{kind === 'pickup' ? t('Abholpunkt', 'Pickup point') : t('Lagerort', 'Storage location')}</Popup>
           </CircleMarker>

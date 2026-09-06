@@ -30,7 +30,7 @@ public final class ApiModels {
 
     public record AssemblyInput(
             @NotBlank String name, String description, String hint, List<String> eventTypes,
-            @NotEmpty Map<UUID, Integer> itemQuantities) {}
+            @NotEmpty Map<UUID, Integer> itemQuantities, String image, boolean removeImage) {}
 
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,

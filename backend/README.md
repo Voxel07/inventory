@@ -50,3 +50,36 @@ resource -> service -> orm -> model
 - `helper/storage` contains local and S3-compatible media storage infrastructure.
 
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
+
+## Item images
+
+The web app converts new JPEG, PNG and WebP item uploads to WebP at quality 82,
+with a maximum edge length of 2048 pixels (no upscaling). Conversion applies EXIF
+orientation, converts to sRGB and re-encodes pixels without the source metadata
+or filename. EXIF, XMP and ICC chunks are explicitly removed from the encoded WebP. It
+requires browser WebP encoding support; unsupported or invalid files fail before
+upload. Map overlays continue to use the generic media uploader.
+
+Uploads are staged until the item is saved. The API assigns the final object key
+`items/<unique-image-id>/<item-id>.webp`, so multiple images have the item ID as
+their filename without overwriting each other. After database commit the staged
+object is deleted; rollback preserves it for retry and removes the new copy.
+Failed storage cleanup is logged. Abandoned uploads and removed item images are
+not automatically garbage-collected.
+
+Media is fetched from `/api/media/<key>` using the app's authentication headers.
+The API reads private Garage/S3 objects with signed requests and returns the
+bytes and image content type. The bucket does not need public access; its API
+credentials need object read, write and delete permissions. `S3_ENDPOINT` must
+be reachable by the backend and need not be reachable by the browser.
+
+New records store object keys. Older URLs under the configured S3 endpoint/bucket
+or `MEDIA_PUBLIC_BASE_URL` are translated to keys when returned by the API. Keep
+that public base configured if existing records use it. Unrelated external URLs
+remain external. Existing images display in their original format; re-upload them
+to apply WebP conversion, metadata removal and item-based naming.
+
+Run `mvn test` for media storage and API regression tests. For actual browser
+encoding and authenticated rendering checks, start the frontend with `bun run dev`
+and open `/tests/media.browser.html`; its generated fixtures and mocked API do not
+need a running backend or S3 service.

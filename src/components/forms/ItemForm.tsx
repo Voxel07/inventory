@@ -1,3 +1,4 @@
+import { MediaImage } from '../common/MediaImage';
 import { useState } from 'react';
 import {
     Box,
@@ -259,7 +260,7 @@ export function ItemForm({
                         <input
                             hidden
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp"
                             multiple
                             onChange={(event) => {
                                 const selected = Array.from(event.target.files ?? []);
@@ -270,12 +271,12 @@ export function ItemForm({
                         />
                     </Button>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                        {t('Bis zu 8 Bilder; sie werden im konfigurierten Garage-S3-Speicher abgelegt.', 'Up to 8 images; they are stored in the configured Garage S3 storage.')}
+                        {t('Bis zu 8 Bilder (JPEG, PNG, WebP); als WebP komprimiert, maximal 2048 Pixel, ohne Original-Metadaten.', 'Up to 8 images (JPEG, PNG, WebP); compressed to WebP, up to 2048 pixels, with original metadata removed.')}
                     </Typography>
                     <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
                         {initialData?.images?.filter((filename) => !removedImages.includes(filename)).map((filename) => (
                             <Box key={filename} sx={{ position: 'relative', width: 96, height: 72 }}>
-                                <Box component="img" src={itemImageUrl(initialData, filename, '192x144')} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1 }} />
+                                <MediaImage src={itemImageUrl(initialData, filename, '192x144')} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1 }} />
                                 <IconButton
                                     size="small"
                                     color="error"

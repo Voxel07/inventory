@@ -131,7 +131,25 @@ async function queueOffline<T>(action: { type: string; payload: Record<string, u
 export function apiFileUrl(value?: string): string | undefined {
   if (!value) return undefined;
   if (/^https?:\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value;
-  return `${API_URL}/api/media/${encodeURIComponent(value)}`;
+  return `${API_URL}/api/media/${value.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+// Only attach credentials to our own media endpoint, never to external images.
+export function isApiMediaUrl(value: string): boolean {
+  const base = new URL(`${API_URL}/api/media/`);
+  const url = new URL(value, base);
+  return url.origin === base.origin && url.pathname.startsWith(base.pathname);
+}
+
+export async function fetchMedia(url: string, signal?: AbortSignal, retried = false): Promise<Blob> {
+  if (!isApiMediaUrl(url)) throw new Error('Invalid media URL');
+  const response = await fetch(url, { headers: await getAuthorizationHeaders(), signal });
+  if (response.status === 401 && !retried && canRefreshAuth()) {
+    await getValidAccessToken(true);
+    return fetchMedia(url, signal, true);
+  }
+  if (!response.ok) throw await responseError(response);
+  return response.blob();
 }
 
 async function uploadMediaAttempt(file: File, retried: boolean): Promise<string> {
@@ -148,7 +166,7 @@ async function uploadMediaAttempt(file: File, retried: boolean): Promise<string>
   }
   if (!response.ok) throw await responseError(response);
   const stored = await response.json() as { key: string; url?: string };
-  return stored.url || stored.key;
+  return stored.key;
 }
 
 export function uploadMedia(file: File): Promise<string> {

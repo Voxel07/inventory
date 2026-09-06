@@ -30,6 +30,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
+    @Inject org.ash.inventory.helper.storage.MediaService media;
     @Inject ActorService actorService;
     @Inject CatalogOrm orm;
 
@@ -137,6 +138,7 @@ public class CatalogService {
         apply(assembly, input);
         orm.persist(assembly);
         replaceComponents(assembly, input);
+        applyAssemblyImage(assembly, input);
         return assembly;
     }
 
@@ -146,6 +148,7 @@ public class CatalogService {
         apply(assembly, input);
         orm.deleteAssemblyItems(assembly);
         replaceComponents(assembly, input);
+        applyAssemblyImage(assembly, input);
         return assembly;
     }
 
@@ -161,6 +164,14 @@ public class CatalogService {
         target.description = input.description();
         target.hint = input.hint();
         target.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
+    }
+
+    private void applyAssemblyImage(Assembly target, ApiModels.AssemblyInput input) {
+        if (input.image() != null && !input.image().isBlank()) {
+            target.imageObjectKey = media.attachToAssembly(input.image(), target.id);
+        } else if (input.removeImage()) {
+            target.imageObjectKey = null;
+        }
     }
 
     private void replaceComponents(Assembly assembly, ApiModels.AssemblyInput input) {
@@ -226,12 +237,13 @@ public class CatalogService {
 
     private void persistImages(Item item, List<String> images) {
         if (images == null) return;
+        if (images.size() > 8) throw ApiException.badRequest("An item can have at most 8 images");
         int order = 0;
         for (String objectKey : images) {
             if (objectKey == null || objectKey.isBlank()) continue;
             var image = new ItemImage();
             image.item = item;
-            image.objectKey = objectKey;
+            image.objectKey = media.attachToItem(objectKey, item.id);
             image.displayOrder = order++;
             orm.persist(image);
         }
