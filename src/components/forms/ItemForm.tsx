@@ -1,4 +1,4 @@
-import { MediaImage } from '../common/MediaImage';
+import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import {
     Box,
@@ -13,18 +13,13 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    IconButton,
-    Chip,
     FormControlLabel,
     Switch,
 } from '@mui/material';
-import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
-import DeleteIcon from '@mui/icons-material/Delete';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useTranslate } from '../../utils/naming';
-import { itemImageUrl } from '../../utils/itemImages';
 
 interface Props {
     initialData?: Item;
@@ -73,8 +68,7 @@ export function ItemForm({
         containerRemainingPercent: initialData?.containerRemainingPercent == null ? '' : String(initialData.containerRemainingPercent),
     });
     const [nameError, setNameError] = useState('');
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
-    const [removedImages, setRemovedImages] = useState<string[]>([]);
+    const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
     const [addLocationOpen, setAddLocationOpen] = useState(false);
     const [newLocData, setNewLocData] = useState({
         name: '',
@@ -129,8 +123,9 @@ export function ItemForm({
         const parseOptional = (value: string) => value === '' ? undefined : Number(value);
         const submitData: ItemFormData = {
             ...formData,
-            imageFiles,
-            removeImages: removedImages,
+            imageFiles: images.files,
+            removeImages: images.removed,
+            imageReplacements: images.replacements,
             amount: parseOptional(numericInputs.amount),
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
@@ -254,49 +249,7 @@ export function ItemForm({
                     fullWidth
                     helperText={t('Hinweise zur Verwendung, Vorbereitung oder Montage', 'Instructions for use, preparation, or assembly')}
                 />
-                <Box>
-                    <Button component="label" variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
-                        {t('Bilder hinzufügen', 'Add images')}
-                        <input
-                            hidden
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            multiple
-                            onChange={(event) => {
-                                const selected = Array.from(event.target.files ?? []);
-                                const existingCount = (initialData?.images?.length ?? 0) - removedImages.length;
-                                setImageFiles((current) => [...current, ...selected].slice(0, Math.max(0, 8 - existingCount)));
-                                event.target.value = '';
-                            }}
-                        />
-                    </Button>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                        {t('Bis zu 8 Bilder (JPEG, PNG, WebP); als WebP komprimiert, maximal 2048 Pixel, ohne Original-Metadaten.', 'Up to 8 images (JPEG, PNG, WebP); compressed to WebP, up to 2048 pixels, with original metadata removed.')}
-                    </Typography>
-                    <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                        {initialData?.images?.filter((filename) => !removedImages.includes(filename)).map((filename) => (
-                            <Box key={filename} sx={{ position: 'relative', width: 96, height: 72 }}>
-                                <MediaImage src={itemImageUrl(initialData, filename, '192x144')} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1 }} />
-                                <IconButton
-                                    size="small"
-                                    color="error"
-                                    aria-label={t('Bild entfernen', 'Remove image')}
-                                    onClick={() => setRemovedImages((current) => [...current, filename])}
-                                    sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'background.paper' }}
-                                >
-                                    <DeleteIcon fontSize="small" />
-                                </IconButton>
-                            </Box>
-                        ))}
-                        {imageFiles.map((file, index) => (
-                            <Chip
-                                key={`${file.name}-${file.lastModified}-${index}`}
-                                label={file.name}
-                                onDelete={() => setImageFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}
-                            />
-                        ))}
-                    </Stack>
-                </Box>
+                <ImageAttachments existing={initialData?.images} value={images} onChange={setImages} disabled={isLoading} />
 
                 <Divider />
                 <Typography variant="subtitle2" color="text.secondary">

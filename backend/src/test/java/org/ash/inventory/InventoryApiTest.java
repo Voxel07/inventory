@@ -14,6 +14,44 @@ import static org.hamcrest.Matchers.notNullValue;
 @QuarkusTest
 class InventoryApiTest {
     @Test
+    void assemblyImageCanBeCreatedReplacedPreservedAndRemoved() {
+        String component = request().body(Map.of("name", "Assembly image component", "category", "Equipment", "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
+        String staged = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", bytes, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        var body = new java.util.HashMap<String, Object>();
+        body.put("name", "Assembly with image");
+        body.put("itemQuantities", Map.of(component, 1));
+        body.put("image", staged);
+        var created = request().body(body).post("/api/assemblies").then().statusCode(200).extract().jsonPath();
+        String id = created.getString("id");
+        String first = created.getString("image");
+        org.junit.jupiter.api.Assertions.assertTrue(first.matches("assemblies/[0-9a-f-]{36}/" + id + "\\.webp"));
+        org.junit.jupiter.api.Assertions.assertArrayEquals(bytes,
+                request().get("/api/media/" + first).then().statusCode(200).contentType("image/webp").extract().asByteArray());
+        request().get("/api/media/" + staged).then().statusCode(404);
+        request().get("/api/assemblies/" + id).then().statusCode(200).body("image", equalTo(first));
+
+        body.remove("image");
+        body.put("description", "Unrelated edit keeps the image");
+        request().body(body).patch("/api/assemblies/" + id).then().statusCode(200).body("image", equalTo(first));
+        String replacement = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", bytes, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        body.put("image", replacement);
+        String second = request().body(body).patch("/api/assemblies/" + id).then().statusCode(200).extract().path("image");
+        org.junit.jupiter.api.Assertions.assertNotEquals(first, second);
+        org.junit.jupiter.api.Assertions.assertTrue(second.endsWith("/" + id + ".webp"));
+        request().get("/api/media/" + replacement).then().statusCode(404);
+        body.remove("image");
+        body.put("removeImage", true);
+        request().body(body).patch("/api/assemblies/" + id).then().statusCode(200).body("image", org.hamcrest.Matchers.nullValue());
+        request().get("/api/assemblies/" + id).then().statusCode(200).body("image", org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
     void uploadedImagesAreNamedForTheItemAndServedWithoutRedirects() {
         byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
         String first = given().header("X-Actor-Id", "media-admin")

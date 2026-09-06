@@ -1,4 +1,4 @@
-import { prepareItemImage } from '/src/utils/prepareItemImage.ts';
+import { calculateImageCrop, prepareItemImage } from '/src/utils/prepareItemImage.ts';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -90,6 +90,29 @@ try {
   catch { rejected = true; }
   finally { HTMLCanvasElement.prototype.toBlob = originalToBlob; }
   check(rejected, 'Silent PNG fallback is rejected when WebP encoding is unavailable');
+
+  canvas.width = 2048;
+  canvas.height = 1024;
+  context.fillStyle = '#ff0000';
+  context.fillRect(0, 0, 1024, 1024);
+  context.fillStyle = '#0000ff';
+  context.fillRect(1024, 0, 1024, 1024);
+  const cropSource = new File([await makeBlob(canvas, 'image/png')], 'crop.png', { type: 'image/png' });
+  const region = calculateImageCrop(2048, 1024, 1, 1, 1, 0.5);
+  const cropped = await prepareItemImage(cropSource, { crop: region, maxDimension: 512 });
+  const cropBitmap = await createImageBitmap(cropped);
+  check(cropBitmap.width === 512 && cropBitmap.height === 512, 'Crop aspect ratio and selected output size are applied');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(cropBitmap, 0, 0);
+  const pixel = context.getImageData(256, 256, 1, 1).data;
+  check(pixel[2] > 220 && pixel[0] < 30, 'Moving the crop selects the correct visible pixels');
+  cropBitmap.close();
+  const zoomed = calculateImageCrop(2048, 1024, 1, 2, 0.5, 0.5);
+  check(zoomed.width === 512 && zoomed.height === 512 && zoomed.x === 768, 'Zoom crops around the chosen position');
+  check(await prepareItemImage(cropped) === cropped, 'Prepared crops are not compressed again during upload');
+  rejected = false;
+  try { await prepareItemImage(cropSource, { crop: { x: 2000, y: 0, width: 500, height: 500 } }); } catch { rejected = true; }
+  check(rejected, 'Out-of-bounds crops are rejected');
 
   window.__ENV__ = { API_URL: location.origin };
   const { setDevelopmentSession, clearAuth } = await import('/src/services/authManager.ts');

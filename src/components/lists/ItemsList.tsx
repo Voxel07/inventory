@@ -187,7 +187,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                             <Grid key={item.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
                                 <Card onClick={() => navigate(`/items/${item.id}`)} sx={{ height: '100%', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
                                     {image ? (
-                                        <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 88, sm: 112 }, objectFit: 'cover', bgcolor: 'grey.100' }} />
+                                        <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 88, sm: 112 }, objectFit: 'contain', bgcolor: 'grey.100' }} />
                                     ) : (
                                         <Box sx={{ height: { xs: 88, sm: 112 }, bgcolor: 'grey.100', display: 'grid', placeItems: 'center' }}>
                                             <GridViewIcon sx={{ fontSize: { xs: 30, sm: 38 }, color: 'text.disabled' }} />

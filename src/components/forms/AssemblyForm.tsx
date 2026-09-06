@@ -1,3 +1,4 @@
+import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState, useMemo } from 'react';
 import {
     Box,
@@ -40,6 +41,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
         eventTypes: initialData?.eventTypes ?? [],
     });
     const [search, setSearch] = useState('');
+    const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
 
     const filteredItems = useMemo(() => {
         if (!search.trim()) return items;
@@ -77,7 +79,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        onSubmit(formData);
+        onSubmit({ ...formData, imageFile: images.files[0] ?? (initialData?.image && !images.removed.includes(initialData.image) ? images.replacements[initialData.image] : undefined), removeImage: Boolean(initialData?.image && images.removed.includes(initialData.image)) });
     }
 
     const selectedItems = items.filter((i) => formData.itemIds.includes(i.id));
@@ -116,6 +118,8 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
                     renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
                 />
+
+                <ImageAttachments existing={initialData?.image ? [initialData.image] : []} value={images} onChange={setImages} maxImages={1} disabled={isLoading} />
 
                 {selectedItems.length > 0 && (
                     <Paper variant="outlined" sx={{ p: 1.5 }}>

@@ -1,6 +1,15 @@
 const MAX_DIMENSION = 2048;
 const MAX_PIXELS = 40_000_000;
 const MAX_BYTES = 20 * 1024 * 1024;
+const preparedImages = new WeakSet<File>();
+
+export interface ImageCrop { x: number; y: number; width: number; height: number }
+
+export function calculateImageCrop(width: number, height: number, aspect: number, zoom: number, x: number, y: number): ImageCrop {
+  const cropWidth = Math.min(width, height * aspect) / zoom;
+  const cropHeight = cropWidth / aspect;
+  return { x: (width - cropWidth) * x, y: (height - cropHeight) * y, width: cropWidth, height: cropHeight };
+}
 
 // Canvas encoders can add their own ICC profile. Keep pixel/alpha chunks only.
 // RIFF layout: https://developers.google.com/speed/webp/docs/riff_container
@@ -37,8 +46,7 @@ async function stripWebpMetadata(blob: Blob): Promise<Uint8Array<ArrayBuffer>> {
   return output;
 }
 
-/** Re-encode pixels only: apply camera orientation, discard source metadata and filename. */
-export async function prepareItemImage(file: File): Promise<File> {
+export async function decodeImage(file: File): Promise<ImageBitmap> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Please select a JPEG, PNG or WebP image.');
   }
@@ -49,21 +57,39 @@ export async function prepareItemImage(file: File): Promise<File> {
   } catch {
     throw new Error('This image could not be decoded. Please select a valid JPEG, PNG or WebP image.');
   }
+  if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > MAX_PIXELS) {
+    bitmap.close();
+    throw new Error('Images must contain no more than 40 million pixels.');
+  }
+  return bitmap;
+}
+
+/** Re-encode pixels only: apply camera orientation, discard source metadata and filename. */
+export async function prepareItemImage(file: File, options?: { crop?: ImageCrop; maxDimension?: number }): Promise<File> {
+  // Crops prepared in the editor should not be compressed again on submission.
+  if (!options && preparedImages.has(file)) return file;
+  const bitmap = await decodeImage(file);
   try {
-    if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > MAX_PIXELS) {
-      throw new Error('Images must contain no more than 40 million pixels.');
+    const crop = options?.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
+    const maxDimension = options?.maxDimension ?? MAX_DIMENSION;
+    if (!Object.values(crop).every(Number.isFinite) || crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0
+        || crop.x + crop.width > bitmap.width + 0.001 || crop.y + crop.height > bitmap.height + 0.001
+        || !Number.isFinite(maxDimension) || maxDimension < 256 || maxDimension > MAX_DIMENSION) {
+      throw new Error('Invalid image crop or output size.');
     }
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxDimension / Math.max(crop.width, crop.height));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.width = Math.max(1, Math.round(crop.width * scale));
+    canvas.height = Math.max(1, Math.round(crop.height * scale));
     const context = canvas.getContext('2d', { colorSpace: 'srgb' });
     if (!context) throw new Error('Image conversion is unavailable in this browser.');
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
     // Some browsers silently return PNG when WebP encoding is unavailable.
     if (!blob || blob.type !== 'image/webp') throw new Error('This browser cannot convert images to WebP.');
-    return new File([await stripWebpMetadata(blob)], 'image.webp', { type: 'image/webp' });
+    const prepared = new File([await stripWebpMetadata(blob)], 'image.webp', { type: 'image/webp' });
+    preparedImages.add(prepared);
+    return prepared;
   } finally {
     bitmap.close();
   }

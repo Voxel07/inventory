@@ -1,3 +1,5 @@
+import { MediaImage } from '../components/common/MediaImage';
+import { apiFileUrl } from '../services/apiClient';
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -270,6 +272,8 @@ export function AssemblyDetail() {
                     }).join(', ')}
                 </Alert>
             )}
+
+            {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ display: 'block', maxWidth: '100%', maxHeight: 360, objectFit: 'contain', borderRadius: 1, mb: 2 }} />}
 
             {assembly.description && (
                 <Paper sx={{ p: 2, mb: 3 }}>

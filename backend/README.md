@@ -51,7 +51,7 @@ resource -> service -> orm -> model
 
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
 
-## Item images
+## Item and assembly images
 
 The web app converts new JPEG, PNG and WebP item uploads to WebP at quality 82,
 with a maximum edge length of 2048 pixels (no upscaling). Conversion applies EXIF
@@ -83,3 +83,18 @@ Run `mvn test` for media storage and API regression tests. For actual browser
 encoding and authenticated rendering checks, start the frontend with `bun run dev`
 and open `/tests/media.browser.html`; its generated fixtures and mocked API do not
 need a running backend or S3 service.
+
+Assemblies support one optional image via `image` (object key) and `removeImage`
+on create/update. Omitting these fields preserves the image on update. Assembly
+uploads use `assemblies/<unique-image-id>/<assembly-id>.webp`. The nullable
+`assemblies.image_object_key` column is added by the currently configured
+Hibernate schema update when the backend starts.
+
+Item and assembly forms share an image editor with drag/position controls, zoom,
+original/square/landscape/portrait aspect ratios and 512/1024/2048-pixel output
+limits. Cropping is applied to the stored pixels before upload, with no upscaling
+and the same metadata stripping. Existing images can be edited, and item image
+replacements preserve gallery order. Applying a crop stages a change in the form;
+it is uploaded only when the form is saved. Cancel closes the editor without
+applying its crop. Restoring discarded areas after saving requires the original
+image to be uploaded again.

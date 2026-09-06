@@ -1,3 +1,5 @@
+import { MediaImage } from '../common/MediaImage';
+import { apiFileUrl } from '../../services/apiClient';
 import { useState } from 'react';
 import {
     Table,
@@ -130,7 +132,10 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                 sx={{ cursor: 'pointer' }}
                             >
                                 <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                        {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 64, height: 48, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} />}
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+                                    </Stack>
                                     {!!assembly.eventTypes?.length && (
                                         <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
                                             {assembly.eventTypes.map((eventType) => <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} size="small" color="primary" variant="outlined" />)}
