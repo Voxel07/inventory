@@ -1,5 +1,6 @@
 package org.ash.inventory.resource;
 
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -13,14 +14,18 @@ import org.jboss.resteasy.reactive.RestStreamElementType;
 import java.util.Map;
 
 /**
- * Server-Sent Events endpoint streaming real-time status transitions and inventory movements.
+ * Server-Sent Events endpoint streaming real-time status transitions and
+ * inventory movements.
  */
 @Path("/api/events/stream")
 public class EventStreamResource {
-    @Inject EventBroadcaster broadcaster;
-    @Inject ActorService actors;
+    @Inject
+    EventBroadcaster broadcaster;
+    @Inject
+    ActorService actors;
 
     @GET
+    @Blocking
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<Map<String, Object>> stream() {
