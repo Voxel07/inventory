@@ -1,5 +1,5 @@
-# Run this file on the dedicated storage/S3 VPS. It keeps Garage and a physical
-# PostgreSQL hot standby in a separate failure domain from the primary app VPS.
+# Run this file on the dedicated storage/S3 VPS. It keeps Garage and a clean
+# PostgreSQL 18 database for logical replication in a separate failure domain.
 services:
   garage:
     image: dxflrs/garage:v2.3.0
@@ -33,32 +33,24 @@ services:
       garage:
         condition: service_started
 
-  postgres-standby:
+  postgres-replica:
     image: postgres:18-alpine
-    user: postgres
-    entrypoint: ["/bin/sh", "/usr/local/bin/standby-entrypoint.sh"]
     environment:
-      PGDATA: /var/lib/postgresql/18/standby
-      PRIMARY_DB_HOST: ${PRIMARY_DB_HOST:?Set PRIMARY_DB_HOST to the primary VPS private address}
-      PRIMARY_DB_PORT: ${PRIMARY_DB_PORT:-5432}
-      PRIMARY_DB_SSLMODE: ${PRIMARY_DB_SSLMODE:-prefer}
-      REPLICATION_USER: ${REPLICATION_USER:-inventory_replicator}
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD}
-      REPLICATION_SLOT: ${REPLICATION_SLOT:-inventory_storage_standby}
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: ${REPLICA_DB_PASSWORD:?Set REPLICA_DB_PASSWORD before starting PostgreSQL}
     ports:
-      - "${STANDBY_DB_BIND_ADDRESS:-127.0.0.1}:${STANDBY_DB_PORT:-5433}:5432"
+      - "${REPLICA_DB_BIND_ADDRESS:-127.0.0.1}:${REPLICA_DB_PORT:-5433}:5432"
     volumes:
-      - inventory-postgres-standby:/var/lib/postgresql
-      - ./deploy/postgres/standby-entrypoint.sh:/usr/local/bin/standby-entrypoint.sh:ro
+      - inventory-postgres-replica:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
       interval: 5s
       timeout: 3s
       retries: 20
-      start_period: 60s
     restart: unless-stopped
 
 volumes:
   inventory-garage-meta:
   inventory-garage-data:
-  inventory-postgres-standby:
+  inventory-postgres-replica:

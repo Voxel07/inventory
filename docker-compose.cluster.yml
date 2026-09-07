@@ -2,7 +2,7 @@
 # Usage:
 #   docker compose -f docker-compose.cluster.yml up -d
 # For deployment across distinct VPS nodes, run App services on VPS 1 & 2 pointing to:
-#   - DB_URL: Primary PostgreSQL on VPS 1 (with read replica on VPS 2)
+#   - DB_URL: Primary PostgreSQL on VPS 1 (with a logical replica on the storage VPS)
 #   - REDIS_URL: Shared Valkey (Redis protocol) for the catalog cache,
 #     distributed rate limiting, and live-event fan-out
 #   - S3_ENDPOINT: Garage S3 cluster node on VPS 3
@@ -10,13 +10,22 @@
 services:
   postgres:
     image: postgres:18-alpine
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_slot_wal_keep_size=${POSTGRES_MAX_SLOT_WAL_KEEP_SIZE:-10GB}
     environment:
-      PGDATA: /var/lib/postgresql/data
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
       POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
     volumes:
-      - inventory-postgres:/var/lib/postgresql/data
+      - inventory-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
       interval: 5s
