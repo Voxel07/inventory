@@ -38,7 +38,7 @@ export type CsvImportType = 'items' | 'assemblies' | 'combined';
  */
 export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
   // Strip BOM if present
-  let content = text.replace(/^\uFEFF/, '').trim();
+  const content = text.replace(/^\uFEFF/, '').trim();
   if (!content) return { headers: [], rows: [] };
 
   // Detect delimiter from first non-empty line

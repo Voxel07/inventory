@@ -1,34 +1,22 @@
+# ASH Inventory - Multi-VPS Scaled Architecture (2+ App Replicas + Shared Valkey + PostgreSQL + Garage S3)
+# Usage:
+#   docker compose -f docker-compose.cluster.yml up -d
+# For deployment across distinct VPS nodes, run App services on VPS 1 & 2 pointing to:
+#   - DB_URL: Primary PostgreSQL on VPS 1 (with read replica on VPS 2)
+#   - REDIS_URL: Shared Valkey (Redis protocol) for the catalog cache,
+#     distributed rate limiting, and live-event fan-out
+#   - S3_ENDPOINT: Garage S3 cluster node on VPS 3
+
 services:
   postgres:
     image: postgres:18-alpine
-    command:
-      - postgres
-      - -c
-      - wal_level=replica
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
-      - -c
-      - wal_keep_size=${POSTGRES_WAL_KEEP_SIZE:-1GB}
-      - -c
-      - max_slot_wal_keep_size=${POSTGRES_MAX_SLOT_WAL_KEEP_SIZE:-10GB}
     environment:
-      # Keep the historical mount usable with the PostgreSQL 18 image, whose
-      # upstream default PGDATA otherwise moved to /var/lib/postgresql/18/docker.
       PGDATA: /var/lib/postgresql/data
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
       POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
-      REPLICATION_USER: ${REPLICATION_USER:-inventory_replicator}
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD before starting PostgreSQL}
-      REPLICATION_SLOT: ${REPLICATION_SLOT:-inventory_storage_standby}
-      REPLICATION_CIDR: ${REPLICATION_CIDR:-127.0.0.1/32}
-    ports:
-      - "${DB_REPLICATION_BIND_ADDRESS:-127.0.0.1}:${DB_REPLICATION_PORT:-5432}:5432"
     volumes:
       - inventory-postgres:/var/lib/postgresql/data
-      - ./deploy/postgres/primary-replication-init.sh:/docker-entrypoint-initdb.d/20-primary-replication.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
       interval: 5s
@@ -39,18 +27,19 @@ services:
   valkey:
     image: valkey/valkey:8-alpine
     command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - inventory-valkey:/data
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 5
     restart: unless-stopped
 
   garage:
     image: dxflrs/garage:v2.3.0
-    container_name: garage
     restart: unless-stopped
     ports:
       - "3900:3900" # S3 API
@@ -67,25 +56,11 @@ services:
       timeout: 5s
       retries: 5
 
-  garage-webui:
-    image: khairul169/garage-webui:latest
-    container_name: garage-webui
-    restart: unless-stopped
-    ports:
-      - "3909:3909"
-    environment:
-      API_BASE_URL: "http://garage:3903"
-      S3_ENDPOINT_URL: "http://garage:3900"
-    volumes:
-      - ./garage.toml:/etc/garage.toml:ro
-    depends_on:
-      garage:
-        condition: service_started
-
-  inventory-api:
+  # Primary API Node (VPS 1 / Replica 1)
+  inventory-api-1:
     build: ./backend
     ports:
-      - "${API_BIND_ADDRESS:-127.0.0.1}:8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
       DB_URL: jdbc:postgresql://postgres:5432/inventory
@@ -94,57 +69,96 @@ services:
       REDIS_URL: redis://valkey:6379
       API_RATE_LIMIT_BACKEND: redis
       EVENT_BACKEND: redis
+      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
+      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      # A single public Authentik client mirrors the working WRW setup. The
-      # BACKEND/VITE-specific variables remain available for advanced setups.
-      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
-      OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-inventory}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
-      PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
-      PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
-      PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      OTEL_ENABLED: ${OTEL_ENABLED:-false}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserver:5080/api/default}
-      MEDIA_MODE: ${MEDIA_MODE:-local}
-      MEDIA_LOCAL_DIRECTORY: /data/media
-      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      MEDIA_MODE: s3
+      S3_ENDPOINT: http://garage:3900
       S3_BUCKET: ${S3_BUCKET:-inventory}
       S3_REGION: ${S3_REGION:-garage}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
-    volumes:
-      - inventory-media:/data/media
+      garage:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/q/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
+  # Secondary API Node (VPS 2 / Replica 2 for Load Balancing)
+  inventory-api-2:
+    build: ./backend
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/inventory
+      DB_USER: inventory
+      DB_PASSWORD: ${DB_PASSWORD:-inventory}
+      REDIS_URL: redis://valkey:6379
+      API_RATE_LIMIT_BACKEND: redis
+      EVENT_BACKEND: redis
+      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
+      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
+      OIDC_ENABLED: ${OIDC_ENABLED:-true}
+      OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-inventory}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
+      MEDIA_MODE: s3
+      S3_ENDPOINT: http://garage:3900
+      S3_BUCKET: ${S3_BUCKET:-inventory}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      garage:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/q/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Static Web Frontend
   inventory-app:
     build:
       context: .
       args:
-        - APP_VERSION=${APP_VERSION:-dev}
+        - APP_VERSION=${APP_VERSION:-cluster}
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:3333:80"
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
       VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY-}
-      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
+      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-inventory}
       VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3333/}
       VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-openid profile email offline_access}
     depends_on:
-      inventory-api:
+      inventory-api-1:
         condition: service_started
     restart: unless-stopped
 
 volumes:
   inventory-postgres:
   inventory-valkey:
-  inventory-media:
   inventory-garage-meta:
   inventory-garage-data:

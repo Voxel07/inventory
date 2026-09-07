@@ -191,4 +191,31 @@ class InventoryApiTest {
                 .body("[0].projectedStock", equalTo(-5))
                 .body("[0].netDeficit", equalTo(5));
     }
+
+    @Test
+    void catalogEtagsReturnNotModifiedAndAreInvalidatedByWrites() {
+        String etag = request().get("/api/items")
+                .then().statusCode(200)
+                .header("ETag", notNullValue())
+                .extract().header("ETag");
+
+        request().get("/api/items")
+                .then().statusCode(200)
+                .contentType(ContentType.JSON)
+                .body("$", org.hamcrest.Matchers.instanceOf(java.util.List.class));
+
+        request().header("If-None-Match", etag)
+                .get("/api/items")
+                .then().statusCode(304);
+
+        request().body(Map.of("sku", "ETAG-001", "name", "ETag invalidation item", "category", "Test", "amount", 1, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200);
+
+        request().header("If-None-Match", etag)
+                .get("/api/items")
+                .then().statusCode(200)
+                .header("ETag", org.hamcrest.Matchers.not(etag))
+                .body("name", org.hamcrest.Matchers.hasItem("ETag invalidation item"));
+    }
 }

@@ -18,9 +18,10 @@ import { useUIStore } from '../../store/uiStore';
 import { useTranslate } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNotifications, markNotificationRead, type AppNotification } from '../../services/notificationService';
+import { subscribeToApiChanges } from '../../services/apiClient';
 
 function payloadText(notification: AppNotification, key: string): string | undefined {
     const value = notification.payload[key];
@@ -37,6 +38,9 @@ export function Header() {
     const { online, queued } = useOfflineStatus();
     const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: getNotifications, refetchInterval: 60_000 });
     const unreadNotifications = notifications.filter((notification) => !notification.readAt);
+    useEffect(() => subscribeToApiChanges(() => {
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }), [queryClient]);
     const markRead = useMutation({
         mutationFn: (ids: string[]) => Promise.all(ids.map(markNotificationRead)),
         onMutate: async (ids) => {

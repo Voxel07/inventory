@@ -228,25 +228,51 @@ export function FactionOrderDetail() {
   async function printOrder() {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const qr = await generateQRCodeDataURL(currentOrder.id, 'faction-order', currentOrder.orderCode);
+    const locationLabel = (item: Item) => {
+      const location = item.expand?.storageLocation;
+      return location
+        ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
+        : item.storageLocation || t('Kein Lagerort', 'No location');
+    };
     const rows = [
-      ...orderAssemblies.map((assembly) => ({
-        requested: currentOrder.requestedAssemblyQuantities[assembly.id] ?? 0,
-        name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
-        details: `${Object.keys(assembly.itemQuantities ?? {}).length} ${t('Komponenten', 'components')}`,
-      })),
-      ...orderItems.map((item) => ({
-        requested: currentOrder.requestedQuantities[item.id] ?? 0,
-        name: item.name,
-        details: [item.expand?.storageLocation?.name, item.expand?.storageLocation?.position, item.hint].filter(Boolean).join(' · '),
-      })),
-    ];
+      ...orderAssemblies.flatMap((assembly) => {
+        const assemblyCount = currentOrder.requestedAssemblyQuantities[assembly.id] ?? 0;
+        const components = Object.entries(assembly.itemQuantities ?? {});
+        if (!components.length) return [{
+          requested: assemblyCount,
+          name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
+          details: t('Keine Komponenten', 'No components'),
+          locationKey: 'zzz',
+        }];
+        return components.map(([itemId, componentQuantity]) => {
+          const item = itemMap.get(itemId);
+          const location = item ? locationLabel(item) : t('Kein Lagerort', 'No location');
+          return {
+            requested: assemblyCount * componentQuantity,
+            name: `${t('Baugruppe', 'Assembly')}: ${assembly.name} / ${item?.name ?? itemId}`,
+            details: [location, item?.hint].filter(Boolean).join(' · '),
+            locationKey: location.toLocaleLowerCase(),
+          };
+        });
+      }),
+      ...orderItems.map((item) => {
+        const location = locationLabel(item);
+        return {
+          requested: currentOrder.requestedQuantities[item.id] ?? 0,
+          name: item.name,
+          details: [location, item.hint].filter(Boolean).join(' · '),
+          locationKey: location.toLocaleLowerCase(),
+        };
+      }),
+    ].sort((a, b) => a.locationKey.localeCompare(b.locationKey));
+
     const x = [14, 26, 44, 66, 138, 196];
     let y: number;
 
     function drawHeader(firstPage: boolean) {
       doc.setFontSize(firstPage ? 17 : 12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${currentOrder.eventType} · ${currentOrder.faction}`, 14, firstPage ? 18 : 12);
+      doc.text(`${currentOrder.eventType} · ${currentOrder.faction} — ${t('Kommissionierschein', 'Commissioning Slip')}`, 14, firstPage ? 18 : 12);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       if (firstPage) {
@@ -263,7 +289,7 @@ export function FactionOrderDetail() {
       doc.setFillColor(235, 235, 235);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      const headers = [t('Erledigt', 'Done'), t('Bedarf', 'Qty'), t('Vorbereitet', 'Prepared'), t('Artikel / Baugruppe', 'Item / assembly'), t('Lagerort / Hinweis', 'Location / instruction')];
+      const headers = [t('Erledigt', 'Done'), t('Bedarf', 'Qty'), t('Vorbereitet', 'Prepared'), t('Artikel / Baugruppe', 'Item / assembly'), t('Lagerort / Komponenten', 'Location / components')];
       for (let index = 0; index < headers.length; index += 1) {
         doc.rect(x[index], tableY, x[index + 1] - x[index], 8, 'FD');
         doc.text(headers[index], x[index] + 1.5, tableY + 5.2, { maxWidth: x[index + 1] - x[index] - 3 });
@@ -275,9 +301,9 @@ export function FactionOrderDetail() {
     y = drawHeader(true);
     for (const row of rows) {
       const nameLines = doc.splitTextToSize(row.name, x[4] - x[3] - 3).slice(0, 2);
-      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 3).slice(0, 2);
+      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 3).slice(0, 3);
       const rowHeight = Math.max(10, Math.max(nameLines.length, detailLines.length) * 4.2 + 3);
-      if (y + rowHeight > 282) {
+      if (y + rowHeight > 270) {
         doc.addPage();
         y = drawHeader(false);
       }
@@ -287,10 +313,12 @@ export function FactionOrderDetail() {
       doc.text(String(row.requested), x[1] + 7, y + rowHeight / 2 + 1, { align: 'center' });
       doc.line(x[2] + 3, y + rowHeight / 2 + 2, x[3] - 3, y + rowHeight / 2 + 2);
       doc.text(nameLines, x[3] + 1.5, y + 4.5);
-      doc.text(detailLines, x[4] + 1.5, y + 4.5);
+      doc.setFontSize(7.5);
+      doc.text(detailLines, x[4] + 1.5, y + 4.2);
       y += rowHeight;
     }
-    if (y + 34 > 282) {
+
+    if (y + 45 > 282) {
       doc.addPage();
       y = drawHeader(false);
     }
@@ -300,9 +328,15 @@ export function FactionOrderDetail() {
     doc.text(t('Notizen / offene Punkte', 'Notes / open tasks'), 14, y);
     doc.setFont('helvetica', 'normal');
     y += 3;
-    doc.rect(14, y, 182, 26);
-    if (currentOrder.notes) doc.text(doc.splitTextToSize(currentOrder.notes, 176).slice(0, 5), 17, y + 5);
-    doc.save(`${currentOrder.orderCode}.pdf`);
+    doc.rect(14, y, 182, 18);
+    if (currentOrder.notes) doc.text(doc.splitTextToSize(currentOrder.notes, 176).slice(0, 3), 17, y + 5);
+
+    y += 24;
+    doc.setFontSize(8);
+    doc.text(t('Kommissioniert von / Datum: ________________________________', 'Commissioned by / Date: ________________________________'), 14, y);
+    doc.text(t('Abgeholt von (Unterschrift): ________________________________', 'Picked up by (Signature): ________________________________'), 105, y);
+
+    doc.save(`${currentOrder.orderCode}-packing-slip.pdf`);
   }
   const componentUnitTotal = Object.values(expandFactionOrderComponents(order, assemblies, 'prepared'))
     .reduce((sum, value) => sum + value, 0);
@@ -573,7 +607,7 @@ export function FactionOrderDetail() {
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Listen-QR', 'List QR')}</Button>
-          <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrder}>{t('Drucken', 'Print')}</Button>
+          <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrder}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
           {canEditOrder && order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>

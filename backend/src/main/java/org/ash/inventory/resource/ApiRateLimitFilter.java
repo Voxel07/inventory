@@ -11,17 +11,18 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.ext.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.ash.inventory.helper.ratelimit.DistributedRateLimiterService;
+import org.ash.inventory.helper.ratelimit.RateLimiter;
 
-/** Per-caller fixed-window throttling for the public API boundary. */
+import java.util.Map;
+
+/** Per-caller throttling for the public API boundary with distributed multi-VPS support. */
 @Provider
 @Priority(Priorities.AUTHORIZATION)
 @ApplicationScoped
 public class ApiRateLimitFilter implements ContainerRequestFilter {
     @Inject SecurityIdentity identity;
+    @Inject DistributedRateLimiterService rateLimiter;
 
     @ConfigProperty(name = "inventory.api.rate-limit.requests", defaultValue = "300")
     int requestLimit;
@@ -29,30 +30,16 @@ public class ApiRateLimitFilter implements ContainerRequestFilter {
     @ConfigProperty(name = "inventory.api.rate-limit.window-seconds", defaultValue = "60")
     long windowSeconds;
 
-    private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
-
     @Override
     public void filter(ContainerRequestContext request) {
         if (!request.getUriInfo().getPath().startsWith("api/")) return;
 
-        long now = Instant.now().getEpochSecond();
-        long effectiveWindowSeconds = Math.max(1, windowSeconds);
-        int effectiveRequestLimit = Math.max(1, requestLimit);
-        long windowStart = now - Math.floorMod(now, effectiveWindowSeconds);
         String caller = caller(request);
-        var allowed = new AtomicBoolean();
-        Window current = windows.compute(caller, (key, previous) -> {
-            if (previous == null || previous.startedAt() != windowStart) {
-                allowed.set(true);
-                return new Window(windowStart, 1);
-            }
-            int nextCount = previous.count() + 1;
-            allowed.set(nextCount <= effectiveRequestLimit);
-            return new Window(windowStart, nextCount);
-        });
+        RateLimiter.Result result = rateLimiter.tryAcquire(caller, requestLimit, windowSeconds);
 
-        if (allowed.get()) return;
-        long retryAfter = Math.max(1, current.startedAt() + effectiveWindowSeconds - now);
+        if (result.allowed()) return;
+
+        long retryAfter = result.retryAfterSeconds();
         request.abortWith(jakarta.ws.rs.core.Response.status(429)
                 .header("Retry-After", retryAfter)
                 .type(MediaType.APPLICATION_JSON)
@@ -67,6 +54,4 @@ public class ApiRateLimitFilter implements ContainerRequestFilter {
         String forwarded = request.getHeaderString("X-Forwarded-For");
         return "network:" + (forwarded == null || forwarded.isBlank() ? "anonymous" : forwarded.split(",", 2)[0].trim());
     }
-
-    private record Window(long startedAt, int count) {}
 }

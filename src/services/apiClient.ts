@@ -1,6 +1,6 @@
 import type { User } from '../types';
 import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
-import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
+import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin } from './oidcClient';
 import {
   canRefreshAuth,
@@ -21,7 +21,11 @@ export async function initializeAuth(): Promise<void> {
   try {
     const callbackTokens = await completeOidcLogin();
     if (callbackTokens) setOidcSession(callbackTokens);
-    if (getAuthSnapshot().token) await refreshCurrentUser();
+    if (getAuthSnapshot().token) {
+      await refreshCurrentUser();
+      void startRealtimeEvents();
+      void precacheCatalogForOfflineUse();
+    }
   } catch (error) {
     console.error('OIDC login failed', error);
     clearAuth(error instanceof Error ? error.message : 'OIDC sign-in failed');
@@ -38,9 +42,12 @@ export async function login(): Promise<void> {
     method: 'POST', body: { email: 'admin@localhost', password: '' }, anonymous: true,
   });
   setDevelopmentSession(response.token, response.user);
+  void startRealtimeEvents();
+  void precacheCatalogForOfflineUse();
 }
 
 export function logout(): void {
+  stopRealtimeEvents();
   clearAuth();
 }
 
@@ -89,6 +96,9 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous) Object.assign(headers, await getAuthorizationHeaders());
+  const cacheKey = url.toString();
+  const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
+  if (cached) headers['If-None-Match'] = cached.etag;
 
   const response = await fetch(url, {
     method,
@@ -99,6 +109,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     await getValidAccessToken(true);
     return apiRequestAttempt<T>(path, options, true);
   }
+  if (response.status === 304 && cached) return cached.value as T;
   if (!response.ok) {
     const error = await responseError(response);
     if (response.status === 401 && !options.anonymous) clearAuth('Your session has expired. Please sign in again.');
@@ -108,7 +119,13 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     throw error;
   }
   const result = response.status === 204 ? undefined as T : await response.json() as T;
-  if (method !== 'GET') window.dispatchEvent(new CustomEvent('ash-api-change'));
+  if (method === 'GET') {
+    const etag = response.headers.get('ETag');
+    if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
+  } else {
+    conditionalGetCache.clear();
+    window.dispatchEvent(new CustomEvent('ash-api-change'));
+  }
   return result;
 }
 
@@ -183,4 +200,97 @@ export function subscribeToApiChanges(callback: () => void) {
   };
 }
 
-window.addEventListener('online', () => void flushOfflineQueue());
+const conditionalGetCache = new Map<string, { etag: string; value: unknown }>();
+let sseAbortController: AbortController | null = null;
+let sseRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRealtimeReconnect(): void {
+  if (sseRetryTimer || !navigator.onLine || !getAuthSnapshot().token) return;
+  sseRetryTimer = setTimeout(() => {
+    sseRetryTimer = null;
+    void startRealtimeEvents();
+  }, 5000);
+}
+
+function handleSseBlock(block: string): void {
+  const data = block.split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
+    .join('\n');
+  if (!data) return;
+  let detail: unknown = data;
+  try {
+    detail = JSON.parse(data);
+  } catch {
+    // Non-JSON data still signals that API state changed.
+  }
+  if (typeof detail === 'object' && detail !== null && 'type' in detail && detail.type === 'heartbeat') return;
+  window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
+  window.dispatchEvent(new CustomEvent('ash-api-change'));
+}
+
+export async function startRealtimeEvents(): Promise<void> {
+  stopRealtimeEvents();
+  if (!navigator.onLine || !getAuthSnapshot().token) return;
+
+  const controller = new AbortController();
+  sseAbortController = controller;
+  try {
+    const headers = await getAuthorizationHeaders();
+    const response = await fetch(`${API_URL}/api/events/stream`, {
+      headers: { ...headers, Accept: 'text/event-stream' },
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replaceAll('\r\n', '\n');
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() || '';
+      for (const block of blocks) handleSseBlock(block);
+    }
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+  } finally {
+    if (sseAbortController === controller) {
+      sseAbortController = null;
+      scheduleRealtimeReconnect();
+    }
+  }
+}
+
+export function stopRealtimeEvents(): void {
+  if (sseRetryTimer) {
+    clearTimeout(sseRetryTimer);
+    sseRetryTimer = null;
+  }
+  if (sseAbortController) {
+    sseAbortController.abort();
+    sseAbortController = null;
+  }
+}
+
+async function precacheCatalogForOfflineUse(): Promise<void> {
+  const catalogs = [
+    { key: 'items', path: '/api/items' },
+    { key: 'assemblies', path: '/api/assemblies' },
+    { key: 'storageLocations', path: '/api/storage-locations' },
+    { key: 'events', path: '/api/events' },
+  ];
+  await Promise.allSettled(catalogs.map(async ({ key, path }) => {
+    const data = await apiRequest<unknown[]>(path);
+    await setOfflineCatalog(key, data);
+  }));
+}
+
+window.addEventListener('online', () => {
+  void flushOfflineQueue();
+  void startRealtimeEvents();
+  void precacheCatalogForOfflineUse();
+});
+window.addEventListener('offline', stopRealtimeEvents);

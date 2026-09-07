@@ -8,8 +8,29 @@ function payload(data: Partial<StorageLocationFormData>) {
   delete fields.removeMapOverlay;
   return { ...fields, ...(removeMapOverlay ? { mapOverlay: null } : {}) };
 }
-export function getStorageLocations(): Promise<StorageLocation[]> { return apiRequest('/api/storage-locations'); }
-export function getStorageLocation(id: string): Promise<StorageLocation> { return apiRequest(`/api/storage-locations/${id}`); }
+import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+
+export async function getStorageLocations(): Promise<StorageLocation[]> {
+  try {
+    const locations = await apiRequest<StorageLocation[]>('/api/storage-locations');
+    void setOfflineCatalog('storageLocations', locations);
+    return locations;
+  } catch (error) {
+    const cached = await getOfflineCatalog<StorageLocation[]>('storageLocations');
+    if (cached) return cached;
+    throw error;
+  }
+}
+export async function getStorageLocation(id: string): Promise<StorageLocation> {
+  try {
+    return await apiRequest(`/api/storage-locations/${id}`);
+  } catch (error) {
+    const cached = await getOfflineCatalog<StorageLocation[]>('storageLocations');
+    const found = cached?.find((loc) => loc.id === id);
+    if (found) return found;
+    throw error;
+  }
+}
 export async function createStorageLocation(data: StorageLocationFormData): Promise<StorageLocation> {
   const mapOverlay = data.mapOverlayFile ? await uploadMedia(data.mapOverlayFile) : undefined;
   return apiRequest('/api/storage-locations', { method: 'POST', body: { ...payload(data), mapOverlay } });

@@ -9,8 +9,29 @@ async function payload(data: Partial<AssemblyFormData>) {
   return { ...fields, ...(image ? { image, removeImage: false } : {}) };
 }
 
-export function getAssemblies(): Promise<Assembly[]> { return apiRequest('/api/assemblies'); }
-export function getAssembly(id: string): Promise<Assembly> { return apiRequest(`/api/assemblies/${id}`); }
+import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+
+export async function getAssemblies(): Promise<Assembly[]> {
+  try {
+    const assemblies = await apiRequest<Assembly[]>('/api/assemblies');
+    void setOfflineCatalog('assemblies', assemblies);
+    return assemblies;
+  } catch (error) {
+    const cached = await getOfflineCatalog<Assembly[]>('assemblies');
+    if (cached) return cached;
+    throw error;
+  }
+}
+export async function getAssembly(id: string): Promise<Assembly> {
+  try {
+    return await apiRequest(`/api/assemblies/${id}`);
+  } catch (error) {
+    const cached = await getOfflineCatalog<Assembly[]>('assemblies');
+    const found = cached?.find((a) => a.id === id);
+    if (found) return found;
+    throw error;
+  }
+}
 export async function createAssembly(data: AssemblyFormData): Promise<Assembly> { return apiRequest('/api/assemblies', { method: 'POST', body: await payload(data) }); }
 export async function updateAssembly(id: string, data: Partial<AssemblyFormData>): Promise<Assembly> { return apiRequest(`/api/assemblies/${id}`, { method: 'PATCH', body: await payload(data) }); }
 export async function deleteAssembly(id: string): Promise<boolean> { await apiRequest(`/api/assemblies/${id}`, { method: 'DELETE' }); return true; }

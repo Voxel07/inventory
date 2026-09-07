@@ -1,0 +1,64 @@
+# Run this file on the dedicated storage/S3 VPS. It keeps Garage and a physical
+# PostgreSQL hot standby in a separate failure domain from the primary app VPS.
+services:
+  garage:
+    image: dxflrs/garage:v2.3.0
+    restart: unless-stopped
+    ports:
+      - "${GARAGE_S3_BIND_ADDRESS:-0.0.0.0}:3900:3900"
+      - "${GARAGE_RPC_BIND_ADDRESS:-0.0.0.0}:3901:3901"
+      - "${GARAGE_WEB_BIND_ADDRESS:-0.0.0.0}:3902:3902"
+      - "${GARAGE_ADMIN_BIND_ADDRESS:-127.0.0.1}:3903:3903"
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - inventory-garage-meta:/var/lib/garage/meta
+      - inventory-garage-data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  garage-webui:
+    image: khairul169/garage-webui:latest
+    restart: unless-stopped
+    ports:
+      - "${GARAGE_WEBUI_BIND_ADDRESS:-127.0.0.1}:3909:3909"
+    environment:
+      API_BASE_URL: http://garage:3903
+      S3_ENDPOINT_URL: http://garage:3900
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+    depends_on:
+      garage:
+        condition: service_started
+
+  postgres-standby:
+    image: postgres:18-alpine
+    user: postgres
+    entrypoint: ["/bin/sh", "/usr/local/bin/standby-entrypoint.sh"]
+    environment:
+      PGDATA: /var/lib/postgresql/18/standby
+      PRIMARY_DB_HOST: ${PRIMARY_DB_HOST:?Set PRIMARY_DB_HOST to the primary VPS private address}
+      PRIMARY_DB_PORT: ${PRIMARY_DB_PORT:-5432}
+      PRIMARY_DB_SSLMODE: ${PRIMARY_DB_SSLMODE:-prefer}
+      REPLICATION_USER: ${REPLICATION_USER:-inventory_replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD}
+      REPLICATION_SLOT: ${REPLICATION_SLOT:-inventory_storage_standby}
+    ports:
+      - "${STANDBY_DB_BIND_ADDRESS:-127.0.0.1}:${STANDBY_DB_PORT:-5433}:5432"
+    volumes:
+      - inventory-postgres-standby:/var/lib/postgresql
+      - ./deploy/postgres/standby-entrypoint.sh:/usr/local/bin/standby-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  inventory-garage-meta:
+  inventory-garage-data:
+  inventory-postgres-standby:

@@ -150,18 +150,11 @@ export function CsvImportDialog({
   }
 
   function handleDownloadTemplate(type: CsvImportType) {
-    let content = '';
-    let name = '';
-    if (type === 'items') {
-      content = generateSampleItemsCsv();
-      name = 'Artikel_Vorlage.csv';
-    } else if (type === 'assemblies') {
-      content = generateSampleAssembliesCsv();
-      name = 'Baugruppen_Vorlage.csv';
-    } else {
-      content = generateSampleCombinedCsv();
-      name = 'Inventar_Vorlage.csv';
-    }
+    const [content, name] = type === 'items'
+      ? [generateSampleItemsCsv(), 'Artikel_Vorlage.csv']
+      : type === 'assemblies'
+        ? [generateSampleAssembliesCsv(), 'Baugruppen_Vorlage.csv']
+        : [generateSampleCombinedCsv(), 'Inventar_Vorlage.csv'];
 
     const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

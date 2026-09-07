@@ -31,6 +31,8 @@ public class InventoryOperationsService {
     OperationsOrm orm;
     @Inject
     ActorService actors;
+    @Inject
+    org.ash.inventory.helper.event.EventBroadcaster broadcaster;
 
     public record StockState(int physical, int checkedOut, int damaged, int reserved, int available) {
     }
@@ -69,6 +71,7 @@ public class InventoryOperationsService {
         if (input.factionOrderId() != null)
             transaction.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         orm.persist(transaction);
+        broadcaster.broadcast("stock.changed", Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return transaction;
     }
 
@@ -130,6 +133,7 @@ public class InventoryOperationsService {
         if (input.factionOrderId() != null)
             report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         orm.persist(report);
+        broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", "damage_reported", "quantity", report.quantity));
         return report;
     }
 
@@ -150,6 +154,7 @@ public class InventoryOperationsService {
         report.resolutionNotes = input.notes();
         if (input.status() == DomainEnums.DamageStatus.in_review) {
             report.status = DomainEnums.DamageStatus.in_review;
+            broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", "damage_reviewed", "quantity", input.amount()));
             return report;
         }
         if (input.status() == DomainEnums.DamageStatus.repaired)
@@ -175,6 +180,7 @@ public class InventoryOperationsService {
         transaction.notes = input.notes();
         transaction.idempotencyKey = input.idempotencyKey();
         orm.persist(transaction);
+        broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return report;
     }
 

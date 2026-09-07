@@ -40,6 +40,8 @@ public class OrderService {
     CatalogService catalog;
     @Inject
     InventoryOperationsService inventory;
+    @Inject
+    org.ash.inventory.helper.event.EventBroadcaster broadcaster;
 
     private static final Map<DomainEnums.OrderStatus, Set<DomainEnums.OrderStatus>> TRANSITIONS = Map.of(
             DomainEnums.OrderStatus.draft, Set.of(DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.cancelled),
@@ -80,6 +82,7 @@ public class OrderService {
         orm.persist(order);
         replaceLines(order, input);
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, null, input.notes(), lineSnapshot(order));
+        broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
         return order;
     }
 
@@ -97,6 +100,7 @@ public class OrderService {
         order.notes = input.notes();
         replaceLines(order, input);
         audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(), lineSnapshot(order));
+        broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
         return order;
     }
 
@@ -345,6 +349,7 @@ public class OrderService {
             throw ApiException.conflict("Invalid order transition: " + from + " -> " + target);
         order.status = target;
         audit(order, actors.current(), action, from, target, idempotencyKey, notes, delta);
+        broadcaster.broadcast("order.transition", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode, "status", target.name()));
     }
 
     private void audit(FactionOrder order, UserAccount actor, String action, DomainEnums.OrderStatus from,

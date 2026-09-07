@@ -16,8 +16,29 @@ function payload(data: Partial<ItemFormData>) {
   delete fields.removeImages;
   return { ...fields, consumable: Boolean((data as Partial<ItemFormData> & { isConsumable?: boolean }).isConsumable) };
 }
-export function getItems(): Promise<Item[]> { return apiRequest('/api/items'); }
-export function getItem(id: string): Promise<Item> { return apiRequest(`/api/items/${id}`); }
+import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+
+export async function getItems(): Promise<Item[]> {
+  try {
+    const items = await apiRequest<Item[]>('/api/items');
+    void setOfflineCatalog('items', items);
+    return items;
+  } catch (error) {
+    const cached = await getOfflineCatalog<Item[]>('items');
+    if (cached) return cached;
+    throw error;
+  }
+}
+export async function getItem(id: string): Promise<Item> {
+  try {
+    return await apiRequest(`/api/items/${id}`);
+  } catch (error) {
+    const cached = await getOfflineCatalog<Item[]>('items');
+    const found = cached?.find((item) => item.id === id);
+    if (found) return found;
+    throw error;
+  }
+}
 export async function createItem(data: ItemFormData): Promise<Item> {
   const images = await uploadItemImages(data.imageFiles);
   return apiRequest('/api/items', { method: 'POST', body: { ...payload(data), images } });

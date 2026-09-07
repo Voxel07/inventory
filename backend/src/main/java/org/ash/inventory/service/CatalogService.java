@@ -1,23 +1,15 @@
 package org.ash.inventory.service;
 
+import io.quarkus.cache.CacheInvalidateAll;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.helper.event.EventBroadcaster;
+import org.ash.inventory.model.*;
+import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
-import org.ash.inventory.model.Assembly;
-import org.ash.inventory.model.AssemblyItem;
-import org.ash.inventory.model.AssemblyItemId;
-import org.ash.inventory.model.EventOccurrence;
-import org.ash.inventory.model.Faction;
-import org.ash.inventory.model.Item;
-import org.ash.inventory.model.ItemImage;
-import org.ash.inventory.model.StorageLocation;
-
-import jakarta.inject.Inject;
-import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.StockTransaction;
-import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.orm.CatalogOrm;
 
 import java.math.RoundingMode;
 import java.text.Normalizer;
@@ -26,6 +18,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -33,8 +26,31 @@ public class CatalogService {
     @Inject org.ash.inventory.helper.storage.MediaService media;
     @Inject ActorService actorService;
     @Inject CatalogOrm orm;
+    @Inject EventBroadcaster broadcaster;
+
+    public List<Item> getItems(String search) {
+        return orm.items(search);
+    }
+
+    public List<StorageLocation> getLocations() {
+        return orm.locations();
+    }
+
+    public List<Assembly> getAssemblies() {
+        return orm.assemblies();
+    }
+
+    public List<EventOccurrence> getEvents(String eventType) {
+        return orm.events(eventType);
+    }
+
+    public List<Faction> getFactions(String eventType) {
+        return orm.factions(eventType);
+    }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item createItem(ApiModels.ItemInput input) {
         var item = new Item();
         apply(item, input);
@@ -52,10 +68,13 @@ public class CatalogService {
             tx.occurredAt = Instant.now();
             orm.persist(tx);
         }
+        catalogChanged("items", item.id);
         return item;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
         apply(item, input);
@@ -63,13 +82,17 @@ public class CatalogService {
             orm.deleteItemImages(item);
             persistImages(item, input.images());
         }
+        catalogChanged("items", item.id);
         return item;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
         item.active = false;
+        catalogChanged("items", item.id);
     }
 
     private void apply(Item item, ApiModels.ItemInput input) {
@@ -98,25 +121,37 @@ public class CatalogService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "locations-cache")
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
         var location = new StorageLocation();
         apply(location, input);
         orm.persist(location);
+        catalogChanged("storage-locations", location.id);
         return location;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "locations-cache")
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         var location = locked(StorageLocation.class, id, "Storage location");
         apply(location, input);
+        catalogChanged("storage-locations", location.id);
         return location;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "locations-cache")
+    @CacheInvalidateAll(cacheName = "items-cache")
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteLocation(UUID id) {
         var location = locked(StorageLocation.class, id, "Storage location");
         if (orm.countItemsAt(location) > 0) throw ApiException.conflict("Storage location is still assigned to inventory items");
         orm.remove(location);
+        catalogChanged("storage-locations", location.id);
     }
 
     private void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
@@ -133,30 +168,36 @@ public class CatalogService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
         var assembly = new Assembly();
         apply(assembly, input);
         orm.persist(assembly);
         replaceComponents(assembly, input);
         applyAssemblyImage(assembly, input);
+        catalogChanged("assemblies", assembly.id);
         return assembly;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         var assembly = locked(Assembly.class, id, "Assembly");
         apply(assembly, input);
         orm.deleteAssemblyItems(assembly);
         replaceComponents(assembly, input);
         applyAssemblyImage(assembly, input);
+        catalogChanged("assemblies", assembly.id);
         return assembly;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
         orm.deleteAssemblyItems(assembly);
         orm.remove(assembly);
+        catalogChanged("assemblies", assembly.id);
     }
 
     private void apply(Assembly target, ApiModels.AssemblyInput input) {
@@ -187,6 +228,7 @@ public class CatalogService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
     public EventOccurrence createEvent(ApiModels.EventInput input) {
         var event = new EventOccurrence();
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -197,10 +239,12 @@ public class CatalogService {
         event.status = input.status() == null ? "planned" : input.status();
         event.notes = input.notes();
         orm.persist(event);
+        catalogChanged("events", event.id);
         return event;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
     public EventOccurrence updateEvent(UUID id, ApiModels.EventInput input) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -209,10 +253,12 @@ public class CatalogService {
         event.endDate = input.endDate() == null ? input.startDate() : input.endDate();
         event.status = input.status() == null ? event.status : input.status();
         event.notes = input.notes();
+        catalogChanged("events", event.id);
         return event;
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "factions-cache")
     public Faction createFaction(ApiModels.FactionInput input) {
         var faction = new Faction();
         faction.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -220,6 +266,7 @@ public class CatalogService {
         faction.slug = input.slug() == null || input.slug().isBlank() ? slug(input.name()) : slug(input.slug());
         faction.active = input.active() == null || input.active();
         orm.persist(faction);
+        catalogChanged("factions", faction.id);
         return faction;
     }
 
@@ -253,6 +300,10 @@ public class CatalogService {
         String prefix = slug(name).replace("-", "").toUpperCase(Locale.ROOT);
         if (prefix.length() > 8) prefix = prefix.substring(0, 8);
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase(Locale.ROOT);
+    }
+
+    private void catalogChanged(String resource, UUID id) {
+        broadcaster.broadcast("catalog.changed", Map.of("resource", resource, "id", id.toString()));
     }
 
     private String slug(String value) {
