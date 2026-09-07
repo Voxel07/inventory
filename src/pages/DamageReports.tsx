@@ -10,6 +10,7 @@ import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportFormData, DamageStatus } from '../types';
 import { useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 
 export function DamageReportsPage() {
     const t = useTranslate();
@@ -30,7 +31,10 @@ export function DamageReportsPage() {
                 setFormOpen(false);
                 showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
             },
-            onError: () => showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error'),
+            onError: (error) => {
+                if (isOfflineQueuedError(error)) return;
+                showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
+            },
         });
     }
 

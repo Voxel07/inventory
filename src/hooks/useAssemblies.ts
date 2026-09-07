@@ -5,27 +5,14 @@ import {
   createAssembly,
   updateAssembly,
   deleteAssembly,
-  subscribeToAssemblies,
 } from '../services/assemblyService';
 import type { AssemblyFormData } from '../types';
-import { useEffect } from 'react';
 
 export function useAssemblies() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery({
+  return useQuery({
     queryKey: ['assemblies'],
     queryFn: getAssemblies,
   });
-
-  useEffect(() => {
-    const unsubscribe = subscribeToAssemblies(() => {
-      queryClient.invalidateQueries({ queryKey: ['assemblies'] });
-    });
-    return unsubscribe;
-  }, [queryClient]);
-
-  return query;
 }
 
 export function useAssembly(id: string) {

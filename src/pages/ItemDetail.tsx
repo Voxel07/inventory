@@ -39,6 +39,7 @@ import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
 import { useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -150,7 +151,10 @@ export function ItemDetail() {
                 setCheckoutOpen(false);
                 showSnackbar(t('Transaktion abgeschlossen', 'Transaction completed'), 'success');
             },
-            onError: () => showSnackbar(t('Transaktion fehlgeschlagen', 'Transaction failed'), 'error'),
+            onError: (error) => {
+                if (isOfflineQueuedError(error)) return;
+                showSnackbar(t('Transaktion fehlgeschlagen', 'Transaction failed'), 'error');
+            },
         });
     }
 

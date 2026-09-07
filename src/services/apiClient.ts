@@ -82,6 +82,12 @@ export class OfflineQueuedError extends Error {
   constructor(idempotencyKey: string) { super('Action saved offline and will sync automatically'); this.idempotencyKey = idempotencyKey; }
 }
 
+export class RequestTimeoutError extends Error {
+  constructor() { super('Request timed out'); this.name = 'RequestTimeoutError'; }
+}
+
+const REQUEST_TIMEOUT_MS = 20_000;
+
 async function responseError(response: Response): Promise<ApiError> {
   const payload = await response.json().catch(() => ({})) as { error?: string; message?: string; details?: unknown };
   return new ApiError(response.status, payload.error || payload.message || `API request failed (${response.status})`, payload.details);
@@ -100,11 +106,22 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
   const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
   if (cached) headers['If-None-Match'] = cached.etag;
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new RequestTimeoutError();
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (response.status === 401 && !options.anonymous && !retried && canRefreshAuth()) {
     await getValidAccessToken(true);
     return apiRequestAttempt<T>(path, options, true);
@@ -114,7 +131,8 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     const error = await responseError(response);
     if (response.status === 401 && !options.anonymous) clearAuth('Your session has expired. Please sign in again.');
     if (response.status === 429) {
-      window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString() } }));
+      const retryAfterSeconds = Number(response.headers.get('Retry-After') ?? '') || undefined;
+      window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds } }));
     }
     throw error;
   }
@@ -123,10 +141,28 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     const etag = response.headers.get('ETag');
     if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
   } else {
-    conditionalGetCache.clear();
+    invalidateConditionalCacheFor(path);
     window.dispatchEvent(new CustomEvent('ash-api-change'));
   }
   return result;
+}
+
+function resourcePrefix(path: string): string {
+  const segments = path.split('/').filter(Boolean);
+  return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : path;
+}
+
+function invalidateConditionalCacheFor(path: string): void {
+  const prefix = resourcePrefix(path);
+  for (const key of conditionalGetCache.keys()) {
+    let keyPath: string;
+    try {
+      keyPath = new URL(key).pathname;
+    } catch {
+      continue;
+    }
+    if (resourcePrefix(keyPath) === prefix) conditionalGetCache.delete(key);
+  }
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -134,7 +170,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     return await apiRequestAttempt<T>(path, options, false);
   } catch (error) {
-    if (options.offline && (error instanceof TypeError || !navigator.onLine)) return queueOffline<T>(options.offline);
+    if (options.offline && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(options.offline);
     throw error;
   }
 }
@@ -190,8 +226,18 @@ export function uploadMedia(file: File): Promise<string> {
   return uploadMediaAttempt(file, false);
 }
 
-export function subscribeToApiChanges(callback: () => void) {
-  const listener = () => callback();
+export type ApiChangeDetail = {
+  type?: string;
+  resource?: string;
+  id?: string;
+  orderId?: string;
+  itemId?: string;
+  status?: string;
+  quantity?: unknown;
+};
+
+export function subscribeToApiChanges(callback: (detail?: ApiChangeDetail) => void) {
+  const listener = (event: Event) => callback((event as CustomEvent<ApiChangeDetail | undefined>).detail);
   window.addEventListener('ash-api-change', listener);
   window.addEventListener('online', listener);
   return () => {
@@ -225,8 +271,11 @@ function handleSseBlock(block: string): void {
     // Non-JSON data still signals that API state changed.
   }
   if (typeof detail === 'object' && detail !== null && 'type' in detail && detail.type === 'heartbeat') return;
+  const changeDetail: ApiChangeDetail = typeof detail === 'object' && detail !== null
+    ? detail as ApiChangeDetail
+    : { type: String(detail) };
   window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
-  window.dispatchEvent(new CustomEvent('ash-api-change'));
+  window.dispatchEvent(new CustomEvent('ash-api-change', { detail: changeDetail }));
 }
 
 export async function startRealtimeEvents(): Promise<void> {

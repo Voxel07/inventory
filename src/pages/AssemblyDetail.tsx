@@ -42,6 +42,7 @@ import type { AssemblyFormData, Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -104,7 +105,10 @@ export function AssemblyDetail() {
                     setCheckoutAmount(1);
                     showSnackbar(t('Baugruppe erfolgreich ausgeliehen', 'Assembly checked out successfully'), 'success');
                 },
-                onError: () => showSnackbar(t('Fehler beim Ausleihen der Baugruppe', 'Could not check out assembly'), 'error'),
+                onError: (error) => {
+                    if (isOfflineQueuedError(error)) return;
+                    showSnackbar(t('Fehler beim Ausleihen der Baugruppe', 'Could not check out assembly'), 'error');
+                },
             },
         );
     }

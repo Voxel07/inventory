@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, useMediaQuery } from '@mui/material';
+import { QueryClient, QueryClientProvider, MutationCache, useQueryClient } from '@tanstack/react-query';
+import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, useMediaQuery, useTheme } from '@mui/material';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
@@ -29,10 +29,22 @@ import type { User } from './types';
 import { Navigate } from 'react-router-dom';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
-import { useEffect } from 'react';
-import { useAppLanguage } from './utils/naming';
+import { useEffect, useMemo } from 'react';
+import { useAppLanguage, translate } from './utils/naming';
+import { OfflineQueuedError, subscribeToApiChanges } from './services/apiClient';
+import { invalidateForApiChange } from './utils/realtimeInvalidation';
 
 const queryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (error instanceof OfflineQueuedError) {
+        useUIStore.getState().showSnackbar(
+          translate('Offline gespeichert — wird bei Verbindung synchronisiert', 'Saved offline — will sync when connected'),
+          'info',
+        );
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 30_000,
@@ -41,9 +53,11 @@ const queryClient = new QueryClient({
   },
 });
 
-const theme = createTheme({
+function buildTheme(mode: 'light' | 'dark') {
+  const dark = mode === 'dark';
+  return createTheme({
   palette: {
-    mode: 'light',
+    mode,
     primary: {
       main: '#e30613',
       dark: '#b8000a',
@@ -57,14 +71,14 @@ const theme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#f4f5f6',
-      paper: '#ffffff',
+      default: dark ? '#121315' : '#f4f5f6',
+      paper: dark ? '#1c1d20' : '#ffffff',
     },
     text: {
-      primary: '#0e0e0f',
-      secondary: '#656e85',
+      primary: dark ? '#f0f1f3' : '#0e0e0f',
+      secondary: dark ? '#a7adbb' : '#656e85',
     },
-    divider: '#e2e4e9',
+    divider: dark ? '#2c2d31' : '#e2e4e9',
     success: { main: '#5f8068' },
     warning: { main: '#b66a00' },
     error: { main: '#d12222' },
@@ -102,7 +116,7 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: '#f4f5f6',
+          backgroundColor: dark ? '#121315' : '#f4f5f6',
           backgroundImage: 'linear-gradient(135deg, rgba(14, 14, 15, 0.018) 25%, transparent 25%, transparent 75%, rgba(14, 14, 15, 0.018) 75%)',
           backgroundSize: '28px 28px',
         },
@@ -117,7 +131,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          border: '1px solid #e2e4e9',
+          border: dark ? '1px solid #2c2d31' : '1px solid #e2e4e9',
           boxShadow: '0 1px 2px rgba(14, 14, 15, 0.035)',
         },
       },
@@ -179,7 +193,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '&.MuiTableRow-hover:hover': {
-            backgroundColor: 'rgba(227, 6, 19, 0.045)',
+            backgroundColor: dark ? 'rgba(227, 6, 19, 0.12)' : 'rgba(227, 6, 19, 0.045)',
           },
         },
       },
@@ -188,8 +202,8 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 2,
-          backgroundColor: '#ffffff',
-          '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cfd2d8' },
+          backgroundColor: dark ? '#1c1d20' : '#ffffff',
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#3a3b40' : '#cfd2d8' },
           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#0e0e0f' },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: '#e30613',
@@ -208,7 +222,7 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          border: '1px solid #e2e4e9',
+          border: dark ? '1px solid #2c2d31' : '1px solid #e2e4e9',
           borderTop: '4px solid #e30613',
           boxShadow: '0 18px 60px rgba(0, 0, 0, 0.22)',
         },
@@ -294,7 +308,8 @@ const theme = createTheme({
       },
     },
   },
-});
+  });
+}
 
 function AppContent() {
   useAppLanguage();
@@ -304,11 +319,28 @@ function AppContent() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const snackbar = useUIStore((s) => s.snackbar);
   const hideSnackbar = useUIStore((s) => s.hideSnackbar);
+  const theme = useTheme();
+  const queryClient = useQueryClient();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile, setSidebarOpen]);
+
+  useEffect(() => subscribeToApiChanges((detail) => invalidateForApiChange(queryClient, detail)), [queryClient]);
+
+  useEffect(() => {
+    const onRateLimited = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string; retryAfterSeconds?: number }>).detail ?? {};
+      const retry = detail.retryAfterSeconds ? ` (${detail.retryAfterSeconds}s)` : '';
+      useUIStore.getState().showSnackbar(
+        translate(`Zu viele Anfragen — kurz warten${retry}`, `Too many requests — try again shortly${retry}`),
+        'warning',
+      );
+    };
+    window.addEventListener('ash-api-rate-limited', onRateLimited);
+    return () => window.removeEventListener('ash-api-rate-limited', onRateLimited);
+  }, []);
 
   if (!isAuthenticated) {
     return (
@@ -398,12 +430,20 @@ function HomeRoute() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </ThemeProvider>
+      <ThemedApp />
     </QueryClientProvider>
+  );
+}
+
+function ThemedApp() {
+  const themeMode = useUIStore((s) => s.themeMode);
+  const theme = useMemo(() => buildTheme(themeMode), [themeMode]);
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

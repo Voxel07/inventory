@@ -6,27 +6,14 @@ import {
   updateItem,
   deleteItem,
   deleteItems,
-  subscribeToItems,
 } from '../services/inventoryService';
 import type { ItemFormData } from '../types';
-import { useEffect } from 'react';
 
 export function useItems() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery({
+  return useQuery({
     queryKey: ['items'],
     queryFn: getItems,
   });
-
-  useEffect(() => {
-    const unsubscribe = subscribeToItems(() => {
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    });
-    return unsubscribe;
-  }, [queryClient]);
-
-  return query;
 }
 
 export function useItem(id: string) {

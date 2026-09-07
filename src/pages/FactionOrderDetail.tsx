@@ -69,6 +69,7 @@ import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
 import type { Assembly, FactionOrderHistoryAction, FactionOrderHistoryEntry, FactionOrderStatus, Item, User } from '../types';
 import { useAppLanguage, useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 import { calculateItemStock } from '../utils/stock';
 import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
 import {
@@ -502,6 +503,7 @@ export function FactionOrderDetail() {
   }
 
   function handleError(error: unknown) {
+    if (isOfflineQueuedError(error)) return; // Global handler shows "saved offline".
     showSnackbar(error instanceof Error ? error.message : t('Aktion fehlgeschlagen', 'Action failed'), 'error');
   }
 

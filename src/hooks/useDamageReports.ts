@@ -3,27 +3,14 @@ import {
   getDamageReports,
   createDamageReport,
   updateDamageReportStatus,
-  subscribeToDamageReports,
 } from '../services/damageReportService';
 import type { DamageReportFormData, DamageStatus } from '../types';
-import { useEffect } from 'react';
 
 export function useDamageReports(itemId?: string) {
-  const queryClient = useQueryClient();
-
-  const query = useQuery({
+  return useQuery({
     queryKey: ['damageReports', itemId],
     queryFn: () => getDamageReports(itemId),
   });
-
-  useEffect(() => {
-    const unsubscribe = subscribeToDamageReports(() => {
-      queryClient.invalidateQueries({ queryKey: ['damageReports'] });
-    });
-    return unsubscribe;
-  }, [queryClient]);
-
-  return query;
 }
 
 export function useCreateDamageReport() {

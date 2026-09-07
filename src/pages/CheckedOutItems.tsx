@@ -13,6 +13,7 @@ import { useTransactions, useCreateTransaction } from '../hooks/useTransactions'
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
 import { useNames, useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 
 export function CheckedOutItemsPage() {
@@ -82,7 +83,10 @@ export function CheckedOutItemsPage() {
             },
             {
                 onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
-                onError: () => showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error'),
+                onError: (error) => {
+                    if (isOfflineQueuedError(error)) return;
+                    showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error');
+                },
             },
         );
     }

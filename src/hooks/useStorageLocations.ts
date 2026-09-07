@@ -5,27 +5,14 @@ import {
   createStorageLocation,
   updateStorageLocation,
   deleteStorageLocation,
-  subscribeToStorageLocations,
 } from '../services/storageLocationService';
-import { useEffect } from 'react';
 import type { StorageLocation, StorageLocationFormData } from '../types';
 
 export function useStorageLocations() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery({
+  return useQuery({
     queryKey: ['storageLocations'],
     queryFn: getStorageLocations,
   });
-
-  useEffect(() => {
-    const unsubscribe = subscribeToStorageLocations(() => {
-      queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
-    });
-    return unsubscribe;
-  }, [queryClient]);
-
-  return query;
 }
 
 export function useStorageLocation(id: string) {

@@ -14,6 +14,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
 import { useUIStore } from '../../store/uiStore';
 import { useTranslate } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
@@ -22,6 +25,8 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNotifications, markNotificationRead, type AppNotification } from '../../services/notificationService';
 import { subscribeToApiChanges } from '../../services/apiClient';
+import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
+import { discardSyncFailure, getSyncFailures, type SyncFailure } from '../../services/offlineQueue';
 
 function payloadText(notification: AppNotification, key: string): string | undefined {
     const value = notification.payload[key];
@@ -35,7 +40,11 @@ export function Header() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
-    const { online, queued } = useOfflineStatus();
+    const [syncIssuesOpen, setSyncIssuesOpen] = useState(false);
+    const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
+    const { online, queued, syncIssues } = useOfflineStatus();
+    const themeMode = useUIStore((s) => s.themeMode);
+    const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
     const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: getNotifications, refetchInterval: 60_000 });
     const unreadNotifications = notifications.filter((notification) => !notification.readAt);
     useEffect(() => subscribeToApiChanges(() => {
@@ -74,7 +83,19 @@ export function Header() {
         markRead.mutate(unreadNotifications.map((notification) => notification.id));
     }
 
+    function openSyncIssues() {
+        setSyncIssuesOpen(true);
+        void getSyncFailures().then(setSyncFailures);
+    }
+
+    function discardFailure(idempotencyKey: string) {
+        void discardSyncFailure(idempotencyKey).then(() => {
+            setSyncFailures((current) => current.filter((failure) => failure.idempotencyKey !== idempotencyKey));
+        });
+    }
+
     return (
+        <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar>
                 <IconButton
@@ -140,6 +161,24 @@ export function Header() {
                         </Menu>
                     </>
                 )}
+                <IconButton
+                    color="inherit"
+                    onClick={toggleThemeMode}
+                    aria-label={t('Farbschema umschalten', 'Toggle colour scheme')}
+                    sx={{ mr: { xs: 0.5, sm: 1 } }}
+                >
+                    {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                </IconButton>
+                {syncIssues > 0 && (
+                    <Chip
+                        size="small"
+                        color="error"
+                        icon={<ErrorOutlineIcon />}
+                        label={t(`${syncIssues} Synchronisierungsprobleme`, `${syncIssues} sync issues`)}
+                        onClick={openSyncIssues}
+                        sx={{ mr: 1, color: 'white', fontWeight: 700, '& .MuiChip-icon': { color: 'inherit' } }}
+                    />
+                )}
                 {(!online || queued > 0) && (
                     <Chip
                         size="small"
@@ -152,5 +191,12 @@ export function Header() {
                 )}
             </Toolbar>
         </AppBar>
+        <SyncIssuesDialog
+            open={syncIssuesOpen}
+            failures={syncFailures}
+            onClose={() => setSyncIssuesOpen(false)}
+            onDiscard={discardFailure}
+        />
+        </>
     );
 }

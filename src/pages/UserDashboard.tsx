@@ -30,6 +30,7 @@ import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 import type { DamageReportFormData, Item, TransactionFormData } from '../types';
 import { useNames, useTranslate } from '../utils/naming';
+import { isOfflineQueuedError } from '../utils/offline';
 
 export function UserDashboard() {
     const names = useNames();
@@ -113,7 +114,8 @@ export function UserDashboard() {
                 setReturnItem(null);
                 showSnackbar(t('Artikel erfolgreich zurückgegeben', 'Item returned successfully'), 'success');
             },
-            onError: () => {
+            onError: (error) => {
+                if (isOfflineQueuedError(error)) return;
                 showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not record return'), 'error');
             }
         });
@@ -125,7 +127,10 @@ export function UserDashboard() {
                 setDamageItem(null);
                 showSnackbar(t('Schaden erfolgreich gemeldet', 'Damage reported successfully'), 'success');
             },
-            onError: () => showSnackbar(t('Schaden konnte nicht gemeldet werden', 'Could not report damage'), 'error'),
+            onError: (error) => {
+                if (isOfflineQueuedError(error)) return;
+                showSnackbar(t('Schaden konnte nicht gemeldet werden', 'Could not report damage'), 'error');
+            },
         });
     }
 

@@ -213,6 +213,13 @@ To ensure the inventory system is a comprehensive, production-grade tool for eve
 
 ## 5. Target Architecture & Technology Recommendations
 
+> **Deployment stages:** this section describes the *target* multi-node topology.
+> The repository ships two concrete deployment paths — start with
+> [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md) (one app VPS + one
+> S3/backup node) and move to [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md)
+> for the multi-node setup described here. The default `docker-compose.yml` is
+> single-node.
+
 ### 5.1 Database: PostgreSQL 18+ (The Foundation)
 **Verdict:** PostgreSQL 18+ replaces SQLite/PocketBase to guarantee ACID compliance, transactional integrity, and scalable multi-user operations.
 
@@ -332,7 +339,9 @@ flowchart TD
 
 #### 5.5.1 The 2-VPS + Cloudflare Worker Setup Capacity
 With two 4-core application nodes and a Cloudflare Worker edge:
-- **Throughput:** Capable of handling **10,000+ requests/sec** and over **5,000 active concurrent users**.
+- **Throughput:** Design ceiling of roughly **10,000+ requests/sec** and several
+  thousand active users. These are planning figures, not guarantees — measure
+  with the OpenTelemetry/OpenObserver stack before relying on them.
 - **Redundancy:** If VPS 1 undergoes maintenance or suffers a hardware outage, the Cloudflare Worker detects the health-check failure in <2 seconds and directs 100% of traffic to VPS 2.
 - **Resource Utilization:** Average CPU usage across both nodes will remain under 10% during standard operations, providing immense headroom for peak event surges.
 

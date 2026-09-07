@@ -46,9 +46,16 @@ The legacy `pb_schema.json` remains only as a migration reference and is not use
 
 Roles are enforced by the backend: `admin`, `inventory_manager`, `warehouse_packer`, and `faction_leader`. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
 
+## Deployment
+
+- [Step 1 — Single VPS + S3/backup storage node](docs/DEPLOYMENT_STEP1.md)
+- [Step 2 — Multi-node HA](docs/DEPLOYMENT_STEP2.md)
+
 ## Offline field operation
 
 The production build installs as a PWA. Reads are cached by the service worker and operational writes use an IndexedDB append-only queue with UUID idempotency keys. The queue replays through `/api/sync` after connectivity returns and its status is shown in the header.
+
+The exact online/offline boundary, queue semantics, and conflict handling are documented in [`docs/OFFLINE_MODE.md`](docs/OFFLINE_MODE.md).
 
 ## Faction order workflow
 

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cancelFactionOrder,
@@ -13,22 +12,11 @@ import {
   saveFactionOrderPreparation,
   startFactionOrderPreparation,
   submitFactionOrder,
-  subscribeToFactionOrders,
   updateFactionOrder,
 } from '../services/factionOrderService';
 import type { EventType, FactionOrderFormData } from '../types';
 
-function useFactionOrderRealtime() {
-  const queryClient = useQueryClient();
-  useEffect(() => subscribeToFactionOrders(() => {
-    queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    queryClient.invalidateQueries({ queryKey: ['procurement-deficits'] });
-  }), [queryClient]);
-}
-
 export function useFactionOrders(eventType?: EventType, faction?: string) {
-  useFactionOrderRealtime();
   return useQuery({
     queryKey: ['faction-orders', eventType, faction],
     queryFn: () => getFactionOrders({ eventType, faction }),
@@ -36,7 +24,6 @@ export function useFactionOrders(eventType?: EventType, faction?: string) {
 }
 
 export function useFactionOrder(id: string) {
-  useFactionOrderRealtime();
   return useQuery({
     queryKey: ['faction-orders', 'detail', id],
     queryFn: () => getFactionOrder(id),

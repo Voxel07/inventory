@@ -2,6 +2,23 @@ import { create } from 'zustand';
 import { EVENT_TYPES, type EventType } from '../types';
 
 const ACTIVE_EVENT_STORAGE_KEY = 'inventory-active-event';
+const THEME_MODE_STORAGE_KEY = 'inventory-theme-mode';
+
+type ThemeMode = 'light' | 'dark';
+
+function storedThemeMode(): ThemeMode {
+  try {
+    const value = localStorage.getItem(THEME_MODE_STORAGE_KEY);
+    if (value === 'light' || value === 'dark') return value;
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 function storedActiveEvent(): EventType {
   try {
@@ -20,6 +37,9 @@ interface UIState {
 
   activeEventType: EventType;
   setActiveEventType: (eventType: EventType) => void;
+
+  themeMode: ThemeMode;
+  toggleThemeMode: () => void;
 
   snackbar: { open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' };
   showSnackbar: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
@@ -58,6 +78,18 @@ export const useUIStore = create<UIState>((set) => ({
     }
     set({ activeEventType: eventType });
   },
+
+  themeMode: storedThemeMode(),
+  toggleThemeMode: () =>
+    set((s) => {
+      const next: ThemeMode = s.themeMode === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(THEME_MODE_STORAGE_KEY, next);
+      } catch {
+        // Keep the in-memory selection even when persistence is unavailable.
+      }
+      return { themeMode: next };
+    }),
 
   snackbar: { open: false, message: '', severity: 'info' },
   showSnackbar: (message, severity = 'info') =>

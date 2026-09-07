@@ -1,14 +1,8 @@
-import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUsers, subscribeToUsers, updateUserPermissions } from '../services/userService';
+import { getUsers, updateUserPermissions } from '../services/userService';
 import type { UserPermissionsFormData } from '../types';
 
 export function useUsers() {
-  const queryClient = useQueryClient();
-  useEffect(() => subscribeToUsers(() => {
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-    queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
-  }), [queryClient]);
   return useQuery({
     queryKey: ['users'],
     queryFn: getUsers,
