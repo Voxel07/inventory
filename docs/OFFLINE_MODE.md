@@ -27,8 +27,9 @@ and how the queue replays.
 - Creating or editing items, assemblies, storage locations, users, events, and
   general orders requires a connection. Catalog maintenance is an HQ-side task
   and is intentionally excluded from the queue to avoid unresolvable conflicts.
-- Signing in requires a connection; the OIDC session is held in `sessionStorage`,
-  so a fully offline cold start is not supported.
+- The initial sign-in requires a connection, but the OIDC session is mirrored to
+  IndexedDB, so a PWA cold start restores the session and can work offline
+  (cached reads + queued writes) without re-authenticating.
 
 ## Queue semantics
 

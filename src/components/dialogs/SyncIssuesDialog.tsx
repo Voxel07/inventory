@@ -11,7 +11,7 @@ import {
     ListItemText,
     Typography,
 } from '@mui/material';
-import { useTranslate } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import type { SyncFailure } from '../../services/offlineQueue';
 
 export function SyncIssuesDialog({
@@ -27,15 +27,15 @@ export function SyncIssuesDialog({
     onDiscard: (idempotencyKey: string) => void;
     discarding?: boolean;
 }) {
-    const t = useTranslate();
+    const t = useT();
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>{t('Synchronisierungsprobleme', 'Sync issues')}</DialogTitle>
+            <DialogTitle>{t('syncIssues.title')}</DialogTitle>
             <DialogContent dividers sx={{ p: 0 }}>
                 {failures.length === 0 ? (
                     <Box sx={{ p: 2 }}>
                         <Typography color="text.secondary">
-                            {t('Keine offenen Synchronisierungsprobleme.', 'No open sync issues.')}
+                            {t('syncIssues.empty')}
                         </Typography>
                     </Box>
                 ) : (
@@ -51,7 +51,7 @@ export function SyncIssuesDialog({
                                             onClick={() => onDiscard(failure.idempotencyKey)}
                                             disabled={discarding}
                                         >
-                                            {t('Verwerfen', 'Discard')}
+                                            {t('syncIssues.discard')}
                                         </Button>
                                     }
                                 >
@@ -67,7 +67,7 @@ export function SyncIssuesDialog({
                 )}
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>{t('Schließen', 'Close')}</Button>
+                <Button onClick={onClose}>{t('syncIssues.close')}</Button>
             </DialogActions>
         </Dialog>
     );

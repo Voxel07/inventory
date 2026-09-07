@@ -18,7 +18,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
 import { useUIStore } from '../../store/uiStore';
-import { useTranslate } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type MouseEvent } from 'react';
@@ -36,7 +36,7 @@ function payloadText(notification: AppNotification, key: string): string | undef
 export function Header() {
     const toggleSidebar = useUIStore((s) => s.toggleSidebar);
     const showSnackbar = useUIStore((s) => s.showSnackbar);
-    const t = useTranslate();
+    const t = useT();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
@@ -63,7 +63,7 @@ export function Header() {
         },
         onError: (_error, _ids, context) => {
             if (context?.previous) queryClient.setQueryData(['notifications'], context.previous);
-            showSnackbar(t('Abholhinweis konnte nicht bestätigt werden', 'Could not dismiss pickup notice'), 'error');
+            showSnackbar(t('header.dismissPickupNoticeFailed'), 'error');
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
     });
@@ -103,13 +103,13 @@ export function Header() {
                     edge="start"
                     onClick={toggleSidebar}
                     sx={{ mr: { xs: 1, sm: 2 } }}
-                    aria-label={t('Navigation umschalten', 'Toggle navigation')}
+                    aria-label={t('header.toggleNavigation')}
                 >
                     <MenuIcon />
                 </IconButton>
                 <InventoryIcon sx={{ mr: 1.5, color: 'primary.main', display: { xs: 'none', sm: 'block' } }} />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
-                    {t('Inventar', 'Inventory')}
+                    {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 {unreadNotifications.length > 0 && (
@@ -119,7 +119,7 @@ export function Header() {
                             size="small"
                             color="primary"
                             icon={<NotificationsActiveIcon />}
-                            label={t(`${unreadNotifications.length} Abholhinweise`, `${unreadNotifications.length} pickup notices`)}
+                            label={t('header.pickupNotices', { count: unreadNotifications.length })}
                             onClick={openNotifications}
                             aria-controls={notificationAnchor ? 'pickup-notices-menu' : undefined}
                             aria-haspopup="menu"
@@ -145,9 +145,9 @@ export function Header() {
                                     <MenuItem key={notification.id} onClick={() => openNotification(notification)}>
                                         <ListItemText
                                             primary={orderCode
-                                                ? t(`Bestellung ${orderCode} ist abholbereit`, `Order ${orderCode} is ready for pickup`)
-                                                : t('Bestellung ist abholbereit', 'Order is ready for pickup')}
-                                            secondary={details || t('Bestellung öffnen', 'Open order')}
+                                                ? t('header.orderReady', { orderCode })
+                                                : t('header.orderReadyGeneric')}
+                                            secondary={details || t('header.openOrder')}
                                             sx={{ whiteSpace: 'normal' }}
                                         />
                                     </MenuItem>
@@ -156,7 +156,7 @@ export function Header() {
                             <Divider />
                             <MenuItem onClick={dismissAllNotifications} disabled={markRead.isPending}>
                                 <DoneAllIcon fontSize="small" sx={{ mr: 1.5 }} />
-                                {t('Alle als gelesen markieren', 'Mark all as read')}
+                                {t('header.markAllRead')}
                             </MenuItem>
                         </Menu>
                     </>
@@ -164,7 +164,7 @@ export function Header() {
                 <IconButton
                     color="inherit"
                     onClick={toggleThemeMode}
-                    aria-label={t('Farbschema umschalten', 'Toggle colour scheme')}
+                    aria-label={t('header.toggleColourScheme')}
                     sx={{ mr: { xs: 0.5, sm: 1 } }}
                 >
                     {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
@@ -174,7 +174,7 @@ export function Header() {
                         size="small"
                         color="error"
                         icon={<ErrorOutlineIcon />}
-                        label={t(`${syncIssues} Synchronisierungsprobleme`, `${syncIssues} sync issues`)}
+                        label={t('header.syncIssues', { count: syncIssues })}
                         onClick={openSyncIssues}
                         sx={{ mr: 1, color: 'white', fontWeight: 700, '& .MuiChip-icon': { color: 'inherit' } }}
                     />
@@ -184,8 +184,8 @@ export function Header() {
                         size="small"
                         color={online ? 'warning' : 'error'}
                         label={online
-                            ? t(`${queued} Aktionen warten`, `${queued} actions queued`)
-                            : t(`Offline — ${queued} warten`, `Offline — ${queued} queued`)}
+                            ? t('header.queuedActions', { count: queued })
+                            : t('header.offlineQueued', { count: queued })}
                         sx={{ color: 'white', fontWeight: 700 }}
                     />
                 )}

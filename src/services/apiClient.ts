@@ -8,6 +8,7 @@ import {
   getAuthorizationHeaders,
   getAuthSnapshot,
   getValidAccessToken,
+  restorePersistedSession,
   setAuthError,
   setDevelopmentSession,
   setOidcSession,
@@ -21,6 +22,7 @@ export async function initializeAuth(): Promise<void> {
   try {
     const callbackTokens = await completeOidcLogin();
     if (callbackTokens) setOidcSession(callbackTokens);
+    if (!getAuthSnapshot().token) await restorePersistedSession();
     if (getAuthSnapshot().token) {
       await refreshCurrentUser();
       void startRealtimeEvents();

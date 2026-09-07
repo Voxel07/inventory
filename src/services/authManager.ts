@@ -1,5 +1,6 @@
 import type { User } from '../types';
 import { refreshOidcTokens, type OidcTokenSet } from './oidcClient';
+import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession } from './authStorage';
 
 const SESSION_KEY = 'ash.inventory.authSession';
 const LEGACY_TOKEN_KEY = 'ash.inventory.accessToken';
@@ -51,6 +52,40 @@ function persist(): void {
   else sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
+
+  if (session.accessToken || session.refreshToken) {
+    void saveStoredAuthSession(session);
+  } else {
+    void clearStoredAuthSession();
+  }
+}
+
+/**
+ * Restores a previously persisted OIDC session (e.g. after a PWA cold start
+ * where sessionStorage was cleared). A failed refresh never clears auth — an
+ * offline start keeps the restored session so reads fall back to the cache and
+ * writes queue locally.
+ */
+export async function restorePersistedSession(): Promise<void> {
+  if (session.accessToken) return;
+  const stored = await loadStoredAuthSession();
+  if (!stored) return;
+  session = {
+    ...emptySession(),
+    ...stored,
+    user: (stored.user as User | null) ?? null,
+  };
+  persist();
+  publish();
+  const needsRefresh = !session.refreshToken
+    || !session.accessToken
+    || (session.expiresAt !== null && session.expiresAt <= Date.now() + REFRESH_EARLY_MS);
+  if (!needsRefresh || !navigator.onLine) return;
+  try {
+    replaceTokens(await refreshOidcTokens(session.refreshToken));
+  } catch {
+    // Keep the restored session; the next successful request refreshes or clears on 401.
+  }
 }
 
 function replaceTokens(tokens: OidcTokenSet): void {

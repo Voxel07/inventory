@@ -57,6 +57,15 @@ The production build installs as a PWA. Reads are cached by the service worker a
 
 The exact online/offline boundary, queue semantics, and conflict handling are documented in [`docs/OFFLINE_MODE.md`](docs/OFFLINE_MODE.md).
 
+## Internationalization
+
+Localization runs on [i18next](https://www.i18next.com/) with German (`de`) and
+English (`en`) catalogs in [`src/i18n`](src/i18n). New code should use the
+key-based `useT()` hook from `src/utils/naming` (e.g.
+`t('header.queuedActions', { count })`), which supports interpolation and
+pluralization. Legacy call sites still use the `useTranslate(de, en)`
+compatibility shim and should be migrated to catalog keys incrementally.
+
 ## Faction order workflow
 
 Open **Events → Faction lists** to create a dated list for a faction. Individual items and assemblies can be selected; both are filtered by their event tags. A draft can copy the previous list and display changes. Its lifecycle is:
