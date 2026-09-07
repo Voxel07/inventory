@@ -1,8 +1,37 @@
-# Run this file on the dedicated storage/S3 VPS. It keeps Garage and a clean
-# PostgreSQL 18 database for logical replication in a separate failure domain.
+# Run this file on the dedicated storage/S3 VPS. It runs Traefik (with Let's Encrypt TLS),
+# Garage S3 object storage, Garage WebUI, Beszel monitoring agent, and a PostgreSQL 18
+# database for logical replication in a separate failure domain.
+
 services:
+  traefik:
+    image: traefik:v3.7.12
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--log.level=WARN"
+      - "--api=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=mail@matzeschneider.de"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - garage-net
+
   garage:
     image: dxflrs/garage:v2.3.0
+    container_name: garage
     restart: unless-stopped
     ports:
       - "${GARAGE_S3_BIND_ADDRESS:-0.0.0.0}:3900:3900"
@@ -10,9 +39,21 @@ services:
       - "${GARAGE_WEB_BIND_ADDRESS:-0.0.0.0}:3902:3902"
       - "${GARAGE_ADMIN_BIND_ADDRESS:-127.0.0.1}:3903:3903"
     volumes:
-      - ./garage.toml:/etc/garage.toml:ro
-      - inventory-garage-meta:/var/lib/garage/meta
-      - inventory-garage-data:/var/lib/garage/data
+      - ${GARAGE_CONFIG:-./etc/garage.toml}:/etc/garage.toml:ro
+      - ${GARAGE_META_DIR:-./meta}:/var/lib/garage/meta
+      - ${GARAGE_DATA_DIR:-./data}:/var/lib/garage/data
+    networks:
+      - garage-net
+    labels:
+      - "traefik.enable=true"
+      # S3 API Router (handles s3.matzeschneider.de and *.s3.matzeschneider.de for virtual-hosted buckets)
+      - "traefik.http.routers.garage-s3.rule=Host(`s3.matzeschneider.de`) || HostRegexp(`{bucket:.+}.s3.matzeschneider.de`)"
+      - "traefik.http.routers.garage-s3.entrypoints=websecure"
+      - "traefik.http.routers.garage-s3.tls.certresolver=letsencrypt"
+      - "traefik.http.services.garage-s3.loadbalancer.server.port=3900"
+      # Prevent buffering for large file streaming/uploads
+      - "traefik.http.middlewares.buffering.buffering.maxRequestBodyBytes=0"
+      - "traefik.http.routers.garage-s3.middlewares=buffering"
     healthcheck:
       test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
       interval: 10s
@@ -21,6 +62,7 @@ services:
 
   garage-webui:
     image: khairul169/garage-webui:latest
+    container_name: garage-webui
     restart: unless-stopped
     ports:
       - "${GARAGE_WEBUI_BIND_ADDRESS:-127.0.0.1}:3909:3909"
@@ -28,13 +70,39 @@ services:
       API_BASE_URL: http://garage:3903
       S3_ENDPOINT_URL: http://garage:3900
     volumes:
-      - ./garage.toml:/etc/garage.toml:ro
+      - ${GARAGE_CONFIG:-./etc/garage.toml}:/etc/garage.toml:ro
+    networks:
+      - garage-net
     depends_on:
       garage:
         condition: service_started
 
+  beszel-agent:
+    image: henrygd/beszel-agent:0.19.0
+    container_name: beszel-agent
+    restart: unless-stopped
+    networks:
+      - garage-net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - PORT=45876
+      - KEY=ssh-ed25519 123/asd
+      - TOKEN=123
+      - HUB_URL=https://m.matzeschneider.de
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=garage-net"
+      - "traefik.http.routers.beszel-agent.rule=Host(`agent2.matzeschneider.de`)"
+      - "traefik.http.routers.beszel-agent.entrypoints=websecure"
+      - "traefik.http.routers.beszel-agent.tls=true"
+      - "traefik.http.routers.beszel-agent.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.beszel-agent.service=beszel-agent"
+      - "traefik.http.services.beszel-agent.loadbalancer.server.port=45876"
+
   postgres-replica:
     image: postgres:18-alpine
+    container_name: postgres-replica
     environment:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
@@ -49,8 +117,13 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+    networks:
+      - garage-net
+
+networks:
+  garage-net:
+    name: garage-net
+    driver: bridge
 
 volumes:
-  inventory-garage-meta:
-  inventory-garage-data:
   inventory-postgres-replica:
