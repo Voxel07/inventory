@@ -54,7 +54,9 @@ export function calculateItemStock(
   }
 
   const totalStock = Math.max(0, totalAdded - writtenOff);
-  const remaining = Math.max(0, totalStock - checkedOut - damaged);
+  // Keep shortages visible. A negative value is meaningful when demand or
+  // imported transaction history exceeds the physical stock.
+  const remaining = totalStock - checkedOut - damaged;
 
   return {
     totalStock,

@@ -160,4 +160,35 @@ class InventoryApiTest {
                 .then().statusCode(200)
                 .body("[0].name", equalTo("Sponsor tent"));
     }
+
+    @Test
+    void overOrderedStockAppearsAsAProcurementDeficit() {
+        String itemId = request()
+                .body(Map.of("sku", "PROC-OVER-001", "name", "Over-ordered cable", "category", "Equipment", "amount", 10, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Procurement test faction");
+        orderBody.put("eventDate", "2031-04-05");
+        orderBody.put("pickupLatitude", 52.52);
+        orderBody.put("pickupLongitude", 13.405);
+        orderBody.put("requestedQuantities", Map.of(itemId, 15));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String eventId = request().body(orderBody)
+                .post("/api/orders")
+                .then().statusCode(200)
+                .extract().path("eventOccurrenceId");
+
+        request().get("/api/procurement/deficits?eventOccurrenceId=" + eventId)
+                .then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].itemId", equalTo(itemId))
+                .body("[0].demand", equalTo(15))
+                .body("[0].availableStock", equalTo(10))
+                .body("[0].projectedStock", equalTo(-5))
+                .body("[0].netDeficit", equalTo(5));
+    }
 }

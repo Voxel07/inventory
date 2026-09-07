@@ -6,7 +6,7 @@ import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
-import { useItems, useCreateItem, useUpdateItem, useDeleteItem } from '../hooks/useItems';
+import { useItems, useCreateItem, useUpdateItem, useDeleteItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
@@ -26,14 +26,14 @@ export function Items() {
     const { data: damageReports } = useDamageReports();
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
-    const deleteItem = useDeleteItem();
+    const deleteItems = useDeleteItems();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [formOpen, setFormOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Item | undefined>();
     const [qrItem, setQrItem] = useState<Item | undefined>();
-    const [deletingId, setDeletingId] = useState<string | undefined>();
+    const [deletingIds, setDeletingIds] = useState<string[]>([]);
 
     const { data: storageLocations } = useStorageLocations();
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
@@ -64,17 +64,27 @@ export function Items() {
     }
 
     function handleDelete(id: string) {
-        setDeletingId(id);
+        setDeletingIds([id]);
+    }
+
+    function handleDeleteMany(ids: string[]) {
+        setDeletingIds(ids);
     }
 
     function handleDeleteConfirm() {
-        if (!deletingId) return;
-        deleteItem.mutate(deletingId, {
+        if (!deletingIds.length) return;
+        deleteItems.mutate(deletingIds, {
             onSuccess: () => {
-                setDeletingId(undefined);
-                showSnackbar(t('Artikel gelöscht', 'Item deleted'), 'success');
+                const count = deletingIds.length;
+                setDeletingIds([]);
+                showSnackbar(
+                    count === 1
+                        ? t('Artikel gelöscht', 'Item deleted')
+                        : t(`${count} Artikel gelöscht`, `${count} items deleted`),
+                    'success',
+                );
             },
-            onError: () => showSnackbar(t('Fehler beim Löschen des Artikels', 'Could not delete item'), 'error'),
+            onError: () => showSnackbar(t('Fehler beim Löschen der Artikel', 'Could not delete items'), 'error'),
         });
     }
 
@@ -107,6 +117,7 @@ export function Items() {
                 isLoading={isLoading}
                 onEdit={setEditingItem}
                 onDelete={handleDelete}
+                onDeleteMany={handleDeleteMany}
             />
 
             {/* Create Dialog */}
@@ -149,17 +160,23 @@ export function Items() {
             </Dialog>
 
             {/* Delete Confirmation Dialog */}
-            <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
-                <DialogTitle>{t('Artikel löschen', 'Delete item')}</DialogTitle>
+            <Dialog open={deletingIds.length > 0} onClose={() => setDeletingIds([])}>
+                <DialogTitle>
+                    {deletingIds.length === 1 ? t('Artikel löschen', 'Delete item') : t('Artikel löschen', 'Delete items')}
+                </DialogTitle>
                 <DialogContent>
-                    <DialogContentText>{t('Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this item? This cannot be undone.')}</DialogContentText>
+                    <DialogContentText>
+                        {deletingIds.length === 1
+                            ? t('Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this item? This cannot be undone.')
+                            : t(`Sind Sie sicher, dass Sie ${deletingIds.length} Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.`, `Are you sure you want to delete ${deletingIds.length} items? This cannot be undone.`)}
+                    </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Tooltip title={t('Löschvorgang abbrechen', 'Cancel deletion')} arrow>
-                        <Button onClick={() => setDeletingId(undefined)}>{t('Abbrechen', 'Cancel')}</Button>
+                        <Button onClick={() => setDeletingIds([])}>{t('Abbrechen', 'Cancel')}</Button>
                     </Tooltip>
-                    <Tooltip title={t('Diesen Artikel dauerhaft löschen', 'Permanently delete this item')} arrow>
-                        <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItem.isPending}>
+                    <Tooltip title={t('Ausgewählte Artikel dauerhaft löschen', 'Permanently delete selected items')} arrow>
+                        <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItems.isPending}>
                             {t('Löschen', 'Delete')}
                         </Button>
                     </Tooltip>

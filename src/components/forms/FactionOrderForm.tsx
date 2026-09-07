@@ -187,8 +187,25 @@ export function FactionOrderForm({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [assemblies, assemblyQuantities, eventType, search]);
 
-  const currentQuantities = numericValues(quantities);
-  const currentAssemblyQuantities = numericValues(assemblyQuantities);
+  const currentQuantities = useMemo(() => numericValues(quantities), [quantities]);
+  const currentAssemblyQuantities = useMemo(() => numericValues(assemblyQuantities), [assemblyQuantities]);
+  const orderDemandByItem = useMemo(() => {
+    const demand = new Map<string, number>(Object.entries(currentQuantities));
+    for (const [assemblyId, assemblyCount] of Object.entries(currentAssemblyQuantities)) {
+      const assembly = assemblies.find((candidate) => candidate.id === assemblyId);
+      if (!assembly) continue;
+      for (const [itemId, componentQuantity] of Object.entries(assembly.itemQuantities ?? {})) {
+        demand.set(itemId, (demand.get(itemId) ?? 0) + componentQuantity * assemblyCount);
+      }
+    }
+    return demand;
+  }, [assemblies, currentAssemblyQuantities, currentQuantities]);
+  const projectedStockByItem = useMemo(() => new Map(items.map((item) => [
+    item.id,
+    (availableByItem.get(item.id) ?? 0) - (orderDemandByItem.get(item.id) ?? 0),
+  ])), [availableByItem, items, orderDemandByItem]);
+  const shortageCount = useMemo(() => [...projectedStockByItem.values()]
+    .reduce((total, projected) => total + Math.max(0, -projected), 0), [projectedStockByItem]);
   const changes = useMemo(() => {
     if (!comparison) return [];
     const comparisonItems = factionOrderItemBaseline(comparison);
@@ -475,11 +492,21 @@ export function FactionOrderForm({
 
         <Box>
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
+          {shortageCount > 0 && (
+            <Alert severity="warning" sx={{ my: 1 }}>
+              {t(
+                `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen“ angezeigt.`,
+                `This order exceeds available stock by ${shortageCount} units. Delivery is not guaranteed; the shortage will appear in Procurement as needing to be ordered.`,
+              )}
+            </Alert>
+          )}
           {viewMode === 'tiles' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
               {visibleItems.map((item) => {
                 const isSelected = Number(quantities[item.id]) > 0;
                 const image = itemImageUrl(item, undefined, '240x160');
+                const available = availableByItem.get(item.id) ?? 0;
+                const projected = projectedStockByItem.get(item.id) ?? available;
                 return (
                   <Paper
                     key={item.id}
@@ -488,7 +515,12 @@ export function FactionOrderForm({
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
-                    <Typography variant="caption" color={availableByItem.get(item.id) ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {availableByItem.get(item.id) ?? 0}</Typography>
+                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {available}</Typography>
+                    {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
+                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
+                        {t('Nach Bestellung', 'After order')}: {projected}
+                      </Typography>
+                    )}
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
                       <IconButton size="small" disabled={!isSelected} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>
                       <Typography sx={{ fontWeight: 800 }}>{quantities[item.id] ?? 0}</Typography>
@@ -503,6 +535,8 @@ export function FactionOrderForm({
               {visibleItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
+                const available = availableByItem.get(item.id) ?? 0;
+                const projected = projectedStockByItem.get(item.id) ?? available;
                 return (
                   <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -511,7 +545,12 @@ export function FactionOrderForm({
                         : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category} · {t('Verfügbar', 'Available')}: {availableByItem.get(item.id) ?? 0}</Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category} · {t('Verfügbar', 'Available')}: {available}</Typography>
+                        {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
+                          <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 700 }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
+                            {t('Nach Bestellung', 'After order')}: {projected}
+                          </Typography>
+                        )}
                       </Box>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>

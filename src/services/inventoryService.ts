@@ -36,6 +36,10 @@ export async function updateItem(id: string, data: Partial<ItemFormData>): Promi
   return apiRequest(`/api/items/${id}`, { method: 'PATCH', body: { ...payload(data), images } });
 }
 export async function deleteItem(id: string): Promise<boolean> { await apiRequest(`/api/items/${id}`, { method: 'DELETE' }); return true; }
+export async function deleteItems(ids: string[]): Promise<string[]> {
+  await Promise.all(ids.map((id) => deleteItem(id)));
+  return ids;
+}
 export function subscribeToItems(callback: (data: { action: string; record: Item }) => void) {
   return subscribeToApiChanges(() => callback({ action: 'refresh', record: {} as Item }));
 }

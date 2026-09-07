@@ -221,7 +221,12 @@ export function ItemDetail() {
                     ))}
                 </Box>
             )}
-            {item.hint && <Alert severity="info" sx={{ mb: 2 }}><Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>{item.hint}</Alert>}
+            {item.hint && (
+                <Alert severity="info" sx={{ mb: 2, alignItems: 'flex-start', '& .MuiAlert-icon': { pt: '2px' } }}>
+                    <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
+                    <Typography variant="body2">{item.hint}</Typography>
+                </Alert>
+            )}
 
             <Grid container spacing={2}>
                 {/* Info Cards */}

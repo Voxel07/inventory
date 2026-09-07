@@ -5,6 +5,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  deleteItems,
   subscribeToItems,
 } from '../services/inventoryService';
 import type { ItemFormData } from '../types';
@@ -61,6 +62,16 @@ export function useDeleteItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+  });
+}
+
+export function useDeleteItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => deleteItems(ids),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },

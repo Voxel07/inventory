@@ -5,16 +5,13 @@ import jakarta.inject.Inject;
 import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.orm.OrderOrm;
 import org.ash.inventory.model.Assembly;
-import org.ash.inventory.model.AssemblyItem;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderHistory;
-import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.GeneralOrder;
 import org.ash.inventory.model.Item;
-import org.ash.inventory.model.ItemImage;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StorageLocation;
@@ -28,9 +25,12 @@ import java.util.Map;
 
 @ApplicationScoped
 public class ApiMapper {
-    @Inject org.ash.inventory.helper.storage.MediaService media;
-    @Inject CatalogOrm catalogOrm;
-    @Inject OrderOrm orderOrm;
+    @Inject
+    org.ash.inventory.helper.storage.MediaService media;
+    @Inject
+    CatalogOrm catalogOrm;
+    @Inject
+    OrderOrm orderOrm;
 
     public Map<String, Object> user(UserAccount value) {
         var result = base(value.id, value.createdAt, value.updatedAt);
@@ -93,7 +93,8 @@ public class ApiMapper {
         put(result, "nextMaintenanceDue", value.nextMaintenanceDue);
         put(result, "currentOperatingHours", value.currentOperatingHours);
         put(result, "maintenanceStatus", value.maintenanceStatus == null ? null : value.maintenanceStatus.name());
-        if (value.storageLocation != null) result.put("expand", Map.of("storageLocation", location(value.storageLocation)));
+        if (value.storageLocation != null)
+            result.put("expand", Map.of("storageLocation", location(value.storageLocation)));
         return result;
     }
 
@@ -154,7 +155,8 @@ public class ApiMapper {
         result.put("timestamp", value.occurredAt);
         var expand = new LinkedHashMap<String, Object>();
         expand.put("userId", user(value.user));
-        if (value.factionOrder != null) expand.put("factionOrderId", orderSummary(value.factionOrder));
+        if (value.factionOrder != null)
+            expand.put("factionOrderId", orderSummary(value.factionOrder));
         result.put("expand", expand);
         return result;
     }
@@ -195,14 +197,18 @@ public class ApiMapper {
             returned.merge(id, line.returnedQuantity, Integer::sum);
             missing.merge(id, line.missingQuantity, Integer::sum);
             damaged.merge(id, line.damagedQuantity, Integer::sum);
-            if (itemViews.stream().noneMatch(existing -> id.equals(existing.get("id")))) itemViews.add(item(line.item));
-            if (line.sourceAssembly != null && assemblyViews.stream().noneMatch(existing -> line.sourceAssembly.id.toString().equals(existing.get("id")))) {
+            if (itemViews.stream().noneMatch(existing -> id.equals(existing.get("id"))))
+                itemViews.add(item(line.item));
+            if (line.sourceAssembly != null && assemblyViews.stream()
+                    .noneMatch(existing -> line.sourceAssembly.id.toString().equals(existing.get("id")))) {
                 assemblyViews.add(assembly(line.sourceAssembly));
             }
         }
         for (var assemblyView : assemblyViews) {
             String assemblyId = assemblyView.get("id").toString();
-            var assemblyLines = lines.stream().filter(line -> line.sourceAssembly != null && line.sourceAssembly.id.toString().equals(assemblyId)).toList();
+            var assemblyLines = lines.stream()
+                    .filter(line -> line.sourceAssembly != null && line.sourceAssembly.id.toString().equals(assemblyId))
+                    .toList();
             int requestedCount = Integer.MAX_VALUE;
             int preparedCount = Integer.MAX_VALUE;
             for (var line : assemblyLines) {
@@ -230,12 +236,18 @@ public class ApiMapper {
         var expand = new LinkedHashMap<String, Object>();
         expand.put("itemIds", itemViews);
         expand.put("assemblyIds", assemblyViews);
-        if (value.createdBy != null) expand.put("createdBy", user(value.createdBy));
-        if (value.preparedBy != null) expand.put("preparedBy", user(value.preparedBy));
-        if (value.readyBy != null) expand.put("readyBy", user(value.readyBy));
-        if (value.pickedUpBy != null) expand.put("pickedUpBy", user(value.pickedUpBy));
-        if (value.returnedBy != null) expand.put("returnedBy", user(value.returnedBy));
-        if (value.pickupLocation != null) expand.put("pickupLocation", location(value.pickupLocation));
+        if (value.createdBy != null)
+            expand.put("createdBy", user(value.createdBy));
+        if (value.preparedBy != null)
+            expand.put("preparedBy", user(value.preparedBy));
+        if (value.readyBy != null)
+            expand.put("readyBy", user(value.readyBy));
+        if (value.pickedUpBy != null)
+            expand.put("pickedUpBy", user(value.pickedUpBy));
+        if (value.returnedBy != null)
+            expand.put("returnedBy", user(value.returnedBy));
+        if (value.pickupLocation != null)
+            expand.put("pickupLocation", location(value.pickupLocation));
         result.put("expand", expand);
         return result;
     }
@@ -255,7 +267,8 @@ public class ApiMapper {
         result.put("timestamp", value.createdAt);
         var expand = new LinkedHashMap<String, Object>();
         expand.put("reportedBy", user(value.reporter));
-        if (value.handler != null) expand.put("handledBy", user(value.handler));
+        if (value.handler != null)
+            expand.put("handledBy", user(value.handler));
         result.put("expand", expand);
         return result;
     }
@@ -311,6 +324,7 @@ public class ApiMapper {
     }
 
     private void put(Map<String, Object> target, String key, Object value) {
-        if (value != null) target.put(key, value);
+        if (value != null)
+            target.put(key, value);
     }
 }

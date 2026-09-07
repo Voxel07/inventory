@@ -11,6 +11,7 @@ export type ProcurementDeficit = {
   physicalStock: number;
   availableStock: number;
   reservedStock: number;
+  projectedStock: number;
   netDeficit: number;
   recommendedAction: 'purchase' | 'rent_or_purchase';
 };

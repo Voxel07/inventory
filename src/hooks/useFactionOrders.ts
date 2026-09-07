@@ -23,6 +23,7 @@ function useFactionOrderRealtime() {
   useEffect(() => subscribeToFactionOrders(() => {
     queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['procurement-deficits'] });
   }), [queryClient]);
 }
 
@@ -51,6 +52,7 @@ function useOrderMutation<TVariables, TResult>(mutationFn: (variables: TVariable
       queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-deficits'] });
     },
   });
 }

@@ -22,8 +22,8 @@ export function Procurement() {
   }, [deficits]);
 
   function exportCsv() {
-    const header = ['supplier', 'sku', 'name', 'classification', 'demand', 'available', 'deficit', 'action'];
-    const rows = deficits.map((row) => [row.supplier, row.sku, row.name, row.classification, row.demand, row.availableStock, row.netDeficit, row.recommendedAction]);
+    const header = ['supplier', 'sku', 'name', 'classification', 'demand', 'available', 'projected', 'deficit', 'action'];
+    const rows = deficits.map((row) => [row.supplier, row.sku, row.name, row.classification, row.demand, row.availableStock, row.projectedStock, row.netDeficit, row.recommendedAction]);
     const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
@@ -60,8 +60,8 @@ export function Procurement() {
             </Stack>
             <TableContainer>
               <Table size="small">
-                <TableHead><TableRow><TableCell>SKU</TableCell><TableCell>{t('Artikel', 'Item')}</TableCell><TableCell>{t('Typ', 'Type')}</TableCell><TableCell align="right">{t('Bedarf', 'Demand')}</TableCell><TableCell align="right">{t('Verfügbar', 'Available')}</TableCell><TableCell align="right">{t('Fehlmenge', 'Deficit')}</TableCell><TableCell>{t('Aktion', 'Action')}</TableCell></TableRow></TableHead>
-                <TableBody>{rows.map((row) => <TableRow key={row.itemId}><TableCell sx={{ fontFamily: 'monospace' }}>{row.sku}</TableCell><TableCell>{row.name}</TableCell><TableCell><Chip size="small" color={row.classification === 'consumable' ? 'warning' : 'info'} label={row.classification === 'consumable' ? t('Verbrauch', 'Consumable') : t('Asset', 'Asset')} /></TableCell><TableCell align="right">{row.demand}</TableCell><TableCell align="right">{row.availableStock}</TableCell><TableCell align="right" sx={{ fontWeight: 900, color: 'error.main' }}>{row.netDeficit}</TableCell><TableCell>{row.recommendedAction === 'purchase' ? t('Kaufen', 'Purchase') : t('Mieten / kaufen', 'Rent / purchase')}</TableCell></TableRow>)}</TableBody>
+                <TableHead><TableRow><TableCell>SKU</TableCell><TableCell>{t('Artikel', 'Item')}</TableCell><TableCell>{t('Typ', 'Type')}</TableCell><TableCell align="right">{t('Bedarf', 'Demand')}</TableCell><TableCell align="right">{t('Verfügbar', 'Available')}</TableCell><TableCell align="right">{t('Nach Bedarf', 'After demand')}</TableCell><TableCell align="right">{t('Zu bestellen', 'To order')}</TableCell><TableCell>{t('Aktion', 'Action')}</TableCell></TableRow></TableHead>
+                <TableBody>{rows.map((row) => <TableRow key={row.itemId}><TableCell sx={{ fontFamily: 'monospace' }}>{row.sku}</TableCell><TableCell>{row.name}</TableCell><TableCell><Chip size="small" color={row.classification === 'consumable' ? 'warning' : 'info'} label={row.classification === 'consumable' ? t('Verbrauch', 'Consumable') : t('Asset', 'Asset')} /></TableCell><TableCell align="right">{row.demand}</TableCell><TableCell align="right">{row.availableStock}</TableCell><TableCell align="right" sx={{ fontWeight: 800, color: 'error.main' }}>{row.projectedStock}</TableCell><TableCell align="right" sx={{ fontWeight: 900, color: 'error.main' }}>{row.netDeficit}</TableCell><TableCell>{row.recommendedAction === 'purchase' ? t('Kaufen', 'Purchase') : t('Mieten / kaufen', 'Rent / purchase')}</TableCell></TableRow>)}</TableBody>
               </Table>
             </TableContainer>
           </Paper>
