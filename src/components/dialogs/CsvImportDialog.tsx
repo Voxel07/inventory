@@ -112,10 +112,34 @@ export function CsvImportDialog({
     return parseItemsFromCsv(rows, storageLocations, items);
   }, [rows, tabType, storageLocations, items]);
 
+  const effectiveItemsForAssemblies = useMemo(() => {
+    if (tabType !== 'combined') return items;
+    const map = new Map<string, Item>();
+    for (const it of items) {
+      map.set(it.name.toLowerCase().trim(), it);
+    }
+    for (const p of parsedItems) {
+      if (p.data.name && !map.has(p.data.name.toLowerCase().trim())) {
+        map.set(p.data.name.toLowerCase().trim(), {
+          id: `csv-new-${p.index}`,
+          name: p.data.name,
+          category: p.data.category,
+          amount: p.data.amount ?? 0,
+          minStock: p.data.minStock,
+          value: p.data.value,
+          storageLocation: p.storageLocationId || '',
+          created: '',
+          updated: '',
+        } as Item);
+      }
+    }
+    return Array.from(map.values());
+  }, [items, parsedItems, tabType]);
+
   const parsedAssemblies: ParsedAssemblyRow[] = useMemo(() => {
     if (tabType === 'items' || rows.length === 0) return [];
-    return parseAssembliesFromCsv(rows, items, assemblies);
-  }, [rows, tabType, items, assemblies]);
+    return parseAssembliesFromCsv(rows, effectiveItemsForAssemblies, assemblies);
+  }, [rows, tabType, effectiveItemsForAssemblies, assemblies]);
 
   // Statistics
   const validItemsCount = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems)).length;
@@ -271,7 +295,8 @@ export function CsvImportDialog({
         let allMatched = true;
 
         for (const comp of row.components) {
-          const item = comp.itemId ? items.find((i) => i.id === comp.itemId) : createdItemsMap.get(comp.itemName.toLowerCase().trim());
+          const isTempId = comp.itemId?.startsWith('csv-new-');
+          const item = (!isTempId && comp.itemId) ? items.find((i) => i.id === comp.itemId) : createdItemsMap.get(comp.itemName.toLowerCase().trim());
           if (item) {
             finalItemIds.push(item.id);
             finalQuantities[item.id] = (finalQuantities[item.id] ?? 0) + comp.quantity;

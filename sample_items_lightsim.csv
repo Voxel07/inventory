@@ -1,0 +1,22 @@
+Artikel;Kategorie;Bestand;Mindestbestand;Einzelwert;Lagerort;Unterkategorie;Lieferant;Verbrauchsmaterial;Events;Hinweis
+Hesco Barrier klein (1x1m);Infrastruktur;40;10;45,00;Palettenlager;Barrikaden & Deckung;Hesco Bastion;Nein;LS,DE,TNO;Militärische Schutzkörbe zur Feldbefestigung. Vor Ort mit Sand oder Erde befüllen.
+Hesco Barrier groß (1.5x1.5m);Infrastruktur;25;6;85,00;Palettenlager;Barrikaden & Deckung;Hesco Bastion;Nein;LS,DE,TNO;Große Schutzwall-Elemente für HQ-Sicherung und Fahrzeugsperren.
+20-Personen Aufenthaltszelt (6x4m);Infrastruktur;3;1;1450,00;Zeltlager;Zelte & Unterstand;Mil-Tec;Nein;LS,DE,TNO;Großraumzelt inkl. Gestänge, Zelthaut, Heringen und Spannleinen. Nur trocken einlagern!
+GPS Field Tracker (Mobilgerät);IT & Elektronik;25;20;120,00;Technik-Lager 1;Tracking-System;AirsoftTech;Nein;LS,DE,TNO;LoRa/GPS-Spieler-Tracker mit Li-Po Akku. Vor Ausgabe per USB-C voll laden.
+Tracker Basisstation (LoRa/Gateway);IT & Elektronik;3;1;450,00;Technik-Lager 1;Tracking-System;AirsoftTech;Nein;LS,DE,TNO;Zentrale Empfangsstation für Felddaten. Antenne an erhöhtem Standort montieren.
+Feld-PC Intel i5 Industriegehäuse;IT & Elektronik;4;2;650,00;Technik-Lager 1;Computer;Dell;Nein;LS,DE,TNO;Robuster Steuerungsrechner für Spielfeld-Auswertung und Live-Map.
+Feld-Monitor 24 Zoll FullHD;IT & Elektronik;5;2;140,00;Technik-Lager 1;Peripherie;Iiyama;Nein;LS,DE,TNO;Inkl. HDMI- und Netzkabel im gepolsterten Flightcase transportieren.
+Tastatur & Maus Set USB robust;IT & Elektronik;6;2;35,00;Technik-Lager 1;Peripherie;Logitech;Nein;LS,DE,TNO;Kabelgebundenes spritzwassergeschütztes Set für Leitstand.
+Satelliten/Mesh Uplink Station;IT & Elektronik;3;1;580,00;Technik-Lager 1;Netzwerk;AirsoftTech;Nein;LS,DE,TNO;Datenübertragung zwischen Außenposten und Leitstelle.
+HQ Capture Point Station (Elektronisch);IT & Elektronik;4;1;380,00;Technik-Lager 1;Spielmechanik;AirsoftTech;Nein;LS,DE,TNO;Elektronischer Flaggenpunkt mit RFID-Leser, Display und RGB-Statuslichtern.
+Starlink Standard Kit (Schüssel & Router);IT & Elektronik;2;1;450,00;Technik-Lager 1;Satellit;SpaceX / Starlink;Nein;LS,DE,TNO;Satelliten-Terminal für Internetanbindung. Mast oder Stativhalterung nutzen.
+Ubiquiti UniFi Access Point Outdoor (U6 Mesh);IT & Elektronik;4;2;179,00;Technik-Lager 1;WLAN;Ubiquiti;Nein;LS,DE,TNO;Wetterfester Mesh-Access-Point für Geländewlan. Inkl. PoE-Adapter.
+Ubiquiti UniFi Router / Gateway (Cloud Gateway);IT & Elektronik;3;1;210,00;Technik-Lager 1;Router;Ubiquiti;Nein;LS,DE,TNO;Zentrales Sicherheitsgateway mit vorkonfigurierten Orga/Gäste-VLANs.
+Patchkabel Cat.6 RJ45 20m Outdoor;IT & Elektronik;12;4;24,90;Kabelkiste Strom;Kabel;Kopp;Nein;LS,DE,TNO;UV-beständiges und trittfestes Gigabit-Netzwerkkabel für Außenbereich.
+HQ Funkgerät Basisstation (VHF/UHF 25W);Funktechnik;3;1;295,00;Funkraum;Stationärfunk;Midland;Nein;LS,DE,TNO;Feste Funkstation für Spielleiter/HQ mit Netzteil und Handmikrofon.
+Hochleistungs-Funkantenne VHF/UHF mit Mastfuß;Funktechnik;4;1;119,00;Funkraum;Antennen;Diamond;Nein;LS,DE,TNO;Rundstrahlantenne inkl. 15m verlustarmem Koaxialkabel RG-213.
+Handfunkgerät 5W VHF/UHF IP67;Funktechnik;24;8;65,00;Funkraum;Handfunk;Retevis;Nein;LS,DE,TNO;Wasserdichtes Handfunkgerät mit Akku, Antenne, Gürtelclip und Ladeschale.
+Mobilbauzaun 3.5m x 2.0m Stahl;Infrastruktur;40;10;42,00;Palettenlager;Absperrung;Schake;Nein;LS,DE,TNO;Verzinkter Bauzaun für Absperrungen, Safezone und Eingangsbereich.
+Bauzaunbanner / Sichtschutz 3.5m x 2.0m blickdicht;Infrastruktur;40;10;18,50;Palettenlager;Absperrung;Schake;Nein;LS,DE,TNO;Reißfeste Sichtschutzblende mit Randverstärkung und Metallösen.
+Bauzaunfuß Beton / Recycling 26kg;Infrastruktur;45;10;12,50;Palettenlager;Absperrung;Schake;Nein;LS,DE,TNO;Schwerer Standfuß mit 6 Einstecklöchern für standsicheren Aufbau.
+Bauzaunschelle Verbindungsklammer Stahl;Infrastruktur;80;20;2,50;Palettenlager;Verbindungsmaterial;Schake;Nein;LS,DE,TNO;Verbindungsschellen zur festen Verschraubung zweier Zaunelemente.
