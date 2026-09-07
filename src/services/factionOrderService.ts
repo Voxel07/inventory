@@ -8,12 +8,12 @@ export function getFactionOrder(id: string): Promise<FactionOrder> { return apiR
 export function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> { return apiRequest('/api/orders', { method: 'POST', body: data }); }
 export function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> { return apiRequest(`/api/orders/${id}`, { method: 'PATCH', body: data }); }
 
-function transition(id: string, status: string, notes?: string): Promise<FactionOrder> {
+function transition(id: string, status: string, notes?: string, extra?: Record<string, unknown>): Promise<FactionOrder> {
   const idempotencyKey = crypto.randomUUID();
-  const body = { idempotencyKey, notes };
+  const body = { idempotencyKey, notes, ...extra };
   return apiRequest(`/api/orders/${id}/transitions/${status}`, {
     method: 'POST', body,
-    offline: { type: 'order.transition', payload: { orderId: id, status, notes } },
+    offline: { type: 'order.transition', payload: { orderId: id, status, notes, ...extra } },
   });
 }
 
@@ -40,7 +40,19 @@ export async function saveFactionOrderPreparation(
   });
 }
 
-export function markFactionOrderReady(id: string, note?: string) { return transition(id, 'ready', note); }
+export function markFactionOrderReady(
+  id: string,
+  note?: string,
+  pickupLocation?: string,
+  pickupLatitude?: number,
+  pickupLongitude?: number,
+) {
+  const extra: Record<string, unknown> = {};
+  if (pickupLocation !== undefined) extra.pickupLocation = pickupLocation || null;
+  if (pickupLatitude !== undefined) extra.pickupLatitude = pickupLatitude;
+  if (pickupLongitude !== undefined) extra.pickupLongitude = pickupLongitude;
+  return transition(id, 'ready', note, Object.keys(extra).length ? extra : undefined);
+}
 export function reopenFactionOrderPreparation(id: string, note?: string) { return transition(id, 'preparing', note); }
 export function pickUpFactionOrder(id: string) { return transition(id, 'picked_up'); }
 export function returnFactionOrder(id: string): Promise<FactionOrder> {

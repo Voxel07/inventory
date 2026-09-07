@@ -86,7 +86,19 @@ export function useSaveFactionOrderPreparation() {
 }
 
 export function useMarkFactionOrderReady() {
-  return useOrderMutation(({ id, note }: { id: string; note?: string }) => markFactionOrderReady(id, note));
+  return useOrderMutation(({
+    id,
+    note,
+    pickupLocation,
+    pickupLatitude,
+    pickupLongitude,
+  }: {
+    id: string;
+    note?: string;
+    pickupLocation?: string;
+    pickupLatitude?: number;
+    pickupLongitude?: number;
+  }) => markFactionOrderReady(id, note, pickupLocation, pickupLatitude, pickupLongitude));
 }
 
 export function useReopenFactionOrderPreparation() {

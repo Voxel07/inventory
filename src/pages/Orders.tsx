@@ -9,7 +9,7 @@ type OrderTab = 'general' | 'faction';
 export function Orders() {
   const t = useTranslate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab: OrderTab = searchParams.get('tab') === 'faction' ? 'faction' : 'general';
+  const tab: OrderTab = searchParams.get('tab') === 'general' ? 'general' : 'faction';
 
   return (
     <Box>

@@ -16,6 +16,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -25,6 +26,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import SaveIcon from '@mui/icons-material/Save';
 import GridViewIcon from '@mui/icons-material/GridView';
 import ViewListIcon from '@mui/icons-material/ViewList';
+import DeleteIcon from '@mui/icons-material/Delete';
 import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item, StorageLocation } from '../../types';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import { useTranslate } from '../../utils/naming';
@@ -39,7 +41,6 @@ import { useDamageReports } from '../../hooks/useDamageReports';
 import { calculateItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
-import { StorageLocationMap } from '../maps/StorageLocationMap';
 import { apiFileUrl } from '../../services/apiClient';
 
 type ResourceViewMode = 'list' | 'tiles';
@@ -69,7 +70,6 @@ function numericValues(values: Record<string, string>): Record<string, number> {
 export function FactionOrderForm({
   items,
   assemblies,
-  storageLocations,
   orders,
   initialData,
   defaultEventType = 'DE',
@@ -91,11 +91,6 @@ export function FactionOrderForm({
   const [eventDate, setEventDate] = useState(
     initialData?.eventDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
   );
-  const initialPickupLocation = initialData?.pickupLocation ?? storageLocations[0]?.id ?? '';
-  const initialPickupWaypoint = storageLocations.find((location) => location.id === initialPickupLocation);
-  const [pickupLocation, setPickupLocation] = useState(initialPickupLocation);
-  const [pickupLatitude, setPickupLatitude] = useState<number | undefined>(initialData?.pickupLatitude ?? initialPickupWaypoint?.latitude);
-  const [pickupLongitude, setPickupLongitude] = useState<number | undefined>(initialData?.pickupLongitude ?? initialPickupWaypoint?.longitude);
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(initialData ? factionOrderItemBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
@@ -113,10 +108,6 @@ export function FactionOrderForm({
   const { data: transactions } = useTransactions();
   const { data: damageReports } = useDamageReports();
   const categories = useMemo(() => [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
-  const selectedPickupWaypoint = useMemo(
-    () => storageLocations.find((location) => location.id === pickupLocation),
-    [pickupLocation, storageLocations],
-  );
 
   const availableByItem = useMemo(() => new Map(items.map((item) => [
     item.id,
@@ -132,22 +123,6 @@ export function FactionOrderForm({
         : allowedFactions(defaultEventType)[0] ?? '',
     );
   }, [defaultEventType, defaultFaction, initialData]);
-
-  useEffect(() => {
-    if (!pickupLocation && storageLocations[0]) {
-      setPickupLocation(storageLocations[0].id);
-      setPickupLatitude(storageLocations[0].latitude);
-      setPickupLongitude(storageLocations[0].longitude);
-      return;
-    }
-    if (pickupLocation && (pickupLatitude == null || pickupLongitude == null)) {
-      const location = storageLocations.find((candidate) => candidate.id === pickupLocation);
-      if (location) {
-        setPickupLatitude(location.latitude);
-        setPickupLongitude(location.longitude);
-      }
-    }
-  }, [pickupLatitude, pickupLocation, pickupLongitude, storageLocations]);
 
   useEffect(() => {
     const options = allowedFactions(eventType);
@@ -242,9 +217,6 @@ export function FactionOrderForm({
     setAssemblyQuantities(Object.fromEntries(
       Object.entries(previousAssemblies).map(([id, value]) => [id, String(value)]),
     ));
-    if (previousOrder.pickupLocation) setPickupLocation(previousOrder.pickupLocation);
-    setPickupLatitude(previousOrder.pickupLatitude);
-    setPickupLongitude(previousOrder.pickupLongitude);
     setComparison(previousOrder);
   }
 
@@ -259,6 +231,15 @@ export function FactionOrderForm({
     });
   }
 
+  function removeItem(id: string, assembly = false) {
+    const setter = assembly ? setAssemblyQuantities : setQuantities;
+    setter((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
+
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const requestedQuantities = numericValues(quantities);
@@ -267,9 +248,6 @@ export function FactionOrderForm({
       eventType,
       faction,
       eventDate,
-      pickupLocation: pickupLocation || undefined,
-      pickupLatitude,
-      pickupLongitude,
       itemIds: Object.keys(requestedQuantities),
       requestedQuantities,
       assemblyIds: Object.keys(requestedAssemblyQuantities),
@@ -311,43 +289,7 @@ export function FactionOrderForm({
             slotProps={{ inputLabel: { shrink: true } }}
             required
           />
-          <FormControl fullWidth>
-            <InputLabel>{t('Nahegelegener Lagerort (optional)', 'Nearby storage location (optional)')}</InputLabel>
-            <Select
-              label={t('Nahegelegener Lagerort (optional)', 'Nearby storage location (optional)')}
-              value={pickupLocation}
-              onChange={(event) => {
-                const id = event.target.value;
-                const location = storageLocations.find((candidate) => candidate.id === id);
-                setPickupLocation(id);
-                setPickupLatitude(location?.latitude);
-                setPickupLongitude(location?.longitude);
-              }}
-            >
-              <MenuItem value="">{t('Kein Lagerort', 'No storage location')}</MenuItem>
-              {storageLocations.map((location) => (
-                <MenuItem key={location.id} value={location.id}>
-                  {[location.name, location.area, location.position].filter(Boolean).join(' · ')}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
         </Stack>
-
-        <StorageLocationMap
-          editable
-          compact
-          kind="pickup"
-          latitude={pickupLatitude}
-          longitude={pickupLongitude}
-          zoom={selectedPickupWaypoint?.mapZoom}
-          overlayBounds={selectedPickupWaypoint?.overlayBounds}
-          overlayUrl={apiFileUrl(selectedPickupWaypoint?.mapOverlay)}
-          onCenterChange={(latitude, longitude) => {
-            setPickupLatitude(latitude);
-            setPickupLongitude(longitude);
-          }}
-        />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
           <Button
@@ -448,7 +390,7 @@ export function FactionOrderForm({
                   <Paper
                     key={assembly.id}
                     variant="outlined"
-                    sx={{ p: 1, borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
                   >
                     {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: '100%', height: 64, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 64, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><CategoryIcon color="primary" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{assembly.name}</Typography>
@@ -459,6 +401,11 @@ export function FactionOrderForm({
                       <Typography sx={{ fontWeight: 800 }}>{assemblyQuantities[assembly.id] ?? 0}</Typography>
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
+                    {isSelected && (
+                      <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                        <IconButton size="small" color="error" onClick={() => removeItem(assembly.id, true)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
                   </Paper>
                 );
               })}
@@ -480,6 +427,11 @@ export function FactionOrderForm({
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(assembly.id, -1, true)}><RemoveIcon fontSize="small" /></IconButton>
                         <Typography sx={{ width: 28, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
+                        {quantity > 0 && (
+                          <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                            <IconButton size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
+                          </Tooltip>
+                        )}
                       </Stack>
                     </Stack>
                   </Paper>
@@ -495,7 +447,7 @@ export function FactionOrderForm({
           {shortageCount > 0 && (
             <Alert severity="warning" sx={{ my: 1 }}>
               {t(
-                `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen“ angezeigt.`,
+                `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen" angezeigt.`,
                 `This order exceeds available stock by ${shortageCount} units. Delivery is not guaranteed; the shortage will appear in Procurement as needing to be ordered.`,
               )}
             </Alert>
@@ -511,7 +463,7 @@ export function FactionOrderForm({
                   <Paper
                     key={item.id}
                     variant="outlined"
-                    sx={{ p: 1, borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
@@ -526,6 +478,11 @@ export function FactionOrderForm({
                       <Typography sx={{ fontWeight: 800 }}>{quantities[item.id] ?? 0}</Typography>
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
+                    {isSelected && (
+                      <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                        <IconButton size="small" color="error" onClick={() => removeItem(item.id)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
                   </Paper>
                 );
               })}
@@ -556,6 +513,11 @@ export function FactionOrderForm({
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>
                         <Typography sx={{ width: 28, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
+                        {quantity > 0 && (
+                          <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                            <IconButton size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
+                          </Tooltip>
+                        )}
                       </Stack>
                     </Stack>
                   </Paper>
@@ -578,7 +540,7 @@ export function FactionOrderForm({
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
-          disabled={isLoading || pickupLatitude == null || pickupLongitude == null || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
+          disabled={isLoading || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
         >
           {submitLabel ?? t('Bestellliste erstellen', 'Create order list')}
         </Button>

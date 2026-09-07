@@ -1,50 +1,26 @@
 import { useMemo, useState } from 'react';
 import {
     Box,
-    Typography,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Button,
-    Skeleton,
-    Tooltip,
-    Stack,
-    useMediaQuery,
-    useTheme,
-    TextField,
     MenuItem,
+    Paper,
+    Skeleton,
+    Stack,
+    TextField,
+    Typography,
 } from '@mui/material';
-import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
 import { useNames, useTranslate } from '../utils/naming';
-
-interface CheckedOutRow {
-    key: string;
-    itemId: string;
-    name: string;
-    category: string;
-    storageLocation: string;
-    checkedOut: number;
-    personId: string;
-    person: string;
-    eventKey: string;
-    event: string;
-    factionOrderId?: string;
-}
+import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 
 export function CheckedOutItemsPage() {
     const names = useNames();
     const t = useTranslate();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
+    const { data: assemblies } = useAssemblies();
     const createTransaction = useCreateTransaction();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [search, setSearch] = useState('');
@@ -141,83 +117,14 @@ export function CheckedOutItemsPage() {
                 </Stack>
             </Paper>
 
-            {visibleRows.length === 0 ? (
-                <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">{t('Derzeit sind keine Artikel ausgeliehen.', 'No items are currently checked out.')}</Typography>
-                </Paper>
-            ) : (
-                isMobile ? (
-                    <Stack spacing={1.5}>
-                        {visibleRows.map((row) => (
-                            <Paper key={row.key} sx={{ p: 2 }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                                    <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{row.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">{row.category || '—'} · {row.storageLocation}</Typography>
-                                        <Typography variant="body2">{row.person}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{row.event}</Typography>
-                                    </Box>
-                                    <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
-                                        <Typography variant="h5" color="warning.main">{row.checkedOut}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
-                                    </Box>
-                                </Box>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    color="success"
-                                    startIcon={<AssignmentReturnIcon />}
-                                    onClick={() => handleQuickReturn(row)}
-                                    disabled={createTransaction.isPending}
-                                    sx={{ mt: 2, minHeight: 48 }}
-                                >
-                                    {t('1 Einheit zurückgeben', 'Return 1 unit')}
-                                </Button>
-                            </Paper>
-                        ))}
-                    </Stack>
-                ) : <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>{t('Name', 'Name')}</TableCell>
-                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-                                <TableCell>{t('Person', 'Person')}</TableCell>
-                                <TableCell>{t('Event', 'Event')}</TableCell>
-                                <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
-                                <TableCell align="right">{t('Aktion', 'Action')}</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {visibleRows.map((row) => (
-                                <TableRow key={row.key} hover>
-                                    <TableCell>{row.name}</TableCell>
-                                    <TableCell>{row.category}</TableCell>
-                                    <TableCell>{row.storageLocation}</TableCell>
-                                    <TableCell>{row.person}</TableCell>
-                                    <TableCell>{row.event}</TableCell>
-                                    <TableCell align="right">{row.checkedOut}</TableCell>
-                                    <TableCell align="right">
-                                        <Tooltip title={`${names.action.checkin}: 1 ${t('Einheit', 'unit')}`} arrow>
-                                            <span>
-                                                <Button
-                                                    size="small"
-                                                    variant="contained"
-                                                    onClick={() => handleQuickReturn(row)}
-                                                    disabled={createTransaction.isPending}
-                                                >
-                                                    {t('Schnellrückgabe', 'Quick return')}
-                                                </Button>
-                                            </span>
-                                        </Tooltip>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            )}
+            <CheckedOutList
+                rows={visibleRows}
+                assemblies={assemblies}
+                showPerson
+                linkToItem
+                onQuickReturn={handleQuickReturn}
+                returnPending={createTransaction.isPending}
+            />
         </Box>
     );
 }

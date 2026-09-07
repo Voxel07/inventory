@@ -6,7 +6,9 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -30,6 +32,8 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import CategoryIcon from '@mui/icons-material/Category';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -118,8 +122,15 @@ export function FactionOrderDetail() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [stateTransition, setStateTransition] = useState<StateTransition>(null);
   const [transitionNote, setTransitionNote] = useState('');
+  const [transitionPickupLocation, setTransitionPickupLocation] = useState('');
+  const [transitionPickupLatitude, setTransitionPickupLatitude] = useState<number | undefined>();
+  const [transitionPickupLongitude, setTransitionPickupLongitude] = useState<number | undefined>();
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState('');
+  // expandable assemblies in checklist view
+  const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
+  // per-assembly per-item checkbox state
+  const [assemblyChecked, setAssemblyChecked] = useState<Record<string, Record<string, boolean>>>({});
 
   useEffect(() => {
     setPrepared(Object.fromEntries(
@@ -129,6 +140,15 @@ export function FactionOrderDetail() {
       Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
     ));
   }, [order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
+
+  // Initialise transition pickup location from existing order value when dialog opens
+  useEffect(() => {
+    if (stateTransition === 'ready' && order) {
+      setTransitionPickupLocation(order.pickupLocation ?? '');
+      setTransitionPickupLatitude(order.pickupLatitude);
+      setTransitionPickupLongitude(order.pickupLongitude);
+    }
+  }, [stateTransition, order]);
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const assemblyMap = useMemo(() => new Map(assemblies.map((assembly) => [assembly.id, assembly])), [assemblies]);
@@ -149,6 +169,12 @@ export function FactionOrderDetail() {
       return !term || `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`.toLocaleLowerCase().includes(term);
     });
   }, [itemCategory, itemSearch, orderItems]);
+  const visibleOrderAssemblies = useMemo(() => {
+    const term = itemSearch.trim().toLocaleLowerCase();
+    return orderAssemblies.filter((assembly) =>
+      !term || `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term),
+    );
+  }, [itemSearch, orderAssemblies]);
 
   const reservedByOthers = useMemo(() => {
     const result: Record<string, number> = {};
@@ -225,6 +251,9 @@ export function FactionOrderDetail() {
   const preparationComplete = requestedTotal > 0 && requestedTotal === preparedTotal;
   const progress = requestedTotal ? Math.round((preparedTotal / requestedTotal) * 100) : 0;
 
+  // Transition pickup location derived state
+  const transitionPickupWaypoint = storageLocations.find((loc) => loc.id === transitionPickupLocation);
+
   async function printOrder() {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const qr = await generateQRCodeDataURL(currentOrder.id, 'faction-order', currentOrder.orderCode);
@@ -266,7 +295,8 @@ export function FactionOrderDetail() {
       }),
     ].sort((a, b) => a.locationKey.localeCompare(b.locationKey));
 
-    const x = [14, 26, 44, 66, 138, 196];
+    // Column x positions: Done | Qty | Prepared | Item/Assembly | Location/Details
+    const x = [14, 26, 44, 66, 140, 197];
     let y: number;
 
     function drawHeader(firstPage: boolean) {
@@ -289,7 +319,7 @@ export function FactionOrderDetail() {
       doc.setFillColor(235, 235, 235);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      const headers = [t('Erledigt', 'Done'), t('Bedarf', 'Qty'), t('Vorbereitet', 'Prepared'), t('Artikel / Baugruppe', 'Item / assembly'), t('Lagerort / Komponenten', 'Location / components')];
+      const headers = [t('Erl.', 'Done'), t('Bed.', 'Qty'), t('Vorb.', 'Prep.'), t('Artikel / Baugruppe', 'Item / Assembly'), t('Lagerort / Komponenten', 'Location / Components')];
       for (let index = 0; index < headers.length; index += 1) {
         doc.rect(x[index], tableY, x[index + 1] - x[index], 8, 'FD');
         doc.text(headers[index], x[index] + 1.5, tableY + 5.2, { maxWidth: x[index + 1] - x[index] - 3 });
@@ -300,21 +330,30 @@ export function FactionOrderDetail() {
 
     y = drawHeader(true);
     for (const row of rows) {
-      const nameLines = doc.splitTextToSize(row.name, x[4] - x[3] - 3).slice(0, 2);
-      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 3).slice(0, 3);
-      const rowHeight = Math.max(10, Math.max(nameLines.length, detailLines.length) * 4.2 + 3);
+      // Item col width = x[4]-x[3]-4 = 70mm; Details col = x[5]-x[4]-4 = 53mm
+      const nameLines = doc.splitTextToSize(row.name, x[4] - x[3] - 4).slice(0, 3);
+      doc.setFontSize(7.5);
+      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 4).slice(0, 3);
+      doc.setFontSize(9);
+      const rowHeight = Math.max(12, Math.max(nameLines.length, detailLines.length) * 4.5 + 4);
       if (y + rowHeight > 270) {
         doc.addPage();
         y = drawHeader(false);
       }
       for (let index = 0; index < x.length - 1; index += 1) doc.rect(x[index], y, x[index + 1] - x[index], rowHeight);
-      doc.rect(x[0] + 4, y + (rowHeight - 4) / 2, 4, 4);
+      // Done checkbox
+      doc.rect(x[0] + 3, y + (rowHeight - 4) / 2, 4, 4);
+      // Qty
       doc.setFontSize(9);
-      doc.text(String(row.requested), x[1] + 7, y + rowHeight / 2 + 1, { align: 'center' });
+      doc.text(String(row.requested), x[1] + (x[2] - x[1]) / 2, y + rowHeight / 2 + 1.5, { align: 'center' });
+      // Prepared line
       doc.line(x[2] + 3, y + rowHeight / 2 + 2, x[3] - 3, y + rowHeight / 2 + 2);
-      doc.text(nameLines, x[3] + 1.5, y + 4.5);
+      // Item name
+      doc.setFontSize(9);
+      doc.text(nameLines, x[3] + 1.5, y + 5);
+      // Details
       doc.setFontSize(7.5);
-      doc.text(detailLines, x[4] + 1.5, y + 4.2);
+      doc.text(detailLines, x[4] + 1.5, y + 4.5);
       y += rowHeight;
     }
 
@@ -485,12 +524,21 @@ export function FactionOrderDetail() {
   function closeStateTransition() {
     setStateTransition(null);
     setTransitionNote('');
+    setTransitionPickupLocation('');
+    setTransitionPickupLatitude(undefined);
+    setTransitionPickupLongitude(undefined);
   }
 
   function runStateTransition() {
     const note = transitionNote.trim() || undefined;
     if (stateTransition === 'ready') {
-      markReady.mutate({ id: currentOrder.id, note }, {
+      markReady.mutate({
+        id: currentOrder.id,
+        note,
+        pickupLocation: transitionPickupLocation || undefined,
+        pickupLatitude: transitionPickupLatitude,
+        pickupLongitude: transitionPickupLongitude,
+      }, {
         onSuccess: () => {
           closeStateTransition();
           showSnackbar(t('Liste ist abholbereit', 'List is ready for pickup'), 'success');
@@ -506,6 +554,22 @@ export function FactionOrderDetail() {
         onError: handleError,
       });
     }
+  }
+
+  function toggleAssemblyExpand(assemblyId: string) {
+    setExpandedAssemblies((prev) => ({ ...prev, [assemblyId]: !prev[assemblyId] }));
+  }
+
+  function toggleItemCheck(assemblyId: string, itemId: string) {
+    setAssemblyChecked((prev) => {
+      const current = prev[assemblyId] ?? {};
+      return { ...prev, [assemblyId]: { ...current, [itemId]: !current[itemId] } };
+    });
+  }
+
+  function assemblyAllChecked(assembly: Assembly): boolean {
+    const checked = assemblyChecked[assembly.id] ?? {};
+    return Object.keys(assembly.itemQuantities ?? {}).every((itemId) => checked[itemId]);
   }
 
   function itemRow(item: Item) {
@@ -549,21 +613,34 @@ export function FactionOrderDetail() {
     const requested = currentOrder.requestedAssemblyQuantities?.[assembly.id] ?? 0;
     const storedPrepared = currentOrder.preparedAssemblyQuantities?.[assembly.id] ?? 0;
     const available = availableAssemblies(assembly);
-    const components = Object.entries(assembly.itemQuantities ?? {})
-      .map(([itemId, quantity]) => `${quantity}× ${itemMap.get(itemId)?.name ?? itemId}`)
-      .join(', ');
+    const isExpanded = expandedAssemblies[assembly.id] ?? false;
+    const allChecked = assemblyAllChecked(assembly);
+    const componentEntries = Object.entries(assembly.itemQuantities ?? {});
+    const checkedCount = componentEntries.filter(([itemId]) => (assemblyChecked[assembly.id] ?? {})[itemId]).length;
+
     return (
-      <Card key={assembly.id} variant="outlined" sx={{ borderColor: 'primary.dark', bgcolor: 'rgba(227, 6, 19, 0.045)' }}>
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+      <Card
+        key={assembly.id}
+        variant="outlined"
+        sx={{
+          borderColor: allChecked ? 'success.main' : 'primary.dark',
+          bgcolor: allChecked ? 'rgba(95, 128, 104, 0.06)' : 'rgba(227, 6, 19, 0.045)',
+        }}
+      >
+        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <CategoryIcon color={allChecked ? 'success' : 'primary'} fontSize="small" sx={{ flexShrink: 0 }} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <CategoryIcon color="primary" fontSize="small" />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+                {allChecked && <Chip size="small" color="success" label={t('Vollständig', 'Complete')} />}
               </Stack>
-              <Typography variant="body2" color="text.secondary">{components || t('Keine Komponenten', 'No components')}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {componentEntries.length} {t('Komponenten', 'components')}
+                {componentEntries.length > 0 && ` · ${checkedCount}/${componentEntries.length} ${t('abgehakt', 'checked')}`}
+              </Typography>
             </Box>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
               <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
               {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
@@ -576,14 +653,127 @@ export function FactionOrderDetail() {
                 value={preparedAssemblies[assembly.id] ?? ''}
                 onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
                 slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ width: { xs: '100%', sm: 125 } }}
+                sx={{ width: 110, flexShrink: 0 }}
               />
             )}
+            {componentEntries.length > 0 && (
+              <IconButton size="small" onClick={() => toggleAssemblyExpand(assembly.id)} aria-label={isExpanded ? t('Einklappen', 'Collapse') : t('Ausklappen', 'Expand')}>
+                {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+            )}
           </Stack>
+
+          {componentEntries.length > 0 && (
+            <Collapse in={isExpanded}>
+              <Divider sx={{ my: 1 }} />
+              <Stack spacing={0.5}>
+                {componentEntries.map(([itemId, qty]) => {
+                  const item = itemMap.get(itemId);
+                  const checked = (assemblyChecked[assembly.id] ?? {})[itemId] ?? false;
+                  return (
+                    <Stack
+                      key={itemId}
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center', py: 0.25, opacity: checked ? 0.6 : 1 }}
+                    >
+                      <Checkbox
+                        size="small"
+                        checked={checked}
+                        onChange={() => toggleItemCheck(assembly.id, itemId)}
+                        sx={{ p: 0.25 }}
+                      />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: checked ? 400 : 600, textDecoration: checked ? 'line-through' : 'none' }}>
+                          {qty}× {item?.name ?? itemId}
+                        </Typography>
+                        {item && (
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                            {item.expand?.storageLocation?.name || item.storageLocation || '—'}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            </Collapse>
+          )}
         </CardContent>
       </Card>
     );
   }
+
+  // Action buttons panel — shown at top
+  const actionButtons = (
+    <Paper sx={{ p: 2, mb: 2 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {canEditOrder && order.status === 'draft' && (
+          <Button
+            variant="contained"
+            startIcon={<CheckCircleIcon />}
+            onClick={() => submitOrder.mutate(order.id, {
+              onSuccess: () => showSnackbar(t('Bedarf ist bereit zur Bearbeitung — Artikel werden reserviert', 'Request submitted — items will be reserved'), 'success'),
+              onError: handleError,
+            })}
+            disabled={submitOrder.isPending}
+          >
+            {t('Bedarf vollständig', 'Request complete')}
+          </Button>
+        )}
+        {isManager && order.status === 'submitted' && (
+          <Button
+            variant="contained"
+            startIcon={<PlayArrowIcon />}
+            onClick={() => startPreparation.mutate(order.id, { onSuccess: () => showSnackbar(t('Vorbereitung gestartet', 'Preparation started'), 'success'), onError: handleError })}
+            disabled={startPreparation.isPending}
+          >
+            {t('Vorbereitung starten', 'Start preparation')}
+          </Button>
+        )}
+        {isManager && order.status === 'preparing' && (
+          <>
+            <Button variant="outlined" startIcon={<InventoryIcon />} onClick={fillAvailable}>{t('Verfügbare Mengen füllen', 'Fill available amounts')}</Button>
+            <Button variant="contained" startIcon={<SaveIcon />} onClick={savePrepared} disabled={savePreparation.isPending}>{t('Fortschritt speichern', 'Save progress')}</Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckCircleIcon />}
+              disabled={!preparationComplete || markReady.isPending}
+              onClick={() => setStateTransition('ready')}
+            >
+              {t('Abholbereit', 'Mark ready')}
+            </Button>
+          </>
+        )}
+        {isManager && order.status === 'ready' && (
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<ReplayIcon />}
+              onClick={() => setStateTransition('preparing')}
+              disabled={reopenPreparation.isPending}
+            >
+              {t('Zurück in Vorbereitung', 'Back to preparation')}
+            </Button>
+            <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={() => setConfirmAction('pickup')}>
+              {t('Komplette Liste abholen', 'Pick up complete list')}
+            </Button>
+          </>
+        )}
+        {isManager && ['picked_up', 'partially_returned'].includes(order.status) && (
+          <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setReturnOpen(true)}>
+            {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
+          </Button>
+        )}
+        {canEditOrder && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+          <Button color="error" startIcon={<CancelIcon />} onClick={() => setConfirmAction('cancel')} sx={{ ml: { sm: 'auto' } }}>
+            {t('Stornieren', 'Cancel')}
+          </Button>
+        )}
+      </Stack>
+    </Paper>
+  );
 
   return (
     <Box>
@@ -591,7 +781,7 @@ export function FactionOrderDetail() {
         {t('Alle Fraktionslisten', 'All faction lists')}
       </Button>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
         <Box>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="h4">{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
@@ -601,22 +791,28 @@ export function FactionOrderDetail() {
             {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItems.length + orderAssemblies.length} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
           </Typography>
           <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
-          <Typography variant="body2" sx={{ mt: 0.5 }}>
-            {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
-          </Typography>
         </Box>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { md: 'flex-start' } }}>
           <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Listen-QR', 'List QR')}</Button>
           <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrder}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
           {canEditOrder && order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
 
+      {/* Action buttons at the top */}
+      {actionButtons}
+
       {order.status === 'ready' && (
         <Alert severity="success" icon={<LocationOnIcon />} sx={{ mb: 2 }}>
           <Typography sx={{ fontWeight: 800 }}>{t('Diese Bestellung kann abgeholt werden.', 'This order is ready for pickup.')}</Typography>
-          <Typography variant="body2">{t('Abholort', 'Pickup location')}: {pickupLocationLabel}</Typography>
+          <Typography variant="body2">{t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong></Typography>
         </Alert>
+      )}
+
+      {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && (
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
+        </Typography>
       )}
 
       {order.pickupLatitude != null && order.pickupLongitude != null && (
@@ -645,34 +841,18 @@ export function FactionOrderDetail() {
         {order.notes && <Typography sx={{ mt: 2 }}>{order.notes}</Typography>}
       </Paper>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
-        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Erstellt von', 'Created by')}</Typography><Typography sx={{ fontWeight: 700 }}>{relationName(order.expand?.createdBy, order.history[0]?.userName)}</Typography></Paper>
-        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Vorbereitet von', 'Prepared by')}</Typography><Typography sx={{ fontWeight: 700 }}>{relationName(order.expand?.preparedBy)}</Typography><Typography variant="caption">{order.preparedAt ? new Date(order.preparedAt).toLocaleString() : '—'}</Typography></Paper>
-        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Abholbereit durch', 'Made ready by')}</Typography><Typography sx={{ fontWeight: 700 }}>{relationName(order.expand?.readyBy)}</Typography><Typography variant="caption">{order.readyAt ? new Date(order.readyAt).toLocaleString() : '—'}</Typography></Paper>
-        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Abgeholt von', 'Picked up by')}</Typography><Typography sx={{ fontWeight: 700 }}>{relationName(order.expand?.pickedUpBy)}</Typography><Typography variant="caption">{order.pickedUpAt ? new Date(order.pickedUpAt).toLocaleString() : '—'}</Typography></Paper>
-      </Box>
-
-      {!!orderAssemblies.length && (
-        <>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-            <CategoryIcon color="primary" />
-            <Typography variant="h6">{t('Baugruppen', 'Assemblies')}</Typography>
-          </Stack>
-          <Stack spacing={1.25} sx={{ mb: 2 }}>{orderAssemblies.map(assemblyRow)}</Stack>
-        </>
-      )}
-      {!!orderItems.length && (
-        <>
-          <Typography variant="h6" sx={{ mb: 1 }}>{t('Einzelartikel', 'Individual items')}</Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.25 }}>
-            <TextField
-              fullWidth
-              size="small"
-              label={t('Artikel suchen', 'Search items')}
-              value={itemSearch}
-              onChange={(event) => setItemSearch(event.target.value)}
-              slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
-            />
+      {/* Search covers both items and assemblies */}
+      {(!!orderAssemblies.length || !!orderItems.length) && (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            label={t('Artikel oder Baugruppen suchen', 'Search items or assemblies')}
+            value={itemSearch}
+            onChange={(event) => setItemSearch(event.target.value)}
+            slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
+          />
+          {!!orderItems.length && (
             <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
               <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
               <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
@@ -680,7 +860,23 @@ export function FactionOrderDetail() {
                 {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
               </Select>
             </FormControl>
+          )}
+        </Stack>
+      )}
+
+      {!!orderAssemblies.length && (
+        <>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+            <CategoryIcon color="primary" />
+            <Typography variant="h6">{t('Baugruppen', 'Assemblies')}</Typography>
           </Stack>
+          <Stack spacing={1.25} sx={{ mb: 2 }}>{visibleOrderAssemblies.map(assemblyRow)}</Stack>
+          {!visibleOrderAssemblies.length && <Typography color="text.secondary" sx={{ mb: 2 }}>{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+        </>
+      )}
+      {!!orderItems.length && (
+        <>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('Einzelartikel', 'Individual items')}</Typography>
           <Stack spacing={0.5} sx={{ mb: 2 }}>{visibleOrderItems.map(itemRow)}</Stack>
           {!visibleOrderItems.length && <Typography color="text.secondary" sx={{ mb: 2 }}>{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
         </>
@@ -692,71 +888,6 @@ export function FactionOrderDetail() {
         <Alert severity="warning" sx={{ mb: 2 }}>{t('Mindestens eine Baugruppe dieser Liste existiert nicht mehr.', 'At least one assembly on this list no longer exists.')}</Alert>
       )}
 
-      <Paper sx={{ p: 2, mb: 3, position: { xs: 'sticky', md: 'static' }, bottom: { xs: 76, md: 'auto' }, zIndex: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {canEditOrder && order.status === 'draft' && (
-            <Button
-              variant="contained"
-              startIcon={<CheckCircleIcon />}
-              onClick={() => submitOrder.mutate(order.id, { onSuccess: () => showSnackbar(t('Bedarf ist bereit zur Bearbeitung', 'Request is ready for processing'), 'success'), onError: handleError })}
-              disabled={submitOrder.isPending}
-            >
-              {t('Bedarf vollständig', 'Request complete')}
-            </Button>
-          )}
-          {isManager && order.status === 'submitted' && (
-            <Button
-              variant="contained"
-              startIcon={<PlayArrowIcon />}
-              onClick={() => startPreparation.mutate(order.id, { onSuccess: () => showSnackbar(t('Vorbereitung gestartet', 'Preparation started'), 'success'), onError: handleError })}
-              disabled={startPreparation.isPending}
-            >
-              {t('Vorbereitung starten', 'Start preparation')}
-            </Button>
-          )}
-          {isManager && order.status === 'preparing' && (
-            <>
-              <Button variant="outlined" startIcon={<InventoryIcon />} onClick={fillAvailable}>{t('Verfügbare Mengen füllen', 'Fill available amounts')}</Button>
-              <Button variant="contained" startIcon={<SaveIcon />} onClick={savePrepared} disabled={savePreparation.isPending}>{t('Fortschritt speichern', 'Save progress')}</Button>
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<CheckCircleIcon />}
-                disabled={!preparationComplete || markReady.isPending}
-                onClick={() => setStateTransition('ready')}
-              >
-                {t('Abholbereit', 'Mark ready')}
-              </Button>
-            </>
-          )}
-          {isManager && order.status === 'ready' && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<ReplayIcon />}
-                onClick={() => setStateTransition('preparing')}
-                disabled={reopenPreparation.isPending}
-              >
-                {t('Zurück in Vorbereitung', 'Back to preparation')}
-              </Button>
-              <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={() => setConfirmAction('pickup')}>
-                {t('Komplette Liste abholen', 'Pick up complete list')}
-              </Button>
-            </>
-          )}
-          {isManager && ['picked_up', 'partially_returned'].includes(order.status) && (
-            <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={() => setReturnOpen(true)}>
-              {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
-            </Button>
-          )}
-          {canEditOrder && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
-            <Button color="error" startIcon={<CancelIcon />} onClick={() => setConfirmAction('cancel')} sx={{ ml: { sm: 'auto' } }}>
-              {t('Stornieren', 'Cancel')}
-            </Button>
-          )}
-        </Stack>
-      </Paper>
-
       {order.status === 'picked_up' && (
         <Alert severity="info" sx={{ mb: 3 }}>
           {t(
@@ -765,6 +896,14 @@ export function FactionOrderDetail() {
           )}
         </Alert>
       )}
+
+      {/* Metadata grid — compact */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1, mb: 3 }}>
+        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Erstellt von', 'Created by')}</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>{relationName(order.expand?.createdBy, order.history[0]?.userName)}</Typography></Paper>
+        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Vorbereitet von', 'Prepared by')}</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>{relationName(order.expand?.preparedBy)}</Typography><Typography variant="caption">{order.preparedAt ? new Date(order.preparedAt).toLocaleString() : '—'}</Typography></Paper>
+        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Abholbereit durch', 'Made ready by')}</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>{relationName(order.expand?.readyBy)}</Typography><Typography variant="caption">{order.readyAt ? new Date(order.readyAt).toLocaleString() : '—'}</Typography></Paper>
+        <Paper sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">{t('Abgeholt von', 'Picked up by')}</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>{relationName(order.expand?.pickedUpBy)}</Typography><Typography variant="caption">{order.pickedUpAt ? new Date(order.pickedUpAt).toLocaleString() : '—'}</Typography></Paper>
+      </Box>
 
       {previousOrder && (
         <Paper sx={{ p: 2, mb: 3 }}>
@@ -886,7 +1025,8 @@ export function FactionOrderDetail() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(stateTransition)} onClose={closeStateTransition} fullWidth maxWidth="xs">
+      {/* State transition dialog — "Mark ready" includes pickup location picker */}
+      <Dialog open={Boolean(stateTransition)} onClose={closeStateTransition} fullWidth maxWidth={stateTransition === 'ready' ? 'sm' : 'xs'}>
         <DialogTitle>
           {stateTransition === 'ready'
             ? t('Liste als abholbereit markieren', 'Mark list ready')
@@ -895,11 +1035,52 @@ export function FactionOrderDetail() {
         <DialogContent>
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             {stateTransition === 'ready'
-              ? t('Die Liste kann danach abgeholt werden.', 'The list can be picked up afterwards.')
+              ? t('Bitte gib den Abholort an. Die Liste kann danach abgeholt werden.', 'Please set the pickup location. The list can be picked up afterwards.')
               : t('Die vorbereiteten Mengen bleiben erhalten und können wieder bearbeitet werden.', 'Prepared quantities are kept and can be edited again.')}
           </Typography>
+          {stateTransition === 'ready' && (
+            <Stack spacing={2} sx={{ mb: 2 }}>
+              <FormControl size="small" fullWidth>
+                <InputLabel>{t('Abholort (Lagerort)', 'Pickup location (storage location)')}</InputLabel>
+                <Select
+                  label={t('Abholort (Lagerort)', 'Pickup location (storage location)')}
+                  value={transitionPickupLocation}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    const loc = storageLocations.find((l) => l.id === id);
+                    setTransitionPickupLocation(id);
+                    setTransitionPickupLatitude(loc?.latitude);
+                    setTransitionPickupLongitude(loc?.longitude);
+                  }}
+                >
+                  <MenuItem value="">{t('Kein Lagerort', 'No storage location')}</MenuItem>
+                  {storageLocations.map((loc) => (
+                    <MenuItem key={loc.id} value={loc.id}>
+                      {[loc.name, loc.area, loc.location, loc.position].filter(Boolean).join(' · ')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {(transitionPickupLatitude != null || transitionPickupWaypoint) && (
+                <StorageLocationMap
+                  editable
+                  compact
+                  kind="pickup"
+                  latitude={transitionPickupLatitude}
+                  longitude={transitionPickupLongitude}
+                  zoom={transitionPickupWaypoint?.mapZoom}
+                  overlayBounds={transitionPickupWaypoint?.overlayBounds}
+                  overlayUrl={apiFileUrl(transitionPickupWaypoint?.mapOverlay)}
+                  onCenterChange={(lat, lng) => {
+                    setTransitionPickupLatitude(lat);
+                    setTransitionPickupLongitude(lng);
+                  }}
+                />
+              )}
+            </Stack>
+          )}
           <TextField
-            autoFocus
+            autoFocus={stateTransition !== 'ready'}
             fullWidth
             multiline
             minRows={2}

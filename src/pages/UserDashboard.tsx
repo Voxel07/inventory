@@ -4,12 +4,6 @@ import {
     Typography,
     Grid,
     Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Button,
     Dialog,
     DialogTitle,
@@ -26,12 +20,14 @@ import { useNavigate } from 'react-router-dom';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useDamageReports, useCreateDamageReport } from '../hooks/useDamageReports';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
+import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 import type { DamageReportFormData, Item, TransactionFormData } from '../types';
 import { useNames, useTranslate } from '../utils/naming';
 
@@ -47,6 +43,7 @@ export function UserDashboard() {
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: allTransactions, isLoading: txLoading } = useTransactions();
     const { data: damageReports } = useDamageReports();
+    const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
     const createTransaction = useCreateTransaction();
     const createDamageReport = useCreateDamageReport();
@@ -60,40 +57,43 @@ export function UserDashboard() {
         return allTransactions.filter((tx) => tx.userId === currentUser.id);
     }, [allTransactions, currentUser]);
 
-    // 2. Items currently checked out by this user
-    const checkedOutItems = useMemo(() => {
+    // 2. Build CheckedOutRow format for the shared component and metrics
+    const checkedOutRows = useMemo<CheckedOutRow[]>(() => {
         if (!items || !allTransactions || !currentUser) return [];
-        const checkoutMap = new Map<string, number>();
-
-        // Sort all transactions chronologically to calculate user's net checkouts
-        const sortedTransactions = [...allTransactions].sort(
-            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
-
-        for (const tx of sortedTransactions) {
-            if (tx.userId !== currentUser.id) continue;
-            const currentVal = checkoutMap.get(tx.itemId) ?? 0;
-            if (tx.transactionType === 'checkout') {
-                checkoutMap.set(tx.itemId, currentVal + tx.quantityChanged);
-            } else if (tx.transactionType === 'checkin') {
-                checkoutMap.set(tx.itemId, Math.max(0, currentVal - tx.quantityChanged));
-            }
+        const itemMap = new Map(items.map((item) => [item.id, item]));
+        const rows = new Map<string, CheckedOutRow>();
+        const chronological = [...allTransactions]
+            .filter((tx) => tx.userId === currentUser.id)
+            .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        for (const tx of chronological) {
+            if (tx.transactionType !== 'checkout' && tx.transactionType !== 'checkin') continue;
+            const item = itemMap.get(tx.itemId);
+            if (!item) continue;
+            const order = tx.expand?.factionOrderId;
+            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.reason || t('Ohne Event', 'No event');
+            const key = `${tx.itemId}:${tx.factionOrderId ?? 'manual'}`;
+            const existing = rows.get(key);
+            const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
+            const loc = item.expand?.storageLocation;
+            rows.set(key, {
+                key,
+                itemId: item.id,
+                name: item.name,
+                category: item.category,
+                storageLocation: loc ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
+                checkedOut: Math.max(0, (existing?.checkedOut ?? 0) + amount),
+                personId: currentUser.id,
+                person: currentUser.name || currentUser.email || currentUser.id,
+                eventKey: existing?.eventKey ?? eventKey,
+                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.reason || t('Ohne Event', 'No event')),
+                factionOrderId: tx.factionOrderId,
+            });
         }
+        return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
+    }, [items, allTransactions, currentUser, t]);
 
-        const results: { item: Item; quantity: number }[] = [];
-        for (const [itemId, quantity] of checkoutMap.entries()) {
-            if (quantity > 0) {
-                const item = items.find((i) => i.id === itemId);
-                if (item) {
-                    results.push({ item, quantity });
-                }
-            }
-        }
-        return results;
-    }, [items, allTransactions, currentUser]);
-
-    const totalUniqueCheckedOut = checkedOutItems.length;
-    const totalUnitsCheckedOut = checkedOutItems.reduce((sum, current) => sum + current.quantity, 0);
+    const totalUniqueCheckedOut = checkedOutRows.length;
+    const totalUnitsCheckedOut = checkedOutRows.reduce((sum, r) => sum + r.checkedOut, 0);
     const totalUserTransactionsCount = userTransactions.length;
     const userDamageReportsCount = useMemo(() => {
         if (!damageReports || !currentUser) return 0;
@@ -167,71 +167,23 @@ export function UserDashboard() {
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 {t('Meine ausgeliehenen Artikel', 'My checked-out items')}
             </Typography>
-            {checkedOutItems.length === 0 ? (
-                <Paper sx={{ p: 4, textAlign: 'center', mb: 4 }}>
-                    <Typography color="text.secondary">{t('Sie haben derzeit keine Artikel ausgeliehen.', 'You currently have no items checked out.')}</Typography>
-                </Paper>
-            ) : (
-                isMobile ? (
-                    <Stack spacing={1.5} sx={{ mb: 4 }}>
-                        {checkedOutItems.map(({ item, quantity }) => (
-                            <Paper key={item.id} sx={{ p: 2 }}>
-                                <Box onClick={() => navigate(`/items/${item.id}`)} sx={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                                    <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">{item.category || '—'} · {item.expand?.storageLocation?.name || item.storageLocation || '—'}</Typography>
-                                    </Box>
-                                    <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
-                                        <Typography variant="h5" color="warning.main">{quantity}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
-                                    </Box>
-                                </Box>
-                                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                                    <Button fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => setReturnItem({ item, quantity })} sx={{ minHeight: 48 }}>{names.action.checkin}</Button>
-                                    <Button fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => setDamageItem({ item, quantity })} sx={{ minHeight: 48 }}>{t('Schaden', 'Damage')}</Button>
-                                </Stack>
-                            </Paper>
-                        ))}
-                    </Stack>
-                ) : <TableContainer component={Paper} sx={{ overflowX: 'auto', mb: 4 }}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>{t('Artikelname', 'Item name')}</TableCell>
-                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                                <TableCell align="right">{t('Ausgeliehene Menge', 'Quantity checked out')}</TableCell>
-                                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-                                <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {checkedOutItems.map(({ item, quantity }) => (
-                                <TableRow key={item.id} hover>
-                                    <TableCell
-                                        onClick={() => navigate(`/items/${item.id}`)}
-                                        sx={{ cursor: 'pointer', fontWeight: 600, '&:hover': { color: 'primary.main' } }}
-                                    >
-                                        {item.name}
-                                    </TableCell>
-                                    <TableCell>{item.category || '—'}</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>
-                                        {quantity}
-                                    </TableCell>
-                                    <TableCell>
-                                        {item.expand?.storageLocation?.name || item.storageLocation || '—'}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                                            <Button variant="outlined" color="success" size="small" startIcon={<AssignmentReturnIcon />} onClick={() => setReturnItem({ item, quantity })}>{names.action.checkin}</Button>
-                                            <Button variant="outlined" color="error" size="small" startIcon={<ReportProblemIcon />} onClick={() => setDamageItem({ item, quantity })}>{t('Schaden melden', 'Report damage')}</Button>
-                                        </Stack>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            )}
+            <Box sx={{ mb: 4 }}>
+                <CheckedOutList
+                    rows={checkedOutRows}
+                    assemblies={assemblies}
+                    showPerson={false}
+                    linkToItem
+                    onQuickReturn={(row) => {
+                        const item = items?.find((i) => i.id === row.itemId);
+                        if (item) setReturnItem({ item, quantity: row.checkedOut });
+                    }}
+                    onDamageReport={(row) => {
+                        const item = items?.find((i) => i.id === row.itemId);
+                        if (item) setDamageItem({ item, quantity: row.checkedOut });
+                    }}
+                    returnPending={createTransaction.isPending}
+                />
+            </Box>
 
             {/* My Recent Activity */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
