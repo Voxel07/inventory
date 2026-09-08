@@ -170,18 +170,11 @@ export function FactionOrderForm({
   }, [assemblies, assemblyQuantities, eventType, search]);
 
   const hasActiveSearch = Boolean(search.trim());
-  const hasActiveItemFilter = Boolean(search.trim() || category);
   const displayedAssemblies = useMemo(
     () => isMobile && !hasActiveSearch
       ? visibleAssemblies.filter((assembly) => !(Number(assemblyQuantities[assembly.id]) > 0))
       : visibleAssemblies,
     [assemblyQuantities, hasActiveSearch, isMobile, visibleAssemblies],
-  );
-  const displayedItems = useMemo(
-    () => isMobile && !hasActiveItemFilter
-      ? visibleItems.filter((item) => !(Number(quantities[item.id]) > 0))
-      : visibleItems,
-    [hasActiveItemFilter, isMobile, quantities, visibleItems],
   );
   const selectedAssemblies = useMemo(
     () => assemblies
@@ -507,7 +500,7 @@ export function FactionOrderForm({
           )}
           {viewMode === 'tiles' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
-              {displayedItems.map((item) => {
+              {visibleItems.map((item) => {
                 const isSelected = Number(quantities[item.id]) > 0;
                 const image = itemImageUrl(item, undefined, '240x160');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -542,7 +535,7 @@ export function FactionOrderForm({
             </Box>
           ) : (
             <Stack spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
-              {displayedItems.map((item) => {
+              {visibleItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -582,7 +575,7 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!displayedItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+          {!visibleItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
         </Box>
 
         {isMobile && selectedEntryCount > 0 && (

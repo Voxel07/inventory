@@ -66,6 +66,11 @@ public class OrderOrm {
                 .setParameter("order", order).setParameter("key", idempotencyKey).getSingleResult() > 0;
     }
 
+    public FactionOrder orderByHistoryIdempotencyKey(UUID idempotencyKey) {
+        return entityManager.createQuery("select h.order from FactionOrderHistory h where h.idempotencyKey = :key", FactionOrder.class)
+                .setParameter("key", idempotencyKey).getResultStream().findFirst().orElse(null);
+    }
+
     public long countOrderCodes(String prefixPattern) {
         return entityManager.createQuery("select count(o) from FactionOrder o where o.orderCode like :prefix", Long.class)
                 .setParameter("prefix", prefixPattern).getSingleResult();

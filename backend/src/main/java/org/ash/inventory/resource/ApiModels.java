@@ -46,7 +46,8 @@ public final class ApiModels {
             String eventType, String faction, LocalDate eventDate, UUID eventOccurrenceId, UUID factionId,
             LocalDate requestedPickupDate,
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude, String collectorName, String notes,
-            Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities) {}
+            Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities,
+            UUID idempotencyKey) {}
 
     public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose) {}
 

@@ -36,6 +36,7 @@ import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canManageInventory } from '../utils/access';
 import type { User } from '../types';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
+import { isOfflineQueuedError } from '../utils/offline';
 
 function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error' {
   if (status === 'draft') return 'default';
@@ -293,7 +294,13 @@ export function FactionOrders() {
                 showSnackbar(t('Bestellliste erstellt', 'Order list created'), 'success');
                 navigate(`/orders/faction/${order.id}`);
               },
-              onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Liste konnte nicht erstellt werden', 'Could not create list'), 'error'),
+              onError: (error) => {
+                if (isOfflineQueuedError(error)) {
+                  setDialogOpen(false);
+                  return; // The global mutation handler confirms that the order was queued.
+                }
+                showSnackbar(error instanceof Error ? error.message : t('Liste konnte nicht erstellt werden', 'Could not create list'), 'error');
+              },
             })}
           />
         </DialogContent>

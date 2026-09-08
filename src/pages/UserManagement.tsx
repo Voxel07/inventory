@@ -27,14 +27,38 @@ function UserPermissionsEditor({ user }: { user: User }) {
     setFactions(user.faction ?? []);
   }, [user]);
 
+  function savePermissions() {
+    save.mutate({ userId: user.id, data: { role, faction: role === 'faction_leader' ? factions : [] } }, {
+      onSuccess: () => showSnackbar(t('Zugriffsrechte gespeichert', 'Access rights saved'), 'success'),
+      onError: () => showSnackbar(t('Zugriffsrechte konnten nicht gespeichert werden', 'Could not save access rights'), 'error'),
+    });
+  }
+
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
-        <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 700 }}>{user.name || user.username || user.email}</Typography>
-          <Typography variant="body2" color="text.secondary">{user.email}</Typography>
+    <Paper variant="outlined" sx={{ p: { xs: 1, md: 2 } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr) auto',
+            md: 'minmax(180px, 1fr) 210px minmax(260px, 2fr) auto',
+          },
+          alignItems: 'center',
+          gap: { xs: 0.75, md: 2 },
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{user.name || user.username || user.email}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{user.email}</Typography>
         </Box>
-        <TextField select label={t('Rolle', 'Role')} value={role} onChange={(event) => setRole(event.target.value as AccessRole)} sx={{ minWidth: 210 }}>
+        <TextField
+          select
+          size="small"
+          label={t('Rolle', 'Role')}
+          value={role}
+          onChange={(event) => setRole(event.target.value as AccessRole)}
+          sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}
+        >
           <MenuItem value="admin">{t('Administrator', 'Administrator')}</MenuItem>
           <MenuItem value="inventory_manager">{t('Inventarverwaltung', 'Inventory manager')}</MenuItem>
           <MenuItem value="faction_leader">{t('Fraktionsleitung', 'Faction leader')}</MenuItem>
@@ -45,21 +69,32 @@ function UserPermissionsEditor({ user }: { user: User }) {
           value={factionOptions.filter((option) => factions.includes(option))}
           onChange={(_event, values) => setFactions(values)}
           disabled={role !== 'faction_leader'}
+          size="small"
+          limitTags={1}
           renderInput={(params) => <TextField {...params} label={t('Zugewiesene Fraktionen', 'Assigned factions')} />}
-          sx={{ flex: '2 1 360px' }}
+          sx={{
+            gridColumn: { xs: '1 / -1', md: 'auto' },
+            display: { xs: role === 'faction_leader' ? 'block' : 'none', md: 'block' },
+          }}
         />
         <Button
           variant="contained"
           startIcon={<SaveIcon />}
+          size="small"
+          aria-label={t('Zugriffsrechte speichern', 'Save access rights')}
           disabled={save.isPending || (role === 'faction_leader' && factions.length === 0)}
-          onClick={() => save.mutate({ userId: user.id, data: { role, faction: role === 'faction_leader' ? factions : [] } }, {
-            onSuccess: () => showSnackbar(t('Zugriffsrechte gespeichert', 'Access rights saved'), 'success'),
-            onError: () => showSnackbar(t('Zugriffsrechte konnten nicht gespeichert werden', 'Could not save access rights'), 'error'),
-          })}
+          onClick={savePermissions}
+          sx={{
+            gridColumn: { xs: 2, md: 'auto' },
+            gridRow: { xs: 1, md: 'auto' },
+            minWidth: { xs: 36, md: 'auto' },
+            px: { xs: 0.75, md: 1.5 },
+            '& .MuiButton-startIcon': { mr: { xs: 0, md: 1 }, ml: 0 },
+          }}
         >
-          {t('Speichern', 'Save')}
+          <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{t('Speichern', 'Save')}</Box>
         </Button>
-      </Stack>
+      </Box>
     </Paper>
   );
 }
@@ -69,12 +104,12 @@ export function UserManagement() {
   const { data: users = [], isLoading, isError } = useUsers();
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 1 }}>{t('Benutzerverwaltung', 'User management')}</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('Benutzerverwaltung', 'User management')}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 3 } }}>
         {t('Authentik-Rollen und mehrere Fraktionszuordnungen serverseitig verwalten.', 'Manage Authentik roles and multiple faction assignments on the server.')}
       </Typography>
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Benutzer konnten nicht geladen werden. Prüfen Sie OIDC und die API-Berechtigungen.', 'Users could not be loaded. Check OIDC and API permissions.')}</Alert>}
-      <Stack spacing={1.5}>
+      <Stack spacing={{ xs: 0.75, sm: 1.5 }}>
         {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : users.map((user) => <UserPermissionsEditor key={user.id} user={user} />)}
       </Stack>
     </Box>

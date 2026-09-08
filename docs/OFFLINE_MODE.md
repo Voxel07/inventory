@@ -18,6 +18,7 @@ and how the queue replays.
 | --- | --- |
 | Stock transaction (checkout/checkin) | `transaction` |
 | Damage report | `damage.create` |
+| Create a faction order | `order.create` |
 | Order status transition (submit/prepare/ready/pickup/cancel/reopen) | `order.transition` |
 | Save preparation quantities | `order.prepare` |
 | Record return (partial/full) | `order.return` |

@@ -70,7 +70,7 @@ type RequestOptions = {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
   anonymous?: boolean;
-  offline?: { type: string; payload: Record<string, unknown> };
+  offline?: { type: string; payload: Record<string, unknown>; idempotencyKey?: string };
 };
 
 export class ApiError extends Error {
@@ -168,17 +168,26 @@ function invalidateConditionalCacheFor(path: string): void {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  if (options.offline && !navigator.onLine) return queueOffline<T>(options.offline);
+  const offlineAction = options.offline
+    ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
+    : undefined;
+  if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction);
   try {
     return await apiRequestAttempt<T>(path, options, false);
   } catch (error) {
-    if (options.offline && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(options.offline);
+    if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction);
     throw error;
   }
 }
 
-async function queueOffline<T>(action: { type: string; payload: Record<string, unknown> }): Promise<T> {
-  const idempotencyKey = crypto.randomUUID();
+function bodyIdempotencyKey(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object' || !('idempotencyKey' in body)) return undefined;
+  const value = (body as { idempotencyKey?: unknown }).idempotencyKey;
+  return typeof value === 'string' ? value : undefined;
+}
+
+async function queueOffline<T>(action: { type: string; payload: Record<string, unknown>; idempotencyKey?: string }): Promise<T> {
+  const idempotencyKey = action.idempotencyKey ?? crypto.randomUUID();
   await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: action.payload, localTimestamp: new Date().toISOString() });
   throw new OfflineQueuedError(idempotencyKey);
 }

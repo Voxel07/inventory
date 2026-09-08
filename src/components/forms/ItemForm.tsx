@@ -6,15 +6,13 @@ import {
     Button,
     Stack,
     Autocomplete,
-    Typography,
-    Divider,
     Tooltip,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
+    Checkbox,
     FormControlLabel,
-    Switch,
 } from '@mui/material';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
@@ -47,7 +45,7 @@ export function ItemForm({
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
         supplier: initialData?.supplier ?? '',
-        eventTypes: initialData?.eventTypes ?? [],
+        eventTypes: initialData ? (initialData.eventTypes ?? []) : [...EVENT_TYPES],
         storageLocation: initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
         isConsumable: initialData?.isConsumable ?? false,
@@ -58,6 +56,7 @@ export function ItemForm({
         containersOpened: initialData?.containersOpened ?? undefined,
         containerRemainingPercent: initialData?.containerRemainingPercent ?? undefined,
     });
+    const [isBulkPackage, setIsBulkPackage] = useState((initialData?.containerSize ?? 0) > 0);
     const [numericInputs, setNumericInputs] = useState({
         amount: '',
         minStock: String(initialData?.minStock ?? 5),
@@ -80,8 +79,6 @@ export function ItemForm({
 
     const createLoc = useCreateStorageLocation();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
-
-    const isContainer = Number(numericInputs.containerSize) > 0;
 
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,21 +126,22 @@ export function ItemForm({
             amount: parseOptional(numericInputs.amount),
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
-            containerSize: parseOptional(numericInputs.containerSize),
-            containerCount: parseOptional(numericInputs.containerCount),
-            containersOpened: parseOptional(numericInputs.containersOpened),
-            containerRemainingPercent: parseOptional(numericInputs.containerRemainingPercent),
+            containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
+            containerCount: isBulkPackage
+                ? (initialData ? (initialData.containerCount ?? initialData.amount) : parseOptional(numericInputs.amount))
+                : undefined,
+            containersOpened: isBulkPackage ? parseOptional(numericInputs.containersOpened) : undefined,
+            containerRemainingPercent: isBulkPackage ? parseOptional(numericInputs.containerRemainingPercent) : undefined,
         };
-        if (isContainer) {
-            submitData.amount = (submitData.containerCount ?? 0) * (submitData.containerSize ?? 0);
-        }
         onSubmit(submitData);
     }
 
-    const amountValid = !!initialData || isContainer || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const amountValid = !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const containerSizeValid = !isBulkPackage
+        || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
         && numericInputs.value !== '' && Number(numericInputs.value) >= 0;
-    const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !requiredNumbersValid;
+    const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid || !requiredNumbersValid;
 
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
@@ -157,17 +155,55 @@ export function ItemForm({
                     error={!!nameError}
                     helperText={nameError}
                 />
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', columnGap: 2, flexWrap: 'wrap' }}>
+                    <FormControlLabel
+                        control={<Checkbox checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({ ...prev, isConsumable: event.target.checked }))} />}
+                        label={t('Verbrauchsmaterial', 'Consumable')}
+                    />
+                    <FormControlLabel
+                        control={(
+                            <Checkbox
+                                checked={isBulkPackage}
+                                onChange={(event) => {
+                                    const checked = event.target.checked;
+                                    setIsBulkPackage(checked);
+                                    if (!checked) {
+                                        setNumericInputs((prev) => ({
+                                            ...prev,
+                                            containerSize: '',
+                                            containerCount: '',
+                                            containersOpened: '',
+                                            containerRemainingPercent: '',
+                                        }));
+                                    }
+                                }}
+                            />
+                        )}
+                        label={t('Box mit mehreren gleichen Artikeln', 'Box with multiple identical items')}
+                    />
+                </Box>
                 {!initialData && (
                     <TextField
-                        label={t('Menge', 'Amount')}
+                        label={isBulkPackage ? t('Anzahl der Boxen', 'Number of boxes') : t('Menge', 'Amount')}
                         type="number"
                         value={numericInputs.amount}
                         onChange={handleNumberChange('amount')}
                         required
                         fullWidth
-                        disabled={isContainer}
-                        helperText={isContainer ? t(`Automatisch berechnet: ${Number(numericInputs.containerCount || 0) * Number(numericInputs.containerSize || 0)} Einheiten`, `Calculated automatically: ${Number(numericInputs.containerCount || 0) * Number(numericInputs.containerSize || 0)} units`) : undefined}
+                        helperText={isBulkPackage ? t('Die Menge wird als Anzahl vollständiger Boxen gespeichert', 'The amount is stored as the number of full boxes') : undefined}
                         slotProps={{ htmlInput: { min: 0 } }}
+                    />
+                )}
+                {isBulkPackage && (
+                    <TextField
+                        label={t('Artikel pro Box', 'Items per box')}
+                        type="number"
+                        value={numericInputs.containerSize}
+                        onChange={handleNumberChange('containerSize')}
+                        required
+                        fullWidth
+                        helperText={t('z. B. 500 Schrauben pro Box', 'e.g. 500 screws per box')}
+                        slotProps={{ htmlInput: { min: 1 } }}
                     />
                 )}
                 <TextField
@@ -236,10 +272,6 @@ export function ItemForm({
                     onChange={handleChange('supplier')}
                     fullWidth
                 />
-                <FormControlLabel
-                    control={<Switch checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({ ...prev, isConsumable: event.target.checked }))} />}
-                    label={t('Verbrauchsmaterial (wird bei Rückgabe als verbraucht gebucht)', 'Consumable (record as consumed on return)')}
-                />
                 <TextField
                     label={t('Hinweis / besondere Anweisungen', 'Hint / special instructions')}
                     value={formData.hint ?? ''}
@@ -250,49 +282,6 @@ export function ItemForm({
                     helperText={t('Hinweise zur Verwendung, Vorbereitung oder Montage', 'Instructions for use, preparation, or assembly')}
                 />
                 <ImageAttachments existing={initialData?.images} value={images} onChange={setImages} disabled={isLoading} />
-
-                <Divider />
-                <Typography variant="subtitle2" color="text.secondary">
-                    {t('Behälter / Großgebinde (optional)', 'Containers / bulk packaging (optional)')}
-                </Typography>
-                <TextField
-                    label={t('Einheiten pro Behälter', 'Units per container')}
-                    type="number"
-                    value={numericInputs.containerSize}
-                    onChange={handleNumberChange('containerSize')}
-                    fullWidth
-                    helperText={t('z. B. 500 Schrauben pro Box', 'e.g. 500 screws per box')}
-                    slotProps={{ htmlInput: { min: 0 } }}
-                />
-                {isContainer && (
-                    <>
-                        <TextField
-                            label={t('Anzahl der Behälter', 'Number of containers')}
-                            type="number"
-                            value={numericInputs.containerCount}
-                            onChange={handleNumberChange('containerCount')}
-                            fullWidth
-                            slotProps={{ htmlInput: { min: 0 } }}
-                        />
-                        <TextField
-                            label={t('Geöffnete Behälter', 'Opened containers')}
-                            type="number"
-                            value={numericInputs.containersOpened}
-                            onChange={handleNumberChange('containersOpened')}
-                            fullWidth
-                            slotProps={{ htmlInput: { min: 0 } }}
-                        />
-                        <TextField
-                            label={t('Verbleibender Inhalt im geöffneten Behälter (%)', 'Remaining contents in opened container (%)')}
-                            type="number"
-                            value={numericInputs.containerRemainingPercent}
-                            onChange={handleNumberChange('containerRemainingPercent')}
-                            fullWidth
-                            helperText={t('Wie voll ist der aktuell geöffnete Behälter (0-100)', 'How full the currently opened container is (0-100)')}
-                            slotProps={{ htmlInput: { min: 0, max: 100 } }}
-                        />
-                    </>
-                )}
 
                 <Tooltip title={initialData ? t('Änderungen an diesem Artikel speichern', 'Save changes to this item') : t('Neuen Artikel im Inventar erstellen', 'Create a new inventory item')} arrow>
                     <span>

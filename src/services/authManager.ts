@@ -1,5 +1,5 @@
 import type { User } from '../types';
-import { refreshOidcTokens, type OidcTokenSet } from './oidcClient';
+import { isOidcSessionRejected, refreshOidcTokens, type OidcTokenSet } from './oidcClient';
 import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession } from './authStorage';
 
 const SESSION_KEY = 'ash.inventory.authSession';
@@ -148,9 +148,15 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
     || (session.expiresAt !== null && session.expiresAt <= Date.now() + REFRESH_EARLY_MS);
   if (!needsRefresh) return session.accessToken;
   if (!session.refreshToken) {
-    if (session.expiresAt !== null && session.expiresAt <= Date.now()) clearAuth('Your session has expired. Please sign in again.');
+    if (navigator.onLine && session.expiresAt !== null && session.expiresAt <= Date.now()) {
+      clearAuth('Your session has expired. Please sign in again.');
+    }
     return session.accessToken;
   }
+  // An expired access token is still useful for preserving the local session
+  // while offline; cached reads and queued writes do not need the server to
+  // accept it until connectivity returns.
+  if (!navigator.onLine) return session.accessToken;
 
   if (!refreshPromise) {
     const currentRefreshToken = session.refreshToken;
@@ -160,8 +166,13 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
         return tokens.accessToken;
       })
       .catch((error) => {
-        clearAuth('Your session has expired. Please sign in again.');
-        throw error;
+        if (isOidcSessionRejected(error)) {
+          clearAuth('Your session has expired. Please sign in again.');
+          throw error;
+        }
+        // Discovery/network/server failures are temporary. Keep the durable
+        // session and let API requests use their normal offline fallback.
+        return session.accessToken;
       })
       .finally(() => { refreshPromise = null; });
   }

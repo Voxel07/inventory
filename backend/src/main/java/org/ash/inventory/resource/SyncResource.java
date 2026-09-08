@@ -2,6 +2,7 @@ package org.ash.inventory.resource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -29,6 +30,7 @@ public class SyncResource {
     @Inject ActorService actors;
 
     @POST
+    @Transactional
     public Object sync(@Valid ApiModels.SyncBatch batch) {
         actors.current();
         var results = new ArrayList<Map<String, Object>>();
@@ -52,6 +54,15 @@ public class SyncResource {
 
     private Object execute(ApiModels.SyncAction action) {
         return switch (action.type()) {
+            case "order.create" -> {
+                actors.current();
+                var value = objectMapper.convertValue(action.payload(), ApiModels.OrderInput.class);
+                yield mapper.order(orders.create(new ApiModels.OrderInput(
+                        value.eventType(), value.faction(), value.eventDate(), value.eventOccurrenceId(), value.factionId(),
+                        value.requestedPickupDate(), value.pickupLocation(), value.pickupLatitude(), value.pickupLongitude(),
+                        value.collectorName(), value.notes(), value.requestedQuantities(),
+                        value.requestedAssemblyQuantities(), action.idempotencyKey())));
+            }
             case "transaction" -> {
                 actors.requireManager();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.TransactionInput.class);

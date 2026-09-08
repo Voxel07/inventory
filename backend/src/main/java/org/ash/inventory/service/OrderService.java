@@ -61,6 +61,13 @@ public class OrderService {
     @Transactional
     public FactionOrder create(ApiModels.OrderInput input) {
         var actor = actors.current();
+        if (input.idempotencyKey() != null) {
+            var existing = orm.orderByHistoryIdempotencyKey(input.idempotencyKey());
+            if (existing != null) {
+                assertFactionAccess(actor, existing.faction);
+                return existing;
+            }
+        }
         var event = input.eventOccurrenceId() != null
                 ? required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence")
                 : catalog.findOrCreateEvent(requiredText(input.eventType(), "eventType"),
@@ -79,7 +86,7 @@ public class OrderService {
         order.orderCode = nextOrderCode(event, faction);
         orm.persist(order);
         replaceLines(order, input);
-        audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, null, input.notes(), lineSnapshot(order));
+        audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, input.idempotencyKey(), input.notes(), lineSnapshot(order));
         broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
         return order;
     }

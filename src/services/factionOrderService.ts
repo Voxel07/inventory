@@ -5,7 +5,15 @@ export function getFactionOrders(filters?: { eventType?: string; faction?: strin
   return apiRequest('/api/orders', { query: filters });
 }
 export function getFactionOrder(id: string): Promise<FactionOrder> { return apiRequest(`/api/orders/${id}`); }
-export function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> { return apiRequest('/api/orders', { method: 'POST', body: data }); }
+export function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> {
+  const idempotencyKey = crypto.randomUUID();
+  const body = { ...data, idempotencyKey };
+  return apiRequest('/api/orders', {
+    method: 'POST',
+    body,
+    offline: { type: 'order.create', payload: data as unknown as Record<string, unknown>, idempotencyKey },
+  });
+}
 export function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> { return apiRequest(`/api/orders/${id}`, { method: 'PATCH', body: data }); }
 
 function transition(id: string, status: string, notes?: string, extra?: Record<string, unknown>): Promise<FactionOrder> {

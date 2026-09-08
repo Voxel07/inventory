@@ -172,7 +172,15 @@ export function UserDashboard() {
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 {t('Meine ausgeliehenen Artikel', 'My checked-out items')}
             </Typography>
-            <Box sx={{ mb: 4 }}>
+            <Box
+                sx={{
+                    mb: 4,
+                    '& a[href^="/items/"]': {
+                        color: 'text.secondary',
+                        '&:hover, &:visited': { color: 'text.secondary' },
+                    },
+                }}
+            >
                 <CheckedOutList
                     rows={checkedOutRows}
                     assemblies={assemblies}

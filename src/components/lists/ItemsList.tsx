@@ -9,7 +9,6 @@ import {
     TableRow,
     TableSortLabel,
     Paper,
-    Chip,
     Skeleton,
     Typography,
     TextField,
@@ -22,7 +21,6 @@ import {
     Grid,
     Card,
     CardContent,
-    CardActions,
     Checkbox,
     IconButton,
     ListItemIcon,
@@ -36,10 +34,8 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import GridViewIcon from '@mui/icons-material/GridView';
 import { useNavigate } from 'react-router-dom';
-import { TooltipButton } from '../shared/TooltipButton';
 import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTransaction } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
-import { formatStatus } from '../../utils/formatters';
 import { useTranslate } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { itemImageUrl } from '../../utils/itemImages';
@@ -53,13 +49,6 @@ interface Props {
     onDelete: (id: string) => void;
     onDeleteMany: (ids: string[]) => void;
 }
-
-const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-    available: 'success',
-    checked_out: 'warning',
-    damaged: 'error',
-    retired: 'default',
-};
 
 type SortField = 'value' | 'stock' | null;
 type SortDir = 'asc' | 'desc';
@@ -237,10 +226,11 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                         const image = itemImageUrl(item);
                         const color = stockColor(remaining, item.minStock ?? 5);
                         return (
-                            <Grid key={item.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+                            <Grid key={item.id} size={{ xs: 6, sm: 3, md: 2 }}>
                                 <Card onClick={() => navigate(`/items/${item.id}`)} sx={{ height: '100%', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
                                     <Box sx={{ position: 'relative' }}>
                                         <Checkbox
+                                            size="small"
                                             checked={selectedIds.has(item.id)}
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={() => toggleSelection(item.id)}
@@ -248,37 +238,39 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                             sx={{ position: 'absolute', zIndex: 1, top: 2, left: 2, bgcolor: 'rgba(255,255,255,0.82)', borderRadius: 1, p: 0.5 }}
                                         />
                                         {image ? (
-                                            <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 88, sm: 112 }, objectFit: 'contain', bgcolor: 'grey.100' }} />
+                                            <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 72, sm: 84 }, objectFit: 'contain', bgcolor: 'grey.100' }} />
                                         ) : (
-                                            <Box sx={{ height: { xs: 88, sm: 112 }, bgcolor: 'grey.100', display: 'grid', placeItems: 'center' }}>
-                                                <GridViewIcon sx={{ fontSize: { xs: 30, sm: 38 }, color: 'text.disabled' }} />
+                                            <Box sx={{ height: { xs: 72, sm: 84 }, bgcolor: 'grey.100', display: 'grid', placeItems: 'center' }}>
+                                                <GridViewIcon sx={{ fontSize: { xs: 26, sm: 32 }, color: 'text.disabled' }} />
                                             </Box>
                                         )}
                                     </Box>
-                                    <CardContent sx={{ flexGrow: 1, p: { xs: 1, sm: 1.25 }, '&:last-child': { pb: { xs: 0.5, sm: 0.75 } } }}>
-                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                                    <CardContent sx={{ flexGrow: 1, p: { xs: 0.75, sm: 1 }, '&:last-child': { pb: { xs: 0.75, sm: 1 } } }}>
+                                        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <Box sx={{ minWidth: 0 }}>
                                                 <Typography sx={{ fontWeight: 700, fontSize: { xs: '0.85rem', sm: '0.95rem' }, lineHeight: 1.15 }} noWrap>{item.name}</Typography>
                                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category || t('Ohne Kategorie', 'No category')}</Typography>
                                             </Box>
-                                            <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" sx={{ alignSelf: 'flex-start', display: { xs: 'none', sm: 'inline-flex' } }} />
+                                            <IconButton
+                                                size="small"
+                                                aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
+                                                onClick={(event) => openActionMenu(event, item)}
+                                                sx={{ mt: -0.5, mr: -0.5 }}
+                                            >
+                                                <MoreVertIcon fontSize="small" />
+                                            </IconButton>
                                         </Stack>
-                                        <Typography sx={{ mt: 0.75, fontWeight: 800, fontSize: { xs: '1.35rem', sm: '1.55rem' }, lineHeight: 1, color }}>
+                                        <Typography sx={{ mt: 0.5, fontWeight: 800, fontSize: { xs: '1.1rem', sm: '1.2rem' }, lineHeight: 1, color }}>
                                             {remaining}/{totalStock}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.25 }}>{t('verfügbar / gesamt', 'available / total')}{checkedOut ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}{damaged ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}</Typography>
-                                        {item.hint && <Typography variant="caption" sx={{ mt: 0.5, display: { xs: 'none', sm: '-webkit-box' }, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} color="text.secondary">{item.hint}</Typography>}
-                                    </CardContent>
-                                    <CardActions onClick={(event) => event.stopPropagation()} sx={{ justifyContent: 'flex-end', p: 0.25, minHeight: 36, '& .MuiIconButton-root': { p: 0.65 } }}>
-                                        {isMobile ? (
-                                            <IconButton aria-label={t('Artikelaktionen öffnen', 'Open item actions')} onClick={(event) => openActionMenu(event, item)}><MoreVertIcon /></IconButton>
-                                        ) : (
-                                            <>
-                                                <TooltipButton variant="icon" tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')} icon={<EditIcon />} onClick={() => onEdit(item)} />
-                                                <TooltipButton variant="icon" tooltipText={t('Artikel löschen', 'Delete item')} icon={<DeleteIcon />} color="error" onClick={() => onDelete(item.id)} />
-                                            </>
+                                        {(checkedOut > 0 || damaged > 0) && (
+                                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.25 }}>
+                                                {checkedOut > 0 ? `${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
+                                                {checkedOut > 0 && damaged > 0 ? ' · ' : ''}
+                                                {damaged > 0 ? `${damaged} ${t('defekt', 'damaged')}` : ''}
+                                            </Typography>
                                         )}
-                                    </CardActions>
+                                    </CardContent>
                                 </Card>
                             </Grid>
                         );
@@ -286,7 +278,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     {filteredAndSorted.length === 0 && <Grid size={{ xs: 12 }}><Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper></Grid>}
                 </Grid>
             ) : isMobile ? (
-                <Stack spacing={1.5}>
+                <Stack spacing={0.75}>
                     {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
                         const minStock = item.minStock ?? 5;
                         const color = stockColor(remaining, minStock);
@@ -294,32 +286,43 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                             ? [item.expand.storageLocation.name, item.expand.storageLocation.location, item.expand.storageLocation.position].filter(Boolean).join(' / ')
                             : item.storageLocation || '—';
                         return (
-                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ p: 2, cursor: 'pointer' }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
-                                    <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">{item.category || t('Ohne Kategorie', 'No category')}</Typography>
-                                    </Box>
-                                    <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" />
-                                </Box>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, my: 1.5 }}>
-                                    <Box>
-                                        <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available')}</Typography>
-                                        <Typography variant="h5" sx={{ color }}>{remaining}/{totalStock}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{t('verfügbar / gesamt', 'available / total')}{checkedOut ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}{damaged ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}</Typography>
-                                    </Box>
-                                    <Box>
-                                        <Typography variant="caption" color="text.secondary">{t('Lagerort', 'Storage location')}</Typography>
-                                        <Typography variant="body2">{location}</Typography>
-                                    </Box>
-                                </Box>
-                                <Box onClick={(event) => event.stopPropagation()} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, pt: 0.5 }}>
+                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ p: 1, cursor: 'pointer' }}>
+                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start' }}>
                                     <Checkbox
+                                        size="small"
                                         checked={selectedIds.has(item.id)}
+                                        onClick={(event) => event.stopPropagation()}
                                         onChange={() => toggleSelection(item.id)}
                                         slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
+                                        sx={{ p: 0.5, ml: -0.5 }}
                                     />
-                                    <IconButton aria-label={t('Artikelaktionen öffnen', 'Open item actions')} onClick={(event) => openActionMenu(event, item)}><MoreVertIcon /></IconButton>
+                                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                                        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{item.category || t('Ohne Kategorie', 'No category')}</Typography>
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
+                                        onClick={(event) => openActionMenu(event, item)}
+                                        sx={{ mt: -0.5, mr: -0.5 }}
+                                    >
+                                        <MoreVertIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(72px, auto) 1fr', gap: 1, mt: 0.5, pl: 4 }}>
+                                    <Box>
+                                        <Typography sx={{ color, fontWeight: 800, lineHeight: 1.2 }}>{remaining}/{totalStock}</Typography>
+                                        {(checkedOut > 0 || damaged > 0) && (
+                                            <Typography variant="caption" color="text.secondary" noWrap>
+                                                {checkedOut > 0 ? `${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
+                                                {checkedOut > 0 && damaged > 0 ? ' · ' : ''}
+                                                {damaged > 0 ? `${damaged} ${t('defekt', 'damaged')}` : ''}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{location}</Typography>
+                                    </Box>
                                 </Box>
                             </Paper>
                         );
@@ -327,11 +330,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                     {filteredAndSorted.length === 0 && <Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper>}
                 </Stack>
             ) : <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                <Table size="small">
+                <Table size="small" sx={{ '& .MuiTableCell-root': { py: 0.5 }, '& .MuiTableCell-head': { py: 0.75 } }}>
                     <TableHead>
                         <TableRow>
                             <TableCell padding="checkbox">
                                 <Checkbox
+                                    size="small"
                                     checked={filteredAndSorted.length > 0 && filteredAndSorted.every(({ item }) => selectedIds.has(item.id))}
                                     indeterminate={filteredAndSorted.some(({ item }) => selectedIds.has(item.id)) && !filteredAndSorted.every(({ item }) => selectedIds.has(item.id))}
                                     onChange={() => {
@@ -371,8 +375,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                             </TableCell>
                             <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
                             <TableCell>{t('Events', 'Events')}</TableCell>
-                            <TableCell>{t('Status', 'Status')}</TableCell>
-                            <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
+                            <TableCell padding="checkbox" />
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -388,34 +391,28 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                 >
                                     <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                                         <Checkbox
+                                            size="small"
                                             checked={selectedIds.has(item.id)}
                                             onChange={() => toggleSelection(item.id)}
                                             slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
                                         />
                                     </TableCell>
                                     <TableCell>{item.name}</TableCell>
-                                    <TableCell>
-                                        {item.category}
-                                        {item.subcategory && (
-                                            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                                {item.subcategory}
-                                            </Typography>
-                                        )}
+                                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                        {item.category}{item.subcategory ? ` · ${item.subcategory}` : ''}
                                     </TableCell>
                                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                         <Typography
+                                            component="span"
                                             variant="body2"
                                             sx={{ color, fontWeight: remaining <= minStock ? 700 : 400 }}
                                         >
                                             {remaining}/{totalStock}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" noWrap>
-                                            {t('verfügbar / gesamt', 'available / total')}{checkedOut > 0 ? ` · ${checkedOut} ${t('ausgeliehen', 'checked out')}` : ''}{damaged > 0 ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}
-                                            {(item.containerSize ?? 0) > 0 && ` · ${item.containerCount ?? 0} ${t('Kartons', 'containers')}`}
-                                        </Typography>
-                                        {(item.containerSize ?? 0) > 0 && (item.containersOpened ?? 0) > 0 && (
-                                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                                                {item.containersOpened} {t('geöffnet', 'opened')} · {item.containerRemainingPercent ?? 100}%
+                                        {(checkedOut > 0 || damaged > 0) && (
+                                            <Typography component="span" variant="caption" color="text.secondary" noWrap>
+                                                {checkedOut > 0 ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
+                                                {damaged > 0 ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}
                                             </Typography>
                                         )}
                                     </TableCell>
@@ -428,40 +425,23 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                                 : item.storageLocation || '—';
                                         })()}
                                     </TableCell>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                            {item.eventTypes?.map((type) => <Chip key={type} label={type} size="small" variant="outlined" />)}
-                                        </Box>
+                                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                        {item.eventTypes?.join(', ') || '—'}
                                     </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={formatStatus(item.status)}
-                                            color={statusColors[item.status] ?? 'default'}
+                                    <TableCell align="right" padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                                        <IconButton
                                             size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                        <TooltipButton
-                                            variant="icon"
-                                            tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')}
-                                            icon={<EditIcon />}
-                                            size="small"
-                                            onClick={() => onEdit(item)}
-                                        />
-                                        <TooltipButton
-                                            variant="icon"
-                                            tooltipText={t('Artikel löschen', 'Delete item')}
-                                            icon={<DeleteIcon />}
-                                            size="small"
-                                            color="error"
-                                            onClick={() => onDelete(item.id)}
-                                        />
+                                            aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
+                                            onClick={(event) => openActionMenu(event, item)}
+                                        >
+                                            <MoreVertIcon fontSize="small" />
+                                        </IconButton>
                                     </TableCell>
                                 </TableRow>
                             );
                         })}
                         {filteredAndSorted.length === 0 && (
-                            <TableRow><TableCell colSpan={9}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
                         )}
                     </TableBody>
                 </Table>

@@ -33,6 +33,31 @@ export type OidcTokenSet = {
   expiresAt: number | null;
 };
 
+export class OidcTokenRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+  ) {
+    super(message);
+    this.name = 'OidcTokenRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** True only when the provider definitively rejected the refresh credentials. */
+export function isOidcSessionRejected(error: unknown): boolean {
+  return error instanceof OidcTokenRequestError
+    && error.status >= 400
+    && error.status < 500
+    && error.status !== 408
+    && error.status !== 429;
+}
+
 let metadataPromise: Promise<OidcMetadata> | null = null;
 
 function base64Url(bytes: Uint8Array): string {
@@ -124,11 +149,17 @@ async function tokenRequest(parameters: URLSearchParams): Promise<TokenResponse>
   const result = await response.json().catch(() => ({})) as TokenResponse;
   if (!response.ok || result.error) {
     if (result.error === 'invalid_client' || response.status === 401) {
-      throw new Error(
+      throw new OidcTokenRequestError(
         'OIDC client authentication failed. Configure the Authentik OAuth2/OIDC provider as a Public client and verify that its Client ID matches this application.',
+        response.status,
+        result.error,
       );
     }
-    throw new Error(result.error_description || result.error || `OIDC token request failed (${response.status})`);
+    throw new OidcTokenRequestError(
+      result.error_description || result.error || `OIDC token request failed (${response.status})`,
+      response.status,
+      result.error,
+    );
   }
   if (!result.access_token) throw new Error('OIDC provider did not return an access token');
   return result;

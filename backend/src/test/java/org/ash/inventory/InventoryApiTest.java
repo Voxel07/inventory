@@ -162,6 +162,40 @@ class InventoryApiTest {
     }
 
     @Test
+    void offlineFactionOrderCreationIsReplayedIdempotently() {
+        String itemId = request()
+                .body(Map.of("sku", "OFFLINE-ORDER-001", "name", "Offline order item", "category", "Equipment", "amount", 3, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+
+        var payload = new java.util.HashMap<String, Object>();
+        payload.put("eventType", "DE");
+        payload.put("faction", "Offline order test faction");
+        payload.put("eventDate", "2033-05-06");
+        payload.put("requestedQuantities", Map.of(itemId, 2));
+        payload.put("requestedAssemblyQuantities", Map.of());
+        String idempotencyKey = java.util.UUID.randomUUID().toString();
+        var batch = Map.of("actions", java.util.List.of(Map.of(
+                "idempotencyKey", idempotencyKey,
+                "type", "order.create",
+                "payload", payload)));
+
+        String orderId = request().body(batch)
+                .post("/api/sync")
+                .then().statusCode(200)
+                .body("results[0].status", equalTo("applied"))
+                .body("results[0].entity.status", equalTo("draft"))
+                .extract().path("results[0].entity.id");
+
+        request().body(batch)
+                .post("/api/sync")
+                .then().statusCode(200)
+                .body("results[0].status", equalTo("applied"))
+                .body("results[0].entity.id", equalTo(orderId));
+    }
+
+    @Test
     void factionOrderPickupPointIsSetWhenTheOrderIsMarkedReady() {
         String itemId = request()
                 .body(Map.of("sku", "PICKUP-LATE-001", "name", "Late pickup item", "category", "Equipment", "amount", 1, "value", 0))
