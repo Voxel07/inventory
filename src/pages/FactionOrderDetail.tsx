@@ -792,6 +792,11 @@ export function FactionOrderDetail() {
           <Typography color="text.secondary">
             {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItems.length + orderAssemblies.length} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
           </Typography>
+          {order.requestedPickupDate && (
+            <Typography sx={{ fontWeight: 700, mt: 0.5 }}>
+              {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+            </Typography>
+          )}
           <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { md: 'flex-start' } }}>

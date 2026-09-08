@@ -46,6 +46,7 @@ export interface FactionOrder {
   eventType: EventType;
   faction: string;
   eventDate: string;
+  requestedPickupDate?: string;
   pickupLocation?: string;
   pickupLatitude?: number;
   pickupLongitude?: number;
@@ -89,6 +90,7 @@ export interface FactionOrderFormData {
   eventType: EventType;
   faction: string;
   eventDate: string;
+  requestedPickupDate?: string;
   pickupLocation?: string;
   pickupLatitude?: number;
   pickupLongitude?: number;

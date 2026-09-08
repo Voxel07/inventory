@@ -194,6 +194,11 @@ export function FactionOrders() {
                     <Typography sx={{ mt: 2 }}>
                       {new Date(latest.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
                     </Typography>
+                    {latest.requestedPickupDate && (
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(latest.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary">
                       {['picked_up', 'returned'].includes(latest.status) ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
                     </Typography>
@@ -249,6 +254,11 @@ export function FactionOrders() {
                       {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
                       {['picked_up', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
                     </Typography>
+                    {order.requestedPickupDate && (
+                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
+                        {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                      </Typography>
+                    )}
                     <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: order.status === 'ready' ? 800 : 400 }}>{t('Abholort', 'Pickup location')}: {pickupLabel(order)}</Typography>
                   </Box>
                   <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />

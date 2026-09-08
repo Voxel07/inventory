@@ -3,6 +3,7 @@ import { EVENT_TYPES, type EventType } from '../types';
 
 const ACTIVE_EVENT_STORAGE_KEY = 'inventory-active-event';
 const THEME_MODE_STORAGE_KEY = 'inventory-theme-mode';
+const MOBILE_NAVIGATION_QUERY = '(max-width: 899.95px)';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -28,6 +29,15 @@ function storedActiveEvent(): EventType {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
   return 'DE';
+}
+
+function defaultSidebarOpen(): boolean {
+  try {
+    return !window.matchMedia(MOBILE_NAVIGATION_QUERY).matches;
+  } catch {
+    // Default to the desktop layout when matchMedia is unavailable.
+    return true;
+  }
 }
 
 interface UIState {
@@ -65,7 +75,7 @@ const defaultFilters = {
 };
 
 export const useUIStore = create<UIState>((set) => ({
-  sidebarOpen: true,
+  sidebarOpen: defaultSidebarOpen(),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 

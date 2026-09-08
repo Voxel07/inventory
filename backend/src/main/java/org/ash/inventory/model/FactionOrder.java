@@ -9,12 +9,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "faction_orders")
 public class FactionOrder extends BaseEntity {
     @Column(name = "order_code", nullable = false, unique = true) public String orderCode;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "event_occurrence_id") public EventOccurrence eventOccurrence;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_id") public Faction faction;
+    @Column(name = "requested_pickup_date") public LocalDate requestedPickupDate;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "pickup_location_id") public StorageLocation pickupLocation;
     @Column(name = "pickup_latitude") public Double pickupLatitude;
     @Column(name = "pickup_longitude") public Double pickupLongitude;

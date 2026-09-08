@@ -18,6 +18,8 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -80,6 +82,8 @@ export function FactionOrderForm({
   onSubmit,
 }: Props) {
   const t = useTranslate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
   const initialEventType = initialData?.eventType ?? defaultEventType;
   const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || FACTIONS_BY_EVENT[type].some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
@@ -90,6 +94,9 @@ export function FactionOrderForm({
   );
   const [eventDate, setEventDate] = useState(
     initialData?.eventDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+  );
+  const [requestedPickupDate, setRequestedPickupDate] = useState(
+    initialData?.requestedPickupDate?.slice(0, 10) ?? '',
   );
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
@@ -155,12 +162,40 @@ export function FactionOrderForm({
     const term = search.trim().toLocaleLowerCase();
     return assemblies
       .filter((assembly) => {
-        if (Number(assemblyQuantities[assembly.id]) > 0) return true;
         if (term) return `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term);
+        if (Number(assemblyQuantities[assembly.id]) > 0) return true;
         return assembly.eventTypes?.includes(eventType);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [assemblies, assemblyQuantities, eventType, search]);
+
+  const hasActiveSearch = Boolean(search.trim());
+  const hasActiveItemFilter = Boolean(search.trim() || category);
+  const displayedAssemblies = useMemo(
+    () => isMobile && !hasActiveSearch
+      ? visibleAssemblies.filter((assembly) => !(Number(assemblyQuantities[assembly.id]) > 0))
+      : visibleAssemblies,
+    [assemblyQuantities, hasActiveSearch, isMobile, visibleAssemblies],
+  );
+  const displayedItems = useMemo(
+    () => isMobile && !hasActiveItemFilter
+      ? visibleItems.filter((item) => !(Number(quantities[item.id]) > 0))
+      : visibleItems,
+    [hasActiveItemFilter, isMobile, quantities, visibleItems],
+  );
+  const selectedAssemblies = useMemo(
+    () => assemblies
+      .filter((assembly) => Number(assemblyQuantities[assembly.id]) > 0)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [assemblies, assemblyQuantities],
+  );
+  const selectedItems = useMemo(
+    () => items
+      .filter((item) => Number(quantities[item.id]) > 0)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [items, quantities],
+  );
+  const selectedEntryCount = selectedAssemblies.length + selectedItems.length;
 
   const currentQuantities = useMemo(() => numericValues(quantities), [quantities]);
   const currentAssemblyQuantities = useMemo(() => numericValues(assemblyQuantities), [assemblyQuantities]);
@@ -248,6 +283,7 @@ export function FactionOrderForm({
       eventType,
       faction,
       eventDate,
+      requestedPickupDate: requestedPickupDate || undefined,
       itemIds: Object.keys(requestedQuantities),
       requestedQuantities,
       assemblyIds: Object.keys(requestedAssemblyQuantities),
@@ -259,7 +295,7 @@ export function FactionOrderForm({
   return (
     <Box component="form" onSubmit={submit}>
       <Stack spacing={2.5}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
           <FormControl fullWidth>
             <InputLabel>{t('Event', 'Event')}</InputLabel>
             <Select
@@ -289,7 +325,16 @@ export function FactionOrderForm({
             slotProps={{ inputLabel: { shrink: true } }}
             required
           />
-        </Stack>
+          <TextField
+            fullWidth
+            type="date"
+            label={t('Gewünschtes Abholdatum (optional)', 'Requested pickup date (optional)')}
+            value={requestedPickupDate}
+            onChange={(event) => setRequestedPickupDate(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            helperText={t('Wann möchtest du die Bestellung abholen?', 'When would you like to collect the order?')}
+          />
+        </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
           <Button
@@ -379,11 +424,13 @@ export function FactionOrderForm({
         <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
             <CategoryIcon color="primary" />
-            <Typography variant="h6">{t('Benötigte Baugruppen', 'Requested assemblies')}</Typography>
+            <Typography variant="h6">
+              {isMobile ? t('Baugruppen auswählen', 'Choose assemblies') : t('Benötigte Baugruppen', 'Requested assemblies')}
+            </Typography>
           </Stack>
           {viewMode === 'tiles' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleAssemblies.map((assembly) => {
+              {displayedAssemblies.map((assembly) => {
                 const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -401,7 +448,7 @@ export function FactionOrderForm({
                       <Typography sx={{ fontWeight: 800 }}>{assemblyQuantities[assembly.id] ?? 0}</Typography>
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
-                    {isSelected && (
+                    {isSelected && !isMobile && (
                       <Tooltip title={t('Alle entfernen', 'Remove all')}>
                         <IconButton size="small" color="error" onClick={() => removeItem(assembly.id, true)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
                       </Tooltip>
@@ -412,7 +459,7 @@ export function FactionOrderForm({
             </Box>
           ) : (
             <Stack spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleAssemblies.map((assembly) => {
+              {displayedAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -427,10 +474,14 @@ export function FactionOrderForm({
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(assembly.id, -1, true)}><RemoveIcon fontSize="small" /></IconButton>
                         <Typography sx={{ width: 28, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
-                        {quantity > 0 && (
-                          <Tooltip title={t('Alle entfernen', 'Remove all')}>
-                            <IconButton size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
-                          </Tooltip>
+                        {!isMobile && (
+                          <Box sx={{ width: 34, flexShrink: 0 }}>
+                            {quantity > 0 && (
+                              <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                                <IconButton size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
                         )}
                       </Stack>
                     </Stack>
@@ -439,11 +490,13 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          {!displayedAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
         </Box>
 
         <Box>
-          <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
+          <Typography variant="h6">
+            {isMobile ? t('Artikel auswählen', 'Choose items') : t('Benötigte Artikel', 'Requested items')}
+          </Typography>
           {shortageCount > 0 && (
             <Alert severity="warning" sx={{ my: 1 }}>
               {t(
@@ -454,7 +507,7 @@ export function FactionOrderForm({
           )}
           {viewMode === 'tiles' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleItems.map((item) => {
+              {displayedItems.map((item) => {
                 const isSelected = Number(quantities[item.id]) > 0;
                 const image = itemImageUrl(item, undefined, '240x160');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -478,7 +531,7 @@ export function FactionOrderForm({
                       <Typography sx={{ fontWeight: 800 }}>{quantities[item.id] ?? 0}</Typography>
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
-                    {isSelected && (
+                    {isSelected && !isMobile && (
                       <Tooltip title={t('Alle entfernen', 'Remove all')}>
                         <IconButton size="small" color="error" onClick={() => removeItem(item.id)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
                       </Tooltip>
@@ -489,7 +542,7 @@ export function FactionOrderForm({
             </Box>
           ) : (
             <Stack spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleItems.map((item) => {
+              {displayedItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -513,10 +566,14 @@ export function FactionOrderForm({
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>
                         <Typography sx={{ width: 28, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
-                        {quantity > 0 && (
-                          <Tooltip title={t('Alle entfernen', 'Remove all')}>
-                            <IconButton size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
-                          </Tooltip>
+                        {!isMobile && (
+                          <Box sx={{ width: 34, flexShrink: 0 }}>
+                            {quantity > 0 && (
+                              <Tooltip title={t('Alle entfernen', 'Remove all')}>
+                                <IconButton size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
                         )}
                       </Stack>
                     </Stack>
@@ -525,8 +582,75 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!visibleItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+          {!displayedItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
         </Box>
+
+        {isMobile && selectedEntryCount > 0 && (
+          <Box>
+            <Divider sx={{ mb: 2 }} />
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="h6">{t('Aktuelle Bestellung', 'Current order')}</Typography>
+              <Chip
+                size="small"
+                color="primary"
+                label={selectedEntryCount === 1
+                  ? t('1 Position', '1 entry')
+                  : t(`${selectedEntryCount} Positionen`, `${selectedEntryCount} entries`)}
+              />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {t(
+                'Bereits hinzugefügte Positionen. Entfernen ist hier bewusst von den Schnellwahl-Tasten getrennt.',
+                'Items already added. Remove actions are kept separate from the quick quantity controls.',
+              )}
+            </Typography>
+            <Stack spacing={1}>
+              {selectedAssemblies.map((assembly) => {
+                const quantity = Number(assemblyQuantities[assembly.id]) || 0;
+                return (
+                  <Paper key={`selected-assembly-${assembly.id}`} variant="outlined" sx={{ p: 1 }}>
+                    <Typography sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('Baugruppe', 'Assembly')} · {Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')}
+                    </Typography>
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+                      <Stack direction="row" sx={{ alignItems: 'center' }}>
+                        <IconButton size="small" onClick={() => changeQuantity(assembly.id, -1, true)} aria-label={t('Menge verringern', 'Decrease quantity')}><RemoveIcon fontSize="small" /></IconButton>
+                        <Typography sx={{ width: 32, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
+                        <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)} aria-label={t('Menge erhöhen', 'Increase quantity')}><AddIcon fontSize="small" /></IconButton>
+                      </Stack>
+                      <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(assembly.id, true)}>
+                        {t('Entfernen', 'Remove')}
+                      </Button>
+                    </Stack>
+                  </Paper>
+                );
+              })}
+              {selectedItems.map((item) => {
+                const quantity = Number(quantities[item.id]) || 0;
+                const available = availableByItem.get(item.id) ?? 0;
+                return (
+                  <Paper key={`selected-item-${item.id}`} variant="outlined" sx={{ p: 1 }}>
+                    <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.category} · {t('Verfügbar', 'Available')}: {available}
+                    </Typography>
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+                      <Stack direction="row" sx={{ alignItems: 'center' }}>
+                        <IconButton size="small" onClick={() => changeQuantity(item.id, -1)} aria-label={t('Menge verringern', 'Decrease quantity')}><RemoveIcon fontSize="small" /></IconButton>
+                        <Typography sx={{ width: 32, textAlign: 'center', fontWeight: 800 }}>{quantity}</Typography>
+                        <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)} aria-label={t('Menge erhöhen', 'Increase quantity')}><AddIcon fontSize="small" /></IconButton>
+                      </Stack>
+                      <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(item.id)}>
+                        {t('Entfernen', 'Remove')}
+                      </Button>
+                    </Stack>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
 
         <TextField
           label={t('Anmerkungen', 'Notes')}

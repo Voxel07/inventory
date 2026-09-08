@@ -309,6 +309,7 @@ public class ApiMapper {
         result.put("eventType", value.eventOccurrence.eventType);
         result.put("eventOccurrenceId", value.eventOccurrence.id.toString());
         result.put("eventDate", value.eventOccurrence.startDate);
+        put(result, "requestedPickupDate", value.requestedPickupDate);
         result.put("faction", value.faction.name);
         result.put("factionId", value.faction.id.toString());
         result.put("status", value.status.name());

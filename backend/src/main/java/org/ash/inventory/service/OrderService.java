@@ -72,9 +72,7 @@ public class OrderService {
         var order = new FactionOrder();
         order.eventOccurrence = event;
         order.faction = faction;
-        order.pickupLocation = input.pickupLocation() == null ? null
-                : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
-        applyPickupPoint(order, input);
+        order.requestedPickupDate = input.requestedPickupDate();
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         order.createdBy = actor;
@@ -93,9 +91,7 @@ public class OrderService {
         if (order.status != DomainEnums.OrderStatus.draft && order.status != DomainEnums.OrderStatus.submitted) {
             throw ApiException.conflict("Only draft or submitted orders can be edited");
         }
-        order.pickupLocation = input.pickupLocation() == null ? order.pickupLocation
-                : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
-        applyPickupPoint(order, input);
+        order.requestedPickupDate = input.requestedPickupDate();
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         replaceLines(order, input);
@@ -153,6 +149,9 @@ public class OrderService {
             boolean nonePrepared = lines.stream().allMatch(line -> line.preparedQuantity == 0);
             if (nonePrepared)
                 throw ApiException.conflict("An order cannot be ready before any items are prepared");
+            order.pickupLocation = input.pickupLocation() == null ? order.pickupLocation
+                    : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
+            applyPickupPoint(order, input.pickupLatitude(), input.pickupLongitude());
             order.readyBy = actor;
         }
         if (target == DomainEnums.OrderStatus.picked_up) {
@@ -426,13 +425,13 @@ public class OrderService {
         };
     }
 
-    private void applyPickupPoint(FactionOrder order, ApiModels.OrderInput input) {
-        Double latitude = input.pickupLatitude() != null
-                ? input.pickupLatitude()
+    private void applyPickupPoint(FactionOrder order, Double requestedLatitude, Double requestedLongitude) {
+        Double latitude = requestedLatitude != null
+                ? requestedLatitude
                 : order.pickupLatitude != null ? order.pickupLatitude
                         : order.pickupLocation == null ? null : order.pickupLocation.latitude;
-        Double longitude = input.pickupLongitude() != null
-                ? input.pickupLongitude()
+        Double longitude = requestedLongitude != null
+                ? requestedLongitude
                 : order.pickupLongitude != null ? order.pickupLongitude
                         : order.pickupLocation == null ? null : order.pickupLocation.longitude;
         if (latitude == null || longitude == null)

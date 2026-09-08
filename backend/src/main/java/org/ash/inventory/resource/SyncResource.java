@@ -70,7 +70,10 @@ public class SyncResource {
                 var target = DomainEnums.OrderStatus.valueOf(action.payload().get("status").toString());
                 if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft) actors.current();
                 else actors.requireManager();
-                yield mapper.order(orders.transition(orderId, target, new ApiModels.TransitionInput(action.idempotencyKey(), text(action.payload(), "notes"), text(action.payload(), "collectorName"))));
+                var value = objectMapper.convertValue(action.payload(), ApiModels.TransitionInput.class);
+                yield mapper.order(orders.transition(orderId, target, new ApiModels.TransitionInput(
+                        action.idempotencyKey(), value.notes(), value.collectorName(), value.pickupLocation(),
+                        value.pickupLatitude(), value.pickupLongitude())));
             }
             case "order.return" -> {
                 actors.requireManager();

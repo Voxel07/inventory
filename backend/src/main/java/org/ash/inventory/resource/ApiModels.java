@@ -44,6 +44,7 @@ public final class ApiModels {
 
     public record OrderInput(
             String eventType, String faction, LocalDate eventDate, UUID eventOccurrenceId, UUID factionId,
+            LocalDate requestedPickupDate,
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude, String collectorName, String notes,
             Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities) {}
 
@@ -52,7 +53,9 @@ public final class ApiModels {
     public record PreparationInput(Map<UUID, Integer> preparedQuantities, boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
     public record ReturnLine(@Min(0) int returned, @Min(0) int missing, @Min(0) int damaged, BigDecimal operatingHours, String notes) {}
     public record ReturnInput(@NotEmpty Map<UUID, ReturnLine> lines, UUID idempotencyKey, String notes) {}
-    public record TransitionInput(UUID idempotencyKey, String notes, String collectorName) {}
+    public record TransitionInput(
+            UUID idempotencyKey, String notes, String collectorName,
+            UUID pickupLocation, Double pickupLatitude, Double pickupLongitude) {}
 
     public record DamageInput(
             @NotNull UUID itemId, @Min(1) int amount, @NotBlank String description,

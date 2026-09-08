@@ -85,7 +85,7 @@ public class OrderResource {
             actor.current();
         else
             actor.requireManager();
-        var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null) : input;
+        var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return mapper.order(service.transition(id, status, safeInput));
     }
 

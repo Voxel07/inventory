@@ -162,6 +162,42 @@ class InventoryApiTest {
     }
 
     @Test
+    void factionOrderPickupPointIsSetWhenTheOrderIsMarkedReady() {
+        String itemId = request()
+                .body(Map.of("sku", "PICKUP-LATE-001", "name", "Late pickup item", "category", "Equipment", "amount", 1, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Late pickup test faction");
+        orderBody.put("eventDate", "2032-04-05");
+        orderBody.put("requestedPickupDate", "2032-04-03");
+        orderBody.put("requestedQuantities", Map.of(itemId, 1));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody)
+                .post("/api/orders")
+                .then().statusCode(200)
+                .body("status", equalTo("draft"))
+                .body("requestedPickupDate", equalTo("2032-04-03"))
+                .extract().path("id");
+
+        request().body(Map.of())
+                .post("/api/orders/" + orderId + "/transitions/submitted")
+                .then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 1), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare")
+                .then().statusCode(200);
+        request().body(Map.of("pickupLatitude", 52.52, "pickupLongitude", 13.405))
+                .post("/api/orders/" + orderId + "/transitions/ready")
+                .then().statusCode(200)
+                .body("status", equalTo("ready"))
+                .body("pickupLatitude", equalTo(52.52f))
+                .body("pickupLongitude", equalTo(13.405f));
+    }
+
+    @Test
     void overOrderedStockAppearsAsAProcurementDeficit() {
         String itemId = request()
                 .body(Map.of("sku", "PROC-OVER-001", "name", "Over-ordered cable", "category", "Equipment", "amount", 10, "value", 0))
@@ -173,8 +209,6 @@ class InventoryApiTest {
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Procurement test faction");
         orderBody.put("eventDate", "2031-04-05");
-        orderBody.put("pickupLatitude", 52.52);
-        orderBody.put("pickupLongitude", 13.405);
         orderBody.put("requestedQuantities", Map.of(itemId, 15));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String eventId = request().body(orderBody)
