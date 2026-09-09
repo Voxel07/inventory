@@ -23,6 +23,7 @@ import { UserManagement } from './pages/UserManagement';
 import { TransactionHistoryPage } from './pages/TransactionHistory';
 import { Procurement } from './pages/Procurement';
 import { Maintenance } from './pages/Maintenance';
+import { Profile } from './pages/Profile';
 import { InventoryManagerGuard } from './components/shared/AccessGuard';
 import { canManageInventory } from './utils/access';
 import type { User } from './types';
@@ -401,6 +402,7 @@ function AppContent() {
             <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
             <Route path="/procurement" element={<InventoryManagerGuard><Procurement /></InventoryManagerGuard>} />
             <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
             <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
             <Route path="*" element={<Navigate to="/" replace />} />

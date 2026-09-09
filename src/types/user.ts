@@ -9,7 +9,7 @@ export interface User {
   updated: string;
 }
 
-export type UserRole = 'Admin ' | 'Admin' | 'User' | 'admin' | 'manager' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader' | 'user' | 'banker' | 'player';
+export type UserRole = 'Admin ' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader';
 
 export type AccessRole = 'admin' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader';
 

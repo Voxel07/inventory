@@ -7,6 +7,7 @@ type OidcMetadata = {
   issuer: string;
   authorization_endpoint: string;
   token_endpoint: string;
+  end_session_endpoint?: string;
 };
 
 type OidcTransaction = {
@@ -247,4 +248,22 @@ export async function refreshOidcTokens(refreshToken: string): Promise<OidcToken
     refresh_token: refreshToken,
   }));
   return toTokenSet(response, refreshToken);
+}
+
+export async function oidcLogoutUrl(idToken: string): Promise<string> {
+  if (!OIDC_CONFIG) throw new Error('OIDC is not configured');
+  const provider = await metadata();
+  if (!provider.end_session_endpoint) {
+    throw new Error('OIDC discovery response does not include an end-session endpoint');
+  }
+
+  const parameters: Record<string, string> = {
+    client_id: OIDC_CONFIG.clientId,
+    post_logout_redirect_uri: OIDC_CONFIG.redirectUri,
+  };
+  if (idToken) parameters.id_token_hint = idToken;
+
+  const url = new URL(provider.end_session_endpoint);
+  url.search = new URLSearchParams(parameters).toString();
+  return url.toString();
 }

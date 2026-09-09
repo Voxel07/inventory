@@ -51,6 +51,7 @@ export function Navigation() {
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
     const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
+    const showSnackbar = useUIStore((s) => s.showSnackbar);
     const activeEventType = useUIStore((s) => s.activeEventType);
     const setActiveEventType = useUIStore((s) => s.setActiveEventType);
     const theme = useTheme();
@@ -151,8 +152,14 @@ export function Navigation() {
                     <Box sx={{ px: 1, pb: 1.5 }}><LanguageSelector /></Box>
                     <ListItemButton
                         onClick={() => {
-                            logout();
-                            navigate('/');
+                            void logout()
+                                .then((redirectingToProvider) => {
+                                    if (!redirectingToProvider) navigate('/');
+                                })
+                                .catch(() => {
+                                    navigate('/');
+                                    showSnackbar(t('nav.signOutProviderFailed'), 'error');
+                                });
                         }}
                         sx={{
                             borderRadius: 0.5,

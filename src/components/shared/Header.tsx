@@ -9,6 +9,7 @@ import {
     ListItemText,
     Menu,
     MenuItem,
+    Tooltip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
@@ -17,6 +18,7 @@ import DoneAllIcon from '@mui/icons-material/DoneAll';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { useUIStore } from '../../store/uiStore';
 import { useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
@@ -165,10 +167,20 @@ export function Header() {
                     color="inherit"
                     onClick={toggleThemeMode}
                     aria-label={t('header.toggleColourScheme')}
-                    sx={{ mr: { xs: 0.5, sm: 1 } }}
+                    sx={{ mr: 0.5 }}
                 >
                     {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
                 </IconButton>
+                <Tooltip title={t('header.openProfile')}>
+                    <IconButton
+                        color="inherit"
+                        onClick={() => navigate('/profile')}
+                        aria-label={t('header.openProfile')}
+                        sx={{ mr: { xs: 0.5, sm: 1 } }}
+                    >
+                        <AccountCircleIcon />
+                    </IconButton>
+                </Tooltip>
                 {syncIssues > 0 && (
                     <Chip
                         size="small"

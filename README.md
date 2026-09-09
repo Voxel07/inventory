@@ -27,6 +27,8 @@ Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs,
 
 The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required.
 
+The sign-out button redirects to the provider's `end_session_endpoint` from OIDC discovery, including the ID token and configured redirect URI. To make this RP-initiated logout also end the user's main Authentik SSO session, configure the provider's invalidation flow with a **User Logout** stage. In Authentik, open **Flows and Stages → Flows → default-provider-invalidation-flow → Stage Bindings**, bind the existing `default-invalidation-logout` stage, and assign that flow to the provider. Without this Authentik setting, its default behavior ends only the Inventory application session.
+
 Authentik supplies application roles through its `groups` claim. Use these namespaced group names so they cannot be confused with roles belonging to another application:
 
 | Authentik group | Inventory role |

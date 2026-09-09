@@ -133,7 +133,7 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t('Bestand', 'Stock')}</TableCell>
-                        <TableCell align="right">{t('Gesamtwert', 'Total value')}</TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 120 }}>{t('Gesamtwert', 'Total value')}</TableCell>
                         <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                     </TableRow>
                 </TableHead>
@@ -181,7 +181,7 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
                                         {remaining}/{totalStock}
                                     </Typography>
                                 </TableCell>
-                                <TableCell align="right">
+                                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                     {getAssemblyTotalValue(assembly).toFixed(2)} €
                                 </TableCell>
                                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>

@@ -1,12 +1,13 @@
 import type { User } from '../types';
 import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
-import { beginOidcLogin, completeOidcLogin } from './oidcClient';
+import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl } from './oidcClient';
 import {
   canRefreshAuth,
   clearAuth,
   getAuthorizationHeaders,
   getAuthSnapshot,
+  getOidcIdToken,
   getValidAccessToken,
   restorePersistedSession,
   setAuthError,
@@ -48,9 +49,24 @@ export async function login(): Promise<void> {
   void precacheCatalogForOfflineUse();
 }
 
-export function logout(): void {
+export async function logout(): Promise<boolean> {
   stopRealtimeEvents();
-  clearAuth();
+  if (!OIDC_CONFIG) {
+    await clearAuth();
+    return false;
+  }
+
+  let providerLogoutUrl: string;
+  try {
+    providerLogoutUrl = await oidcLogoutUrl(getOidcIdToken());
+  } catch (error) {
+    await clearAuth();
+    throw error;
+  }
+
+  await clearAuth();
+  window.location.assign(providerLogoutUrl);
+  return true;
 }
 
 export async function refreshCurrentUser(): Promise<User | null> {

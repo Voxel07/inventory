@@ -47,17 +47,16 @@ function publish(error: string | null = null): void {
   listeners.forEach((listener) => listener());
 }
 
-function persist(): void {
+function persist(): Promise<void> {
   if (session.accessToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   else sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 
   if (session.accessToken || session.refreshToken) {
-    void saveStoredAuthSession(session);
-  } else {
-    void clearStoredAuthSession();
+    return saveStoredAuthSession(session);
   }
+  return clearStoredAuthSession();
 }
 
 /**
@@ -75,7 +74,7 @@ export async function restorePersistedSession(): Promise<void> {
     ...stored,
     user: (stored.user as User | null) ?? null,
   };
-  persist();
+  void persist();
   publish();
   const needsRefresh = !session.refreshToken
     || !session.accessToken
@@ -96,7 +95,7 @@ function replaceTokens(tokens: OidcTokenSet): void {
     idToken: tokens.idToken || session.idToken,
     expiresAt: tokens.expiresAt,
   };
-  persist();
+  void persist();
   publish();
 }
 
@@ -116,13 +115,13 @@ export function setOidcSession(tokens: OidcTokenSet): void {
 
 export function setDevelopmentSession(token: string, user: User): void {
   session = { ...emptySession(), accessToken: token, user };
-  persist();
+  void persist();
   publish();
 }
 
 export function updateAuthUser(user: User): void {
   session = { ...session, user };
-  persist();
+  void persist();
   publish();
 }
 
@@ -130,10 +129,15 @@ export function setAuthError(error: string | null): void {
   publish(error);
 }
 
-export function clearAuth(error: string | null = null): void {
+export async function clearAuth(error: string | null = null): Promise<void> {
   session = emptySession();
-  persist();
+  const persisted = persist();
   publish(error);
+  await persisted;
+}
+
+export function getOidcIdToken(): string {
+  return session.idToken;
 }
 
 export function canRefreshAuth(): boolean {
