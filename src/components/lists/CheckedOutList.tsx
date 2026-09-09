@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -185,84 +185,71 @@ export function CheckedOutList({
     );
   }
 
+  // Keep assembly groups and standalone items in one table so every column uses
+  // the same width. Previously each assembly rendered its own table and omitted
+  // the Event header, which left the header short and shifted the action column.
+  const hasActions = Boolean(onQuickReturn || onDamageReport);
+  const columnCount = 5 + (showPerson ? 1 : 0) + (hasActions ? 1 : 0);
+
   // Desktop table
   return (
-    <Stack spacing={2}>
-      {groups.length > 0 && groups.map((group) => {
-        const groupKey = `${group.assembly.id}:${group.factionOrderId}`;
-        const isExpanded = expandedGroups[groupKey] ?? true;
-        return (
-          <Paper key={groupKey} variant="outlined" sx={{ borderColor: 'primary.dark', overflow: 'hidden' }}>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                alignItems: 'center',
-                p: 1.5,
-                bgcolor: 'rgba(227, 6, 19, 0.045)',
-                cursor: 'pointer',
-              }}
-              onClick={() => toggleGroup(groupKey)}
-            >
-              <CategoryIcon color="primary" fontSize="small" />
-              <Typography sx={{ fontWeight: 700, flex: 1 }}>{group.assembly.name}</Typography>
-              {group.rows[0]?.factionOrderId && (
-                <Chip
-                  component={Link}
-                  to={`/orders/faction/${group.rows[0].factionOrderId}`}
-                  clickable
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  label={group.rows[0].event}
-                />
-              )}
-              <Typography variant="caption" color="text.secondary">{group.rows.length} {t('Positionen', 'items')}</Typography>
-              {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </Stack>
-            <Collapse in={isExpanded}>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>{t('Artikel', 'Item')}</TableCell>
-                      <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                      <TableCell>{t('Lagerort', 'Storage')}</TableCell>
-                      {showPerson && <TableCell>{t('Person', 'Person')}</TableCell>}
-                      <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
-                      {(onQuickReturn || onDamageReport) && <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {group.rows.map((row) => renderTableRow(row))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Collapse>
-          </Paper>
-        );
-      })}
-      {ungroupedRows.length > 0 && (
-        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('Name', 'Name')}</TableCell>
-                <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-                {showPerson && <TableCell>{t('Person', 'Person')}</TableCell>}
-                <TableCell>{t('Event', 'Event')}</TableCell>
-                <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
-                {(onQuickReturn || onDamageReport) && <TableCell align="right">{t('Aktion', 'Action')}</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {ungroupedRows.map((row) => renderTableRow(row))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Stack>
+    <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
+      <Table size="small" sx={{ width: '100%', minWidth: 900 }}>
+        <TableHead>
+          <TableRow>
+            <TableCell>{t('Name', 'Name')}</TableCell>
+            <TableCell>{t('Kategorie', 'Category')}</TableCell>
+            <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
+            {showPerson && <TableCell>{t('Person', 'Person')}</TableCell>}
+            <TableCell>{t('Event', 'Event')}</TableCell>
+            <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
+            {hasActions && <TableCell align="right">{t('Aktion', 'Action')}</TableCell>}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {groups.map((group) => {
+            const groupKey = `${group.assembly.id}:${group.factionOrderId}`;
+            const isExpanded = expandedGroups[groupKey] ?? true;
+            return (
+              <Fragment key={groupKey}>
+                <TableRow
+                  onClick={() => toggleGroup(groupKey)}
+                  sx={{ cursor: 'pointer', bgcolor: 'rgba(227, 6, 19, 0.045)' }}
+                >
+                  <TableCell colSpan={columnCount} sx={{ py: 1 }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
+                      <CategoryIcon color="primary" fontSize="small" sx={{ flexShrink: 0 }} />
+                      <Typography sx={{ fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                        {group.assembly.name}
+                      </Typography>
+                      {group.rows[0]?.factionOrderId && (
+                        <Chip
+                          component={Link}
+                          to={`/orders/faction/${group.rows[0].factionOrderId}`}
+                          clickable
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          label={group.rows[0].event}
+                          onClick={(event) => event.stopPropagation()}
+                          sx={{ maxWidth: '45%' }}
+                        />
+                      )}
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        {group.rows.length} {t('Positionen', 'items')}
+                      </Typography>
+                      {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+                {isExpanded && group.rows.map((row) => renderTableRow(row, true))}
+              </Fragment>
+            );
+          })}
+          {ungroupedRows.map((row) => renderTableRow(row))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 
   function renderMobileRow(row: CheckedOutRow) {
@@ -298,10 +285,10 @@ export function CheckedOutList({
     );
   }
 
-  function renderTableRow(row: CheckedOutRow) {
+  function renderTableRow(row: CheckedOutRow, nested = false) {
     return (
       <TableRow key={row.key} hover>
-        <TableCell>
+        <TableCell sx={nested ? { pl: 5 } : undefined}>
           {linkToItem
             ? <Box component={Link} to={`/items/${row.itemId}`} sx={{ fontWeight: 700, color: 'inherit', textDecoration: 'none', '&:hover': { color: 'primary.main' } }}>{row.name}</Box>
             : row.name}

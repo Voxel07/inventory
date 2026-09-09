@@ -264,37 +264,51 @@ export function FactionOrderDetail() {
         ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
         : item.storageLocation || t('Kein Lagerort', 'No location');
     };
-    const rows = [
-      ...orderAssemblies.flatMap((assembly) => {
-        const assemblyCount = currentOrder.requestedAssemblyQuantities[assembly.id] ?? 0;
-        const components = Object.entries(assembly.itemQuantities ?? {});
-        if (!components.length) return [{
-          requested: assemblyCount,
-          name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
-          details: t('Keine Komponenten', 'No components'),
-          locationKey: 'zzz',
-        }];
-        return components.map(([itemId, componentQuantity]) => {
+    type PrintRow = {
+      kind: 'assembly' | 'component' | 'item';
+      requested: number;
+      name: string;
+      details: string;
+      locationKey?: string;
+    };
+    const assemblyRows: PrintRow[] = orderAssemblies.flatMap((assembly) => {
+      const assemblyCount = currentOrder.requestedAssemblyQuantities[assembly.id] ?? 0;
+      const components = Object.entries(assembly.itemQuantities ?? {})
+        .map(([itemId, componentQuantity]) => {
           const item = itemMap.get(itemId);
           const location = item ? locationLabel(item) : t('Kein Lagerort', 'No location');
           return {
+            kind: 'component' as const,
             requested: assemblyCount * componentQuantity,
-            name: `${t('Baugruppe', 'Assembly')}: ${assembly.name} / ${item?.name ?? itemId}`,
+            name: item?.name ?? itemId,
             details: [location, item?.hint].filter(Boolean).join(' · '),
             locationKey: location.toLocaleLowerCase(),
           };
-        });
-      }),
-      ...orderItems.map((item) => {
+        })
+        .sort((a, b) => a.locationKey.localeCompare(b.locationKey));
+      const componentSummary = components.length
+        ? t(`${components.length} Komponenten`, `${components.length} components`)
+        : t('Keine Komponenten', 'No components');
+      return [{
+        kind: 'assembly' as const,
+        requested: assemblyCount,
+        name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
+        details: [componentSummary, assembly.hint].filter(Boolean).join(' · '),
+      }, ...components];
+    });
+    const itemRows: PrintRow[] = orderItems
+      .map((item) => {
         const location = locationLabel(item);
         return {
+          kind: 'item' as const,
           requested: currentOrder.requestedQuantities[item.id] ?? 0,
           name: item.name,
           details: [location, item.hint].filter(Boolean).join(' · '),
           locationKey: location.toLocaleLowerCase(),
         };
-      }),
-    ].sort((a, b) => a.locationKey.localeCompare(b.locationKey));
+      })
+      .sort((a, b) => (a.locationKey ?? '').localeCompare(b.locationKey ?? ''));
+    const rows = [...assemblyRows, ...itemRows];
 
     // Column x positions: Done | Qty | Prepared | Item/Assembly | Location/Details
     const x = [14, 26, 44, 66, 140, 197];
@@ -317,12 +331,17 @@ export function FactionOrderDetail() {
         doc.text(currentOrder.orderCode, 140, 12);
       }
       const tableY = firstPage ? 54 : 18;
-      doc.setFillColor(235, 235, 235);
+      const headers = [t('Erl.', 'Done'), t('Bed.', 'Qty'), t('Vorb.', 'Prep.'), t('Artikel / Baugruppe', 'Item / Assembly'), t('Lagerort / Komponenten', 'Location / Components')];
+      // PDF text and fills share the non-stroking color state. Paint every cell
+      // before drawing any labels so black header text cannot blacken later cells.
+      for (let index = 0; index < headers.length; index += 1) {
+        doc.setFillColor(235, 235, 235);
+        doc.rect(x[index], tableY, x[index + 1] - x[index], 8, 'FD');
+      }
+      doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      const headers = [t('Erl.', 'Done'), t('Bed.', 'Qty'), t('Vorb.', 'Prep.'), t('Artikel / Baugruppe', 'Item / Assembly'), t('Lagerort / Komponenten', 'Location / Components')];
       for (let index = 0; index < headers.length; index += 1) {
-        doc.rect(x[index], tableY, x[index + 1] - x[index], 8, 'FD');
         doc.text(headers[index], x[index] + 1.5, tableY + 5.2, { maxWidth: x[index + 1] - x[index] - 3 });
       }
       doc.setFont('helvetica', 'normal');
@@ -330,31 +349,59 @@ export function FactionOrderDetail() {
     }
 
     y = drawHeader(true);
+    function wrappedText(text: string, width: number, fontSize: number, style: 'normal' | 'bold', maxLines = 10): string[] {
+      doc.setFont('helvetica', style);
+      doc.setFontSize(fontSize);
+      const lines = doc.splitTextToSize(text || '—', width) as string[];
+      if (lines.length <= maxLines) return lines;
+      const visible = lines.slice(0, maxLines);
+      let lastLine = visible[maxLines - 1].trimEnd();
+      while (lastLine && doc.getTextWidth(`${lastLine}...`) > width) lastLine = lastLine.slice(0, -1);
+      visible[maxLines - 1] = `${lastLine}...`;
+      return visible;
+    }
+
     for (const row of rows) {
-      // Item col width = x[4]-x[3]-4 = 70mm; Details col = x[5]-x[4]-4 = 53mm
-      const nameLines = doc.splitTextToSize(row.name, x[4] - x[3] - 4).slice(0, 3);
-      doc.setFontSize(7.5);
-      const detailLines = doc.splitTextToSize(row.details || '—', x[5] - x[4] - 4).slice(0, 3);
-      doc.setFontSize(9);
-      const rowHeight = Math.max(12, Math.max(nameLines.length, detailLines.length) * 4.5 + 4);
-      if (y + rowHeight > 270) {
+      const isAssembly = row.kind === 'assembly';
+      const nameFontSize = isAssembly ? 10 : 8.5;
+      const nameStyle = isAssembly || row.kind === 'item' ? 'bold' : 'normal';
+      const nameWidth = isAssembly ? x[5] - x[3] - 4 : x[4] - x[3] - 4;
+      const nameLines = wrappedText(isAssembly ? row.name : `${row.kind === 'component' ? '- ' : ''}${row.name}`, nameWidth, nameFontSize, nameStyle);
+      const detailLines = isAssembly ? wrappedText(row.details, nameWidth, 7.5, 'normal', 5) : wrappedText(row.details, x[5] - x[4] - 4, 7.5, 'normal');
+      const rowHeight = isAssembly
+        ? Math.max(14, nameLines.length * 4.5 + detailLines.length * 3.6 + 4)
+        : Math.max(12, Math.max(nameLines.length * 4, detailLines.length * 3.6) + 4);
+      // Keep an assembly heading with at least the first component beneath it.
+      if (y + rowHeight + (isAssembly ? 12 : 0) > 270) {
         doc.addPage();
         y = drawHeader(false);
       }
-      for (let index = 0; index < x.length - 1; index += 1) doc.rect(x[index], y, x[index + 1] - x[index], rowHeight);
-      // Done checkbox
+
+      if (isAssembly) doc.setFillColor(248, 232, 234);
+      for (let index = 0; index < x.length - 1; index += 1) {
+        if (isAssembly && index === 4) continue;
+        const right = isAssembly && index === 3 ? x[5] : x[index + 1];
+        doc.rect(x[index], y, right - x[index], rowHeight, isAssembly ? 'FD' : 'S');
+      }
+
       doc.rect(x[0] + 3, y + (rowHeight - 4) / 2, 4, 4);
-      // Qty
-      doc.setFontSize(9);
+      doc.setFont('helvetica', isAssembly ? 'bold' : 'normal');
+      doc.setFontSize(isAssembly ? 10 : 9);
       doc.text(String(row.requested), x[1] + (x[2] - x[1]) / 2, y + rowHeight / 2 + 1.5, { align: 'center' });
-      // Prepared line
       doc.line(x[2] + 3, y + rowHeight / 2 + 2, x[3] - 3, y + rowHeight / 2 + 2);
-      // Item name
-      doc.setFontSize(9);
-      doc.text(nameLines, x[3] + 1.5, y + 5);
-      // Details
-      doc.setFontSize(7.5);
-      doc.text(detailLines, x[4] + 1.5, y + 4.5);
+
+      doc.setFont('helvetica', nameStyle);
+      doc.setFontSize(nameFontSize);
+      doc.text(nameLines, x[3] + 1.5, y + 4.8, { maxWidth: nameWidth });
+      if (isAssembly) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(detailLines, x[3] + 1.5, y + 5 + nameLines.length * 4.5, { maxWidth: nameWidth });
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(detailLines, x[4] + 1.5, y + 4.5, { maxWidth: x[5] - x[4] - 4 });
+      }
       y += rowHeight;
     }
 

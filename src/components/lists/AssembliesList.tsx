@@ -1,6 +1,6 @@
 import { MediaImage } from '../common/MediaImage';
 import { apiFileUrl } from '../../services/apiClient';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
     Table,
     TableBody,
@@ -27,22 +27,30 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
-import type { Assembly, Item } from '../../types';
+import type { Assembly, DamageReport, Item, StockTransaction } from '../../types';
 import { useTranslate } from '../../utils/naming';
+import { assemblyAvailability } from '../../utils/factionOrderQuantities';
+import { calculateItemStock } from '../../utils/stock';
 
 interface Props {
     assemblies: Assembly[] | undefined;
     items: Item[] | undefined;
+    transactions: StockTransaction[] | undefined;
+    damageReports: DamageReport[] | undefined;
     isLoading: boolean;
     onEdit: (assembly: Assembly) => void;
     onDelete: (id: string) => void;
 }
 
-export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete }: Props) {
+export function AssembliesList({ assemblies, items, transactions, damageReports, isLoading, onEdit, onDelete }: Props) {
     const t = useTranslate();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
+    const stockByItemId = useMemo(() => new Map((items ?? []).map((item) => [
+        item.id,
+        calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0),
+    ])), [damageReports, items, transactions]);
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, assembly: Assembly) => {
         event.stopPropagation();
@@ -109,6 +117,13 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
         );
     }
 
+    function getAssemblyStock(assembly: Assembly) {
+        return {
+            totalStock: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.totalStock ?? 0),
+            remaining: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.remaining ?? 0),
+        };
+    }
+
     return (
         <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
             <Table size="small">
@@ -117,6 +132,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                         <TableCell>{t('Name', 'Name')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t('Bestand', 'Stock')}</TableCell>
                         <TableCell align="right">{t('Gesamtwert', 'Total value')}</TableCell>
                         <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                     </TableRow>
@@ -124,6 +140,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                 <TableBody>
                     {assemblies.map((assembly) => {
                         const assemblyItems = getExpandedItems(assembly);
+                        const { totalStock, remaining } = getAssemblyStock(assembly);
                         return (
                             <TableRow
                                 key={assembly.id}
@@ -159,6 +176,15 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete 
                                             );
                                         })}
                                     </Stack>
+                                </TableCell>
+                                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                    <Typography
+                                        component="span"
+                                        variant="body2"
+                                        sx={{ color: remaining > 0 ? 'success.main' : 'error.main', fontWeight: remaining <= 0 ? 700 : 400 }}
+                                    >
+                                        {remaining}/{totalStock}
+                                    </Typography>
                                 </TableCell>
                                 <TableCell align="right">
                                     {getAssemblyTotalValue(assembly).toFixed(2)} €

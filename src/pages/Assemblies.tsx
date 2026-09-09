@@ -8,6 +8,8 @@ import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useStorageLocations } from '../hooks/useStorageLocations';
+import { useTransactions } from '../hooks/useTransactions';
+import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
@@ -17,6 +19,8 @@ export function Assemblies() {
     const t = useTranslate();
     const { data: assemblies, isLoading } = useAssemblies();
     const { data: items } = useItems();
+    const { data: transactions, isLoading: transactionsLoading } = useTransactions();
+    const { data: damageReports, isLoading: damageReportsLoading } = useDamageReports();
     const { data: storageLocations } = useStorageLocations();
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
@@ -88,7 +92,9 @@ export function Assemblies() {
             <AssembliesList
                 assemblies={assemblies}
                 items={items}
-                isLoading={isLoading}
+                transactions={transactions}
+                damageReports={damageReports}
+                isLoading={isLoading || transactionsLoading || damageReportsLoading}
                 onEdit={setEditingAssembly}
                 onDelete={setDeletingId}
             />
