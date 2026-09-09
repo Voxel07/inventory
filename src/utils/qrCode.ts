@@ -20,8 +20,9 @@ export function getQRUrl(id: string, type: QRResourceType = 'item', textCode?: s
 
 export function generateQRCodeDataURL(id: string, type: QRResourceType = 'item', textCode?: string): Promise<string> {
   return QRCode.toDataURL(getQRUrl(id, type, textCode), {
-    width: 256,
-    margin: 2,
+    width: 512,
+    margin: 4,
+    errorCorrectionLevel: 'M',
     color: { dark: '#000000', light: '#ffffff' },
   });
 }

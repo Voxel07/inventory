@@ -91,8 +91,8 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const enrichedItems = useMemo(() => {
         if (!items) return [];
         return items.map((item) => {
-            const { totalStock, checkedOut, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
-            return { item, totalStock, checkedOut, damaged, remaining };
+            const { totalStock, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+            return { item, totalStock, damaged, remaining };
         });
     }, [items, transactions, damageReports]);
 
@@ -222,7 +222,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
             )}
             {viewMode === 'tiles' ? (
                 <Grid container spacing={{ xs: 1, sm: 1.5 }}>
-                    {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
+                    {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
                         const image = itemImageUrl(item);
                         const color = stockColor(remaining, item.minStock ?? 5);
                         return (
@@ -263,11 +263,9 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         <Typography sx={{ mt: 0.5, fontWeight: 800, fontSize: { xs: '1.1rem', sm: '1.2rem' }, lineHeight: 1, color }}>
                                             {remaining}/{totalStock}
                                         </Typography>
-                                        {(checkedOut > 0 || damaged > 0) && (
+                                        {damaged > 0 && (
                                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.25 }}>
-                                                {checkedOut > 0 ? `${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
-                                                {checkedOut > 0 && damaged > 0 ? ' · ' : ''}
-                                                {damaged > 0 ? `${damaged} ${t('defekt', 'damaged')}` : ''}
+                                                {damaged} {t('defekt', 'damaged')}
                                             </Typography>
                                         )}
                                     </CardContent>
@@ -279,7 +277,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                 </Grid>
             ) : isMobile ? (
                 <Stack spacing={0.75}>
-                    {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
+                    {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
                         const minStock = item.minStock ?? 5;
                         const color = stockColor(remaining, minStock);
                         const location = item.expand?.storageLocation
@@ -312,11 +310,9 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(72px, auto) 1fr', gap: 1, mt: 0.5, pl: 4 }}>
                                     <Box>
                                         <Typography sx={{ color, fontWeight: 800, lineHeight: 1.2 }}>{remaining}/{totalStock}</Typography>
-                                        {(checkedOut > 0 || damaged > 0) && (
+                                        {damaged > 0 && (
                                             <Typography variant="caption" color="text.secondary" noWrap>
-                                                {checkedOut > 0 ? `${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
-                                                {checkedOut > 0 && damaged > 0 ? ' · ' : ''}
-                                                {damaged > 0 ? `${damaged} ${t('defekt', 'damaged')}` : ''}
+                                                {damaged} {t('defekt', 'damaged')}
                                             </Typography>
                                         )}
                                     </Box>
@@ -379,7 +375,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filteredAndSorted.map(({ item, totalStock, checkedOut, damaged, remaining }) => {
+                        {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
                             const minStock = item.minStock ?? 5;
                             const color = stockColor(remaining, minStock);
                             return (
@@ -409,10 +405,9 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         >
                                             {remaining}/{totalStock}
                                         </Typography>
-                                        {(checkedOut > 0 || damaged > 0) && (
+                                        {damaged > 0 && (
                                             <Typography component="span" variant="caption" color="text.secondary" noWrap>
-                                                {checkedOut > 0 ? ` · ${checkedOut} ${t('ausgeliehen', 'out')}` : ''}
-                                                {damaged > 0 ? ` · ${damaged} ${t('defekt', 'damaged')}` : ''}
+                                                {' · '}{damaged} {t('defekt', 'damaged')}
                                             </Typography>
                                         )}
                                     </TableCell>

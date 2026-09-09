@@ -83,7 +83,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
     };
     const canEdit = (tx: StockTransaction) => onEdit && !tx.damageReportId && !tx.factionOrderId && tx.transactionType !== 'repaired' && tx.transactionType !== 'written_off';
 
-    function orderChip(tx: StockTransaction) {
+    function orderChip(tx: StockTransaction, compact = false) {
         if (!tx.factionOrderId) return null;
         const order = tx.expand?.factionOrderId;
         return (
@@ -95,6 +95,12 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                 variant="outlined"
                 color="primary"
                 label={order ? `${order.eventType} · ${order.faction}` : t('Fraktionsliste', 'Faction list')}
+                sx={compact ? {
+                    height: 20,
+                    flexShrink: 0,
+                    fontSize: '0.7rem',
+                    '& .MuiChip-label': { px: 0.75 },
+                } : undefined}
             />
         );
     }
@@ -152,7 +158,12 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                             </TableCell>
                             <TableCell>{getUserName(tx)}</TableCell>
                             <TableCell align="right">{tx.quantityChanged}</TableCell>
-                            <TableCell><Stack spacing={0.5}><span>{tx.reason}</span>{orderChip(tx)}</Stack></TableCell>
+                            <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, whiteSpace: 'nowrap' }}>
+                                    <span>{tx.reason}</span>
+                                    {orderChip(tx, true)}
+                                </Box>
+                            </TableCell>
                             <TableCell>{tx.notes}</TableCell>
                             {onEdit && (
                                 <TableCell align="center">

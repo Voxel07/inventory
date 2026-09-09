@@ -12,6 +12,7 @@ import {
     DialogContent,
     Skeleton,
     Alert,
+    Stack,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -321,6 +322,26 @@ export function ItemDetail() {
                                     Erstellt
                                 </Typography>
                                 <Typography>{new Date(item.created).toLocaleDateString()}</Typography>
+                            </Box>
+                            <Box sx={{ gridColumn: '1 / -1' }}>
+                                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
+                                    {t('Event-Nutzung', 'Event use')}
+                                </Typography>
+                                {item.eventTypes?.length ? (
+                                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                                        {item.eventTypes.map((eventType) => (
+                                            <Chip
+                                                key={eventType}
+                                                label={eventType === 'LS' ? 'LightSim' : eventType}
+                                                color="primary"
+                                                variant="outlined"
+                                                size="small"
+                                            />
+                                        ))}
+                                    </Stack>
+                                ) : (
+                                    <Typography>—</Typography>
+                                )}
                             </Box>
                         </Box>
                     </Paper>

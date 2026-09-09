@@ -259,13 +259,20 @@ export function AssemblyDetail() {
 
             </Box>
 
-            {!!assembly.eventTypes?.length && (
-                <Stack direction="row" spacing={0.75} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
-                    {assembly.eventTypes.map((eventType) => (
-                        <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" />
-                    ))}
-                </Stack>
-            )}
+            <Paper sx={{ p: 2, mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 1 }}>
+                    {t('Event-Nutzung', 'Event use')}
+                </Typography>
+                {assembly.eventTypes?.length ? (
+                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                        {assembly.eventTypes.map((eventType) => (
+                            <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" />
+                        ))}
+                    </Stack>
+                ) : (
+                    <Typography color="text.secondary">{t('Keinem Event zugeordnet', 'Not assigned to an event')}</Typography>
+                )}
+            </Paper>
 
             {insufficientItems.length > 0 && (
                 <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>

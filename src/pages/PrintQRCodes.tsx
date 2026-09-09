@@ -11,6 +11,7 @@ import {
     Autocomplete,
     TextField,
     Tooltip,
+    MenuItem,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { jsPDF } from 'jspdf';
@@ -20,6 +21,14 @@ import { generateQRCodeDataURL } from '../utils/qrCode';
 import { useTranslate } from '../utils/naming';
 
 type FilterMode = 'all' | 'items' | 'assemblies' | 'single';
+
+const M221_LABEL_FORMATS = [
+    { id: '40x30', width: 40, height: 30, label: '40 × 30 mm' },
+    { id: '50x80', width: 50, height: 80, label: '50 × 80 mm' },
+    { id: '70x80', width: 70, height: 80, label: '70 × 80 mm' },
+] as const;
+
+type LabelFormatId = (typeof M221_LABEL_FORMATS)[number]['id'];
 
 interface QREntry {
     id: string;
@@ -37,6 +46,7 @@ export function PrintQRCodesPage() {
     const [pdfGenerating, setPdfGenerating] = useState(false);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [labelFormatId, setLabelFormatId] = useState<LabelFormatId>('40x30');
 
     useEffect(() => {
         if (itemsLoading || assembliesLoading) return;
@@ -84,57 +94,49 @@ export function PrintQRCodesPage() {
 
         setPdfGenerating(true);
         try {
-            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 10;
-            const qrSize = 40;
-            const cellWidth = (pageWidth - margin * 2) / 4;
-            const cellHeight = qrSize + 12;
-
-            let x = margin;
-            let y = margin;
-
-            // Title
-            const title =
-                filterMode === 'all'
-                    ? t('Alle QR-Codes', 'All QR codes')
-                    : filterMode === 'items'
-                        ? t('Artikel-QR-Codes', 'Item QR codes')
-                        : filterMode === 'assemblies'
-                            ? t('Baugruppen-QR-Codes', 'Assembly QR codes')
-                            : 'QR-Code';
-            doc.setFontSize(16);
-            doc.text(title, pageWidth / 2, y + 5, { align: 'center' });
-            y += 15;
+            const labelFormat = M221_LABEL_FORMATS.find((format) => format.id === labelFormatId) ?? M221_LABEL_FORMATS[0];
+            const orientation = labelFormat.width >= labelFormat.height ? 'landscape' : 'portrait';
+            const doc = new jsPDF({
+                orientation,
+                unit: 'mm',
+                format: [labelFormat.width, labelFormat.height],
+                compress: true,
+            });
 
             for (let i = 0; i < filteredEntries.length; i++) {
                 const entry = filteredEntries[i];
+                if (i > 0) doc.addPage([labelFormat.width, labelFormat.height], orientation);
 
-                if (y + cellHeight > pageHeight - margin) {
-                    doc.addPage();
-                    y = margin;
-                    x = margin;
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = Math.max(1.5, Math.min(pageWidth, pageHeight) * 0.05);
+                const textAreaHeight = 5;
+                const qrSize = Math.min(
+                    pageWidth - margin * 2,
+                    pageHeight - margin * 2 - textAreaHeight,
+                );
+                const contentHeight = qrSize + textAreaHeight;
+                const qrX = (pageWidth - qrSize) / 2;
+                const qrY = (pageHeight - contentHeight) / 2;
+
+                doc.addImage(entry.qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+                doc.setFontSize(pageWidth <= 40 ? 7 : 9);
+                const maxTextWidth = pageWidth - margin * 2;
+                let printableName = entry.name;
+                while (printableName.length > 1 && doc.getTextWidth(printableName) > maxTextWidth) {
+                    printableName = printableName.slice(0, -1);
                 }
-
-                const imgX = x + (cellWidth - qrSize) / 2;
-                doc.addImage(entry.qrDataUrl, 'PNG', imgX, y, qrSize, qrSize);
-
-                doc.setFontSize(8);
-                const labelX = x + cellWidth / 2;
-                const labelY = y + qrSize + 4;
-                const truncatedName = entry.name.length > 20 ? entry.name.slice(0, 18) + '…' : entry.name;
-                doc.text(truncatedName, labelX, labelY, { align: 'center' });
-
-                x += cellWidth;
-                if (x + cellWidth > pageWidth - margin + 1) {
-                    x = margin;
-                    y += cellHeight;
+                if (printableName !== entry.name) {
+                    while (printableName.length > 1 && doc.getTextWidth(`${printableName}...`) > maxTextWidth) {
+                        printableName = printableName.slice(0, -1);
+                    }
+                    printableName = `${printableName.trimEnd()}...`;
                 }
+                doc.text(printableName, pageWidth / 2, qrY + qrSize + 3.5, { align: 'center' });
             }
 
-            doc.save(`qr-codes-${filterMode}.pdf`);
+            doc.save(`qr-labels-m221-${labelFormat.id}-${filterMode}.pdf`);
         } finally {
             setPdfGenerating(false);
         }
@@ -198,7 +200,26 @@ export function PrintQRCodesPage() {
                             sx={{ minWidth: 280 }}
                         />
                     )}
+
+                    <TextField
+                        select
+                        label={t('M221-Etikettenformat', 'M221 label size')}
+                        value={labelFormatId}
+                        onChange={(event) => setLabelFormatId(event.target.value as LabelFormatId)}
+                        size="small"
+                        sx={{ minWidth: 180 }}
+                    >
+                        {M221_LABEL_FORMATS.map((format) => (
+                            <MenuItem key={format.id} value={format.id}>{format.label}</MenuItem>
+                        ))}
+                    </TextField>
                 </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    {t(
+                        'Eine PDF-Seite pro Etikett. Im Druckdialog „Tatsächliche Größe“ bzw. 100 % wählen.',
+                        'One PDF page per label. Choose “Actual size” or 100% in the print dialog.',
+                    )}
+                </Typography>
             </Paper>
 
             {filteredEntries.length === 0 ? (
