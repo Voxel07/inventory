@@ -41,8 +41,7 @@ public class OrderResource {
         UserAccount user = actor.current();
         var stream = orm.orders(eventType, faction).stream();
         if (user.role == DomainEnums.UserRole.faction_leader)
-            stream = stream.filter(value -> user.factions.contains(value.faction.name)
-                    || user.factions.contains(value.faction.eventType + ":" + value.faction.name));
+            stream = stream.filter(value -> actor.canAccessFaction(user, value.faction.eventType, value.faction.name));
         return stream.map(mapper::order).toList();
     }
 

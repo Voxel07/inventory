@@ -34,8 +34,16 @@ export interface FactionOrderHistoryEntry {
   userId: string;
   userName: string;
   timestamp: string;
-  quantities?: Record<string, number>;
-  assemblyQuantities?: Record<string, number>;
+  deltaSnapshot?: {
+    items?: Record<string, number>;
+    assemblies?: Record<string, number>;
+    addedItems?: Record<string, number>;
+    removedItems?: Record<string, number>;
+    changedItems?: Record<string, { before: number; after: number }>;
+    addedAssemblies?: Record<string, number>;
+    removedAssemblies?: Record<string, number>;
+    changedAssemblies?: Record<string, { before: number; after: number }>;
+  };
   note?: string;
 }
 

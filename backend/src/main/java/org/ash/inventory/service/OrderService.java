@@ -98,11 +98,13 @@ public class OrderService {
         if (order.status != DomainEnums.OrderStatus.draft && order.status != DomainEnums.OrderStatus.submitted) {
             throw ApiException.conflict("Only draft or submitted orders can be edited");
         }
+        var before = requestedContents(order);
         order.requestedPickupDate = input.requestedPickupDate();
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         replaceLines(order, input);
-        audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(), lineSnapshot(order));
+        audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(),
+                contentChanges(before, requestedContents(order)));
         broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
         return order;
     }
@@ -403,13 +405,85 @@ public class OrderService {
     private Map<String, Object> lineSnapshot(FactionOrder order) {
         var rows = new ArrayList<Map<String, Object>>();
         for (var line : orm.lines(order)) {
-            rows.add(Map.of("itemId", line.item.id, "requested", line.requestedQuantity, "prepared",
-                    line.preparedQuantity,
-                    "pickedUp", line.pickedUpQuantity, "returned", line.returnedQuantity, "missing",
-                    line.missingQuantity, "damaged", line.damagedQuantity));
+            var row = new LinkedHashMap<String, Object>();
+            row.put("itemId", line.item.id);
+            if (line.sourceAssembly != null) row.put("sourceAssemblyId", line.sourceAssembly.id);
+            row.put("requested", line.requestedQuantity);
+            row.put("prepared", line.preparedQuantity);
+            row.put("pickedUp", line.pickedUpQuantity);
+            row.put("returned", line.returnedQuantity);
+            row.put("missing", line.missingQuantity);
+            row.put("damaged", line.damagedQuantity);
+            rows.add(row);
         }
-        return Map.of("lines", rows);
+        var contents = requestedContents(order);
+        return Map.of("lines", rows, "items", contents.items(), "assemblies", contents.assemblies());
     }
+
+    private RequestedContents requestedContents(FactionOrder order) {
+        var items = new LinkedHashMap<String, Integer>();
+        var assemblyLines = new LinkedHashMap<String, List<FactionOrderLine>>();
+        for (var line : orm.lines(order)) {
+            if (line.sourceAssembly == null) {
+                items.merge(line.item.id.toString(), line.requestedQuantity, Integer::sum);
+            } else {
+                assemblyLines.computeIfAbsent(line.sourceAssembly.id.toString(), ignored -> new ArrayList<>()).add(line);
+            }
+        }
+        var assemblies = new LinkedHashMap<String, Integer>();
+        for (var entry : assemblyLines.entrySet()) {
+            int requestedCount = Integer.MAX_VALUE;
+            for (var line : entry.getValue()) {
+                var component = orm.assemblyItem(line.sourceAssembly, line.item);
+                int componentQuantity = component == null ? 1 : component.quantity;
+                requestedCount = Math.min(requestedCount, line.requestedQuantity / componentQuantity);
+            }
+            assemblies.put(entry.getKey(), requestedCount == Integer.MAX_VALUE ? 0 : requestedCount);
+        }
+        return new RequestedContents(items, assemblies);
+    }
+
+    private Map<String, Object> contentChanges(RequestedContents before, RequestedContents after) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("items", after.items());
+        result.put("assemblies", after.assemblies());
+        result.put("addedItems", addedValues(before.items(), after.items()));
+        result.put("removedItems", removedValues(before.items(), after.items()));
+        result.put("changedItems", changedValues(before.items(), after.items()));
+        result.put("addedAssemblies", addedValues(before.assemblies(), after.assemblies()));
+        result.put("removedAssemblies", removedValues(before.assemblies(), after.assemblies()));
+        result.put("changedAssemblies", changedValues(before.assemblies(), after.assemblies()));
+        return result;
+    }
+
+    private Map<String, Integer> addedValues(Map<String, Integer> before, Map<String, Integer> after) {
+        var result = new LinkedHashMap<String, Integer>();
+        after.forEach((id, quantity) -> {
+            if (!before.containsKey(id)) result.put(id, quantity);
+        });
+        return result;
+    }
+
+    private Map<String, Integer> removedValues(Map<String, Integer> before, Map<String, Integer> after) {
+        var result = new LinkedHashMap<String, Integer>();
+        before.forEach((id, quantity) -> {
+            if (!after.containsKey(id)) result.put(id, quantity);
+        });
+        return result;
+    }
+
+    private Map<String, Map<String, Integer>> changedValues(Map<String, Integer> before, Map<String, Integer> after) {
+        var result = new LinkedHashMap<String, Map<String, Integer>>();
+        after.forEach((id, quantity) -> {
+            Integer previous = before.get(id);
+            if (previous != null && previous.intValue() != quantity) {
+                result.put(id, Map.of("before", previous, "after", quantity));
+            }
+        });
+        return result;
+    }
+
+    private record RequestedContents(Map<String, Integer> items, Map<String, Integer> assemblies) {}
 
     private String nextOrderCode(EventOccurrence event, Faction faction) {
         String factionPart = faction.slug.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(Locale.ROOT);
@@ -451,11 +525,7 @@ public class OrderService {
     }
 
     private void assertFactionAccess(UserAccount actor, Faction faction) {
-        if (actor.role != DomainEnums.UserRole.faction_leader)
-            return;
-        String key = faction.eventType + ":" + faction.name;
-        if (!actor.factions.contains(faction.name) && !actor.factions.contains(key))
-            throw ApiException.forbidden("You do not have access to this faction");
+        actors.requireFactionAccess(actor, faction.eventType, faction.name);
     }
 
     private void createReadyNotification(FactionOrder order) {

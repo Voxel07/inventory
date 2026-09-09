@@ -244,7 +244,8 @@ export function FactionOrderDetail() {
     ? [...[pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean), pickupPoint].filter(Boolean).join(' · ')
     : pickupPoint ?? t('Nicht angegeben', 'Not specified');
   const isManager = canManageInventory(currentUser);
-  const canEditOrder = isManager || order.createdBy === user?.id;
+  const canEditOrder = isManager || canAccessFaction(currentUser, order.eventType, order.faction);
+  const canEditOrderContents = canEditOrder && ['draft', 'submitted'].includes(order.status);
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
     + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
   const preparedTotal = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0)
@@ -476,8 +477,32 @@ export function FactionOrderDetail() {
   }
 
   function historySnapshot(entry: FactionOrderHistoryEntry) {
-    const itemEntries = Object.entries(entry.quantities ?? {}).filter(([, quantity]) => quantity > 0);
-    const assemblyEntries = Object.entries(entry.assemblyQuantities ?? {}).filter(([, quantity]) => quantity > 0);
+    const snapshot = entry.deltaSnapshot;
+    const addedItems = Object.entries(snapshot?.addedItems ?? {});
+    const removedItems = Object.entries(snapshot?.removedItems ?? {});
+    const changedItems = Object.entries(snapshot?.changedItems ?? {});
+    const addedAssemblies = Object.entries(snapshot?.addedAssemblies ?? {});
+    const removedAssemblies = Object.entries(snapshot?.removedAssemblies ?? {});
+    const changedAssemblies = Object.entries(snapshot?.changedAssemblies ?? {});
+    const hasChanges = addedItems.length || removedItems.length || changedItems.length
+      || addedAssemblies.length || removedAssemblies.length || changedAssemblies.length;
+
+    if (hasChanges) {
+      return (
+        <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
+          {addedAssemblies.map(([id, quantity]) => <Chip key={`added-assembly-${id}`} size="small" color="success" variant="outlined" label={`${t('Hinzugefügt', 'Added')}: ${quantity}× ${assemblyMap.get(id)?.name ?? id}`} />)}
+          {removedAssemblies.map(([id, quantity]) => <Chip key={`removed-assembly-${id}`} size="small" color="error" variant="outlined" label={`${t('Entfernt', 'Removed')}: ${quantity}× ${assemblyMap.get(id)?.name ?? id}`} />)}
+          {changedAssemblies.map(([id, quantities]) => <Chip key={`changed-assembly-${id}`} size="small" color="warning" variant="outlined" label={`${t('Menge geändert', 'Quantity changed')}: ${assemblyMap.get(id)?.name ?? id} ${quantities.before} → ${quantities.after}`} />)}
+          {addedItems.map(([id, quantity]) => <Chip key={`added-item-${id}`} size="small" color="success" variant="outlined" label={`${t('Hinzugefügt', 'Added')}: ${quantity}× ${itemMap.get(id)?.name ?? id}`} />)}
+          {removedItems.map(([id, quantity]) => <Chip key={`removed-item-${id}`} size="small" color="error" variant="outlined" label={`${t('Entfernt', 'Removed')}: ${quantity}× ${itemMap.get(id)?.name ?? id}`} />)}
+          {changedItems.map(([id, quantities]) => <Chip key={`changed-item-${id}`} size="small" color="warning" variant="outlined" label={`${t('Menge geändert', 'Quantity changed')}: ${itemMap.get(id)?.name ?? id} ${quantities.before} → ${quantities.after}`} />)}
+        </Stack>
+      );
+    }
+
+    if (entry.action !== 'created') return null;
+    const itemEntries = Object.entries(snapshot?.items ?? {}).filter(([, quantity]) => quantity > 0);
+    const assemblyEntries = Object.entries(snapshot?.assemblies ?? {}).filter(([, quantity]) => quantity > 0);
     if (!itemEntries.length && !assemblyEntries.length) return null;
     return (
       <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
@@ -621,35 +646,74 @@ export function FactionOrderDetail() {
     return Object.keys(assembly.itemQuantities ?? {}).every((itemId) => checked[itemId]);
   }
 
+  function quantityChips(requested: number, available: number, storedPrepared: number) {
+    return (
+      <>
+        <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
+        <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
+        {currentOrder.status !== 'preparing' && (
+          <Chip
+            size="small"
+            color={storedPrepared === requested ? 'success' : 'default'}
+            label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`}
+          />
+        )}
+      </>
+    );
+  }
+
   function itemRow(item: Item) {
     const requested = currentOrder.requestedQuantities[item.id] ?? 0;
     const storedPrepared = currentOrder.preparedQuantities[item.id] ?? 0;
     const available = availableFor(item);
     return (
       <Card key={item.id} variant="outlined">
-        <CardContent sx={{ px: 1.25, py: 0.75, '&:last-child': { pb: 0.75 } }}>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {item.expand?.storageLocation?.name || item.storageLocation || t('Kein Lagerort', 'No storage location')}
-                {item.category ? ` · ${item.category}` : ''}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
-              <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
-              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
+        <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, '&:last-child': { pb: { xs: 1.25, md: 1.5 } } }}>
+          <Stack spacing={{ xs: 1, md: 0 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                  {item.expand?.storageLocation?.name || item.storageLocation || t('Kein Lagerort', 'No storage location')}
+                  {item.category ? ` · ${item.category}` : ''}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
+                {quantityChips(requested, available, storedPrepared)}
+              </Stack>
+              {currentOrder.status === 'preparing' && (
+                <TextField
+                  type="number"
+                  size="small"
+                  label={t('Vorbereitet', 'Prepared')}
+                  value={prepared[item.id] ?? ''}
+                  onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
+                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
+                  sx={{ display: { xs: 'none', md: 'flex' }, width: 110, flexShrink: 0 }}
+                />
+              )}
             </Stack>
+            <Box
+              sx={{
+                display: { xs: 'grid', md: 'none' },
+                gridTemplateColumns: currentOrder.status === 'preparing' ? 'repeat(2, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+                gap: 0.5,
+                '& .MuiChip-root': { width: '100%' },
+                '& .MuiChip-label': { px: 0.5, fontSize: '0.7rem' },
+              }}
+            >
+              {quantityChips(requested, available, storedPrepared)}
+            </Box>
             {currentOrder.status === 'preparing' && (
               <TextField
+                fullWidth
                 type="number"
                 size="small"
                 label={t('Vorbereitet', 'Prepared')}
                 value={prepared[item.id] ?? ''}
                 onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
                 slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ width: 110 }}
+                sx={{ display: { xs: 'flex', md: 'none' } }}
               />
             )}
           </Stack>
@@ -676,39 +740,62 @@ export function FactionOrderDetail() {
           bgcolor: allChecked ? 'rgba(95, 128, 104, 0.06)' : 'rgba(227, 6, 19, 0.045)',
         }}
       >
-        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <CategoryIcon color={allChecked ? 'success' : 'primary'} fontSize="small" sx={{ flexShrink: 0 }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
-                {allChecked && <Chip size="small" color="success" label={t('Vollständig', 'Complete')} />}
+        <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, '&:last-child': { pb: { xs: 1.25, md: 1.5 } } }}>
+          <Stack spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <CategoryIcon color={allChecked ? 'success' : 'primary'} fontSize="small" sx={{ flexShrink: 0 }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{assembly.name}</Typography>
+                  {allChecked && <Chip size="small" color="success" label={t('Vollständig', 'Complete')} />}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {componentEntries.length} {t('Komponenten', 'components')}
+                  {componentEntries.length > 0 && ` · ${checkedCount}/${componentEntries.length} ${t('abgehakt', 'checked')}`}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
+                {quantityChips(requested, available, storedPrepared)}
               </Stack>
-              <Typography variant="caption" color="text.secondary">
-                {componentEntries.length} {t('Komponenten', 'components')}
-                {componentEntries.length > 0 && ` · ${checkedCount}/${componentEntries.length} ${t('abgehakt', 'checked')}`}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <Chip size="small" label={`${t('Bedarf', 'Requested')}: ${requested}`} />
-              <Chip size="small" color={available >= requested ? 'success' : 'warning'} label={`${t('Verfügbar', 'Available')}: ${available}`} />
-              {currentOrder.status !== 'preparing' && <Chip size="small" color={storedPrepared === requested ? 'success' : 'default'} label={`${['picked_up', 'returned'].includes(currentOrder.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared')}: ${storedPrepared}`} />}
+              {currentOrder.status === 'preparing' && (
+                <TextField
+                  type="number"
+                  size="small"
+                  label={t('Vorbereitet', 'Prepared')}
+                  value={preparedAssemblies[assembly.id] ?? ''}
+                  onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
+                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
+                  sx={{ display: { xs: 'none', md: 'flex' }, width: 110, flexShrink: 0 }}
+                />
+              )}
+              {componentEntries.length > 0 && (
+                <IconButton size="small" onClick={() => toggleAssemblyExpand(assembly.id)} aria-label={isExpanded ? t('Einklappen', 'Collapse') : t('Ausklappen', 'Expand')} sx={{ flexShrink: 0 }}>
+                  {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              )}
             </Stack>
+            <Box
+              sx={{
+                display: { xs: 'grid', md: 'none' },
+                gridTemplateColumns: currentOrder.status === 'preparing' ? 'repeat(2, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+                gap: 0.5,
+                '& .MuiChip-root': { width: '100%' },
+                '& .MuiChip-label': { px: 0.5, fontSize: '0.7rem' },
+              }}
+            >
+              {quantityChips(requested, available, storedPrepared)}
+            </Box>
             {currentOrder.status === 'preparing' && (
               <TextField
+                fullWidth
                 type="number"
                 size="small"
                 label={t('Vorbereitet', 'Prepared')}
                 value={preparedAssemblies[assembly.id] ?? ''}
                 onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
                 slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ width: 110, flexShrink: 0 }}
+                sx={{ display: { xs: 'flex', md: 'none' } }}
               />
-            )}
-            {componentEntries.length > 0 && (
-              <IconButton size="small" onClick={() => toggleAssemblyExpand(assembly.id)} aria-label={isExpanded ? t('Einklappen', 'Collapse') : t('Ausklappen', 'Expand')}>
-                {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-              </IconButton>
             )}
           </Stack>
 
@@ -815,7 +902,7 @@ export function FactionOrderDetail() {
             {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
           </Button>
         )}
-        {canEditOrder && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+        {isManager && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
           <Button color="error" startIcon={<CancelIcon />} onClick={() => setConfirmAction('cancel')} sx={{ ml: { sm: 'auto' } }}>
             {t('Stornieren', 'Cancel')}
           </Button>
@@ -846,10 +933,10 @@ export function FactionOrderDetail() {
           )}
           <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
         </Box>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { md: 'flex-start' } }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { xs: 'stretch', md: 'flex-start' } }}>
           <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Listen-QR', 'List QR')}</Button>
           <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrder}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
-          {canEditOrder && order.status !== 'picked_up' && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
+          {canEditOrderContents && <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
 

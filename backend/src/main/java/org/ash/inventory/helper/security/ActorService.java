@@ -76,6 +76,18 @@ public class ActorService {
         if (current().role != DomainEnums.UserRole.admin) throw ApiException.forbidden("Administrator access required");
     }
 
+    public boolean canAccessFaction(UserAccount actor, String eventType, String faction) {
+        if (actor.role != DomainEnums.UserRole.faction_leader) return true;
+        String key = eventType + ":" + faction;
+        return actor.factions.contains(faction) || actor.factions.contains(key);
+    }
+
+    public void requireFactionAccess(UserAccount actor, String eventType, String faction) {
+        if (!canAccessFaction(actor, eventType, faction)) {
+            throw ApiException.forbidden("You do not have access to this faction");
+        }
+    }
+
     private String header(String name, String fallback) {
         String value = headers.getHeaderString(name);
         return value == null || value.isBlank() ? fallback : value;

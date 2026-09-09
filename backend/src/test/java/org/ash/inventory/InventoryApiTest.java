@@ -112,6 +112,87 @@ class InventoryApiTest {
                 .header("X-Actor-Role", "faction_leader");
     }
 
+    private static io.restassured.specification.RequestSpecification assignedFactionLeaderRequest() {
+        return given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-assigned-faction-leader")
+                .header("X-Actor-Name", "Assigned Faction Leader")
+                .header("X-Actor-Role", "faction_leader");
+    }
+
+    @Test
+    void factionLeaderCannotUseTheApiForAnUnassignedFaction() {
+        String userId = assignedFactionLeaderRequest()
+                .get("/api/auth/me")
+                .then().statusCode(200)
+                .extract().path("id");
+        request()
+                .body(Map.of("role", "faction_leader", "faction", java.util.List.of("DE:Allowed API faction")))
+                .patch("/api/users/" + userId)
+                .then().statusCode(200);
+
+        String itemId = request()
+                .body(Map.of("sku", "FACTION-ACCESS-001", "name", "Faction access item", "category", "Equipment", "amount", 2, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+        String replacementItemId = request()
+                .body(Map.of("sku", "FACTION-ACCESS-002", "name", "Faction replacement item", "category", "Equipment", "amount", 2, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+        var assignedOrder = Map.of(
+                "eventType", "DE",
+                "faction", "Allowed API faction",
+                "eventDate", "2034-05-06",
+                "requestedQuantities", Map.of(itemId, 1),
+                "requestedAssemblyQuantities", Map.of());
+        var unassignedOrder = Map.of(
+                "eventType", "DE",
+                "faction", "Hidden API faction",
+                "eventDate", "2034-05-06",
+                "requestedQuantities", Map.of(itemId, 1),
+                "requestedAssemblyQuantities", Map.of());
+
+        assignedFactionLeaderRequest()
+                .body(assignedOrder)
+                .post("/api/orders")
+                .then().statusCode(200)
+                .body("faction", equalTo("Allowed API faction"));
+        assignedFactionLeaderRequest()
+                .body(unassignedOrder)
+                .post("/api/orders")
+                .then().statusCode(403);
+
+        String adminCreatedAssignedOrderId = request()
+                .body(assignedOrder)
+                .post("/api/orders")
+                .then().statusCode(200)
+                .extract().path("id");
+        var editedAssignedOrder = new java.util.HashMap<String, Object>(assignedOrder);
+        editedAssignedOrder.put("requestedQuantities", Map.of(replacementItemId, 2));
+        editedAssignedOrder.put("notes", "Edited by another assigned faction leader");
+        assignedFactionLeaderRequest()
+                .body(editedAssignedOrder)
+                .patch("/api/orders/" + adminCreatedAssignedOrderId)
+                .then().statusCode(200)
+                .body("notes", equalTo("Edited by another assigned faction leader"))
+                .body("history[-1].deltaSnapshot.addedItems", org.hamcrest.Matchers.hasEntry(replacementItemId, 2))
+                .body("history[-1].deltaSnapshot.removedItems", org.hamcrest.Matchers.hasEntry(itemId, 1));
+
+        String unassignedOrderId = request()
+                .body(unassignedOrder)
+                .post("/api/orders")
+                .then().statusCode(200)
+                .extract().path("id");
+        assignedFactionLeaderRequest()
+                .get("/api/orders/" + unassignedOrderId)
+                .then().statusCode(403);
+        assignedFactionLeaderRequest()
+                .get("/api/orders")
+                .then().statusCode(200)
+                .body("faction", org.hamcrest.Matchers.everyItem(equalTo("Allowed API faction")));
+    }
+
     @Test
     void catalogAndMaintenanceBlockerFlow() {
         String locationId = request()

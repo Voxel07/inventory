@@ -44,9 +44,11 @@ export default {
   },
   profile: {
     title: 'Profile',
-    subtitle: 'Your account details and assigned access role.',
+    subtitle: 'Your account details and assigned access.',
     name: 'Name',
     role: 'Role',
+    assignedFactions: 'Assigned factions',
+    noAssignedFactions: 'No factions assigned',
     unknownUser: 'Unknown user',
     roles: {
       admin: 'Administrator',

@@ -33,7 +33,7 @@ import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type
 import { useUIStore } from '../store/uiStore';
 import { useAppLanguage, useTranslate } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { allowedFactionKeys, canManageInventory } from '../utils/access';
+import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import type { User } from '../types';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -64,18 +64,20 @@ export function FactionOrders() {
   const { user } = useAuth();
   const currentUser = user as unknown as User;
   const isManager = canManageInventory(currentUser);
-  const allowedFactions = isManager ? null : (currentUser?.faction ?? []);
   const allowedKeys = allowedFactionKeys(currentUser);
-  const selectableEvents = EVENT_TYPES.filter((type) => isManager || FACTIONS_BY_EVENT[type].some((faction) => allowedFactions?.includes(faction)));
-  const visibleFactions = FACTIONS_BY_EVENT[eventType].filter((faction) => isManager || allowedFactions?.includes(faction));
+  const selectableEvents = EVENT_TYPES.filter((type) => FACTIONS_BY_EVENT[type]
+    .some((faction) => canAccessFaction(currentUser, type, faction)));
+  const visibleFactions = FACTIONS_BY_EVENT[eventType]
+    .filter((faction) => canAccessFaction(currentUser, eventType, faction));
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: storageLocations = [] } = useStorageLocations();
   const { data: allOrders = [], isLoading, isError } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = useMemo(
-    () => allOrders.filter((order) => order.eventType === eventType),
-    [allOrders, eventType],
+    () => allOrders.filter((order) => order.eventType === eventType
+      && canAccessFaction(currentUser, order.eventType, order.faction)),
+    [allOrders, currentUser, eventType],
   );
 
   const ordersByFaction = useMemo(() => Object.fromEntries(
@@ -95,7 +97,8 @@ export function FactionOrders() {
   function selectEvent(value: EventType | null) {
     if (!value) return;
     setEventType(value);
-    const firstFaction = FACTIONS_BY_EVENT[value].find((candidate) => isManager || allowedFactions?.includes(candidate));
+    const firstFaction = FACTIONS_BY_EVENT[value]
+      .find((candidate) => canAccessFaction(currentUser, value, candidate));
     if (firstFaction) setSelectedFaction(firstFaction);
   }
 

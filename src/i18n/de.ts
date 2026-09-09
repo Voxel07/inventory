@@ -44,9 +44,11 @@ export default {
   },
   profile: {
     title: 'Profil',
-    subtitle: 'Ihre Kontodaten und zugewiesene Zugriffsrolle.',
+    subtitle: 'Ihre Kontodaten und zugewiesenen Zugriffsrechte.',
     name: 'Name',
     role: 'Rolle',
+    assignedFactions: 'Zugewiesene Fraktionen',
+    noAssignedFactions: 'Keine Fraktionen zugewiesen',
     unknownUser: 'Unbekannter Benutzer',
     roles: {
       admin: 'Administrator',
