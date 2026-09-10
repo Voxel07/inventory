@@ -23,7 +23,7 @@ flowchart LR
     A[Yearly Event Planning] --> B[Faction Order Draft]
     B --> C[Warehouse Commissioning & Packing]
     C --> D[Ready for Pickup + Notification]
-    D --> E[Custody Handover via QR Scan]
+    D --> E[Custody Handover via Order Verification]
     E --> F[In-Game Deployment]
     F --> G[Return & Condition Reconciliation]
     G --> H[Damage / Loss Reporting or Restock]
@@ -37,25 +37,25 @@ This matrix evaluates the current codebase against the requirements defined in [
 
 | Feature / Capability | Handwritten Requirement | Current App State | Gap / Target Architecture |
 |---|---|---|---|
-| **Item Management** | Categories, subcategories, event filters, images, hints | **Implemented** (`src/pages/Items.tsx`, `ItemDetail.tsx`) | Images stored in PocketBase; target Garage S3 on VPS 3. |
-| **Assemblies / Bundles** | Group items together to check out at once | **Implemented** (`src/pages/Assemblies.tsx`, `AssemblyDetail.tsx`) | Ready; component breakdown works during checkout. |
-| **Consumables vs. Returnables** | Track items expected to return vs. used up | **Partial** (`containerSize`, container remaining %, but no explicit consumable flag) | Needs explicit item classification (`consumable` vs. `returnable`). |
-| **Stock Tracking & Alerts** | Alerts when stock runs low | **Partial** (`minStock` exists, flagged in UI dashboard) | Needs automated alerts / push notifications / email warnings. |
-| **Event History & Baselines** | History of orders and what was actually used; copy last year's baseline | **Implemented** (`src/pages/FactionOrders.tsx`, copy previous list) | Baseline copying exists; needs cross-year event occurrence scoping. |
-| **Faction Orders** | Factions state what they need; editable drafts | **Implemented** (`src/pages/FactionOrderDetail.tsx`) | JSON aggregate map in PocketBase; needs normalized relational lines. |
-| **Packing & Readiness Notification** | Packing by warehouse crew; notification when ready | **Partial** (status flow exists: `draft -> preparing -> ready`) | Notification system missing (WebPush, email, or in-app push). |
-| **Damage & Loss Tracking** | Menu to track broken or lost items | **Implemented** (`src/pages/DamageReports.tsx`) | Partial repair/write-off works; needs direct linking to return scans. |
-| **User Traceability** | Track who performed each action | **Implemented** (records user ID on transactions and order milestones) | Needs server-enforced audit immutability and tamper-proof logs. |
-| **QR Code Scanning & Printing** | QR on items, assemblies, orders; camera scan & print sheets | **Implemented** (`ZXing` scanner, `/print-qr` with `jsPDF`) | Works well on desktop and mobile; needs short manual code fallback. |
-| **Order Identification** | Unique human-readable code per order | **Partial** (uses auto-generated PB IDs or order codes) | Needs structured code format (e.g. `DE26-KGG-01`). |
-| **Printable Paper Sheets** | Paper commissioning lists to check off by hand in warehouse | **Missing / Minimal** (browser print CSS only) | Needs dedicated printable PDF packing slip with checkboxes and QR header. |
-| **Demand & Reorder View** | See what is more ordered than in stock & what needs reordering | **Missing** | Dedicated procurement view calculating `Demand - Available Stock = Deficit`. |
-| **Incomplete Kit Check-in** | Handle missing kit components separately upon return | **Missing** | Itemized return checklist keeping unreturned kit parts assigned to customer. |
-| **Safety & Maintenance Cycles** | Periodic test schedules (DGUV V3, generator hours, battery health) | **Missing** | Certification schedules with automated checkout blocking for overdue gear. |
-| **Offline Field Mode (PWA)** | Scan and operate in bunkers/forests with zero cellular signal | **Missing** | Service Worker + IndexedDB queue with automated sync and idempotency keys. |
-| **Access Control & HQ Crew Limit** | Limit access to HQ crew, separate faction leaders | **Partial** (`role` field on user, but PB collection rules are currently broad) | Server-side RBAC (HQ Admin, Warehouse Packer, Faction Leader). |
-| **High Availability & Storage** | Redundant nodes, S3 storage, and off-site backup | **Missing** (Single container on 1 host) | Cloudflare Workers LB -> 2 App VPS + 3rd VPS Garage S3 & Storage Box. |
-| **Cross-Device Usability** | Mobile & desktop responsive, simple fast UI | **Implemented** (MUI responsive drawers, mobile bottom bars, card layouts) | Responsive layouts active; PWA offline layer planned. |
+| **Item Management** | Categories, subcategories, event filters, images, hints | **Implemented** (`src/pages/Items.tsx`, `ItemDetail.tsx`) | S3/local media storage active via Garage S3 API. |
+| **Assemblies / Bundles** | Group items together to check out at once | **Implemented** (`src/pages/Assemblies.tsx`, `AssemblyDetail.tsx`) | Ready; component breakdown works during checkout and return. |
+| **Consumables vs. Returnables** | Track items expected to return vs. used up | **Implemented** (`is_consumable` flag on Item, UI checkbox, container metrics) | Full distinction between consumable stock and returnable custody gear. |
+| **Stock Tracking & Alerts** | Alerts when stock runs low | **Implemented** (`minStock` threshold badges, dashboard shortage cards) | Real-time calculation via backend `InventoryOperationsService`. |
+| **Event History & Baselines** | History of orders and what was actually used; copy last year's baseline | **Implemented** (`src/pages/FactionOrders.tsx`, copy previous list) | Baseline copying and change diff view active. |
+| **Faction Orders** | Factions state what they need; editable drafts | **Implemented** (`src/pages/FactionOrderDetail.tsx`) | Normalized relational lines with reservation lifecycle in PostgreSQL. |
+| **Packing & Readiness Notification** | Packing by warehouse crew; notification when ready | **Implemented (In-App)** | Status flow `draft -> preparing -> ready` with SSE in-app notifications in Header. |
+| **Damage & Loss Tracking** | Menu to track broken or lost items | **Implemented** (`src/pages/DamageReports.tsx`) | Integrated with item return checklist and repair/write-off lifecycle. |
+| **User Traceability** | Track who performed each action | **Implemented** | Immutable history ledger (`faction_order_history`) with actor IDs & deltas. |
+| **QR Code Generation & Printing** | QR on items, assemblies, orders; print sheets & packing slips | **Implemented** (`/print-qr` with `jsPDF`, `QRCodeGenerator`) | In-app camera QR scanning removed (handled separately / via dedicated hardware scanners). |
+| **Order Identification** | Unique human-readable code per order | **Implemented** | Structured order codes (e.g. `DE26-KGG-01`) generated automatically. |
+| **Printable Paper Sheets** | Paper commissioning lists to check off by hand in warehouse | **Implemented** | Dedicated PDF packing slip generated via `jsPDF` with checkboxes, QR header, and locations. |
+| **Demand & Reorder View** | See what is more ordered than in stock & what needs reordering | **Implemented** (`src/pages/Procurement.tsx`) | Dedicated procurement view calculating deficits, grouped by vendor with CSV export. |
+| **Incomplete Kit Check-in** | Handle missing kit components separately upon return | **Implemented** (`OrderReturnChecklist.tsx`) | Itemized component return keeping unreturned parts assigned to customer (`partially_returned`). |
+| **Safety & Maintenance Cycles** | Periodic test schedules (DGUV V3, generator hours, battery health) | **Implemented** (`src/pages/Maintenance.tsx`) | DGUV V3 records and operating hours with automated checkout blocking for overdue items. |
+| **Offline Field Mode (PWA)** | Operate in bunkers/forests with zero cellular signal | **Implemented** | Service Worker + IndexedDB queue with automated sync, idempotency keys, and conflict dialog. |
+| **Access Control & HQ Crew Limit** | Limit access to HQ crew, separate faction leaders | **Implemented** | Authentik OIDC group mapping (`admin`, `inventory_manager`, `warehouse_packer`, `faction_leader`). |
+| **Deployment & Storage** | Durable hosting, S3 storage, and off-site backup | **Implemented (Step 1)** (App VPS + Storage VPS / S3) | Multi-VPS cluster with Cloudflare Workers deferred; will come at a later date if demand requires it. |
+| **Cross-Device Usability** | Mobile & desktop responsive, simple fast UI | **Implemented** (MUI responsive drawers, mobile bottom bars, card layouts) | Responsive layouts active across desktop, tablet, and mobile browsers. |
 
 ---
 
@@ -103,12 +103,12 @@ The core operational lifecycle consists of strict status transitions:
    - Once all items are assembled (or shortages explicitly acknowledged), status moves to `READY`.
    - Automated push notification / email / SMS sent to the designated collector with the **exact pickup location and OpenStreetMap pin**.
 4. **Custody Handover (Pickup):**
-   - The collector presents the printed or digital Order QR code at the designated pickup location.
+   - The collector presents the printed or digital Order QR code / order code at the designated pickup location.
    - The order detail screen renders the interactive OpenStreetMap pin showing where to collect the gear.
-   - Warehouse marshal scans the QR code, confirms collector identity.
+   - Warehouse marshal opens the order (via order code or external QR scan) and confirms collector identity.
    - System atomically creates checkout transactions transferring custody to the collector.
 5. **Return & Condition Check (Reconciliation):**
-   - Post-game return: Marshal scans the order QR code at the designated return/intake point.
+   - Post-game return: Marshal opens the order return reconciliation checklist at the designated return/intake point.
    - Items are inspected:
      - Undamaged returnable items are checked back into inventory.
      - Consumable items are marked as used/depleted.
@@ -138,14 +138,14 @@ To prevent field shortages before major events, the system provides a dedicated 
 
 ### 3.6 Incomplete Kit / Assembly Check-in & Return Workflow
 When an assembly (e.g., *"Faction HQ Power Kit"* composed of 1 generator, 2 cable drums, 4 multi-sockets, and 2 floodlights) is returned, components are often missing or returned separately.
-- **Component-Level Return Checklist:** The marshal scans the order QR code, which displays an itemized visual checklist of all components within the checked-out assembly.
+- **Component-Level Return Checklist:** The marshal opens the order return checklist, which displays an itemized visual checklist of all components within the checked-out assembly.
 - **Partial Assembly Reconciliation:**
   - Undamaged returned components are checked back into available warehouse stock immediately.
   - Missing components (e.g., 1 cable drum not returned) are flagged as **`MISSING_UNRETURNED`**.
   - Custody for the missing item remains assigned to the collecting customer/faction.
   - The order status transitions to **`PARTIALLY_RETURNED`** (preventing premature order closure).
 - **Resolution Outcomes:**
-  1. *Late Return:* Customer returns the missing item later $\rightarrow$ marshal scans the item back in $\rightarrow$ order closes.
+  1. *Late Return:* Customer returns the missing item later $\rightarrow$ marshal checks the item back in $\rightarrow$ order closes.
   2. *Declared Lost / Replaced:* Customer pays replacement fee or signs loss waiver $\rightarrow$ item is written off with replacement invoice note $\rightarrow$ order closes.
 
 ### 3.7 Periodic Safety & Maintenance Cycles (DGUV V3, Generator Hours, Battery Health)
@@ -168,10 +168,10 @@ Airsoft events are hosted on remote military training areas, dense forests, or u
 - **PWA Service Worker Caching:**
   - The web application installs as a PWA on mobile devices (iOS / Android / Rugged Android scanners).
   - Caches the application shell, item catalog (names, storage locations, photos, hints), and all active event orders and pick-lists in browser **IndexedDB**.
-- **Offline Scanner & Commissioning Operations:**
-  - Marshals can scan QR codes, check off items during warehouse picking, confirm readiness, and record return condition without any internet connection.
+- **Offline Commissioning & Field Operations:**
+  - Marshals can check off items during warehouse picking, confirm readiness, and record return condition without any internet connection.
 - **Append-Only Sync Queue & Conflict Resolution:**
-  - Every offline scan/action appends an immutable event into IndexedDB with a client-generated UUID idempotency key and local timestamp.
+  - Every offline action appends an immutable event into IndexedDB with a client-generated UUID idempotency key and local timestamp.
   - Visual status indicator in the UI: *"Offline — 7 actions queued"*.
   - When connection is re-established (e.g. returning to HQ Wi-Fi), the queue automatically replays against the Quarkus REST API.
   - Server-side idempotency keys prevent duplicate checkouts or duplicate check-ins even if synced multiple times.
@@ -189,8 +189,8 @@ To ensure the inventory system is a comprehensive, production-grade tool for eve
 | **Faction / Event Orders** | **Core Strength:** Event-scoped faction lists, copy previous year baseline, diff view. | Typically generic sub-rentals; lacks airsoft/scenario faction workflows. | **Implemented & Core Feature** |
 | **Assemblies / Bundles** | **Implemented:** Predefined kits, component quantity breakdown. | Standard in Rentman & Snipe-IT ("Kits / Bundles"). | **Implemented & Core Feature** |
 | **Visual Warehouse & Maps** | **Implemented:** Leaflet map overlay for field/warehouse positioning. | Rare in standard tools (usually text-only shelf/bin). | **Implemented & Enhanced** |
-| **Mobile QR Scanning** | **Implemented:** ZXing camera & file scanner on desktop/mobile. | Standard across all mobile inventory apps. | **Implemented** |
-| **Demand vs. Stock Deficit** | **Added (Section 3.5):** Procurement & reorder deficit view across upcoming events. | **Rentman Gold Standard:** Real-time shortage planner showing required vs. available gear across dates. | **Included (Target Build)** |
+| **QR Code Printing & Labels** | **Implemented:** QR generation on items, assemblies, orders, and PDF commissioning slips. | Standard across inventory and logistics applications. | **Implemented** (In-app camera scanning removed; handled via alternative/external means) |
+| **Demand vs. Stock Deficit** | **Implemented (Section 3.5):** Procurement & reorder deficit view across upcoming events. | **Rentman Gold Standard:** Real-time shortage planner showing required vs. available gear across dates. | **Implemented & Core Feature** |
 | **Incomplete Kit Check-in** | **Added (Section 3.6):** Component-level checklist tracking missing kit parts upon return. | Rentman tracks "missing kit components" with replacement billing/follow-up. | **Included (Target Build)** |
 | **Periodic Maintenance & Inspection** | **Added (Section 3.7):** DGUV V3 safety testing, generator runtime hours, battery health. | Standard (DGUV V3 safety testing, periodic inspection dates, calibration, warranty). | **Included (Target Build)** |
 | **Offline Field Mode (PWA)** | **Added (Section 3.8):** IndexedDB local queue for remote dead-zone scanning & sync. | High-end field logistics apps support offline queueing with sync. | **Included (Target Build)** |
@@ -205,7 +205,7 @@ To ensure the inventory system is a comprehensive, production-grade tool for eve
 3. **Periodic Maintenance & Inspection Cycles (Section 3.7):**
    - Tracks legal electrical safety tests (**DGUV V3**), generator operating hours (service alarms every 50h), and prop battery health, automatically blocking overdue gear from checkout.
 4. **Offline Field Mode via PWA (Section 3.8):**
-   - Service Worker caching and IndexedDB offline queueing with idempotency keys for zero-signal bunker/forest scanning.
+   - Service Worker caching and IndexedDB offline queueing with idempotency keys for zero-signal bunker/forest field operations.
 
 *(Note: Transport manifests / CMR documents are explicitly deferred for a future iteration).*
 
@@ -223,7 +223,7 @@ To ensure the inventory system is a comprehensive, production-grade tool for eve
 ### 5.1 Database: PostgreSQL 18+ (The Foundation)
 **Verdict:** PostgreSQL 18+ replaces SQLite/PocketBase to guarantee ACID compliance, transactional integrity, and scalable multi-user operations.
 
-- **ACID Transactions & Row-Level Locking:** Prevents race conditions and double-checkouts when multiple marshals scan items simultaneously.
+- **ACID Transactions & Row-Level Locking:** Prevents race conditions and double-checkouts when multiple marshals process transactions simultaneously.
 - **Relational Integrity:** Foreign keys enforce that order histories, audit trails, and item references remain intact even if master records are deactivated.
 - **Fuzzy Search:** Built-in `pg_trgm` extension enables typo-tolerant search for German/English gear names on mobile devices.
 - **Disaster Recovery:** Point-in-Time Recovery (PITR) via continuous Write-Ahead Log (WAL) archiving.
@@ -243,7 +243,7 @@ flowchart TD
         OPENAPI[SmallRye OpenAPI - Auto-generated OpenAPI 3.1 & Swagger UI]
     end
 
-    Client[Frontend / Scanner PWA] --> R
+    Client[Frontend / Field PWA] --> R
     R --> OIDC
     R --> ORM
     ORM --> DB[(PostgreSQL 18)]
@@ -260,9 +260,13 @@ flowchart TD
 
 ---
 
-### 5.3 Multi-VPS Hosting Architecture: Cloudflare Workers + 2 App Nodes + 1 Storage Node
+### 5.3 Hosting Architecture & Deployment Topology
 
-To ensure high availability, redundancy, and independent storage scaling without the complexity of Kubernetes, the infrastructure uses a **3-node VPS architecture** coordinated by **Cloudflare Workers**:
+The operational baseline is **Step 1 — Single Application VPS + Storage & Backup Node** (detailed in [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md)). A multi-VPS active/failover cluster with Cloudflare Workers is **deferred and will be implemented at a later date if user demand or high-availability requirements necessitate it**.
+
+#### 5.3.1 Target Scale-Out Architecture (Deferred for Future Demand): Cloudflare Workers + 2 App Nodes + 1 Storage Node
+
+If scaling or zero-downtime multi-node failover is required in the future, the infrastructure scales to a **3-node VPS architecture** coordinated by **Cloudflare Workers**:
 
 ```mermaid
 flowchart TD
@@ -330,15 +334,15 @@ flowchart TD
   - Quarkus backend and React frontend emit standard **OpenTelemetry (OTel)** logs, metrics, and distributed traces.
   - Ingests:
     1. **Audit Logs:** Dedicated JSON stream logging every inventory movement with user ID, IP, order ID, and before/after stock delta.
-    2. **Application Performance Metrics:** API endpoint latencies (especially QR scanner endpoints).
+    2. **Application Performance Metrics:** API endpoint latencies (especially inventory transactions and sync endpoints).
     3. **Error Traces:** Detailed stack traces and client-side unhandled errors from mobile field devices.
 
 ---
 
 ### 5.5 Hosting Capacity & The "When Does k3s Make Sense?" Evaluation
 
-#### 5.5.1 The 2-VPS + Cloudflare Worker Setup Capacity
-With two 4-core application nodes and a Cloudflare Worker edge:
+#### 5.5.1 The Deferred 2-VPS + Cloudflare Worker Setup Capacity
+With two 4-core application nodes and a Cloudflare Worker edge (planned for future scale-out if demand requires it):
 - **Throughput:** Design ceiling of roughly **10,000+ requests/sec** and several
   thousand active users. These are planning figures, not guarantees — measure
   with the OpenTelemetry/OpenObserver stack before relying on them.
@@ -490,8 +494,8 @@ gantt
     Offline PWA & IndexedDB Sync         :p3_4, after p3_3, 7d
     Push Notifications (WebPush/SSE)     :p3_5, after p3_4, 5d
     section Phase 4: Production Hardening
-    2-VPS Docker + Cloudflare Worker     :p4_1, after p3_2, 5d
-    Garage S3 on VPS 3 + Storage Box     :p4_2, after p4_1, 4d
+    Step 1 VPS + Storage Node Deployment :p4_1, after p3_2, 5d
+    Garage S3 on Storage Node + Backup   :p4_2, after p4_1, 4d
     Automated WAL Backups to Storage Box :p4_3, after p4_2, 3d
     End-to-End Field Validation Testing  :p4_4, after p4_3, 5d
 ```
@@ -517,11 +521,11 @@ gantt
 4. Add the Demand & Reorder Deficit view (`Demand - Available Stock = Reorder Quantity`).
 5. Implement **Offline Field Mode via PWA**:
    - Service Worker caching of active orders and pick lists in **IndexedDB**.
-   - Offline scanning queue with client-side idempotency keys syncing back to Quarkus upon reconnection.
-6. Implement push notifications via Server-Sent Events (SSE) or WebPush API.
+   - Offline sync queue with client-side idempotency keys syncing back to Quarkus upon reconnection.
+6. Implement in-app notifications via Server-Sent Events (SSE) and explore WebPush API.
 
-### Phase 4: Production Hardening & Multi-VPS Deployment
-1. Deploy **Cloudflare Worker** as health-checked edge load balancer routing to VPS 1 and VPS 2.
-2. Setup **VPS 1 (Primary)** and **VPS 2 (Hot Standby)** running Traefik, React 19 SPA, Quarkus REST API, and PostgreSQL 18 streaming replication.
-3. Setup **VPS 3** running **Garage S3** for media/PDF storage and mount/sync to **Hetzner Storage Box** for encrypted off-site backups.
-4. Setup automated PostgreSQL WAL archiving (`pgBackRest` or `wal-g`) to Hetzner Storage Box.
+### Phase 4: Production Hardening & Deployment (Step 1 Baseline; Multi-VPS Deferred)
+1. Deploy **Step 1 Baseline**: Single application VPS running Nginx, React 19 SPA, Quarkus REST API, PostgreSQL 18, and Valkey ([`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md)).
+2. Setup **Storage Node (VPS 2/3)** running **Garage S3** for media/PDF storage and mount/sync to **Hetzner Storage Box** for encrypted off-site backups.
+3. Setup automated PostgreSQL logical replication and WAL archiving (`pgBackRest` or `wal-g`) to Hetzner Storage Box.
+4. **Deferred Scale-Out (Future Phase if Demand Requires):** Introduce multi-VPS active/standby failover coordinated by a **Cloudflare Worker** L7 load balancer if operational load or strict HA needs demand it.
