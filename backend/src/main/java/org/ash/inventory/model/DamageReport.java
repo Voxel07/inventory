@@ -13,9 +13,11 @@ import jakarta.persistence.Table;
 @Table(name = "damage_reports")
 public class DamageReport extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reporter_id") public UserAccount reporter;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handler_id") public UserAccount handler;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "faction_order_id") public FactionOrder factionOrder;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handover_id") public CustodyHandover handover;
     @Column(nullable = false) public int quantity;
     @Column(name = "repaired_quantity", nullable = false) public int repairedQuantity;
     @Column(name = "written_off_quantity", nullable = false) public int writtenOffQuantity;
@@ -23,5 +25,6 @@ public class DamageReport extends BaseEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.DamageStatus status = DomainEnums.DamageStatus.reported;
     @Column(nullable = false) public String description;
     @Column(name = "resolution_notes") public String resolutionNotes;
+    @Column(name = "safety_impact", nullable = false) public boolean safetyImpact;
     @Column(name = "idempotency_key", unique = true) public java.util.UUID idempotencyKey;
 }

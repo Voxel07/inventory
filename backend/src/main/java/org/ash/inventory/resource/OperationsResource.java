@@ -49,7 +49,7 @@ public class OperationsResource {
     @POST
     @Path("/transactions")
     public Object transaction(@Valid ApiModels.TransactionInput input) {
-        actor.requireManager();
+        actor.requireWarehouse();
         return mapper.transaction(service.transact(input));
     }
 
@@ -65,14 +65,14 @@ public class OperationsResource {
     @POST
     @Path("/damage-reports")
     public Object createDamage(@Valid ApiModels.DamageInput input) {
-        actor.requireManager();
+        actor.requireMarshal();
         return mapper.damage(service.createDamage(input));
     }
 
     @PATCH
     @Path("/damage-reports/{id}")
     public Object resolveDamage(@PathParam("id") UUID id, @Valid ApiModels.DamageResolutionInput input) {
-        actor.requireManager();
+        actor.requireMaintenance();
         return mapper.damage(service.resolveDamage(id, input));
     }
 
@@ -88,7 +88,7 @@ public class OperationsResource {
     @POST
     @Path("/maintenance")
     public Object maintenance(@Valid ApiModels.MaintenanceInput input) {
-        actor.requireManager();
+        actor.requireMaintenance();
         return mapper.maintenance(service.recordMaintenance(input));
     }
 

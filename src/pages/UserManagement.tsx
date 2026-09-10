@@ -10,8 +10,10 @@ const factionOptions = [...new Set(EVENT_TYPES.flatMap((eventType) => FACTIONS_B
 
 function mappedRole(user: User): AccessRole {
   const role = user.role?.trim().toLowerCase();
-  if (role === 'admin') return 'admin';
+  if (role === 'admin' || role === 'hq_admin') return role;
   if (role === 'manager' || role === 'inventory_manager') return 'inventory_manager';
+  if (role === 'warehouse_packer' || role === 'warehouse_crew' || role === 'marshal'
+    || role === 'event_planner' || role === 'maintenance_crew' || role === 'read_only') return role;
   return 'faction_leader';
 }
 
@@ -60,8 +62,15 @@ function UserPermissionsEditor({ user }: { user: User }) {
           sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}
         >
           <MenuItem value="admin">{t('Administrator', 'Administrator')}</MenuItem>
+          <MenuItem value="hq_admin">{t('HQ-Administrator', 'HQ administrator')}</MenuItem>
           <MenuItem value="inventory_manager">{t('Inventarverwaltung', 'Inventory manager')}</MenuItem>
+          <MenuItem value="warehouse_packer">{t('Lager / Kommissionierung', 'Warehouse packer')}</MenuItem>
+          <MenuItem value="warehouse_crew">{t('Lagerteam', 'Warehouse crew')}</MenuItem>
+          <MenuItem value="marshal">{t('Marshal', 'Marshal')}</MenuItem>
+          <MenuItem value="event_planner">{t('Eventplanung', 'Event planner')}</MenuItem>
+          <MenuItem value="maintenance_crew">{t('Wartungsteam', 'Maintenance crew')}</MenuItem>
           <MenuItem value="faction_leader">{t('Fraktionsleitung', 'Faction leader')}</MenuItem>
+          <MenuItem value="read_only">{t('Nur Lesen', 'Read only')}</MenuItem>
         </TextField>
         <Autocomplete
           multiple

@@ -62,13 +62,18 @@ export interface FactionOrder {
   itemIds: string[];
   requestedQuantities: Record<string, number>;
   preparedQuantities: Record<string, number>;
+  allocatedQuantities?: Record<string, number>;
+  reservedQuantities?: Record<string, number>;
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
   preparedAssemblyQuantities: Record<string, number>;
   pickedUpQuantities?: Record<string, number>;
+  handedOverQuantities?: Record<string, number>;
   returnedQuantities?: Record<string, number>;
+  consumedQuantities?: Record<string, number>;
   missingQuantities?: Record<string, number>;
   damagedQuantities?: Record<string, number>;
+  writtenOffQuantities?: Record<string, number>;
   notes?: string;
   createdBy: string;
   preparedBy?: string;

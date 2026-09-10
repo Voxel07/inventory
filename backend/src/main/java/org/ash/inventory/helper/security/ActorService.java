@@ -25,7 +25,13 @@ public class ActorService {
 
     @Transactional
     public UserAccount current() {
-        if (cached != null) return cached;
+        if (cached != null) {
+            var managed = users.findByExternalSubject(cached.externalSubject);
+            if (managed != null) {
+                cached = managed;
+                return cached;
+            }
+        }
         String subject;
         String name;
         String email = null;
@@ -60,20 +66,41 @@ public class ActorService {
         } else {
             cached.name = name;
             if (email != null) cached.email = email;
-            if (!identity.isAnonymous()) cached.role = role;
+            if (devAuthEnabled || (identity != null && !identity.isAnonymous())) cached.role = role;
         }
         return cached;
     }
 
     public void requireManager() {
-        var role = current().role;
-        if (role != DomainEnums.UserRole.admin && role != DomainEnums.UserRole.inventory_manager && role != DomainEnums.UserRole.warehouse_packer) {
-            throw ApiException.forbidden("Inventory manager access required");
-        }
+        requireAny("Inventory manager access required", DomainEnums.UserRole.admin,
+                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
+                DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew);
     }
 
     public void requireAdmin() {
-        if (current().role != DomainEnums.UserRole.admin) throw ApiException.forbidden("Administrator access required");
+        requireAny("Administrator access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin);
+    }
+
+    public void requireWarehouse() {
+        requireAny("Warehouse access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
+                DomainEnums.UserRole.warehouse_crew);
+    }
+
+    public void requireMarshal() {
+        requireAny("Marshal access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
+                DomainEnums.UserRole.warehouse_crew, DomainEnums.UserRole.marshal);
+    }
+
+    public void requireMaintenance() {
+        requireAny("Maintenance access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.maintenance_crew);
+    }
+
+    public void requirePlanner() {
+        requireAny("Event planner access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.event_planner);
     }
 
     public boolean canAccessFaction(UserAccount actor, String eventType, String faction) {
@@ -99,11 +126,23 @@ public class ActorService {
     }
 
     static DomainEnums.UserRole roleFrom(Set<String> roles) {
+        if (roles.contains("inventory_hq_admin")) return DomainEnums.UserRole.hq_admin;
         if (roles.contains("inventory_admin")) return DomainEnums.UserRole.admin;
         if (roles.contains("inventory_manager")) return DomainEnums.UserRole.inventory_manager;
+        if (roles.contains("inventory_warehouse_crew")) return DomainEnums.UserRole.warehouse_crew;
         if (roles.contains("inventory_warehouse_packer")) return DomainEnums.UserRole.warehouse_packer;
+        if (roles.contains("inventory_marshal")) return DomainEnums.UserRole.marshal;
+        if (roles.contains("inventory_event_planner")) return DomainEnums.UserRole.event_planner;
+        if (roles.contains("inventory_maintenance_crew")) return DomainEnums.UserRole.maintenance_crew;
+        if (roles.contains("inventory_read_only")) return DomainEnums.UserRole.read_only;
         if (roles.contains("inventory_faction_leader")) return DomainEnums.UserRole.faction_leader;
         return DomainEnums.UserRole.faction_leader;
+    }
+
+    private void requireAny(String message, DomainEnums.UserRole... allowed) {
+        var role = current().role;
+        for (var candidate : allowed) if (role == candidate) return;
+        throw ApiException.forbidden(message);
     }
 
     private DomainEnums.UserRole parseRole(String value) {

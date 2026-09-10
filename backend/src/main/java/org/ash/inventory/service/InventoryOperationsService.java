@@ -31,8 +31,7 @@ public class InventoryOperationsService {
     OperationsOrm orm;
     @Inject
     ActorService actors;
-    @Inject
-    org.ash.inventory.helper.event.EventBroadcaster broadcaster;
+    @Inject DomainEventService events;
 
     public record StockState(int physical, int checkedOut, int damaged, int reserved, int available) {
     }
@@ -50,6 +49,9 @@ public class InventoryOperationsService {
                 return existing;
         }
         var item = lockedItem(input.itemId());
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            throw ApiException.conflict("Serialized items require an asset-specific inventory transaction");
+        }
         var state = stock(item);
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
             assertCheckoutAllowed(item);
@@ -68,43 +70,45 @@ public class InventoryOperationsService {
         transaction.reason = input.reason();
         transaction.notes = input.notes();
         transaction.idempotencyKey = input.idempotencyKey();
+        transaction.clientCommandId = input.idempotencyKey();
+        switch (input.transactionType()) {
+            case added, received, adjusted, checkin, transfer_in -> transaction.destinationLocation = item.storageLocation;
+            case checkout, transfer_out, written_off -> transaction.sourceLocation = item.storageLocation;
+            default -> { }
+        }
+        transaction.availabilityBefore = state.available();
         if (input.factionOrderId() != null)
             transaction.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         orm.persist(transaction);
-        broadcaster.broadcast("stock.changed", Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
+        transaction.availabilityAfter = stock(item).available();
+        events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
+                Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return transaction;
     }
 
     public StockState stock(Item item) {
-        int physical = 0;
-        boolean hasAddedTransaction = false;
-        int checkedOut = 0;
-        for (var tx : orm.transactions(item)) {
-            switch (tx.type) {
-                case added -> {
-                    hasAddedTransaction = true;
-                    physical += tx.quantity;
-                }
-                case repaired, checkin -> physical += tx.quantity;
-                case checkout -> {
-                    physical -= tx.quantity;
-                    checkedOut += tx.quantity;
-                }
-                case written_off, consumed -> physical -= tx.quantity;
-            }
-            if (tx.type == DomainEnums.TransactionType.checkin)
-                checkedOut = Math.max(0, checkedOut - tx.quantity);
-        }
-        if (!hasAddedTransaction) {
-            physical += item.baseAmount;
-        }
-        int damaged = orm.unresolvedDamage(item).stream()
-                .mapToInt(report -> Math.max(0, report.quantity - report.repairedQuantity - report.writtenOffQuantity))
-                .sum();
-        int reserved = orm.reservedLines(item).stream()
-                .mapToInt(line -> line.preparedQuantity).sum();
+        var totals = orm.transactionTotals(item);
+        int physical = quantity(totals, DomainEnums.TransactionType.added)
+                + quantity(totals, DomainEnums.TransactionType.received)
+                + quantity(totals, DomainEnums.TransactionType.adjusted)
+                + quantity(totals, DomainEnums.TransactionType.checkin)
+                + quantity(totals, DomainEnums.TransactionType.transfer_in)
+                - quantity(totals, DomainEnums.TransactionType.checkout)
+                - quantity(totals, DomainEnums.TransactionType.written_off)
+                - quantity(totals, DomainEnums.TransactionType.transfer_out);
+        if (!totals.containsKey(DomainEnums.TransactionType.added)) physical += item.baseAmount;
+        int checkedOut = quantity(totals, DomainEnums.TransactionType.checkout)
+                - quantity(totals, DomainEnums.TransactionType.checkin)
+                - quantity(totals, DomainEnums.TransactionType.consumed)
+                - quantity(totals, DomainEnums.TransactionType.missing);
+        int damaged = orm.unresolvedDamageQuantity(item);
+        int reserved = orm.activeReservationQuantity(item);
         return new StockState(Math.max(0, physical), Math.max(0, checkedOut), damaged, reserved,
                 Math.max(0, physical - damaged - reserved));
+    }
+
+    private int quantity(Map<DomainEnums.TransactionType, Long> totals, DomainEnums.TransactionType type) {
+        return Math.toIntExact(totals.getOrDefault(type, 0L));
     }
 
     public void assertCheckoutAllowed(Item item) {
@@ -133,12 +137,20 @@ public class InventoryOperationsService {
         if (input.factionOrderId() != null)
             report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         orm.persist(report);
-        broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", "damage_reported", "quantity", report.quantity));
+        events.record("damage.reported", "damage_report", report.id, report.reporter.id, input.idempotencyKey(),
+                Map.of("itemId", report.item.id.toString(), "quantity", report.quantity));
         return report;
     }
 
     @Transactional
     public DamageReport resolveDamage(UUID id, ApiModels.DamageResolutionInput input) {
+        if (input.idempotencyKey() != null) {
+            var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
+            if (existing != null && existing.damageReport != null && existing.damageReport.id.equals(id))
+                return existing.damageReport;
+            if (existing != null)
+                throw ApiException.conflict("Idempotency key is already used by another stock transaction");
+        }
         var report = orm.findLockedDamage(id);
         if (report == null)
             throw ApiException.notFound("Damage report not found");
@@ -154,9 +166,11 @@ public class InventoryOperationsService {
         report.resolutionNotes = input.notes();
         if (input.status() == DomainEnums.DamageStatus.in_review) {
             report.status = DomainEnums.DamageStatus.in_review;
-            broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", "damage_reviewed", "quantity", input.amount()));
+            events.record("damage.triaged", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
+                    Map.of("itemId", report.item.id.toString(), "quantity", input.amount()));
             return report;
         }
+        int availabilityBefore = stock(report.item).available();
         if (input.status() == DomainEnums.DamageStatus.repaired)
             report.repairedQuantity += input.amount();
         else
@@ -179,8 +193,14 @@ public class InventoryOperationsService {
                 : "Damage written off";
         transaction.notes = input.notes();
         transaction.idempotencyKey = input.idempotencyKey();
+        transaction.clientCommandId = input.idempotencyKey();
+        if (transaction.type == DomainEnums.TransactionType.written_off)
+            transaction.sourceLocation = report.item.storageLocation;
+        transaction.availabilityBefore = availabilityBefore;
         orm.persist(transaction);
-        broadcaster.broadcast("stock.changed", Map.of("itemId", report.item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
+        transaction.availabilityAfter = stock(report.item).available();
+        events.record("damage.resolved", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
+                Map.of("itemId", report.item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return report;
     }
 
@@ -205,6 +225,8 @@ public class InventoryOperationsService {
         item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
                 ? DomainEnums.MaintenanceStatus.in_service
                 : deriveStatus(item.nextMaintenanceDue);
+        events.record("maintenance.recorded", "item", item.id, record.inspector.id, null,
+                Map.of("itemId", item.id.toString(), "result", record.result.name(), "type", record.type.name()));
         return record;
     }
 

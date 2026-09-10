@@ -10,6 +10,7 @@ export interface StorageLocation {
   mapZoom?: number;
   mapOverlay?: string;
   overlayBounds?: MapBounds;
+  locationType?: 'warehouse' | 'bin' | 'staging' | 'event_site' | 'vehicle' | 'in_custody' | 'quarantine' | 'repair' | 'scrap';
   created: string;
   updated: string;
 }
@@ -46,6 +47,8 @@ export interface Item {
   images?: string[];
   hint?: string;
   isConsumable?: boolean;
+  trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
+  inventoryRole?: 'consumable' | 'returnable' | 'repairable' | 'rental';
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
@@ -75,6 +78,8 @@ export interface ItemFormData {
   storageLocation: string;
   hint?: string;
   isConsumable?: boolean;
+  trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
+  inventoryRole?: 'consumable' | 'returnable' | 'repairable' | 'rental';
   imageFiles?: File[];
   imageReplacements?: Record<string, File>;
   removeImages?: string[];

@@ -18,6 +18,18 @@ class ActorServiceRoleTest {
                 ActorService.roleFrom(Set.of("inventory_warehouse_packer")));
         assertEquals(DomainEnums.UserRole.faction_leader,
                 ActorService.roleFrom(Set.of("inventory_faction_leader")));
+        assertEquals(DomainEnums.UserRole.hq_admin,
+                ActorService.roleFrom(Set.of("inventory_hq_admin")));
+        assertEquals(DomainEnums.UserRole.warehouse_crew,
+                ActorService.roleFrom(Set.of("inventory_warehouse_crew")));
+        assertEquals(DomainEnums.UserRole.marshal,
+                ActorService.roleFrom(Set.of("inventory_marshal")));
+        assertEquals(DomainEnums.UserRole.event_planner,
+                ActorService.roleFrom(Set.of("inventory_event_planner")));
+        assertEquals(DomainEnums.UserRole.maintenance_crew,
+                ActorService.roleFrom(Set.of("inventory_maintenance_crew")));
+        assertEquals(DomainEnums.UserRole.read_only,
+                ActorService.roleFrom(Set.of("inventory_read_only")));
     }
 
     @Test

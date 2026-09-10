@@ -16,12 +16,18 @@ import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.Notification;
 import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.model.StockReservation;
+import org.ash.inventory.model.CustodyHandover;
+import org.ash.inventory.model.CustodyHandoverLine;
+import org.ash.inventory.model.ReturnReconciliation;
 import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.orm.OrderOrm;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +46,7 @@ public class OrderService {
     CatalogService catalog;
     @Inject
     InventoryOperationsService inventory;
-    @Inject
-    org.ash.inventory.helper.event.EventBroadcaster broadcaster;
+    @Inject DomainEventService events;
 
     private static final Map<DomainEnums.OrderStatus, Set<DomainEnums.OrderStatus>> TRANSITIONS = Map.of(
             DomainEnums.OrderStatus.draft, Set.of(DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.cancelled),
@@ -87,7 +92,7 @@ public class OrderService {
         orm.persist(order);
         replaceLines(order, input);
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, input.idempotencyKey(), input.notes(), lineSnapshot(order));
-        broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
+        orderEvent("order.created", order, actor, input.idempotencyKey());
         return order;
     }
 
@@ -105,41 +110,48 @@ public class OrderService {
         replaceLines(order, input);
         audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(),
                 contentChanges(before, requestedContents(order)));
-        broadcaster.broadcast("order.changed", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode));
+        orderEvent("order.updated", order, actors.current(), null);
         return order;
     }
 
     @Transactional
     public FactionOrder prepare(UUID id, ApiModels.PreparationInput input) {
-        actors.requireManager();
+        actors.requireWarehouse();
         var order = lockedOrder(id);
         if (idempotent(order, input.idempotencyKey()))
             return order;
+        var lines = orm.lines(order);
+        if (lines.stream().anyMatch(line -> line.item.trackingMode == DomainEnums.TrackingMode.serialized)) {
+            throw ApiException.conflict("Serialized order lines require explicit asset assignments");
+        }
         if (order.status == DomainEnums.OrderStatus.submitted)
             transition(order, DomainEnums.OrderStatus.preparing, null, "preparation_started", input.notes(), Map.of());
         else if (order.status != DomainEnums.OrderStatus.preparing)
             throw ApiException.conflict("Order must be submitted or preparing");
 
-        var lines = orm.lines(order);
         var requestedByItem = aggregate(lines, false);
         for (var entry : requestedByItem.entrySet()) {
+            var lockedItem = orm.findLocked(Item.class, entry.getKey().id);
+            if (lockedItem == null) throw ApiException.notFound("Item not found");
             int prepared = input.preparedQuantities() == null ? 0
-                    : input.preparedQuantities().getOrDefault(entry.getKey().id, 0);
+                : input.preparedQuantities().getOrDefault(entry.getKey().id, 0);
             if (prepared < 0 || prepared > entry.getValue())
                 throw ApiException
                         .badRequest("Prepared quantity for " + entry.getKey().name + " is outside the requested range");
             int currentReservation = lines.stream().filter(line -> line.item.id.equals(entry.getKey().id))
                     .mapToInt(line -> line.preparedQuantity).sum();
-            int availableIncludingThisOrder = inventory.stock(entry.getKey()).available() + currentReservation;
+            int availableIncludingThisOrder = inventory.stock(lockedItem).available() + currentReservation;
             if (prepared > availableIncludingThisOrder && !input.acknowledgeShortages()) {
                 throw ApiException.conflict("Only " + availableIncludingThisOrder + " units of " + entry.getKey().name
                         + " can be reserved");
             }
-            distributePrepared(lines, entry.getKey(), Math.min(prepared, availableIncludingThisOrder));
+            distributePrepared(lines, lockedItem, Math.min(prepared, availableIncludingThisOrder));
         }
+        reconcileReservations(order, lines, actors.current());
         order.preparedBy = actors.current();
         audit(order, actors.current(), "preparation_saved", order.status, order.status, input.idempotencyKey(),
                 input.notes(), lineSnapshot(order));
+        orderEvent("order.prepared", order, actors.current(), input.idempotencyKey());
         return order;
     }
 
@@ -149,10 +161,14 @@ public class OrderService {
         var actor = actors.current();
         if (idempotent(order, input.idempotencyKey()))
             return order;
-        if (target != DomainEnums.OrderStatus.submitted && target != DomainEnums.OrderStatus.draft)
-            actors.requireManager();
-        else
+        if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft)
             assertFactionAccess(actor, order.faction);
+        else if (target == DomainEnums.OrderStatus.picked_up || target == DomainEnums.OrderStatus.closed)
+            actors.requireMarshal();
+        else if (target == DomainEnums.OrderStatus.ready || target == DomainEnums.OrderStatus.preparing)
+            actors.requireWarehouse();
+        else
+            actors.requirePlanner();
         if (target == DomainEnums.OrderStatus.ready) {
             var lines = orm.lines(order);
             boolean nonePrepared = lines.stream().allMatch(line -> line.preparedQuantity == 0);
@@ -168,6 +184,12 @@ public class OrderService {
             pickup(order, actor, input.idempotencyKey());
             order.pickedUpBy = actor;
         }
+        if (target == DomainEnums.OrderStatus.cancelled)
+            releaseReservations(order);
+        if (order.status == DomainEnums.OrderStatus.preparing && target == DomainEnums.OrderStatus.submitted) {
+            releaseReservations(order);
+            clearPreparation(order);
+        }
         if (target == DomainEnums.OrderStatus.closed && hasOutstanding(order))
             throw ApiException.conflict("Order still has outstanding units");
         transition(order, target, input.idempotencyKey(), actionFor(target), input.notes(), lineSnapshot(order));
@@ -178,7 +200,7 @@ public class OrderService {
 
     @Transactional
     public FactionOrder returnItems(UUID id, ApiModels.ReturnInput input) {
-        actors.requireManager();
+        actors.requireMarshal();
         var order = lockedOrder(id);
         if (idempotent(order, input.idempotencyKey()))
             return order;
@@ -193,21 +215,25 @@ public class OrderService {
             if (item == null)
                 throw ApiException.notFound("Item not found");
             var relevant = lines.stream().filter(line -> line.item.id.equals(item.id)).toList();
-            int outstanding = relevant.stream()
-                    .mapToInt(line -> line.pickedUpQuantity - line.returnedQuantity - line.damagedQuantity).sum();
+            int outstanding = relevant.stream().mapToInt(this::outstandingQuantity).sum();
             var outcome = entry.getValue();
-            int reconciled = outcome.returned() + outcome.damaged();
+            if (!item.consumable && outcome.consumed() > 0)
+                throw ApiException.badRequest("Only consumable items can be recorded as consumed");
+            int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged();
             if (reconciled + outcome.missing() > outstanding)
                 throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
-            distributeReturn(relevant, outcome.returned(), outcome.damaged(), outcome.missing());
+            distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
+                    outcome.damaged(), outcome.missing(), input.idempotencyKey(), outcome.notes());
 
             if (outcome.returned() > 0)
-                createReturnTransaction(item, order, actor,
-                        item.consumable ? DomainEnums.TransactionType.consumed : DomainEnums.TransactionType.checkin,
-                        outcome.returned(), null, outcome.notes());
-            if (outcome.damaged() > 0) {
                 createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
-                        outcome.damaged(), null, "Returned damaged: " + outcome.notes());
+                        outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
+            if (outcome.consumed() > 0)
+                createReturnTransaction(item, order, actor, DomainEnums.TransactionType.consumed,
+                        outcome.consumed(), input.idempotencyKey(), "consumed", outcome.notes());
+            if (outcome.damaged() > 0) {
+                var damagedCheckin = createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
+                        outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
                 var damage = new DamageReport();
                 damage.item = item;
                 damage.reporter = actor;
@@ -216,12 +242,14 @@ public class OrderService {
                 damage.severity = DomainEnums.DamageSeverity.high;
                 damage.description = outcome.notes() == null ? "Damage recorded during order return" : outcome.notes();
                 orm.persist(damage);
+                damagedCheckin.availabilityAfter = inventory.stock(item).available();
             }
             if (outcome.operatingHours() != null
                     && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
                 item.currentOperatingHours = outcome.operatingHours();
             }
         }
+        createReturnHandover(order, actor, input.idempotencyKey(), lines, input);
         order.returnedBy = actor;
         var target = hasOutstanding(order) ? DomainEnums.OrderStatus.partially_returned
                 : DomainEnums.OrderStatus.returned;
@@ -238,7 +266,7 @@ public class OrderService {
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet())
             outcomes.put(entry.getKey().id,
-                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, null, "Full order return"));
+                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, null, "Full order return"));
         return returnItems(id, new ApiModels.ReturnInput(outcomes, idempotencyKey, "Full order return"));
     }
 
@@ -250,6 +278,8 @@ public class OrderService {
         var lines = orm.lines(order);
         for (var entry : aggregatePrepared(lines).entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey().id);
+            if (item.trackingMode == DomainEnums.TrackingMode.serialized)
+                throw ApiException.conflict("Serialized order lines require explicit asset assignments");
             inventory.assertCheckoutAllowed(item);
             int ownReservation = lines.stream().filter(line -> line.item.id.equals(item.id))
                     .mapToInt(line -> line.preparedQuantity).sum();
@@ -262,12 +292,19 @@ public class OrderService {
             transaction.factionOrder = order;
             transaction.type = DomainEnums.TransactionType.checkout;
             transaction.quantity = entry.getValue();
+            transaction.availabilityBefore = available;
+            transaction.availabilityAfter = available - entry.getValue();
             transaction.reason = "Faction order pickup " + order.orderCode;
-            transaction.idempotencyKey = null;
+            transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup");
+            transaction.clientCommandId = idempotencyKey;
+            transaction.sourceLocation = item.storageLocation;
+            transaction.destinationLocation = order.pickupLocation;
             orm.persist(transaction);
         }
         for (var line : lines)
-            line.pickedUpQuantity = line.preparedQuantity;
+            line.pickedUpQuantity = line.handedOverQuantity = line.preparedQuantity;
+        convertReservationsToCustody(order);
+        createHandover(order, actor, idempotencyKey, lines);
     }
 
     private void replaceLines(FactionOrder order, ApiModels.OrderInput input) {
@@ -309,35 +346,206 @@ public class OrderService {
         int remaining = quantity;
         for (var line : lines.stream().filter(candidate -> candidate.item.id.equals(item.id)).toList()) {
             line.preparedQuantity = Math.min(line.requestedQuantity, remaining);
+            line.allocatedQuantity = line.preparedQuantity;
+            line.reservedQuantity = line.preparedQuantity;
             remaining -= line.preparedQuantity;
         }
     }
 
-    private void distributeReturn(List<FactionOrderLine> lines, int returned, int damaged, int missing) {
-        int returnLeft = returned;
-        int damageLeft = damaged;
-        int missingLeft = missing;
+    private void distributeReturn(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
+            int returned, int consumed, int damaged, int missing, UUID idempotencyKey, String notes) {
+        int undistributed = distributeOutcome(order, lines, item, actor, returned,
+                DomainEnums.ReconciliationOutcome.returned_good, idempotencyKey, notes);
+        undistributed += distributeOutcome(order, lines, item, actor, consumed,
+                DomainEnums.ReconciliationOutcome.consumed, idempotencyKey, notes);
+        undistributed += distributeOutcome(order, lines, item, actor, damaged,
+                DomainEnums.ReconciliationOutcome.returned_damaged, idempotencyKey, notes);
+        if (undistributed > 0)
+            throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
+
+        int currentMissing = lines.stream().mapToInt(line -> line.missingQuantity).sum();
+        if (missing < currentMissing) {
+            throw ApiException.badRequest("Missing quantity is the current unresolved total and cannot be reduced without an outcome");
+        }
+        int missingLeft = missing - currentMissing;
         for (var line : lines) {
-            int outstanding = line.pickedUpQuantity - line.returnedQuantity - line.damagedQuantity;
-            int take = Math.min(outstanding, returnLeft);
-            line.returnedQuantity += take;
-            line.missingQuantity = Math.max(0, line.missingQuantity - take);
-            returnLeft -= take;
-            outstanding -= take;
-            take = Math.min(outstanding, damageLeft);
-            line.damagedQuantity += take;
-            line.missingQuantity = Math.max(0, line.missingQuantity - take);
-            damageLeft -= take;
-            outstanding -= take;
-            int declaredMissing = Math.min(outstanding, missingLeft);
-            line.missingQuantity = Math.max(line.missingQuantity, declaredMissing);
-            missingLeft -= declaredMissing;
+            int capacity = Math.max(0, outstandingQuantity(line) - line.missingQuantity);
+            int newlyMissing = Math.min(capacity, missingLeft);
+            line.missingQuantity += newlyMissing;
+            recordReconciliation(order, line, item, actor, DomainEnums.ReconciliationOutcome.missing,
+                    newlyMissing, idempotencyKey, notes);
+            missingLeft -= newlyMissing;
+        }
+        if (missingLeft > 0)
+            throw ApiException.badRequest("Missing quantity exceeds outstanding quantity for " + item.name);
+    }
+
+    private int distributeOutcome(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
+            int quantity, DomainEnums.ReconciliationOutcome outcome, UUID idempotencyKey, String notes) {
+        int remaining = distributeOutcomePass(order, lines, item, actor, quantity, outcome, false,
+                idempotencyKey, notes);
+        return distributeOutcomePass(order, lines, item, actor, remaining, outcome, true, idempotencyKey, notes);
+    }
+
+    private int distributeOutcomePass(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
+            int quantity, DomainEnums.ReconciliationOutcome outcome, boolean resolveMissing,
+            UUID idempotencyKey, String notes) {
+        int remaining = quantity;
+        for (var line : lines) {
+            int capacity = resolveMissing
+                    ? Math.min(outstandingQuantity(line), line.missingQuantity)
+                    : Math.max(0, outstandingQuantity(line) - line.missingQuantity);
+            int take = Math.min(capacity, remaining);
+            if (take == 0) continue;
+            switch (outcome) {
+                case returned_good -> line.returnedQuantity += take;
+                case consumed -> line.consumedQuantity += take;
+                case returned_damaged -> line.damagedQuantity += take;
+                default -> throw new IllegalArgumentException("Unsupported reconciliation outcome " + outcome);
+            }
+            if (resolveMissing) line.missingQuantity -= take;
+            var recordedOutcome = resolveMissing && outcome == DomainEnums.ReconciliationOutcome.returned_good
+                    ? DomainEnums.ReconciliationOutcome.returned_late : outcome;
+            recordReconciliation(order, line, item, actor, recordedOutcome, take, idempotencyKey, notes);
+            remaining -= take;
+            if (remaining == 0) break;
+        }
+        return remaining;
+    }
+
+    private void reconcileReservations(FactionOrder order, List<FactionOrderLine> lines, UserAccount actor) {
+        for (var line : lines) {
+            var reservation = orm.reservation(line);
+            if (line.preparedQuantity == 0) {
+                if (reservation != null && reservation.openQuantity() > 0) release(reservation);
+                line.reservedQuantity = 0;
+                continue;
+            }
+            if (reservation == null) {
+                reservation = new StockReservation();
+                reservation.order = order;
+                reservation.orderLine = line;
+                reservation.item = line.item;
+                reservation.location = line.item.storageLocation;
+                reservation.createdBy = actor;
+                orm.persist(reservation);
+            }
+            reservation.requestedQuantity = line.requestedQuantity;
+            reservation.reservedQuantity = line.preparedQuantity;
+            reservation.releasedQuantity = 0;
+            reservation.releasedAt = null;
+            reservation.status = DomainEnums.ReservationStatus.active;
+            reservation.activeAssetKey = "ACTIVE";
+            line.reservedQuantity = line.preparedQuantity;
         }
     }
 
-    private void createReturnTransaction(Item item, FactionOrder order, UserAccount actor,
+    private void releaseReservations(FactionOrder order) {
+        for (var reservation : orm.reservations(order)) {
+            if (reservation.openQuantity() > 0) release(reservation);
+            reservation.activeAssetKey = null;
+        }
+        for (var line : orm.lines(order)) line.reservedQuantity = 0;
+    }
+
+    private void clearPreparation(FactionOrder order) {
+        for (var line : orm.lines(order)) {
+            line.preparedQuantity = 0;
+            line.allocatedQuantity = 0;
+            line.reservedQuantity = 0;
+        }
+    }
+
+    private void release(StockReservation reservation) {
+        reservation.releasedQuantity = reservation.reservedQuantity;
+        reservation.releasedAt = Instant.now();
+        reservation.status = DomainEnums.ReservationStatus.released;
+        reservation.activeAssetKey = null;
+    }
+
+    private void convertReservationsToCustody(FactionOrder order) {
+        for (var reservation : orm.reservations(order)) {
+            if (reservation.openQuantity() == 0) continue;
+            reservation.releasedQuantity = reservation.reservedQuantity;
+            reservation.releasedAt = Instant.now();
+            reservation.status = DomainEnums.ReservationStatus.converted_to_custody;
+            reservation.activeAssetKey = null;
+        }
+        for (var line : orm.lines(order)) line.reservedQuantity = 0;
+    }
+
+    private void createHandover(FactionOrder order, UserAccount actor, UUID idempotencyKey,
+            List<FactionOrderLine> lines) {
+        var handover = new CustodyHandover();
+        handover.order = order;
+        handover.type = DomainEnums.HandoverType.checkout;
+        handover.marshal = actor;
+        handover.collectorName = order.collectorName == null || order.collectorName.isBlank()
+                ? order.faction.name : order.collectorName;
+        handover.location = order.pickupLocation;
+        handover.conditionConfirmed = true;
+        handover.handoverCode = order.orderCode + "-OUT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        handover.idempotencyKey = idempotencyKey;
+        orm.persist(handover);
+        for (var line : lines) {
+            if (line.handedOverQuantity == 0) continue;
+            var detail = new CustodyHandoverLine();
+            detail.handover = handover;
+            detail.orderLine = line;
+            detail.item = line.item;
+            detail.quantity = line.handedOverQuantity;
+            orm.persist(detail);
+        }
+    }
+
+    private void createReturnHandover(FactionOrder order, UserAccount actor, UUID idempotencyKey,
+            List<FactionOrderLine> lines, ApiModels.ReturnInput input) {
+        var handover = new CustodyHandover();
+        handover.order = order;
+        handover.type = DomainEnums.HandoverType.checkin;
+        handover.marshal = actor;
+        handover.collectorName = order.collectorName == null || order.collectorName.isBlank()
+                ? order.faction.name : order.collectorName;
+        handover.location = order.pickupLocation;
+        handover.conditionConfirmed = true;
+        handover.handoverCode = order.orderCode + "-IN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        handover.idempotencyKey = idempotencyKey;
+        handover.notes = input.notes();
+        orm.persist(handover);
+        for (var entry : input.lines().entrySet()) {
+            var outcome = entry.getValue();
+            int quantity = outcome.returned() + outcome.damaged();
+            if (quantity == 0) continue;
+            var line = lines.stream().filter(candidate -> candidate.item.id.equals(entry.getKey())).findFirst().orElse(null);
+            if (line == null) continue;
+            var detail = new CustodyHandoverLine();
+            detail.handover = handover;
+            detail.orderLine = line;
+            detail.item = line.item;
+            detail.quantity = quantity;
+            detail.conditionNotes = outcome.notes();
+            orm.persist(detail);
+        }
+    }
+
+    private void recordReconciliation(FactionOrder order, FactionOrderLine line, Item item, UserAccount actor,
+            DomainEnums.ReconciliationOutcome outcome, int quantity, UUID idempotencyKey, String notes) {
+        if (quantity <= 0) return;
+        var reconciliation = new ReturnReconciliation();
+        reconciliation.order = order;
+        reconciliation.orderLine = line;
+        reconciliation.item = item;
+        reconciliation.recordedBy = actor;
+        reconciliation.outcome = outcome;
+        reconciliation.quantity = quantity;
+        reconciliation.idempotencyKey = idempotencyKey;
+        reconciliation.notes = notes;
+        orm.persist(reconciliation);
+    }
+
+    private StockTransaction createReturnTransaction(Item item, FactionOrder order, UserAccount actor,
             DomainEnums.TransactionType type,
-            int quantity, UUID idempotencyKey, String notes) {
+            int quantity, UUID clientCommandId, String operation, String notes) {
         var transaction = new StockTransaction();
         transaction.item = item;
         transaction.user = actor;
@@ -346,8 +554,21 @@ public class OrderService {
         transaction.quantity = quantity;
         transaction.reason = "Faction order return " + order.orderCode;
         transaction.notes = notes;
-        transaction.idempotencyKey = idempotencyKey;
+        transaction.idempotencyKey = transactionKey(clientCommandId, order, item, operation);
+        transaction.clientCommandId = clientCommandId;
+        transaction.sourceLocation = order.pickupLocation;
+        if (type == DomainEnums.TransactionType.checkin)
+            transaction.destinationLocation = item.storageLocation;
+        transaction.availabilityBefore = inventory.stock(item).available();
         orm.persist(transaction);
+        transaction.availabilityAfter = inventory.stock(item).available();
+        return transaction;
+    }
+
+    private UUID transactionKey(UUID clientCommandId, FactionOrder order, Item item, String operation) {
+        if (clientCommandId == null) return null;
+        return UUID.nameUUIDFromBytes((clientCommandId + ":" + order.id + ":" + item.id + ":" + operation)
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     private void transition(FactionOrder order, DomainEnums.OrderStatus target, UUID idempotencyKey, String action,
@@ -357,7 +578,7 @@ public class OrderService {
             throw ApiException.conflict("Invalid order transition: " + from + " -> " + target);
         order.status = target;
         audit(order, actors.current(), action, from, target, idempotencyKey, notes, delta);
-        broadcaster.broadcast("order.transition", Map.of("orderId", order.id.toString(), "orderCode", order.orderCode, "status", target.name()));
+        orderEvent("order." + target.name(), order, actors.current(), idempotencyKey);
     }
 
     private void audit(FactionOrder order, UserAccount actor, String action, DomainEnums.OrderStatus from,
@@ -380,7 +601,7 @@ public class OrderService {
 
     private boolean hasOutstanding(FactionOrder order) {
         return orm.lines(order).stream()
-                .anyMatch(line -> line.pickedUpQuantity > line.returnedQuantity + line.damagedQuantity);
+                .anyMatch(line -> outstandingQuantity(line) > 0);
     }
 
     private Map<Item, Integer> aggregate(List<FactionOrderLine> lines, boolean prepared) {
@@ -397,9 +618,14 @@ public class OrderService {
     private Map<Item, Integer> aggregateOutstanding(List<FactionOrderLine> lines) {
         var values = new LinkedHashMap<Item, Integer>();
         for (var line : lines)
-            values.merge(line.item, Math.max(0, line.pickedUpQuantity - line.returnedQuantity - line.damagedQuantity),
-                    Integer::sum);
+            values.merge(line.item, outstandingQuantity(line), Integer::sum);
         return values;
+    }
+
+    private int outstandingQuantity(FactionOrderLine line) {
+        int handedOver = Math.max(line.handedOverQuantity, line.pickedUpQuantity); // pickedUp is the legacy column
+        return Math.max(0, handedOver - line.returnedQuantity - line.consumedQuantity
+                - line.damagedQuantity - line.writtenOffQuantity);
     }
 
     private Map<String, Object> lineSnapshot(FactionOrder order) {
@@ -548,6 +774,11 @@ public class OrderService {
         }
         notification.payload = payload;
         orm.persist(notification);
+    }
+
+    private void orderEvent(String type, FactionOrder order, UserAccount actor, UUID idempotencyKey) {
+        events.record(type, "faction_order", order.id, actor == null ? null : actor.id, idempotencyKey,
+                Map.of("orderId", order.id.toString(), "orderCode", order.orderCode, "status", order.status.name()));
     }
 
     private FactionOrder lockedOrder(UUID id) {

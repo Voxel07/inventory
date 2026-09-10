@@ -10,9 +10,12 @@ import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.model.StockReservation;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.UUID;
 
 /** Database access for stock, damage, maintenance, and procurement views. */
@@ -59,23 +62,58 @@ public class OperationsOrm {
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);
     }
 
-    public List<StockTransaction> transactions(Item item) {
-        return entityManager.createQuery("from StockTransaction tx where tx.item = :item", StockTransaction.class)
-                .setParameter("item", item).getResultList();
+    public Map<DomainEnums.TransactionType, Long> transactionTotals(Item item) {
+        var totals = new EnumMap<DomainEnums.TransactionType, Long>(DomainEnums.TransactionType.class);
+        for (var row : entityManager.createQuery(
+                "select tx.type, sum(tx.quantity) from StockTransaction tx where tx.item = :item group by tx.type",
+                Object[].class).setParameter("item", item).getResultList()) {
+            totals.put((DomainEnums.TransactionType) row[0], (Long) row[1]);
+        }
+        return totals;
     }
 
     public List<DamageReport> unresolvedDamage(Item item) {
         return entityManager.createQuery("from DamageReport d where d.item = :item and d.status in :statuses", DamageReport.class)
                 .setParameter("item", item)
-                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.in_review))
+                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
+                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
+                        DomainEnums.DamageStatus.in_repair, DomainEnums.DamageStatus.repaired,
+                        DomainEnums.DamageStatus.verified))
                 .getResultList();
     }
 
-    public List<FactionOrderLine> reservedLines(Item item) {
-        return entityManager.createQuery("from FactionOrderLine line where line.item = :item and line.order.status in :statuses", FactionOrderLine.class)
+    public int unresolvedDamageQuantity(Item item) {
+        Long quantity = entityManager.createQuery("""
+                select coalesce(sum(d.quantity - d.repairedQuantity - d.writtenOffQuantity), 0)
+                from DamageReport d where d.item = :item and d.status in :statuses
+                """, Long.class)
                 .setParameter("item", item)
-                .setParameter("statuses", List.of(DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready))
+                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
+                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
+                        DomainEnums.DamageStatus.in_repair, DomainEnums.DamageStatus.repaired,
+                        DomainEnums.DamageStatus.verified))
+                .getSingleResult();
+        return Math.toIntExact(quantity);
+    }
+
+    public List<StockReservation> activeReservations(Item item) {
+        return entityManager.createQuery("from StockReservation reservation where reservation.item = :item and reservation.status in :statuses", StockReservation.class)
+                .setParameter("item", item)
+                .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active, DomainEnums.ReservationStatus.partially_released))
                 .getResultList();
+    }
+
+    public int activeReservationQuantity(Item item) {
+        Long quantity = entityManager.createQuery("""
+                select coalesce(sum(reservation.reservedQuantity - reservation.releasedQuantity), 0)
+                from StockReservation reservation
+                where reservation.item = :item and reservation.status in :statuses
+                """, Long.class)
+                .setParameter("item", item)
+                .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
+                        DomainEnums.ReservationStatus.partially_released))
+                .getSingleResult();
+        return Math.toIntExact(quantity);
     }
 
     public List<FactionOrderLine> activeOrderLines(UUID eventOccurrenceId, List<DomainEnums.OrderStatus> statuses) {

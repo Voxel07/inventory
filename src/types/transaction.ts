@@ -8,6 +8,9 @@ export interface StockTransaction {
   userId: string;
   damageReportId?: string;
   factionOrderId?: string;
+  clientCommandId?: string;
+  sourceLocationId?: string;
+  destinationLocationId?: string;
   reason: string;
   notes: string;
   timestamp: string;

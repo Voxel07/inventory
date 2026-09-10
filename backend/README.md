@@ -49,6 +49,8 @@ resource -> service -> orm -> model
 - `helper/security` resolves the authenticated actor and implements the reusable RBAC checks used by resources.
 - `helper/storage` contains local and S3-compatible media storage infrastructure.
 
+The completed domain and event architecture is documented in [`../docs/DOMAIN_ARCHITECTURE.md`](../docs/DOMAIN_ARCHITECTURE.md). Business services append events to `domain_event_outbox` in the same transaction as aggregate changes. The outbox dispatcher provides at-least-once SSE/Redis delivery, so consumers deduplicate on `eventId`.
+
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
 
 ## Item and assembly images

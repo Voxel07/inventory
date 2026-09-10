@@ -3,7 +3,7 @@ import { Alert, Box, Button, DialogActions, Stack, TextField, Typography } from 
 import type { FactionOrder, Item } from '../../types';
 import { useTranslate } from '../../utils/naming';
 
-type Outcome = { returned: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
+type Outcome = { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
 
 export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }: {
   order: FactionOrder;
@@ -15,18 +15,30 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   const t = useTranslate();
   const outstanding = useMemo<Record<string, number>>(() => Object.fromEntries(items.map((item) => {
     const picked = order.pickedUpQuantities?.[item.id] ?? 0;
-    const reconciled = (order.returnedQuantities?.[item.id] ?? 0) + (order.damagedQuantities?.[item.id] ?? 0);
+    const reconciled = (order.returnedQuantities?.[item.id] ?? 0)
+      + (order.consumedQuantities?.[item.id] ?? 0)
+      + (order.damagedQuantities?.[item.id] ?? 0)
+      + (order.writtenOffQuantities?.[item.id] ?? 0);
     return [item.id, Math.max(0, picked - reconciled)];
   }).filter(([, quantity]) => Number(quantity) > 0)), [items, order]);
   const [lines, setLines] = useState<Record<string, Outcome>>(() => Object.fromEntries(
-    Object.entries(outstanding).map(([itemId, quantity]) => [itemId, { returned: Number(quantity), missing: 0, damaged: 0 }]),
+    Object.entries(outstanding).map(([itemId, quantity]) => {
+      const existingMissing = Math.min(Number(quantity), order.missingQuantities?.[itemId] ?? 0);
+      return [itemId, {
+        returned: Number(quantity) - existingMissing,
+        consumed: 0,
+        missing: existingMissing,
+        damaged: 0,
+      }];
+    }),
   ));
 
   function setValue(itemId: string, field: keyof Outcome, raw: string) {
     setLines((current) => ({ ...current, [itemId]: { ...current[itemId], [field]: field === 'notes' ? raw : raw === '' ? undefined : Number(raw) } }));
   }
   const invalid = Object.entries(lines).some(([itemId, value]) =>
-    value.returned < 0 || value.missing < 0 || value.damaged < 0 || value.returned + value.missing + value.damaged > Number(outstanding[itemId]));
+    value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0
+    || value.returned + value.consumed + value.missing + value.damaged > Number(outstanding[itemId]));
 
   return (
     <>
@@ -39,7 +51,8 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
             <Box key={itemId} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
               <Typography sx={{ fontWeight: 800 }}>{item?.name ?? itemId} · {quantity} {t('offen', 'outstanding')}</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                <TextField size="small" type="number" label={t('Zurück', 'Returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                <TextField size="small" type="number" label={item?.isConsumable ? t('Ungeöffnet zurück', 'Returned unopened') : t('Zurück', 'Returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                {item?.isConsumable && <TextField size="small" type="number" label={t('Verbraucht', 'Consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
                 <TextField size="small" type="number" label={t('Fehlt', 'Missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                 <TextField size="small" type="number" label={t('Beschädigt', 'Damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                 {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('Betriebsstunden', 'Operating hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}

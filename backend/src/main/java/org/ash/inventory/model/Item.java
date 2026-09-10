@@ -33,6 +33,12 @@ public class Item extends BaseEntity {
     public List<String> eventTags = new ArrayList<>();
     @Column(name = "is_consumable", nullable = false)
     public boolean consumable;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tracking_mode", nullable = false)
+    public DomainEnums.TrackingMode trackingMode = DomainEnums.TrackingMode.bulk;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inventory_role", nullable = false)
+    public DomainEnums.InventoryRole inventoryRole = DomainEnums.InventoryRole.returnable;
     @Column(name = "base_amount", nullable = false)
     public int baseAmount;
     @Column(name = "min_stock", nullable = false)

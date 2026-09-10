@@ -9,6 +9,7 @@ import org.ash.inventory.model.AssemblyItem;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderHistory;
 import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.StockReservation;
 
 import java.util.List;
 import java.util.UUID;
@@ -56,9 +57,25 @@ public class OrderOrm {
                 .setParameter("order", order).getResultList();
     }
 
+    public List<StockReservation> reservations(FactionOrder order) {
+        return entityManager.createQuery("from StockReservation reservation where reservation.order = :order", StockReservation.class)
+                .setParameter("order", order).getResultList();
+    }
+
+    public StockReservation reservation(FactionOrderLine line) {
+        return entityManager.createQuery("from StockReservation reservation where reservation.orderLine = :line order by reservation.createdAt desc", StockReservation.class)
+                .setParameter("line", line).setMaxResults(1).getResultStream().findFirst().orElse(null);
+    }
+
     public void deleteLines(FactionOrder order) {
-        entityManager.createQuery("delete from FactionOrderLine line where line.order = :order")
-                .setParameter("order", order).executeUpdate();
+        for (var reservation : reservations(order)) entityManager.remove(reservation);
+        var assignments = entityManager.createQuery(
+                "from OrderLineAssetAssignment assignment where assignment.order = :order",
+                org.ash.inventory.model.OrderLineAssetAssignment.class)
+                .setParameter("order", order).getResultList();
+        for (var assignment : assignments) entityManager.remove(assignment);
+        entityManager.flush();
+        for (var line : lines(order)) entityManager.remove(line);
     }
 
     public boolean historyExists(FactionOrder order, UUID idempotencyKey) {

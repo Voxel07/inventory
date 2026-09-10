@@ -6,6 +6,7 @@ import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.orm.OrderOrm;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.DamageReport;
+import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.FactionOrder;
@@ -54,6 +55,7 @@ public class ApiMapper {
     public Map<String, Object> location(StorageLocation value) {
         var result = base(value.id, value.createdAt, value.updatedAt);
         put(result, "name", value.name);
+        put(result, "locationType", value.locationType == null ? DomainEnums.LocationType.bin.name() : value.locationType.name());
         put(result, "description", value.description);
         put(result, "area", value.area);
         put(result, "location", value.location);
@@ -79,6 +81,8 @@ public class ApiMapper {
         put(result, "supplier", value.supplier);
         result.put("eventTypes", value.eventTags == null ? List.of() : value.eventTags);
         result.put("isConsumable", value.consumable);
+        result.put("trackingMode", value.trackingMode.name());
+        result.put("inventoryRole", value.inventoryRole.name());
         put(result, "storageLocation", value.storageLocation == null ? null : value.storageLocation.id.toString());
         result.put("status", value.active ? "available" : "retired");
         var images = catalogOrm.itemImages(value).stream().map(image -> media.mediaReference(image.objectKey)).toList();
@@ -148,8 +152,14 @@ public class ApiMapper {
         result.put("userId", value.user.id.toString());
         result.put("transactionType", value.type.name());
         result.put("quantityChanged", value.quantity);
+        put(result, "assetInstanceId", value.assetInstance == null ? null : value.assetInstance.id.toString());
+        put(result, "sourceLocationId", value.sourceLocation == null ? null : value.sourceLocation.id.toString());
+        put(result, "destinationLocationId", value.destinationLocation == null ? null : value.destinationLocation.id.toString());
+        put(result, "availabilityBefore", value.availabilityBefore);
+        put(result, "availabilityAfter", value.availabilityAfter);
         put(result, "factionOrderId", value.factionOrder == null ? null : value.factionOrder.id.toString());
         put(result, "damageReportId", value.damageReport == null ? null : value.damageReport.id.toString());
+        put(result, "clientCommandId", value.clientCommandId == null ? null : value.clientCommandId.toString());
         put(result, "reason", value.reason);
         put(result, "notes", value.notes);
         result.put("timestamp", value.occurredAt);
@@ -178,10 +188,15 @@ public class ApiMapper {
 
         var requested = new LinkedHashMap<String, Integer>();
         var prepared = new LinkedHashMap<String, Integer>();
+        var allocated = new LinkedHashMap<String, Integer>();
+        var reserved = new LinkedHashMap<String, Integer>();
         var pickedUp = new LinkedHashMap<String, Integer>();
+        var handedOver = new LinkedHashMap<String, Integer>();
         var returned = new LinkedHashMap<String, Integer>();
+        var consumed = new LinkedHashMap<String, Integer>();
         var missing = new LinkedHashMap<String, Integer>();
         var damaged = new LinkedHashMap<String, Integer>();
+        var writtenOff = new LinkedHashMap<String, Integer>();
         var requestedAssemblies = new LinkedHashMap<String, Integer>();
         var preparedAssemblies = new LinkedHashMap<String, Integer>();
         var assemblyViews = new ArrayList<Map<String, Object>>();
@@ -193,10 +208,15 @@ public class ApiMapper {
                 requested.merge(id, line.requestedQuantity, Integer::sum);
                 prepared.merge(id, line.preparedQuantity, Integer::sum);
             }
+            allocated.merge(id, line.allocatedQuantity, Integer::sum);
+            reserved.merge(id, line.reservedQuantity, Integer::sum);
             pickedUp.merge(id, line.pickedUpQuantity, Integer::sum);
+            handedOver.merge(id, Math.max(line.handedOverQuantity, line.pickedUpQuantity), Integer::sum);
             returned.merge(id, line.returnedQuantity, Integer::sum);
+            consumed.merge(id, line.consumedQuantity, Integer::sum);
             missing.merge(id, line.missingQuantity, Integer::sum);
             damaged.merge(id, line.damagedQuantity, Integer::sum);
+            writtenOff.merge(id, line.writtenOffQuantity, Integer::sum);
             if (itemViews.stream().noneMatch(existing -> id.equals(existing.get("id"))))
                 itemViews.add(item(line.item));
             if (line.sourceAssembly != null && assemblyViews.stream()
@@ -223,10 +243,15 @@ public class ApiMapper {
         result.put("itemIds", requested.keySet());
         result.put("requestedQuantities", requested);
         result.put("preparedQuantities", prepared);
+        result.put("allocatedQuantities", allocated);
+        result.put("reservedQuantities", reserved);
         result.put("pickedUpQuantities", pickedUp);
+        result.put("handedOverQuantities", handedOver);
         result.put("returnedQuantities", returned);
+        result.put("consumedQuantities", consumed);
         result.put("missingQuantities", missing);
         result.put("damagedQuantities", damaged);
+        result.put("writtenOffQuantities", writtenOff);
         result.put("assemblyIds", requestedAssemblies.keySet());
         result.put("requestedAssemblyQuantities", requestedAssemblies);
         result.put("preparedAssemblyQuantities", preparedAssemblies);

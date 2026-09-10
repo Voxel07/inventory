@@ -22,11 +22,13 @@ public final class ApiModels {
             @Min(0) BigDecimal value, UUID storageLocation, String positionDetails, String hint,
             BigDecimal containerSize, Integer containerCount, Integer containersOpened, Integer containerRemainingPercent,
             Integer maintenanceIntervalDays, LocalDate nextMaintenanceDue, BigDecimal currentOperatingHours,
-            DomainEnums.MaintenanceStatus maintenanceStatus, List<String> images) {}
+            DomainEnums.MaintenanceStatus maintenanceStatus, List<String> images,
+            DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole) {}
 
     public record StorageLocationInput(
             @NotBlank String name, String description, String area, String location, String position,
-            Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds) {}
+            Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
+            DomainEnums.LocationType locationType) {}
 
     public record AssemblyInput(
             @NotBlank String name, String description, String hint, List<String> eventTypes,
@@ -52,7 +54,9 @@ public final class ApiModels {
     public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose) {}
 
     public record PreparationInput(Map<UUID, Integer> preparedQuantities, boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
-    public record ReturnLine(@Min(0) int returned, @Min(0) int missing, @Min(0) int damaged, BigDecimal operatingHours, String notes) {}
+    public record ReturnLine(
+            @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
+            BigDecimal operatingHours, String notes) {}
     public record ReturnInput(@NotEmpty Map<UUID, ReturnLine> lines, UUID idempotencyKey, String notes) {}
     public record TransitionInput(
             UUID idempotencyKey, String notes, String collectorName,

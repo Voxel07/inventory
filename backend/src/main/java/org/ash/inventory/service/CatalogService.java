@@ -5,7 +5,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.helper.event.EventBroadcaster;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.resource.ApiException;
@@ -26,7 +25,7 @@ public class CatalogService {
     @Inject org.ash.inventory.helper.storage.MediaService media;
     @Inject ActorService actorService;
     @Inject CatalogOrm orm;
-    @Inject EventBroadcaster broadcaster;
+    @Inject DomainEventService events;
 
     public List<Item> getItems(String search) {
         return orm.items(search);
@@ -66,6 +65,8 @@ public class CatalogService {
             tx.notes = "Initial stock on item creation";
             tx.idempotencyKey = UUID.randomUUID();
             tx.occurredAt = Instant.now();
+            tx.availabilityBefore = 0;
+            tx.availabilityAfter = item.baseAmount;
             orm.persist(tx);
         }
         catalogChanged("items", item.id);
@@ -104,7 +105,18 @@ public class CatalogService {
         item.supplier = input.supplier();
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
         item.consumable = input.consumable();
+        item.trackingMode = input.trackingMode() == null ? DomainEnums.TrackingMode.bulk : input.trackingMode();
+        item.inventoryRole = input.inventoryRole() == null
+                ? (input.consumable() ? DomainEnums.InventoryRole.consumable : DomainEnums.InventoryRole.returnable)
+                : input.inventoryRole();
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized
+                && item.inventoryRole == DomainEnums.InventoryRole.consumable) {
+            throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
+        }
         if (input.amount() != null) item.baseAmount = input.amount();
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.baseAmount > 0) {
+            throw ApiException.badRequest("Serialized stock must be created as individually identified asset instances");
+        }
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
         item.storageLocation = input.storageLocation() == null ? null : required(StorageLocation.class, input.storageLocation(), "Storage location");
@@ -156,6 +168,7 @@ public class CatalogService {
 
     private void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
         target.name = input.name().trim();
+        target.locationType = input.locationType() == null ? DomainEnums.LocationType.bin : input.locationType();
         target.description = input.description();
         target.area = input.area();
         target.location = input.location();
@@ -303,7 +316,8 @@ public class CatalogService {
     }
 
     private void catalogChanged(String resource, UUID id) {
-        broadcaster.broadcast("catalog.changed", Map.of("resource", resource, "id", id.toString()));
+        events.record("catalog.changed", resource, id, actorService.current().id, null,
+                Map.of("resource", resource, "id", id.toString()));
     }
 
     private String slug(String value) {

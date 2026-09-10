@@ -3,6 +3,8 @@
 > **Status:** Architecture Refinement & Evaluation Baseline  
 > **Document Purpose:** Clear, structured specification for coding agents and human engineers to evaluate the application's current state, assess feature gaps, compare tech stacks against industry standards, and guide migration from PocketBase to an enterprise-grade REST backend (PostgreSQL + Java 25 LTS / Quarkus).
 
+> **Architecture completion:** The detailed bounded contexts, aggregate ownership, inventory semantics, transactional-outbox contract, event catalog, consistency rules, offline conflict policy, and implementation map are defined in [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md). That document incorporates the execution gaps identified in [`next_steps.md`](next_steps.md) and is normative when this baseline is ambiguous.
+
 ---
 
 ## 1. Executive Summary & Domain Context

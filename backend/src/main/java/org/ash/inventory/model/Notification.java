@@ -21,4 +21,8 @@ public class Notification extends BaseEntity {
     @Column(nullable = false) public String type;
     @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false) public Map<String, Object> payload = new LinkedHashMap<>();
     @Column(name = "read_at") public Instant readAt;
+    @Column(name = "delivery_status", nullable = false) public String deliveryStatus = "pending";
+    @Column(name = "delivery_attempts", nullable = false) public int deliveryAttempts;
+    @Column(name = "delivered_at") public Instant deliveredAt;
+    @Column(name = "last_delivery_error", length = 2000) public String lastDeliveryError;
 }

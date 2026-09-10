@@ -9,9 +9,10 @@ export interface User {
   updated: string;
 }
 
-export type UserRole = 'Admin ' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader';
+export type UserRole = 'admin' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader'
+  | 'hq_admin' | 'warehouse_crew' | 'marshal' | 'event_planner' | 'maintenance_crew' | 'read_only';
 
-export type AccessRole = 'admin' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader';
+export type AccessRole = UserRole;
 
 export interface UserPermissionsFormData {
   role: AccessRole;

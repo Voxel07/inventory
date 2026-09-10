@@ -2,7 +2,7 @@ package org.ash.inventory.resource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -30,15 +30,13 @@ public class SyncResource {
     @Inject ActorService actors;
 
     @POST
-    @Transactional
     public Object sync(@Valid ApiModels.SyncBatch batch) {
-        actors.current();
         var results = new ArrayList<Map<String, Object>>();
         for (var action : batch.actions()) {
             var result = new LinkedHashMap<String, Object>();
             result.put("idempotencyKey", action.idempotencyKey());
             try {
-                result.put("entity", execute(action));
+                result.put("entity", QuarkusTransaction.requiringNew().call(() -> execute(action)));
                 result.put("status", "applied");
             } catch (ApiException exception) {
                 result.put("status", exception.status == 409 ? "conflict" : "rejected");
@@ -64,14 +62,14 @@ public class SyncResource {
                         value.requestedAssemblyQuantities(), action.idempotencyKey())));
             }
             case "transaction" -> {
-                actors.requireManager();
+                actors.requireWarehouse();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
                         value.reason(), value.notes(), value.userId(), value.factionOrderId(), action.idempotencyKey());
                 yield mapper.transaction(inventory.transact(input));
             }
             case "order.prepare" -> {
-                actors.requireManager();
+                actors.requireWarehouse();
                 UUID orderId = uuid(action.payload(), "orderId");
                 var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.PreparationInput.class);
                 yield mapper.order(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes())));
@@ -80,20 +78,24 @@ public class SyncResource {
                 UUID orderId = uuid(action.payload(), "orderId");
                 var target = DomainEnums.OrderStatus.valueOf(action.payload().get("status").toString());
                 if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft) actors.current();
-                else actors.requireManager();
+                else if (target == DomainEnums.OrderStatus.picked_up || target == DomainEnums.OrderStatus.closed)
+                    actors.requireMarshal();
+                else if (target == DomainEnums.OrderStatus.ready || target == DomainEnums.OrderStatus.preparing)
+                    actors.requireWarehouse();
+                else actors.requirePlanner();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.TransitionInput.class);
                 yield mapper.order(orders.transition(orderId, target, new ApiModels.TransitionInput(
                         action.idempotencyKey(), value.notes(), value.collectorName(), value.pickupLocation(),
                         value.pickupLatitude(), value.pickupLongitude())));
             }
             case "order.return" -> {
-                actors.requireManager();
+                actors.requireMarshal();
                 UUID orderId = uuid(action.payload(), "orderId");
                 var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.ReturnInput.class);
                 yield mapper.order(orders.returnItems(orderId, new ApiModels.ReturnInput(value.lines(), action.idempotencyKey(), value.notes())));
             }
             case "damage.create" -> {
-                actors.requireManager();
+                actors.requireMarshal();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.DamageInput.class);
                 yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(), action.idempotencyKey())));
             }

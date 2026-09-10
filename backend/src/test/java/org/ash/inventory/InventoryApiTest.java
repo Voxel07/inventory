@@ -2,7 +2,13 @@ package org.ash.inventory;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.ash.inventory.model.DomainEvent;
+import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.service.DomainEventService;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -13,6 +19,297 @@ import static org.hamcrest.Matchers.notNullValue;
 
 @QuarkusTest
 class InventoryApiTest {
+    @Inject EntityManager entityManager;
+    @Inject DomainEventService domainEvents;
+
+    @Test
+    void serializedItemsRejectQuantityOnlyStockAndPreparationCommands() {
+        String itemId = request().body(Map.of("sku", "SERIAL-GUARD-001", "name", "Serialized guard item",
+                        "category", "Test", "amount", 0, "value", 0, "trackingMode", "serialized"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1))
+                .post("/api/transactions").then().statusCode(409);
+
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Serialized guard faction");
+        orderBody.put("eventDate", "2037-09-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 1));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 1), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(409);
+    }
+
+    @Test
+    void expiredOutboxLeasesAreDeadLetteredAndPublishedAcksAreBatched() {
+        java.util.UUID expiredId = QuarkusTransaction.requiringNew().call(() -> {
+            var event = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+            event.attemptCount = 10;
+            entityManager.persist(event);
+            entityManager.flush();
+            return event.id;
+        });
+        domainEvents.claim(1);
+        DomainEnums.OutboxStatus expiredStatus = QuarkusTransaction.requiringNew().call(() ->
+                entityManager.find(DomainEvent.class, expiredId).status);
+        org.junit.jupiter.api.Assertions.assertEquals(DomainEnums.OutboxStatus.dead_letter, expiredStatus);
+
+        java.util.List<java.util.UUID> publishedIds = QuarkusTransaction.requiringNew().call(() -> {
+            var first = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
+            var second = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
+            entityManager.persist(first);
+            entityManager.persist(second);
+            entityManager.flush();
+            return java.util.List.of(first.id, second.id);
+        });
+        domainEvents.published(publishedIds);
+        long publishedCount = QuarkusTransaction.requiringNew().call(() -> entityManager.createQuery("""
+                select count(event) from DomainEvent event
+                where event.id in :ids and event.status = :status
+                """, Long.class)
+                .setParameter("ids", publishedIds)
+                .setParameter("status", DomainEnums.OutboxStatus.published)
+                .getSingleResult());
+        org.junit.jupiter.api.Assertions.assertEquals(2L, publishedCount);
+    }
+
+    private DomainEvent outboxEvent(DomainEnums.OutboxStatus status, java.time.Instant availableAt) {
+        var event = new DomainEvent();
+        event.eventType = "test.event";
+        event.aggregateType = "test";
+        event.aggregateId = java.util.UUID.randomUUID();
+        event.payload = new java.util.LinkedHashMap<>();
+        event.status = status;
+        event.availableAt = availableAt;
+        event.occurredAt = availableAt;
+        return event;
+    }
+
+    @Test
+    void devAuthRoleChangesAreAppliedToExistingUsers() {
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "role-refresh-user")
+                .header("X-Actor-Role", "admin")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("admin"));
+
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "role-refresh-user")
+                .header("X-Actor-Role", "marshal")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("marshal"));
+    }
+
+    @Test
+    void reopeningPreparationReleasesReservationsAndOrderLinesRemainEditable() {
+        String itemId = request().body(Map.of("sku", "REOPEN-EDIT-001", "name", "Reopen edit item",
+                        "category", "Test", "amount", 2, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Reopen edit faction");
+        orderBody.put("eventDate", "2037-05-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 2), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(200);
+
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted")
+                .then().statusCode(200)
+                .body("reservedQuantities.'" + itemId + "'", equalTo(0))
+                .body("preparedQuantities.'" + itemId + "'", equalTo(0));
+        orderBody.put("requestedQuantities", Map.of(itemId, 1));
+        request().body(orderBody).patch("/api/orders/" + orderId).then().statusCode(200)
+                .body("requestedQuantities.'" + itemId + "'", equalTo(1));
+    }
+
+    @Test
+    void unopenedConsumablesReturnToStockAndConsumedUnitsDoNot() {
+        String warehouseId = request().body(Map.of("name", "Consumable warehouse", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String eventSiteId = request().body(Map.of("name", "Consumable event site", "mapZoom", 16,
+                        "latitude", 52.5, "longitude", 13.4, "locationType", "event_site"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of("sku", "CONSUMABLE-RETURN-001", "name", "Returnable boxes",
+                        "category", "Test", "amount", 4, "value", 0, "consumable", true,
+                        "storageLocation", warehouseId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Consumable return faction");
+        orderBody.put("eventDate", "2037-06-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 4));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 4), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(200);
+        request().body(Map.of("pickupLocation", eventSiteId))
+                .post("/api/orders/" + orderId + "/transitions/ready").then().statusCode(200);
+        String pickupCommand = java.util.UUID.randomUUID().toString();
+        request().body(Map.of("idempotencyKey", pickupCommand))
+                .post("/api/orders/" + orderId + "/transitions/picked_up").then().statusCode(200);
+
+        String returnCommand = java.util.UUID.randomUUID().toString();
+        request().body(Map.of("idempotencyKey", returnCommand, "lines", Map.of(itemId,
+                        Map.of("returned", 2, "consumed", 2, "missing", 0, "damaged", 0))))
+                .post("/api/orders/" + orderId + "/return").then().statusCode(200)
+                .body("status", equalTo("returned"))
+                .body("returnedQuantities.'" + itemId + "'", equalTo(2))
+                .body("consumedQuantities.'" + itemId + "'", equalTo(2));
+
+        request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
+                .body("find { it.transactionType == 'checkout' }.clientCommandId", equalTo(pickupCommand))
+                .body("find { it.transactionType == 'checkout' }.sourceLocationId", equalTo(warehouseId))
+                .body("find { it.transactionType == 'checkout' }.destinationLocationId", equalTo(eventSiteId))
+                .body("find { it.transactionType == 'checkin' }.quantityChanged", equalTo(2))
+                .body("find { it.transactionType == 'checkin' }.clientCommandId", equalTo(returnCommand))
+                .body("find { it.transactionType == 'checkin' }.sourceLocationId", equalTo(eventSiteId))
+                .body("find { it.transactionType == 'checkin' }.destinationLocationId", equalTo(warehouseId))
+                .body("find { it.transactionType == 'consumed' }.quantityChanged", equalTo(2));
+
+        var demand = new java.util.HashMap<String, Object>(orderBody);
+        demand.put("faction", "Consumable stock verification");
+        demand.put("requestedQuantities", Map.of(itemId, 3));
+        String nextOrder = request().body(demand).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + nextOrder + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 3), "acknowledgeShortages", false))
+                .post("/api/orders/" + nextOrder + "/prepare").then().statusCode(409);
+    }
+
+    @Test
+    void repairingDamageDoesNotCreatePhysicalStock() {
+        String itemId = request().body(Map.of("sku", "REPAIR-STOCK-001", "name", "Repair stock item",
+                        "category", "Test", "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String damageId = request().body(Map.of("itemId", itemId, "amount", 1,
+                        "description", "Regression test damage", "severity", "high"))
+                .post("/api/damage-reports").then().statusCode(200).extract().path("id");
+        request().body(Map.of("status", "repaired", "amount", 1))
+                .patch("/api/damage-reports/" + damageId).then().statusCode(200)
+                .body("status", equalTo("repaired"));
+
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Repair stock faction");
+        orderBody.put("eventDate", "2037-07-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 2), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(409);
+    }
+
+    @Test
+    void repeatedMissingDeclarationsRecordOnlyNewlyMissingUnits() {
+        String itemId = request().body(Map.of("sku", "MISSING-DELTA-001", "name", "Missing delta item",
+                        "category", "Test", "amount", 2, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Missing delta faction");
+        orderBody.put("eventDate", "2037-08-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 2), "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(200);
+        request().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
+                .post("/api/orders/" + orderId + "/transitions/ready").then().statusCode(200);
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/picked_up").then().statusCode(200);
+
+        for (int missing : java.util.List.of(1, 1, 2)) {
+            request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString(), "lines", Map.of(itemId,
+                            Map.of("returned", 0, "consumed", 0, "missing", missing, "damaged", 0))))
+                    .post("/api/orders/" + orderId + "/return").then().statusCode(200)
+                    .body("missingQuantities.'" + itemId + "'", equalTo(missing));
+        }
+        Object[] missingAudit = QuarkusTransaction.requiringNew().call(() -> entityManager.createQuery("""
+                select count(reconciliation), sum(reconciliation.quantity)
+                from ReturnReconciliation reconciliation
+                where reconciliation.order.id = :orderId and reconciliation.outcome = :outcome
+                """, Object[].class)
+                .setParameter("orderId", java.util.UUID.fromString(orderId))
+                .setParameter("outcome", org.ash.inventory.model.DomainEnums.ReconciliationOutcome.missing)
+                .getSingleResult());
+        org.junit.jupiter.api.Assertions.assertEquals(2L, missingAudit[0]);
+        org.junit.jupiter.api.Assertions.assertEquals(2L, missingAudit[1]);
+    }
+
+    @Test
+    void rejectedOfflineCommandRollsBackItsPartialAggregateChanges() {
+        String itemId = request().body(Map.of("sku", "SYNC-ROLLBACK-001", "name", "Sync rollback item",
+                        "category", "Test", "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "LS");
+        orderBody.put("faction", "Sync rollback faction");
+        orderBody.put("eventDate", "2036-06-01");
+        orderBody.put("requestedQuantities", Map.of(itemId, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
+
+        var action = Map.of(
+                "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "type", "order.prepare",
+                "payload", Map.of("orderId", orderId, "input", Map.of(
+                        "preparedQuantities", Map.of(itemId, 2), "acknowledgeShortages", false)));
+        request().body(Map.of("actions", java.util.List.of(action))).post("/api/sync")
+                .then().statusCode(200).body("results[0].status", equalTo("conflict"));
+        request().get("/api/orders/" + orderId).then().statusCode(200)
+                .body("status", equalTo("submitted"))
+                .body("reservedQuantities.'" + itemId + "'", equalTo(0));
+    }
+
+    @Test
+    void reservationsPreventDoubleAllocationAndBecomeCustodyOnPickup() {
+        String itemId = request()
+                .body(Map.of("sku", "RESERVE-001", "name", "Reservation test radio", "category", "Comms",
+                        "amount", 2, "value", 0, "trackingMode", "bulk", "inventoryRole", "returnable"))
+                .post("/api/items").then().statusCode(200)
+                .body("trackingMode", equalTo("bulk")).body("inventoryRole", equalTo("returnable"))
+                .extract().path("id");
+
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Reservation alpha");
+        orderBody.put("eventDate", "2035-05-10");
+        orderBody.put("requestedQuantities", Map.of(itemId, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String first = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + first + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 2), "acknowledgeShortages", false))
+                .post("/api/orders/" + first + "/prepare").then().statusCode(200)
+                .body("reservedQuantities.'" + itemId + "'", equalTo(2));
+
+        orderBody.put("faction", "Reservation bravo");
+        orderBody.put("requestedQuantities", Map.of(itemId, 1));
+        String second = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/" + second + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 1), "acknowledgeShortages", false))
+                .post("/api/orders/" + second + "/prepare").then().statusCode(409);
+
+        request().body(Map.of()).post("/api/orders/" + first + "/transitions/cancelled").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 1), "acknowledgeShortages", false))
+                .post("/api/orders/" + second + "/prepare").then().statusCode(200);
+        request().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
+                .post("/api/orders/" + second + "/transitions/ready").then().statusCode(200);
+        request().body(Map.of("collectorName", "Faction Quartermaster"))
+                .post("/api/orders/" + second + "/transitions/picked_up").then().statusCode(200)
+                .body("reservedQuantities.'" + itemId + "'", equalTo(0))
+                .body("handedOverQuantities.'" + itemId + "'", equalTo(1));
+        request().body(Map.of("lines", Map.of(itemId, Map.of("returned", 1, "missing", 0, "damaged", 0))))
+                .post("/api/orders/" + second + "/return").then().statusCode(200)
+                .body("status", equalTo("returned"))
+                .body("returnedQuantities.'" + itemId + "'", equalTo(1));
+        request().body(Map.of()).post("/api/orders/" + second + "/transitions/closed").then().statusCode(200);
+    }
+
     @Test
     void assemblyImageCanBeCreatedReplacedPreservedAndRemoved() {
         String component = request().body(Map.of("name", "Assembly image component", "category", "Equipment", "value", 0))

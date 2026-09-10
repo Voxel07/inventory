@@ -72,7 +72,7 @@ public class OrderResource {
     @POST
     @Path("/{id}/prepare")
     public Object prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
-        actor.requireManager();
+        actor.requireWarehouse();
         return mapper.order(service.prepare(id, input));
     }
 
@@ -82,8 +82,12 @@ public class OrderResource {
             ApiModels.TransitionInput input) {
         if (status == DomainEnums.OrderStatus.submitted || status == DomainEnums.OrderStatus.draft)
             actor.current();
+        else if (status == DomainEnums.OrderStatus.picked_up || status == DomainEnums.OrderStatus.closed)
+            actor.requireMarshal();
+        else if (status == DomainEnums.OrderStatus.ready || status == DomainEnums.OrderStatus.preparing)
+            actor.requireWarehouse();
         else
-            actor.requireManager();
+            actor.requirePlanner();
         var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return mapper.order(service.transition(id, status, safeInput));
     }
@@ -91,14 +95,14 @@ public class OrderResource {
     @POST
     @Path("/{id}/return")
     public Object returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
-        actor.requireManager();
+        actor.requireMarshal();
         return mapper.order(service.returnItems(id, input));
     }
 
     @POST
     @Path("/{id}/return-all")
     public Object returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
-        actor.requireManager();
+        actor.requireMarshal();
         return mapper.order(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }
 }

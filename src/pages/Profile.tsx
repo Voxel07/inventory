@@ -10,6 +10,12 @@ const ROLE_KEYS: Record<string, string> = {
   manager: 'profile.roles.inventoryManager',
   inventory_manager: 'profile.roles.inventoryManager',
   warehouse_packer: 'profile.roles.warehousePacker',
+  warehouse_crew: 'profile.roles.warehousePacker',
+  marshal: 'profile.roles.marshal',
+  event_planner: 'profile.roles.eventPlanner',
+  maintenance_crew: 'profile.roles.maintenanceCrew',
+  hq_admin: 'profile.roles.admin',
+  read_only: 'profile.roles.readOnly',
   faction_leader: 'profile.roles.factionLeader',
 };
 

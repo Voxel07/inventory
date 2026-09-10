@@ -21,6 +21,8 @@ import java.util.UUID;
 public class MaintenanceRecord {
     @Id @GeneratedValue public UUID id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "maintenance_schedule_id") public MaintenanceSchedule schedule;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.MaintenanceType type;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "inspector_user_id") public UserAccount inspector;
     @Column(name = "performed_at", nullable = false) public Instant performedAt;
@@ -28,6 +30,7 @@ public class MaintenanceRecord {
     @Column(name = "operating_hours") public BigDecimal operatingHours;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.MaintenanceResult result;
     @Column(name = "certificate_number") public String certificateNumber;
+    @Column(name = "certificate_object_key") public String certificateObjectKey;
     public String notes;
     @Column(name = "created_at", nullable = false, updatable = false) public Instant createdAt;
     @PrePersist void prePersist() { if (createdAt == null) createdAt = Instant.now(); }

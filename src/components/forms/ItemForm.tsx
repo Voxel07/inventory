@@ -13,6 +13,7 @@ import {
     DialogActions,
     Checkbox,
     FormControlLabel,
+    MenuItem,
 } from '@mui/material';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
@@ -49,6 +50,8 @@ export function ItemForm({
         storageLocation: initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
         isConsumable: initialData?.isConsumable ?? false,
+        trackingMode: initialData?.trackingMode ?? 'bulk',
+        inventoryRole: initialData?.inventoryRole ?? (initialData?.isConsumable ? 'consumable' : 'returnable'),
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
@@ -123,7 +126,7 @@ export function ItemForm({
             imageFiles: images.files,
             removeImages: images.removed,
             imageReplacements: images.replacements,
-            amount: parseOptional(numericInputs.amount),
+            amount: formData.trackingMode === 'serialized' ? 0 : parseOptional(numericInputs.amount),
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
@@ -136,7 +139,8 @@ export function ItemForm({
         onSubmit(submitData);
     }
 
-    const amountValid = !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const amountValid = formData.trackingMode === 'serialized'
+        || !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
     const containerSizeValid = !isBulkPackage
         || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
@@ -157,13 +161,20 @@ export function ItemForm({
                 />
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', columnGap: 2, flexWrap: 'wrap' }}>
                     <FormControlLabel
-                        control={<Checkbox checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({ ...prev, isConsumable: event.target.checked }))} />}
+                        control={<Checkbox checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({
+                            ...prev,
+                            isConsumable: event.target.checked,
+                            inventoryRole: event.target.checked ? 'consumable'
+                                : prev.inventoryRole === 'consumable' ? 'returnable' : prev.inventoryRole,
+                            trackingMode: event.target.checked && prev.trackingMode === 'serialized' ? 'bulk' : prev.trackingMode,
+                        }))} />}
                         label={t('Verbrauchsmaterial', 'Consumable')}
                     />
                     <FormControlLabel
                         control={(
                             <Checkbox
                                 checked={isBulkPackage}
+                                disabled={formData.trackingMode === 'serialized'}
                                 onChange={(event) => {
                                     const checked = event.target.checked;
                                     setIsBulkPackage(checked);
@@ -182,15 +193,62 @@ export function ItemForm({
                         label={t('Box mit mehreren gleichen Artikeln', 'Box with multiple identical items')}
                     />
                 </Box>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <TextField
+                        select
+                        fullWidth
+                        label={t('Bestandsführung', 'Tracking mode')}
+                        value={formData.trackingMode ?? 'bulk'}
+                        onChange={(event) => {
+                            const trackingMode = event.target.value as ItemFormData['trackingMode'];
+                            setFormData((prev) => ({
+                                ...prev,
+                                trackingMode,
+                                inventoryRole: trackingMode === 'serialized' && prev.inventoryRole === 'consumable'
+                                    ? 'returnable' : prev.inventoryRole,
+                                isConsumable: trackingMode === 'serialized' ? false : prev.isConsumable,
+                            }));
+                            if (trackingMode === 'serialized') setIsBulkPackage(false);
+                        }}
+                    >
+                        <MenuItem value="bulk">{t('Mengenbestand', 'Bulk')}</MenuItem>
+                        <MenuItem value="serialized">{t('Einzelgeräte / Seriennummern', 'Serialized assets')}</MenuItem>
+                        <MenuItem value="lot_tracked">{t('Chargenbestand', 'Lot tracked')}</MenuItem>
+                    </TextField>
+                    <TextField
+                        select
+                        fullWidth
+                        label={t('Inventarrolle', 'Inventory role')}
+                        value={formData.inventoryRole ?? 'returnable'}
+                        onChange={(event) => {
+                            const inventoryRole = event.target.value as ItemFormData['inventoryRole'];
+                            setFormData((prev) => ({
+                                ...prev,
+                                inventoryRole,
+                                isConsumable: inventoryRole === 'consumable',
+                                trackingMode: inventoryRole === 'consumable' && prev.trackingMode === 'serialized'
+                                    ? 'bulk' : prev.trackingMode,
+                            }));
+                        }}
+                    >
+                        <MenuItem value="consumable">{t('Verbrauchsmaterial', 'Consumable')}</MenuItem>
+                        <MenuItem value="returnable">{t('Rückgabepflichtig', 'Returnable')}</MenuItem>
+                        <MenuItem value="repairable">{t('Reparierbar', 'Repairable')}</MenuItem>
+                        <MenuItem value="rental">{t('Mietgerät', 'Rental')}</MenuItem>
+                    </TextField>
+                </Stack>
                 {!initialData && (
                     <TextField
                         label={isBulkPackage ? t('Anzahl der Boxen', 'Number of boxes') : t('Menge', 'Amount')}
                         type="number"
                         value={numericInputs.amount}
                         onChange={handleNumberChange('amount')}
-                        required
+                        required={formData.trackingMode !== 'serialized'}
+                        disabled={formData.trackingMode === 'serialized'}
                         fullWidth
-                        helperText={isBulkPackage ? t('Die Menge wird als Anzahl vollständiger Boxen gespeichert', 'The amount is stored as the number of full boxes') : undefined}
+                        helperText={formData.trackingMode === 'serialized'
+                            ? t('Bestand wird über einzeln identifizierte Assets geführt.', 'Stock is registered through individually identified assets.')
+                            : isBulkPackage ? t('Die Menge wird als Anzahl vollständiger Boxen gespeichert', 'The amount is stored as the number of full boxes') : undefined}
                         slotProps={{ htmlInput: { min: 0 } }}
                     />
                 )}

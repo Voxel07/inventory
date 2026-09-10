@@ -101,7 +101,7 @@ export function useReturnFactionOrder() {
 }
 
 export function useReturnFactionOrderItems() {
-  return useOrderMutation(({ id, lines }: { id: string; lines: Record<string, { returned: number; missing: number; damaged: number; operatingHours?: number; notes?: string }> }) => returnFactionOrderItems(id, lines));
+  return useOrderMutation(({ id, lines }: { id: string; lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }> }) => returnFactionOrderItems(id, lines));
 }
 
 export function useCancelFactionOrder() {
