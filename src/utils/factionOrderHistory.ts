@@ -5,14 +5,14 @@ function hasValues(values: Record<string, number> | undefined): values is Record
 }
 
 export function factionOrderItemBaseline(order: FactionOrder): Record<string, number> {
-  if (['picked_up', 'returned'].includes(order.status) && hasValues(order.preparedQuantities)) {
+  if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && hasValues(order.preparedQuantities)) {
     return order.preparedQuantities;
   }
   return order.requestedQuantities;
 }
 
 export function factionOrderAssemblyBaseline(order: FactionOrder): Record<string, number> {
-  if (['picked_up', 'returned'].includes(order.status) && hasValues(order.preparedAssemblyQuantities)) {
+  if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && hasValues(order.preparedAssemblyQuantities)) {
     return order.preparedAssemblyQuantities;
   }
   return order.requestedAssemblyQuantities ?? {};

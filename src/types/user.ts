@@ -9,8 +9,8 @@ export interface User {
   updated: string;
 }
 
-export type UserRole = 'admin' | 'inventory_manager' | 'warehouse_packer' | 'faction_leader'
-  | 'hq_admin' | 'warehouse_crew' | 'marshal' | 'event_planner' | 'maintenance_crew' | 'read_only';
+export type UserRole = 'hq_admin' | 'warehouse_crew' | 'marshal' | 'event_planner'
+  | 'maintenance_crew' | 'faction_leader' | 'read_only';
 
 export type AccessRole = UserRole;
 

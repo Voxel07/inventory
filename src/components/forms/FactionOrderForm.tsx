@@ -1,5 +1,5 @@
 import { MediaImage } from '../common/MediaImage';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -31,7 +31,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item, StorageLocation } from '../../types';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import {
   factionOrderAssemblyBaseline,
   factionOrderItemBaseline,
@@ -81,13 +81,16 @@ export function FactionOrderForm({
   allowedFactionKeys,
   onSubmit,
 }: Props) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
   const initialEventType = initialData?.eventType ?? defaultEventType;
   const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || FACTIONS_BY_EVENT[type].some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
-  const allowedFactions = (type: EventType) => FACTIONS_BY_EVENT[type].filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`));
+  const allowedFactions = useCallback(
+    (type: EventType) => FACTIONS_BY_EVENT[type].filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`)),
+    [allowedFactionKeys],
+  );
   const [eventType, setEventType] = useState<EventType>(initialEventType);
   const [faction, setFaction] = useState(
     initialData?.faction ?? defaultFaction ?? allowedFactions(initialEventType)[0] ?? '',
@@ -118,7 +121,7 @@ export function FactionOrderForm({
 
   const availableByItem = useMemo(() => new Map(items.map((item) => [
     item.id,
-    calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0).remaining,
+    calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item).remaining,
   ])), [damageReports, items, transactions]);
 
   useEffect(() => {
@@ -129,12 +132,12 @@ export function FactionOrderForm({
         ? defaultFaction
         : allowedFactions(defaultEventType)[0] ?? '',
     );
-  }, [defaultEventType, defaultFaction, initialData]);
+  }, [allowedFactions, defaultEventType, defaultFaction, initialData]);
 
   useEffect(() => {
     const options = allowedFactions(eventType);
     if (!options.includes(faction)) setFaction(options[0] ?? '');
-  }, [eventType, faction, allowedFactionKeys]);
+  }, [allowedFactions, eventType, faction]);
 
   const previousOrder = useMemo(
     () => findPreviousFactionOrder(orders, {

@@ -25,7 +25,6 @@ class MediaServiceTest {
         media.region = "garage";
         media.accessKey = Optional.of("test-key");
         media.secretKey = Optional.of("test-secret");
-        media.publicBaseUrl = Optional.of("https://images.example.test");
         return media;
     }
 
@@ -43,14 +42,14 @@ class MediaServiceTest {
     }
 
     @Test
-    void recognizesLegacyUrlsOnlyFromConfiguredStorage() {
+    void acceptsOnlyCanonicalObjectKeys() {
         var media = service();
-        assertEquals("photo.jpg", media.mediaReference("http://garage:3900/inventory/photo.jpg"));
-        assertEquals("a b+.png", media.mediaReference("https://images.example.test/a%20b%2B.png"));
-        assertEquals("items/one/image.webp", media.mediaReference("https://images.example.test/items/one/image.webp"));
-        String external = "https://images.example.test.evil.test/photo.jpg";
-        assertEquals(external, media.mediaReference(external));
+        assertEquals("items/one/image.webp", media.mediaReference("items/one/image.webp"));
         assertEquals("image.webp", media.mediaReference("image.webp"));
+        assertEquals(400, assertThrows(ApiException.class,
+                () -> media.mediaReference("https://images.example.test/image.webp")).status);
+        assertEquals(400, assertThrows(ApiException.class,
+                () -> media.mediaReference("http://garage:3900/inventory/image.webp")).status);
         assertNull(media.mediaReference(null));
     }
 

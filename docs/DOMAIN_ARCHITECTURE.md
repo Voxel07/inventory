@@ -179,16 +179,17 @@ For bulk quantities, conflicts return the new available balance and version. For
 
 ## Authorization policy
 
-Canonical roles are `hq_admin`, `warehouse_crew`, `marshal`, `event_planner`, `maintenance_crew`, `faction_leader`, and `read_only`. The legacy roles remain accepted during migration.
+Canonical roles are `hq_admin`, `warehouse_crew`, `marshal`, `event_planner`, `maintenance_crew`, `faction_leader`, and `read_only`. No role aliases are accepted at runtime.
 
 | Capability | Roles |
 |---|---|
-| Manage master data and permissions | hq_admin |
+| Manage master data | hq_admin, warehouse_crew |
+| Manage users and permissions | hq_admin |
 | Receive, reserve, prepare, transfer, count | hq_admin, warehouse_crew |
 | Execute custody and returns | hq_admin, warehouse_crew, marshal |
 | Plan events and orders | hq_admin, event_planner; faction leader for own faction |
 | Repair and maintenance | hq_admin, maintenance_crew |
-| Write off or approve count variance | hq_admin, explicitly delegated inventory manager |
+| Write off or approve count variance | hq_admin |
 | View vendor documents | permitted HQ roles only |
 
 ## Reporting and projections

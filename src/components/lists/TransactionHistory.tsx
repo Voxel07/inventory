@@ -18,7 +18,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { StockTransaction, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { Link } from 'react-router-dom';
 
 interface Props {
@@ -30,7 +30,7 @@ interface Props {
 }
 
 export function TransactionHistory({ transactions, items, users, isLoading, onEdit }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     if (isLoading) {

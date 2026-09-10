@@ -67,7 +67,6 @@ export interface FactionOrder {
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
   preparedAssemblyQuantities: Record<string, number>;
-  pickedUpQuantities?: Record<string, number>;
   handedOverQuantities?: Record<string, number>;
   returnedQuantities?: Record<string, number>;
   consumedQuantities?: Record<string, number>;
@@ -77,13 +76,9 @@ export interface FactionOrder {
   notes?: string;
   createdBy: string;
   preparedBy?: string;
-  preparedAt?: string;
   readyBy?: string;
-  readyAt?: string;
   pickedUpBy?: string;
-  pickedUpAt?: string;
   returnedBy?: string;
-  returnedAt?: string;
   history: FactionOrderHistoryEntry[];
   created: string;
   updated: string;

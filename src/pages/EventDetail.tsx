@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -25,7 +25,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
 import { useItems } from '../hooks/useItems';
 import { EVENT_TYPES, type EventReportStatus, type EventType } from '../types';
-import { useAppLanguage, useTranslate } from '../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 
 type QuantityInputs = Record<string, string>;
@@ -45,7 +45,7 @@ function toQuantities(values: QuantityInputs): Record<string, number> {
 export function EventDetail() {
   const { reportId = '' } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
-  const t = useTranslate();
+  const t = useLocalizedText();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
@@ -60,7 +60,7 @@ export function EventDetail() {
   const [notes, setNotes] = useState('');
   const [search, setSearch] = useState('');
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     if (!report) return;
     setEventType(report.eventType);
     setEventDate(report.eventDate.slice(0, 10));
@@ -69,11 +69,11 @@ export function EventDetail() {
     setUsed(toInputs(report.usedQuantities));
     setNotes(report.notes ?? '');
     setSearch('');
-  }
+  }, [report]);
 
   useEffect(() => {
     resetForm();
-  }, [report?.id, report?.updated]);
+  }, [resetForm]);
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const recordedIds = useMemo(() => new Set([

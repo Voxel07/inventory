@@ -29,12 +29,12 @@ import { TransactionForm } from '../components/forms/TransactionForm';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 import type { DamageReportFormData, Item, TransactionFormData } from '../types';
-import { useNames, useTranslate } from '../utils/naming';
+import { useNames, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
 export function UserDashboard() {
     const names = useNames();
-    const t = useTranslate();
+    const t = useLocalizedText();
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

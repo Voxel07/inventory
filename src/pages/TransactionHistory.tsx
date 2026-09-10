@@ -7,11 +7,11 @@ import { useItems } from '../hooks/useItems';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import type { StockTransaction, TransactionFormData } from '../types';
-import { nameFor, useNames, useTranslate } from '../utils/naming';
+import { nameFor, useNames, useLocalizedText } from '../utils/naming';
 
 export function TransactionHistoryPage() {
   const names = useNames();
-  const t = useTranslate();
+  const t = useLocalizedText();
   const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: transactions, isLoading } = useTransactions({

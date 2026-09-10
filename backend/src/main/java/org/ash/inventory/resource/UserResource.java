@@ -32,7 +32,7 @@ public class UserResource {
     @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled;
 
     @GET @Path("/auth/me") @Transactional
-    public Object me() { return mapper.user(actors.current()); }
+    public org.ash.inventory.resource.dto.ApiResponses.UserResponse me() { return mapper.user(actors.current()); }
 
     @POST @Path("/auth/dev-login") @Transactional
     public Object devLogin(@Valid ApiModels.DevLoginInput input) {
@@ -43,17 +43,17 @@ public class UserResource {
             user.externalSubject = input.email();
             user.email = input.email();
             user.name = input.email().contains("@") ? input.email().substring(0, input.email().indexOf('@')) : input.email();
-            user.role = DomainEnums.UserRole.admin;
+            user.role = DomainEnums.UserRole.hq_admin;
             orm.persist(user);
         }
         return Map.of("token", "dev:" + user.externalSubject, "user", mapper.user(user));
     }
 
     @GET @Path("/users") @Transactional
-    public List<?> users() { actors.requireManager(); return orm.users().stream().map(mapper::user).toList(); }
+    public List<org.ash.inventory.resource.dto.ApiResponses.UserResponse> users() { actors.requireAdmin(); return orm.users().stream().map(mapper::user).toList(); }
 
     @PATCH @Path("/users/{id}") @Transactional
-    public Object updatePermissions(@PathParam("id") UUID id, @Valid ApiModels.UserPermissionsInput input) {
+    public org.ash.inventory.resource.dto.ApiResponses.UserResponse updatePermissions(@PathParam("id") UUID id, @Valid ApiModels.UserPermissionsInput input) {
         actors.requireAdmin();
         var user = orm.find(id);
         if (user == null) throw ApiException.notFound("User not found");

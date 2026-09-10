@@ -22,6 +22,9 @@ import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.service.CatalogService;
 
+import org.ash.inventory.resource.dto.ApiResponses;
+
+import java.util.List;
 import java.util.UUID;
 
 @Path("/api")
@@ -36,31 +39,31 @@ public class CatalogResource {
     @Inject CatalogOrm orm;
 
     @GET @Path("/items") @Transactional
-    public Response items(@QueryParam("search") String search) {
+    public List<ApiResponses.ItemResponse> items(@QueryParam("search") String search) {
         actor.current();
-        return catalogResponse(responses.items(cacheKey(search)));
+        return mapper.items(service.getItems(search));
     }
 
     @GET @Path("/items/{id}") @Transactional
-    public Object item(@PathParam("id") UUID id) { actor.current(); return mapper.item(required(Item.class, id, "Item")); }
-    @POST @Path("/items") public Object createItem(@Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.createItem(input)); }
-    @PATCH @Path("/items/{id}") public Object updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.updateItem(id, input)); }
+    public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { actor.current(); return mapper.item(required(Item.class, id, "Item")); }
+    @POST @Path("/items") public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.createItem(input)); }
+    @PATCH @Path("/items/{id}") public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") public Response deleteItem(@PathParam("id") UUID id) { actor.requireManager(); service.retireItem(id); return Response.noContent().build(); }
 
     @GET @Path("/storage-locations") @Transactional
     public Response locations() { actor.current(); return catalogResponse(responses.locations()); }
     @GET @Path("/storage-locations/{id}") @Transactional
-    public Object location(@PathParam("id") UUID id) { actor.current(); return mapper.location(required(StorageLocation.class, id, "Storage location")); }
-    @POST @Path("/storage-locations") public Object createLocation(@Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.createLocation(input)); }
-    @PATCH @Path("/storage-locations/{id}") public Object updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.updateLocation(id, input)); }
+    public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { actor.current(); return mapper.location(required(StorageLocation.class, id, "Storage location")); }
+    @POST @Path("/storage-locations") public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.createLocation(input)); }
+    @PATCH @Path("/storage-locations/{id}") public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.updateLocation(id, input)); }
     @DELETE @Path("/storage-locations/{id}") public Response deleteLocation(@PathParam("id") UUID id) { actor.requireManager(); service.deleteLocation(id); return Response.noContent().build(); }
 
     @GET @Path("/assemblies") @Transactional
     public Response assemblies() { actor.current(); return catalogResponse(responses.assemblies()); }
     @GET @Path("/assemblies/{id}") @Transactional
-    public Object assembly(@PathParam("id") UUID id) { actor.current(); return mapper.assembly(required(Assembly.class, id, "Assembly")); }
-    @POST @Path("/assemblies") public Object createAssembly(@Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.createAssembly(input)); }
-    @PATCH @Path("/assemblies/{id}") public Object updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.updateAssembly(id, input)); }
+    public ApiResponses.AssemblyResponse assembly(@PathParam("id") UUID id) { actor.current(); return mapper.assembly(required(Assembly.class, id, "Assembly")); }
+    @POST @Path("/assemblies") public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.createAssembly(input)); }
+    @PATCH @Path("/assemblies/{id}") public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.updateAssembly(id, input)); }
     @DELETE @Path("/assemblies/{id}") public Response deleteAssembly(@PathParam("id") UUID id) { actor.requireManager(); service.deleteAssembly(id); return Response.noContent().build(); }
 
     @GET @Path("/events") @Transactional
@@ -69,16 +72,16 @@ public class CatalogResource {
         return catalogResponse(responses.events(cacheKey(eventType)));
     }
     @GET @Path("/events/{id}") @Transactional
-    public Object event(@PathParam("id") UUID id) { actor.current(); return mapper.event(required(EventOccurrence.class, id, "Event occurrence")); }
-    @POST @Path("/events") public Object createEvent(@Valid ApiModels.EventInput input) { actor.requireManager(); return mapper.event(service.createEvent(input)); }
-    @PATCH @Path("/events/{id}") public Object updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requireManager(); return mapper.event(service.updateEvent(id, input)); }
+    public ApiResponses.EventResponse event(@PathParam("id") UUID id) { actor.current(); return mapper.event(required(EventOccurrence.class, id, "Event occurrence")); }
+    @POST @Path("/events") public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.createEvent(input)); }
+    @PATCH @Path("/events/{id}") public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.updateEvent(id, input)); }
 
     @GET @Path("/factions") @Transactional
     public Response factions(@QueryParam("eventType") String eventType) {
         actor.current();
         return catalogResponse(responses.factions(cacheKey(eventType)));
     }
-    @POST @Path("/factions") public Object createFaction(@Valid ApiModels.FactionInput input) { actor.requireManager(); return mapper.faction(service.createFaction(input)); }
+    @POST @Path("/factions") public ApiResponses.FactionResponse createFaction(@Valid ApiModels.FactionInput input) { actor.requirePlanner(); return mapper.faction(service.createFaction(input)); }
 
     private String cacheKey(String value) {
         return value == null ? "" : value;

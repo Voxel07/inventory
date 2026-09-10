@@ -12,13 +12,13 @@ import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
-import { useNames, useTranslate } from '../utils/naming';
+import { useNames, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
 
 export function CheckedOutItemsPage() {
     const names = useNames();
-    const t = useTranslate();
+    const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: assemblies } = useAssemblies();

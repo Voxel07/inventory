@@ -1,43 +1,32 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  transactionApi,
   getTransactions,
-  createTransaction,
   updateTransaction,
   assemblyCheckout,
 } from '../services/transactionService';
-import type { TransactionFormData } from '../types';
+import { createCreateResourceHooks } from './useResourceApi';
+import type { StockTransaction, TransactionFormData } from '../types';
 
-interface TransactionFilters {
-  itemId?: string;
-  userId?: string;
-  transactionType?: string;
-  startDate?: string;
-  endDate?: string;
-}
+const baseHooks = createCreateResourceHooks<StockTransaction, TransactionFormData>(
+  transactionApi,
+  'transactions',
+  ['items'],
+);
 
-export function useTransactions(filters?: TransactionFilters) {
+export const useCreateTransaction = baseHooks.useCreate;
+
+export function useTransactions(filters?: { itemId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string }) {
   return useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => getTransactions(filters),
   });
 }
 
-export function useCreateTransaction() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: TransactionFormData) => createTransaction(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    },
-  });
-}
-
 export function useUpdateTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<TransactionFormData> }) =>
-      updateTransaction(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<TransactionFormData> }) => updateTransaction(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -48,12 +37,8 @@ export function useUpdateTransaction() {
 export function useAssemblyCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ itemQuantities, assemblyName, reason, notes }: {
-      itemQuantities: Record<string, number>;
-      assemblyName: string;
-      reason: string;
-      notes: string;
-    }) => assemblyCheckout(itemQuantities, assemblyName, reason, notes),
+    mutationFn: ({ itemQuantities, assemblyName, reason, notes }: { itemQuantities: Record<string, number>; assemblyName: string; reason: string; notes: string }) =>
+      assemblyCheckout(itemQuantities, assemblyName, reason, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });

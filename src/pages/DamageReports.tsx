@@ -9,11 +9,11 @@ import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportFormData, DamageStatus } from '../types';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
 export function DamageReportsPage() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: reports, isLoading } = useDamageReports();

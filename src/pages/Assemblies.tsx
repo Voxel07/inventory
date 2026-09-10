@@ -1,22 +1,23 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, useTheme, useMediaQuery } from '@mui/material';
+import { Box, Typography, Dialog, DialogTitle, DialogContent, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
-import { useUIStore } from '../store/uiStore';
+import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 export function Assemblies() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: assemblies, isLoading } = useAssemblies();
@@ -24,50 +25,17 @@ export function Assemblies() {
     const { data: transactions, isLoading: transactionsLoading } = useTransactions();
     const { data: damageReports, isLoading: damageReportsLoading } = useDamageReports();
     const { data: storageLocations } = useStorageLocations();
+
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
     const deleteAssembly = useDeleteAssembly();
-    const showSnackbar = useUIStore((s) => s.showSnackbar);
 
-    const [formOpen, setFormOpen] = useState(false);
+    const crud = useCrudManager<Assembly, AssemblyFormData>(
+        { create: createAssembly, update: updateAssembly, delete: deleteAssembly },
+        { entityName: 'Baugruppe' },
+    );
+
     const [importOpen, setImportOpen] = useState(false);
-    const [editingAssembly, setEditingAssembly] = useState<Assembly | undefined>();
-    const [deletingId, setDeletingId] = useState<string | undefined>();
-
-    function handleCreate(data: AssemblyFormData) {
-        createAssembly.mutate(data, {
-            onSuccess: () => {
-                setFormOpen(false);
-                showSnackbar(t('Baugruppe erfolgreich erstellt', 'Assembly created successfully'), 'success');
-            },
-            onError: () => showSnackbar(t('Fehler beim Erstellen der Baugruppe', 'Could not create assembly'), 'error'),
-        });
-    }
-
-    function handleUpdate(data: AssemblyFormData) {
-        if (!editingAssembly) return;
-        updateAssembly.mutate(
-            { id: editingAssembly.id, data },
-            {
-                onSuccess: () => {
-                    setEditingAssembly(undefined);
-                    showSnackbar(t('Baugruppe erfolgreich aktualisiert', 'Assembly updated successfully'), 'success');
-                },
-                onError: () => showSnackbar(t('Fehler beim Aktualisieren der Baugruppe', 'Could not update assembly'), 'error'),
-            },
-        );
-    }
-
-    function handleDeleteConfirm() {
-        if (!deletingId) return;
-        deleteAssembly.mutate(deletingId, {
-            onSuccess: () => {
-                setDeletingId(undefined);
-                showSnackbar(t('Baugruppe gelöscht', 'Assembly deleted'), 'success');
-            },
-            onError: () => showSnackbar(t('Fehler beim Löschen der Baugruppe', 'Could not delete assembly'), 'error'),
-        });
-    }
 
     return (
         <Box>
@@ -86,7 +54,7 @@ export function Assemblies() {
                         icon={<AddIcon />}
                         label={t('Baugruppe hinzufügen', 'Add assembly')}
                         variant="contained"
-                        onClick={() => setFormOpen(true)}
+                        onClick={crud.openCreate}
                     />
                 </Box>
             </Box>
@@ -97,52 +65,45 @@ export function Assemblies() {
                 transactions={transactions}
                 damageReports={damageReports}
                 isLoading={isLoading || transactionsLoading || damageReportsLoading}
-                onEdit={setEditingAssembly}
-                onDelete={setDeletingId}
+                onEdit={crud.openEdit}
+                onDelete={crud.setDeletingId}
             />
 
             {/* Create Dialog */}
-            <Dialog open={formOpen} fullScreen={isMobile} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={crud.formOpen && !crud.editingEntity} fullScreen={isMobile} onClose={crud.closeForm} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Neue Baugruppe erstellen', 'Create new assembly')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <AssemblyForm items={items ?? []} onSubmit={handleCreate} isLoading={createAssembly.isPending} />
+                    <AssemblyForm items={items ?? []} onSubmit={crud.handleSave} isLoading={createAssembly.isPending} />
                 </DialogContent>
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editingAssembly} fullScreen={isMobile} onClose={() => setEditingAssembly(undefined)} maxWidth="sm" fullWidth>
+            <Dialog open={Boolean(crud.editingEntity)} fullScreen={isMobile} onClose={crud.closeForm} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Baugruppe bearbeiten', 'Edit assembly')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    {editingAssembly && (
+                    {crud.editingEntity && (
                         <AssemblyForm
-                            initialData={editingAssembly}
+                            initialData={crud.editingEntity}
                             items={items ?? []}
-                            onSubmit={handleUpdate}
+                            onSubmit={crud.handleSave}
                             isLoading={updateAssembly.isPending}
                         />
                     )}
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={!!deletingId} onClose={() => setDeletingId(undefined)}>
-                <DialogTitle>{t('Baugruppe löschen', 'Delete assembly')}</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        {t('Sind Sie sicher, dass Sie diese Baugruppe löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this assembly? This cannot be undone.')}
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Tooltip title={t('Löschvorgang abbrechen', 'Cancel deletion')} arrow>
-                        <Button onClick={() => setDeletingId(undefined)}>{t('Abbrechen', 'Cancel')}</Button>
-                    </Tooltip>
-                    <Tooltip title={t('Diese Baugruppe dauerhaft löschen', 'Permanently delete this assembly')} arrow>
-                        <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-                            {t('Löschen', 'Delete')}
-                        </Button>
-                    </Tooltip>
-                </DialogActions>
-            </Dialog>
+            {/* Delete Confirmation */}
+            <ConfirmDialog
+                open={Boolean(crud.deletingId)}
+                title={t('Baugruppe löschen', 'Delete assembly')}
+                message={t('Sind Sie sicher, dass Sie diese Baugruppe löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this assembly? This cannot be undone.')}
+                actionLabel={t('Löschen', 'Delete')}
+                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionColor="error"
+                onClose={() => crud.setDeletingId(undefined)}
+                onConfirm={crud.confirmDelete}
+                pending={deleteAssembly.isPending}
+            />
 
             {/* CSV Import Dialog */}
             <CsvImportDialog

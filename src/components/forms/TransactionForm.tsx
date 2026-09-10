@@ -17,7 +17,7 @@ import type { TransactionFormData, Item, TransactionType } from '../../types';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useDamageReports } from '../../hooks/useDamageReports';
 import { calculateItemStock } from '../../utils/stock';
-import { useNames, useTranslate } from '../../utils/naming';
+import { useNames, useLocalizedText } from '../../utils/naming';
 
 interface Props {
     items: Item[];
@@ -29,7 +29,7 @@ interface Props {
 
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
     const names = useNames();
-    const t = useTranslate();
+    const t = useLocalizedText();
     const transactionReasons = Object.values(names.reason);
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
@@ -60,7 +60,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                 >
                     {items.map((item) => {
-                        const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+                        const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
                         return (
                             <MenuItem key={item.id} value={item.id}>
                                 {item.name} ({t('Verfügbar', 'Available')}: {remaining})

@@ -48,7 +48,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item createItem(ApiModels.ItemInput input) {
         var item = new Item();
@@ -74,7 +73,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
@@ -88,7 +86,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
@@ -134,7 +131,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
         var location = new StorageLocation();
@@ -146,7 +142,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         var location = locked(StorageLocation.class, id, "Storage location");
@@ -157,7 +152,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "items-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteLocation(UUID id) {
         var location = locked(StorageLocation.class, id, "Storage location");

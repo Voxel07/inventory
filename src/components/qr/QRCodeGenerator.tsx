@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, Stack, Typography, Tooltip } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import { generateQRCodeDataURL, type QRResourceType } from '../../utils/qrCode';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
     itemId: string;
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function QRCodeGenerator({ itemId, itemName, resourceType = 'item', textCode }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const [qrDataUrl, setQrDataUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
 

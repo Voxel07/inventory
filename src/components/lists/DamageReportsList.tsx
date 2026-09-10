@@ -6,7 +6,7 @@ import {
 import { useState } from 'react';
 import type { DamageReport, DamageStatus, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
     reports: DamageReport[] | undefined;
@@ -23,7 +23,7 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
 };
 
 export function DamageReportsList({ reports, items, users, isLoading, view = 'open', isUpdating, onUpdateStatus }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const visibleReports = reports?.filter((report) => view === 'history'

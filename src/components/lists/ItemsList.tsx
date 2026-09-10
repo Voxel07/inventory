@@ -36,7 +36,7 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import { useNavigate } from 'react-router-dom';
 import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTransaction } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { itemImageUrl } from '../../utils/itemImages';
 
@@ -62,7 +62,7 @@ function stockColor(remaining: number, minStock: number) {
 
 export function ItemsList({ items, transactions, damageReports, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
     const navigate = useNavigate();
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const activeEventType = useUIStore((state) => state.activeEventType);
@@ -91,7 +91,7 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const enrichedItems = useMemo(() => {
         if (!items) return [];
         return items.map((item) => {
-            const { totalStock, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+            const { totalStock, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
             return { item, totalStock, damaged, remaining };
         });
     }, [items, transactions, damageReports]);

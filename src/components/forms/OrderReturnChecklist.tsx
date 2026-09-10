@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, DialogActions, Stack, TextField, Typography } from '@mui/material';
 import type { FactionOrder, Item } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 type Outcome = { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
 
@@ -12,14 +12,14 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   onCancel: () => void;
   onSubmit: (lines: Record<string, Outcome>) => void;
 }) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const outstanding = useMemo<Record<string, number>>(() => Object.fromEntries(items.map((item) => {
-    const picked = order.pickedUpQuantities?.[item.id] ?? 0;
+    const handedOver = order.handedOverQuantities?.[item.id] ?? 0;
     const reconciled = (order.returnedQuantities?.[item.id] ?? 0)
       + (order.consumedQuantities?.[item.id] ?? 0)
       + (order.damagedQuantities?.[item.id] ?? 0)
       + (order.writtenOffQuantities?.[item.id] ?? 0);
-    return [item.id, Math.max(0, picked - reconciled)];
+    return [item.id, Math.max(0, handedOver - reconciled)];
   }).filter(([, quantity]) => Number(quantity) > 0)), [items, order]);
   const [lines, setLines] = useState<Record<string, Outcome>>(() => Object.fromEntries(
     Object.entries(outstanding).map(([itemId, quantity]) => {

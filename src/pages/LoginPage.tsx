@@ -12,10 +12,10 @@ import LoginIcon from '@mui/icons-material/Login';
 import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 export function LoginPage() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const { login, error: authError } = useAuth();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [isLoading, setIsLoading] = useState(false);

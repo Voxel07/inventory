@@ -37,7 +37,7 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import {
   parseCsv,
@@ -72,7 +72,7 @@ export function CsvImportDialog({
   assemblies,
   storageLocations,
 }: Props) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const queryClient = useQueryClient();

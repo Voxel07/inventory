@@ -1,27 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  damageReportApi,
   getDamageReports,
-  createDamageReport,
   updateDamageReportStatus,
 } from '../services/damageReportService';
-import type { DamageReportFormData, DamageStatus } from '../types';
+import { createCreateResourceHooks } from './useResourceApi';
+import type { DamageReport, DamageReportFormData, DamageStatus } from '../types';
+
+const relatedKeys = ['items', 'transactions'];
+const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
+  damageReportApi,
+  'damageReports',
+  relatedKeys,
+);
+
+export const useCreateDamageReport = baseHooks.useCreate;
 
 export function useDamageReports(itemId?: string) {
   return useQuery({
     queryKey: ['damageReports', itemId],
     queryFn: () => getDamageReports(itemId),
-  });
-}
-
-export function useCreateDamageReport() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: DamageReportFormData) => createDamageReport(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['damageReports'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    },
   });
 }
 
@@ -32,8 +30,7 @@ export function useUpdateDamageReportStatus() {
       updateDamageReportStatus(id, status, amount),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      relatedKeys.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
     },
   });
 }

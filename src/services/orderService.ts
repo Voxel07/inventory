@@ -1,14 +1,6 @@
 import type { GeneralOrder, GeneralOrderFormData } from '../types';
-import { apiRequest, subscribeToApiChanges } from './apiClient';
+import { createCreateResourceApi } from './resourceFactory';
 
-export function getOrders(): Promise<GeneralOrder[]> {
-  return apiRequest('/api/general-orders');
-}
-
-export function createOrder(data: GeneralOrderFormData): Promise<GeneralOrder> {
-  return apiRequest('/api/general-orders', { method: 'POST', body: data });
-}
-
-export function subscribeToOrders(callback: () => void) {
-  return subscribeToApiChanges(callback);
-}
+export const generalOrderApi = createCreateResourceApi<GeneralOrder, GeneralOrderFormData>('/api/general-orders');
+export const getOrders = generalOrderApi.getAll;
+export const createOrder = generalOrderApi.create;

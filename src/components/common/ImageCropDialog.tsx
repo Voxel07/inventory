@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
 import { calculateImageCrop, decodeImage, prepareItemImage } from '../../utils/prepareItemImage';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClose: () => void; onApply: (file: File) => void }) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const titleId = useId();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [bitmap, setBitmap] = useState<ImageBitmap>();

@@ -14,7 +14,7 @@ import {
 } from 'react-leaflet';
 import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import type { MapBounds } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 const DEFAULT_CENTER = [52.375953, 11.826278] as const;
 const DEFAULT_ZOOM = 19;
@@ -78,7 +78,7 @@ export function StorageLocationMap({
   kind = 'storage',
   compact = false,
 }: Props) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [touchActive, setTouchActive] = useState(false);

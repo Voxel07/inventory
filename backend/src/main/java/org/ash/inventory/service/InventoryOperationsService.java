@@ -33,7 +33,10 @@ public class InventoryOperationsService {
     ActorService actors;
     @Inject DomainEventService events;
 
-    public record StockState(int physical, int checkedOut, int damaged, int reserved, int available) {
+    public record StockState(int onHand, int checkedOut, int damaged, int reserved, int available) {
+        public int totalOwned() {
+            return onHand + checkedOut;
+        }
     }
 
     @Transactional
@@ -87,8 +90,29 @@ public class InventoryOperationsService {
     }
 
     public StockState stock(Item item) {
-        var totals = orm.transactionTotals(item);
-        int physical = quantity(totals, DomainEnums.TransactionType.added)
+        return stock(item, orm.transactionTotals(item), orm.unresolvedDamageQuantity(item),
+                orm.activeReservationQuantity(item));
+    }
+
+    public Map<UUID, StockState> stock(List<Item> items) {
+        var itemIds = items.stream().map(item -> item.id).toList();
+        var transactionTotals = orm.transactionTotals(itemIds);
+        var damageQuantities = orm.unresolvedDamageQuantities(itemIds);
+        var reservationQuantities = orm.activeReservationQuantities(itemIds);
+        var result = new LinkedHashMap<UUID, StockState>();
+        for (var item : items) {
+            result.put(item.id, stock(
+                    item,
+                    transactionTotals.getOrDefault(item.id, Map.of()),
+                    Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
+                    Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L))
+            ));
+        }
+        return result;
+    }
+
+    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved) {
+        int onHand = quantity(totals, DomainEnums.TransactionType.added)
                 + quantity(totals, DomainEnums.TransactionType.received)
                 + quantity(totals, DomainEnums.TransactionType.adjusted)
                 + quantity(totals, DomainEnums.TransactionType.checkin)
@@ -96,15 +120,13 @@ public class InventoryOperationsService {
                 - quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.written_off)
                 - quantity(totals, DomainEnums.TransactionType.transfer_out);
-        if (!totals.containsKey(DomainEnums.TransactionType.added)) physical += item.baseAmount;
+        if (!totals.containsKey(DomainEnums.TransactionType.added)) onHand += item.baseAmount;
         int checkedOut = quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.checkin)
                 - quantity(totals, DomainEnums.TransactionType.consumed)
                 - quantity(totals, DomainEnums.TransactionType.missing);
-        int damaged = orm.unresolvedDamageQuantity(item);
-        int reserved = orm.activeReservationQuantity(item);
-        return new StockState(Math.max(0, physical), Math.max(0, checkedOut), damaged, reserved,
-                Math.max(0, physical - damaged - reserved));
+        return new StockState(Math.max(0, onHand), Math.max(0, checkedOut), damaged, reserved,
+                Math.max(0, onHand - damaged - reserved));
     }
 
     private int quantity(Map<DomainEnums.TransactionType, Long> totals, DomainEnums.TransactionType type) {
@@ -244,7 +266,7 @@ public class InventoryOperationsService {
             var state = stock(entry.getKey());
             // Active demand already includes prepared lines, so compare it with
             // usable physical stock instead of subtracting reservations twice.
-            int usableStock = Math.max(0, state.physical() - state.damaged());
+            int usableStock = Math.max(0, state.onHand() - state.damaged());
             int projectedStock = usableStock - entry.getValue();
             int deficit = Math.max(0, -projectedStock);
             if (deficit == 0)
@@ -258,7 +280,8 @@ public class InventoryOperationsService {
                     : entry.getKey().supplier);
             row.put("classification", entry.getKey().consumable ? "consumable" : "asset");
             row.put("demand", entry.getValue());
-            row.put("physicalStock", state.physical());
+            row.put("onHandStock", state.onHand());
+            row.put("totalOwnedStock", state.totalOwned());
             row.put("availableStock", usableStock);
             row.put("reservedStock", state.reserved());
             row.put("projectedStock", projectedStock);

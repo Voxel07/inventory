@@ -31,6 +31,15 @@ export interface StorageLocationFormData {
   overlayBounds?: MapBounds;
 }
 
+export interface ItemStock {
+  totalOwned: number;
+  onHand: number;
+  checkedOut: number;
+  damaged: number;
+  reserved: number;
+  available: number;
+}
+
 export interface Item {
   id: string;
   sku?: string;
@@ -60,6 +69,7 @@ export interface Item {
   maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
   created: string;
   updated: string;
+  stock?: ItemStock;
   expand?: {
     storageLocation?: StorageLocation;
   };

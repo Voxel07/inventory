@@ -18,7 +18,7 @@ import { jsPDF } from 'jspdf';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 type FilterMode = 'all' | 'items' | 'assemblies' | 'single';
 
@@ -38,7 +38,7 @@ interface QREntry {
 }
 
 export function PrintQRCodesPage() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: assemblies, isLoading: assembliesLoading } = useAssemblies();
     const [entries, setEntries] = useState<QREntry[]>([]);

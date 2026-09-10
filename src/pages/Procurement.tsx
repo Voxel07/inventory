@@ -33,10 +33,10 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { jsPDF } from 'jspdf';
 import { getProcurementDeficits } from '../services/procurementService';
 import { useEventReports } from '../hooks/useEvents';
-import { useAppLanguage, useTranslate } from '../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../utils/naming';
 
 export function Procurement() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const language = useAppLanguage();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));

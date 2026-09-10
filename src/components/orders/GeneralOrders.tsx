@@ -18,11 +18,11 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonIcon from '@mui/icons-material/Person';
 import { useCreateOrder, useOrders } from '../../hooks/useOrders';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 
 export function GeneralOrders() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: orders = [], isLoading, isError } = useOrders();
   const createOrder = useCreateOrder();

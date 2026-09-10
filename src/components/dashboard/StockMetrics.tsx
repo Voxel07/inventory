@@ -5,7 +5,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import type { Item, StockTransaction, DamageReport } from '../../types';
 import { calculateItemStock } from '../../utils/stock';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
     items: Item[] | undefined;
@@ -14,16 +14,16 @@ interface Props {
 }
 
 export function StockMetrics({ items, transactions, damageReports }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const totalItems = items?.length ?? 0;
     const totalStock =
         items?.reduce((sum, item) => {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
-            return sum + remaining;
+            const stock = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
+            return sum + stock.totalStock;
         }, 0) ?? 0;
     const lowStockItems =
         items?.filter((item) => {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
             return remaining <= (item.minStock ?? 5);
         }).length ?? 0;
     const recentTransactions = transactions?.slice(0, 10).length ?? 0;

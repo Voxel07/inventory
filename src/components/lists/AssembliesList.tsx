@@ -28,7 +28,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { Assembly, DamageReport, Item, StockTransaction } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { calculateItemStock } from '../../utils/stock';
 
@@ -43,13 +43,13 @@ interface Props {
 }
 
 export function AssembliesList({ assemblies, items, transactions, damageReports, isLoading, onEdit, onDelete }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     const stockByItemId = useMemo(() => new Map((items ?? []).map((item) => [
         item.id,
-        calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0),
+        calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item),
     ])), [damageReports, items, transactions]);
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, assembly: Assembly) => {

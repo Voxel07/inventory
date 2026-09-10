@@ -10,12 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ActorServiceRoleTest {
     @Test
     void mapsNamespacedAuthentikGroupsToInternalRoles() {
-        assertEquals(DomainEnums.UserRole.admin,
-                ActorService.roleFrom(Set.of("inventory_admin")));
-        assertEquals(DomainEnums.UserRole.inventory_manager,
-                ActorService.roleFrom(Set.of("inventory_manager")));
-        assertEquals(DomainEnums.UserRole.warehouse_packer,
-                ActorService.roleFrom(Set.of("inventory_warehouse_packer")));
         assertEquals(DomainEnums.UserRole.faction_leader,
                 ActorService.roleFrom(Set.of("inventory_faction_leader")));
         assertEquals(DomainEnums.UserRole.hq_admin,
@@ -35,16 +29,17 @@ class ActorServiceRoleTest {
     @Test
     void ignoresUnprefixedAndUnrelatedGroups() {
         assertEquals(DomainEnums.UserRole.faction_leader,
-                ActorService.roleFrom(Set.of("admin", "warehouse_packer", "another_app_admin")));
+                ActorService.roleFrom(Set.of("admin", "inventory_admin", "inventory_manager",
+                        "inventory_warehouse_packer", "another_app_admin")));
     }
 
     @Test
     void appliesMostPrivilegedInventoryRoleWhenSeveralArePresent() {
-        assertEquals(DomainEnums.UserRole.admin,
+        assertEquals(DomainEnums.UserRole.hq_admin,
                 ActorService.roleFrom(Set.of(
                         "inventory_faction_leader",
-                        "inventory_warehouse_packer",
-                        "inventory_manager",
-                        "inventory_admin")));
+                        "inventory_warehouse_crew",
+                        "inventory_marshal",
+                        "inventory_hq_admin")));
     }
 }

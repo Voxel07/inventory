@@ -6,15 +6,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useT } from '../utils/naming';
 
 const ROLE_KEYS: Record<string, string> = {
-  admin: 'profile.roles.admin',
-  manager: 'profile.roles.inventoryManager',
-  inventory_manager: 'profile.roles.inventoryManager',
-  warehouse_packer: 'profile.roles.warehousePacker',
-  warehouse_crew: 'profile.roles.warehousePacker',
+  warehouse_crew: 'profile.roles.warehouseCrew',
   marshal: 'profile.roles.marshal',
   event_planner: 'profile.roles.eventPlanner',
   maintenance_crew: 'profile.roles.maintenanceCrew',
-  hq_admin: 'profile.roles.admin',
+  hq_admin: 'profile.roles.hqAdmin',
   read_only: 'profile.roles.readOnly',
   faction_leader: 'profile.roles.factionLeader',
 };

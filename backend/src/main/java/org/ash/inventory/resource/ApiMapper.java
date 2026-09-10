@@ -2,8 +2,7 @@ package org.ash.inventory.resource;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ash.inventory.orm.CatalogOrm;
-import org.ash.inventory.orm.OrderOrm;
+import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
@@ -17,6 +16,10 @@ import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
+import org.ash.inventory.orm.CatalogOrm;
+import org.ash.inventory.orm.OrderOrm;
+import org.ash.inventory.resource.dto.ApiResponses;
+import org.ash.inventory.service.InventoryOperationsService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -27,170 +30,206 @@ import java.util.Map;
 @ApplicationScoped
 public class ApiMapper {
     @Inject
-    org.ash.inventory.helper.storage.MediaService media;
+    MediaService media;
     @Inject
     CatalogOrm catalogOrm;
     @Inject
     OrderOrm orderOrm;
+    @Inject
+    InventoryOperationsService operations;
 
-    public Map<String, Object> user(UserAccount value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        put(result, "name", value.name);
-        put(result, "username", value.name);
-        put(result, "email", value.email);
-        put(result, "role", value.role.name());
-        result.put("faction", value.factions == null ? List.of() : value.factions);
-        return result;
+    public ApiResponses.UserResponse user(UserAccount value) {
+        return new ApiResponses.UserResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.name,
+                value.name,
+                value.email,
+                value.role.name(),
+                value.factions == null ? List.of() : value.factions
+        );
     }
 
-    public Map<String, Object> generalOrder(GeneralOrder value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("name", value.name);
-        result.put("purpose", value.purpose);
-        result.put("createdBy", value.createdBy.id.toString());
-        result.put("expand", Map.of("createdBy", user(value.createdBy)));
-        return result;
+    public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value) {
+        return new ApiResponses.GeneralOrderResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.name,
+                value.purpose,
+                value.createdBy.id.toString(),
+                Map.of("createdBy", user(value.createdBy))
+        );
     }
 
-    public Map<String, Object> location(StorageLocation value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        put(result, "name", value.name);
-        put(result, "locationType", value.locationType == null ? DomainEnums.LocationType.bin.name() : value.locationType.name());
-        put(result, "description", value.description);
-        put(result, "area", value.area);
-        put(result, "location", value.location);
-        put(result, "position", value.position);
-        put(result, "latitude", value.latitude);
-        put(result, "longitude", value.longitude);
-        put(result, "mapZoom", value.mapZoom);
-        put(result, "mapOverlay", media.mediaReference(value.mapOverlayUrl));
-        put(result, "overlayBounds", value.overlayBounds);
-        return result;
+    public ApiResponses.StorageLocationResponse location(StorageLocation value) {
+        return new ApiResponses.StorageLocationResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.name,
+                value.locationType == null ? DomainEnums.LocationType.bin.name() : value.locationType.name(),
+                value.description,
+                value.area,
+                value.location,
+                value.position,
+                value.latitude,
+                value.longitude,
+                value.mapZoom,
+                media.mediaReference(value.mapOverlayUrl),
+                value.overlayBounds
+        );
     }
 
-    public Map<String, Object> item(Item value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("sku", value.sku);
-        result.put("name", value.name);
-        put(result, "description", value.description);
-        result.put("amount", value.baseAmount);
-        result.put("minStock", value.minStock);
-        result.put("value", BigDecimal.valueOf(value.unitValueCents, 2));
-        result.put("category", value.category);
-        put(result, "subcategory", value.subcategory);
-        put(result, "supplier", value.supplier);
-        result.put("eventTypes", value.eventTags == null ? List.of() : value.eventTags);
-        result.put("isConsumable", value.consumable);
-        result.put("trackingMode", value.trackingMode.name());
-        result.put("inventoryRole", value.inventoryRole.name());
-        put(result, "storageLocation", value.storageLocation == null ? null : value.storageLocation.id.toString());
-        result.put("status", value.active ? "available" : "retired");
-        var images = catalogOrm.itemImages(value).stream().map(image -> media.mediaReference(image.objectKey)).toList();
-        result.put("images", images);
-        put(result, "hint", value.hint);
-        put(result, "positionDetails", value.positionDetails);
-        put(result, "containerSize", value.containerSize);
-        put(result, "containerCount", value.containerCount);
-        put(result, "containersOpened", value.containersOpened);
-        put(result, "containerRemainingPercent", value.containerRemainingPercent);
-        put(result, "maintenanceIntervalDays", value.maintenanceIntervalDays);
-        put(result, "nextMaintenanceDue", value.nextMaintenanceDue);
-        put(result, "currentOperatingHours", value.currentOperatingHours);
-        put(result, "maintenanceStatus", value.maintenanceStatus == null ? null : value.maintenanceStatus.name());
-        if (value.storageLocation != null)
-            result.put("expand", Map.of("storageLocation", location(value.storageLocation)));
-        return result;
+    public ApiResponses.ItemResponse item(Item value) {
+        return item(value, operations.stock(value));
     }
 
-    public Map<String, Object> assembly(Assembly value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("name", value.name);
-        put(result, "description", value.description);
-        put(result, "hint", value.hint);
-        put(result, "image", media.mediaReference(value.imageObjectKey));
-        result.put("eventTypes", value.eventTags == null ? List.of() : value.eventTags);
+    public List<ApiResponses.ItemResponse> items(List<Item> values) {
+        var stock = operations.stock(values);
+        return values.stream().map(value -> item(value, stock.get(value.id))).toList();
+    }
+
+    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state) {
+        var images = catalogOrm.itemImages(value).stream()
+                .map(image -> media.mediaReference(image.objectKey))
+                .toList();
+        Map<String, Object> expand = value.storageLocation != null
+                ? Map.of("storageLocation", location(value.storageLocation))
+                : Map.of();
+
+        ApiResponses.StockDto stockDto = state == null ? null : new ApiResponses.StockDto(
+                state.totalOwned(),
+                state.onHand(),
+                state.checkedOut(),
+                state.damaged(),
+                state.reserved(),
+                state.available()
+        );
+
+        return new ApiResponses.ItemResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.sku,
+                value.name,
+                value.description,
+                value.baseAmount,
+                value.minStock,
+                BigDecimal.valueOf(value.unitValueCents, 2),
+                value.category,
+                value.subcategory,
+                value.supplier,
+                value.eventTags == null ? List.of() : value.eventTags,
+                value.consumable,
+                value.trackingMode.name(),
+                value.inventoryRole.name(),
+                value.storageLocation == null ? null : value.storageLocation.id.toString(),
+                value.active ? "available" : "retired",
+                images,
+                value.hint,
+                value.positionDetails,
+                value.containerSize,
+                value.containerCount,
+                value.containersOpened,
+                value.containerRemainingPercent,
+                value.maintenanceIntervalDays,
+                value.nextMaintenanceDue,
+                value.currentOperatingHours,
+                value.maintenanceStatus == null ? null : value.maintenanceStatus.name(),
+                stockDto,
+                expand
+        );
+    }
+
+    public ApiResponses.AssemblyResponse assembly(Assembly value) {
         var components = catalogOrm.assemblyItems(value);
         var quantities = new LinkedHashMap<String, Integer>();
-        var items = new ArrayList<Map<String, Object>>();
+        var items = new ArrayList<ApiResponses.ItemResponse>();
         for (var component : components) {
             quantities.put(component.item.id.toString(), component.quantity);
-            items.add(item(component.item));
+            items.add(item(component.item, null));
         }
-        result.put("itemIds", quantities.keySet());
-        result.put("itemQuantities", quantities);
-        result.put("expand", Map.of("itemIds", items));
-        return result;
+        return new ApiResponses.AssemblyResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.name,
+                value.description,
+                value.hint,
+                media.mediaReference(value.imageObjectKey),
+                value.eventTags == null ? List.of() : value.eventTags,
+                quantities.keySet(),
+                quantities,
+                Map.of("itemIds", items)
+        );
     }
 
-    public Map<String, Object> event(EventOccurrence value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("eventType", value.eventType);
-        result.put("name", value.name);
-        result.put("eventDate", value.startDate);
-        result.put("startDate", value.startDate);
-        result.put("endDate", value.endDate);
-        result.put("status", value.status);
-        put(result, "notes", value.notes);
-        result.put("itemIds", List.of());
-        result.put("plannedQuantities", Map.of());
-        result.put("usedQuantities", Map.of());
-        return result;
+    public ApiResponses.EventResponse event(EventOccurrence value) {
+        return new ApiResponses.EventResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.eventType,
+                value.name,
+                value.startDate,
+                value.startDate,
+                value.endDate,
+                value.status,
+                value.notes,
+                List.of(),
+                Map.of(),
+                Map.of()
+        );
     }
 
-    public Map<String, Object> faction(Faction value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("eventType", value.eventType);
-        result.put("name", value.name);
-        result.put("slug", value.slug);
-        result.put("active", value.active);
-        return result;
+    public ApiResponses.FactionResponse faction(Faction value) {
+        return new ApiResponses.FactionResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.eventType,
+                value.name,
+                value.slug,
+                value.active
+        );
     }
 
-    public Map<String, Object> transaction(StockTransaction value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("itemId", value.item.id.toString());
-        result.put("userId", value.user.id.toString());
-        result.put("transactionType", value.type.name());
-        result.put("quantityChanged", value.quantity);
-        put(result, "assetInstanceId", value.assetInstance == null ? null : value.assetInstance.id.toString());
-        put(result, "sourceLocationId", value.sourceLocation == null ? null : value.sourceLocation.id.toString());
-        put(result, "destinationLocationId", value.destinationLocation == null ? null : value.destinationLocation.id.toString());
-        put(result, "availabilityBefore", value.availabilityBefore);
-        put(result, "availabilityAfter", value.availabilityAfter);
-        put(result, "factionOrderId", value.factionOrder == null ? null : value.factionOrder.id.toString());
-        put(result, "damageReportId", value.damageReport == null ? null : value.damageReport.id.toString());
-        put(result, "clientCommandId", value.clientCommandId == null ? null : value.clientCommandId.toString());
-        put(result, "reason", value.reason);
-        put(result, "notes", value.notes);
-        result.put("timestamp", value.occurredAt);
+    public ApiResponses.TransactionResponse transaction(StockTransaction value) {
         var expand = new LinkedHashMap<String, Object>();
         expand.put("userId", user(value.user));
-        if (value.factionOrder != null)
+        if (value.factionOrder != null) {
             expand.put("factionOrderId", orderSummary(value.factionOrder));
-        result.put("expand", expand);
-        return result;
+        }
+        return new ApiResponses.TransactionResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.item.id.toString(),
+                value.user.id.toString(),
+                value.type.name(),
+                value.quantity,
+                value.assetInstance == null ? null : value.assetInstance.id.toString(),
+                value.sourceLocation == null ? null : value.sourceLocation.id.toString(),
+                value.destinationLocation == null ? null : value.destinationLocation.id.toString(),
+                value.availabilityBefore,
+                value.availabilityAfter,
+                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.damageReport == null ? null : value.damageReport.id.toString(),
+                value.clientCommandId == null ? null : value.clientCommandId.toString(),
+                value.reason,
+                value.notes,
+                value.occurredAt,
+                expand
+        );
     }
 
-    public Map<String, Object> order(FactionOrder value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.putAll(orderSummary(value));
-        result.put("factionKey", value.faction.eventType + ":" + value.faction.name);
-        put(result, "pickupLocation", value.pickupLocation == null ? null : value.pickupLocation.id.toString());
-        put(result, "pickupLatitude", value.pickupLatitude);
-        put(result, "pickupLongitude", value.pickupLongitude);
-        put(result, "collectorName", value.collectorName);
-        put(result, "notes", value.notes);
-        put(result, "createdBy", value.createdBy == null ? null : value.createdBy.id.toString());
-        put(result, "preparedBy", value.preparedBy == null ? null : value.preparedBy.id.toString());
-        put(result, "readyBy", value.readyBy == null ? null : value.readyBy.id.toString());
-        put(result, "pickedUpBy", value.pickedUpBy == null ? null : value.pickedUpBy.id.toString());
-        put(result, "returnedBy", value.returnedBy == null ? null : value.returnedBy.id.toString());
-
+    public ApiResponses.OrderResponse order(FactionOrder value) {
         var requested = new LinkedHashMap<String, Integer>();
         var prepared = new LinkedHashMap<String, Integer>();
         var allocated = new LinkedHashMap<String, Integer>();
         var reserved = new LinkedHashMap<String, Integer>();
-        var pickedUp = new LinkedHashMap<String, Integer>();
         var handedOver = new LinkedHashMap<String, Integer>();
         var returned = new LinkedHashMap<String, Integer>();
         var consumed = new LinkedHashMap<String, Integer>();
@@ -199,8 +238,10 @@ public class ApiMapper {
         var writtenOff = new LinkedHashMap<String, Integer>();
         var requestedAssemblies = new LinkedHashMap<String, Integer>();
         var preparedAssemblies = new LinkedHashMap<String, Integer>();
-        var assemblyViews = new ArrayList<Map<String, Object>>();
-        var itemViews = new ArrayList<Map<String, Object>>();
+        var assemblyViews = new ArrayList<ApiResponses.AssemblyResponse>();
+        var itemViews = new ArrayList<ApiResponses.ItemResponse>();
+        var orderLines = new ArrayList<ApiResponses.OrderLineResponse>();
+
         var lines = orderOrm.lines(value);
         for (var line : lines) {
             String id = line.item.id.toString();
@@ -210,22 +251,41 @@ public class ApiMapper {
             }
             allocated.merge(id, line.allocatedQuantity, Integer::sum);
             reserved.merge(id, line.reservedQuantity, Integer::sum);
-            pickedUp.merge(id, line.pickedUpQuantity, Integer::sum);
-            handedOver.merge(id, Math.max(line.handedOverQuantity, line.pickedUpQuantity), Integer::sum);
+            handedOver.merge(id, line.handedOverQuantity, Integer::sum);
             returned.merge(id, line.returnedQuantity, Integer::sum);
             consumed.merge(id, line.consumedQuantity, Integer::sum);
             missing.merge(id, line.missingQuantity, Integer::sum);
             damaged.merge(id, line.damagedQuantity, Integer::sum);
             writtenOff.merge(id, line.writtenOffQuantity, Integer::sum);
-            if (itemViews.stream().noneMatch(existing -> id.equals(existing.get("id"))))
+
+            orderLines.add(new ApiResponses.OrderLineResponse(
+                    line.id,
+                    line.item.id,
+                    line.item.name,
+                    line.sourceAssembly == null ? null : line.sourceAssembly.id,
+                    line.sourceAssembly == null ? null : line.sourceAssembly.name,
+                    line.requestedQuantity,
+                    line.preparedQuantity,
+                    line.allocatedQuantity,
+                    line.reservedQuantity,
+                    line.handedOverQuantity,
+                    line.returnedQuantity,
+                    line.consumedQuantity,
+                    line.missingQuantity,
+                    line.damagedQuantity,
+                    line.writtenOffQuantity
+            ));
+
+            if (itemViews.stream().noneMatch(existing -> line.item.id.equals(existing.id())))
                 itemViews.add(item(line.item));
             if (line.sourceAssembly != null && assemblyViews.stream()
-                    .noneMatch(existing -> line.sourceAssembly.id.toString().equals(existing.get("id")))) {
+                    .noneMatch(existing -> line.sourceAssembly.id.equals(existing.id()))) {
                 assemblyViews.add(assembly(line.sourceAssembly));
             }
         }
+
         for (var assemblyView : assemblyViews) {
-            String assemblyId = assemblyView.get("id").toString();
+            String assemblyId = assemblyView.id().toString();
             var assemblyLines = lines.stream()
                     .filter(line -> line.sourceAssembly != null && line.sourceAssembly.id.toString().equals(assemblyId))
                     .toList();
@@ -240,24 +300,9 @@ public class ApiMapper {
             requestedAssemblies.put(assemblyId, requestedCount == Integer.MAX_VALUE ? 0 : requestedCount);
             preparedAssemblies.put(assemblyId, preparedCount == Integer.MAX_VALUE ? 0 : preparedCount);
         }
-        result.put("itemIds", requested.keySet());
-        result.put("requestedQuantities", requested);
-        result.put("preparedQuantities", prepared);
-        result.put("allocatedQuantities", allocated);
-        result.put("reservedQuantities", reserved);
-        result.put("pickedUpQuantities", pickedUp);
-        result.put("handedOverQuantities", handedOver);
-        result.put("returnedQuantities", returned);
-        result.put("consumedQuantities", consumed);
-        result.put("missingQuantities", missing);
-        result.put("damagedQuantities", damaged);
-        result.put("writtenOffQuantities", writtenOff);
-        result.put("assemblyIds", requestedAssemblies.keySet());
-        result.put("requestedAssemblyQuantities", requestedAssemblies);
-        result.put("preparedAssemblyQuantities", preparedAssemblies);
 
         var history = orderOrm.history(value).stream().map(this::history).toList();
-        result.put("history", history);
+
         var expand = new LinkedHashMap<String, Object>();
         expand.put("itemIds", itemViews);
         expand.put("assemblyIds", assemblyViews);
@@ -273,84 +318,116 @@ public class ApiMapper {
             expand.put("returnedBy", user(value.returnedBy));
         if (value.pickupLocation != null)
             expand.put("pickupLocation", location(value.pickupLocation));
-        result.put("expand", expand);
-        return result;
+
+        return new ApiResponses.OrderResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.orderCode,
+                value.eventOccurrence.eventType,
+                value.eventOccurrence.id,
+                value.eventOccurrence.startDate,
+                value.requestedPickupDate,
+                value.faction.name,
+                value.faction.id,
+                value.faction.eventType + ":" + value.faction.name,
+                value.status.name(),
+                value.pickupLocation == null ? null : value.pickupLocation.id.toString(),
+                value.pickupLatitude,
+                value.pickupLongitude,
+                value.collectorName,
+                value.notes,
+                value.createdBy == null ? null : value.createdBy.id.toString(),
+                value.preparedBy == null ? null : value.preparedBy.id.toString(),
+                value.readyBy == null ? null : value.readyBy.id.toString(),
+                value.pickedUpBy == null ? null : value.pickedUpBy.id.toString(),
+                value.returnedBy == null ? null : value.returnedBy.id.toString(),
+                requested.keySet(),
+                requested,
+                prepared,
+                allocated,
+                reserved,
+                handedOver,
+                returned,
+                consumed,
+                missing,
+                damaged,
+                writtenOff,
+                requestedAssemblies.keySet(),
+                requestedAssemblies,
+                preparedAssemblies,
+                orderLines,
+                history,
+                expand
+        );
     }
 
-    public Map<String, Object> damage(DamageReport value) {
-        var result = base(value.id, value.createdAt, value.updatedAt);
-        result.put("itemId", value.item.id.toString());
-        result.put("amount", value.quantity);
-        result.put("repairedAmount", value.repairedQuantity);
-        result.put("writtenOffAmount", value.writtenOffQuantity);
-        result.put("reportedBy", value.reporter.id.toString());
-        put(result, "handledBy", value.handler == null ? null : value.handler.id.toString());
-        put(result, "factionOrderId", value.factionOrder == null ? null : value.factionOrder.id.toString());
-        result.put("description", value.description);
-        result.put("severity", value.severity.name());
-        result.put("status", value.status.name());
-        result.put("timestamp", value.createdAt);
+    public ApiResponses.DamageResponse damage(DamageReport value) {
         var expand = new LinkedHashMap<String, Object>();
         expand.put("reportedBy", user(value.reporter));
         if (value.handler != null)
             expand.put("handledBy", user(value.handler));
-        result.put("expand", expand);
-        return result;
+
+        return new ApiResponses.DamageResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.item.id.toString(),
+                value.quantity,
+                value.repairedQuantity,
+                value.writtenOffQuantity,
+                value.reporter.id.toString(),
+                value.handler == null ? null : value.handler.id.toString(),
+                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.description,
+                value.severity.name(),
+                value.status.name(),
+                value.createdAt,
+                expand
+        );
     }
 
-    public Map<String, Object> maintenance(MaintenanceRecord value) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("id", value.id.toString());
-        result.put("itemId", value.item.id.toString());
-        result.put("type", value.type.name());
-        result.put("inspectorUserId", value.inspector.id.toString());
-        result.put("performedAt", value.performedAt);
-        put(result, "nextDueAt", value.nextDueAt);
-        put(result, "operatingHours", value.operatingHours);
-        result.put("result", value.result.name());
-        put(result, "certificateNumber", value.certificateNumber);
-        put(result, "notes", value.notes);
-        result.put("created", value.createdAt);
-        return result;
+    public ApiResponses.MaintenanceResponse maintenance(MaintenanceRecord value) {
+        return new ApiResponses.MaintenanceResponse(
+                value.id,
+                value.item.id.toString(),
+                value.type.name(),
+                value.inspector.id.toString(),
+                value.performedAt,
+                value.nextDueAt,
+                value.operatingHours,
+                value.result.name(),
+                value.certificateNumber,
+                value.notes,
+                value.createdAt
+        );
     }
 
-    private Map<String, Object> history(FactionOrderHistory value) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("action", value.action);
-        result.put("userId", value.actor.id.toString());
-        result.put("userName", value.actor.name);
-        result.put("timestamp", value.occurredAt);
-        put(result, "fromStatus", value.fromStatus);
-        put(result, "toStatus", value.toStatus);
-        result.put("deltaSnapshot", value.deltaSnapshot);
-        put(result, "note", value.notes);
-        return result;
+    public ApiResponses.OrderHistoryResponse history(FactionOrderHistory value) {
+        return new ApiResponses.OrderHistoryResponse(
+                value.action,
+                value.actor.id.toString(),
+                value.actor.name,
+                value.occurredAt,
+                value.fromStatus,
+                value.toStatus,
+                value.deltaSnapshot,
+                value.notes
+        );
     }
 
-    private Map<String, Object> orderSummary(FactionOrder value) {
+    public Map<String, Object> orderSummary(FactionOrder value) {
         var result = new LinkedHashMap<String, Object>();
         result.put("id", value.id.toString());
         result.put("orderCode", value.orderCode);
         result.put("eventType", value.eventOccurrence.eventType);
         result.put("eventOccurrenceId", value.eventOccurrence.id.toString());
         result.put("eventDate", value.eventOccurrence.startDate);
-        put(result, "requestedPickupDate", value.requestedPickupDate);
+        if (value.requestedPickupDate != null)
+            result.put("requestedPickupDate", value.requestedPickupDate);
         result.put("faction", value.faction.name);
         result.put("factionId", value.faction.id.toString());
         result.put("status", value.status.name());
         return result;
-    }
-
-    private LinkedHashMap<String, Object> base(Object id, Object created, Object updated) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("id", id.toString());
-        result.put("created", created);
-        result.put("updated", updated);
-        return result;
-    }
-
-    private void put(Map<String, Object> target, String key, Object value) {
-        if (value != null)
-            target.put(key, value);
     }
 }

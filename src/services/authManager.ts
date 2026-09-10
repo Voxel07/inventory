@@ -3,8 +3,6 @@ import { isOidcSessionRejected, refreshOidcTokens, type OidcTokenSet } from './o
 import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession } from './authStorage';
 
 const SESSION_KEY = 'ash.inventory.authSession';
-const LEGACY_TOKEN_KEY = 'ash.inventory.accessToken';
-const LEGACY_USER_KEY = 'ash.inventory.user';
 const REFRESH_EARLY_MS = 30_000;
 
 type StoredAuthSession = {
@@ -29,9 +27,7 @@ function loadSession(): StoredAuthSession {
   try {
     const stored = sessionStorage.getItem(SESSION_KEY);
     if (stored) return { ...emptySession(), ...JSON.parse(stored) as Partial<StoredAuthSession> };
-    const accessToken = localStorage.getItem(LEGACY_TOKEN_KEY) || '';
-    const user = JSON.parse(localStorage.getItem(LEGACY_USER_KEY) || 'null') as User | null;
-    return { ...emptySession(), accessToken, user };
+    return emptySession();
   } catch {
     return emptySession();
   }
@@ -50,8 +46,6 @@ function publish(error: string | null = null): void {
 function persist(): Promise<void> {
   if (session.accessToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   else sessionStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_USER_KEY);
 
   if (session.accessToken || session.refreshToken) {
     return saveStoredAuthSession(session);
@@ -190,7 +184,7 @@ export async function getAuthorizationHeaders(): Promise<Record<string, string>>
   if (token.startsWith('dev:')) {
     headers['X-Actor-Id'] = token.slice(4);
     headers['X-Actor-Name'] = session.user?.name || 'Development Admin';
-    headers['X-Actor-Role'] = String(session.user?.role || 'admin').trim().toLowerCase();
+    headers['X-Actor-Role'] = String(session.user?.role || 'hq_admin').trim().toLowerCase();
   }
   return headers;
 }

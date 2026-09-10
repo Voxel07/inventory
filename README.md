@@ -20,8 +20,9 @@ mvn quarkus:dev
 ```
 
 Development mode uses an in-memory H2 database and does not require Docker,
-PostgreSQL, Grafana, or an OpenTelemetry collector. Production uses PostgreSQL
-and Flyway as configured in `docker-compose.yml`.
+PostgreSQL, Grafana, or an OpenTelemetry collector. Production uses PostgreSQL;
+the current schema-management limitations are documented in
+[`REQUIREMENTS_ARCHITECTURE.md`](REQUIREMENTS_ARCHITECTURE.md#9-persistence-and-schema-state).
 
 Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
 
@@ -33,20 +34,21 @@ Authentik supplies application roles through its `groups` claim. Use these names
 
 | Authentik group | Inventory role |
 | --- | --- |
-| `inventory_admin` | `admin` |
-| `inventory_manager` | `inventory_manager` |
-| `inventory_warehouse_packer` | `warehouse_packer` |
+| `inventory_hq_admin` | `hq_admin` |
+| `inventory_warehouse_crew` | `warehouse_crew` |
+| `inventory_marshal` | `marshal` |
+| `inventory_event_planner` | `event_planner` |
+| `inventory_maintenance_crew` | `maintenance_crew` |
 | `inventory_faction_leader` | `faction_leader` |
+| `inventory_read_only` | `read_only` |
 
 The Authentik group is authoritative at sign-in; the corresponding internal role is stored in `app_users`. A token without a recognized inventory group receives the least-privileged `faction_leader` role.
 
 ## PostgreSQL schema and API
 
-Flyway owns schema changes in `backend/src/main/resources/db/migration`. OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`.
+OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Hibernate currently updates the production schema; the required Flyway cutover is tracked in the architecture document.
 
-The legacy `pb_schema.json` remains only as a migration reference and is not used at runtime.
-
-Roles are enforced by the backend: `admin`, `inventory_manager`, `warehouse_packer`, and `faction_leader`. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
+Roles are enforced by the backend using the seven canonical values listed above. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
 
 ## Deployment
 
@@ -62,11 +64,10 @@ The exact online/offline boundary, queue semantics, and conflict handling are do
 ## Internationalization
 
 Localization runs on [i18next](https://www.i18next.com/) with German (`de`) and
-English (`en`) catalogs in [`src/i18n`](src/i18n). New code should use the
+English (`en`) catalogs in [`src/i18n`](src/i18n). Shared copy uses the
 key-based `useT()` hook from `src/utils/naming` (e.g.
 `t('header.queuedActions', { count })`), which supports interpolation and
-pluralization. Legacy call sites still use the `useTranslate(de, en)`
-compatibility shim and should be migrated to catalog keys incrementally.
+pluralization. Context-specific bilingual copy uses `useLocalizedText()`.
 
 ## Faction order workflow
 

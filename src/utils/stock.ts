@@ -1,4 +1,4 @@
-import type { StockTransaction, DamageReport } from '../types';
+import type { StockTransaction, DamageReport, Item } from '../types';
 
 export interface StockCalculation {
   totalStock: number;
@@ -12,7 +12,17 @@ export function calculateItemStock(
   transactions: StockTransaction[] | undefined,
   damageReports: DamageReport[] | undefined,
   initialAmount = 0,
+  item?: Item,
 ): StockCalculation {
+  if (item?.stock) {
+    return {
+      totalStock: item.stock.totalOwned,
+      checkedOut: item.stock.checkedOut,
+      damaged: item.stock.damaged,
+      remaining: item.stock.available,
+    };
+  }
+
   let totalAdded = 0;
   let checkedOut = 0;
   let hasAddedTransaction = false;

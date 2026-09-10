@@ -49,7 +49,7 @@ import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 
@@ -91,7 +91,7 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 }
 
 export function ItemDetail() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { itemId } = useParams<{ itemId: string }>();
@@ -136,8 +136,8 @@ export function ItemDetail() {
     );
 
     const { totalStock, checkedOut, damaged, remaining } = useMemo(() => {
-        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports, item?.amount ?? 0);
-    }, [itemId, item?.amount, allTransactions, itemDamageReports]);
+        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports, item?.amount ?? 0, item);
+    }, [itemId, item, allTransactions, itemDamageReports]);
 
     const stockHistory = useMemo(
         () => buildStockHistory(itemTransactions, item?.amount ?? 0),

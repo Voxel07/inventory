@@ -1,15 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { GeneralOrderFormData } from '../types';
-import { createOrder, getOrders } from '../services/orderService';
+import type { GeneralOrder, GeneralOrderFormData } from '../types';
+import { generalOrderApi } from '../services/orderService';
+import { createCreateResourceHooks } from './useResourceApi';
 
-export function useOrders() {
-  return useQuery({ queryKey: ['general-orders'], queryFn: getOrders });
-}
-
-export function useCreateOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: GeneralOrderFormData) => createOrder(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['general-orders'] }),
-  });
-}
+export const {
+  useList: useOrders,
+  useCreate: useCreateOrder,
+} = createCreateResourceHooks<GeneralOrder, GeneralOrderFormData>(generalOrderApi, 'general-orders');

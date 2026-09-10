@@ -13,6 +13,8 @@ import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StockReservation;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.EnumMap;
 import java.util.Map;
@@ -72,6 +74,22 @@ public class OperationsOrm {
         return totals;
     }
 
+    public Map<UUID, Map<DomainEnums.TransactionType, Long>> transactionTotals(Collection<UUID> itemIds) {
+        var totals = new LinkedHashMap<UUID, Map<DomainEnums.TransactionType, Long>>();
+        if (itemIds.isEmpty()) return totals;
+        for (var row : entityManager.createQuery("""
+                select tx.item.id, tx.type, sum(tx.quantity)
+                from StockTransaction tx
+                where tx.item.id in :itemIds
+                group by tx.item.id, tx.type
+                """, Object[].class).setParameter("itemIds", itemIds).getResultList()) {
+            UUID itemId = (UUID) row[0];
+            totals.computeIfAbsent(itemId, ignored -> new EnumMap<>(DomainEnums.TransactionType.class))
+                    .put((DomainEnums.TransactionType) row[1], (Long) row[2]);
+        }
+        return totals;
+    }
+
     public List<DamageReport> unresolvedDamage(Item item) {
         return entityManager.createQuery("from DamageReport d where d.item = :item and d.status in :statuses", DamageReport.class)
                 .setParameter("item", item)
@@ -96,6 +114,26 @@ public class OperationsOrm {
         return Math.toIntExact(quantity);
     }
 
+    public Map<UUID, Long> unresolvedDamageQuantities(Collection<UUID> itemIds) {
+        var quantities = new LinkedHashMap<UUID, Long>();
+        if (itemIds.isEmpty()) return quantities;
+        for (var row : entityManager.createQuery("""
+                select d.item.id, coalesce(sum(d.quantity - d.repairedQuantity - d.writtenOffQuantity), 0)
+                from DamageReport d
+                where d.item.id in :itemIds and d.status in :statuses
+                group by d.item.id
+                """, Object[].class)
+                .setParameter("itemIds", itemIds)
+                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
+                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
+                        DomainEnums.DamageStatus.in_repair, DomainEnums.DamageStatus.repaired,
+                        DomainEnums.DamageStatus.verified))
+                .getResultList()) {
+            quantities.put((UUID) row[0], (Long) row[1]);
+        }
+        return quantities;
+    }
+
     public List<StockReservation> activeReservations(Item item) {
         return entityManager.createQuery("from StockReservation reservation where reservation.item = :item and reservation.status in :statuses", StockReservation.class)
                 .setParameter("item", item)
@@ -114,6 +152,25 @@ public class OperationsOrm {
                         DomainEnums.ReservationStatus.partially_released))
                 .getSingleResult();
         return Math.toIntExact(quantity);
+    }
+
+    public Map<UUID, Long> activeReservationQuantities(Collection<UUID> itemIds) {
+        var quantities = new LinkedHashMap<UUID, Long>();
+        if (itemIds.isEmpty()) return quantities;
+        for (var row : entityManager.createQuery("""
+                select reservation.item.id,
+                       coalesce(sum(reservation.reservedQuantity - reservation.releasedQuantity), 0)
+                from StockReservation reservation
+                where reservation.item.id in :itemIds and reservation.status in :statuses
+                group by reservation.item.id
+                """, Object[].class)
+                .setParameter("itemIds", itemIds)
+                .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
+                        DomainEnums.ReservationStatus.partially_released))
+                .getResultList()) {
+            quantities.put((UUID) row[0], (Long) row[1]);
+        }
+        return quantities;
     }
 
     public List<FactionOrderLine> activeOrderLines(UUID eventOccurrenceId, List<DomainEnums.OrderStatus> statuses) {

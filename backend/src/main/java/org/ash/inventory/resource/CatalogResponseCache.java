@@ -44,11 +44,6 @@ public class CatalogResponseCache {
         removeEventListener.run();
     }
 
-    @CacheResult(cacheName = "items-cache")
-    public String items(String search) {
-        return json(catalog.getItems(search).stream().map(mapper::item).toList());
-    }
-
     @CacheResult(cacheName = "locations-cache")
     public String locations() {
         return json(catalog.getLocations().stream().map(mapper::location).toList());
@@ -69,7 +64,7 @@ public class CatalogResponseCache {
         return json(catalog.getFactions(eventType).stream().map(mapper::faction).toList());
     }
 
-    private String json(java.util.List<Map<String, Object>> values) {
+    private String json(java.util.List<?> values) {
         try {
             return objectMapper.writeValueAsString(values);
         } catch (JsonProcessingException exception) {
@@ -80,12 +75,12 @@ public class CatalogResponseCache {
     private void invalidateFor(String resource) {
         Set<String> cacheNames = new LinkedHashSet<>();
         switch (resource) {
-            case "items" -> cacheNames.addAll(Set.of("items-cache", "assemblies-cache"));
-            case "storage-locations" -> cacheNames.addAll(Set.of("locations-cache", "items-cache", "assemblies-cache"));
+            case "items" -> cacheNames.add("assemblies-cache");
+            case "storage-locations" -> cacheNames.addAll(Set.of("locations-cache", "assemblies-cache"));
             case "assemblies" -> cacheNames.add("assemblies-cache");
             case "events" -> cacheNames.add("events-cache");
             case "factions" -> cacheNames.add("factions-cache");
-            default -> cacheNames.addAll(Set.of("items-cache", "locations-cache", "assemblies-cache", "events-cache", "factions-cache"));
+            default -> cacheNames.addAll(Set.of("locations-cache", "assemblies-cache", "events-cache", "factions-cache"));
         }
         for (String cacheName : cacheNames) {
             cacheManager.getCache(cacheName).ifPresent(cache ->

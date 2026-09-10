@@ -18,6 +18,8 @@ import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.orm.OrderOrm;
 import org.ash.inventory.service.OrderService;
 
+import org.ash.inventory.resource.dto.ApiResponses;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +39,7 @@ public class OrderResource {
 
     @GET
     @Transactional
-    public List<?> orders(@QueryParam("eventType") String eventType, @QueryParam("faction") String faction) {
+    public List<ApiResponses.OrderResponse> orders(@QueryParam("eventType") String eventType, @QueryParam("faction") String faction) {
         UserAccount user = actor.current();
         var stream = orm.orders(eventType, faction).stream();
         if (user.role == DomainEnums.UserRole.faction_leader)
@@ -48,7 +50,7 @@ public class OrderResource {
     @GET
     @Path("/{id}")
     @Transactional
-    public Object order(@PathParam("id") UUID id) {
+    public ApiResponses.OrderResponse order(@PathParam("id") UUID id) {
         var order = orm.findOrder(id);
         if (order == null)
             throw ApiException.notFound("Faction order not found");
@@ -57,28 +59,28 @@ public class OrderResource {
     }
 
     @POST
-    public Object create(@Valid ApiModels.OrderInput input) {
+    public ApiResponses.OrderResponse create(@Valid ApiModels.OrderInput input) {
         actor.current();
         return mapper.order(service.create(input));
     }
 
     @PATCH
     @Path("/{id}")
-    public Object update(@PathParam("id") UUID id, @Valid ApiModels.OrderInput input) {
+    public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.OrderInput input) {
         actor.current();
         return mapper.order(service.update(id, input));
     }
 
     @POST
     @Path("/{id}/prepare")
-    public Object prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
+    public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
         actor.requireWarehouse();
         return mapper.order(service.prepare(id, input));
     }
 
     @POST
     @Path("/{id}/transitions/{status}")
-    public Object transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
+    public ApiResponses.OrderResponse transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
             ApiModels.TransitionInput input) {
         if (status == DomainEnums.OrderStatus.submitted || status == DomainEnums.OrderStatus.draft)
             actor.current();
@@ -94,14 +96,14 @@ public class OrderResource {
 
     @POST
     @Path("/{id}/return")
-    public Object returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
+    public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
         actor.requireMarshal();
         return mapper.order(service.returnItems(id, input));
     }
 
     @POST
     @Path("/{id}/return-all")
-    public Object returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
+    public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
         actor.requireMarshal();
         return mapper.order(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }

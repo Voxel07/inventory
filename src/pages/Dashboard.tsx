@@ -5,10 +5,10 @@ import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { useUsers } from '../hooks/useUsers';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 export function Dashboard() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: damageReports } = useDamageReports();

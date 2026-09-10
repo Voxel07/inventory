@@ -91,13 +91,30 @@ class InventoryApiTest {
     void devAuthRoleChangesAreAppliedToExistingUsers() {
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "role-refresh-user")
-                .header("X-Actor-Role", "admin")
-                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("admin"));
+                .header("X-Actor-Role", "hq_admin")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("hq_admin"));
 
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "role-refresh-user")
                 .header("X-Actor-Role", "marshal")
                 .get("/api/auth/me").then().statusCode(200).body("role", equalTo("marshal"));
+    }
+
+    @Test
+    void canonicalRolesAreAuthorizedAndRemovedRoleNamesHaveNoPrivilege() {
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "canonical-event-planner")
+                .header("X-Actor-Role", "event_planner")
+                .body(Map.of("eventType", "DE", "name", "Canonical role event",
+                        "startDate", "2038-09-10", "endDate", "2038-09-11", "status", "planned"))
+                .post("/api/events").then().statusCode(200);
+
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "removed-role-user")
+                .header("X-Actor-Role", "admin")
+                .body(Map.of("sku", "REMOVED-ROLE-001", "name", "Must not be created",
+                        "category", "Test", "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(403);
     }
 
     @Test
@@ -399,7 +416,7 @@ class InventoryApiTest {
         return given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-admin")
                 .header("X-Actor-Name", "Test Admin")
-                .header("X-Actor-Role", "admin");
+                .header("X-Actor-Role", "hq_admin");
     }
 
     private static io.restassured.specification.RequestSpecification factionLeaderRequest() {
@@ -639,29 +656,22 @@ class InventoryApiTest {
     }
 
     @Test
-    void catalogEtagsReturnNotModifiedAndAreInvalidatedByWrites() {
-        String etag = request().get("/api/items")
-                .then().statusCode(200)
-                .header("ETag", notNullValue())
-                .extract().header("ETag");
+    void itemListReturnsLiveOwnedAndOnHandStockAfterCheckout() {
+        String itemId = request().body(Map.of(
+                        "sku", "LIVE-STOCK-001", "name", "Live stock item", "category", "Test",
+                        "amount", 3, "value", 10))
+                .post("/api/items").then().statusCode(200)
+                .body("stock.totalOwned", equalTo(3))
+                .body("stock.onHand", equalTo(3))
+                .extract().path("id");
 
-        request().get("/api/items")
-                .then().statusCode(200)
-                .contentType(ContentType.JSON)
-                .body("$", org.hamcrest.Matchers.instanceOf(java.util.List.class));
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1))
+                .post("/api/transactions").then().statusCode(200);
 
-        request().header("If-None-Match", etag)
-                .get("/api/items")
-                .then().statusCode(304);
-
-        request().body(Map.of("sku", "ETAG-001", "name", "ETag invalidation item", "category", "Test", "amount", 1, "value", 0))
-                .post("/api/items")
-                .then().statusCode(200);
-
-        request().header("If-None-Match", etag)
-                .get("/api/items")
-                .then().statusCode(200)
-                .header("ETag", org.hamcrest.Matchers.not(etag))
-                .body("name", org.hamcrest.Matchers.hasItem("ETag invalidation item"));
+        request().get("/api/items").then().statusCode(200)
+                .body("find { it.id == '" + itemId + "' }.stock.totalOwned", equalTo(3))
+                .body("find { it.id == '" + itemId + "' }.stock.onHand", equalTo(2))
+                .body("find { it.id == '" + itemId + "' }.stock.checkedOut", equalTo(1))
+                .body("find { it.id == '" + itemId + "' }.stock.available", equalTo(2));
     }
 }

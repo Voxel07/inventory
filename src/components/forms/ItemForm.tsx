@@ -18,7 +18,7 @@ import {
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
     initialData?: Item;
@@ -37,7 +37,7 @@ export function ItemForm({
     onSubmit,
     isLoading,
 }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const [formData, setFormData] = useState<ItemFormData>({
         name: initialData?.name ?? '',
         amount: undefined,

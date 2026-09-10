@@ -63,9 +63,8 @@ export default {
     noAssignedFactions: 'Keine Fraktionen zugewiesen',
     unknownUser: 'Unbekannter Benutzer',
     roles: {
-      admin: 'Administrator',
-      inventoryManager: 'Inventarverwaltung',
-      warehousePacker: 'Lagerverpackung',
+      hqAdmin: 'HQ-Administrator',
+      warehouseCrew: 'Lagerteam',
       marshal: 'Marshal',
       eventPlanner: 'Eventplanung',
       maintenanceCrew: 'Wartungsteam',

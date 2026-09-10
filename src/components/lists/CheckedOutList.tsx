@@ -28,7 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { Link } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 export interface CheckedOutRow {
   key: string;
@@ -83,7 +83,7 @@ export function CheckedOutList({
   linkToItem,
   returnPending,
 }: Props) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});

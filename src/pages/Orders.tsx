@@ -2,12 +2,12 @@ import { Box, Paper, Tab, Tabs } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { GeneralOrders } from '../components/orders/GeneralOrders';
 import { FactionOrders } from './FactionOrders';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 type OrderTab = 'general' | 'faction';
 
 export function Orders() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: OrderTab = searchParams.get('tab') === 'general' ? 'general' : 'faction';
 

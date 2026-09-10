@@ -3,7 +3,7 @@ package org.ash.inventory.model;
 public final class DomainEnums {
     private DomainEnums() {}
 
-    public enum UserRole { admin, inventory_manager, warehouse_packer, faction_leader, hq_admin, warehouse_crew, marshal, event_planner, maintenance_crew, read_only }
+    public enum UserRole { hq_admin, warehouse_crew, marshal, event_planner, maintenance_crew, faction_leader, read_only }
     public enum TrackingMode { bulk, serialized, lot_tracked }
     public enum InventoryRole { consumable, returnable, repairable, rental }
     public enum AssetState { available, reserved, staged, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }

@@ -31,7 +31,7 @@ import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
-import { useAppLanguage, useTranslate } from '../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import type { User } from '../types';
@@ -51,7 +51,7 @@ function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning'
 }
 
 export function FactionOrders() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const language = useAppLanguage();
   const navigate = useNavigate();
   const theme = useTheme();

@@ -23,7 +23,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useItems } from '../hooks/useItems';
 import { createMaintenanceRecord, getMaintenanceRecords } from '../services/maintenanceService';
 import { useUIStore } from '../store/uiStore';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import type { Item } from '../types';
 
 function addMonths(months: number): string {
@@ -39,7 +39,7 @@ function addYears(years: number): string {
 }
 
 export function Maintenance() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const queryClient = useQueryClient();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const formRef = useRef<HTMLDivElement | null>(null);

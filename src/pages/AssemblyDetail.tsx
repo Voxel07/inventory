@@ -45,7 +45,7 @@ import { useUIStore } from '../store/uiStore';
 import type { AssemblyFormData, Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -56,7 +56,7 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
 };
 
 export function AssemblyDetail() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { assemblyId } = useParams<{ assemblyId: string }>();
@@ -166,7 +166,7 @@ export function AssemblyDetail() {
         if (!items || !transactions) return new Map<string, number>();
         const map = new Map<string, number>();
         for (const item of items) {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
             map.set(item.id, remaining);
         }
         return map;

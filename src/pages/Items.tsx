@@ -1,92 +1,47 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, Dialog, DialogTitle, DialogContent, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
-import { useItems, useCreateItem, useUpdateItem, useDeleteItems } from '../hooks/useItems';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
+import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
-import { useUIStore } from '../store/uiStore';
+import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 export function Items() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading } = useItems();
     const { data: assemblies } = useAssemblies();
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
+    const { data: storageLocations } = useStorageLocations();
+
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
+    const deleteItem = useDeleteItem();
     const deleteItems = useDeleteItems();
-    const showSnackbar = useUIStore((s) => s.showSnackbar);
 
-    const [formOpen, setFormOpen] = useState(false);
+    const crud = useCrudManager<Item, ItemFormData>(
+        { create: createItem, update: updateItem, delete: deleteItem, deleteMany: deleteItems },
+        { entityName: 'Artikel' },
+    );
+
     const [importOpen, setImportOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState<Item | undefined>();
     const [qrItem, setQrItem] = useState<Item | undefined>();
-    const [deletingIds, setDeletingIds] = useState<string[]>([]);
 
-    const { data: storageLocations } = useStorageLocations();
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
     const allNames = items?.map((i) => i.name) ?? [];
-
-    function handleCreate(data: ItemFormData) {
-        createItem.mutate(data, {
-            onSuccess: () => {
-                setFormOpen(false);
-                showSnackbar(t('Artikel erfolgreich erstellt', 'Item created successfully'), 'success');
-            },
-            onError: () => showSnackbar(t('Fehler beim Erstellen des Artikels', 'Could not create item'), 'error'),
-        });
-    }
-
-    function handleUpdate(data: ItemFormData) {
-        if (!editingItem) return;
-        updateItem.mutate(
-            { id: editingItem.id, data },
-            {
-                onSuccess: () => {
-                    setEditingItem(undefined);
-                    showSnackbar(t('Artikel erfolgreich aktualisiert', 'Item updated successfully'), 'success');
-                },
-                onError: () => showSnackbar(t('Fehler beim Aktualisieren des Artikels', 'Could not update item'), 'error'),
-            },
-        );
-    }
-
-    function handleDelete(id: string) {
-        setDeletingIds([id]);
-    }
-
-    function handleDeleteMany(ids: string[]) {
-        setDeletingIds(ids);
-    }
-
-    function handleDeleteConfirm() {
-        if (!deletingIds.length) return;
-        deleteItems.mutate(deletingIds, {
-            onSuccess: () => {
-                const count = deletingIds.length;
-                setDeletingIds([]);
-                showSnackbar(
-                    count === 1
-                        ? t('Artikel gelöscht', 'Item deleted')
-                        : t(`${count} Artikel gelöscht`, `${count} items deleted`),
-                    'success',
-                );
-            },
-            onError: () => showSnackbar(t('Fehler beim Löschen der Artikel', 'Could not delete items'), 'error'),
-        });
-    }
 
     return (
         <Box>
@@ -105,7 +60,7 @@ export function Items() {
                         icon={<AddIcon />}
                         label={t('Artikel hinzufügen', 'Add item')}
                         variant="contained"
-                        onClick={() => setFormOpen(true)}
+                        onClick={crud.openCreate}
                     />
                 </Box>
             </Box>
@@ -115,17 +70,17 @@ export function Items() {
                 transactions={transactions}
                 damageReports={damageReports}
                 isLoading={isLoading}
-                onEdit={setEditingItem}
-                onDelete={handleDelete}
-                onDeleteMany={handleDeleteMany}
+                onEdit={crud.openEdit}
+                onDelete={crud.openDelete}
+                onDeleteMany={crud.openDeleteMany}
             />
 
             {/* Create Dialog */}
-            <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
+            <Dialog open={crud.isCreateOpen} onClose={crud.closeCreate} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t('Neuen Artikel erstellen', 'Create new item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <ItemForm
-                        onSubmit={handleCreate}
+                        onSubmit={crud.handleCreate}
                         isLoading={createItem.isPending}
                         storageLocations={storageLocations ?? []}
                         categories={categories}
@@ -135,17 +90,17 @@ export function Items() {
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editingItem} onClose={() => setEditingItem(undefined)} maxWidth="sm" fullWidth fullScreen={isMobile}>
+            <Dialog open={crud.isEditOpen} onClose={crud.closeEdit} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t('Artikel bearbeiten', 'Edit item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    {editingItem && (
+                    {crud.editingEntity && (
                         <ItemForm
-                            initialData={editingItem}
-                            onSubmit={handleUpdate}
+                            initialData={crud.editingEntity}
+                            onSubmit={crud.handleUpdate}
                             isLoading={updateItem.isPending}
                             storageLocations={storageLocations ?? []}
                             categories={categories}
-                            existingNames={allNames.filter((n) => n !== editingItem.name)}
+                            existingNames={allNames.filter((n) => n !== crud.editingEntity?.name)}
                         />
                     )}
                 </DialogContent>
@@ -160,28 +115,20 @@ export function Items() {
             </Dialog>
 
             {/* Delete Confirmation Dialog */}
-            <Dialog open={deletingIds.length > 0} onClose={() => setDeletingIds([])}>
-                <DialogTitle>
-                    {deletingIds.length === 1 ? t('Artikel löschen', 'Delete item') : t('Artikel löschen', 'Delete items')}
-                </DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        {deletingIds.length === 1
-                            ? t('Sind Sie sicher, dass Sie diesen Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this item? This cannot be undone.')
-                            : t(`Sind Sie sicher, dass Sie ${deletingIds.length} Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.`, `Are you sure you want to delete ${deletingIds.length} items? This cannot be undone.`)}
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Tooltip title={t('Löschvorgang abbrechen', 'Cancel deletion')} arrow>
-                        <Button onClick={() => setDeletingIds([])}>{t('Abbrechen', 'Cancel')}</Button>
-                    </Tooltip>
-                    <Tooltip title={t('Ausgewählte Artikel dauerhaft löschen', 'Permanently delete selected items')} arrow>
-                        <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteItems.isPending}>
-                            {t('Löschen', 'Delete')}
-                        </Button>
-                    </Tooltip>
-                </DialogActions>
-            </Dialog>
+            <ConfirmDialog
+                open={crud.isDeleteOpen}
+                title={t('Artikel löschen', crud.deletingIds.length > 1 ? 'Delete items' : 'Delete item')}
+                message={t(
+                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
+                    `Are you sure you want to delete ${crud.deletingIds.length} item(s)? This cannot be undone.`,
+                )}
+                actionLabel={t('Löschen', 'Delete')}
+                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionColor="error"
+                onClose={crud.closeDelete}
+                onConfirm={crud.handleDeleteConfirm}
+                pending={deleteItem.isPending || deleteItems.isPending}
+            />
 
             {/* CSV Import Dialog */}
             <CsvImportDialog

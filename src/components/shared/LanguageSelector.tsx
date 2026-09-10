@@ -1,10 +1,10 @@
 import { Box, FormControl, MenuItem, Select, Typography } from '@mui/material';
 import TranslateIcon from '@mui/icons-material/Translate';
-import { setAppLanguage, useAppLanguage, useTranslate, type AppLanguage } from '../../utils/naming';
+import { setAppLanguage, useAppLanguage, useLocalizedText, type AppLanguage } from '../../utils/naming';
 
 export function LanguageSelector({ compact = false }: { compact?: boolean }) {
   const language = useAppLanguage();
-  const t = useTranslate();
+  const t = useLocalizedText();
 
   return (
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>

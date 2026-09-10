@@ -8,7 +8,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import type { DamageReportFormData, Item, DamageSeverity } from '../../types';
-import { nameFor, useAppLanguage, useTranslate } from '../../utils/naming';
+import { nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
 interface Props {
@@ -21,7 +21,7 @@ interface Props {
 
 export function DamageReportForm({ items, preselectedItemId, onSubmit, isLoading, maxAmount }: Props) {
     useAppLanguage();
-    const t = useTranslate();
+    const t = useLocalizedText();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
     const [formData, setFormData] = useState<DamageReportFormData>({
         itemId: preselectedItemId ?? '',

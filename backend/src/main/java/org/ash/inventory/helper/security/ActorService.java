@@ -46,10 +46,10 @@ public class ActorService {
             Object groups = identity.getAttribute("factions");
             if (groups instanceof Set<?> values) factions = values.stream().map(Object::toString).collect(java.util.stream.Collectors.toSet());
         } else if (devAuthEnabled) {
-            subject = header("X-Actor-Id", "dev-admin");
-            name = header("X-Actor-Name", "Development Admin");
+            subject = header("X-Actor-Id", "dev-hq-admin");
+            name = header("X-Actor-Name", "Development HQ Admin");
             email = subject.contains("@") ? subject : "dev@localhost";
-            role = parseRole(header("X-Actor-Role", "admin"));
+            role = parseRole(header("X-Actor-Role", "hq_admin"));
         } else {
             throw new ApiException(401, "Authentication required");
         }
@@ -72,35 +72,32 @@ public class ActorService {
     }
 
     public void requireManager() {
-        requireAny("Inventory manager access required", DomainEnums.UserRole.admin,
-                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
-                DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew);
+        requireAny("Inventory management access required", DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.warehouse_crew);
     }
 
     public void requireAdmin() {
-        requireAny("Administrator access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin);
+        requireAny("Administrator access required", DomainEnums.UserRole.hq_admin);
     }
 
     public void requireWarehouse() {
-        requireAny("Warehouse access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
-                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
+        requireAny("Warehouse access required", DomainEnums.UserRole.hq_admin,
                 DomainEnums.UserRole.warehouse_crew);
     }
 
     public void requireMarshal() {
-        requireAny("Marshal access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
-                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.warehouse_packer,
+        requireAny("Marshal access required", DomainEnums.UserRole.hq_admin,
                 DomainEnums.UserRole.warehouse_crew, DomainEnums.UserRole.marshal);
     }
 
     public void requireMaintenance() {
-        requireAny("Maintenance access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
-                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.maintenance_crew);
+        requireAny("Maintenance access required", DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.maintenance_crew);
     }
 
     public void requirePlanner() {
-        requireAny("Event planner access required", DomainEnums.UserRole.admin, DomainEnums.UserRole.hq_admin,
-                DomainEnums.UserRole.inventory_manager, DomainEnums.UserRole.event_planner);
+        requireAny("Event planner access required", DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.event_planner);
     }
 
     public boolean canAccessFaction(UserAccount actor, String eventType, String faction) {
@@ -127,10 +124,7 @@ public class ActorService {
 
     static DomainEnums.UserRole roleFrom(Set<String> roles) {
         if (roles.contains("inventory_hq_admin")) return DomainEnums.UserRole.hq_admin;
-        if (roles.contains("inventory_admin")) return DomainEnums.UserRole.admin;
-        if (roles.contains("inventory_manager")) return DomainEnums.UserRole.inventory_manager;
         if (roles.contains("inventory_warehouse_crew")) return DomainEnums.UserRole.warehouse_crew;
-        if (roles.contains("inventory_warehouse_packer")) return DomainEnums.UserRole.warehouse_packer;
         if (roles.contains("inventory_marshal")) return DomainEnums.UserRole.marshal;
         if (roles.contains("inventory_event_planner")) return DomainEnums.UserRole.event_planner;
         if (roles.contains("inventory_maintenance_crew")) return DomainEnums.UserRole.maintenance_crew;

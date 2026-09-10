@@ -4,7 +4,7 @@ import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CropIcon from '@mui/icons-material/Crop';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFileUrl, fetchMedia, isApiMediaUrl } from '../../services/apiClient';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 import { ImageCropDialog } from './ImageCropDialog';
 import { MediaImage } from './MediaImage';
 
@@ -31,7 +31,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
   maxImages?: number;
   disabled?: boolean;
 }) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const [editing, setEditing] = useState<{ file: File; index?: number; key?: string }>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -120,7 +120,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
 }
 
 function ImageControls({ label, disabled, onEdit, onRemove }: { label: string; disabled: boolean; onEdit: () => void; onRemove: () => void }) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
       <Button size="small" disabled={disabled} startIcon={<CropIcon />} aria-label={`${t('Bild anpassen', 'Adjust image')} ${label}`} onClick={onEdit}>{t('Anpassen', 'Adjust')}</Button>

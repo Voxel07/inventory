@@ -21,7 +21,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import { EVENT_TYPES, type AssemblyFormData, type Assembly, type Item } from '../../types';
-import { useTranslate } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
     initialData?: Assembly;
@@ -31,7 +31,7 @@ interface Props {
 }
 
 export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props) {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const [formData, setFormData] = useState<AssemblyFormData>({
         name: initialData?.name ?? '',
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],

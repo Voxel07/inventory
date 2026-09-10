@@ -302,7 +302,7 @@ public class OrderService {
             orm.persist(transaction);
         }
         for (var line : lines)
-            line.pickedUpQuantity = line.handedOverQuantity = line.preparedQuantity;
+            line.handedOverQuantity = line.preparedQuantity;
         convertReservationsToCustody(order);
         createHandover(order, actor, idempotencyKey, lines);
     }
@@ -623,8 +623,7 @@ public class OrderService {
     }
 
     private int outstandingQuantity(FactionOrderLine line) {
-        int handedOver = Math.max(line.handedOverQuantity, line.pickedUpQuantity); // pickedUp is the legacy column
-        return Math.max(0, handedOver - line.returnedQuantity - line.consumedQuantity
+        return Math.max(0, line.handedOverQuantity - line.returnedQuantity - line.consumedQuantity
                 - line.damagedQuantity - line.writtenOffQuantity);
     }
 
@@ -636,7 +635,7 @@ public class OrderService {
             if (line.sourceAssembly != null) row.put("sourceAssemblyId", line.sourceAssembly.id);
             row.put("requested", line.requestedQuantity);
             row.put("prepared", line.preparedQuantity);
-            row.put("pickedUp", line.pickedUpQuantity);
+            row.put("handedOver", line.handedOverQuantity);
             row.put("returned", line.returnedQuantity);
             row.put("missing", line.missingQuantity);
             row.put("damaged", line.damagedQuantity);

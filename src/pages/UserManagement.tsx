@@ -3,29 +3,20 @@ import { Alert, Autocomplete, Box, Button, MenuItem, Paper, Stack, TextField, Ty
 import SaveIcon from '@mui/icons-material/Save';
 import { useUpdateUserPermissions, useUsers } from '../hooks/useUsers';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type AccessRole, type User } from '../types';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 
 const factionOptions = [...new Set(EVENT_TYPES.flatMap((eventType) => FACTIONS_BY_EVENT[eventType]))].sort();
 
-function mappedRole(user: User): AccessRole {
-  const role = user.role?.trim().toLowerCase();
-  if (role === 'admin' || role === 'hq_admin') return role;
-  if (role === 'manager' || role === 'inventory_manager') return 'inventory_manager';
-  if (role === 'warehouse_packer' || role === 'warehouse_crew' || role === 'marshal'
-    || role === 'event_planner' || role === 'maintenance_crew' || role === 'read_only') return role;
-  return 'faction_leader';
-}
-
 function UserPermissionsEditor({ user }: { user: User }) {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const save = useUpdateUserPermissions();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
-  const [role, setRole] = useState<AccessRole>(mappedRole(user));
+  const [role, setRole] = useState<AccessRole>(user.role);
   const [factions, setFactions] = useState<string[]>(user.faction ?? []);
 
   useEffect(() => {
-    setRole(mappedRole(user));
+    setRole(user.role);
     setFactions(user.faction ?? []);
   }, [user]);
 
@@ -61,10 +52,7 @@ function UserPermissionsEditor({ user }: { user: User }) {
           onChange={(event) => setRole(event.target.value as AccessRole)}
           sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}
         >
-          <MenuItem value="admin">{t('Administrator', 'Administrator')}</MenuItem>
           <MenuItem value="hq_admin">{t('HQ-Administrator', 'HQ administrator')}</MenuItem>
-          <MenuItem value="inventory_manager">{t('Inventarverwaltung', 'Inventory manager')}</MenuItem>
-          <MenuItem value="warehouse_packer">{t('Lager / Kommissionierung', 'Warehouse packer')}</MenuItem>
           <MenuItem value="warehouse_crew">{t('Lagerteam', 'Warehouse crew')}</MenuItem>
           <MenuItem value="marshal">{t('Marshal', 'Marshal')}</MenuItem>
           <MenuItem value="event_planner">{t('Eventplanung', 'Event planner')}</MenuItem>
@@ -109,7 +97,7 @@ function UserPermissionsEditor({ user }: { user: User }) {
 }
 
 export function UserManagement() {
-  const t = useTranslate();
+  const t = useLocalizedText();
   const { data: users = [], isLoading, isError } = useUsers();
   return (
     <Box>

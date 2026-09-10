@@ -8,7 +8,8 @@ export type ProcurementDeficit = {
   supplier: string;
   classification: 'consumable' | 'asset';
   demand: number;
-  physicalStock: number;
+  onHandStock: number;
+  totalOwnedStock: number;
   availableStock: number;
   reservedStock: number;
   projectedStock: number;

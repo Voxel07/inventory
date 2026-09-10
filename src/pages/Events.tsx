@@ -27,7 +27,7 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { useCreateEventReport, useEventReports } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
-import { useAppLanguage, useTranslate } from '../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 
 type QuantityInputs = Record<string, string>;
@@ -46,7 +46,7 @@ function toQuantities(values: QuantityInputs): Record<string, number> {
 
 export function Events() {
   const navigate = useNavigate();
-  const t = useTranslate();
+  const t = useLocalizedText();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
@@ -75,14 +75,14 @@ export function Events() {
     setPlanned(toInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
     setUsed({});
     setNotes('');
-  }, [eventType, lastCompleted?.id]);
+  }, [eventType, lastCompleted?.id, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
 
   function itemName(itemId: string): string {
     return items?.find((item) => item.id === itemId)?.name ?? itemId;
   }
 
   function stockFor(item: Item) {
-    return calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0).remaining;
+    return calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item).remaining;
   }
 
   function save(status: EventReportStatus) {

@@ -45,11 +45,8 @@ export function useT() {
   return i18next.t.bind(i18next);
 }
 
-/**
- * Backward-compatible shim for code that still passes inline `(de, en)` pairs.
- * Prefer `useT()` with catalog keys for new code.
- */
-export function useTranslate() {
+/** Resolves contextual bilingual copy that does not belong to the shared catalog. */
+export function useLocalizedText() {
   const language = useAppLanguage();
   return (de: string, en: string): string => (language === 'de' ? de : en);
 }

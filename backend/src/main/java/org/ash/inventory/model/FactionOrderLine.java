@@ -18,7 +18,6 @@ public class FactionOrderLine extends BaseEntity {
     @Column(name = "reserved_quantity", nullable = false) public int reservedQuantity;
     @Column(name = "prepared_quantity", nullable = false) public int preparedQuantity;
     @Column(name = "handed_over_quantity", nullable = false) public int handedOverQuantity;
-    @Column(name = "picked_up_quantity", nullable = false) public int pickedUpQuantity;
     @Column(name = "returned_quantity", nullable = false) public int returnedQuantity;
     @Column(name = "consumed_quantity", nullable = false) public int consumedQuantity;
     @Column(name = "missing_quantity", nullable = false) public int missingQuantity;

@@ -39,7 +39,6 @@ public class MediaService {
     @ConfigProperty(name = "inventory.media.s3.region") String region;
     @ConfigProperty(name = "inventory.media.s3.access-key") Optional<String> accessKey;
     @ConfigProperty(name = "inventory.media.s3.secret-key") Optional<String> secretKey;
-    @ConfigProperty(name = "inventory.media.public-base-url") Optional<String> publicBaseUrl;
 
     public record StoredMedia(String key, String url) {}
     public record MediaContent(byte[] bytes, String contentType) {}
@@ -61,21 +60,10 @@ public class MediaService {
         return new MediaContent(readLocal(key), contentType(key));
     }
 
-    /** Resolve URLs returned by older API versions without fetching arbitrary remote hosts. */
+    /** Accept only canonical object keys stored by this application. */
     public String mediaReference(String value) {
-        if (value == null || !value.matches("(?i)^https?://.*")) return value;
-        var bases = new java.util.ArrayList<String>();
-        publicBaseUrl.filter(base -> !base.isBlank()).ifPresent(bases::add);
-        bases.add(endpoint.replaceAll("/+$", "") + "/" + bucket);
-        for (String base : bases) {
-            String prefix = base.replaceAll("/+$", "") + "/";
-            if (value.startsWith(prefix)) {
-                String rawKey = URI.create(value).getRawPath().substring(URI.create(prefix).getRawPath().length());
-                String key = java.net.URLDecoder.decode(rawKey.replace("+", "%2B"), StandardCharsets.UTF_8);
-                validateKey(key);
-                return key;
-            }
-        }
+        if (value == null) return null;
+        validateKey(value);
         return value;
     }
 

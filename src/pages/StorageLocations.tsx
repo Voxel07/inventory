@@ -45,13 +45,14 @@ import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
-import { useTranslate } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 
 export function StorageLocations() {
-    const t = useTranslate();
+    const t = useLocalizedText();
     const navigate = useNavigate();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const theme = useTheme();
@@ -111,7 +112,7 @@ export function StorageLocations() {
     // Enriched items with checkouts and damage calculations
     const enrichedStoredItems = useMemo(() => {
         return storedItems.map((item) => {
-            const { totalStock, remaining, checkedOut } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0);
+            const { totalStock, remaining, checkedOut } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
             return { item, totalStock, remaining, checkedOut };
         });
     }, [storedItems, transactions, damageReports]);
@@ -589,22 +590,20 @@ export function StorageLocations() {
             </Dialog>
 
             {/* Delete Confirmation */}
-            <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-                <DialogTitle>{t('Lagerort löschen?', 'Delete storage location?')}</DialogTitle>
-                <DialogContent>
-                    <Typography>
-                        {t('Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this storage location? Linked items will lose their location reference. This cannot be undone.')}
-                    </Typography>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDeleteConfirmOpen(false)} color="inherit">
-                        {t('Abbrechen', 'Cancel')}
-                    </Button>
-                    <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteMutation.isPending}>
-                        {t('Löschen', 'Delete')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <ConfirmDialog
+                open={deleteConfirmOpen}
+                title={t('Lagerort löschen', 'Delete storage location')}
+                onClose={() => setDeleteConfirmOpen(false)}
+                onConfirm={handleDeleteConfirm}
+                pending={deleteMutation.isPending}
+                actionLabel={t('Löschen', 'Delete')}
+                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionColor="error"
+                message={t(
+                    'Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.',
+                    'Are you sure you want to delete this storage location? Linked items will lose their location reference. This cannot be undone.',
+                )}
+            />
         </Box>
     );
 }
