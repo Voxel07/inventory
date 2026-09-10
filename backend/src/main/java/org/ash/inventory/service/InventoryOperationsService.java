@@ -95,6 +95,12 @@ public class InventoryOperationsService {
     }
 
     public StockState stock(Item item) {
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            var assets = orm.assetsForItem(item);
+            if (!assets.isEmpty()) {
+                return calculateAssetStock(assets);
+            }
+        }
         return stock(item, orm.transactionTotals(item), orm.unresolvedDamageQuantity(item),
                 orm.activeReservationQuantity(item));
     }
@@ -104,16 +110,65 @@ public class InventoryOperationsService {
         var transactionTotals = orm.transactionTotals(itemIds);
         var damageQuantities = orm.unresolvedDamageQuantities(itemIds);
         var reservationQuantities = orm.activeReservationQuantities(itemIds);
+        var serializedAssets = orm.assetsForItems(items.stream()
+                .filter(i -> i.trackingMode == DomainEnums.TrackingMode.serialized)
+                .map(i -> i.id).toList());
+        var assetsByItem = new LinkedHashMap<UUID, List<org.ash.inventory.model.AssetInstance>>();
+        for (var asset : serializedAssets) {
+            assetsByItem.computeIfAbsent(asset.item.id, ignored -> new ArrayList<>()).add(asset);
+        }
+
         var result = new LinkedHashMap<UUID, StockState>();
         for (var item : items) {
-            result.put(item.id, stock(
-                    item,
-                    transactionTotals.getOrDefault(item.id, Map.of()),
-                    Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
-                    Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L))
-            ));
+            if (item.trackingMode == DomainEnums.TrackingMode.serialized && assetsByItem.containsKey(item.id)) {
+                result.put(item.id, calculateAssetStock(assetsByItem.get(item.id)));
+            } else {
+                result.put(item.id, stock(
+                        item,
+                        transactionTotals.getOrDefault(item.id, Map.of()),
+                        Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
+                        Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L))
+                ));
+            }
         }
         return result;
+    }
+
+    private StockState calculateAssetStock(List<org.ash.inventory.model.AssetInstance> assets) {
+        int onHand = 0;
+        int checkedOut = 0;
+        int damaged = 0;
+        int reserved = 0;
+        int available = 0;
+        for (var asset : assets) {
+            boolean isDamaged = asset.availabilityStatus == DomainEnums.AssetState.damaged
+                    || asset.availabilityStatus == DomainEnums.AssetState.in_repair
+                    || asset.conditionStatus == DomainEnums.ConditionStatus.damaged
+                    || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe;
+            boolean isCheckedOut = asset.availabilityStatus == DomainEnums.AssetState.in_custody
+                    || asset.availabilityStatus == DomainEnums.AssetState.in_field;
+            boolean isReserved = asset.availabilityStatus == DomainEnums.AssetState.reserved
+                    || asset.availabilityStatus == DomainEnums.AssetState.staged;
+            boolean isLostOrWrittenOff = asset.availabilityStatus == DomainEnums.AssetState.lost
+                    || asset.availabilityStatus == DomainEnums.AssetState.written_off
+                    || asset.conditionStatus == DomainEnums.ConditionStatus.lost;
+
+            if (isLostOrWrittenOff) continue;
+
+            if (isCheckedOut) {
+                checkedOut++;
+            } else {
+                onHand++;
+                if (isDamaged) {
+                    damaged++;
+                } else if (isReserved) {
+                    reserved++;
+                } else if (asset.availabilityStatus == DomainEnums.AssetState.available) {
+                    available++;
+                }
+            }
+        }
+        return new StockState(onHand, checkedOut, damaged, reserved, available);
     }
 
     private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved) {

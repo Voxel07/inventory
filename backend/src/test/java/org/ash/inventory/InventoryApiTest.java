@@ -44,6 +44,46 @@ class InventoryApiTest {
     }
 
     @Test
+    void serializedItemCreationProvisionsAssetsAndBlocksTrackingModeChangeWithStock() {
+        // 1. Create a serialized item with amount = 3
+        String itemId = request().body(Map.of("sku", "GEN-HONDA-01", "name", "Honda 2kW Generator",
+                        "category", "Power", "amount", 3, "minStock", 1, "value", 1200, "trackingMode", "serialized"))
+                .post("/api/items").then().statusCode(200)
+                .body("stock.totalOwned", org.hamcrest.Matchers.equalTo(3))
+                .body("stock.available", org.hamcrest.Matchers.equalTo(3))
+                .extract().path("id");
+
+        // 2. Verify 3 asset instances were created
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("size()", org.hamcrest.Matchers.equalTo(3))
+                .body("[0].assetCode", org.hamcrest.Matchers.equalTo("GEN-HONDA-01-001"))
+                .body("[1].assetCode", org.hamcrest.Matchers.equalTo("GEN-HONDA-01-002"))
+                .body("[2].assetCode", org.hamcrest.Matchers.equalTo("GEN-HONDA-01-003"));
+
+        // 3. Changing tracking mode to bulk must be rejected because item has stock and assets
+        request().body(Map.of("name", "Honda 2kW Generator", "category", "Power", "trackingMode", "bulk"))
+                .patch("/api/items/" + itemId).then().statusCode(400);
+
+        // 4. Batch add 2 more assets
+        request().body(Map.of("batchCount", 2, "codePrefix", "GEN-HONDA-01-"))
+                .post("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("size()", org.hamcrest.Matchers.equalTo(2));
+
+        // 5. Verify total owned stock is now 5
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.totalOwned", org.hamcrest.Matchers.equalTo(5))
+                .body("stock.available", org.hamcrest.Matchers.equalTo(5));
+
+        // 6. Create bulk item with stock, then verify attempting to switch to serialized is rejected
+        String bulkId = request().body(Map.of("sku", "BULK-BB-01", "name", "BBs 0.28g",
+                        "category", "Ammo", "amount", 10, "minStock", 2, "value", 15, "trackingMode", "bulk"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+
+        request().body(Map.of("name", "BBs 0.28g", "category", "Ammo", "trackingMode", "serialized"))
+                .patch("/api/items/" + bulkId).then().statusCode(400);
+    }
+
+    @Test
     void expiredOutboxLeasesAreDeadLetteredAndPublishedAcksAreBatched() {
         java.util.UUID expiredId = QuarkusTransaction.requiringNew().call(() -> {
             var event = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.parse("2000-01-01T00:00:00Z"));

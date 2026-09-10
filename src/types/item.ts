@@ -104,4 +104,41 @@ export interface ItemFormData {
   maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
 }
 
+export interface AssetInstance {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  itemId: string;
+  assetCode: string;
+  serialNumber?: string;
+  manufacturer?: string;
+  model?: string;
+  conditionStatus: 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
+  availabilityStatus: 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+  serviceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
+  operatingHours?: number;
+  currentLocationId?: string;
+  currentLocationName?: string;
+  currentCustodianId?: string;
+  currentCustodianName?: string;
+  notes?: string;
+  active: boolean;
+}
+
+export interface AssetInstanceInput {
+  assetCode?: string;
+  serialNumber?: string;
+  manufacturer?: string;
+  model?: string;
+  conditionStatus?: 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
+  availabilityStatus?: 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+  currentLocationId?: string;
+  currentCustodianId?: string;
+  operatingHours?: number;
+  notes?: string;
+  batchCount?: number;
+  codePrefix?: string;
+  startNumber?: number;
+}
+
 import type { EventType } from './event';

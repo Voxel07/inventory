@@ -50,6 +50,31 @@ public class CatalogResource {
     @PATCH @Path("/items/{id}") public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") public Response deleteItem(@PathParam("id") UUID id) { actor.requireManager(); service.retireItem(id); return Response.noContent().build(); }
 
+    @GET @Path("/items/{id}/assets") @Transactional
+    public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id) {
+        actor.current();
+        return mapper.assets(service.getAssets(id));
+    }
+
+    @POST @Path("/items/{id}/assets") @Transactional
+    public List<ApiResponses.AssetInstanceResponse> createAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
+        actor.requireManager();
+        return mapper.assets(service.createAssets(id, input));
+    }
+
+    @PATCH @Path("/items/{id}/assets/{assetId}") @Transactional
+    public ApiResponses.AssetInstanceResponse updateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId, @Valid ApiModels.AssetInstanceInput input) {
+        actor.requireManager();
+        return mapper.asset(service.updateAsset(id, assetId, input));
+    }
+
+    @DELETE @Path("/items/{id}/assets/{assetId}") @Transactional
+    public Response deleteAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId) {
+        actor.requireManager();
+        service.deleteAsset(id, assetId);
+        return Response.noContent().build();
+    }
+
     @GET @Path("/storage-locations") @Transactional
     public Response locations() { actor.current(); return catalogResponse(responses.locations()); }
     @GET @Path("/storage-locations/{id}") @Transactional

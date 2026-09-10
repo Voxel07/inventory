@@ -77,4 +77,10 @@ public final class ApiModels {
     public record DevLoginInput(@NotBlank String email, String password) {}
     public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type, @NotNull Map<String, Object> payload, Instant localTimestamp) {}
     public record SyncBatch(@NotEmpty List<SyncAction> actions) {}
+
+    public record AssetInstanceInput(
+            String assetCode, String serialNumber, String manufacturer, String model,
+            DomainEnums.ConditionStatus conditionStatus, DomainEnums.AssetState availabilityStatus,
+            UUID currentLocationId, UUID currentCustodianId, BigDecimal operatingHours, String notes,
+            Integer batchCount, String codePrefix, Integer startNumber) {}
 }

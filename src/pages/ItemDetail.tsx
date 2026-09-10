@@ -49,6 +49,7 @@ import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
+import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -444,6 +445,13 @@ export function ItemDetail() {
                                 </Box>
                             </Box>
                         </Paper>
+                    </Grid>
+                )}
+
+                {/* Serialized Item Drill-down & Asset Management */}
+                {item.trackingMode === 'serialized' && (
+                    <Grid size={12}>
+                        <AssetInstancesList item={item} />
                     </Grid>
                 )}
 

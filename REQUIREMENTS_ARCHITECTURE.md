@@ -42,10 +42,12 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 |---|---|---:|---|
 | CAT-01 | Maintain items, images, categories, event tags, hints, value, and storage location | Implemented | `CatalogResource`, `CatalogService`, `Item`, Items UI |
 | CAT-02 | Maintain assemblies with fixed component quantities | Implemented | `Assembly`, catalog service, Assemblies UI |
+| CAT-03 | Consolidated serialized item tracking: single parent catalog entry with aggregate stock, min-stock alerting, asset ID provisioning, and instance drill-down | Planned | `CatalogService`, `AssetInstance`, Items UI |
 | LOC-01 | Maintain hierarchical/georeferenced storage and pickup locations | Implemented | `StorageLocation`, map components, pickup map dialog |
 | INV-01 | Distinguish total owned, on-hand, checked-out, damaged, reserved, and available stock | Implemented | `InventoryOperationsService.StockState`, `StockDto` |
 | INV-02 | Block over-allocation and unsafe/overdue checkout | Implemented | locked transaction paths and maintenance guard |
 | INV-03 | Require event and faction context for every direct checkout and retain that context on the immutable transaction | Implemented | `TransactionForm`, assembly checkout, `InventoryOperationsService`, `StockTransaction` |
+| INV-04 | Enforce tracking mode immutability once stock/movements exist; prohibit quantity-only mutations on serialized assets and support faction batching | Planned | `CatalogService`, `InventoryOperationsService`, `OrderService` |
 | ORD-01 | Support `draft → submitted → preparing → ready → picked_up → partially_returned/returned → closed` plus cancellation | Implemented | `OrderService`, order resources and hooks |
 | ORD-02 | Commission individual items and assemblies on desktop and mobile | Implemented | `OrderPickListTable` |
 | ORD-03 | Reserve prepared quantities and atomically convert them to custody on pickup | Implemented | reservations, order service, stock transactions |
@@ -124,11 +126,35 @@ Invariants:
 - `available` is the only quantity allocatable to a new order.
 - Damage repair changes condition, not physical quantity.
 - A write-off is the explicit operation that reduces owned stock.
-- Serialized items require asset-specific transactions; quantity-only commands are rejected.
+- Serialized items require asset-specific transactions; quantity-only stock movements and order handovers are rejected.
 - Direct checkout commands require an event and faction snapshot. Order checkout and return transactions derive the same snapshot from their source order.
 - A return associated with a faction order must use the order reconciliation use case; the generic transaction endpoint rejects order-linked stock changes.
 
 The item collection is intentionally **not server-cached** because it carries dynamic stock. Its stock projection is computed with three grouped queries—transaction totals, unresolved damage, and active reservations—rather than per-item queries. Stable catalog collections may use server caching and ETags.
+
+### 5.1 Serialized inventory and tracking mode rules
+
+1. **Tracking mode transition guard (immutability with stock):**
+   - Changing `trackingMode` from `bulk` or `lot_tracked` to `serialized` (or vice-versa) on an item that has existing stock (`baseAmount > 0` or current stock ledger entries) is **strictly prohibited**.
+   - Attempting to switch an existing item with stock to serialized mode must be blocked at both the API (`CatalogService`) and UI (`ItemForm`) layers. Mutating existing bulk stock to serialized without registered asset IDs produces orphaned stock and breaks the physical identity invariant.
+   - An item may only be configured as serialized at creation or when current and historical stock is zero, unless an explicit guided migration tool is used to register individual physical asset IDs for all existing units.
+
+2. **Parent catalog aggregation and minimum stock:**
+   - To keep the catalog concise, serialized equipment (e.g., 5 power generators or 50 walkie-talkies) exists as a **single consolidated parent catalog item** rather than cluttering the catalog with separate rows per physical unit.
+   - The parent item carries aggregate inventory metrics (`totalOwned`, `onHand`, `available`) alongside threshold alerting (`minStock`). For example, an aggregate power generator item tracks 5 total units and alerts when available operational units fall below `minStock = 2`.
+   - Creating serialized stock requires defining or generating asset identifiers rather than assigning an anonymous scalar count. Minimum stock remains an aggregate threshold for the equipment model, not a per-asset flag.
+
+3. **Sub-group asset instance drill-down:**
+   - Selecting a serialized item in the catalog opens a detailed drill-down view of its child physical units (`AssetInstance`).
+   - Each unit in the sub-group displays:
+     - Canonical Asset ID / QR code (e.g., `GEN-001` .. `GEN-005` or `WT-001` .. `WT-050`) and optional manufacturer serial number;
+     - Current operational and availability state (available, reserved, checked out / in custody, in repair, maintenance due, damaged);
+     - Current storage location, operating hours, and active custodian.
+   - The UI provides batch generation (e.g., prefix + sequential numbering) and manual barcode/QR scanning to easily register multiple asset IDs upon item creation or intake.
+
+4. **Event allocation and faction distribution batching:**
+   - High-value serialized items often need to be distributed in subsets to multiple factions during events (e.g., 50 walkie-talkies partitioned into batches of 10 for different faction headquarters).
+   - Order commissioning and custody handovers must support selecting or assigning batches of specific serialized assets to faction orders, while maintaining 100% individual asset identity and return reconciliation for each handed-over unit.
 
 ## 6. Authentication and authorization
 
@@ -219,3 +245,4 @@ These are not compatibility work and are not represented as already implemented:
 3. Add browser-level tests for mobile commissioning, offline filtered reads, and the traceability panel.
 4. Validate backup restore, outbox recovery, and offline-conflict workflows in a production-like environment.
 5. Add route-level code splitting to reduce the largest frontend bundle.
+6. Refactor `TrackingMode` and serialized inventory: prohibit tracking mode mutation on items with stock, consolidate serialized assets into parent catalog entries with instance drill-down, support asset ID batch registration, and enable faction batch distribution.

@@ -263,4 +263,25 @@ public final class ApiResponses {
             String notes,
             Instant created
     ) {}
+
+    public record AssetInstanceResponse(
+            UUID id,
+            Instant createdAt,
+            Instant updatedAt,
+            UUID itemId,
+            String assetCode,
+            String serialNumber,
+            String manufacturer,
+            String model,
+            String conditionStatus,
+            String availabilityStatus,
+            String serviceStatus,
+            BigDecimal operatingHours,
+            String currentLocationId,
+            String currentLocationName,
+            String currentCustodianId,
+            String currentCustodianName,
+            String notes,
+            boolean active
+    ) {}
 }

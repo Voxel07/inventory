@@ -82,6 +82,7 @@ export function ItemForm({
 
     const createLoc = useCreateStorageLocation();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
+    const hasStock = Boolean(initialData && ((initialData.stock?.totalOwned ?? initialData.amount ?? 0) > 0));
 
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +127,7 @@ export function ItemForm({
             imageFiles: images.files,
             removeImages: images.removed,
             imageReplacements: images.replacements,
-            amount: formData.trackingMode === 'serialized' ? 0 : parseOptional(numericInputs.amount),
+            amount: parseOptional(numericInputs.amount),
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
@@ -139,8 +140,7 @@ export function ItemForm({
         onSubmit(submitData);
     }
 
-    const amountValid = formData.trackingMode === 'serialized'
-        || !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const amountValid = !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
     const containerSizeValid = !isBulkPackage
         || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
@@ -199,6 +199,8 @@ export function ItemForm({
                         fullWidth
                         label={t('Bestandsführung', 'Tracking mode')}
                         value={formData.trackingMode ?? 'bulk'}
+                        disabled={hasStock}
+                        helperText={hasStock ? t('Bestandsführung kann bei Artikeln mit Bestand nicht geändert werden.', 'Tracking mode cannot be changed for items with existing stock.') : undefined}
                         onChange={(event) => {
                             const trackingMode = event.target.value as ItemFormData['trackingMode'];
                             setFormData((prev) => ({
@@ -243,11 +245,10 @@ export function ItemForm({
                         type="number"
                         value={numericInputs.amount}
                         onChange={handleNumberChange('amount')}
-                        required={formData.trackingMode !== 'serialized'}
-                        disabled={formData.trackingMode === 'serialized'}
+                        required
                         fullWidth
                         helperText={formData.trackingMode === 'serialized'
-                            ? t('Bestand wird über einzeln identifizierte Assets geführt.', 'Stock is registered through individually identified assets.')
+                            ? t('Erstellt automatisch die entsprechende Anzahl an Einzelgeräten/Assets (z. B. SKU-001..).', 'Automatically creates the corresponding number of asset instances (e.g. SKU-001..).')
                             : isBulkPackage ? t('Die Menge wird als Anzahl vollständiger Boxen gespeichert', 'The amount is stored as the number of full boxes') : undefined}
                         slotProps={{ htmlInput: { min: 0 } }}
                     />

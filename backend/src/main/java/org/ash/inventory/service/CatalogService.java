@@ -54,6 +54,19 @@ public class CatalogService {
         apply(item, input);
         orm.persist(item);
         persistImages(item, input.images());
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.baseAmount > 0) {
+            for (int i = 1; i <= item.baseAmount; i++) {
+                var asset = new AssetInstance();
+                asset.item = item;
+                asset.assetCode = String.format("%s-%03d", item.sku, i);
+                asset.availabilityStatus = DomainEnums.AssetState.available;
+                asset.conditionStatus = DomainEnums.ConditionStatus.good;
+                asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
+                asset.currentLocation = item.storageLocation;
+                asset.active = true;
+                orm.persist(asset);
+            }
+        }
         if (item.baseAmount > 0) {
             var tx = new StockTransaction();
             tx.item = item;
@@ -76,6 +89,13 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
+        if (input.trackingMode() != null && input.trackingMode() != item.trackingMode) {
+            long assetCount = orm.countAssets(item);
+            long txCount = orm.countTransactions(item);
+            if (item.baseAmount > 0 || assetCount > 0 || txCount > 0) {
+                throw ApiException.badRequest("Cannot change tracking mode for an item with existing stock or transaction history");
+            }
+        }
         apply(item, input);
         if (input.images() != null) {
             orm.deleteItemImages(item);
@@ -111,9 +131,6 @@ public class CatalogService {
             throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
         }
         if (input.amount() != null) item.baseAmount = input.amount();
-        if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.baseAmount > 0) {
-            throw ApiException.badRequest("Serialized stock must be created as individually identified asset instances");
-        }
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
         item.storageLocation = input.storageLocation() == null ? null : required(StorageLocation.class, input.storageLocation(), "Storage location");
@@ -301,6 +318,123 @@ public class CatalogService {
             image.displayOrder = order++;
             orm.persist(image);
         }
+    }
+
+    public List<AssetInstance> getAssets(UUID itemId) {
+        var item = required(Item.class, itemId, "Item");
+        return orm.assetInstances(item);
+    }
+
+    @Transactional
+    public List<AssetInstance> createAssets(UUID itemId, ApiModels.AssetInstanceInput input) {
+        var item = locked(Item.class, itemId, "Item");
+        var created = new ArrayList<AssetInstance>();
+        int batchCount = input.batchCount() != null && input.batchCount() > 1 ? input.batchCount() : 1;
+        String prefix = input.codePrefix() != null && !input.codePrefix().isBlank() ? input.codePrefix().trim() : item.sku + "-";
+        int startNum = input.startNumber() != null && input.startNumber() > 0 ? input.startNumber() : 1;
+
+        if (batchCount > 1) {
+            long existingCount = orm.countAssets(item);
+            int currentSeq = Math.max(startNum, (int) existingCount + 1);
+            for (int i = 0; i < batchCount; i++) {
+                var asset = new AssetInstance();
+                asset.item = item;
+                String code = String.format("%s%03d", prefix, currentSeq + i);
+                if (orm.assetCodeExists(code)) {
+                    code = String.format("%s%03d-%s", prefix, currentSeq + i, UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT));
+                }
+                asset.assetCode = code;
+                asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
+                asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
+                asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
+                asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : required(StorageLocation.class, input.currentLocationId(), "Storage location");
+                asset.active = true;
+                orm.persist(asset);
+                created.add(asset);
+            }
+        } else {
+            var asset = new AssetInstance();
+            asset.item = item;
+            String code = input.assetCode();
+            if (code == null || code.isBlank()) {
+                long existingCount = orm.countAssets(item);
+                code = String.format("%s%03d", prefix, existingCount + 1);
+                if (orm.assetCodeExists(code)) {
+                    code = String.format("%s%03d-%s", prefix, existingCount + 1, UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT));
+                }
+            } else if (orm.assetCodeExists(code)) {
+                throw ApiException.conflict("Asset code " + code + " already exists");
+            }
+            asset.assetCode = code.trim().toUpperCase(Locale.ROOT);
+            asset.serialNumber = input.serialNumber();
+            asset.manufacturer = input.manufacturer();
+            asset.model = input.model();
+            asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
+            asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
+            asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
+            asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : required(StorageLocation.class, input.currentLocationId(), "Storage location");
+            if (input.currentCustodianId() != null) {
+                asset.currentCustodian = required(UserAccount.class, input.currentCustodianId(), "User");
+            }
+            if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
+            asset.notes = input.notes();
+            asset.active = true;
+            orm.persist(asset);
+            created.add(asset);
+        }
+
+        var tx = new StockTransaction();
+        tx.item = item;
+        tx.user = actorService.current();
+        tx.type = DomainEnums.TransactionType.added;
+        tx.quantity = created.size();
+        tx.reason = "Asset registration";
+        tx.notes = "Added " + created.size() + " serialized asset(s)";
+        tx.idempotencyKey = UUID.randomUUID();
+        tx.occurredAt = Instant.now();
+        orm.persist(tx);
+
+        catalogChanged("items", item.id);
+        events.record("asset.created", "item", item.id, actorService.current().id, null,
+                Map.of("itemId", item.id.toString(), "count", created.size()));
+        return created;
+    }
+
+    @Transactional
+    public AssetInstance updateAsset(UUID itemId, UUID assetId, ApiModels.AssetInstanceInput input) {
+        var item = locked(Item.class, itemId, "Item");
+        var asset = locked(AssetInstance.class, assetId, "Asset");
+        if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
+        if (input.assetCode() != null && !input.assetCode().isBlank() && !input.assetCode().equalsIgnoreCase(asset.assetCode)) {
+            if (orm.assetCodeExists(input.assetCode())) throw ApiException.conflict("Asset code already exists");
+            asset.assetCode = input.assetCode().trim().toUpperCase(Locale.ROOT);
+        }
+        if (input.serialNumber() != null) asset.serialNumber = input.serialNumber().trim();
+        if (input.conditionStatus() != null) asset.conditionStatus = input.conditionStatus();
+        if (input.availabilityStatus() != null) asset.availabilityStatus = input.availabilityStatus();
+        if (input.currentLocationId() != null) {
+            asset.currentLocation = required(StorageLocation.class, input.currentLocationId(), "Storage location");
+        }
+        if (input.currentCustodianId() != null) {
+            asset.currentCustodian = required(UserAccount.class, input.currentCustodianId(), "User");
+        }
+        if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
+        if (input.notes() != null) asset.notes = input.notes();
+        catalogChanged("items", item.id);
+        events.record("asset.updated", "asset", asset.id, actorService.current().id, null,
+                Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
+        return asset;
+    }
+
+    @Transactional
+    public void deleteAsset(UUID itemId, UUID assetId) {
+        var item = locked(Item.class, itemId, "Item");
+        var asset = locked(AssetInstance.class, assetId, "Asset");
+        if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
+        asset.active = false;
+        catalogChanged("items", item.id);
+        events.record("asset.retired", "asset", asset.id, actorService.current().id, null,
+                Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
     }
 
     private String generateSku(String name) {

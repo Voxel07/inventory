@@ -1,4 +1,4 @@
-import type { Item, ItemFormData } from '../types';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
 import { apiRequest, uploadMedia } from './apiClient';
 import { prepareItemImage } from '../utils/prepareItemImage';
 import { createCrudResourceApi } from './resourceFactory';
@@ -48,3 +48,27 @@ export const createItem = itemApi.create;
 export const updateItem = itemApi.update;
 export const deleteItem = itemApi.delete;
 export const deleteItems = itemApi.deleteMany;
+
+export async function getItemAssets(itemId: string): Promise<AssetInstance[]> {
+  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`);
+}
+
+export async function createItemAssets(itemId: string, input: AssetInstanceInput): Promise<AssetInstance[]> {
+  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function updateItemAsset(itemId: string, assetId: string, input: AssetInstanceInput): Promise<AssetInstance> {
+  return apiRequest<AssetInstance>(`/api/items/${itemId}/assets/${assetId}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export async function deleteItemAsset(itemId: string, assetId: string): Promise<void> {
+  await apiRequest<void>(`/api/items/${itemId}/assets/${assetId}`, {
+    method: 'DELETE',
+  });
+}

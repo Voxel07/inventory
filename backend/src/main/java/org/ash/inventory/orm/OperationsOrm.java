@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.FactionOrderLine;
@@ -186,4 +187,15 @@ public class OperationsOrm {
     public DamageReport findLockedDamage(UUID id) { return entityManager.find(DamageReport.class, id, LockModeType.PESSIMISTIC_WRITE); }
     public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
     public void persist(Object entity) { entityManager.persist(entity); }
+
+    public List<AssetInstance> assetsForItem(Item item) {
+        return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true", AssetInstance.class)
+                .setParameter("item", item).getResultList();
+    }
+
+    public List<AssetInstance> assetsForItems(Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return List.of();
+        return entityManager.createQuery("from AssetInstance a where a.item.id in :itemIds and a.active = true", AssetInstance.class)
+                .setParameter("itemIds", itemIds).getResultList();
+    }
 }

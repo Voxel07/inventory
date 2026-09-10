@@ -4,12 +4,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItem;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.ItemImage;
+import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StorageLocation;
 
 import java.time.LocalDate;
@@ -99,5 +101,34 @@ public class CatalogOrm {
     public long countItemsAt(StorageLocation location) {
         return entityManager.createQuery("select count(i) from Item i where i.storageLocation = :location", Long.class)
                 .setParameter("location", location).getSingleResult();
+    }
+
+    public List<AssetInstance> assetInstances(Item item) {
+        return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true order by a.assetCode asc", AssetInstance.class)
+                .setParameter("item", item).getResultList();
+    }
+
+    public long countAssets(Item item) {
+        return entityManager.createQuery("select count(a) from AssetInstance a where a.item = :item and a.active = true", Long.class)
+                .setParameter("item", item).getSingleResult();
+    }
+
+    public long countTransactions(Item item) {
+        return entityManager.createQuery("select count(tx) from StockTransaction tx where tx.item = :item", Long.class)
+                .setParameter("item", item).getSingleResult();
+    }
+
+    public AssetInstance findAssetByCode(String code) {
+        if (code == null || code.isBlank()) return null;
+        return entityManager.createQuery("from AssetInstance a where lower(a.assetCode) = :code and a.active = true", AssetInstance.class)
+                .setParameter("code", code.trim().toLowerCase(Locale.ROOT))
+                .getResultStream().findFirst().orElse(null);
+    }
+
+    public boolean assetCodeExists(String code) {
+        if (code == null || code.isBlank()) return false;
+        return entityManager.createQuery("select count(a) from AssetInstance a where lower(a.assetCode) = :code", Long.class)
+                .setParameter("code", code.trim().toLowerCase(Locale.ROOT))
+                .getSingleResult() > 0;
     }
 }

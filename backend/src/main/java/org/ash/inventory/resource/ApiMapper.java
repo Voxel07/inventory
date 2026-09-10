@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
@@ -431,5 +432,32 @@ public class ApiMapper {
         result.put("factionId", value.faction.id.toString());
         result.put("status", value.status.name());
         return result;
+    }
+
+    public ApiResponses.AssetInstanceResponse asset(AssetInstance value) {
+        return new ApiResponses.AssetInstanceResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.item.id,
+                value.assetCode,
+                value.serialNumber,
+                value.manufacturer,
+                value.model,
+                value.conditionStatus == null ? "good" : value.conditionStatus.name(),
+                value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
+                value.serviceStatus == null ? null : value.serviceStatus.name(),
+                value.operatingHours,
+                value.currentLocation == null ? null : value.currentLocation.id.toString(),
+                value.currentLocation == null ? null : value.currentLocation.name,
+                value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
+                value.currentCustodian == null ? null : value.currentCustodian.name,
+                value.notes,
+                value.active
+        );
+    }
+
+    public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
+        return values.stream().map(this::asset).toList();
     }
 }

@@ -22,6 +22,7 @@ import {
     Card,
     CardContent,
     Checkbox,
+    Chip,
     IconButton,
     ListItemIcon,
     Menu,
@@ -249,7 +250,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <Box sx={{ minWidth: 0 }}>
                                                 <Typography sx={{ fontWeight: 700, fontSize: { xs: '0.85rem', sm: '0.95rem' }, lineHeight: 1.15 }} noWrap>{item.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category || t('Ohne Kategorie', 'No category')}</Typography>
+                                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category || t('Ohne Kategorie', 'No category')}</Typography>
+                                                    {item.trackingMode === 'serialized' && (
+                                                        <Chip size="small" label={t('SN', 'SN')} variant="outlined" color="info" sx={{ height: 16, fontSize: '0.62rem', px: 0.2 }} />
+                                                    )}
+                                                </Stack>
                                             </Box>
                                             <IconButton
                                                 size="small"
@@ -295,7 +301,12 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                         sx={{ p: 0.5, ml: -0.5 }}
                                     />
                                     <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                                        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                                            <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                                            {item.trackingMode === 'serialized' && (
+                                                <Chip size="small" label={t('Einzelgeräte', 'Serialized')} variant="outlined" color="info" sx={{ height: 18, fontSize: '0.65rem' }} />
+                                            )}
+                                        </Box>
                                         <Typography variant="caption" color="text.secondary">{item.category || t('Ohne Kategorie', 'No category')}</Typography>
                                     </Box>
                                     <IconButton
@@ -393,7 +404,14 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
                                             slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
                                         />
                                     </TableCell>
-                                    <TableCell>{item.name}</TableCell>
+                                    <TableCell>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography component="span" variant="body2" sx={{ fontWeight: 500 }}>{item.name}</Typography>
+                                            {item.trackingMode === 'serialized' && (
+                                                <Chip size="small" label={t('Einzelgeräte', 'Serialized')} variant="outlined" color="info" sx={{ height: 20, fontSize: '0.7rem' }} />
+                                            )}
+                                        </Box>
+                                    </TableCell>
                                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                         {item.category}{item.subcategory ? ` · ${item.subcategory}` : ''}
                                     </TableCell>
