@@ -25,6 +25,10 @@ import {
     Tooltip,
     Autocomplete,
     Stack,
+    Card,
+    CardContent,
+    useTheme,
+    useMediaQuery,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -53,6 +57,8 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
 
 export function AssemblyDetail() {
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { assemblyId } = useParams<{ assemblyId: string }>();
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
@@ -341,6 +347,76 @@ export function AssemblyDetail() {
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <Typography color="text.secondary">{t('Keine Komponenten in dieser Baugruppe', 'No components in this assembly')}</Typography>
                 </Paper>
+            ) : isMobile ? (
+                <Stack spacing={1.5}>
+                    {assemblyItems.map((item) => {
+                        const qty = assembly.itemQuantities?.[item.id] ?? 1;
+                        const available = stockInfo.get(item.id) ?? 0;
+                        const isInsufficient = available < qty;
+                        const loc = item.expand?.storageLocation;
+                        const locStr = loc
+                            ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
+                            : item.storageLocation || '—';
+
+                        return (
+                            <Card
+                                key={item.id}
+                                variant="outlined"
+                                onClick={() => navigate(`/items/${item.id}`)}
+                                sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }}
+                            >
+                                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                                        <Box sx={{ minWidth: 0, mr: 1 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                                                {isInsufficient && <WarningAmberIcon fontSize="small" color="warning" />}
+                                            </Box>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {item.category ? `${item.category} · ` : ''}{locStr}
+                                            </Typography>
+                                        </Box>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                            <Chip
+                                                label={formatStatus(item.status)}
+                                                color={statusColors[item.status] ?? 'default'}
+                                                size="small"
+                                            />
+                                            <TooltipButton
+                                                variant="icon"
+                                                tooltipText={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')}
+                                                icon={<DeleteIcon />}
+                                                size="small"
+                                                color="error"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveItem(item.id);
+                                                }}
+                                            />
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                                        <Stack direction="row" spacing={1}>
+                                            <Chip
+                                                size="small"
+                                                variant="outlined"
+                                                label={`${t('Menge', 'Qty')}: ${qty}`}
+                                            />
+                                            <Chip
+                                                size="small"
+                                                color={isInsufficient ? 'error' : 'success'}
+                                                label={`${t('Verfügbar', 'Available')}: ${available}`}
+                                            />
+                                        </Stack>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            {((item.value ?? 0) * qty).toFixed(2)} €
+                                        </Typography>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </Stack>
             ) : (
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                     <Table size="small">
@@ -424,7 +500,7 @@ export function AssemblyDetail() {
             )}
 
             {/* Checkout Dialog */}
-            <Dialog open={checkoutOpen} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={checkoutOpen} fullScreen={isMobile} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Baugruppe ausleihen', 'Check out assembly')}</DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{ mb: 2 }}>
@@ -475,7 +551,7 @@ export function AssemblyDetail() {
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Baugruppe bearbeiten', 'Edit assembly')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <AssemblyForm

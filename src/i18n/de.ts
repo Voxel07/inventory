@@ -41,6 +41,18 @@ export default {
     openOrder: 'Bestellung öffnen',
     markAllRead: 'Alle als gelesen markieren',
     dismissPickupNoticeFailed: 'Abholhinweis konnte nicht bestätigt werden',
+    quickScan: 'QR / Barcode Scan',
+    quickScanTitle: 'QR- / Barcode-Suche',
+    quickScanHint: 'Gescannte Barcodes werden automatisch geöffnet, oder tippen/fügen Sie hier einen Code ein:',
+    quickScanPlaceholder: 'Code / SKU / URL eingeben',
+    codeResolved: 'Geöffnet: {{name}}',
+    codeNotFound: 'Code nicht gefunden: {{code}}',
+  },
+  common: {
+    cancel: 'Abbrechen',
+    open: 'Öffnen',
+    save: 'Speichern',
+    close: 'Schließen',
   },
   profile: {
     title: 'Profil',

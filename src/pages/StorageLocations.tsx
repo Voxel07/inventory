@@ -24,12 +24,18 @@ import {
     Divider,
     IconButton,
     Tooltip,
+    Card,
+    CardContent,
+    useTheme,
+    useMediaQuery,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RoomIcon from '@mui/icons-material/Room';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MapIcon from '@mui/icons-material/Map';
 import { useNavigate } from 'react-router-dom';
 import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
 import { useItems } from '../hooks/useItems';
@@ -43,12 +49,13 @@ import { useTranslate } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
-import MapIcon from '@mui/icons-material/Map';
 
 export function StorageLocations() {
     const t = useTranslate();
     const navigate = useNavigate();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const { data: locations, isLoading: locationsLoading } = useStorageLocations();
     const { data: items, isLoading: itemsLoading } = useItems();
@@ -179,192 +186,202 @@ export function StorageLocations() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {t('Lagerorte', 'Storage locations')}
-                </Typography>
+            {(!isMobile || !selectedLocId) && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                        {t('Lagerorte', 'Storage locations')}
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={handleOpenCreate}
+                    >
+                        {t('Lagerort hinzufügen', 'Add storage location')}
+                    </Button>
+                </Box>
+            )}
+
+            {isMobile && selectedLocId && (
                 <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleOpenCreate}
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setSelectedLocId(null)}
+                    sx={{ mb: 2 }}
                 >
-                    {t('Lagerort hinzufügen', 'Add storage location')}
+                    {t('Zurück zur Lagerort-Liste', 'Back to location list')}
                 </Button>
-            </Box>
+            )}
 
             <Grid container spacing={3}>
                 {/* Left Column: Locations List */}
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', overflow: 'hidden' }}>
-                        <TextField
-                            label={t('Lagerorte suchen', 'Search storage locations')}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            size="small"
-                            fullWidth
-                            sx={{ mb: 2 }}
-                        />
+                {(!isMobile || !selectedLocId) && (
+                    <Grid size={{ xs: 12, md: 4 }}>
+                        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 180px)', overflow: isMobile ? 'visible' : 'hidden' }}>
+                            <TextField
+                                label={t('Lagerorte suchen', 'Search storage locations')}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                size="small"
+                                fullWidth
+                                sx={{ mb: 2 }}
+                            />
 
-                        {locationsLoading ? (
-                            <Typography sx={{ p: 2 }}>{t('Lagerorte werden geladen...', 'Loading storage locations...')}</Typography>
-                        ) : filteredLocations.length === 0 ? (
-                            <Typography sx={{ p: 2 }} color="text.secondary">
-                                {t('Keine Lagerorte gefunden', 'No storage locations found')}
-                            </Typography>
-                        ) : (
-                            <List sx={{ overflowY: 'auto', flexGrow: 1, px: 0 }}>
-                                {filteredLocations.map((loc) => {
-                                    const count = items?.filter((i) => i.storageLocation === loc.id).length ?? 0;
-                                    return (
-                                        <ListItemButton
-                                            key={loc.id}
-                                            selected={selectedLocId === loc.id}
-                                            onClick={() => setSelectedLocId(loc.id)}
-                                            sx={{
-                                                borderRadius: 2,
-                                                mb: 1,
-                                                border: '1px solid transparent',
-                                                borderColor: selectedLocId === loc.id ? 'primary.main' : 'rgba(255, 255, 255, 0.04)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                '&.Mui-selected': {
-                                                    backgroundColor: 'rgba(124, 77, 255, 0.08)',
-                                                    '&:hover': {
-                                                        backgroundColor: 'rgba(124, 77, 255, 0.15)',
+                            {locationsLoading ? (
+                                <Typography sx={{ p: 2 }}>{t('Lagerorte werden geladen...', 'Loading storage locations...')}</Typography>
+                            ) : filteredLocations.length === 0 ? (
+                                <Typography sx={{ p: 2 }} color="text.secondary">
+                                    {t('Keine Lagerorte gefunden', 'No storage locations found')}
+                                </Typography>
+                            ) : (
+                                <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
+                                    {filteredLocations.map((loc) => {
+                                        const count = items?.filter((i) => i.storageLocation === loc.id).length ?? 0;
+                                        return (
+                                            <ListItemButton
+                                                key={loc.id}
+                                                selected={selectedLocId === loc.id}
+                                                onClick={() => setSelectedLocId(loc.id)}
+                                                sx={{
+                                                    borderRadius: 2,
+                                                    mb: 1,
+                                                    border: '1px solid transparent',
+                                                    borderColor: selectedLocId === loc.id ? 'primary.main' : 'rgba(255, 255, 255, 0.04)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    '&.Mui-selected': {
+                                                        backgroundColor: 'rgba(124, 77, 255, 0.08)',
+                                                        '&:hover': {
+                                                            backgroundColor: 'rgba(124, 77, 255, 0.15)',
+                                                        },
                                                     },
-                                                },
-                                            }}
-                                        >
-                                            <ListItemText
-                                                sx={{ my: 0, mr: 1, minWidth: 0 }}
-                                                primary={
-                                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-                                                        {loc.name}
-                                                    </Typography>
-                                                }
-                                                secondary={
-                                                    <Typography variant="body2" color="text.secondary" noWrap>
-                                                        {loc.area || t('Kein Bereich angegeben', 'No area specified')}
-                                                    </Typography>
-                                                }
-                                            />
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                                                <Chip
-                                                    label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)}
-                                                    size="small"
-                                                    variant="outlined"
+                                                }}
+                                            >
+                                                <ListItemText
+                                                    sx={{ my: 0, mr: 1, minWidth: 0 }}
+                                                    primary={
+                                                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+                                                            {loc.name}
+                                                        </Typography>
+                                                    }
+                                                    secondary={
+                                                        <Typography variant="body2" color="text.secondary" noWrap>
+                                                            {loc.area || t('Kein Bereich angegeben', 'No area specified')}
+                                                        </Typography>
+                                                    }
                                                 />
-                                                <Tooltip title={t('Bearbeiten', 'Edit')} arrow>
-                                                    <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title={t('Löschen', 'Delete')} arrow>
-                                                    <IconButton size="small" color="error" onClick={(e) => handleOpenDelete(loc.id, e)}>
-                                                        <DeleteIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </Box>
-                                        </ListItemButton>
-                                    );
-                                })}
-                            </List>
-                        )}
-                    </Paper>
-                </Grid>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                                                    <Chip
+                                                        label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)}
+                                                        size="small"
+                                                        variant="outlined"
+                                                    />
+                                                    <Tooltip title={t('Bearbeiten', 'Edit')} arrow>
+                                                        <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
+                                                            <EditIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title={t('Löschen', 'Delete')} arrow>
+                                                        <IconButton size="small" color="error" onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Box>
+                                            </ListItemButton>
+                                        );
+                                    })}
+                                </List>
+                            )}
+                        </Paper>
+                    </Grid>
+                )}
 
                 {/* Right Column: Location Details & Stored Items */}
-                <Grid size={{ xs: 12, md: 8 }}>
-                    {activeLocation ? (
-                        <Paper sx={{ p: 3, height: 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                                <RoomIcon color="primary" sx={{ fontSize: 32 }} />
-                                <Box sx={{ flexGrow: 1 }}>
-                                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                                        {activeLocation.name}
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
-                                        {activeLocation.area && (
-                                            <Typography variant="subtitle2" color="text.secondary">
-                                                Bereich/Sektion: {activeLocation.area}
+                {(!isMobile || Boolean(selectedLocId)) && (
+                    <Grid size={{ xs: 12, md: 8 }}>
+                        {activeLocation ? (
+                            <Paper sx={{ p: { xs: 2, md: 3 }, height: isMobile ? 'auto' : 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <RoomIcon color="primary" sx={{ fontSize: 32 }} />
+                                        <Box>
+                                            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                                                {activeLocation.name}
                                             </Typography>
-                                        )}
-                                        {activeLocation.location && (
-                                            <Typography variant="subtitle2" color="text.secondary">
-                                                Ort: {activeLocation.location}
-                                            </Typography>
-                                        )}
-                                        {activeLocation.position && (
-                                            <Typography variant="subtitle2" color="text.secondary">
-                                                Position: {activeLocation.position}
-                                            </Typography>
-                                        )}
+                                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
+                                                {activeLocation.area && (
+                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                        Bereich/Sektion: {activeLocation.area}
+                                                    </Typography>
+                                                )}
+                                                {activeLocation.location && (
+                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                        Ort: {activeLocation.location}
+                                                    </Typography>
+                                                )}
+                                                {activeLocation.position && (
+                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                        Position: {activeLocation.position}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        </Box>
                                     </Box>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<EditIcon />}
+                                        onClick={(e) => handleOpenEdit(activeLocation, e)}
+                                    >
+                                        {t('Bearbeiten', 'Edit')}
+                                    </Button>
                                 </Box>
-                            </Box>
 
-                            {activeLocation.description && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 3, pl: 6 }}>
-                                    {activeLocation.description}
+                                {activeLocation.description && (
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2, pl: { xs: 0, md: 6 } }}>
+                                        {activeLocation.description}
+                                    </Typography>
+                                )}
+
+                                {activeLocation.latitude != null && activeLocation.longitude != null && (
+                                    <Box sx={{ mb: 2 }}>
+                                        <StorageLocationMap
+                                            compact
+                                            latitude={activeLocation.latitude}
+                                            longitude={activeLocation.longitude}
+                                            zoom={activeLocation.mapZoom}
+                                            overlayBounds={activeLocation.overlayBounds}
+                                            overlayUrl={apiFileUrl(activeLocation.mapOverlay)}
+                                        />
+                                    </Box>
+                                )}
+
+                                <Divider sx={{ my: 2 }} />
+
+                                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                                    {t('Hier gelagerte Artikel', 'Items stored here')} ({enrichedStoredItems.length})
                                 </Typography>
-                            )}
 
-                            {activeLocation.latitude != null && activeLocation.longitude != null && (
-                                <Box sx={{ mb: 3 }}>
-                                    <StorageLocationMap
-                                        latitude={activeLocation.latitude}
-                                        longitude={activeLocation.longitude}
-                                        zoom={activeLocation.mapZoom}
-                                        overlayBounds={activeLocation.overlayBounds}
-                                        overlayUrl={apiFileUrl(activeLocation.mapOverlay)}
-                                    />
-                                </Box>
-                            )}
-
-                            <Divider sx={{ mb: 3 }} />
-
-                            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                {t('Hier gelagerte Artikel', 'Items stored here')}
-                            </Typography>
-
-                            {itemsLoading ? (
-                                <Typography sx={{ p: 2 }}>{t('Artikel werden geladen...', 'Loading items...')}</Typography>
-                            ) : enrichedStoredItems.length === 0 ? (
-                                <Box sx={{ p: 4, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-                                    <Typography color="text.secondary">{t('In diesem Lagerort sind noch keine Artikel gelagert.', 'No items are stored at this location yet.')}</Typography>
-                                </Box>
-                            ) : (
-                                <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
-                                    <Table size="small">
-                                        <TableHead>
-                                            <TableRow>
-                                                <TableCell>{t('Artikelname', 'Item name')}</TableCell>
-                                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                                                <TableCell align="right">{t('Verfügbarer Bestand', 'Available stock')}</TableCell>
-                                                <TableCell>{t('Status', 'Status')}</TableCell>
-                                                <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {enrichedStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
-                                                <TableRow
-                                                    key={item.id}
-                                                    hover
-                                                    onClick={() => navigate(`/items/${item.id}`)}
-                                                    sx={{ cursor: 'pointer' }}
-                                                >
-                                                    <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
-                                                    <TableCell>{item.category || '—'}</TableCell>
-                                                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                            {remaining}
-                                                        </Typography>
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {totalStock} gesamt {checkedOut > 0 && `(${checkedOut} ausgeliehen)`}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
+                                {itemsLoading ? (
+                                    <Typography sx={{ p: 2 }}>{t('Artikel werden geladen...', 'Loading items...')}</Typography>
+                                ) : enrichedStoredItems.length === 0 ? (
+                                    <Box sx={{ p: 4, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
+                                        <Typography color="text.secondary">{t('In diesem Lagerort sind noch keine Artikel gelagert.', 'No items are stored at this location yet.')}</Typography>
+                                    </Box>
+                                ) : isMobile ? (
+                                    <Stack spacing={1}>
+                                        {enrichedStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
+                                            <Card
+                                                key={item.id}
+                                                variant="outlined"
+                                                onClick={() => navigate(`/items/${item.id}`)}
+                                                sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }}
+                                            >
+                                                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                                                        <Box sx={{ minWidth: 0, mr: 1 }}>
+                                                            <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                                                            {item.category && <Typography variant="caption" color="text.secondary">{item.category}</Typography>}
+                                                        </Box>
                                                         <Chip
                                                             label={formatStatus(item.status)}
                                                             color={
@@ -378,43 +395,100 @@ export function StorageLocations() {
                                                             }
                                                             size="small"
                                                         />
-                                                    </TableCell>
-                                                    <TableCell align="right">
-                                                        <IconButton size="small" color="primary">
-                                                            <ArrowForwardIosIcon sx={{ fontSize: 14 }} />
-                                                        </IconButton>
-                                                    </TableCell>
+                                                    </Box>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            <strong>{remaining}</strong> {t('verfügbar', 'available')} / {totalStock} {t('gesamt', 'total')}
+                                                            {checkedOut > 0 && ` (${checkedOut} ${t('ausgeliehen', 'out')})`}
+                                                        </Typography>
+                                                        <ArrowForwardIosIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </Stack>
+                                ) : (
+                                    <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>{t('Artikelname', 'Item name')}</TableCell>
+                                                    <TableCell>{t('Kategorie', 'Category')}</TableCell>
+                                                    <TableCell align="right">{t('Verfügbarer Bestand', 'Available stock')}</TableCell>
+                                                    <TableCell>{t('Status', 'Status')}</TableCell>
+                                                    <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            )}
-                        </Paper>
-                    ) : (
-                        <Paper
-                            sx={{
-                                p: 3,
-                                height: 'calc(100vh - 180px)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: 'rgba(255, 255, 255, 0.01)',
-                            }}
-                        >
-                            <Box sx={{ textAlign: 'center' }}>
-                                <RoomIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                <Typography color="text.secondary" variant="subtitle1">
-                                    {t('Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen', 'Select a storage location from the list to view its items')}
-                                </Typography>
-                            </Box>
-                        </Paper>
-                    )}
-                </Grid>
+                                            </TableHead>
+                                            <TableBody>
+                                                {enrichedStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
+                                                    <TableRow
+                                                        key={item.id}
+                                                        hover
+                                                        onClick={() => navigate(`/items/${item.id}`)}
+                                                        sx={{ cursor: 'pointer' }}
+                                                    >
+                                                        <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
+                                                        <TableCell>{item.category || '—'}</TableCell>
+                                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                {remaining}
+                                                            </Typography>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {totalStock} gesamt {checkedOut > 0 && `(${checkedOut} ausgeliehen)`}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={formatStatus(item.status)}
+                                                                color={
+                                                                    item.status === 'available'
+                                                                        ? 'success'
+                                                                        : item.status === 'checked_out'
+                                                                            ? 'warning'
+                                                                            : item.status === 'damaged'
+                                                                                ? 'error'
+                                                                                : 'default'
+                                                                }
+                                                                size="small"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <IconButton size="small" color="primary">
+                                                                <ArrowForwardIosIcon sx={{ fontSize: 14 }} />
+                                                            </IconButton>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                )}
+                            </Paper>
+                        ) : (
+                            <Paper
+                                sx={{
+                                    p: 3,
+                                    height: 'calc(100vh - 180px)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.01)',
+                                }}
+                            >
+                                <Box sx={{ textAlign: 'center' }}>
+                                    <RoomIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                    <Typography color="text.secondary" variant="subtitle1">
+                                        {t('Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen', 'Select a storage location from the list to view its items')}
+                                    </Typography>
+                                </Box>
+                            </Paper>
+                        )}
+                    </Grid>
+                )}
             </Grid>
 
             {/* Create/Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+            <Dialog open={dialogOpen} fullScreen={isMobile} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>{editingLoc ? t('Lagerort bearbeiten', 'Edit storage location') : t('Neuer Lagerort', 'New storage location')}</DialogTitle>
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>

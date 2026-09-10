@@ -44,6 +44,9 @@ import SaveIcon from '@mui/icons-material/Save';
 import PrintIcon from '@mui/icons-material/Print';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import SearchIcon from '@mui/icons-material/Search';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { jsPDF } from 'jspdf';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
@@ -128,6 +131,7 @@ export function FactionOrderDetail() {
   const [transitionPickupLongitude, setTransitionPickupLongitude] = useState<number | undefined>();
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState('');
+  const [sortByLocation, setSortByLocation] = useState(false);
   // expandable assemblies in checklist view
   const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
   // per-assembly per-item checkbox state
@@ -163,13 +167,112 @@ export function FactionOrderDetail() {
     () => [...new Set(orderItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [orderItems],
   );
+
+  // Barcode / SKU scanner integration during order preparation
+  useEffect(() => {
+    if (!order || order.status !== 'preparing') return;
+
+    function onBarcodeScanned(e: Event) {
+      const detail = (e as CustomEvent<{ code: string }>).detail;
+      if (!detail?.code) return;
+      let code = detail.code.trim();
+      const itemUrlMatch = code.match(/\/items\/([a-zA-Z0-9_-]+)/);
+      if (itemUrlMatch?.[1]) {
+        code = itemUrlMatch[1];
+      }
+      const lowerCode = code.toLowerCase();
+
+      // 1. Check if scanned code matches an item in this order
+      const matchedItem = orderItems.find((item) =>
+        item.id.toLowerCase() === lowerCode ||
+        (item.sku && item.sku.toLowerCase() === lowerCode) ||
+        (item.barcode && item.barcode.toLowerCase() === lowerCode),
+      );
+
+      if (matchedItem) {
+        e.preventDefault();
+        const max = order?.requestedQuantities[matchedItem.id] ?? 0;
+        setPrepared((current) => {
+          const currentVal = Number(current[matchedItem.id]) || 0;
+          if (currentVal >= max) {
+            showSnackbar(
+              t(
+                `${matchedItem.name}: Bereits vollständig gepackt (${max}/${max})`,
+                `${matchedItem.name}: Already fully packed (${max}/${max})`,
+              ),
+              'warning',
+            );
+            return current;
+          }
+          const nextVal = currentVal + 1;
+          showSnackbar(
+            t(
+              `${matchedItem.name}: +1 gepackt (${nextVal}/${max})`,
+              `${matchedItem.name}: +1 packed (${nextVal}/${max})`,
+            ),
+            'success',
+          );
+          return { ...current, [matchedItem.id]: String(nextVal) };
+        });
+        return;
+      }
+
+      // 2. Check if scanned code matches an assembly in this order
+      const assemblyUrlMatch = code.match(/\/assemblies\/([a-zA-Z0-9_-]+)/);
+      if (assemblyUrlMatch?.[1]) {
+        code = assemblyUrlMatch[1];
+      }
+      const matchedAssembly = orderAssemblies.find((as) =>
+        as.id.toLowerCase() === lowerCode,
+      );
+
+      if (matchedAssembly) {
+        e.preventDefault();
+        const max = order?.requestedAssemblyQuantities?.[matchedAssembly.id] ?? 0;
+        setPreparedAssemblies((current) => {
+          const currentVal = Number(current[matchedAssembly.id]) || 0;
+          if (currentVal >= max) {
+            showSnackbar(
+              t(
+                `${matchedAssembly.name}: Bereits vollständig gepackt (${max}/${max})`,
+                `${matchedAssembly.name}: Already fully packed (${max}/${max})`,
+              ),
+              'warning',
+            );
+            return current;
+          }
+          const nextVal = currentVal + 1;
+          showSnackbar(
+            t(
+              `${matchedAssembly.name}: +1 gepackt (${nextVal}/${max})`,
+              `${matchedAssembly.name}: +1 packed (${nextVal}/${max})`,
+            ),
+            'success',
+          );
+          return { ...current, [matchedAssembly.id]: String(nextVal) };
+        });
+      }
+    }
+
+    window.addEventListener('ash-barcode-scanned', onBarcodeScanned);
+    return () => window.removeEventListener('ash-barcode-scanned', onBarcodeScanned);
+  }, [order, orderAssemblies, orderItems, showSnackbar, t]);
   const visibleOrderItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
-    return orderItems.filter((item) => {
+    const filtered = orderItems.filter((item) => {
       if (itemCategory && item.category !== itemCategory) return false;
       return !term || `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`.toLocaleLowerCase().includes(term);
     });
-  }, [itemCategory, itemSearch, orderItems]);
+    if (sortByLocation) {
+      return [...filtered].sort((a, b) => {
+        const locA = a.expand?.storageLocation?.name || a.storageLocation || '';
+        const locB = b.expand?.storageLocation?.name || b.storageLocation || '';
+        const cmp = locA.localeCompare(locB);
+        return cmp !== 0 ? cmp : a.name.localeCompare(b.name);
+      });
+    }
+    return filtered;
+  }, [itemCategory, itemSearch, orderItems, sortByLocation]);
   const visibleOrderAssemblies = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return orderAssemblies.filter((assembly) =>
@@ -662,10 +765,37 @@ export function FactionOrderDetail() {
     );
   }
 
+  function stepPreparedItem(itemId: string, delta: number, max: number) {
+    setPrepared((current) => {
+      const currentVal = Number(current[itemId]) || 0;
+      const nextVal = Math.max(0, Math.min(max, currentVal + delta));
+      return { ...current, [itemId]: String(nextVal) };
+    });
+  }
+
+  function setPreparedItemMax(itemId: string, max: number) {
+    setPrepared((current) => ({ ...current, [itemId]: String(max) }));
+  }
+
+  function stepPreparedAssembly(assemblyId: string, delta: number, max: number) {
+    setPreparedAssemblies((current) => {
+      const currentVal = Number(current[assemblyId]) || 0;
+      const nextVal = Math.max(0, Math.min(max, currentVal + delta));
+      return { ...current, [assemblyId]: String(nextVal) };
+    });
+  }
+
+  function setPreparedAssemblyMax(assemblyId: string, max: number) {
+    setPreparedAssemblies((current) => ({ ...current, [assemblyId]: String(max) }));
+  }
+
   function itemRow(item: Item) {
     const requested = currentOrder.requestedQuantities[item.id] ?? 0;
     const storedPrepared = currentOrder.preparedQuantities[item.id] ?? 0;
     const available = availableFor(item);
+    const prepVal = Number(prepared[item.id] || 0);
+    const isPrepComplete = prepVal === requested;
+
     return (
       <Card key={item.id} variant="outlined">
         <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, '&:last-child': { pb: { xs: 1.25, md: 1.5 } } }}>
@@ -682,15 +812,30 @@ export function FactionOrderDetail() {
                 {quantityChips(requested, available, storedPrepared)}
               </Stack>
               {currentOrder.status === 'preparing' && (
-                <TextField
-                  type="number"
-                  size="small"
-                  label={t('Vorbereitet', 'Prepared')}
-                  value={prepared[item.id] ?? ''}
-                  onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
-                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                  sx={{ display: { xs: 'none', md: 'flex' }, width: 110, flexShrink: 0 }}
-                />
+                <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
+                  <IconButton size="small" onClick={() => stepPreparedItem(item.id, -1, requested)} disabled={prepVal <= 0}>
+                    <RemoveIcon fontSize="small" />
+                  </IconButton>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={prepared[item.id] ?? ''}
+                    onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
+                    slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 44, padding: '4px 2px' } } }}
+                  />
+                  <IconButton size="small" color="primary" onClick={() => stepPreparedItem(item.id, 1, requested)} disabled={prepVal >= requested}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                  <Button
+                    size="small"
+                    variant={isPrepComplete ? 'contained' : 'outlined'}
+                    color={isPrepComplete ? 'success' : 'primary'}
+                    onClick={() => setPreparedItemMax(item.id, requested)}
+                    sx={{ minWidth: 54, height: 32, fontSize: '0.75rem', px: 1 }}
+                  >
+                    {isPrepComplete ? 'OK' : t('Max', 'Max')}
+                  </Button>
+                </Stack>
               )}
             </Stack>
             <Box
@@ -705,16 +850,43 @@ export function FactionOrderDetail() {
               {quantityChips(requested, available, storedPrepared)}
             </Box>
             {currentOrder.status === 'preparing' && (
-              <TextField
-                fullWidth
-                type="number"
-                size="small"
-                label={t('Vorbereitet', 'Prepared')}
-                value={prepared[item.id] ?? ''}
-                onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
-                slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ display: { xs: 'flex', md: 'none' } }}
-              />
+              <Stack direction="row" spacing={1} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', mt: 0.5 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => stepPreparedItem(item.id, -1, requested)}
+                  disabled={prepVal <= 0}
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 38, height: 38 }}
+                >
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+                <TextField
+                  type="number"
+                  size="small"
+                  label={t('Vorbereitet', 'Prepared')}
+                  value={prepared[item.id] ?? ''}
+                  onChange={(event) => setPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
+                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', fontWeight: 700 } } }}
+                  sx={{ width: 85 }}
+                />
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => stepPreparedItem(item.id, 1, requested)}
+                  disabled={prepVal >= requested}
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 38, height: 38 }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+                <Button
+                  size="small"
+                  variant={isPrepComplete ? 'contained' : 'outlined'}
+                  color={isPrepComplete ? 'success' : 'primary'}
+                  onClick={() => setPreparedItemMax(item.id, requested)}
+                  sx={{ flexGrow: 1, minHeight: 38 }}
+                >
+                  {isPrepComplete ? t('Vollständig', 'Complete') : t('Max', 'Max')}
+                </Button>
+              </Stack>
             )}
           </Stack>
         </CardContent>
@@ -730,6 +902,8 @@ export function FactionOrderDetail() {
     const allChecked = assemblyAllChecked(assembly);
     const componentEntries = Object.entries(assembly.itemQuantities ?? {});
     const checkedCount = componentEntries.filter(([itemId]) => (assemblyChecked[assembly.id] ?? {})[itemId]).length;
+    const prepAssemblyVal = Number(preparedAssemblies[assembly.id] || 0);
+    const isPrepComplete = prepAssemblyVal === requested;
 
     return (
       <Card
@@ -758,15 +932,30 @@ export function FactionOrderDetail() {
                 {quantityChips(requested, available, storedPrepared)}
               </Stack>
               {currentOrder.status === 'preparing' && (
-                <TextField
-                  type="number"
-                  size="small"
-                  label={t('Vorbereitet', 'Prepared')}
-                  value={preparedAssemblies[assembly.id] ?? ''}
-                  onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
-                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                  sx={{ display: { xs: 'none', md: 'flex' }, width: 110, flexShrink: 0 }}
-                />
+                <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
+                  <IconButton size="small" onClick={() => stepPreparedAssembly(assembly.id, -1, requested)} disabled={prepAssemblyVal <= 0}>
+                    <RemoveIcon fontSize="small" />
+                  </IconButton>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={preparedAssemblies[assembly.id] ?? ''}
+                    onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
+                    slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 44, padding: '4px 2px' } } }}
+                  />
+                  <IconButton size="small" color="primary" onClick={() => stepPreparedAssembly(assembly.id, 1, requested)} disabled={prepAssemblyVal >= requested}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                  <Button
+                    size="small"
+                    variant={isPrepComplete ? 'contained' : 'outlined'}
+                    color={isPrepComplete ? 'success' : 'primary'}
+                    onClick={() => setPreparedAssemblyMax(assembly.id, requested)}
+                    sx={{ minWidth: 54, height: 32, fontSize: '0.75rem', px: 1 }}
+                  >
+                    {isPrepComplete ? 'OK' : t('Max', 'Max')}
+                  </Button>
+                </Stack>
               )}
               {componentEntries.length > 0 && (
                 <IconButton size="small" onClick={() => toggleAssemblyExpand(assembly.id)} aria-label={isExpanded ? t('Einklappen', 'Collapse') : t('Ausklappen', 'Expand')} sx={{ flexShrink: 0 }}>
@@ -786,16 +975,43 @@ export function FactionOrderDetail() {
               {quantityChips(requested, available, storedPrepared)}
             </Box>
             {currentOrder.status === 'preparing' && (
-              <TextField
-                fullWidth
-                type="number"
-                size="small"
-                label={t('Vorbereitet', 'Prepared')}
-                value={preparedAssemblies[assembly.id] ?? ''}
-                onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
-                slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric' } }}
-                sx={{ display: { xs: 'flex', md: 'none' } }}
-              />
+              <Stack direction="row" spacing={1} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', mt: 0.5 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => stepPreparedAssembly(assembly.id, -1, requested)}
+                  disabled={prepAssemblyVal <= 0}
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 38, height: 38 }}
+                >
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+                <TextField
+                  type="number"
+                  size="small"
+                  label={t('Vorbereitet', 'Prepared')}
+                  value={preparedAssemblies[assembly.id] ?? ''}
+                  onChange={(event) => setPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
+                  slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', fontWeight: 700 } } }}
+                  sx={{ width: 85 }}
+                />
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => stepPreparedAssembly(assembly.id, 1, requested)}
+                  disabled={prepAssemblyVal >= requested}
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 38, height: 38 }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+                <Button
+                  size="small"
+                  variant={isPrepComplete ? 'contained' : 'outlined'}
+                  color={isPrepComplete ? 'success' : 'primary'}
+                  onClick={() => setPreparedAssemblyMax(assembly.id, requested)}
+                  sx={{ flexGrow: 1, minHeight: 38 }}
+                >
+                  {isPrepComplete ? t('Vollständig', 'Complete') : t('Max', 'Max')}
+                </Button>
+              </Stack>
             )}
           </Stack>
 
@@ -912,7 +1128,7 @@ export function FactionOrderDetail() {
   );
 
   return (
-    <Box>
+    <Box sx={{ pb: isMobile && isManager && order.status === 'preparing' ? 'calc(64px + env(safe-area-inset-bottom, 0px) + 84px)' : 'calc(64px + env(safe-area-inset-bottom, 0px) + 16px)' }}>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/orders?tab=faction')} sx={{ mb: 1 }}>
         {t('Alle Fraktionslisten', 'All faction lists')}
       </Button>
@@ -958,7 +1174,19 @@ export function FactionOrderDetail() {
 
       {order.pickupLatitude != null && order.pickupLongitude != null && (
         <Paper sx={{ p: 1.5, mb: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="h6">{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<OpenInNewIcon fontSize="small" />}
+              href={`https://www.google.com/maps?q=${order.pickupLatitude},${order.pickupLongitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('In Google Maps öffnen', 'Open in Google Maps')}
+            </Button>
+          </Stack>
           <StorageLocationMap
             compact
             kind="pickup"
@@ -984,7 +1212,7 @@ export function FactionOrderDetail() {
 
       {/* Search covers both items and assemblies */}
       {(!!orderAssemblies.length || !!orderItems.length) && (
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
           <TextField
             fullWidth
             size="small"
@@ -994,7 +1222,7 @@ export function FactionOrderDetail() {
             slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
           />
           {!!orderItems.length && (
-            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 200 } }}>
               <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
               <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
                 <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
@@ -1002,6 +1230,16 @@ export function FactionOrderDetail() {
               </Select>
             </FormControl>
           )}
+          <Button
+            size="small"
+            variant={sortByLocation ? 'contained' : 'outlined'}
+            color={sortByLocation ? 'primary' : 'inherit'}
+            startIcon={<LocationOnIcon fontSize="small" />}
+            onClick={() => setSortByLocation((prev) => !prev)}
+            sx={{ whiteSpace: 'nowrap', minHeight: 40 }}
+          >
+            {t('Lagerort-Sortierung', 'Sort by location')}
+          </Button>
         </Stack>
       )}
 
@@ -1260,6 +1498,60 @@ export function FactionOrderDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Sticky commissioning bar on mobile */}
+      {isMobile && isManager && order.status === 'preparing' && (
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'fixed',
+            bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+            left: 0,
+            right: 0,
+            p: 1.5,
+            zIndex: 1050,
+            borderTop: 1,
+            borderColor: 'divider',
+            backdropFilter: 'blur(8px)',
+            backgroundColor: (th) => (th.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.94)' : 'rgba(255, 255, 255, 0.96)'),
+          }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+                {t('Kommissionierung', 'Commissioning')} · {progress}%
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                {preparedTotal} / {requestedTotal} {t('gepackt', 'packed')}
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<SaveIcon />}
+                onClick={savePrepared}
+                disabled={savePreparation.isPending}
+                sx={{ minHeight: 40 }}
+              >
+                {t('Speichern', 'Save')}
+              </Button>
+              <Button
+                variant="contained"
+                color={preparationComplete ? 'success' : 'primary'}
+                size="small"
+                startIcon={<CheckCircleIcon />}
+                disabled={!preparationComplete || markReady.isPending}
+                onClick={() => setStateTransition('ready')}
+                sx={{ minHeight: 40 }}
+              >
+                {t('Fertig', 'Ready')}
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
     </Box>
   );
 }
+

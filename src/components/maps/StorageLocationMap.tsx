@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMediaUrl } from '../../hooks/useMediaUrl';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
+import CheckIcon from '@mui/icons-material/Check';
 import {
   CircleMarker,
   ImageOverlay,
@@ -23,6 +25,18 @@ function ViewSync({ center, zoom }: { center: LatLngExpression; zoom: number }) 
   useEffect(() => {
     map.setView(center, zoom);
   }, [center, map, zoom]);
+  return null;
+}
+
+function DraggingController({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (enabled) {
+      map.dragging.enable();
+    } else {
+      map.dragging.disable();
+    }
+  }, [enabled, map]);
   return null;
 }
 
@@ -65,10 +79,14 @@ export function StorageLocationMap({
   compact = false,
 }: Props) {
   const t = useTranslate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [touchActive, setTouchActive] = useState(false);
   const resolvedOverlayUrl = useMediaUrl(overlayUrl);
   const center: Coordinate = [latitude ?? DEFAULT_CENTER[0], longitude ?? DEFAULT_CENTER[1]];
   const bounds = (overlayBounds ?? derivedBounds(center)) as LatLngBoundsExpression;
   const effectiveZoom = Math.max(zoom, DEFAULT_ZOOM);
+  const canDrag = editable || !isMobile || touchActive;
 
   return (
     <Stack spacing={1.5}>
@@ -79,20 +97,51 @@ export function StorageLocationMap({
             : t('Klicken Sie auf die Karte, um den Lagerort zu setzen.', 'Click the map to set the storage location.')}
         </Typography>
       )}
-      <Box sx={{ height: compact ? { xs: 240, md: 300 } : { xs: 320, md: 420 }, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        <MapContainer center={center} zoom={effectiveZoom} style={{ width: '100%', height: '100%' }}>
+      <Box sx={{ position: 'relative', height: compact ? { xs: 240, md: 300 } : { xs: 320, md: 420 }, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+        <MapContainer
+          center={center}
+          zoom={effectiveZoom}
+          scrollWheelZoom={false}
+          dragging={canDrag}
+          style={{ width: '100%', height: '100%' }}
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <ViewSync center={center} zoom={effectiveZoom} />
+          <DraggingController enabled={canDrag} />
           <ClickHandler onSelect={editable ? onCenterChange : undefined} />
           {resolvedOverlayUrl && <ImageOverlay url={resolvedOverlayUrl} bounds={bounds} opacity={0.62} />}
           <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#e30613', fillOpacity: 1, weight: 2 }}>
             <Popup>{kind === 'pickup' ? t('Abholpunkt', 'Pickup point') : t('Lagerort', 'Storage location')}</Popup>
           </CircleMarker>
         </MapContainer>
+        {isMobile && !editable && (
+          <Button
+            size="small"
+            variant="contained"
+            color={touchActive ? 'primary' : 'inherit'}
+            startIcon={touchActive ? <CheckIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
+            onClick={() => setTouchActive((v) => !v)}
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 1000,
+              fontSize: '0.72rem',
+              py: 0.25,
+              px: 1,
+              backgroundColor: touchActive ? undefined : 'rgba(0,0,0,0.65)',
+              color: '#fff',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            {touchActive ? t('Karte aktiv', 'Map active') : t('Karte bedienen', 'Interact')}
+          </Button>
+        )}
       </Box>
     </Stack>
   );
 }
+

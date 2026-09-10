@@ -34,6 +34,7 @@ import { useEffect, useMemo } from 'react';
 import { useAppLanguage, translate } from './utils/naming';
 import { OfflineQueuedError, subscribeToApiChanges } from './services/apiClient';
 import { invalidateForApiChange } from './utils/realtimeInvalidation';
+import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 
 const queryClient = new QueryClient({
   mutationCache: new MutationCache({
@@ -316,6 +317,7 @@ function AppContent() {
   useAppLanguage();
   useCurrentUserRefresh();
   const { isAuthenticated } = useAuth();
+  useBarcodeScanner(isAuthenticated);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const snackbar = useUIStore((s) => s.snackbar);

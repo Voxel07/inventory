@@ -13,6 +13,16 @@ import {
     Skeleton,
     Alert,
     Stack,
+    Card,
+    CardContent,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    useTheme,
+    useMediaQuery,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -82,6 +92,8 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 
 export function ItemDetail() {
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { itemId } = useParams<{ itemId: string }>();
     const navigate = useNavigate();
     const { data: item, isLoading } = useItem(itemId ?? '');
@@ -443,44 +455,76 @@ export function ItemDetail() {
                         </Typography>
                         {itemTransactions.length === 0 ? (
                             <Typography color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
-                        ) : (
-                            <Box sx={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Datum', 'Date')}</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Typ', 'Type')}</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Benutzer', 'User')}</th>
-                                            <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #555' }}>{t('Menge', 'Quantity')}</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Grund', 'Reason')}</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #555' }}>{t('Anmerkungen', 'Notes')}</th>
-                                            <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #555', width: '80px' }}>{t('Aktionen', 'Actions')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {itemTransactions
-                                            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                                            .map((tx) => (
-                                                <tr key={tx.id}>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>
-                                                        {new Date(tx.timestamp).toLocaleString()}
-                                                    </td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>
+                        ) : isMobile ? (
+                            <Stack spacing={1.5}>
+                                {itemTransactions
+                                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                    .map((tx) => (
+                                        <Card key={tx.id} variant="outlined">
+                                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                                         <Chip
                                                             label={formatStatus(tx.transactionType)}
                                                             color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'}
                                                             size="small"
                                                         />
-                                                    </td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>
-                                                        {tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}
-                                                    </td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333', textAlign: 'right' }}>
-                                                        {tx.quantityChanged}
-                                                    </td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>{tx.reason}</td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333' }}>{tx.notes}</td>
-                                                    <td style={{ padding: '8px', borderBottom: '1px solid #333', textAlign: 'center' }}>
+                                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${tx.quantityChanged}` : tx.quantityChanged}
+                                                        </Typography>
+                                                    </Stack>
+                                                    <TooltipButton
+                                                        variant="icon"
+                                                        tooltipText={t('Transaktion bearbeiten', 'Edit transaction')}
+                                                        icon={<EditIcon sx={{ fontSize: 18 }} />}
+                                                        onClick={() => setEditingTransaction(tx)}
+                                                        size="small"
+                                                    />
+                                                </Box>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                    {new Date(tx.timestamp).toLocaleString()} · {tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}
+                                                </Typography>
+                                                {(tx.reason || tx.notes) && (
+                                                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                                        {[tx.reason, tx.notes].filter(Boolean).join(' — ')}
+                                                    </Typography>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                            </Stack>
+                        ) : (
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>{t('Datum', 'Date')}</TableCell>
+                                            <TableCell>{t('Typ', 'Type')}</TableCell>
+                                            <TableCell>{t('Benutzer', 'User')}</TableCell>
+                                            <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                                            <TableCell>{t('Grund', 'Reason')}</TableCell>
+                                            <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                                            <TableCell align="center" sx={{ width: 80 }}>{t('Aktionen', 'Actions')}</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {itemTransactions
+                                            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                            .map((tx) => (
+                                                <TableRow key={tx.id} hover>
+                                                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(tx.timestamp).toLocaleString()}</TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={formatStatus(tx.transactionType)}
+                                                            color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'}
+                                                            size="small"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>{tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 600 }}>{tx.quantityChanged}</TableCell>
+                                                    <TableCell>{tx.reason || '—'}</TableCell>
+                                                    <TableCell>{tx.notes || '—'}</TableCell>
+                                                    <TableCell align="center">
                                                         <TooltipButton
                                                             variant="icon"
                                                             tooltipText={t('Transaktion bearbeiten', 'Edit transaction')}
@@ -488,19 +532,19 @@ export function ItemDetail() {
                                                             onClick={() => setEditingTransaction(tx)}
                                                             size="small"
                                                         />
-                                                    </td>
-                                                </tr>
+                                                    </TableCell>
+                                                </TableRow>
                                             ))}
-                                    </tbody>
-                                </table>
-                            </Box>
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
                         )}
                     </Paper>
                 </Grid>
             </Grid>
 
             {/* Edit Dialog */}
-            <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Artikel bearbeiten', 'Edit item')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <ItemForm
@@ -524,6 +568,7 @@ export function ItemDetail() {
             {/* Edit Transaction Dialog */}
             <Dialog
                 open={Boolean(editingTransaction)}
+                fullScreen={isMobile}
                 onClose={() => setEditingTransaction(null)}
                 keepMounted
                 maxWidth="sm"
@@ -546,6 +591,7 @@ export function ItemDetail() {
             {/* Checkout Dialog */}
             <Dialog
                 open={checkoutOpen}
+                fullScreen={isMobile}
                 onClose={() => setCheckoutOpen(false)}
                 keepMounted
                 maxWidth="sm"

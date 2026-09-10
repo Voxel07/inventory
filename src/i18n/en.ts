@@ -41,6 +41,18 @@ export default {
     openOrder: 'Open order',
     markAllRead: 'Mark all as read',
     dismissPickupNoticeFailed: 'Could not dismiss pickup notice',
+    quickScan: 'QR / Barcode Scan',
+    quickScanTitle: 'QR / Barcode Search',
+    quickScanHint: 'Scanned barcodes will open automatically, or type/paste a code here:',
+    quickScanPlaceholder: 'Enter code / SKU / URL',
+    codeResolved: 'Opened: {{name}}',
+    codeNotFound: 'Code not found: {{code}}',
+  },
+  common: {
+    cancel: 'Cancel',
+    open: 'Open',
+    save: 'Save',
+    close: 'Close',
   },
   profile: {
     title: 'Profile',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
@@ -17,6 +17,8 @@ import { useTranslate } from '../utils/naming';
 
 export function Assemblies() {
     const t = useTranslate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: assemblies, isLoading } = useAssemblies();
     const { data: items } = useItems();
     const { data: transactions, isLoading: transactionsLoading } = useTransactions();
@@ -100,7 +102,7 @@ export function Assemblies() {
             />
 
             {/* Create Dialog */}
-            <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={formOpen} fullScreen={isMobile} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Neue Baugruppe erstellen', 'Create new assembly')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <AssemblyForm items={items ?? []} onSubmit={handleCreate} isLoading={createAssembly.isPending} />
@@ -108,7 +110,7 @@ export function Assemblies() {
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editingAssembly} onClose={() => setEditingAssembly(undefined)} maxWidth="sm" fullWidth>
+            <Dialog open={!!editingAssembly} fullScreen={isMobile} onClose={() => setEditingAssembly(undefined)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Baugruppe bearbeiten', 'Edit assembly')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {editingAssembly && (
