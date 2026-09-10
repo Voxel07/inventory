@@ -36,7 +36,8 @@ public final class ApiModels {
 
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
-            @Min(1) int quantityChanged, String reason, String notes, UUID userId, UUID factionOrderId, UUID idempotencyKey) {}
+            @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
+            UUID userId, UUID factionOrderId, UUID idempotencyKey) {}
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,

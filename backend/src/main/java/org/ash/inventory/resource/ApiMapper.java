@@ -216,6 +216,8 @@ public class ApiMapper {
                 value.availabilityBefore,
                 value.availabilityAfter,
                 value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.eventType,
+                value.faction,
                 value.damageReport == null ? null : value.damageReport.id.toString(),
                 value.clientCommandId == null ? null : value.clientCommandId.toString(),
                 value.reason,

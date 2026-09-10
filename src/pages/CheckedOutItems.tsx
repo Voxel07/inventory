@@ -11,6 +11,7 @@ import {
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useAssemblies } from '../hooks/useAssemblies';
+import { useReturnFactionOrderItems } from '../hooks/useFactionOrders';
 import { useUIStore } from '../store/uiStore';
 import { useNames, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -23,6 +24,7 @@ export function CheckedOutItemsPage() {
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: assemblies } = useAssemblies();
     const createTransaction = useCreateTransaction();
+    const returnFactionOrderItems = useReturnFactionOrderItems();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [search, setSearch] = useState('');
     const [personFilter, setPersonFilter] = useState('');
@@ -39,7 +41,7 @@ export function CheckedOutItemsPage() {
             const item = itemMap.get(tx.itemId);
             if (!item) continue;
             const order = tx.expand?.factionOrderId;
-            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.reason || t('Ohne Event', 'No event');
+            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.eventType && tx.faction ? `${tx.eventType}:${tx.faction}` : t('Ohne Event', 'No event');
             const key = `${tx.itemId}:${tx.userId}:${tx.factionOrderId ?? 'manual'}`;
             const existing = rows.get(key);
             const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
@@ -54,7 +56,7 @@ export function CheckedOutItemsPage() {
                 personId: tx.userId,
                 person: tx.expand?.userId?.name || tx.expand?.userId?.email || tx.userId,
                 eventKey: existing?.eventKey ?? eventKey,
-                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.reason || t('Ohne Event', 'No event')),
+                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
                 factionOrderId: tx.factionOrderId,
             });
         }
@@ -71,6 +73,27 @@ export function CheckedOutItemsPage() {
     }), [checkedOutRows, eventFilter, personFilter, search]);
 
     function handleQuickReturn(row: CheckedOutRow) {
+        if (row.factionOrderId) {
+            returnFactionOrderItems.mutate(
+                {
+                    id: row.factionOrderId,
+                    lines: {
+                        [row.itemId]: {
+                            returned: 1,
+                            consumed: 0,
+                            missing: 0,
+                            damaged: 0,
+                            notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
+                        },
+                    },
+                },
+                {
+                    onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
+                    onError: () => showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error'),
+                },
+            );
+            return;
+        }
         createTransaction.mutate(
             {
                 itemId: row.itemId,
@@ -79,7 +102,6 @@ export function CheckedOutItemsPage() {
                 reason: names.reason.returnAfterUse,
                 notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
                 userId: row.personId,
-                factionOrderId: row.factionOrderId,
             },
             {
                 onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
@@ -127,7 +149,7 @@ export function CheckedOutItemsPage() {
                 showPerson
                 linkToItem
                 onQuickReturn={handleQuickReturn}
-                returnPending={createTransaction.isPending}
+                returnPending={createTransaction.isPending || returnFactionOrderItems.isPending}
             />
         </Box>
     );

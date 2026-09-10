@@ -84,7 +84,23 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
     const canEdit = (tx: StockTransaction) => onEdit && !tx.damageReportId && !tx.factionOrderId && tx.transactionType !== 'repaired' && tx.transactionType !== 'written_off';
 
     function orderChip(tx: StockTransaction, compact = false) {
-        if (!tx.factionOrderId) return null;
+        const compactSx = compact ? {
+            height: 20,
+            flexShrink: 0,
+            fontSize: '0.7rem',
+            '& .MuiChip-label': { px: 0.75 },
+        } : undefined;
+        if (!tx.factionOrderId) {
+            if (!tx.eventType || !tx.faction) return null;
+            return (
+                <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`${tx.eventType} · ${tx.faction}`}
+                    sx={compactSx}
+                />
+            );
+        }
         const order = tx.expand?.factionOrderId;
         return (
             <Chip
@@ -95,12 +111,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                 variant="outlined"
                 color="primary"
                 label={order ? `${order.eventType} · ${order.faction}` : t('Fraktionsliste', 'Faction list')}
-                sx={compact ? {
-                    height: 20,
-                    flexShrink: 0,
-                    fontSize: '0.7rem',
-                    '& .MuiChip-label': { px: 0.75 },
-                } : undefined}
+                sx={compactSx}
             />
         );
     }
@@ -122,7 +133,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                         <Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
-                    {tx.factionOrderId && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
+                    {(tx.factionOrderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
                     {canEdit(tx) && <Box sx={{ textAlign: 'right', mt: 0.5 }}><TooltipButton variant="icon" tooltipText={t('Transaktion bearbeiten', 'Edit transaction')} icon={<EditIcon />} onClick={() => onEdit?.(tx)} /></Box>}
                 </Paper>
             ))}

@@ -16,7 +16,7 @@ export function Orders() {
       <Paper sx={{ mb: 3 }}>
         <Tabs
           value={tab}
-          onChange={(_event, value: OrderTab) => setSearchParams(value === 'general' ? {} : { tab: value })}
+          onChange={(_event, value: OrderTab) => setSearchParams({ tab: value })}
           variant="scrollable"
           allowScrollButtonsMobile
         >

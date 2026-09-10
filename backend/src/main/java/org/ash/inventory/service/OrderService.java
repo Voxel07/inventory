@@ -290,6 +290,8 @@ public class OrderService {
             transaction.item = item;
             transaction.user = actor;
             transaction.factionOrder = order;
+            transaction.eventType = order.eventOccurrence.eventType;
+            transaction.faction = order.faction.name;
             transaction.type = DomainEnums.TransactionType.checkout;
             transaction.quantity = entry.getValue();
             transaction.availabilityBefore = available;
@@ -550,6 +552,8 @@ public class OrderService {
         transaction.item = item;
         transaction.user = actor;
         transaction.factionOrder = order;
+        transaction.eventType = order.eventOccurrence.eventType;
+        transaction.faction = order.faction.name;
         transaction.type = type;
         transaction.quantity = quantity;
         transaction.reason = "Faction order return " + order.orderCode;

@@ -46,6 +46,9 @@ public class InventoryOperationsService {
                 || input.transactionType() == DomainEnums.TransactionType.written_off) {
             throw ApiException.badRequest("Damage resolution transactions must be created from a damage report");
         }
+        if (input.factionOrderId() != null) {
+            throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
+        }
         if (input.idempotencyKey() != null) {
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
             if (existing != null)
@@ -57,6 +60,8 @@ public class InventoryOperationsService {
         }
         var state = stock(item);
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
+            requiredText(input.eventType(), "eventType");
+            requiredText(input.faction(), "faction");
             assertCheckoutAllowed(item);
             if (input.quantityChanged() > state.available())
                 throw ApiException.conflict("Only " + state.available() + " units are available");
@@ -72,6 +77,8 @@ public class InventoryOperationsService {
         transaction.quantity = input.quantityChanged();
         transaction.reason = input.reason();
         transaction.notes = input.notes();
+        transaction.eventType = blankToNull(input.eventType());
+        transaction.faction = blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         switch (input.transactionType()) {
@@ -80,8 +87,6 @@ public class InventoryOperationsService {
             default -> { }
         }
         transaction.availabilityBefore = state.available();
-        if (input.factionOrderId() != null)
-            transaction.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         orm.persist(transaction);
         transaction.availabilityAfter = stock(item).available();
         events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
@@ -321,5 +326,15 @@ public class InventoryOperationsService {
         if (value == null)
             throw ApiException.notFound(label + " not found");
         return value;
+    }
+
+    private String requiredText(String value, String field) {
+        if (value == null || value.isBlank())
+            throw ApiException.badRequest(field + " is required");
+        return value.trim();
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

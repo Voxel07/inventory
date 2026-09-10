@@ -65,7 +65,8 @@ public class SyncResource {
                 actors.requireWarehouse();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
-                        value.reason(), value.notes(), value.userId(), value.factionOrderId(), action.idempotencyKey());
+                        value.reason(), value.notes(), value.eventType(), value.faction(), value.userId(),
+                        value.factionOrderId(), action.idempotencyKey());
                 yield mapper.transaction(inventory.transact(input));
             }
             case "order.prepare" -> {

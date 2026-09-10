@@ -11,7 +11,7 @@ export function getQRUrl(id: string, type: QRResourceType = 'item', textCode?: s
     ? `${baseUrl()}/assemblies/${id}`
     : type === 'faction-order'
       ? `${baseUrl()}/orders/faction/${id}`
-      : `${baseUrl()}/items/${id}`;
+      : `${baseUrl()}/items/${id}?transaction=1`;
   if (!textCode) return url;
   const result = new URL(url);
   result.searchParams.set('code', textCode);

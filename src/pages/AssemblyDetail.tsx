@@ -22,6 +22,7 @@ import {
     Skeleton,
     Alert,
     TextField,
+    MenuItem,
     Tooltip,
     Autocomplete,
     Stack,
@@ -42,7 +43,8 @@ import { useTransactions, useAssemblyCheckout } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { useUIStore } from '../store/uiStore';
-import type { AssemblyFormData, Item } from '../types';
+import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
+import type { AssemblyFormData, EventType, Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
@@ -73,6 +75,8 @@ export function AssemblyDetail() {
     const [checkoutReason, setCheckoutReason] = useState('');
     const [checkoutNotes, setCheckoutNotes] = useState('');
     const [checkoutAmount, setCheckoutAmount] = useState(1);
+    const [checkoutEventType, setCheckoutEventType] = useState<EventType | ''>('');
+    const [checkoutFaction, setCheckoutFaction] = useState('');
 
     function handleUpdate(data: AssemblyFormData) {
         if (!assembly) return;
@@ -89,7 +93,8 @@ export function AssemblyDetail() {
     }
 
     function handleCheckout() {
-        if (!assembly) return;
+        const eventType = checkoutEventType;
+        if (!assembly || !eventType || !checkoutFaction) return;
         const quantities = assembly.itemQuantities ?? {};
         // Build full quantities map including items with default qty 1, multiplied by checkoutAmount
         const fullQuantities: Record<string, number> = {};
@@ -102,6 +107,8 @@ export function AssemblyDetail() {
                 assemblyName: assembly.name,
                 reason: checkoutReason || `Assembly checkout: ${assembly.name} (Amount: ${checkoutAmount})`,
                 notes: checkoutNotes,
+                eventType,
+                faction: checkoutFaction,
             },
             {
                 onSuccess: () => {
@@ -109,6 +116,8 @@ export function AssemblyDetail() {
                     setCheckoutReason('');
                     setCheckoutNotes('');
                     setCheckoutAmount(1);
+                    setCheckoutEventType('');
+                    setCheckoutFaction('');
                     showSnackbar(t('Baugruppe erfolgreich ausgeliehen', 'Assembly checked out successfully'), 'success');
                 },
                 onError: (error) => {
@@ -265,19 +274,72 @@ export function AssemblyDetail() {
 
             </Box>
 
-            <Paper sx={{ p: 2, mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                    {t('Event-Nutzung', 'Event use')}
-                </Typography>
-                {assembly.eventTypes?.length ? (
-                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                        {assembly.eventTypes.map((eventType) => (
-                            <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" />
-                        ))}
+            <Paper sx={{ p: { xs: 1.5, md: 2 }, mb: 3, overflow: 'hidden' }}>
+                <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: assembly.image ? { xs: '1fr', md: 'minmax(260px, 420px) minmax(0, 1fr)' } : '1fr',
+                    gap: { xs: 2, md: 2.5 },
+                    alignItems: 'stretch',
+                }}>
+                    {assembly.image && (
+                        <MediaImage
+                            src={apiFileUrl(assembly.image)}
+                            alt={assembly.name}
+                            sx={{
+                                display: 'block',
+                                width: '100%',
+                                height: { xs: 240, md: 320 },
+                                objectFit: 'contain',
+                                bgcolor: 'background.default',
+                                borderRadius: 1,
+                            }}
+                        />
+                    )}
+                    <Stack spacing={2} sx={{ minWidth: 0 }}>
+                        <Box>
+                            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
+                                {t('Event-Nutzung', 'Event use')}
+                            </Typography>
+                            {assembly.eventTypes?.length ? (
+                                <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                                    {assembly.eventTypes.map((eventType) => (
+                                        <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" size="small" />
+                                    ))}
+                                </Stack>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">{t('Keinem Event zugeordnet', 'Not assigned to an event')}</Typography>
+                            )}
+                        </Box>
+
+                        {assembly.description && <Typography variant="body1">{assembly.description}</Typography>}
+
+                        {assembly.hint && (
+                            <Alert severity="info" sx={{ py: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Montagehinweis', 'Assembly instruction')}</Typography>
+                                <Typography variant="body2">{assembly.hint}</Typography>
+                            </Alert>
+                        )}
+
+                        <Box sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
+                            gap: 1,
+                            mt: 'auto !important',
+                        }}>
+                            {[
+                                [t('Komponenten', 'Components'), String(assemblyItems.length), 'text.primary'],
+                                [t('Gesamtwert', 'Total value'), `${totalValue.toFixed(2)} €`, 'text.primary'],
+                                [t('Verfügbar', 'Available'), String(maxAssembliesPossible), maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
+                                [t('Erstellt', 'Created'), new Date(assembly.created).toLocaleDateString(), 'text.primary'],
+                            ].map(([label, value, color]) => (
+                                <Box key={label} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
+                                    <Typography variant="subtitle1" color={color} sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{value}</Typography>
+                                </Box>
+                            ))}
+                        </Box>
                     </Stack>
-                ) : (
-                    <Typography color="text.secondary">{t('Keinem Event zugeordnet', 'Not assigned to an event')}</Typography>
-                )}
+                </Box>
             </Paper>
 
             {insufficientItems.length > 0 && (
@@ -289,41 +351,6 @@ export function AssemblyDetail() {
                     }).join(', ')}
                 </Alert>
             )}
-
-            {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ display: 'block', maxWidth: '100%', maxHeight: 360, objectFit: 'contain', borderRadius: 1, mb: 2 }} />}
-
-            {assembly.description && (
-                <Paper sx={{ p: 2, mb: 3 }}>
-                    <Typography variant="body1">{assembly.description}</Typography>
-                </Paper>
-            )}
-            {assembly.hint && (
-                <Alert severity="info" sx={{ mb: 3 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{t('Montagehinweis', 'Assembly instruction')}</Typography>
-                    {assembly.hint}
-                </Alert>
-            )}
-
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Komponenten</Typography>
-                    <Typography variant="h6">{assemblyItems.length}</Typography>
-                </Paper>
-                <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Gesamtwert</Typography>
-                    <Typography variant="h6">{totalValue.toFixed(2)} €</Typography>
-                </Paper>
-                <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available for checkout')}</Typography>
-                    <Typography variant="h6" color={maxAssembliesPossible > 0 ? "success.main" : "text.secondary"}>
-                        {maxAssembliesPossible}
-                    </Typography>
-                </Paper>
-                <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary">Erstellt</Typography>
-                    <Typography variant="h6">{new Date(assembly.created).toLocaleDateString()}</Typography>
-                </Paper>
-            </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6">
@@ -507,6 +534,36 @@ export function AssemblyDetail() {
                         {t(`Dies leiht alle Artikel in „${assembly.name}“ mit den angegebenen Mengen aus.`, `This checks out every item in “${assembly.name}” in the specified quantities.`)}
                     </DialogContentText>
                     <TextField
+                        select
+                        label={t('Event', 'Event')}
+                        value={checkoutEventType}
+                        onChange={(e) => {
+                            setCheckoutEventType(e.target.value as EventType);
+                            setCheckoutFaction('');
+                        }}
+                        required
+                        fullWidth
+                        sx={{ mb: 2 }}
+                    >
+                        {EVENT_TYPES.map((eventType) => (
+                            <MenuItem key={eventType} value={eventType}>{eventType === 'LS' ? 'LightSim' : eventType}</MenuItem>
+                        ))}
+                    </TextField>
+                    <TextField
+                        select
+                        label={t('Fraktion', 'Faction')}
+                        value={checkoutFaction}
+                        onChange={(e) => setCheckoutFaction(e.target.value)}
+                        required
+                        disabled={!checkoutEventType}
+                        fullWidth
+                        sx={{ mb: 2 }}
+                    >
+                        {(checkoutEventType ? FACTIONS_BY_EVENT[checkoutEventType] : []).map((faction) => (
+                            <MenuItem key={faction} value={faction}>{faction}</MenuItem>
+                        ))}
+                    </TextField>
+                    <TextField
                         label={t('Auszuleihende Menge', 'Quantity to check out')}
                         type="number"
                         value={checkoutAmount}
@@ -542,7 +599,7 @@ export function AssemblyDetail() {
                         <Button
                             variant="contained"
                             onClick={handleCheckout}
-                            disabled={checkoutAssembly.isPending}
+                            disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction}
                         >
                             {t('Alle Artikel ausleihen', 'Check out all items')}
                         </Button>

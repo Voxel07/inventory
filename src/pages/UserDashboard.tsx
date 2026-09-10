@@ -23,6 +23,7 @@ import { useDamageReports, useCreateDamageReport } from '../hooks/useDamageRepor
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
+import { useFactionOrders, useReturnFactionOrderItems } from '../hooks/useFactionOrders';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { TransactionForm } from '../components/forms/TransactionForm';
@@ -47,9 +48,11 @@ export function UserDashboard() {
     const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
     const createTransaction = useCreateTransaction();
+    const { data: factionOrders = [] } = useFactionOrders();
+    const returnFactionOrderItems = useReturnFactionOrderItems();
     const createDamageReport = useCreateDamageReport();
 
-    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number } | null>(null);
+    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number; factionOrderId?: string } | null>(null);
     const [damageItem, setDamageItem] = useState<{ item: Item; quantity: number } | null>(null);
 
     // 1. Transactions belonging to this user
@@ -71,7 +74,7 @@ export function UserDashboard() {
             const item = itemMap.get(tx.itemId);
             if (!item) continue;
             const order = tx.expand?.factionOrderId;
-            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.reason || t('Ohne Event', 'No event');
+            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.eventType && tx.faction ? `${tx.eventType}:${tx.faction}` : t('Ohne Event', 'No event');
             const key = `${tx.itemId}:${tx.factionOrderId ?? 'manual'}`;
             const existing = rows.get(key);
             const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
@@ -86,7 +89,7 @@ export function UserDashboard() {
                 personId: currentUser.id,
                 person: currentUser.name || currentUser.email || currentUser.id,
                 eventKey: existing?.eventKey ?? eventKey,
-                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.reason || t('Ohne Event', 'No event')),
+                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
                 factionOrderId: tx.factionOrderId,
             });
         }
@@ -109,6 +112,30 @@ export function UserDashboard() {
     ];
 
     function handleReturnSubmit(data: TransactionFormData) {
+        if (data.factionOrderId) {
+            returnFactionOrderItems.mutate(
+                {
+                    id: data.factionOrderId,
+                    lines: {
+                        [data.itemId]: {
+                            returned: data.quantityChanged,
+                            consumed: 0,
+                            missing: 0,
+                            damaged: 0,
+                            notes: data.notes || undefined,
+                        },
+                    },
+                },
+                {
+                    onSuccess: () => {
+                        setReturnItem(null);
+                        showSnackbar(t('Artikel erfolgreich zurückgegeben', 'Item returned successfully'), 'success');
+                    },
+                    onError: () => showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not record return'), 'error'),
+                },
+            );
+            return;
+        }
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setReturnItem(null);
@@ -188,13 +215,13 @@ export function UserDashboard() {
                     linkToItem
                     onQuickReturn={(row) => {
                         const item = items?.find((i) => i.id === row.itemId);
-                        if (item) setReturnItem({ item, quantity: row.checkedOut });
+                        if (item) setReturnItem({ item, quantity: row.checkedOut, factionOrderId: row.factionOrderId });
                     }}
                     onDamageReport={(row) => {
                         const item = items?.find((i) => i.id === row.itemId);
                         if (item) setDamageItem({ item, quantity: row.checkedOut });
                     }}
-                    returnPending={createTransaction.isPending}
+                    returnPending={createTransaction.isPending || returnFactionOrderItems.isPending}
                 />
             </Box>
 
@@ -227,14 +254,16 @@ export function UserDashboard() {
                             key={returnItem.item.id}
                             items={items ?? []}
                             preselectedItemId={returnItem.item.id}
+                            orders={factionOrders}
                             onSubmit={handleReturnSubmit}
-                            isLoading={createTransaction.isPending}
+                            isLoading={createTransaction.isPending || returnFactionOrderItems.isPending}
                             initialData={{
                                 itemId: returnItem.item.id,
                                 transactionType: 'checkin',
                                 quantityChanged: returnItem.quantity,
                                 reason: names.reason.returnAfterUse,
                                 notes: '',
+                                factionOrderId: returnItem.factionOrderId,
                             }}
                         />
                     )}

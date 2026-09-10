@@ -1,6 +1,6 @@
 import { MediaImage } from '../components/common/MediaImage';
-import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -41,6 +41,7 @@ import {
 import { useItem, useItems, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
+import { useFactionOrders, useReturnFactionOrderItems } from '../hooks/useFactionOrders';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useStorageLocations } from '../hooks/useStorageLocations';
@@ -96,6 +97,7 @@ export function ItemDetail() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { itemId } = useParams<{ itemId: string }>();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { data: item, isLoading } = useItem(itemId ?? '');
     const { data: allItems } = useItems();
     const { data: allTransactions } = useTransactions();
@@ -103,12 +105,22 @@ export function ItemDetail() {
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
     const updateTransaction = useUpdateTransaction();
+    const { data: factionOrders = [] } = useFactionOrders();
+    const returnFactionOrderItems = useReturnFactionOrderItems();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [editingTransaction, setEditingTransaction] = useState<StockTransaction | null>(null);
+
+    useEffect(() => {
+        if (searchParams.get('transaction') !== '1') return;
+        setCheckoutOpen(true);
+        const next = new URLSearchParams(searchParams);
+        next.delete('transaction');
+        setSearchParams(next, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     function handleUpdateTransaction(data: TransactionFormData) {
         if (!editingTransaction) return;
@@ -159,6 +171,33 @@ export function ItemDetail() {
     }
 
     function handleTransaction(data: TransactionFormData) {
+        if (data.transactionType === 'checkin' && data.factionOrderId) {
+            returnFactionOrderItems.mutate(
+                {
+                    id: data.factionOrderId,
+                    lines: {
+                        [data.itemId]: {
+                            returned: data.quantityChanged,
+                            consumed: 0,
+                            missing: 0,
+                            damaged: 0,
+                            notes: data.notes || undefined,
+                        },
+                    },
+                },
+                {
+                    onSuccess: () => {
+                        setCheckoutOpen(false);
+                        showSnackbar(t('Bestellrückgabe abgeschlossen', 'Order return completed'), 'success');
+                    },
+                    onError: (error) => {
+                        if (isOfflineQueuedError(error)) return;
+                        showSnackbar(t('Bestellrückgabe fehlgeschlagen', 'Order return failed'), 'error');
+                    },
+                },
+            );
+            return;
+        }
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setCheckoutOpen(false);
@@ -374,7 +413,7 @@ export function ItemDetail() {
                             variant="contained"
                             size="small"
                             onClick={() => setCheckoutOpen(true)}
-                            disabled={remaining <= 0}
+                            disabled={remaining <= 0 && checkedOut <= 0}
                         />
                     </Paper>
                 </Grid>
@@ -602,8 +641,9 @@ export function ItemDetail() {
                     <TransactionForm
                         items={allItems ?? []}
                         preselectedItemId={item.id}
+                        orders={factionOrders}
                         onSubmit={handleTransaction}
-                        isLoading={createTransaction.isPending}
+                        isLoading={createTransaction.isPending || returnFactionOrderItems.isPending}
                     />
                 </DialogContent>
             </Dialog>

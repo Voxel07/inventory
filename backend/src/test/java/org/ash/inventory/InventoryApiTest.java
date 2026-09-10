@@ -27,7 +27,8 @@ class InventoryApiTest {
         String itemId = request().body(Map.of("sku", "SERIAL-GUARD-001", "name", "Serialized guard item",
                         "category", "Test", "amount", 0, "value", 0, "trackingMode", "serialized"))
                 .post("/api/items").then().statusCode(200).extract().path("id");
-        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1))
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1,
+                        "eventType", "DE", "faction", "KGG"))
                 .post("/api/transactions").then().statusCode(409);
 
         var orderBody = new java.util.HashMap<String, Object>();
@@ -533,7 +534,8 @@ class InventoryApiTest {
                 .body("[0].reason", equalTo("Initial stock"));
 
         request()
-                .body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1, "reason", "test"))
+                .body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1,
+                        "reason", "test", "eventType", "DE", "faction", "KGG"))
                 .post("/api/transactions")
                 .then().statusCode(409)
                 .body("error", org.hamcrest.Matchers.containsString("maintenance status is overdue"));
@@ -666,7 +668,14 @@ class InventoryApiTest {
                 .extract().path("id");
 
         request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1))
-                .post("/api/transactions").then().statusCode(200);
+                .post("/api/transactions").then().statusCode(400)
+                .body("error", org.hamcrest.Matchers.containsString("eventType is required"));
+
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1,
+                        "eventType", "DE", "faction", "KGG"))
+                .post("/api/transactions").then().statusCode(200)
+                .body("eventType", equalTo("DE"))
+                .body("faction", equalTo("KGG"));
 
         request().get("/api/items").then().statusCode(200)
                 .body("find { it.id == '" + itemId + "' }.stock.totalOwned", equalTo(3))

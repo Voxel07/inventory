@@ -37,8 +37,8 @@ export function useUpdateTransaction() {
 export function useAssemblyCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ itemQuantities, assemblyName, reason, notes }: { itemQuantities: Record<string, number>; assemblyName: string; reason: string; notes: string }) =>
-      assemblyCheckout(itemQuantities, assemblyName, reason, notes),
+    mutationFn: ({ itemQuantities, assemblyName, reason, notes, eventType, faction }: { itemQuantities: Record<string, number>; assemblyName: string; reason: string; notes: string; eventType: TransactionFormData['eventType']; faction: string }) =>
+      assemblyCheckout(itemQuantities, assemblyName, reason, notes, eventType, faction),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });

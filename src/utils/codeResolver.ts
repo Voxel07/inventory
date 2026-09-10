@@ -34,7 +34,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
     return {
       found: true,
       type: 'item',
-      path: `/items/${itemUrlMatch[1]}`,
+      path: `/items/${itemUrlMatch[1]}?transaction=1`,
       code,
     };
   }
@@ -84,7 +84,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
       return {
         found: true,
         type: 'item',
-        path: `/items/${matchingItem.id}`,
+        path: `/items/${matchingItem.id}?transaction=1`,
         name: matchingItem.name,
         code,
       };

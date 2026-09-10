@@ -467,7 +467,13 @@ export function CsvImportDialog({
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 {fileName || t('Geladene CSV-Daten', 'Loaded CSV data')} ({rows.length} {t('Zeilen', 'rows')})
               </Typography>
-              <Button size="small" color="secondary" onClick={resetState} disabled={isImporting}>
+              <Button
+                size="small"
+                color="secondary"
+                onClick={resetState}
+                disabled={isImporting}
+                sx={{ color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.secondary.main }}
+              >
                 {t('Andere Datei wählen', 'Choose another file')}
               </Button>
             </Stack>

@@ -22,6 +22,8 @@ public class StockTransaction extends BaseEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.TransactionType type;
     @Column(nullable = false) public int quantity;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "faction_order_id") public FactionOrder factionOrder;
+    @Column(name = "event_type") public String eventType;
+    @Column(name = "faction") public String faction;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "damage_report_id") public DamageReport damageReport;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_location_id") public StorageLocation sourceLocation;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "destination_location_id") public StorageLocation destinationLocation;

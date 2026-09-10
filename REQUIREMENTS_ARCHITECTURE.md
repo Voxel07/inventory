@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** Implemented architecture baseline, 2026-09-10
+> **Status:** Implemented architecture baseline, 2026-09-11
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -45,11 +45,13 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | LOC-01 | Maintain hierarchical/georeferenced storage and pickup locations | Implemented | `StorageLocation`, map components, pickup map dialog |
 | INV-01 | Distinguish total owned, on-hand, checked-out, damaged, reserved, and available stock | Implemented | `InventoryOperationsService.StockState`, `StockDto` |
 | INV-02 | Block over-allocation and unsafe/overdue checkout | Implemented | locked transaction paths and maintenance guard |
+| INV-03 | Require event and faction context for every direct checkout and retain that context on the immutable transaction | Implemented | `TransactionForm`, assembly checkout, `InventoryOperationsService`, `StockTransaction` |
 | ORD-01 | Support `draft → submitted → preparing → ready → picked_up → partially_returned/returned → closed` plus cancellation | Implemented | `OrderService`, order resources and hooks |
 | ORD-02 | Commission individual items and assemblies on desktop and mobile | Implemented | `OrderPickListTable` |
 | ORD-03 | Reserve prepared quantities and atomically convert them to custody on pickup | Implemented | reservations, order service, stock transactions |
 | ORD-04 | Reconcile returned, consumed, missing, damaged, and written-off units | Implemented | `OrderReturnChecklist`, return service path |
 | ORD-05 | Compare the current order with the previous event-year baseline | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
+| ORD-06 | Resolve item QR codes directly to stock handling, show checked-out quantity, and reconcile returns against an optional originating order | Implemented | QR resolver, `TransactionForm`, faction-order return endpoint |
 | AUD-01 | Preserve append-only order history with actor, timestamp, action, note, and delta | Implemented | `FactionOrderHistory`, mapper, `OrderTraceability` |
 | AUD-02 | Display create/prepare/ready/pickup/return actors and timestamps | Implemented | `OrderTraceability` |
 | DAM-01 | Report, repair, verify, and write off damaged stock without creating stock | Implemented | damage service/resource and regression tests |
@@ -123,6 +125,8 @@ Invariants:
 - Damage repair changes condition, not physical quantity.
 - A write-off is the explicit operation that reduces owned stock.
 - Serialized items require asset-specific transactions; quantity-only commands are rejected.
+- Direct checkout commands require an event and faction snapshot. Order checkout and return transactions derive the same snapshot from their source order.
+- A return associated with a faction order must use the order reconciliation use case; the generic transaction endpoint rejects order-linked stock changes.
 
 The item collection is intentionally **not server-cached** because it carries dynamic stock. Its stock projection is computed with three grouped queries—transaction totals, unresolved damage, and active reservations—rather than per-item queries. Stable catalog collections may use server caching and ETags.
 
@@ -155,7 +159,7 @@ Every transition appends a history entry with:
 - item/assembly additions, removals, and before/after quantity changes;
 - idempotency key for replayable commands.
 
-The detail UI exposes the immutable history, lifecycle actors, timestamps, and the previous comparable faction order. Editing a current order never overwrites its prior history snapshots.
+The detail UI exposes the immutable history, lifecycle actors, timestamps, and the previous comparable faction order. Editing a current order never overwrites its prior history snapshots. Item QR codes open the transaction workflow directly; returns show the total quantity currently out and offer only picked-up orders with an outstanding quantity for that item. Selecting an order records the return through its reconciliation aggregate rather than creating an unrelated stock entry.
 
 ## 8. Offline and consistency model
 
@@ -172,7 +176,7 @@ The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panach
 
 This is the principal remaining production-hardening debt. Before a multi-node or audited production rollout, replace schema update with reviewed, forward-only Flyway migrations and include a deployment migration that converts any non-canonical role values before the application starts. Until then, database backup and restore validation are deployment prerequisites.
 
-Core persisted concepts include users, storage locations, items and images, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, reconciliations, stock transactions, damage reports, maintenance, and domain outbox events.
+Core persisted concepts include users, storage locations, items and images, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, reconciliations, stock transactions (including immutable event/faction checkout snapshots), damage reports, maintenance, and domain outbox events.
 
 ## 10. Media contract
 
@@ -192,6 +196,10 @@ Database records contain canonical relative object keys only, for example `items
 | P2 — Panache dependency without a Panache model | Panache dependency and entity inheritance removed | Maven clean test |
 | Legacy authentication/authorization | Old local storage reads, old enum values, role aliases, and old group mappings removed | `ActorServiceRoleTest`, API auth test |
 | Legacy order/media representations | old pickup quantity fallback and URL-to-key conversion removed | order/API tests and `MediaServiceTest` |
+| QR return lacked custody context | Scan opens the transaction dialog, shows checked-out quantity, filters eligible orders, and routes selected returns through order reconciliation | TypeScript production build and order API tests |
+| Checkout lacked event/faction traceability | UI requires both fields; API rejects context-free checkout; transaction response exposes the stored snapshot | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout` |
+| General orders tab remained inactive | Canonical `tab=general` URL state replaces the contradictory empty-query fallback | TypeScript production build |
+| Dense assembly media layout | Image, event tags, description, instruction, and metrics share one responsive summary panel | TypeScript production build |
 
 Required verification before merge:
 

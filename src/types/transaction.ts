@@ -1,4 +1,5 @@
 import type { User } from './user';
+import type { EventType } from './event';
 
 export interface StockTransaction {
   id: string;
@@ -8,6 +9,8 @@ export interface StockTransaction {
   userId: string;
   damageReportId?: string;
   factionOrderId?: string;
+  eventType?: EventType;
+  faction?: string;
   clientCommandId?: string;
   sourceLocationId?: string;
   destinationLocationId?: string;
@@ -38,4 +41,6 @@ export interface TransactionFormData {
   notes: string;
   userId?: string;
   factionOrderId?: string;
+  eventType?: EventType;
+  faction?: string;
 }
