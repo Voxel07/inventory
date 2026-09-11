@@ -16,6 +16,7 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 @QuarkusTest
 class InventoryApiTest {
@@ -754,5 +755,42 @@ class InventoryApiTest {
                 .body("find { it.id == '" + itemId + "' }.stock.onHand", equalTo(2))
                 .body("find { it.id == '" + itemId + "' }.stock.checkedOut", equalTo(1))
                 .body("find { it.id == '" + itemId + "' }.stock.available", equalTo(2));
+    }
+
+    @Test
+    void deletingStorageLocationUnassignsItemsAndAssets() {
+        String locationId = request().body(Map.of("name", "Location to delete", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of(
+                        "sku", "DELETE-LOCATION-001", "name", "Located serialized item", "category", "Test",
+                        "amount", 1, "value", 0, "trackingMode", "serialized", "storageLocation", locationId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+
+        request().delete("/api/storage-locations/" + locationId).then().statusCode(204);
+
+        request().get("/api/storage-locations").then().statusCode(200)
+                .body("find { it.id == '" + locationId + "' }", nullValue());
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("storageLocation", nullValue())
+                .body("expand.storageLocation", nullValue());
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[0].currentLocationId", nullValue())
+                .body("[0].currentLocationName", nullValue());
+    }
+
+    @Test
+    void deletingItemRemovesItsTransactionHistory() {
+        String itemId = request().body(Map.of(
+                        "sku", "DELETE-HISTORY-001", "name", "Item with history", "category", "Test",
+                        "amount", 3, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+
+        request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
+                .body("size()", equalTo(1));
+
+        request().delete("/api/items/" + itemId).then().statusCode(204);
+
+        request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
+                .body("size()", equalTo(0));
     }
 }

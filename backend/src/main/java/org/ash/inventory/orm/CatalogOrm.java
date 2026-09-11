@@ -34,7 +34,7 @@ public class CatalogOrm {
     }
 
     public List<StorageLocation> locations() {
-        return entityManager.createQuery("from StorageLocation l order by l.createdAt desc", StorageLocation.class).getResultList();
+        return entityManager.createQuery("from StorageLocation l where l.active = true order by l.createdAt desc", StorageLocation.class).getResultList();
     }
 
     public List<Assembly> assemblies() {
@@ -98,9 +98,11 @@ public class CatalogOrm {
                 .setParameter("assembly", assembly).executeUpdate();
     }
 
-    public long countItemsAt(StorageLocation location) {
-        return entityManager.createQuery("select count(i) from Item i where i.storageLocation = :location", Long.class)
-                .setParameter("location", location).getSingleResult();
+    public void clearActiveLocationAssignments(StorageLocation location) {
+        entityManager.createQuery("update Item i set i.storageLocation = null where i.storageLocation = :location")
+                .setParameter("location", location).executeUpdate();
+        entityManager.createQuery("update AssetInstance a set a.currentLocation = null where a.currentLocation = :location")
+                .setParameter("location", location).executeUpdate();
     }
 
     public List<AssetInstance> assetInstances(Item item) {
@@ -116,6 +118,11 @@ public class CatalogOrm {
     public long countTransactions(Item item) {
         return entityManager.createQuery("select count(tx) from StockTransaction tx where tx.item = :item", Long.class)
                 .setParameter("item", item).getSingleResult();
+    }
+
+    public void deleteTransactionHistory(Item item) {
+        entityManager.createQuery("delete from StockTransaction tx where tx.item = :item")
+                .setParameter("item", item).executeUpdate();
     }
 
     public AssetInstance findAssetByCode(String code) {

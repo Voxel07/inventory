@@ -110,6 +110,7 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
+        orm.deleteTransactionHistory(item);
         item.active = false;
         catalogChanged("items", item.id);
     }
@@ -173,8 +174,9 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteLocation(UUID id) {
         var location = locked(StorageLocation.class, id, "Storage location");
-        if (orm.countItemsAt(location) > 0) throw ApiException.conflict("Storage location is still assigned to inventory items");
-        orm.remove(location);
+        if (!location.active) throw ApiException.notFound("Storage location not found");
+        orm.clearActiveLocationAssignments(location);
+        location.active = false;
         catalogChanged("storage-locations", location.id);
     }
 

@@ -16,6 +16,9 @@ export interface CrudMutations<TForm> {
 
 export interface CrudManagerOptions {
   entityName: string;
+  entityNameEnglish?: string;
+  entityNamePlural?: string;
+  entityNamePluralEnglish?: string;
   createSuccessMessage?: string;
   updateSuccessMessage?: string;
   deleteSuccessMessage?: string;
@@ -27,6 +30,9 @@ export function useCrudManager<T extends { id: string }, TForm>(
 ) {
   const t = useLocalizedText();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
+  const entityNameEnglish = options.entityNameEnglish ?? options.entityName;
+  const entityNamePlural = options.entityNamePlural ?? options.entityName;
+  const entityNamePluralEnglish = options.entityNamePluralEnglish ?? entityNameEnglish;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<T | undefined>();
@@ -65,13 +71,13 @@ export function useCrudManager<T extends { id: string }, TForm>(
         closeForm();
         showSnackbar(
           options.createSuccessMessage ??
-            t(`${options.entityName} erfolgreich erstellt`, `${options.entityName} created successfully`),
+            t(`${options.entityName} erfolgreich erstellt`, `${entityNameEnglish} created successfully`),
           'success',
         );
       },
       onError: () =>
         showSnackbar(
-          t(`Fehler beim Erstellen von ${options.entityName}`, `Could not create ${options.entityName}`),
+          t(`Fehler beim Erstellen von ${options.entityName}`, `Could not create ${entityNameEnglish}`),
           'error',
         ),
     });
@@ -86,13 +92,13 @@ export function useCrudManager<T extends { id: string }, TForm>(
           closeForm();
           showSnackbar(
             options.updateSuccessMessage ??
-              t(`${options.entityName} erfolgreich aktualisiert`, `${options.entityName} updated successfully`),
+              t(`${options.entityName} erfolgreich aktualisiert`, `${entityNameEnglish} updated successfully`),
             'success',
           );
         },
         onError: () =>
           showSnackbar(
-            t(`Fehler beim Aktualisieren von ${options.entityName}`, `Could not update ${options.entityName}`),
+            t(`Fehler beim Aktualisieren von ${options.entityName}`, `Could not update ${entityNameEnglish}`),
             'error',
           ),
       },
@@ -115,13 +121,13 @@ export function useCrudManager<T extends { id: string }, TForm>(
           setDeletingIds([]);
           showSnackbar(
             options.deleteSuccessMessage ??
-              t(`${options.entityName} gelöscht`, `${options.entityName} deleted`),
+              t(`${options.entityName} gelöscht`, `${entityNameEnglish} deleted`),
             'success',
           );
         },
         onError: () =>
           showSnackbar(
-            t(`Fehler beim Löschen von ${options.entityName}`, `Could not delete ${options.entityName}`),
+            t(`Fehler beim Löschen von ${options.entityName}`, `Could not delete ${entityNameEnglish}`),
             'error',
           ),
       });
@@ -131,13 +137,13 @@ export function useCrudManager<T extends { id: string }, TForm>(
           const count = deletingIds.length;
           setDeletingIds([]);
           showSnackbar(
-            t(`${count} ${options.entityName} gelöscht`, `${count} items deleted`),
+            t(`${count} ${entityNamePlural} gelöscht`, `${count} ${entityNamePluralEnglish} deleted`),
             'success',
           );
         },
         onError: () =>
           showSnackbar(
-            t(`Fehler beim Löschen der ${options.entityName}`, `Could not delete items`),
+            t(`Fehler beim Löschen der ${entityNamePlural}`, `Could not delete ${entityNamePluralEnglish}`),
             'error',
           ),
       });

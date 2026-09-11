@@ -1,6 +1,6 @@
 import { MediaImage } from '../common/MediaImage';
 import { apiFileUrl } from '../../services/apiClient';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Table,
     TableBody,
@@ -20,6 +20,8 @@ import {
     ListItemText,
     Tooltip,
     Box,
+    Button,
+    Checkbox,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -40,17 +42,33 @@ interface Props {
     isLoading: boolean;
     onEdit: (assembly: Assembly) => void;
     onDelete: (id: string) => void;
+    onDeleteMany: (ids: string[]) => void;
 }
 
-export function AssembliesList({ assemblies, items, transactions, damageReports, isLoading, onEdit, onDelete }: Props) {
+export function AssembliesList({ assemblies, items, transactions, damageReports, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
     const t = useLocalizedText();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
     const stockByItemId = useMemo(() => new Map((items ?? []).map((item) => [
         item.id,
         calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item),
     ])), [damageReports, items, transactions]);
+
+    useEffect(() => {
+        const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);
+        setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
+    }, [assemblies]);
+
+    function toggleSelection(id: string) {
+        setSelectedIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, assembly: Assembly) => {
         event.stopPropagation();
@@ -125,10 +143,33 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
     }
 
     return (
-        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-            <Table size="small">
+        <Box>
+            {selectedIds.size > 0 && (
+                <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
+                    <Typography sx={{ fontWeight: 700 }}>
+                        {t(`${selectedIds.size} ${selectedIds.size === 1 ? 'Baugruppe' : 'Baugruppen'} ausgewählt`, `${selectedIds.size} assembl${selectedIds.size === 1 ? 'y' : 'ies'} selected`)}
+                    </Typography>
+                    <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany([...selectedIds])}>
+                        {t('Auswahl löschen', 'Delete selected')}
+                    </Button>
+                </Paper>
+            )}
+            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+                <Table size="small">
                 <TableHead>
                     <TableRow>
+                        <TableCell padding="checkbox">
+                            <Checkbox
+                                size="small"
+                                checked={assemblies.length > 0 && assemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                indeterminate={assemblies.some((assembly) => selectedIds.has(assembly.id)) && !assemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                onChange={() => {
+                                    const allSelected = assemblies.every((assembly) => selectedIds.has(assembly.id));
+                                    setSelectedIds(allSelected ? new Set() : new Set(assemblies.map((assembly) => assembly.id)));
+                                }}
+                                slotProps={{ input: { 'aria-label': t('Alle Baugruppen auswählen', 'Select all assemblies') } }}
+                            />
+                        </TableCell>
                         <TableCell>{t('Name', 'Name')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
@@ -148,6 +189,14 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
                                 onClick={() => navigate(`/assemblies/${assembly.id}`)}
                                 sx={{ cursor: 'pointer' }}
                             >
+                                <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                                    <Checkbox
+                                        size="small"
+                                        checked={selectedIds.has(assembly.id)}
+                                        onChange={() => toggleSelection(assembly.id)}
+                                        slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
+                                    />
+                                </TableCell>
                                 <TableCell>
                                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                         {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 64, height: 48, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} />}
@@ -229,7 +278,7 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
                         );
                     })}
                 </TableBody>
-            </Table>
+                </Table>
 
             <Menu
                 anchorEl={anchorEl}
@@ -256,6 +305,7 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
                     <ListItemText>{t('Löschen', 'Delete')}</ListItemText>
                 </MenuItem>
             </Menu>
-        </TableContainer>
+            </TableContainer>
+        </Box>
     );
 }

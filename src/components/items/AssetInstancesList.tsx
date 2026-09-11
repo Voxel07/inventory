@@ -32,7 +32,7 @@ import DynamicFeedIcon from '@mui/icons-material/DynamicFeed';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { Item, AssetInstance, AssetInstanceInput } from '../../types';
+import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useLocalizedText } from '../../utils/naming';
@@ -89,7 +89,14 @@ export function AssetInstancesList({ item }: Props) {
         notes: '',
     });
 
-    const [batchInput, setBatchInput] = useState({
+    const [batchInput, setBatchInput] = useState<{
+        batchCount: number;
+        codePrefix: string;
+        startNumber: number;
+        conditionStatus: AssetConditionStatus;
+        availabilityStatus: AssetAvailabilityStatus;
+        currentLocationId?: string;
+    }>({
         batchCount: 5,
         codePrefix: item.sku ? `${item.sku}-` : 'ASSET-',
         startNumber: 1,
@@ -183,8 +190,8 @@ export function AssetInstancesList({ item }: Props) {
             batchCount: Number(batchInput.batchCount),
             codePrefix: batchInput.codePrefix,
             startNumber: Number(batchInput.startNumber),
-            conditionStatus: batchInput.conditionStatus as any,
-            availabilityStatus: batchInput.availabilityStatus as any,
+            conditionStatus: batchInput.conditionStatus,
+            availabilityStatus: batchInput.availabilityStatus,
             currentLocationId: batchInput.currentLocationId,
         }, {
             onSuccess: () => setBatchOpen(false),
@@ -441,7 +448,7 @@ export function AssetInstancesList({ item }: Props) {
                         select
                         label={t('Status', 'Status')}
                         value={singleInput.availabilityStatus || 'available'}
-                        onChange={(e) => updateSingle({ availabilityStatus: e.target.value as any })}
+                        onChange={(e) => updateSingle({ availabilityStatus: e.target.value as AssetAvailabilityStatus })}
                         fullWidth
                     >
                         <MenuItem value="available">{t('Verfügbar', 'Available')}</MenuItem>
@@ -454,7 +461,7 @@ export function AssetInstancesList({ item }: Props) {
                         select
                         label={t('Zustand', 'Condition')}
                         value={singleInput.conditionStatus || 'good'}
-                        onChange={(e) => updateSingle({ conditionStatus: e.target.value as any })}
+                        onChange={(e) => updateSingle({ conditionStatus: e.target.value as AssetConditionStatus })}
                         fullWidth
                     >
                         <MenuItem value="new_condition">{t('Neu', 'New')}</MenuItem>
@@ -568,7 +575,7 @@ export function AssetInstancesList({ item }: Props) {
                         select
                         label={t('Status', 'Status')}
                         value={editInput.availabilityStatus || 'available'}
-                        onChange={(e) => updateEdit({ availabilityStatus: e.target.value as any })}
+                        onChange={(e) => updateEdit({ availabilityStatus: e.target.value as AssetAvailabilityStatus })}
                         fullWidth
                     >
                         <MenuItem value="available">{t('Verfügbar', 'Available')}</MenuItem>
@@ -582,7 +589,7 @@ export function AssetInstancesList({ item }: Props) {
                         select
                         label={t('Zustand', 'Condition')}
                         value={editInput.conditionStatus || 'good'}
-                        onChange={(e) => updateEdit({ conditionStatus: e.target.value as any })}
+                        onChange={(e) => updateEdit({ conditionStatus: e.target.value as AssetConditionStatus })}
                         fullWidth
                     >
                         <MenuItem value="new_condition">{t('Neu', 'New')}</MenuItem>

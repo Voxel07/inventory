@@ -34,7 +34,7 @@ export function Items() {
 
     const crud = useCrudManager<Item, ItemFormData>(
         { create: createItem, update: updateItem, delete: deleteItem, deleteMany: deleteItems },
-        { entityName: 'Artikel' },
+        { entityName: 'Artikel', entityNameEnglish: 'item', entityNamePlural: 'Artikel', entityNamePluralEnglish: 'items' },
     );
 
     const [importOpen, setImportOpen] = useState(false);
@@ -119,8 +119,8 @@ export function Items() {
                 open={crud.isDeleteOpen}
                 title={t('Artikel löschen', crud.deletingIds.length > 1 ? 'Delete items' : 'Delete item')}
                 message={t(
-                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} Artikel löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
-                    `Are you sure you want to delete ${crud.deletingIds.length} item(s)? This cannot be undone.`,
+                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} Artikel einschließlich des zugehörigen Transaktionsverlaufs löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
+                    `Are you sure you want to delete ${crud.deletingIds.length} item(s), including their transaction history? This cannot be undone.`,
                 )}
                 actionLabel={t('Löschen', 'Delete')}
                 actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}

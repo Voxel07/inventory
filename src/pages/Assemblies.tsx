@@ -6,7 +6,7 @@ import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
-import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly } from '../hooks/useAssemblies';
+import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useTransactions } from '../hooks/useTransactions';
@@ -29,10 +29,11 @@ export function Assemblies() {
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
     const deleteAssembly = useDeleteAssembly();
+    const deleteAssemblies = useDeleteAssemblies();
 
     const crud = useCrudManager<Assembly, AssemblyFormData>(
-        { create: createAssembly, update: updateAssembly, delete: deleteAssembly },
-        { entityName: 'Baugruppe' },
+        { create: createAssembly, update: updateAssembly, delete: deleteAssembly, deleteMany: deleteAssemblies },
+        { entityName: 'Baugruppe', entityNameEnglish: 'assembly', entityNamePlural: 'Baugruppen', entityNamePluralEnglish: 'assemblies' },
     );
 
     const [importOpen, setImportOpen] = useState(false);
@@ -66,7 +67,8 @@ export function Assemblies() {
                 damageReports={damageReports}
                 isLoading={isLoading || transactionsLoading || damageReportsLoading}
                 onEdit={crud.openEdit}
-                onDelete={crud.setDeletingId}
+                onDelete={crud.openDelete}
+                onDeleteMany={crud.openDeleteMany}
             />
 
             {/* Create Dialog */}
@@ -94,15 +96,20 @@ export function Assemblies() {
 
             {/* Delete Confirmation */}
             <ConfirmDialog
-                open={Boolean(crud.deletingId)}
-                title={t('Baugruppe löschen', 'Delete assembly')}
-                message={t('Sind Sie sicher, dass Sie diese Baugruppe löschen möchten? Dies kann nicht rückgängig gemacht werden.', 'Are you sure you want to delete this assembly? This cannot be undone.')}
+                open={crud.isDeleteOpen}
+                title={crud.deletingIds.length > 1
+                    ? t('Baugruppen löschen', 'Delete assemblies')
+                    : t('Baugruppe löschen', 'Delete assembly')}
+                message={t(
+                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} ${crud.deletingIds.length === 1 ? 'Baugruppe' : 'Baugruppen'} löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
+                    `Are you sure you want to delete ${crud.deletingIds.length} assembl${crud.deletingIds.length === 1 ? 'y' : 'ies'}? This cannot be undone.`,
+                )}
                 actionLabel={t('Löschen', 'Delete')}
                 actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
                 actionColor="error"
-                onClose={() => crud.setDeletingId(undefined)}
-                onConfirm={crud.confirmDelete}
-                pending={deleteAssembly.isPending}
+                onClose={crud.closeDelete}
+                onConfirm={crud.handleDeleteConfirm}
+                pending={deleteAssembly.isPending || deleteAssemblies.isPending}
             />
 
             {/* CSV Import Dialog */}

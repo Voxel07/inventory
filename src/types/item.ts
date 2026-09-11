@@ -104,6 +104,9 @@ export interface ItemFormData {
   maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
 }
 
+export type AssetConditionStatus = 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
+export type AssetAvailabilityStatus = 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+
 export interface AssetInstance {
   id: string;
   createdAt: string;
@@ -113,8 +116,8 @@ export interface AssetInstance {
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
-  conditionStatus: 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
-  availabilityStatus: 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+  conditionStatus: AssetConditionStatus;
+  availabilityStatus: AssetAvailabilityStatus;
   serviceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
   operatingHours?: number;
   currentLocationId?: string;
@@ -130,8 +133,8 @@ export interface AssetInstanceInput {
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
-  conditionStatus?: 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
-  availabilityStatus?: 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+  conditionStatus?: AssetConditionStatus;
+  availabilityStatus?: AssetAvailabilityStatus;
   currentLocationId?: string;
   currentCustodianId?: string;
   operatingHours?: number;
