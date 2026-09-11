@@ -2,13 +2,16 @@ import type { EventReport, EventReportFormData, EventType } from '../types';
 import { createMutableResourceApi } from './resourceFactory';
 
 function formatEventPayload(data: Partial<EventReportFormData>) {
+  const eventDate = data.eventDate?.slice(0, 10);
   return {
     eventType: data.eventType,
-    name: data.eventDate ? `${data.eventType} ${new Date(data.eventDate).getUTCFullYear()}` : undefined,
-    startDate: data.eventDate,
-    endDate: data.eventDate,
+    name: eventDate ? `${data.eventType} ${eventDate.slice(0, 4)}` : undefined,
+    startDate: eventDate,
+    endDate: eventDate,
     status: data.status,
     notes: data.notes,
+    plannedQuantities: data.plannedQuantities,
+    usedQuantities: data.usedQuantities,
   };
 }
 

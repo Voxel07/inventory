@@ -1,4 +1,4 @@
-import { EVENT_TYPES, type Assembly, type AssemblyFormData, type EventType, type Item, type ItemFormData, type StorageLocation } from '../types';
+import { EVENT_TYPES, FACTIONS_BY_EVENT, type Assembly, type AssemblyFormData, type EventReportFormData, type EventReportStatus, type EventType, type FactionOrderFormData, type Item, type ItemFormData, type StorageLocation } from '../types';
 
 export interface ParsedItemRow {
   index: number;
@@ -6,6 +6,7 @@ export interface ParsedItemRow {
   rawRow: Record<string, string>;
   storageLocationName?: string;
   storageLocationId?: string;
+  assetCodes?: string[];
   status: 'valid' | 'warning' | 'error' | 'duplicate';
   statusMessage?: string;
   isExisting: boolean;
@@ -28,6 +29,26 @@ export interface ParsedAssemblyRow {
   statusMessage?: string;
   isExisting: boolean;
   existingId?: string;
+}
+
+export interface ParsedEventReportRow {
+  index: number;
+  data: EventReportFormData;
+  rawRow: Record<string, string>;
+  plannedItems: ParsedAssemblyComponent[];
+  usedItems: ParsedAssemblyComponent[];
+  status: 'valid' | 'error';
+  statusMessage?: string;
+}
+
+export interface ParsedFactionOrderRow {
+  index: number;
+  data: FactionOrderFormData;
+  rawRow: Record<string, string>;
+  requestedItems: ParsedAssemblyComponent[];
+  targetStatus: 'draft' | 'submitted';
+  status: 'valid' | 'error';
+  statusMessage?: string;
 }
 
 export type CsvImportType = 'items' | 'assemblies' | 'combined';
@@ -178,11 +199,45 @@ const DESCRIPTION_ALIASES = ['description', 'beschreibung', 'details', 'info'];
 const CONTAINER_SIZE_ALIASES = ['containersize', 'gebindegroesse', 'gebindegröße', 'packungsgroesse'];
 const CONTAINER_COUNT_ALIASES = ['containercount', 'gebindeanzahl', 'packungsanzahl'];
 const MAINTENANCE_DAYS_ALIASES = ['maintenanceintervaldays', 'wartungsintervall', 'wartungsintervalltage'];
+const TRACKING_MODE_ALIASES = [
+  'trackingmode',
+  'tracking_mode',
+  'tracking',
+  'trackingmodus',
+  'tracking-modus',
+  'erfassungsart',
+  'nachverfolgung',
+  'seriennummernverwaltung',
+];
+const ASSET_CODE_ALIASES = [
+  'assetcode',
+  'assetcodes',
+  'asset_code',
+  'asset_codes',
+  'asset',
+  'assets',
+  'seriennummer',
+  'seriennummern',
+  'serialnumber',
+  'serialnumbers',
+  'geraetecode',
+  'gerätecode',
+  'inventarnummer',
+  'inventarnummern',
+];
 
 const ASSEMBLY_NAME_ALIASES = ['name', 'baugruppenname', 'assembly', 'baugruppe', 'assemblyname', 'setname', 'set'];
 const ASSEMBLY_COMPONENTS_ALIASES = ['items', 'komponenten', 'components', 'bestandteile', 'inhalt', 'parts'];
 const COMPONENT_ITEM_ALIASES = ['componentitem', 'komponentenartikel', 'komponente', 'einzelteil', 'component'];
 const COMPONENT_QTY_ALIASES = ['quantity', 'menge', 'anzahl', 'qty', 'stueck', 'stück', 'amount'];
+const EVENT_REPORT_TYPE_ALIASES = ['eventtype', 'eventtyp', 'veranstaltungstyp'];
+const EVENT_DATE_ALIASES = ['eventdate', 'eventdatum', 'veranstaltungsdatum', 'datum', 'date'];
+const EVENT_STATUS_ALIASES = ['eventstatus', 'status'];
+const EVENT_PLANNED_ALIASES = ['planned', 'planneditems', 'geplant', 'geplantemengen', 'planmengen'];
+const EVENT_USED_ALIASES = ['used', 'useditems', 'verwendet', 'verwendetemengen', 'tatsaechlichverwendet', 'tatsächlichverwendet'];
+const ORDER_FACTION_ALIASES = ['faction', 'fraktion'];
+const ORDER_ITEMS_ALIASES = ['ordereditems', 'requesteditems', 'bestellteartikel', 'angeforderteartikel'];
+const ORDER_STATUS_ALIASES = ['orderstatus', 'bestellstatus'];
 
 export function detectCsvType(headers: string[]): CsvImportType {
   const normHeaders = headers.map(normalizeKey);
@@ -202,6 +257,29 @@ function parseBoolean(val: string | undefined): boolean {
   if (!val) return false;
   const lower = val.toLowerCase().trim();
   return ['true', '1', 'ja', 'yes', 'wahr', 'y', 'j', 'x'].includes(lower);
+}
+
+function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
+  if (!val) return undefined;
+  const lower = val.toLowerCase().trim();
+  if (['serialized', 'seriell', 'einzeln', 'einzelgerät', 'einzelgeraet', 'seriennummer', 'serial'].includes(lower)) {
+    return 'serialized';
+  }
+  if (['lot_tracked', 'lot', 'charge', 'chargen', 'chargenverfolgt'].includes(lower)) {
+    return 'lot_tracked';
+  }
+  if (['bulk', 'masse', 'mengenbasiert', 'menge'].includes(lower)) {
+    return 'bulk';
+  }
+  return undefined;
+}
+
+function parseAssetCodes(val: string | undefined): string[] {
+  if (!val) return [];
+  return val
+    .split(/[,|\r\n;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function parseNumber(val: string | undefined, defaultValue: number): number {
@@ -266,14 +344,24 @@ export function parseItemsFromCsv(
 
     const category = getField(raw, CATEGORY_ALIASES) || 'Allgemein';
     const amountStr = getField(raw, AMOUNT_ALIASES);
-    const amount = amountStr ? Math.max(0, Math.round(parseNumber(amountStr, 0))) : 0;
     const minStock = Math.max(0, Math.round(parseNumber(getField(raw, MIN_STOCK_ALIASES), 5)));
     const value = Math.max(0, parseNumber(getField(raw, VALUE_ALIASES), 0));
     const subcategory = getField(raw, SUBCATEGORY_ALIASES);
     const supplier = getField(raw, SUPPLIER_ALIASES);
     const hint = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES);
-    const isConsumable = parseBoolean(getField(raw, CONSUMABLE_ALIASES));
     const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES));
+
+    const rawTrackingMode = parseTrackingMode(getField(raw, TRACKING_MODE_ALIASES));
+    const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
+    const trackingMode = rawTrackingMode || (assetCodes.length > 0 ? 'serialized' : undefined);
+
+    let amount = amountStr ? Math.max(0, Math.round(parseNumber(amountStr, 0))) : 0;
+    if (amount === 0 && assetCodes.length > 0) {
+      amount = assetCodes.length;
+    }
+
+    const rawIsConsumable = parseBoolean(getField(raw, CONSUMABLE_ALIASES));
+    const isConsumable = trackingMode === 'serialized' ? false : rawIsConsumable;
 
     const locInput = getField(raw, LOCATION_ALIASES);
     let storageLocationId = '';
@@ -306,6 +394,8 @@ export function parseItemsFromCsv(
       supplier,
       hint,
       isConsumable,
+      trackingMode: trackingMode || 'bulk',
+      inventoryRole: trackingMode === 'serialized' ? 'returnable' : (isConsumable ? 'consumable' : 'returnable'),
       eventTypes,
       containerSize: containerSizeStr ? parseNumber(containerSizeStr, 0) : undefined,
       containerCount: containerCountStr ? Math.round(parseNumber(containerCountStr, 0)) : undefined,
@@ -330,6 +420,7 @@ export function parseItemsFromCsv(
       rawRow: raw,
       storageLocationName,
       storageLocationId,
+      assetCodes: assetCodes.length > 0 ? assetCodes : undefined,
       status,
       statusMessage,
       isExisting: Boolean(existing),
@@ -345,7 +436,9 @@ export function parseItemsFromCsv(
  * "LED Scheinwerfer: 2; Kabeltrommel: 1" or "Generator (1), Benzin (20)"
  */
 function parseInlineComponents(str: string): { name: string; quantity: number }[] {
-  const parts = str.split(/[;,]+/).map((p) => p.trim()).filter(Boolean);
+  // Prefer semicolons when present so commas remain valid inside item names
+  // (for example "Benzingenerator 3,5 kW").
+  const parts = str.split(str.includes(';') ? /[;]+/ : /[,]+/).map((p) => p.trim()).filter(Boolean);
   const result: { name: string; quantity: number }[] = [];
 
   for (const part of parts) {
@@ -580,15 +673,180 @@ export function parseAssembliesFromCsv(
 }
 
 /**
+ * Parses event history rows from a combined CSV. Event quantities use the same
+ * compact syntax as assemblies, for example "Cable reel: 4; Floodlight: 2".
+ */
+export function parseEventReportsFromCsv(
+  rows: Record<string, string>[],
+  items: Item[],
+): ParsedEventReportRow[] {
+  const itemLookup = new Map<string, Item>();
+  for (const item of items) {
+    itemLookup.set(item.name.toLowerCase().trim(), item);
+    itemLookup.set(item.id.toLowerCase().trim(), item);
+    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
+  }
+
+  function resolve(value: string | undefined): { components: ParsedAssemblyComponent[]; quantities: Record<string, number> } {
+    const components: ParsedAssemblyComponent[] = [];
+    const quantities: Record<string, number> = {};
+    for (const component of parseInlineComponents(value ?? '')) {
+      const item = itemLookup.get(component.name.toLowerCase().trim());
+      components.push({
+        itemName: item?.name ?? component.name,
+        quantity: component.quantity,
+        itemId: item?.id,
+        matched: Boolean(item),
+      });
+      if (item) quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
+    }
+    return { components, quantities };
+  }
+
+  const results: ParsedEventReportRow[] = [];
+  for (let index = 0; index < rows.length; index++) {
+    const raw = rows[index];
+    const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
+    if (!rowType || !['event', 'ereignis', 'eventbericht', 'eventreport'].includes(rowType)) continue;
+
+    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
+    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
+    const rawStatus = getField(raw, EVENT_STATUS_ALIASES)?.toLowerCase().trim();
+    const status: EventReportStatus = ['planned', 'geplant'].includes(rawStatus ?? '') ? 'planned' : 'completed';
+    const planned = resolve(getField(raw, EVENT_PLANNED_ALIASES));
+    const used = resolve(getField(raw, EVENT_USED_ALIASES));
+    const unmatched = [...planned.components, ...used.components].filter((component) => !component.matched);
+
+    let validationStatus: ParsedEventReportRow['status'] = 'valid';
+    let statusMessage: string | undefined;
+    if (!eventType) {
+      validationStatus = 'error';
+      statusMessage = 'Unbekannter oder fehlender Eventtyp';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+      validationStatus = 'error';
+      statusMessage = 'Eventdatum muss im Format JJJJ-MM-TT angegeben werden';
+    } else if (unmatched.length > 0) {
+      validationStatus = 'error';
+      statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
+    } else if (status === 'completed' && used.components.length === 0) {
+      validationStatus = 'error';
+      statusMessage = 'Ein abgeschlossenes Event benötigt mindestens einen tatsächlich verwendeten Artikel';
+    }
+
+    results.push({
+      index: index + 1,
+      data: {
+        eventType: eventType ?? 'LS',
+        eventDate,
+        status,
+        itemIds: Object.keys(used.quantities),
+        plannedQuantities: planned.quantities,
+        usedQuantities: used.quantities,
+        notes: getField(raw, HINT_ALIASES) ?? '',
+      },
+      rawRow: raw,
+      plannedItems: planned.components,
+      usedItems: used.components,
+      status: validationStatus,
+      statusMessage,
+    });
+  }
+  return results;
+}
+
+/** Parses draft/submitted faction-order rows from a combined CSV. */
+export function parseFactionOrdersFromCsv(
+  rows: Record<string, string>[],
+  items: Item[],
+): ParsedFactionOrderRow[] {
+  const itemLookup = new Map<string, Item>();
+  for (const item of items) {
+    itemLookup.set(item.name.toLowerCase().trim(), item);
+    itemLookup.set(item.id.toLowerCase().trim(), item);
+    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
+  }
+
+  const results: ParsedFactionOrderRow[] = [];
+  for (let index = 0; index < rows.length; index++) {
+    const raw = rows[index];
+    const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
+    if (!rowType || !['order', 'bestellung', 'factionorder', 'fraktionsbestellung'].includes(rowType)) continue;
+
+    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
+    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
+    const rawFaction = getField(raw, ORDER_FACTION_ALIASES) ?? '';
+    const faction = eventType
+      ? FACTIONS_BY_EVENT[eventType].find((candidate) => candidate.toLowerCase() === rawFaction.toLowerCase())
+      : undefined;
+    const requestedItems: ParsedAssemblyComponent[] = [];
+    const requestedQuantities: Record<string, number> = {};
+    for (const component of parseInlineComponents(getField(raw, ORDER_ITEMS_ALIASES) ?? '')) {
+      const item = itemLookup.get(component.name.toLowerCase().trim());
+      requestedItems.push({
+        itemName: item?.name ?? component.name,
+        quantity: component.quantity,
+        itemId: item?.id,
+        matched: Boolean(item),
+      });
+      if (item) requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
+    }
+    const rawOrderStatus = getField(raw, ORDER_STATUS_ALIASES)?.toLowerCase().trim();
+    const targetStatus = ['submitted', 'eingereicht', 'bereit'].includes(rawOrderStatus ?? '') ? 'submitted' : 'draft';
+    const unmatched = requestedItems.filter((component) => !component.matched);
+
+    let validationStatus: ParsedFactionOrderRow['status'] = 'valid';
+    let statusMessage: string | undefined;
+    if (!eventType) {
+      validationStatus = 'error';
+      statusMessage = 'Unbekannter oder fehlender Eventtyp';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+      validationStatus = 'error';
+      statusMessage = 'Eventdatum muss im Format JJJJ-MM-TT angegeben werden';
+    } else if (!faction) {
+      validationStatus = 'error';
+      statusMessage = `Fraktion "${rawFaction}" gehört nicht zum Eventtyp ${eventType}`;
+    } else if (requestedItems.length === 0) {
+      validationStatus = 'error';
+      statusMessage = 'Eine Bestellung benötigt mindestens einen Artikel';
+    } else if (unmatched.length > 0) {
+      validationStatus = 'error';
+      statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
+    }
+
+    results.push({
+      index: index + 1,
+      data: {
+        eventType: eventType ?? 'LS',
+        faction: faction ?? rawFaction,
+        eventDate,
+        itemIds: Object.keys(requestedQuantities),
+        requestedQuantities,
+        assemblyIds: [],
+        requestedAssemblyQuantities: {},
+        notes: getField(raw, HINT_ALIASES) ?? '',
+      },
+      rawRow: raw,
+      requestedItems,
+      targetStatus,
+      status: validationStatus,
+      statusMessage,
+    });
+  }
+  return results;
+}
+
+/**
  * Generates sample CSV files for download
  */
 export function generateSampleItemsCsv(): string {
   return [
-    'Artikel;Kategorie;Bestand;Mindestbestand;Einzelwert;Lagerort;Unterkategorie;Lieferant;Verbrauchsmaterial;Events;Hinweis',
-    'Stromerzeuger 2kW;Elektro;4;2;349,00;Regal A1;Generatoren;Honda;Nein;DE,TNO;Vor Erstinbetriebnahme Ölstand prüfen',
-    'Kabeltrommel 50m;Elektro;10;5;59,95;Regal A2;Kabel;Brennenstuhl;Nein;DE,TNO,LS;Nach Gebrauch trocken aufrollen',
-    'Gaffa Tape 50m schwarz;Verbrauchsmaterial;24;10;8,50;Kiste B;Klebeband;Tesa;Ja;DE,TNO,LS,M24;Rückstandslos ablösbar',
-    'LED Flutlicht 100W;Beleuchtung;8;4;45,00;Regal C1;Scheinwerfer;Osram;Nein;DE;Inkl. Schutzkontaktstecker',
+    'Artikel;Kategorie;Bestand;Mindestbestand;Einzelwert;Lagerort;Unterkategorie;Lieferant;Verbrauchsmaterial;Events;Hinweis;TrackingMode;AssetCodes',
+    'Stromerzeuger 2kW;Elektro;4;2;349,00;Regal A1;Generatoren;Honda;Nein;DE,TNO;Vor Erstinbetriebnahme Ölstand prüfen;serialized;"GEN-001, GEN-002, GEN-003, GEN-004"',
+    'Kabeltrommel 50m;Elektro;10;5;59,95;Regal A2;Kabel;Brennenstuhl;Nein;DE,TNO,LS;Nach Gebrauch trocken aufrollen;bulk;',
+    'Gaffa Tape 50m schwarz;Verbrauchsmaterial;24;10;8,50;Kiste B;Klebeband;Tesa;Ja;DE,TNO,LS,M24;Rückstandslos ablösbar;bulk;',
+    'LED Flutlicht 100W;Beleuchtung;8;4;45,00;Regal C1;Scheinwerfer;Osram;Nein;DE;Inkl. Schutzkontaktstecker;bulk;',
   ].join('\r\n');
 }
 
@@ -602,10 +860,11 @@ export function generateSampleAssembliesCsv(): string {
 
 export function generateSampleCombinedCsv(): string {
   return [
-    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis',
-    'Artikel;Zeltgestänge 4x4m;Infrastruktur;6;2;120,00;Lager Zelt; ;DE,TNO;Auf Vollständigkeit prüfen',
-    'Artikel;Zeltplane 4x4m;Infrastruktur;6;2;180,00;Lager Zelt; ;DE,TNO;Trocken lagern',
-    'Artikel;Heringe 30cm (10er Set);Infrastruktur;12;4;15,00;Lager Zelt; ;DE,TNO,LS;Immer nachzählen',
-    'Baugruppe;SG-Zelt komplett;Zelte; ; ; ; ;"Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2";DE,TNO;Komplettes Zelt mit Heringen',
+    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes',
+    'Artikel;Feld-PC;IT & Elektronik;2;1;650,00;Lager A; ;DE,TNO;Live-Map Rechner;serialized;"PC-01, PC-02"',
+    'Artikel;Zeltgestänge 4x4m;Infrastruktur;6;2;120,00;Lager Zelt; ;DE,TNO;Auf Vollständigkeit prüfen;bulk;',
+    'Artikel;Zeltplane 4x4m;Infrastruktur;6;2;180,00;Lager Zelt; ;DE,TNO;Trocken lagern;bulk;',
+    'Artikel;Heringe 30cm (10er Set);Infrastruktur;12;4;15,00;Lager Zelt; ;DE,TNO,LS;Immer nachzählen;bulk;',
+    'Baugruppe;SG-Zelt komplett;Zelte; ; ; ; ;"Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2";DE,TNO;Komplettes Zelt mit Heringen;;',
   ].join('\r\n');
 }

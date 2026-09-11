@@ -23,6 +23,38 @@ class InventoryApiTest {
     @Inject DomainEventService domainEvents;
 
     @Test
+    void eventReportsPersistQuantitiesAndExposeOnlyActuallyUsedItems() {
+        String usedItemId = request().body(Map.of("sku", "EVENT-USED-001", "name", "Used event item",
+                        "category", "Test", "amount", 10, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String plannedOnlyItemId = request().body(Map.of("sku", "EVENT-PLAN-001", "name", "Planned-only event item",
+                        "category", "Test", "amount", 10, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+
+        var event = new java.util.HashMap<String, Object>();
+        event.put("eventType", "LS");
+        event.put("name", "LightSim history test");
+        event.put("startDate", "2026-06-13");
+        event.put("endDate", "2026-06-13");
+        event.put("status", "completed");
+        event.put("plannedQuantities", Map.of(usedItemId, 8, plannedOnlyItemId, 3));
+        event.put("usedQuantities", Map.of(usedItemId, 6, plannedOnlyItemId, 0));
+
+        String eventId = request().body(event).post("/api/events").then().statusCode(200)
+                .body("plannedQuantities.'" + usedItemId + "'", equalTo(8))
+                .body("plannedQuantities.'" + plannedOnlyItemId + "'", equalTo(3))
+                .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
+                .body("usedQuantities.size()", equalTo(1))
+                .body("itemIds.size()", equalTo(1))
+                .body("itemIds[0]", equalTo(usedItemId))
+                .extract().path("id");
+
+        request().get("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
+                .body("itemIds[0]", equalTo(usedItemId));
+    }
+
+    @Test
     void serializedItemsRejectQuantityOnlyStockAndPreparationCommands() {
         String itemId = request().body(Map.of("sku", "SERIAL-GUARD-001", "name", "Serialized guard item",
                         "category", "Test", "amount", 0, "value", 0, "trackingMode", "serialized"))

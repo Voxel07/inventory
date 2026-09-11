@@ -15,6 +15,7 @@ import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -262,6 +263,8 @@ public class CatalogService {
         if (event.endDate.isBefore(event.startDate)) throw ApiException.badRequest("Event end date cannot be before its start date");
         event.status = input.status() == null ? "planned" : input.status();
         event.notes = input.notes();
+        if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
+        if (input.usedQuantities() != null) event.usedQuantities = eventQuantities(input.usedQuantities());
         orm.persist(event);
         catalogChanged("events", event.id);
         return event;
@@ -277,6 +280,8 @@ public class CatalogService {
         event.endDate = input.endDate() == null ? input.startDate() : input.endDate();
         event.status = input.status() == null ? event.status : input.status();
         event.notes = input.notes();
+        if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
+        if (input.usedQuantities() != null) event.usedQuantities = eventQuantities(input.usedQuantities());
         catalogChanged("events", event.id);
         return event;
     }
@@ -297,7 +302,21 @@ public class CatalogService {
     public EventOccurrence findOrCreateEvent(String eventType, LocalDate date) {
         var event = orm.findEvent(eventType.toUpperCase(Locale.ROOT), date);
         if (event != null) return event;
-        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null));
+        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
+    }
+
+    private Map<String, Integer> eventQuantities(Map<UUID, Integer> quantities) {
+        var result = new LinkedHashMap<String, Integer>();
+        if (quantities == null) return result;
+        quantities.forEach((itemId, quantity) -> {
+            if (itemId == null || quantity == null || quantity < 0) {
+                throw ApiException.badRequest("Event quantities must be non-negative");
+            }
+            if (quantity == 0) return;
+            required(Item.class, itemId, "Item");
+            result.put(itemId.toString(), quantity);
+        });
+        return result;
     }
 
     public Faction findOrCreateFaction(String eventType, String name) {

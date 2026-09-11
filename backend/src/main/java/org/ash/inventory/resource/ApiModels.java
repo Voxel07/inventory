@@ -41,7 +41,7 @@ public final class ApiModels {
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,
-            String status, String notes) {}
+            String status, String notes, Map<UUID, Integer> plannedQuantities, Map<UUID, Integer> usedQuantities) {}
 
     public record FactionInput(@NotBlank String eventType, @NotBlank String name, String slug, Boolean active) {}
 

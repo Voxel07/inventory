@@ -168,6 +168,8 @@ public class ApiMapper {
     }
 
     public ApiResponses.EventResponse event(EventOccurrence value) {
+        var planned = value.plannedQuantities == null ? Map.<String, Integer>of() : value.plannedQuantities;
+        var used = value.usedQuantities == null ? Map.<String, Integer>of() : value.usedQuantities;
         return new ApiResponses.EventResponse(
                 value.id,
                 value.createdAt,
@@ -179,9 +181,9 @@ public class ApiMapper {
                 value.endDate,
                 value.status,
                 value.notes,
-                List.of(),
-                Map.of(),
-                Map.of()
+                used.keySet().stream().filter(id -> used.getOrDefault(id, 0) > 0).toList(),
+                planned,
+                used
         );
     }
 

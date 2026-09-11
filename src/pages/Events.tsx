@@ -70,6 +70,18 @@ export function Events() {
     () => items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [],
     [eventType, items],
   );
+  const usageReports = useMemo(
+    () => [...completedReports].sort((left, right) => left.eventDate.localeCompare(right.eventDate)),
+    [completedReports],
+  );
+  const usageItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    usageReports.forEach((report) => Object.entries(report.usedQuantities ?? {})
+      .filter(([, quantity]) => quantity > 0)
+      .forEach(([itemId]) => ids.add(itemId)));
+    const names = new Map(items?.map((item) => [item.id, item.name]) ?? []);
+    return [...ids].sort((left, right) => (names.get(left) ?? left).localeCompare(names.get(right) ?? right));
+  }, [items, usageReports]);
 
   useEffect(() => {
     setPlanned(toInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
@@ -89,9 +101,7 @@ export function Events() {
     const plannedQuantities = toQuantities(planned);
     const usedQuantities = toQuantities(used);
     const itemIds = [...new Set([
-      ...eventItems.map((item) => item.id),
-      ...Object.keys(plannedQuantities),
-      ...Object.keys(usedQuantities),
+      ...Object.entries(usedQuantities).filter(([, quantity]) => quantity > 0).map(([itemId]) => itemId),
     ])];
 
     createReport.mutate({
@@ -262,6 +272,44 @@ export function Events() {
           </Stack>
         </Stack>
       </Paper>
+
+      {usageReports.length > 1 && usageItemIds.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('Verbrauchsentwicklung', 'Usage over time')}</Typography>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+            {t(
+              'Tatsächlich verwendete Mengen je abgeschlossenem Event. Nicht verwendete, nur für den Eventtyp markierte Artikel werden nicht angezeigt.',
+              'Actual quantities used per completed event. Items that are only tagged for this event type are not shown.',
+            )}
+          </Typography>
+          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('Artikel', 'Item')}</TableCell>
+                  {usageReports.map((report) => (
+                    <TableCell key={report.id} align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {usageItemIds.map((itemId) => (
+                  <TableRow key={itemId} hover>
+                    <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
+                    {usageReports.map((report) => (
+                      <TableCell key={report.id} align="right">
+                        {report.usedQuantities?.[itemId] ?? '—'}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
 
       <Typography variant="h6" sx={{ mb: 1 }}>{t('Eventverlauf', 'Event history')}</Typography>
       <TableContainer component={Paper}>

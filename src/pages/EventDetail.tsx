@@ -81,21 +81,24 @@ export function EventDetail() {
     ...Object.keys(used),
   ]), [planned, used]);
   const missingItemIds = useMemo(
-    () => [...recordedIds].filter((id) => !itemMap.has(id) && (Number(planned[id]) > 0 || Number(used[id]) > 0)),
-    [itemMap, planned, recordedIds, used],
+    () => [...recordedIds].filter((id) => !itemMap.has(id) && (
+      Number(used[id]) > 0 || ((editing || report?.status !== 'completed') && Number(planned[id]) > 0)
+    )),
+    [editing, itemMap, planned, recordedIds, report?.status, used],
   );
   const visibleItems = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
-        const isRecorded = Number(planned[item.id]) > 0 || Number(used[item.id]) > 0 || recordedIds.has(item.id);
+        const isRecorded = Number(used[item.id]) > 0
+          || ((editing || report?.status !== 'completed') && Number(planned[item.id]) > 0);
         if (isRecorded) return true;
         if (!editing) return false;
         if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
         return item.eventTypes?.includes(eventType);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [editing, eventType, items, planned, recordedIds, search, used]);
+  }, [editing, eventType, items, planned, report?.status, search, used]);
 
   const plannedQuantities = toQuantities(planned);
   const usedQuantities = toQuantities(used);

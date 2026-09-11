@@ -44,16 +44,22 @@ import {
   detectCsvType,
   parseItemsFromCsv,
   parseAssembliesFromCsv,
+  parseEventReportsFromCsv,
+  parseFactionOrdersFromCsv,
   generateSampleItemsCsv,
   generateSampleAssembliesCsv,
   generateSampleCombinedCsv,
   type CsvImportType,
   type ParsedItemRow,
   type ParsedAssemblyRow,
+  type ParsedEventReportRow,
+  type ParsedFactionOrderRow,
 } from '../../utils/csvImport';
 import type { Item, Assembly, StorageLocation } from '../../types';
-import { createItem, updateItem } from '../../services/inventoryService';
+import { createItem, updateItem, createItemAssets } from '../../services/inventoryService';
 import { createAssembly } from '../../services/assemblyService';
+import { createEventReport, getEventReports, updateEventReport } from '../../services/eventService';
+import { createFactionOrder, getFactionOrders, submitFactionOrder, updateFactionOrder } from '../../services/factionOrderService';
 import { createStorageLocation } from '../../services/storageLocationService';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -97,6 +103,8 @@ export function CsvImportDialog({
     successItems: number;
     updatedItems: number;
     successAssemblies: number;
+    successEvents: number;
+    successOrders: number;
     errors: string[];
   } | null>(null);
 
@@ -141,13 +149,31 @@ export function CsvImportDialog({
     return parseAssembliesFromCsv(rows, effectiveItemsForAssemblies, assemblies);
   }, [rows, tabType, effectiveItemsForAssemblies, assemblies]);
 
+  const parsedEvents: ParsedEventReportRow[] = useMemo(() => {
+    if (tabType !== 'combined' || rows.length === 0) return [];
+    return parseEventReportsFromCsv(rows, effectiveItemsForAssemblies);
+  }, [rows, tabType, effectiveItemsForAssemblies]);
+
+  const parsedOrders: ParsedFactionOrderRow[] = useMemo(() => {
+    if (tabType !== 'combined' || rows.length === 0) return [];
+    return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies);
+  }, [rows, tabType, effectiveItemsForAssemblies]);
+
   // Statistics
   const validItemsCount = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems)).length;
   const validAssembliesCount = parsedAssemblies.filter((a) => a.status === 'valid').length;
-  const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length + parsedAssemblies.filter((a) => a.status === 'error').length;
+  const validEventsCount = parsedEvents.filter((event) => event.status === 'valid').length;
+  const validOrdersCount = parsedOrders.filter((order) => order.status === 'valid').length;
+  const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length
+    + parsedAssemblies.filter((a) => a.status === 'error').length
+    + parsedEvents.filter((event) => event.status === 'error').length
+    + parsedOrders.filter((order) => order.status === 'error').length;
   const totalDuplicatesCount = parsedItems.filter((i) => i.status === 'duplicate').length + parsedAssemblies.filter((a) => a.status === 'duplicate').length;
 
-  const totalToImport = (tabType === 'assemblies' ? 0 : validItemsCount) + (tabType === 'items' ? 0 : validAssembliesCount);
+  const totalToImport = (tabType === 'assemblies' ? 0 : validItemsCount)
+    + (tabType === 'items' ? 0 : validAssembliesCount)
+    + validEventsCount
+    + validOrdersCount;
 
   function handleFileSelected(file: File) {
     setFileName(file.name);
@@ -209,6 +235,8 @@ export function CsvImportDialog({
     let successItems = 0;
     let updatedItems = 0;
     let successAssemblies = 0;
+    let successEvents = 0;
+    let successOrders = 0;
 
     const locCache = new Map<string, string>();
     for (const loc of storageLocations) {
@@ -242,7 +270,10 @@ export function CsvImportDialog({
     }
 
     const itemsToProcess = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems));
-    const totalSteps = itemsToProcess.length + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length);
+    const totalSteps = itemsToProcess.length
+      + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length)
+      + validEventsCount
+      + validOrdersCount;
     let currentStep = 0;
 
     if (tabType !== 'assemblies') {
@@ -257,9 +288,13 @@ export function CsvImportDialog({
           locationId = locCache.get(row.storageLocationName.toLowerCase().trim()) || '';
         }
 
+        const hasCustomAssets = row.data.trackingMode === 'serialized' && Boolean(row.assetCodes && row.assetCodes.length > 0);
         const payload = {
           ...row.data,
           storageLocation: locationId,
+          // When serialized and explicit asset codes are provided, start with amount 0 on item creation
+          // so backend does not generate default SKU-xxx assets, then register the explicit codes
+          amount: hasCustomAssets ? 0 : row.data.amount,
         };
 
         try {
@@ -267,10 +302,36 @@ export function CsvImportDialog({
             const updated = await updateItem(row.existingId, payload);
             updatedItems++;
             createdItemsMap.set(updated.name.toLowerCase().trim(), updated);
+
+            if (hasCustomAssets && row.assetCodes) {
+              for (const code of row.assetCodes) {
+                try {
+                  await createItemAssets(row.existingId, {
+                    assetCode: code,
+                    currentLocationId: locationId || undefined,
+                  });
+                } catch {
+                  // Asset code might already exist, ignore conflict
+                }
+              }
+            }
           } else if (!row.isExisting) {
             const created = await createItem(payload);
             successItems++;
             createdItemsMap.set(created.name.toLowerCase().trim(), created);
+
+            if (hasCustomAssets && row.assetCodes) {
+              for (const code of row.assetCodes) {
+                try {
+                  await createItemAssets(created.id, {
+                    assetCode: code,
+                    currentLocationId: locationId || undefined,
+                  });
+                } catch (assetErr: unknown) {
+                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}": ${(assetErr as Error).message || assetErr}`);
+                }
+              }
+            }
           }
         } catch (err: unknown) {
           errors.push(`Fehler bei Artikel "${row.data.name}": ${(err as Error).message || err}`);
@@ -322,11 +383,105 @@ export function CsvImportDialog({
       }
     }
 
+    // Step 4: Import event history after all referenced items exist. Matching
+    // type/date records are updated so retrying a sample import is safe.
+    const existingEvents = parsedEvents.length > 0 ? await getEventReports() : [];
+    for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
+      currentStep++;
+      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      setImportStatusText(t(
+        `Erstelle ${row.data.eventType}-Event vom ${row.data.eventDate}...`,
+        `Creating ${row.data.eventType} event on ${row.data.eventDate}...`,
+      ));
+
+      const resolveQuantities = (components: ParsedEventReportRow['usedItems']) => {
+        const quantities: Record<string, number> = {};
+        for (const component of components) {
+          const isTempId = component.itemId?.startsWith('csv-new-');
+          const item = (!isTempId && component.itemId)
+            ? items.find((candidate) => candidate.id === component.itemId)
+            : createdItemsMap.get(component.itemName.toLowerCase().trim());
+          if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+          quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
+        }
+        return quantities;
+      };
+
+      try {
+        const plannedQuantities = resolveQuantities(row.plannedItems);
+        const usedQuantities = resolveQuantities(row.usedItems);
+        const data = {
+          ...row.data,
+          itemIds: Object.keys(usedQuantities),
+          plannedQuantities,
+          usedQuantities,
+        };
+        const existing = existingEvents.find((event) => (
+          event.eventType === data.eventType && event.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
+        ));
+        const saved = existing
+          ? await updateEventReport(existing.id, data)
+          : await createEventReport(data);
+        if (!existing) existingEvents.push(saved);
+        successEvents++;
+      } catch (err: unknown) {
+        errors.push(`Event ${row.data.eventType} ${row.data.eventDate}: ${(err as Error).message || err}`);
+      }
+    }
+
+    // Step 5: Import faction orders after their event occurrences exist.
+    const existingOrders = parsedOrders.length > 0 ? await getFactionOrders() : [];
+    for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
+      currentStep++;
+      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      setImportStatusText(t(
+        `Importiere Bestellung ${row.data.faction} für ${row.data.eventDate}...`,
+        `Importing ${row.data.faction} order for ${row.data.eventDate}...`,
+      ));
+
+      try {
+        const requestedQuantities: Record<string, number> = {};
+        for (const component of row.requestedItems) {
+          const isTempId = component.itemId?.startsWith('csv-new-');
+          const item = (!isTempId && component.itemId)
+            ? items.find((candidate) => candidate.id === component.itemId)
+            : createdItemsMap.get(component.itemName.toLowerCase().trim());
+          if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+          requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
+        }
+        const data = {
+          ...row.data,
+          itemIds: Object.keys(requestedQuantities),
+          requestedQuantities,
+        };
+        const existing = existingOrders.find((order) => (
+          order.eventType === data.eventType
+          && order.faction.toLowerCase() === data.faction.toLowerCase()
+          && order.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
+        ));
+        if (existing && !['draft', 'submitted'].includes(existing.status)) {
+          throw new Error(`Bestehende Bestellung ${existing.orderCode} hat bereits den Status ${existing.status}`);
+        }
+        const saved = existing
+          ? await updateFactionOrder(existing.id, data)
+          : await createFactionOrder(data);
+        const finalOrder = row.targetStatus === 'submitted' && saved.status === 'draft'
+          ? await submitFactionOrder(saved.id)
+          : saved;
+        if (!existing) existingOrders.push(finalOrder);
+        successOrders++;
+      } catch (err: unknown) {
+        errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
+      }
+    }
+
     // Invalidate caches
     queryClient.invalidateQueries({ queryKey: ['items'] });
     queryClient.invalidateQueries({ queryKey: ['assemblies'] });
     queryClient.invalidateQueries({ queryKey: ['storageLocations'] });
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['event-reports'] });
+    queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
 
     setIsImporting(false);
     setImportProgress(100);
@@ -335,10 +490,12 @@ export function CsvImportDialog({
       successItems,
       updatedItems,
       successAssemblies,
+      successEvents,
+      successOrders,
       errors,
     });
 
-    const totalSuccess = successItems + updatedItems + successAssemblies;
+    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders;
     if (totalSuccess > 0) {
       showSnackbar(
         t(
@@ -546,6 +703,8 @@ export function CsvImportDialog({
                   {importResult.successItems > 0 && `${importResult.successItems} ${t('Artikel neu angelegt', 'items created')}. `}
                   {importResult.updatedItems > 0 && `${importResult.updatedItems} ${t('Artikel aktualisiert', 'items updated')}. `}
                   {importResult.successAssemblies > 0 && `${importResult.successAssemblies} ${t('Baugruppen erstellt', 'assemblies created')}. `}
+                  {importResult.successEvents > 0 && `${importResult.successEvents} ${t('Events erstellt', 'events created')}. `}
+                  {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
                 </Typography>
                 {importResult.errors.length > 0 && (
                   <Box sx={{ mt: 1 }}>
@@ -623,7 +782,25 @@ export function CsvImportDialog({
                               </Tooltip>
                             )}
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 500 }}>{row.data.name || '—'}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <span>{row.data.name || '—'}</span>
+                              {row.data.trackingMode === 'serialized' && (
+                                <Tooltip
+                                  title={row.assetCodes?.length ? `Asset-Codes (${row.assetCodes.length}): ${row.assetCodes.join(', ')}` : t('Seriennummernverwaltung (TrackingMode: serialized)', 'Serialized tracking')}
+                                  arrow
+                                >
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    sx={{ height: 20, fontSize: '0.7rem' }}
+                                    label={row.assetCodes?.length ? `${t('Seriell', 'Serialized')} (${row.assetCodes.length})` : t('Seriell', 'Serialized')}
+                                  />
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TableCell>
                           <TableCell>{row.data.category || '—'}</TableCell>
                           <TableCell align="right">{row.data.amount ?? 0}</TableCell>
                           <TableCell align="right">{row.data.minStock ?? 5}</TableCell>
@@ -690,6 +867,90 @@ export function CsvImportDialog({
                             </Stack>
                           </TableCell>
                           <TableCell>{row.data.description || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {tabType === 'combined' && parsedEvents.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('Eventverlauf-Vorschau', 'Event History Preview')} ({parsedEvents.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>#</TableCell>
+                        <TableCell>{t('Status', 'Status')}</TableCell>
+                        <TableCell>{t('Event', 'Event')}</TableCell>
+                        <TableCell>{t('Datum', 'Date')}</TableCell>
+                        <TableCell>{t('Geplant', 'Planned')}</TableCell>
+                        <TableCell>{t('Verwendet', 'Used')}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {parsedEvents.map((row) => (
+                        <TableRow key={row.index} hover>
+                          <TableCell>{row.index}</TableCell>
+                          <TableCell>
+                            {row.status === 'valid' ? (
+                              <Chip size="small" color="success" label={t('Gültig', 'Valid')} />
+                            ) : (
+                              <Tooltip title={row.statusMessage || ''} arrow>
+                                <Chip size="small" color="error" icon={<ErrorIcon />} label={t('Fehler', 'Error')} />
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType}</TableCell>
+                          <TableCell>{row.data.eventDate}</TableCell>
+                          <TableCell>{row.plannedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
+                          <TableCell>{row.usedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {tabType === 'combined' && parsedOrders.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('Bestellungs-Vorschau', 'Orders Preview')} ({parsedOrders.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>#</TableCell>
+                        <TableCell>{t('Status', 'Status')}</TableCell>
+                        <TableCell>{t('Event', 'Event')}</TableCell>
+                        <TableCell>{t('Datum', 'Date')}</TableCell>
+                        <TableCell>{t('Fraktion', 'Faction')}</TableCell>
+                        <TableCell>{t('Bestellte Artikel', 'Requested items')}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {parsedOrders.map((row) => (
+                        <TableRow key={row.index} hover>
+                          <TableCell>{row.index}</TableCell>
+                          <TableCell>
+                            {row.status === 'valid' ? (
+                              <Chip size="small" color="success" label={row.targetStatus === 'submitted' ? t('Bereit', 'Submitted') : t('Entwurf', 'Draft')} />
+                            ) : (
+                              <Tooltip title={row.statusMessage || ''} arrow>
+                                <Chip size="small" color="error" icon={<ErrorIcon />} label={t('Fehler', 'Error')} />
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType}</TableCell>
+                          <TableCell>{row.data.eventDate}</TableCell>
+                          <TableCell>{row.data.faction}</TableCell>
+                          <TableCell>{row.requestedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
