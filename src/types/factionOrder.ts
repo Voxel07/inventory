@@ -1,4 +1,4 @@
-import type { Item } from './item';
+import type { AssetInstance, Item } from './item';
 import type { Assembly } from './assembly';
 import type { EventType } from './event';
 import type { User } from './user';
@@ -67,6 +67,7 @@ export interface FactionOrder {
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
   preparedAssemblyQuantities: Record<string, number>;
+  assetAssignments?: Record<string, AssetInstance[]>;
   handedOverQuantities?: Record<string, number>;
   returnedQuantities?: Record<string, number>;
   consumedQuantities?: Record<string, number>;

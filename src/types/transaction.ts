@@ -1,11 +1,13 @@
 import type { User } from './user';
 import type { EventType } from './event';
+import type { AssetInstance } from './item';
 
 export interface StockTransaction {
   id: string;
   itemId: string;
   transactionType: TransactionType;
   quantityChanged: number;
+  assetInstanceId?: string;
   userId: string;
   damageReportId?: string;
   factionOrderId?: string;
@@ -21,6 +23,7 @@ export interface StockTransaction {
   updated: string;
   expand?: {
     userId?: User;
+    assetInstanceId?: AssetInstance;
     factionOrderId?: {
       id: string;
       eventType: string;
@@ -37,6 +40,7 @@ export interface TransactionFormData {
   itemId: string;
   transactionType: TransactionType;
   quantityChanged: number;
+  assetInstanceId?: string;
   reason: string;
   notes: string;
   userId?: string;

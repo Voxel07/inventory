@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -25,7 +26,8 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SearchIcon from '@mui/icons-material/Search';
-import type { Assembly, FactionOrder, Item } from '../../../types';
+import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
+import { useItemAssets } from '../../../hooks/useItems';
 import { useLocalizedText } from '../../../utils/naming';
 
 export interface OrderPickListTableProps {
@@ -36,11 +38,101 @@ export interface OrderPickListTableProps {
   itemMap: Map<string, Item>;
   prepared: Record<string, string>;
   preparedAssemblies: Record<string, string>;
+  assetAssignments: Record<string, string[]>;
   onSetPrepared: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSetPreparedAssemblies: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onSetAssetAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
   availableFor: (item: Item) => number;
   availableAssemblies: (assembly: Assembly) => number;
   availableForItemId: (itemId: string) => number;
+}
+
+function assetLabel(asset: AssetInstance) {
+  return [
+    asset.assetCode,
+    asset.serialNumber && `SN ${asset.serialNumber}`,
+    [asset.manufacturer, asset.model].filter(Boolean).join(' '),
+    asset.currentLocationName || asset.availabilityStatus,
+  ].filter(Boolean).join(' · ');
+}
+
+function SerializedAssetPicker({
+  item,
+  required,
+  selectedIds,
+  persistedAssets,
+  editable,
+  onChange,
+}: {
+  item: Item;
+  required: number;
+  selectedIds: string[];
+  persistedAssets: AssetInstance[];
+  editable: boolean;
+  onChange: (ids: string[]) => void;
+}) {
+  const t = useLocalizedText();
+  const { data: assets = [], isLoading } = useItemAssets(editable ? item.id : undefined);
+  const knownAssets = editable ? assets : persistedAssets;
+  const eligible = knownAssets.filter((asset) => asset.active && (
+    selectedIds.includes(asset.id)
+    || (asset.availabilityStatus === 'available'
+      && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
+      && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified'))
+  ));
+  const selected = knownAssets.filter((asset) => selectedIds.includes(asset.id));
+
+  return (
+    <Card variant="outlined">
+      <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, '&:last-child': { pb: { xs: 1.25, md: 1.5 } } }}>
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('Konkrete Seriengeräte für diese Bestellung', 'Specific serialized assets for this order')}
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              color={selectedIds.length === required ? 'success' : 'warning'}
+              label={`${selectedIds.length}/${required}`}
+            />
+          </Stack>
+          {editable ? (
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              loading={isLoading}
+              options={eligible}
+              value={selected}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              getOptionLabel={assetLabel}
+              getOptionDisabled={(option) => !selectedIds.includes(option.id) && selectedIds.length >= required}
+              onChange={(_, value) => onChange(value.map((asset) => asset.id))}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('Seriengeräte auswählen', 'Select serialized assets')}
+                  error={!isLoading && selectedIds.length !== required}
+                  helperText={t(
+                    `Genau ${required} Gerät${required === 1 ? '' : 'e'} auswählen.`,
+                    `Select exactly ${required} asset${required === 1 ? '' : 's'}.`,
+                  )}
+                />
+              )}
+            />
+          ) : (
+            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              {persistedAssets.map((asset) => (
+                <Chip key={asset.id} label={assetLabel(asset)} variant="outlined" />
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function OrderPickListTable({
@@ -51,8 +143,10 @@ export function OrderPickListTable({
   itemMap,
   prepared,
   preparedAssemblies,
+  assetAssignments,
   onSetPrepared,
   onSetPreparedAssemblies,
+  onSetAssetAssignments,
   availableFor,
   availableAssemblies,
   availableForItemId,
@@ -64,6 +158,15 @@ export function OrderPickListTable({
   const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
   const [assemblyChecked, setAssemblyChecked] = useState<Record<string, Record<string, boolean>>>({});
   const hasOrderItems = Boolean(orderItems.length);
+
+  const serializedItems = orderItems.filter((item) => item.trackingMode === 'serialized').map((item) => {
+    let required = Number(prepared[item.id] || 0);
+    for (const assembly of orderAssemblies) {
+      required += Number(preparedAssemblies[assembly.id] || 0) * (assembly.itemQuantities?.[item.id] ?? 0);
+    }
+    return { item, required, persisted: order.assetAssignments?.[item.id] ?? [] };
+  }).filter(({ item, required, persisted }) => required > 0 || persisted.length > 0
+    || (assetAssignments[item.id]?.length ?? 0) > 0);
 
   const visibleOrderItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
@@ -222,6 +325,28 @@ export function OrderPickListTable({
               </Button>
             )}
           </Box>
+        </Box>
+      )}
+
+      {serializedItems.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+            <InventoryIcon color="primary" />
+            <Typography variant="h6">{t('Seriengeräte', 'Serialized assets')}</Typography>
+          </Stack>
+          <Stack spacing={1}>
+            {serializedItems.map(({ item, required, persisted }) => (
+              <SerializedAssetPicker
+                key={item.id}
+                item={item}
+                required={required}
+                selectedIds={assetAssignments[item.id] ?? []}
+                persistedAssets={persisted}
+                editable={order.status === 'preparing'}
+                onChange={(ids) => onSetAssetAssignments((current) => ({ ...current, [item.id]: ids }))}
+              />
+            ))}
+          </Stack>
         </Box>
       )}
 

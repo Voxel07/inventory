@@ -202,6 +202,8 @@ public class ApiMapper {
     public ApiResponses.TransactionResponse transaction(StockTransaction value) {
         var expand = new LinkedHashMap<String, Object>();
         expand.put("userId", user(value.user));
+        if (value.assetInstance != null)
+            expand.put("assetInstanceId", asset(value.assetInstance));
         if (value.factionOrder != null) {
             expand.put("factionOrderId", orderSummary(value.factionOrder));
         }
@@ -246,6 +248,7 @@ public class ApiMapper {
         var assemblyViews = new ArrayList<ApiResponses.AssemblyResponse>();
         var itemViews = new ArrayList<ApiResponses.ItemResponse>();
         var orderLines = new ArrayList<ApiResponses.OrderLineResponse>();
+        var assetAssignments = new LinkedHashMap<String, List<ApiResponses.AssetInstanceResponse>>();
 
         var lines = orderOrm.lines(value);
         for (var line : lines) {
@@ -307,6 +310,10 @@ public class ApiMapper {
         }
 
         var history = orderOrm.history(value).stream().map(this::history).toList();
+        for (var assignment : orderOrm.assetAssignments(value)) {
+            assetAssignments.computeIfAbsent(assignment.assetInstance.item.id.toString(), ignored -> new ArrayList<>())
+                    .add(asset(assignment.assetInstance));
+        }
 
         var expand = new LinkedHashMap<String, Object>();
         expand.put("itemIds", itemViews);
@@ -361,6 +368,7 @@ public class ApiMapper {
                 requestedAssemblies.keySet(),
                 requestedAssemblies,
                 preparedAssemblies,
+                assetAssignments,
                 orderLines,
                 history,
                 expand

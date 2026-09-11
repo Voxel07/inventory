@@ -75,6 +75,20 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
         return tx.userId || 'N/A';
     }
 
+    function assetChip(tx: StockTransaction) {
+        const asset = tx.expand?.assetInstanceId;
+        if (!asset && !tx.assetInstanceId) return null;
+        return (
+            <Chip
+                size="small"
+                variant="outlined"
+                color="secondary"
+                label={asset ? [asset.assetCode, asset.serialNumber && `SN ${asset.serialNumber}`].filter(Boolean).join(' · ') : tx.assetInstanceId}
+                sx={{ height: 22, maxWidth: '100%' }}
+            />
+        );
+    }
+
     const transactionColor = (type: StockTransaction['transactionType']): 'warning' | 'info' | 'success' | 'error' => {
         if (type === 'checkout') return 'warning';
         if (type === 'added') return 'info';
@@ -123,6 +137,7 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
                         <Box sx={{ minWidth: 0 }}>
                             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{getItemName(tx.itemId)}</Typography>
+                            {assetChip(tx)}
                             <Typography variant="caption" color="text.secondary">
                                 {new Date(tx.timestamp).toLocaleString()} · {getUserName(tx)}
                             </Typography>
@@ -159,7 +174,12 @@ export function TransactionHistory({ transactions, items, users, isLoading, onEd
                     {transactions.map((tx) => (
                         <TableRow key={tx.id} hover>
                             <TableCell>{new Date(tx.timestamp).toLocaleString()}</TableCell>
-                            <TableCell>{getItemName(tx.itemId)}</TableCell>
+                            <TableCell>
+                                <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                                    <span>{getItemName(tx.itemId)}</span>
+                                    {assetChip(tx)}
+                                </Stack>
+                            </TableCell>
                             <TableCell>
                                 <Chip
                                     label={formatStatus(tx.transactionType)}

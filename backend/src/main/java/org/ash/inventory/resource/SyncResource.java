@@ -65,7 +65,7 @@ public class SyncResource {
                 actors.requireWarehouse();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
-                        value.reason(), value.notes(), value.eventType(), value.faction(), value.userId(),
+                        value.reason(), value.notes(), value.eventType(), value.faction(), value.assetInstanceId(), value.userId(),
                         value.factionOrderId(), action.idempotencyKey());
                 yield mapper.transaction(inventory.transact(input));
             }
@@ -73,7 +73,8 @@ public class SyncResource {
                 actors.requireWarehouse();
                 UUID orderId = uuid(action.payload(), "orderId");
                 var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.PreparationInput.class);
-                yield mapper.order(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes())));
+                yield mapper.order(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
+                        value.assetAssignments(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes())));
             }
             case "order.transition" -> {
                 UUID orderId = uuid(action.payload(), "orderId");

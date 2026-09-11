@@ -7,6 +7,7 @@ import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
@@ -56,8 +57,10 @@ public class InventoryOperationsService {
         }
         var item = lockedItem(input.itemId());
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            throw ApiException.conflict("Serialized items require an asset-specific inventory transaction");
+            return transactSerialized(input, item, actor);
         }
+        if (input.assetInstanceId() != null)
+            throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
         var state = stock(item);
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
             requiredText(input.eventType(), "eventType");
@@ -92,6 +95,84 @@ public class InventoryOperationsService {
         events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
                 Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return transaction;
+    }
+
+    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor) {
+        if (input.transactionType() != DomainEnums.TransactionType.checkout
+                && input.transactionType() != DomainEnums.TransactionType.checkin) {
+            throw ApiException.conflict("Serialized stock changes must be made through individual asset records");
+        }
+        if (input.quantityChanged() != 1)
+            throw ApiException.badRequest("A serialized asset transaction must have quantity 1");
+        if (input.assetInstanceId() == null)
+            throw ApiException.conflict("Select the serialized asset to " + input.transactionType().name());
+
+        AssetInstance asset = orm.findLockedAsset(input.assetInstanceId());
+        if (asset == null || !asset.active || !asset.item.id.equals(item.id))
+            throw ApiException.notFound("Asset instance not found for this item");
+
+        var before = stock(item).available();
+        var transaction = new StockTransaction();
+        transaction.item = item;
+        transaction.assetInstance = asset;
+        transaction.user = input.userId() == null ? actor : required(UserAccount.class, input.userId(), "User");
+        transaction.type = input.transactionType();
+        transaction.quantity = 1;
+        transaction.reason = input.reason();
+        transaction.notes = input.notes();
+        transaction.eventType = blankToNull(input.eventType());
+        transaction.faction = blankToNull(input.faction());
+        transaction.idempotencyKey = input.idempotencyKey();
+        transaction.clientCommandId = input.idempotencyKey();
+        transaction.availabilityBefore = before;
+
+        if (input.transactionType() == DomainEnums.TransactionType.checkout) {
+            requiredText(input.eventType(), "eventType");
+            requiredText(input.faction(), "faction");
+            assertCheckoutAllowed(item);
+            assertAssetCheckoutAllowed(asset);
+            if (asset.availabilityStatus != DomainEnums.AssetState.available)
+                throw ApiException.conflict("Asset " + asset.assetCode + " is not available");
+            transaction.sourceLocation = asset.currentLocation == null ? item.storageLocation : asset.currentLocation;
+            asset.availabilityStatus = DomainEnums.AssetState.in_field;
+            asset.currentLocation = null;
+            asset.currentCustodian = null;
+        } else {
+            if (asset.availabilityStatus != DomainEnums.AssetState.in_field
+                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody) {
+                throw ApiException.conflict("Asset " + asset.assetCode + " is not checked out");
+            }
+            transaction.sourceLocation = asset.currentLocation;
+            transaction.destinationLocation = item.storageLocation;
+            asset.availabilityStatus = DomainEnums.AssetState.available;
+            asset.currentLocation = item.storageLocation;
+            asset.currentCustodian = null;
+        }
+
+        orm.persist(transaction);
+        transaction.availabilityAfter = stock(item).available();
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("itemId", item.id.toString());
+        payload.put("assetInstanceId", asset.id.toString());
+        payload.put("assetCode", asset.assetCode);
+        payload.put("type", transaction.type.name());
+        payload.put("quantity", 1);
+        events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(), payload);
+        return transaction;
+    }
+
+    private void assertAssetCheckoutAllowed(AssetInstance asset) {
+        if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged
+                || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
+                || asset.conditionStatus == DomainEnums.ConditionStatus.lost) {
+            throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its condition is "
+                    + asset.conditionStatus);
+        }
+        if (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue
+                || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
+            throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its service status is "
+                    + asset.serviceStatus);
+        }
     }
 
     public StockState stock(Item item) {

@@ -9,6 +9,8 @@ import org.ash.inventory.model.AssemblyItem;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderHistory;
 import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.Item;
+import org.ash.inventory.model.OrderLineAssetAssignment;
 import org.ash.inventory.model.StockReservation;
 
 import java.util.List;
@@ -67,14 +69,33 @@ public class OrderOrm {
                 .setParameter("line", line).setMaxResults(1).getResultStream().findFirst().orElse(null);
     }
 
+    public List<OrderLineAssetAssignment> assetAssignments(FactionOrder order) {
+        return entityManager.createQuery(
+                "select assignment from OrderLineAssetAssignment assignment "
+                        + "join fetch assignment.assetInstance asset "
+                        + "join fetch asset.item "
+                        + "where assignment.order = :order order by asset.assetCode",
+                OrderLineAssetAssignment.class)
+                .setParameter("order", order).getResultList();
+    }
+
+    public List<OrderLineAssetAssignment> assetAssignments(FactionOrder order, Item item) {
+        return entityManager.createQuery(
+                "select assignment from OrderLineAssetAssignment assignment "
+                        + "join fetch assignment.assetInstance asset "
+                        + "where assignment.order = :order and asset.item = :item order by asset.assetCode",
+                OrderLineAssetAssignment.class)
+                .setParameter("order", order).setParameter("item", item).getResultList();
+    }
+
+    public void removeAssetAssignments(FactionOrder order) {
+        for (var assignment : assetAssignments(order)) entityManager.remove(assignment);
+        entityManager.flush();
+    }
+
     public void deleteLines(FactionOrder order) {
         for (var reservation : reservations(order)) entityManager.remove(reservation);
-        var assignments = entityManager.createQuery(
-                "from OrderLineAssetAssignment assignment where assignment.order = :order",
-                org.ash.inventory.model.OrderLineAssetAssignment.class)
-                .setParameter("order", order).getResultList();
-        for (var assignment : assignments) entityManager.remove(assignment);
-        entityManager.flush();
+        removeAssetAssignments(order);
         for (var line : lines(order)) entityManager.remove(line);
     }
 

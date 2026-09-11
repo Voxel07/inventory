@@ -20,6 +20,7 @@ export function normalizeFactionOrder(order: FactionOrder): FactionOrder {
     assemblyIds: order.assemblyIds ?? Object.keys(requestedAssemblyQuantities),
     requestedAssemblyQuantities,
     preparedAssemblyQuantities: order.preparedAssemblyQuantities ?? {},
+    assetAssignments: order.assetAssignments ?? {},
     handedOverQuantities: order.handedOverQuantities ?? {},
     returnedQuantities: order.returnedQuantities ?? {},
     consumedQuantities: order.consumedQuantities ?? {},
@@ -70,6 +71,7 @@ export async function saveFactionOrderPreparation(
   id: string,
   preparedQuantities: Record<string, number>,
   preparedAssemblyQuantities: Record<string, number>,
+  assetAssignments: Record<string, string[]>,
 ): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   const flattened = { ...preparedQuantities };
@@ -79,7 +81,7 @@ export async function saveFactionOrderPreparation(
       flattened[itemId] = (flattened[itemId] || 0) + componentQuantity * assemblyCount;
     }
   }
-  const input = { preparedQuantities: flattened, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
+  const input = { preparedQuantities: flattened, assetAssignments, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
   return normalizedOrder(apiRequest(`/api/orders/${id}/prepare`, {
     method: 'POST', body: input,
     offline: { type: 'order.prepare', payload: { orderId: id, input } },

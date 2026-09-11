@@ -69,6 +69,7 @@ export function FactionOrderDetail() {
 
   const [prepared, setPrepared] = useState<Record<string, string>>({});
   const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
+  const [assetAssignments, setAssetAssignments] = useState<Record<string, string[]>>({});
   const [editOpen, setEditOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
@@ -86,7 +87,10 @@ export function FactionOrderDetail() {
         Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
       ),
     );
-  }, [order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
+    setAssetAssignments(Object.fromEntries(
+      Object.entries(order?.assetAssignments ?? {}).map(([itemId, assets]) => [itemId, assets.map((asset) => asset.id)]),
+    ));
+  }, [order?.assetAssignments, order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const assemblyMap = useMemo(() => new Map(assemblies.map((assembly) => [assembly.id, assembly])), [assemblies]);
@@ -141,8 +145,26 @@ export function FactionOrderDetail() {
     if (!order) return;
     const values = Object.fromEntries(Object.entries(prepared).map(([id, value]) => [id, Number(value) || 0]));
     const assemblyValues = Object.fromEntries(Object.entries(preparedAssemblies).map(([id, value]) => [id, Number(value) || 0]));
+    const flattened = { ...values };
+    for (const assembly of orderAssemblies) {
+      const count = assemblyValues[assembly.id] ?? 0;
+      for (const [itemId, componentQuantity] of Object.entries(assembly.itemQuantities ?? {})) {
+        flattened[itemId] = (flattened[itemId] ?? 0) + count * componentQuantity;
+      }
+    }
+    for (const item of orderItems.filter((candidate) => candidate.trackingMode === 'serialized')) {
+      const required = flattened[item.id] ?? 0;
+      const selected = assetAssignments[item.id]?.length ?? 0;
+      if (selected !== required) {
+        showSnackbar(t(
+          `Für ${item.name} müssen genau ${required} Seriengeräte ausgewählt werden (aktuell ${selected}).`,
+          `Select exactly ${required} serialized assets for ${item.name} (${selected} currently selected).`,
+        ), 'error');
+        return;
+      }
+    }
     savePreparation.mutate(
-      { id: order.id, values, assemblyValues },
+      { id: order.id, values, assemblyValues, assetAssignments },
       {
         onSuccess: () => showSnackbar(t('Vorbereitung gespeichert', 'Preparation saved'), 'success'),
         onError: handleError,
@@ -317,8 +339,10 @@ export function FactionOrderDetail() {
         itemMap={itemMap}
         prepared={prepared}
         preparedAssemblies={preparedAssemblies}
+        assetAssignments={assetAssignments}
         onSetPrepared={setPrepared}
         onSetPreparedAssemblies={setPreparedAssemblies}
+        onSetAssetAssignments={setAssetAssignments}
         availableFor={availableFor}
         availableAssemblies={availableAssemblies}
         availableForItemId={availableForItemId}

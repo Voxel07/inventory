@@ -531,6 +531,15 @@ export function ItemDetail() {
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                                                     {new Date(tx.timestamp).toLocaleString()} · {tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}
                                                 </Typography>
+                                                {tx.expand?.assetInstanceId && (
+                                                    <Chip
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="secondary"
+                                                        label={[tx.expand.assetInstanceId.assetCode, tx.expand.assetInstanceId.serialNumber && `SN ${tx.expand.assetInstanceId.serialNumber}`].filter(Boolean).join(' · ')}
+                                                        sx={{ mt: 0.75 }}
+                                                    />
+                                                )}
                                                 {(tx.reason || tx.notes) && (
                                                     <Typography variant="body2" sx={{ mt: 0.5 }}>
                                                         {[tx.reason, tx.notes].filter(Boolean).join(' — ')}
@@ -569,7 +578,18 @@ export function ItemDetail() {
                                                     </TableCell>
                                                     <TableCell>{tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}</TableCell>
                                                     <TableCell align="right" sx={{ fontWeight: 600 }}>{tx.quantityChanged}</TableCell>
-                                                    <TableCell>{tx.reason || '—'}</TableCell>
+                                                    <TableCell>
+                                                        {tx.reason || '—'}
+                                                        {tx.expand?.assetInstanceId && (
+                                                            <Chip
+                                                                size="small"
+                                                                variant="outlined"
+                                                                color="secondary"
+                                                                label={[tx.expand.assetInstanceId.assetCode, tx.expand.assetInstanceId.serialNumber && `SN ${tx.expand.assetInstanceId.serialNumber}`].filter(Boolean).join(' · ')}
+                                                                sx={{ ml: 1 }}
+                                                            />
+                                                        )}
+                                                    </TableCell>
                                                     <TableCell>{tx.notes || '—'}</TableCell>
                                                     <TableCell align="center">
                                                         <TooltipButton

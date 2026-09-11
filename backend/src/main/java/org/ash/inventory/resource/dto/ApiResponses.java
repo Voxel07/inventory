@@ -227,6 +227,7 @@ public final class ApiResponses {
             Set<String> assemblyIds,
             Map<String, Integer> requestedAssemblyQuantities,
             Map<String, Integer> preparedAssemblyQuantities,
+            Map<String, List<AssetInstanceResponse>> assetAssignments,
             List<OrderLineResponse> lines,
             List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand

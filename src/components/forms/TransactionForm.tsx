@@ -18,6 +18,7 @@ import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import type { EventType, FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useDamageReports } from '../../hooks/useDamageReports';
+import { useItemAssets } from '../../hooks/useItems';
 import { calculateItemStock } from '../../utils/stock';
 import { useNames, useLocalizedText } from '../../utils/naming';
 
@@ -50,6 +51,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         itemId: initialData?.itemId ?? preselectedItemId ?? '',
         transactionType: initialData?.transactionType ?? 'checkout',
         quantityChanged: initialData?.quantityChanged ?? 1,
+        assetInstanceId: initialData?.assetInstanceId,
         reason: initialData?.reason ?? '',
         notes: initialData?.notes ?? '',
         eventType: initialData?.eventType,
@@ -58,6 +60,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     });
     const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
     const selectedItem = items.find((item) => item.id === formData.itemId);
+    const isSerialized = selectedItem?.trackingMode === 'serialized';
+    const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = calculateItemStock(
         formData.itemId,
         transactions,
@@ -85,12 +89,27 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         || (quantityLimit !== undefined && quantity > quantityLimit);
     const checkoutContextMissing = formData.transactionType === 'checkout'
         && (!formData.eventType || !formData.faction);
+    const selectableAssets = itemAssets.filter((asset) => {
+        if (!asset.active) return false;
+        if (formData.transactionType === 'checkout') {
+            return asset.availabilityStatus === 'available'
+                && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
+                && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified');
+        }
+        if (formData.transactionType === 'checkin') {
+            return ['in_field', 'in_custody'].includes(asset.availabilityStatus);
+        }
+        return false;
+    });
+    const assetSelectionRequired = Boolean(isSerialized
+        && ['checkout', 'checkin'].includes(formData.transactionType));
+    const assetSelectionMissing = assetSelectionRequired && !formData.assetInstanceId;
     const factionOptions = formData.eventType ? FACTIONS_BY_EVENT[formData.eventType] : [];
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (quantityInvalid || checkoutContextMissing) return;
-        onSubmit({ ...formData, quantityChanged: Number(quantityInput) });
+        if ((!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing) return;
+        onSubmit({ ...formData, quantityChanged: isSerialized ? 1 : Number(quantityInput) });
     }
 
     return (
@@ -100,7 +119,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     select
                     label={t('Artikel', 'Item')}
                     value={formData.itemId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined }))}
                     required
                     fullWidth
                 >
@@ -124,6 +143,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         onChange={(_, value: TransactionType | null) => value && setFormData((prev) => ({
                             ...prev,
                             transactionType: value,
+                            assetInstanceId: undefined,
                             factionOrderId: value === 'checkin' ? prev.factionOrderId : undefined,
                             eventType: value === 'checkout' ? prev.eventType : undefined,
                             faction: value === 'checkout' ? prev.faction : '',
@@ -135,7 +155,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         <ToggleButton value="checkin" disabled={selectedStock.checkedOut < 1}>
                             <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('draußen', 'out')})
                         </ToggleButton>
-                        <ToggleButton value="added"><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
+                        <ToggleButton value="added" disabled={isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
                     </ToggleButtonGroup>
                 </Box>
                 {formData.transactionType === 'checkout' && (
@@ -205,7 +225,35 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </TextField>
                     </>
                 )}
-                <TextField
+                {assetSelectionRequired && (
+                    <TextField
+                        select
+                        label={formData.transactionType === 'checkout'
+                            ? t('Seriengerät auswählen', 'Select serialized asset')
+                            : t('Seriengerät zurücknehmen', 'Select returned asset')}
+                        value={formData.assetInstanceId ?? ''}
+                        onChange={(event) => setFormData((prev) => ({ ...prev, assetInstanceId: event.target.value }))}
+                        required
+                        disabled={assetsLoading}
+                        error={!assetsLoading && assetSelectionMissing}
+                        helperText={assetsLoading
+                            ? t('Seriengeräte werden geladen …', 'Loading serialized assets…')
+                            : selectableAssets.length === 0
+                                ? t('Keine passenden Seriengeräte verfügbar.', 'No eligible serialized assets are available.')
+                                : t('Die Auswahl wird dauerhaft in der Nutzungshistorie gespeichert.', 'This selection is retained in the usage history.')}
+                        fullWidth
+                    >
+                        {selectableAssets.map((asset) => (
+                            <MenuItem key={asset.id} value={asset.id}>
+                                {[asset.assetCode, asset.serialNumber && `SN ${asset.serialNumber}`,
+                                    [asset.manufacturer, asset.model].filter(Boolean).join(' '),
+                                    asset.currentLocationName || asset.availabilityStatus]
+                                    .filter(Boolean).join(' · ')}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                )}
+                {!isSerialized && <TextField
                     label={t('Menge', 'Quantity')}
                     type="number"
                     value={quantityInput}
@@ -217,7 +265,12 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         : undefined}
                     error={quantityInvalid && quantityInput !== ''}
                     slotProps={{ htmlInput: { min: 1, ...(quantityLimit !== undefined ? { max: quantityLimit } : {}) } }}
-                />
+                />}
+                {isSerialized && (
+                    <Alert severity="info">
+                        {t('Seriengeräte werden einzeln mit Menge 1 gebucht.', 'Serialized assets are recorded individually with quantity 1.')}
+                    </Alert>
+                )}
                 <TextField
                     select
                     label={t('Grund', 'Reason')}
@@ -249,6 +302,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                                 itemId: initialData?.itemId ?? preselectedItemId ?? '',
                                 transactionType: initialData?.transactionType ?? 'checkout',
                                 quantityChanged: initialData?.quantityChanged ?? 1,
+                                assetInstanceId: initialData?.assetInstanceId,
                                 reason: initialData?.reason ?? '',
                                 notes: initialData?.notes ?? '',
                                 eventType: initialData?.eventType,
@@ -267,7 +321,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             <Button
                                 type="submit"
                                 variant="contained"
-                                disabled={isLoading || !formData.itemId || !formData.reason || quantityInvalid || checkoutContextMissing}
+                                disabled={isLoading || !formData.itemId || !formData.reason
+                                    || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing}
                                 sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
                             >
                                 {t('Transaktion buchen', 'Post transaction')}

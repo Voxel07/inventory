@@ -60,6 +60,10 @@ public class OperationsOrm {
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);
     }
 
+    public AssetInstance findLockedAsset(UUID id) {
+        return entityManager.find(AssetInstance.class, id, LockModeType.PESSIMISTIC_WRITE);
+    }
+
     public DamageReport damageByIdempotencyKey(UUID key) {
         return entityManager.createQuery("from DamageReport d where d.idempotencyKey = :key", DamageReport.class)
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);

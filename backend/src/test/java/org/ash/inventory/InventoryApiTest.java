@@ -56,24 +56,59 @@ class InventoryApiTest {
     }
 
     @Test
-    void serializedItemsRejectQuantityOnlyStockAndPreparationCommands() {
-        String itemId = request().body(Map.of("sku", "SERIAL-GUARD-001", "name", "Serialized guard item",
-                        "category", "Test", "amount", 0, "value", 0, "trackingMode", "serialized"))
+    void serializedAssetsCanBeSelectedForDirectCheckoutAndOrderPacking() {
+        String itemId = request().body(Map.of("sku", "SERIAL-FLOW-001", "name", "Serialized generator",
+                        "category", "Test", "amount", 2, "value", 0, "trackingMode", "serialized"))
                 .post("/api/items").then().statusCode(200).extract().path("id");
+        var assets = request().get("/api/items/" + itemId + "/assets").then().statusCode(200).extract().jsonPath();
+        String firstAssetId = assets.getString("[0].id");
+        String secondAssetId = assets.getString("[1].id");
+
+        // Quantity-only commands remain guarded, but selecting an exact physical unit succeeds.
         request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1,
                         "eventType", "DE", "faction", "KGG"))
                 .post("/api/transactions").then().statusCode(409);
+        request().body(Map.of("itemId", itemId, "assetInstanceId", firstAssetId,
+                        "transactionType", "checkout", "quantityChanged", 1,
+                        "eventType", "DE", "faction", "KGG", "reason", "Field use"))
+                .post("/api/transactions").then().statusCode(200)
+                .body("assetInstanceId", equalTo(firstAssetId))
+                .body("expand.assetInstanceId.assetCode", equalTo("SERIAL-FLOW-001-001"));
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[0].availabilityStatus", equalTo("in_field"));
+        request().body(Map.of("itemId", itemId, "assetInstanceId", firstAssetId,
+                        "transactionType", "checkin", "quantityChanged", 1, "reason", "Returned"))
+                .post("/api/transactions").then().statusCode(200)
+                .body("assetInstanceId", equalTo(firstAssetId));
 
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
-        orderBody.put("faction", "Serialized guard faction");
+        orderBody.put("faction", "Serialized packing faction");
         orderBody.put("eventDate", "2037-09-10");
         orderBody.put("requestedQuantities", Map.of(itemId, 1));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders").then().statusCode(200).extract().path("id");
         request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/submitted").then().statusCode(200);
         request().body(Map.of("preparedQuantities", Map.of(itemId, 1), "acknowledgeShortages", false))
-                .post("/api/orders/" + orderId + "/prepare").then().statusCode(409);
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(400);
+        request().body(Map.of("preparedQuantities", Map.of(itemId, 1),
+                        "assetAssignments", Map.of(itemId, java.util.List.of(secondAssetId)),
+                        "acknowledgeShortages", false))
+                .post("/api/orders/" + orderId + "/prepare").then().statusCode(200)
+                .body("assetAssignments.'" + itemId + "'[0].id", equalTo(secondAssetId))
+                .body("assetAssignments.'" + itemId + "'[0].availabilityStatus", equalTo("staged"));
+        request().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
+                .post("/api/orders/" + orderId + "/transitions/ready").then().statusCode(200);
+        request().body(Map.of()).post("/api/orders/" + orderId + "/transitions/picked_up").then().statusCode(200)
+                .body("assetAssignments.'" + itemId + "'[0].id", equalTo(secondAssetId))
+                .body("assetAssignments.'" + itemId + "'[0].availabilityStatus", equalTo("in_field"));
+        request().queryParam("itemId", itemId).get("/api/transactions").then().statusCode(200)
+                .body("find { it.assetInstanceId == '" + secondAssetId + "' }.factionOrderId", equalTo(orderId));
+        request().body(Map.of()).post("/api/orders/" + orderId + "/return-all").then().statusCode(200)
+                .body("status", equalTo("returned"))
+                .body("assetAssignments.'" + itemId + "'[0].availabilityStatus", equalTo("available"));
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[1].availabilityStatus", equalTo("available"));
     }
 
     @Test

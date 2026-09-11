@@ -6,6 +6,7 @@ import jakarta.transaction.Transactional;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
@@ -15,6 +16,7 @@ import org.ash.inventory.model.FactionOrderHistory;
 import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.Notification;
+import org.ash.inventory.model.OrderLineAssetAssignment;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StockReservation;
 import org.ash.inventory.model.CustodyHandover;
@@ -29,6 +31,8 @@ import java.time.LocalDate;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -121,15 +125,14 @@ public class OrderService {
         if (idempotent(order, input.idempotencyKey()))
             return order;
         var lines = orm.lines(order);
-        if (lines.stream().anyMatch(line -> line.item.trackingMode == DomainEnums.TrackingMode.serialized)) {
-            throw ApiException.conflict("Serialized order lines require explicit asset assignments");
-        }
         if (order.status == DomainEnums.OrderStatus.submitted)
             transition(order, DomainEnums.OrderStatus.preparing, null, "preparation_started", input.notes(), Map.of());
         else if (order.status != DomainEnums.OrderStatus.preparing)
             throw ApiException.conflict("Order must be submitted or preparing");
 
+        releaseAssetAssignments(order);
         var requestedByItem = aggregate(lines, false);
+        var assignedAssetIds = new HashSet<UUID>();
         for (var entry : requestedByItem.entrySet()) {
             var lockedItem = orm.findLocked(Item.class, entry.getKey().id);
             if (lockedItem == null) throw ApiException.notFound("Item not found");
@@ -140,12 +143,22 @@ public class OrderService {
                         .badRequest("Prepared quantity for " + entry.getKey().name + " is outside the requested range");
             int currentReservation = lines.stream().filter(line -> line.item.id.equals(entry.getKey().id))
                     .mapToInt(line -> line.preparedQuantity).sum();
-            int availableIncludingThisOrder = inventory.stock(lockedItem).available() + currentReservation;
+            int availableIncludingThisOrder = inventory.stock(lockedItem).available()
+                    + (lockedItem.trackingMode == DomainEnums.TrackingMode.serialized ? 0 : currentReservation);
             if (prepared > availableIncludingThisOrder && !input.acknowledgeShortages()) {
                 throw ApiException.conflict("Only " + availableIncludingThisOrder + " units of " + entry.getKey().name
                         + " can be reserved");
             }
-            distributePrepared(lines, lockedItem, Math.min(prepared, availableIncludingThisOrder));
+            int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
+            distributePrepared(lines, lockedItem, actualPrepared);
+            if (lockedItem.trackingMode == DomainEnums.TrackingMode.serialized) {
+                var selectedAssets = input.assetAssignments() == null ? List.<UUID>of()
+                        : input.assetAssignments().getOrDefault(lockedItem.id, List.of());
+                assignAssets(order, lines, lockedItem, selectedAssets, actualPrepared, assignedAssetIds);
+            } else if (input.assetAssignments() != null
+                    && !input.assetAssignments().getOrDefault(lockedItem.id, List.of()).isEmpty()) {
+                throw ApiException.badRequest("Asset assignments can only be used with serialized items");
+            }
         }
         reconcileReservations(order, lines, actors.current());
         order.preparedBy = actors.current();
@@ -222,18 +235,24 @@ public class OrderService {
             int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged();
             if (reconciled + outcome.missing() > outstanding)
                 throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
+            int currentMissing = relevant.stream().mapToInt(line -> line.missingQuantity).sum();
             distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
                     outcome.damaged(), outcome.missing(), input.idempotencyKey(), outcome.notes());
 
-            if (outcome.returned() > 0)
-                createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
-                        outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
-            if (outcome.consumed() > 0)
-                createReturnTransaction(item, order, actor, DomainEnums.TransactionType.consumed,
-                        outcome.consumed(), input.idempotencyKey(), "consumed", outcome.notes());
+            if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+                applySerializedAssetOutcomes(item, order, actor, outcome, currentMissing, input.idempotencyKey());
+            } else {
+                if (outcome.returned() > 0)
+                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
+                            outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
+                if (outcome.consumed() > 0)
+                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.consumed,
+                            outcome.consumed(), input.idempotencyKey(), "consumed", outcome.notes());
+                if (outcome.damaged() > 0)
+                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
+                            outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
+            }
             if (outcome.damaged() > 0) {
-                var damagedCheckin = createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
-                        outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
                 var damage = new DamageReport();
                 damage.item = item;
                 damage.reporter = actor;
@@ -242,7 +261,6 @@ public class OrderService {
                 damage.severity = DomainEnums.DamageSeverity.high;
                 damage.description = outcome.notes() == null ? "Damage recorded during order return" : outcome.notes();
                 orm.persist(damage);
-                damagedCheckin.availabilityAfter = inventory.stock(item).available();
             }
             if (outcome.operatingHours() != null
                     && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
@@ -278,9 +296,11 @@ public class OrderService {
         var lines = orm.lines(order);
         for (var entry : aggregatePrepared(lines).entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey().id);
-            if (item.trackingMode == DomainEnums.TrackingMode.serialized)
-                throw ApiException.conflict("Serialized order lines require explicit asset assignments");
             inventory.assertCheckoutAllowed(item);
+            if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+                pickupAssignedAssets(order, item, actor, idempotencyKey, entry.getValue());
+                continue;
+            }
             int ownReservation = lines.stream().filter(line -> line.item.id.equals(item.id))
                     .mapToInt(line -> line.preparedQuantity).sum();
             int available = inventory.stock(item).available() + ownReservation;
@@ -351,6 +371,93 @@ public class OrderService {
             line.allocatedQuantity = line.preparedQuantity;
             line.reservedQuantity = line.preparedQuantity;
             remaining -= line.preparedQuantity;
+        }
+    }
+
+    private void assignAssets(FactionOrder order, List<FactionOrderLine> lines, Item item, List<UUID> assetIds,
+            int preparedQuantity, Set<UUID> assignedAssetIds) {
+        if (assetIds.size() != preparedQuantity)
+            throw ApiException.badRequest("Select exactly " + preparedQuantity + " serialized assets for " + item.name);
+
+        var preparedLines = lines.stream()
+                .filter(line -> line.item.id.equals(item.id) && line.preparedQuantity > 0).toList();
+        int lineIndex = 0;
+        int assignedToLine = 0;
+        for (UUID assetId : assetIds) {
+            if (!assignedAssetIds.add(assetId))
+                throw ApiException.badRequest("A serialized asset can only be assigned once");
+            AssetInstance asset = orm.findLocked(AssetInstance.class, assetId);
+            if (asset == null || !asset.active || !asset.item.id.equals(item.id))
+                throw ApiException.notFound("Asset instance not found for " + item.name);
+            if (asset.availabilityStatus != DomainEnums.AssetState.available)
+                throw ApiException.conflict("Asset " + asset.assetCode + " is not available");
+            assertAssetCanBePacked(asset);
+
+            while (lineIndex < preparedLines.size()
+                    && assignedToLine >= preparedLines.get(lineIndex).preparedQuantity) {
+                lineIndex++;
+                assignedToLine = 0;
+            }
+            if (lineIndex >= preparedLines.size())
+                throw ApiException.badRequest("Too many serialized assets selected for " + item.name);
+
+            var assignment = new OrderLineAssetAssignment();
+            assignment.order = order;
+            assignment.orderLine = preparedLines.get(lineIndex);
+            assignment.assetInstance = asset;
+            orm.persist(assignment);
+            asset.availabilityStatus = DomainEnums.AssetState.staged;
+            asset.currentLocation = item.storageLocation;
+            asset.currentCustodian = null;
+            assignedToLine++;
+        }
+    }
+
+    private void assertAssetCanBePacked(AssetInstance asset) {
+        if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged
+                || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
+                || asset.conditionStatus == DomainEnums.ConditionStatus.lost) {
+            throw ApiException.conflict("Asset " + asset.assetCode + " cannot be packed because its condition is "
+                    + asset.conditionStatus);
+        }
+        if (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue
+                || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
+            throw ApiException.conflict("Asset " + asset.assetCode + " cannot be packed because its service status is "
+                    + asset.serviceStatus);
+        }
+    }
+
+    private void pickupAssignedAssets(FactionOrder order, Item item, UserAccount actor, UUID idempotencyKey,
+            int preparedQuantity) {
+        var assignments = orm.assetAssignments(order, item);
+        if (assignments.size() != preparedQuantity)
+            throw ApiException.conflict("Serialized asset assignments for " + item.name + " are incomplete");
+        for (var assignment : assignments) {
+            var asset = orm.findLocked(AssetInstance.class, assignment.assetInstance.id);
+            if (asset.availabilityStatus != DomainEnums.AssetState.staged)
+                throw ApiException.conflict("Asset " + asset.assetCode + " is no longer staged for this order");
+            assertAssetCanBePacked(asset);
+            int before = inventory.stock(item).available();
+            var transaction = new StockTransaction();
+            transaction.item = item;
+            transaction.assetInstance = asset;
+            transaction.user = actor;
+            transaction.factionOrder = order;
+            transaction.eventType = order.eventOccurrence.eventType;
+            transaction.faction = order.faction.name;
+            transaction.type = DomainEnums.TransactionType.checkout;
+            transaction.quantity = 1;
+            transaction.availabilityBefore = before;
+            transaction.reason = "Faction order pickup " + order.orderCode;
+            transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup:" + asset.id);
+            transaction.clientCommandId = idempotencyKey;
+            transaction.sourceLocation = asset.currentLocation == null ? item.storageLocation : asset.currentLocation;
+            transaction.destinationLocation = order.pickupLocation;
+            asset.availabilityStatus = DomainEnums.AssetState.in_field;
+            asset.currentLocation = order.pickupLocation;
+            asset.currentCustodian = null;
+            orm.persist(transaction);
+            transaction.availabilityAfter = inventory.stock(item).available();
         }
     }
 
@@ -443,11 +550,25 @@ public class OrderService {
     }
 
     private void releaseReservations(FactionOrder order) {
+        releaseAssetAssignments(order);
         for (var reservation : orm.reservations(order)) {
             if (reservation.openQuantity() > 0) release(reservation);
             reservation.activeAssetKey = null;
         }
         for (var line : orm.lines(order)) line.reservedQuantity = 0;
+    }
+
+    private void releaseAssetAssignments(FactionOrder order) {
+        for (var assignment : orm.assetAssignments(order)) {
+            var asset = assignment.assetInstance;
+            if (asset.availabilityStatus == DomainEnums.AssetState.staged
+                    || asset.availabilityStatus == DomainEnums.AssetState.reserved) {
+                asset.availabilityStatus = DomainEnums.AssetState.available;
+                asset.currentLocation = asset.item.storageLocation;
+                asset.currentCustodian = null;
+            }
+        }
+        orm.removeAssetAssignments(order);
     }
 
     private void clearPreparation(FactionOrder order) {
@@ -567,6 +688,85 @@ public class OrderService {
         orm.persist(transaction);
         transaction.availabilityAfter = inventory.stock(item).available();
         return transaction;
+    }
+
+    private void applySerializedAssetOutcomes(Item item, FactionOrder order, UserAccount actor,
+            ApiModels.ReturnLine outcome, int currentMissing, UUID clientCommandId) {
+        var candidates = new ArrayList<AssetInstance>();
+        for (var assignment : orm.assetAssignments(order, item)) {
+            var asset = orm.findLocked(AssetInstance.class, assignment.assetInstance.id);
+            if (asset.availabilityStatus == DomainEnums.AssetState.in_field
+                    || asset.availabilityStatus == DomainEnums.AssetState.in_custody
+                    || asset.availabilityStatus == DomainEnums.AssetState.lost) {
+                candidates.add(asset);
+            }
+        }
+        candidates.sort(Comparator
+                .comparing((AssetInstance asset) -> asset.availabilityStatus == DomainEnums.AssetState.lost ? 0 : 1)
+                .thenComparing(asset -> asset.assetCode));
+
+        int newlyMissing = Math.max(0, outcome.missing() - currentMissing);
+        int required = outcome.returned() + outcome.damaged() + newlyMissing;
+        if (required > candidates.size())
+            throw ApiException.conflict("Not enough outstanding serialized assets for " + item.name);
+
+        for (int i = 0; i < outcome.returned(); i++) {
+            var asset = candidates.remove(0);
+            if (asset.conditionStatus == DomainEnums.ConditionStatus.lost)
+                asset.conditionStatus = DomainEnums.ConditionStatus.fair;
+            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
+                    DomainEnums.AssetState.available, clientCommandId, "returned", outcome.notes());
+        }
+        for (int i = 0; i < outcome.damaged(); i++) {
+            var asset = candidates.remove(0);
+            asset.conditionStatus = DomainEnums.ConditionStatus.damaged;
+            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
+                    DomainEnums.AssetState.damaged, clientCommandId, "damaged", outcome.notes());
+        }
+        for (int i = 0; i < newlyMissing; i++) {
+            int availableIndex = -1;
+            for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
+                if (candidates.get(candidateIndex).availabilityStatus != DomainEnums.AssetState.lost) {
+                    availableIndex = candidateIndex;
+                    break;
+                }
+            }
+            if (availableIndex < 0)
+                throw ApiException.conflict("No additional serialized asset can be marked missing for " + item.name);
+            var asset = candidates.remove(availableIndex);
+            asset.conditionStatus = DomainEnums.ConditionStatus.lost;
+            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.missing,
+                    DomainEnums.AssetState.lost, clientCommandId, "missing", outcome.notes());
+        }
+    }
+
+    private void createSerializedReturnTransaction(Item item, FactionOrder order, UserAccount actor,
+            AssetInstance asset, DomainEnums.TransactionType type, DomainEnums.AssetState targetState,
+            UUID clientCommandId, String operation, String notes) {
+        int before = inventory.stock(item).available();
+        var transaction = new StockTransaction();
+        transaction.item = item;
+        transaction.assetInstance = asset;
+        transaction.user = actor;
+        transaction.factionOrder = order;
+        transaction.eventType = order.eventOccurrence.eventType;
+        transaction.faction = order.faction.name;
+        transaction.type = type;
+        transaction.quantity = 1;
+        transaction.reason = "Faction order return " + order.orderCode;
+        transaction.notes = notes;
+        transaction.idempotencyKey = transactionKey(clientCommandId, order, item, operation + ":" + asset.id);
+        transaction.clientCommandId = clientCommandId;
+        transaction.sourceLocation = asset.currentLocation == null ? order.pickupLocation : asset.currentLocation;
+        asset.availabilityStatus = targetState;
+        asset.currentLocation = targetState == DomainEnums.AssetState.available
+                || targetState == DomainEnums.AssetState.damaged ? item.storageLocation : null;
+        asset.currentCustodian = null;
+        if (type == DomainEnums.TransactionType.checkin)
+            transaction.destinationLocation = item.storageLocation;
+        transaction.availabilityBefore = before;
+        orm.persist(transaction);
+        transaction.availabilityAfter = inventory.stock(item).available();
     }
 
     private UUID transactionKey(UUID clientCommandId, FactionOrder order, Item item, String operation) {

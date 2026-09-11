@@ -37,7 +37,7 @@ public final class ApiModels {
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
             @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
-            UUID userId, UUID factionOrderId, UUID idempotencyKey) {}
+            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey) {}
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,
@@ -54,7 +54,8 @@ public final class ApiModels {
 
     public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose) {}
 
-    public record PreparationInput(Map<UUID, Integer> preparedQuantities, boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
+    public record PreparationInput(Map<UUID, Integer> preparedQuantities, Map<UUID, List<UUID>> assetAssignments,
+            boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
             BigDecimal operatingHours, String notes) {}
