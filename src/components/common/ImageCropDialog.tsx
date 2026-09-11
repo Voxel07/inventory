@@ -11,7 +11,7 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
   const [aspect, setAspect] = useState('original');
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0.5, y: 0.5 });
-  const [maxDimension, setMaxDimension] = useState(2048);
+  const [maxDimension, setMaxDimension] = useState(512);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const loadFailure = t('Bild konnte nicht geladen werden.', 'Could not load image.');
@@ -86,7 +86,7 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
               <MenuItem value={String(16 / 9)}>16:9</MenuItem><MenuItem value={String(3 / 4)}>3:4</MenuItem>
             </TextField>
             <TextField select fullWidth label={t('Maximale Größe', 'Maximum size')} value={maxDimension} disabled={saving} onChange={(event) => setMaxDimension(Number(event.target.value))}>
-              {[512, 1024, 2048].map((size) => <MenuItem key={size} value={size}>{size} px</MenuItem>)}
+              {[128, 256, 512].map((size) => <MenuItem key={size} value={size}>{size} px</MenuItem>)}
             </TextField>
           </Stack>
           <Box><Typography>{t('Zoom', 'Zoom')}: {zoom.toFixed(1)}×</Typography>
@@ -100,7 +100,7 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(2048); }}>{t('Zurücksetzen', 'Reset')}</Button>
+        <Button disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(512); }}>{t('Zurücksetzen', 'Reset')}</Button>
         <Button disabled={saving} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button>
         <Button disabled={saving || !bitmap} variant="contained" onClick={() => void apply()}>{saving ? t('Wird verarbeitet…', 'Processing…') : t('Anwenden', 'Apply')}</Button>
       </DialogActions>

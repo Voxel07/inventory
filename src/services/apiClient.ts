@@ -253,6 +253,24 @@ export function uploadMedia(file: File): Promise<string> {
   return uploadMediaAttempt(file, false);
 }
 
+async function deleteMediaAttempt(key: string, retried: boolean): Promise<void> {
+  const url = apiFileUrl(key);
+  if (!url || !isApiMediaUrl(url)) throw new Error('Invalid media key');
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: await getAuthorizationHeaders(),
+  });
+  if (response.status === 401 && !retried && canRefreshAuth()) {
+    await getValidAccessToken(true);
+    return deleteMediaAttempt(key, true);
+  }
+  if (!response.ok) throw await responseError(response);
+}
+
+export function deleteMedia(key: string): Promise<void> {
+  return deleteMediaAttempt(key, false);
+}
+
 export type ApiChangeDetail = {
   type?: string;
   resource?: string;

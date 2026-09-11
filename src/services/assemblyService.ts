@@ -1,12 +1,11 @@
 import type { Assembly, AssemblyFormData } from '../types';
-import { uploadMedia } from './apiClient';
-import { prepareItemImage } from '../utils/prepareItemImage';
+import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 
 async function transformAssemblyPayload(data: Partial<AssemblyFormData>) {
   const fields = { ...data };
   delete fields.imageFile;
-  const image = data.imageFile ? await uploadMedia(await prepareItemImage(data.imageFile)) : undefined;
+  const image = data.imageFile ? await stageImage(data.imageFile) : undefined;
   return { ...fields, ...(image ? { image, removeImage: false } : {}) };
 }
 

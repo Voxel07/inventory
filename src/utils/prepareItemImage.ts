@@ -1,4 +1,5 @@
-const MAX_DIMENSION = 2048;
+const MAX_DIMENSION = 512;
+const MIN_DIMENSION = 128;
 const MAX_PIXELS = 40_000_000;
 const MAX_BYTES = 20 * 1024 * 1024;
 const preparedImages = new WeakSet<File>();
@@ -74,7 +75,7 @@ export async function prepareItemImage(file: File, options?: { crop?: ImageCrop;
     const maxDimension = options?.maxDimension ?? MAX_DIMENSION;
     if (!Object.values(crop).every(Number.isFinite) || crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0
         || crop.x + crop.width > bitmap.width + 0.001 || crop.y + crop.height > bitmap.height + 0.001
-        || !Number.isFinite(maxDimension) || maxDimension < 256 || maxDimension > MAX_DIMENSION) {
+        || !Number.isFinite(maxDimension) || maxDimension < MIN_DIMENSION || maxDimension > MAX_DIMENSION) {
       throw new Error('Invalid image crop or output size.');
     }
     const scale = Math.min(1, maxDimension / Math.max(crop.width, crop.height));

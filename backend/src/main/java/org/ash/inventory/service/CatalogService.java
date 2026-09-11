@@ -15,10 +15,12 @@ import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -99,8 +101,13 @@ public class CatalogService {
         }
         apply(item, input);
         if (input.images() != null) {
+            var previousImages = orm.itemImages(item).stream().map(image -> image.objectKey).toList();
             orm.deleteItemImages(item);
             persistImages(item, input.images());
+            var retainedImages = new HashSet<>(input.images());
+            previousImages.stream()
+                    .filter(image -> !retainedImages.contains(image))
+                    .forEach(media::deleteAfterCommit);
         }
         catalogChanged("items", item.id);
         return item;
@@ -222,6 +229,7 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
+        if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);
         orm.deleteAssemblyItems(assembly);
         orm.remove(assembly);
         catalogChanged("assemblies", assembly.id);
@@ -235,10 +243,14 @@ public class CatalogService {
     }
 
     private void applyAssemblyImage(Assembly target, ApiModels.AssemblyInput input) {
+        String previousImage = target.imageObjectKey;
         if (input.image() != null && !input.image().isBlank()) {
             target.imageObjectKey = media.attachToAssembly(input.image(), target.id);
         } else if (input.removeImage()) {
             target.imageObjectKey = null;
+        }
+        if (previousImage != null && !Objects.equals(previousImage, target.imageObjectKey)) {
+            media.deleteAfterCommit(previousImage);
         }
     }
 

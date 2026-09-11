@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CropIcon from '@mui/icons-material/Crop';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFileUrl, fetchMedia, isApiMediaUrl } from '../../services/apiClient';
+import { releaseStagedImage, stageImage } from '../../services/stagedImageService';
 import { useLocalizedText } from '../../utils/naming';
 import { ImageCropDialog } from './ImageCropDialog';
 import { MediaImage } from './MediaImage';
@@ -27,7 +28,7 @@ function FilePreview({ file, alt }: { file: File; alt: string }) {
 export function ImageAttachments({ existing = [], value, onChange, maxImages = 8, disabled = false }: {
   existing?: string[];
   value: ImageAttachmentState;
-  onChange: (value: ImageAttachmentState) => void;
+  onChange: Dispatch<SetStateAction<ImageAttachmentState>>;
   maxImages?: number;
   disabled?: boolean;
 }) {
@@ -35,11 +36,60 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
   const [editing, setEditing] = useState<{ file: File; index?: number; key?: string }>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadsInProgress, setUploadsInProgress] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => activeRequest.current?.abort(), []);
+  const mounted = useRef(true);
+  const stagedFiles = useRef(new Set<File>());
+  useEffect(() => {
+    const files = stagedFiles.current;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      activeRequest.current?.abort();
+      files.forEach(releaseStagedImage);
+      files.clear();
+    };
+  }, []);
   const retained = existing.filter((key) => !value.removed.includes(key));
   const remaining = maxImages - retained.length - value.files.length;
   const busy = disabled || loading;
+
+  function beginUpload(file: File) {
+    stagedFiles.current.add(file);
+    setError('');
+    setUploadsInProgress((count) => count + 1);
+    void stageImage(file)
+      .catch((reason) => {
+        if (mounted.current) setError(reason instanceof Error ? reason.message : t('Bild konnte nicht hochgeladen werden.', 'Could not upload image.'));
+      })
+      .finally(() => {
+        if (mounted.current) setUploadsInProgress((count) => Math.max(0, count - 1));
+      });
+  }
+
+  function releaseImage(file: File) {
+    stagedFiles.current.delete(file);
+    releaseStagedImage(file);
+  }
+
+  function removeExisting(key: string) {
+    const replacement = value.replacements[key];
+    if (replacement) releaseImage(replacement);
+    onChange((current) => {
+      const replacements = { ...current.replacements };
+      delete replacements[key];
+      return {
+        ...current,
+        removed: current.removed.includes(key) ? current.removed : [...current.removed, key],
+        replacements,
+      };
+    });
+  }
+
+  function removeNew(file: File) {
+    releaseImage(file);
+    onChange((current) => ({ ...current, files: current.files.filter((candidate) => candidate !== file) }));
+  }
 
   async function editExisting(key: string) {
     if (value.replacements[key]) { setEditing({ key, file: value.replacements[key] }); return; }
@@ -88,31 +138,34 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
                 setError(t('Bitte JPEG, PNG oder WebP bis 20 MB auswählen.', 'Please select JPEG, PNG or WebP images up to 20 MB.')); return;
               }
               setError('');
-              onChange({ ...value, files: [...value.files, ...selected] });
-              if (selected.length === 1) setEditing({ file: selected[0], index: value.files.length });
+              onChange((current) => ({ ...current, files: [...current.files, ...selected] }));
+              selected.forEach(beginUpload);
             }} />
         </Button>
       </Box>
-      <Typography variant="caption" color="text.secondary">{t('JPEG, PNG oder WebP. Ausschnitt, Zoom und Größe sind anpassbar; gespeichert als WebP ohne Metadaten.', 'JPEG, PNG or WebP. Adjust crop, zoom and size; saved as WebP without metadata.')}</Typography>
+      <Typography variant="caption" color="text.secondary">{t('JPEG, PNG oder WebP. Automatisch komprimiert auf maximal 512 px; 256 px und 128 px sind unter „Anpassen“ verfügbar.', 'JPEG, PNG or WebP. Automatically compressed to a maximum of 512 px; 256 px and 128 px are available under “Adjust”.')}</Typography>
       {loading && <Typography variant="caption">{t('Bild wird geladen…', 'Loading image…')}</Typography>}
+      {uploadsInProgress > 0 && <Typography variant="caption" color="primary">{t('Bild wird im Hintergrund optimiert und hochgeladen…', 'Optimizing and uploading image in the background…')}</Typography>}
       <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1 }}>
         {retained.map((key, index) => (
           <Box key={key} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
             {value.replacements[key] ? <FilePreview file={value.replacements[key]} alt={`${t('Bild', 'Image')} ${index + 1}`} />
               : <MediaImage src={apiFileUrl(key)} alt={`${t('Bild', 'Image')} ${index + 1}`} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />}
-            <ImageControls label={String(index + 1)} disabled={busy} onEdit={() => void editExisting(key)} onRemove={() => onChange({ ...value, removed: [...value.removed, key] })} />
+            <ImageControls label={String(index + 1)} disabled={busy} onEdit={() => void editExisting(key)} onRemove={() => removeExisting(key)} />
           </Box>
         ))}
         {value.files.map((file, index) => (
           <Box key={index} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
             <FilePreview file={file} alt={`${t('Neues Bild', 'New image')} ${index + 1}`} />
-            <ImageControls label={`${t('neu', 'new')} ${index + 1}`} disabled={busy} onEdit={() => setEditing({ file, index })} onRemove={() => onChange({ ...value, files: value.files.filter((_, position) => index !== position) })} />
+            <ImageControls label={`${t('neu', 'new')} ${index + 1}`} disabled={busy} onEdit={() => setEditing({ file, index })} onRemove={() => removeNew(file)} />
           </Box>
         ))}
       </Stack>
       {editing && <ImageCropDialog file={editing.file} onClose={() => setEditing(undefined)} onApply={(file) => {
-        if (editing.key) onChange({ ...value, replacements: { ...value.replacements, [editing.key]: file } });
-        else onChange({ ...value, files: value.files.map((current, index) => index === editing.index ? file : current) });
+        beginUpload(file);
+        releaseImage(editing.file);
+        if (editing.key) onChange((current) => ({ ...current, replacements: { ...current.replacements, [editing.key!]: file } }));
+        else onChange((current) => ({ ...current, files: current.files.map((candidate, index) => index === editing.index ? file : candidate) }));
         setEditing(undefined);
       }} />}
     </Stack>

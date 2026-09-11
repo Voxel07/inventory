@@ -433,10 +433,12 @@ class InventoryApiTest {
         org.junit.jupiter.api.Assertions.assertNotEquals(first, second);
         org.junit.jupiter.api.Assertions.assertTrue(second.endsWith("/" + id + ".webp"));
         request().get("/api/media/" + replacement).then().statusCode(404);
+        request().get("/api/media/" + first).then().statusCode(404);
         body.remove("image");
         body.put("removeImage", true);
         request().body(body).patch("/api/assemblies/" + id).then().statusCode(200).body("image", org.hamcrest.Matchers.nullValue());
         request().get("/api/assemblies/" + id).then().statusCode(200).body("image", org.hamcrest.Matchers.nullValue());
+        request().get("/api/media/" + second).then().statusCode(404);
     }
 
     @Test
@@ -468,6 +470,22 @@ class InventoryApiTest {
                         "images", java.util.List.of(images.get(1))))
                 .patch("/api/items/" + id).then().statusCode(200)
                 .body("images[0]", equalTo(images.get(1))).body("images.size()", equalTo(1));
+        request().get("/api/media/" + images.get(0)).then().statusCode(404);
+        request().get("/api/media/" + images.get(1)).then().statusCode(200);
+        request().delete("/api/media/" + images.get(1)).then().statusCode(400);
+        request().get("/api/media/" + images.get(1)).then().statusCode(200);
+    }
+
+    @Test
+    void abandonedStagedImageCanBeDeleted() {
+        byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
+        String staged = given().header("X-Actor-Id", "media-admin")
+                .multiPart("file", "image.webp", bytes, "image/webp")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+
+        request().get("/api/media/" + staged).then().statusCode(200);
+        request().delete("/api/media/" + staged).then().statusCode(204);
+        request().get("/api/media/" + staged).then().statusCode(404);
     }
 
     @Test

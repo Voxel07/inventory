@@ -1,12 +1,10 @@
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
-import { apiRequest, uploadMedia } from './apiClient';
-import { prepareItemImage } from '../utils/prepareItemImage';
+import { apiRequest } from './apiClient';
+import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 
 async function uploadItemImages(files: File[] = []): Promise<string[]> {
-  const images: string[] = [];
-  for (const file of files) images.push(await uploadMedia(await prepareItemImage(file)));
-  return images;
+  return Promise.all(files.map(stageImage));
 }
 
 function payload(data: Partial<ItemFormData>) {
@@ -34,7 +32,7 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
       for (const image of current.images || []) {
         if (removed.has(image)) continue;
         const replacement = data.imageReplacements?.[image];
-        images.push(replacement ? await uploadMedia(await prepareItemImage(replacement)) : image);
+        images.push(replacement ? await stageImage(replacement) : image);
       }
       images.push(...uploaded);
       return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), images } });

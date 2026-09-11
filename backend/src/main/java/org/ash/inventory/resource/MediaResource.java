@@ -2,6 +2,7 @@ package org.ash.inventory.resource;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -42,5 +43,12 @@ public class MediaResource {
                 .header("Cache-Control", "private, max-age=3600")
                 .header("Vary", "Authorization")
                 .header("X-Content-Type-Options", "nosniff").build();
+    }
+
+    @DELETE @Path("/{key:.+}")
+    public Response deleteStaged(@PathParam("key") String key) {
+        actors.requireManager();
+        media.deleteStaged(key);
+        return Response.noContent().build();
     }
 }

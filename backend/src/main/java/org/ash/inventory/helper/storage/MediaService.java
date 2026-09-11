@@ -26,11 +26,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class MediaService {
     @Inject TransactionSynchronizationRegistry transactions;
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(MediaService.class);
+    private static final Pattern STAGED_IMAGE = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-image\\.webp");
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build();
     @ConfigProperty(name = "inventory.media.mode") String mode;
     @ConfigProperty(name = "inventory.media.local-directory") String localDirectory;
@@ -76,9 +78,29 @@ public class MediaService {
         return attachToRecord(reference, assemblyId, "assemblies");
     }
 
+    /** Delete only an unattached browser upload; permanent item/assembly media cannot be removed through this endpoint. */
+    public void deleteStaged(String reference) {
+        String key = mediaReference(reference);
+        if (!STAGED_IMAGE.matcher(key).matches()) throw ApiException.badRequest("Only staged images can be deleted");
+        delete(key);
+    }
+
+    /** Remove superseded permanent media only after its database update has committed. */
+    public void deleteAfterCommit(String reference) {
+        String key = mediaReference(reference);
+        transactions.registerInterposedSynchronization(new Synchronization() {
+            public void beforeCompletion() {}
+            public void afterCompletion(int status) {
+                if (status != Status.STATUS_COMMITTED) return;
+                try { delete(key); }
+                catch (RuntimeException exception) { LOG.warn("Could not delete superseded media object", exception); }
+            }
+        });
+    }
+
     private String attachToRecord(String reference, UUID recordId, String directory) {
         String key = mediaReference(reference);
-        if (!key.matches("[0-9]{4}-[0-9a-f-]{36}-image\\.webp")) return key;
+        if (!STAGED_IMAGE.matcher(key).matches()) return key;
         String destination = directory + "/" + UUID.randomUUID() + "/" + recordId + ".webp";
         var content = read(key);
         if ("s3".equalsIgnoreCase(mode)) putS3(destination, "image/webp", content.bytes());
