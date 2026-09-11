@@ -63,6 +63,7 @@ export function OrderPickListTable({
   const [sortByLocation, setSortByLocation] = useState(false);
   const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
   const [assemblyChecked, setAssemblyChecked] = useState<Record<string, Record<string, boolean>>>({});
+  const hasOrderItems = Boolean(orderItems.length);
 
   const visibleOrderItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
@@ -147,35 +148,81 @@ export function OrderPickListTable({
   return (
     <>
       {(Boolean(orderAssemblies.length) || Boolean(orderItems.length)) && (
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t('Artikel oder Baugruppen suchen', 'Search items or assemblies')}
-            value={itemSearch}
-            onChange={(event) => setItemSearch(event.target.value)}
-            slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
-          />
-          {Boolean(orderItems.length) && (
-            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 200 } }}>
-              <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
-              <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
-                <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
-                {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
-              </Select>
-            </FormControl>
-          )}
-          <Button
-            size="small"
-            variant={sortByLocation ? 'contained' : 'outlined'}
-            color={sortByLocation ? 'primary' : 'inherit'}
-            startIcon={<LocationOnIcon fontSize="small" />}
-            onClick={() => setSortByLocation((prev) => !prev)}
-            sx={{ whiteSpace: 'nowrap', minHeight: 40 }}
+        <Box
+          sx={{
+            containerName: 'order-filters',
+            containerType: 'inline-size',
+            mb: 2,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr)',
+              gap: 1,
+              alignItems: 'center',
+              '@container order-filters (min-width: 520px)': {
+                gridTemplateColumns: hasOrderItems ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+              },
+              '@container order-filters (min-width: 760px)': {
+                gridTemplateColumns: hasOrderItems
+                  ? 'minmax(260px, 1fr) minmax(180px, 220px) auto'
+                  : 'minmax(0, 1fr)',
+              },
+            }}
           >
-            {t('Lagerort-Sortierung', 'Sort by location')}
-          </Button>
-        </Stack>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('Artikel oder Baugruppen suchen', 'Search items or assemblies')}
+              value={itemSearch}
+              onChange={(event) => setItemSearch(event.target.value)}
+              slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
+              sx={{
+                '@container order-filters (min-width: 520px)': {
+                  gridColumn: hasOrderItems ? '1 / -1' : 'auto',
+                },
+                '@container order-filters (min-width: 760px)': {
+                  gridColumn: 'auto',
+                },
+              }}
+            />
+            {hasOrderItems && (
+              <FormControl size="small" sx={{ minWidth: 0, width: '100%' }}>
+                <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
+                <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
+                  <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+                  {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
+                </Select>
+              </FormControl>
+            )}
+            {hasOrderItems && (
+              <Button
+                size="small"
+                variant={sortByLocation ? 'contained' : 'outlined'}
+                color={sortByLocation ? 'primary' : 'inherit'}
+                startIcon={<LocationOnIcon fontSize="small" />}
+                aria-pressed={sortByLocation}
+                title={t('Artikel nach Lagerort sortieren', 'Sort items by location')}
+                onClick={() => setSortByLocation((prev) => !prev)}
+                sx={{
+                  minHeight: 40,
+                  width: '100%',
+                  px: 1.5,
+                  whiteSpace: 'nowrap',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  '@container order-filters (min-width: 520px)': {
+                    width: 'auto',
+                    justifySelf: 'end',
+                  },
+                }}
+              >
+                {t('Nach Lagerort', 'By location')}
+              </Button>
+            )}
+          </Box>
+        </Box>
       )}
 
       {Boolean(orderAssemblies.length) && (

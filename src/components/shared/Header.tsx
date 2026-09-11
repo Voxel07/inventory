@@ -28,10 +28,8 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import { EVENT_TYPES } from '../../types';
 import { useUIStore } from '../../store/uiStore';
 import { useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
@@ -63,9 +61,6 @@ export function Header() {
     const { online, queued, syncIssues } = useOfflineStatus();
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
-    const activeEventType = useUIStore((s) => s.activeEventType);
-    const setActiveEventType = useUIStore((s) => s.setActiveEventType);
-    const [eventAnchor, setEventAnchor] = useState<HTMLElement | null>(null);
     const [quickScanOpen, setQuickScanOpen] = useState(false);
     const [quickScanInput, setQuickScanInput] = useState('');
     const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: getNotifications, refetchInterval: 60_000 });
@@ -158,40 +153,6 @@ export function Header() {
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                     {t('header.inventory')}
                 </Typography>
-                <Chip
-                    size="small"
-                    variant="outlined"
-                    label={activeEventType === 'LS' ? 'LightSim' : activeEventType}
-                    deleteIcon={<ArrowDropDownIcon />}
-                    onDelete={(e) => setEventAnchor(e.currentTarget)}
-                    onClick={(e) => setEventAnchor(e.currentTarget)}
-                    sx={{
-                        ml: { xs: 1, sm: 1.5 },
-                        color: 'white',
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        '& .MuiChip-deleteIcon': { color: 'white' },
-                    }}
-                />
-                <Menu
-                    anchorEl={eventAnchor}
-                    open={Boolean(eventAnchor)}
-                    onClose={() => setEventAnchor(null)}
-                >
-                    {EVENT_TYPES.map((type) => (
-                        <MenuItem
-                            key={type}
-                            selected={type === activeEventType}
-                            onClick={() => {
-                                setActiveEventType(type);
-                                setEventAnchor(null);
-                            }}
-                        >
-                            {type === 'LS' ? 'LightSim' : type}
-                        </MenuItem>
-                    ))}
-                </Menu>
                 <Box sx={{ flexGrow: 1 }} />
                 <Tooltip title={t('header.quickScan', 'QR / Barcode Scan')}>
                     <IconButton
