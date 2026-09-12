@@ -42,6 +42,7 @@ export interface CheckedOutRow {
   eventKey: string;
   event: string;
   factionOrderId?: string;
+  assetInstanceId?: string;
   /** Resolved assembly this item belongs to (if from a faction order) */
   assemblyId?: string;
 }

@@ -105,7 +105,7 @@ export interface ItemFormData {
 }
 
 export type AssetConditionStatus = 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
-export type AssetAvailabilityStatus = 'available' | 'reserved' | 'staged' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
+export type AssetAvailabilityStatus = 'available' | 'reserved' | 'staged' | 'in_transit' | 'in_custody' | 'in_field' | 'returned_pending_check' | 'damaged' | 'in_repair' | 'in_maintenance' | 'lost' | 'written_off';
 
 export interface AssetInstance {
   id: string;
@@ -126,6 +126,7 @@ export interface AssetInstance {
   currentCustodianName?: string;
   notes?: string;
   active: boolean;
+  version: number;
 }
 
 export interface AssetInstanceInput {
@@ -142,6 +143,7 @@ export interface AssetInstanceInput {
   batchCount?: number;
   codePrefix?: string;
   startNumber?: number;
+  expectedVersion?: number;
 }
 
 import type { EventType } from './event';

@@ -1,9 +1,9 @@
 package org.ash.inventory.resource;
 
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
@@ -13,9 +13,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.orm.OrderOrm;
+import org.ash.inventory.service.ApiQueryService;
 import org.ash.inventory.service.OrderService;
 
 import org.ash.inventory.resource.dto.ApiResponses;
@@ -26,39 +25,35 @@ import java.util.UUID;
 @Path("/api/orders")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@Transactional
 public class OrderResource {
-    @Inject
-    OrderService service;
-    @Inject
-    ApiMapper mapper;
-    @Inject
-    ActorService actor;
-    @Inject
-    OrderOrm orm;
+    private final OrderService service;
+    private final ApiMapper mapper;
+    private final ActorService actor;
+    private final ApiQueryService queries;
+
+    public OrderResource(OrderService service, ApiMapper mapper, ActorService actor, ApiQueryService queries) {
+        this.service = service;
+        this.mapper = mapper;
+        this.actor = actor;
+        this.queries = queries;
+    }
 
     @GET
-    @Transactional
-    public List<ApiResponses.OrderResponse> orders(@QueryParam("eventType") String eventType, @QueryParam("faction") String faction) {
-        UserAccount user = actor.current();
-        var stream = orm.orders(eventType, faction).stream();
-        if (user.role == DomainEnums.UserRole.faction_leader)
-            stream = stream.filter(value -> actor.canAccessFaction(user, value.faction.eventType, value.faction.name));
-        return stream.map(mapper::order).toList();
+    public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") String eventType,
+            @QueryParam("faction") String faction,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.orders(eventType, faction, page, size);
     }
 
     @GET
     @Path("/{id}")
-    @Transactional
     public ApiResponses.OrderResponse order(@PathParam("id") UUID id) {
-        var order = orm.findOrder(id);
-        if (order == null)
-            throw ApiException.notFound("Faction order not found");
-        service.assertCanView(order);
-        return mapper.order(order);
+        return queries.order(id);
     }
 
     @POST
+    @Transactional
     public ApiResponses.OrderResponse create(@Valid ApiModels.OrderInput input) {
         actor.current();
         return mapper.order(service.create(input));
@@ -66,6 +61,7 @@ public class OrderResource {
 
     @PATCH
     @Path("/{id}")
+    @Transactional
     public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.OrderInput input) {
         actor.current();
         return mapper.order(service.update(id, input));
@@ -73,6 +69,7 @@ public class OrderResource {
 
     @POST
     @Path("/{id}/prepare")
+    @Transactional
     public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
         actor.requireWarehouse();
         return mapper.order(service.prepare(id, input));
@@ -80,6 +77,7 @@ public class OrderResource {
 
     @POST
     @Path("/{id}/transitions/{status}")
+    @Transactional
     public ApiResponses.OrderResponse transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
             ApiModels.TransitionInput input) {
         if (status == DomainEnums.OrderStatus.submitted || status == DomainEnums.OrderStatus.draft)
@@ -96,6 +94,7 @@ public class OrderResource {
 
     @POST
     @Path("/{id}/return")
+    @Transactional
     public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
         actor.requireMarshal();
         return mapper.order(service.returnItems(id, input));
@@ -103,6 +102,7 @@ public class OrderResource {
 
     @POST
     @Path("/{id}/return-all")
+    @Transactional
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
         actor.requireMarshal();
         return mapper.order(service.returnAll(id, input == null ? null : input.idempotencyKey()));

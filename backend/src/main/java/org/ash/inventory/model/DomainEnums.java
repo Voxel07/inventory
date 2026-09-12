@@ -6,7 +6,7 @@ public final class DomainEnums {
     public enum UserRole { hq_admin, warehouse_crew, marshal, event_planner, maintenance_crew, faction_leader, read_only }
     public enum TrackingMode { bulk, serialized, lot_tracked }
     public enum InventoryRole { consumable, returnable, repairable, rental }
-    public enum AssetState { available, reserved, staged, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }
+    public enum AssetState { available, reserved, staged, in_transit, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }
     public enum ConditionStatus { new_condition, good, fair, damaged, unsafe, lost }
     public enum LocationType { warehouse, bin, staging, event_site, vehicle, in_custody, quarantine, repair, scrap }
     public enum MaintenanceStatus { certified, due_soon, overdue, in_service }

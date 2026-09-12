@@ -1,22 +1,24 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.AssetInstance;
+import org.ash.inventory.model.CustodyHandover;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
+import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.orm.OperationsOrm;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -24,15 +26,25 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 import java.util.UUID;
 
 @ApplicationScoped
 public class InventoryOperationsService {
-    @Inject
-    OperationsOrm orm;
-    @Inject
-    ActorService actors;
-    @Inject DomainEventService events;
+    private static final List<DomainEnums.TransactionType> DIRECT_TRANSACTION_TYPES = List.of(
+            DomainEnums.TransactionType.checkout,
+            DomainEnums.TransactionType.checkin,
+            DomainEnums.TransactionType.added,
+            DomainEnums.TransactionType.adjusted);
+    private final OperationsOrm orm;
+    private final ActorService actors;
+    private final DomainEventService events;
+
+    public InventoryOperationsService(OperationsOrm orm, ActorService actors, DomainEventService events) {
+        this.orm = orm;
+        this.actors = actors;
+        this.events = events;
+    }
 
     public record StockState(int onHand, int checkedOut, int damaged, int reserved, int available) {
         public int totalOwned() {
@@ -40,12 +52,17 @@ public class InventoryOperationsService {
         }
     }
 
+    public record Deficit(
+            UUID itemId, String sku, String name, String category, String supplier, String classification,
+            int demand, int onHandStock, int totalOwnedStock, int availableStock, int reservedStock,
+            int projectedStock, int netDeficit, String recommendedAction) {}
+
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
         var actor = actors.current();
-        if (input.transactionType() == DomainEnums.TransactionType.repaired
-                || input.transactionType() == DomainEnums.TransactionType.written_off) {
-            throw ApiException.badRequest("Damage resolution transactions must be created from a damage report");
+        if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
+            throw ApiException.badRequest("Transaction type " + input.transactionType()
+                    + " must be created by its owning inventory workflow");
         }
         if (input.factionOrderId() != null) {
             throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
@@ -173,6 +190,7 @@ public class InventoryOperationsService {
             throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its service status is "
                     + asset.serviceStatus);
         }
+        assertNoBlockingScheduleIsDue(asset.item, asset);
     }
 
     public StockState stock(Item item) {
@@ -281,6 +299,7 @@ public class InventoryOperationsService {
             throw ApiException.conflict("Item " + item.name + " is blocked from checkout because maintenance status is "
                     + item.maintenanceStatus);
         }
+        assertNoBlockingScheduleIsDue(item, null);
     }
 
     @Transactional
@@ -296,9 +315,26 @@ public class InventoryOperationsService {
         report.quantity = input.amount();
         report.description = input.description();
         report.severity = input.severity();
+        report.safetyImpact = input.safetyImpact();
         report.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null)
             report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
+        if (input.assetInstanceId() != null) {
+            var asset = orm.findLockedAsset(input.assetInstanceId());
+            if (asset == null || !asset.active || !asset.item.id.equals(report.item.id)) {
+                throw ApiException.badRequest("Asset does not belong to the damaged item");
+            }
+            if (input.amount() != 1) throw ApiException.badRequest("Serialized asset damage quantity must be 1");
+            report.assetInstance = asset;
+            asset.conditionStatus = input.safetyImpact()
+                    ? DomainEnums.ConditionStatus.unsafe : DomainEnums.ConditionStatus.damaged;
+            asset.availabilityStatus = DomainEnums.AssetState.damaged;
+        } else if (report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
+        }
+        if (input.handoverId() != null) {
+            report.handover = required(CustodyHandover.class, input.handoverId(), "Custody handover");
+        }
         orm.persist(report);
         events.record("damage.reported", "damage_report", report.id, report.reporter.id, input.idempotencyKey(),
                 Map.of("itemId", report.item.id.toString(), "quantity", report.quantity));
@@ -346,6 +382,7 @@ public class InventoryOperationsService {
 
         var transaction = new StockTransaction();
         transaction.item = report.item;
+        transaction.assetInstance = report.assetInstance;
         transaction.user = report.handler;
         transaction.type = input.status() == DomainEnums.DamageStatus.repaired ? DomainEnums.TransactionType.repaired
                 : DomainEnums.TransactionType.written_off;
@@ -358,9 +395,19 @@ public class InventoryOperationsService {
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         if (transaction.type == DomainEnums.TransactionType.written_off)
-            transaction.sourceLocation = report.item.storageLocation;
+            transaction.sourceLocation = report.assetInstance == null
+                    ? report.item.storageLocation : report.assetInstance.currentLocation;
         transaction.availabilityBefore = availabilityBefore;
         orm.persist(transaction);
+        if (report.assetInstance != null) {
+            if (transaction.type == DomainEnums.TransactionType.written_off) {
+                report.assetInstance.availabilityStatus = DomainEnums.AssetState.written_off;
+                report.assetInstance.active = false;
+            } else {
+                report.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
+                report.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+            }
+        }
         transaction.availabilityAfter = stock(report.item).available();
         events.record("damage.resolved", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
                 Map.of("itemId", report.item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
@@ -372,6 +419,24 @@ public class InventoryOperationsService {
         var item = lockedItem(input.itemId());
         var record = new MaintenanceRecord();
         record.item = item;
+        if (input.assetInstanceId() != null) {
+            var asset = orm.findLockedAsset(input.assetInstanceId());
+            if (asset == null || !asset.active || !asset.item.id.equals(item.id)) {
+                throw ApiException.badRequest("Asset does not belong to the maintenance item");
+            }
+            record.assetInstance = asset;
+        } else if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            throw ApiException.badRequest("assetInstanceId is required for serialized item maintenance");
+        }
+        if (input.scheduleId() != null) {
+            var schedule = required(MaintenanceSchedule.class, input.scheduleId(), "Maintenance schedule");
+            if (!schedule.item.id.equals(item.id)
+                    || (schedule.assetInstance != null && (record.assetInstance == null
+                            || !record.assetInstance.id.equals(schedule.assetInstance.id)))) {
+                throw ApiException.badRequest("Maintenance schedule does not apply to this item or asset");
+            }
+            record.schedule = schedule;
+        }
         record.inspector = actors.current();
         record.type = input.type();
         record.performedAt = input.performedAt() == null ? Instant.now() : input.performedAt();
@@ -379,22 +444,80 @@ public class InventoryOperationsService {
         record.operatingHours = input.operatingHours();
         record.result = input.result();
         record.certificateNumber = input.certificateNumber();
+        record.certificateObjectKey = input.certificateObjectKey();
         record.notes = input.notes();
+        advanceSchedule(record);
         orm.persist(record);
         if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
             item.currentOperatingHours = input.operatingHours();
-        item.nextMaintenanceDue = input.nextDueAt() == null ? null
-                : input.nextDueAt().atZone(ZoneOffset.UTC).toLocalDate();
+        item.nextMaintenanceDue = record.nextDueAt == null ? null
+                : record.nextDueAt.atZone(ZoneOffset.UTC).toLocalDate();
         item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
                 ? DomainEnums.MaintenanceStatus.in_service
                 : deriveStatus(item.nextMaintenanceDue);
+        if (record.assetInstance != null) {
+            record.assetInstance.operatingHours = input.operatingHours() == null
+                    ? record.assetInstance.operatingHours : input.operatingHours();
+            record.assetInstance.serviceStatus = input.result() == DomainEnums.MaintenanceResult.failed
+                    ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
+            if (input.result() == DomainEnums.MaintenanceResult.failed) {
+                record.assetInstance.availabilityStatus = DomainEnums.AssetState.in_maintenance;
+            } else if (record.assetInstance.availabilityStatus == DomainEnums.AssetState.in_maintenance) {
+                record.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+            }
+        }
         events.record("maintenance.recorded", "item", item.id, record.inspector.id, null,
                 Map.of("itemId", item.id.toString(), "result", record.result.name(), "type", record.type.name()));
         return record;
     }
 
+    private void advanceSchedule(MaintenanceRecord record) {
+        var schedule = record.schedule;
+        if (schedule == null || record.result == DomainEnums.MaintenanceResult.failed) return;
+        switch (schedule.intervalType) {
+            case date -> {
+                if (record.nextDueAt == null) {
+                    long days;
+                    try {
+                        days = schedule.intervalValue.longValueExact();
+                    } catch (ArithmeticException exception) {
+                        throw ApiException.badRequest("Date maintenance intervals must be whole days");
+                    }
+                    record.nextDueAt = record.performedAt.plus(days, java.time.temporal.ChronoUnit.DAYS);
+                }
+                schedule.nextDueAt = record.nextDueAt;
+            }
+            case operating_hours -> {
+                if (record.operatingHours == null) {
+                    throw ApiException.badRequest("operatingHours is required for this maintenance schedule");
+                }
+                schedule.nextDueValue = record.operatingHours.add(schedule.intervalValue);
+            }
+            case usage_count -> schedule.nextDueValue = BigDecimal.valueOf(
+                    orm.checkoutCount(record.item, record.assetInstance)).add(schedule.intervalValue);
+        }
+    }
+
+    private void assertNoBlockingScheduleIsDue(Item item, AssetInstance asset) {
+        var now = Instant.now();
+        for (var schedule : orm.blockingSchedules(item, asset)) {
+            boolean due = switch (schedule.intervalType) {
+                case date -> schedule.nextDueAt != null && !schedule.nextDueAt.isAfter(now);
+                case operating_hours -> schedule.nextDueValue != null
+                        && (asset == null ? item.currentOperatingHours : asset.operatingHours)
+                                .compareTo(schedule.nextDueValue) >= 0;
+                case usage_count -> schedule.nextDueValue != null
+                        && BigDecimal.valueOf(orm.checkoutCount(item, asset)).compareTo(schedule.nextDueValue) >= 0;
+            };
+            if (due) {
+                throw ApiException.conflict("Checkout is blocked by overdue " + schedule.maintenanceType
+                        + " maintenance");
+            }
+        }
+    }
+
     @Transactional
-    public List<Map<String, Object>> deficits(UUID eventOccurrenceId) {
+    public List<Deficit> deficits(UUID eventOccurrenceId) {
         actors.current();
         var active = List.of(DomainEnums.OrderStatus.draft, DomainEnums.OrderStatus.submitted,
                 DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready);
@@ -402,9 +525,10 @@ public class InventoryOperationsService {
         var demand = new LinkedHashMap<Item, Integer>();
         for (var line : lines)
             demand.merge(line.item, line.requestedQuantity, Integer::sum);
-        var result = new ArrayList<Map<String, Object>>();
+        var stockByItem = stock(List.copyOf(demand.keySet()));
+        var result = new ArrayList<Deficit>();
         for (var entry : demand.entrySet()) {
-            var state = stock(entry.getKey());
+            var state = stockByItem.get(entry.getKey().id);
             // Active demand already includes prepared lines, so compare it with
             // usable physical stock instead of subtracting reservations twice.
             int usableStock = Math.max(0, state.onHand() - state.damaged());
@@ -412,25 +536,24 @@ public class InventoryOperationsService {
             int deficit = Math.max(0, -projectedStock);
             if (deficit == 0)
                 continue;
-            var row = new LinkedHashMap<String, Object>();
-            row.put("itemId", entry.getKey().id);
-            row.put("sku", entry.getKey().sku);
-            row.put("name", entry.getKey().name);
-            row.put("category", entry.getKey().category);
-            row.put("supplier", entry.getKey().supplier == null || entry.getKey().supplier.isBlank() ? "Unassigned"
-                    : entry.getKey().supplier);
-            row.put("classification", entry.getKey().consumable ? "consumable" : "asset");
-            row.put("demand", entry.getValue());
-            row.put("onHandStock", state.onHand());
-            row.put("totalOwnedStock", state.totalOwned());
-            row.put("availableStock", usableStock);
-            row.put("reservedStock", state.reserved());
-            row.put("projectedStock", projectedStock);
-            row.put("netDeficit", deficit);
-            row.put("recommendedAction", entry.getKey().consumable ? "purchase" : "rent_or_purchase");
-            result.add(row);
+            result.add(new Deficit(
+                    entry.getKey().id,
+                    entry.getKey().sku,
+                    entry.getKey().name,
+                    entry.getKey().category,
+                    entry.getKey().supplier == null || entry.getKey().supplier.isBlank() ? "Unassigned"
+                            : entry.getKey().supplier,
+                    entry.getKey().consumable ? "consumable" : "asset",
+                    entry.getValue(),
+                    state.onHand(),
+                    state.totalOwned(),
+                    usableStock,
+                    state.reserved(),
+                    projectedStock,
+                    deficit,
+                    entry.getKey().consumable ? "purchase" : "rent_or_purchase"));
         }
-        result.sort((a, b) -> Integer.compare((int) b.get("netDeficit"), (int) a.get("netDeficit")));
+        result.sort(Comparator.comparingInt(Deficit::netDeficit).reversed());
         return result;
     }
 

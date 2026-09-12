@@ -1,11 +1,11 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.DomainEvent;
 import org.ash.inventory.orm.OutboxOrm;
+import org.ash.inventory.resource.ApiException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -20,7 +20,11 @@ import java.util.UUID;
 @ApplicationScoped
 public class DomainEventService {
     private static final int MAX_ATTEMPTS = 10;
-    @Inject OutboxOrm orm;
+    private final OutboxOrm orm;
+
+    public DomainEventService(OutboxOrm orm) {
+        this.orm = orm;
+    }
 
     public DomainEvent record(String type, String aggregateType, UUID aggregateId, UUID actorId,
             UUID idempotencyKey, Map<String, Object> payload) {
@@ -65,6 +69,36 @@ public class DomainEventService {
         event.status = event.attemptCount >= MAX_ATTEMPTS ? DomainEnums.OutboxStatus.dead_letter : DomainEnums.OutboxStatus.failed;
         event.availableAt = Instant.now().plusSeconds(Math.min(300, 1L << Math.min(8, event.attemptCount)));
         event.lastError = message == null ? "Unknown delivery failure" : message.substring(0, Math.min(2000, message.length()));
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<DomainEvent> deadLetters(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid outbox page bounds");
+        try {
+            return orm.deadLetters(Math.multiplyExact(page, size), size);
+        } catch (ArithmeticException exception) {
+            throw ApiException.badRequest("Outbox page offset is too large");
+        }
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public DomainEvent retryDeadLetter(UUID id) {
+        var event = orm.findLocked(id);
+        if (event == null) return null;
+        if (event.status != DomainEnums.OutboxStatus.dead_letter) {
+            throw new IllegalStateException("Only dead-letter events can be retried");
+        }
+        event.status = DomainEnums.OutboxStatus.failed;
+        event.attemptCount = 0;
+        event.availableAt = Instant.now();
+        event.lastError = null;
+        event.publishedAt = null;
+        return event;
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Map<DomainEnums.OutboxStatus, Long> statusCounts() {
+        return orm.statusCounts();
     }
 
     public record Envelope(UUID databaseId, UUID eventId, String type, String aggregateType, UUID aggregateId,

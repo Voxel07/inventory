@@ -1,11 +1,11 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssemblyItemId;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
@@ -31,7 +31,6 @@ import java.time.LocalDate;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,15 +41,20 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
-    @Inject
-    OrderOrm orm;
-    @Inject
-    ActorService actors;
-    @Inject
-    CatalogService catalog;
-    @Inject
-    InventoryOperationsService inventory;
-    @Inject DomainEventService events;
+    private final OrderOrm orm;
+    private final ActorService actors;
+    private final CatalogService catalog;
+    private final InventoryOperationsService inventory;
+    private final DomainEventService events;
+
+    public OrderService(OrderOrm orm, ActorService actors, CatalogService catalog,
+            InventoryOperationsService inventory, DomainEventService events) {
+        this.orm = orm;
+        this.actors = actors;
+        this.catalog = catalog;
+        this.inventory = inventory;
+        this.events = events;
+    }
 
     private static final Map<DomainEnums.OrderStatus, Set<DomainEnums.OrderStatus>> TRANSITIONS = Map.of(
             DomainEnums.OrderStatus.draft, Set.of(DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.cancelled),
@@ -223,6 +227,17 @@ public class OrderService {
         }
         var actor = actors.current();
         var lines = orm.lines(order);
+        var handoverDetails = new ArrayList<ReturnHandoverDetail>();
+        var assetOutcomes = input.assets() == null ? Map.<UUID, ApiModels.AssetReturnLine>of() : input.assets();
+        var assignmentsByAsset = new LinkedHashMap<UUID, OrderLineAssetAssignment>();
+        for (var assignment : orm.assetAssignments(order)) assignmentsByAsset.put(assignment.assetInstance.id, assignment);
+        for (var assetId : assetOutcomes.keySet()) {
+            var assignment = assignmentsByAsset.get(assetId);
+            if (assignment == null) throw ApiException.badRequest("Asset is not assigned to this order: " + assetId);
+            if (!input.lines().containsKey(assignment.assetInstance.item.id)) {
+                throw ApiException.badRequest("Asset outcome has no matching item return line: " + assetId);
+            }
+        }
         for (var entry : input.lines().entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey());
             if (item == null)
@@ -235,13 +250,12 @@ public class OrderService {
             int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged();
             if (reconciled + outcome.missing() > outstanding)
                 throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
-            int currentMissing = relevant.stream().mapToInt(line -> line.missingQuantity).sum();
-            distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
-                    outcome.damaged(), outcome.missing(), input.idempotencyKey(), outcome.notes());
-
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-                applySerializedAssetOutcomes(item, order, actor, outcome, currentMissing, input.idempotencyKey());
+                applySerializedAssetOutcomes(item, order, actor, outcome, input.idempotencyKey(), assetOutcomes,
+                        assignmentsByAsset, handoverDetails);
             } else {
+                distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
+                        outcome.damaged(), outcome.missing(), input.idempotencyKey(), outcome.notes(), handoverDetails);
                 if (outcome.returned() > 0)
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
@@ -252,7 +266,7 @@ public class OrderService {
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
             }
-            if (outcome.damaged() > 0) {
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized && outcome.damaged() > 0) {
                 var damage = new DamageReport();
                 damage.item = item;
                 damage.reporter = actor;
@@ -267,7 +281,7 @@ public class OrderService {
                 item.currentOperatingHours = outcome.operatingHours();
             }
         }
-        createReturnHandover(order, actor, input.idempotencyKey(), lines, input);
+        createReturnHandover(order, actor, input.idempotencyKey(), input, handoverDetails);
         order.returnedBy = actor;
         var target = hasOutstanding(order) ? DomainEnums.OrderStatus.partially_returned
                 : DomainEnums.OrderStatus.returned;
@@ -282,10 +296,20 @@ public class OrderService {
         var order = lockedOrder(id);
         var lines = orm.lines(order);
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
+        var assetOutcomes = new LinkedHashMap<UUID, ApiModels.AssetReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet())
             outcomes.put(entry.getKey().id,
                     new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, null, "Full order return"));
-        return returnItems(id, new ApiModels.ReturnInput(outcomes, idempotencyKey, "Full order return"));
+        for (var assignment : orm.assetAssignments(order)) {
+            var asset = assignment.assetInstance;
+            if (asset.availabilityStatus == DomainEnums.AssetState.in_field
+                    || asset.availabilityStatus == DomainEnums.AssetState.in_custody
+                    || asset.availabilityStatus == DomainEnums.AssetState.lost) {
+                assetOutcomes.put(asset.id, new ApiModels.AssetReturnLine(
+                        DomainEnums.ReconciliationOutcome.returned_good, null, "Full order return"));
+            }
+        }
+        return returnItems(id, new ApiModels.ReturnInput(outcomes, assetOutcomes, idempotencyKey, "Full order return"));
     }
 
     public void assertCanView(FactionOrder order) {
@@ -462,13 +486,14 @@ public class OrderService {
     }
 
     private void distributeReturn(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
-            int returned, int consumed, int damaged, int missing, UUID idempotencyKey, String notes) {
+            int returned, int consumed, int damaged, int missing, UUID idempotencyKey, String notes,
+            List<ReturnHandoverDetail> handoverDetails) {
         int undistributed = distributeOutcome(order, lines, item, actor, returned,
-                DomainEnums.ReconciliationOutcome.returned_good, idempotencyKey, notes);
+                DomainEnums.ReconciliationOutcome.returned_good, idempotencyKey, notes, handoverDetails);
         undistributed += distributeOutcome(order, lines, item, actor, consumed,
-                DomainEnums.ReconciliationOutcome.consumed, idempotencyKey, notes);
+                DomainEnums.ReconciliationOutcome.consumed, idempotencyKey, notes, handoverDetails);
         undistributed += distributeOutcome(order, lines, item, actor, damaged,
-                DomainEnums.ReconciliationOutcome.returned_damaged, idempotencyKey, notes);
+                DomainEnums.ReconciliationOutcome.returned_damaged, idempotencyKey, notes, handoverDetails);
         if (undistributed > 0)
             throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
 
@@ -490,15 +515,17 @@ public class OrderService {
     }
 
     private int distributeOutcome(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
-            int quantity, DomainEnums.ReconciliationOutcome outcome, UUID idempotencyKey, String notes) {
+            int quantity, DomainEnums.ReconciliationOutcome outcome, UUID idempotencyKey, String notes,
+            List<ReturnHandoverDetail> handoverDetails) {
         int remaining = distributeOutcomePass(order, lines, item, actor, quantity, outcome, false,
-                idempotencyKey, notes);
-        return distributeOutcomePass(order, lines, item, actor, remaining, outcome, true, idempotencyKey, notes);
+                idempotencyKey, notes, handoverDetails);
+        return distributeOutcomePass(order, lines, item, actor, remaining, outcome, true, idempotencyKey, notes,
+                handoverDetails);
     }
 
     private int distributeOutcomePass(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
             int quantity, DomainEnums.ReconciliationOutcome outcome, boolean resolveMissing,
-            UUID idempotencyKey, String notes) {
+            UUID idempotencyKey, String notes, List<ReturnHandoverDetail> handoverDetails) {
         int remaining = quantity;
         for (var line : lines) {
             int capacity = resolveMissing
@@ -516,6 +543,10 @@ public class OrderService {
             var recordedOutcome = resolveMissing && outcome == DomainEnums.ReconciliationOutcome.returned_good
                     ? DomainEnums.ReconciliationOutcome.returned_late : outcome;
             recordReconciliation(order, line, item, actor, recordedOutcome, take, idempotencyKey, notes);
+            if (outcome == DomainEnums.ReconciliationOutcome.returned_good
+                    || outcome == DomainEnums.ReconciliationOutcome.returned_damaged) {
+                handoverDetails.add(new ReturnHandoverDetail(line, null, take, notes));
+            }
             remaining -= take;
             if (remaining == 0) break;
         }
@@ -610,8 +641,24 @@ public class OrderService {
         handover.handoverCode = order.orderCode + "-OUT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
         handover.idempotencyKey = idempotencyKey;
         orm.persist(handover);
+        var assignmentsByLine = new LinkedHashMap<UUID, List<OrderLineAssetAssignment>>();
+        for (var assignment : orm.assetAssignments(order)) {
+            assignmentsByLine.computeIfAbsent(assignment.orderLine.id, ignored -> new ArrayList<>()).add(assignment);
+        }
         for (var line : lines) {
             if (line.handedOverQuantity == 0) continue;
+            if (line.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+                for (var assignment : assignmentsByLine.getOrDefault(line.id, List.of())) {
+                    var detail = new CustodyHandoverLine();
+                    detail.handover = handover;
+                    detail.orderLine = line;
+                    detail.item = line.item;
+                    detail.assetInstance = assignment.assetInstance;
+                    detail.quantity = 1;
+                    orm.persist(detail);
+                }
+                continue;
+            }
             var detail = new CustodyHandoverLine();
             detail.handover = handover;
             detail.orderLine = line;
@@ -622,7 +669,7 @@ public class OrderService {
     }
 
     private void createReturnHandover(FactionOrder order, UserAccount actor, UUID idempotencyKey,
-            List<FactionOrderLine> lines, ApiModels.ReturnInput input) {
+            ApiModels.ReturnInput input, List<ReturnHandoverDetail> details) {
         var handover = new CustodyHandover();
         handover.order = order;
         handover.type = DomainEnums.HandoverType.checkin;
@@ -635,29 +682,31 @@ public class OrderService {
         handover.idempotencyKey = idempotencyKey;
         handover.notes = input.notes();
         orm.persist(handover);
-        for (var entry : input.lines().entrySet()) {
-            var outcome = entry.getValue();
-            int quantity = outcome.returned() + outcome.damaged();
-            if (quantity == 0) continue;
-            var line = lines.stream().filter(candidate -> candidate.item.id.equals(entry.getKey())).findFirst().orElse(null);
-            if (line == null) continue;
+        for (var returned : details) {
             var detail = new CustodyHandoverLine();
             detail.handover = handover;
-            detail.orderLine = line;
-            detail.item = line.item;
-            detail.quantity = quantity;
-            detail.conditionNotes = outcome.notes();
+            detail.orderLine = returned.line();
+            detail.item = returned.line().item;
+            detail.assetInstance = returned.asset();
+            detail.quantity = returned.quantity();
+            detail.conditionNotes = returned.notes();
             orm.persist(detail);
         }
     }
 
     private void recordReconciliation(FactionOrder order, FactionOrderLine line, Item item, UserAccount actor,
             DomainEnums.ReconciliationOutcome outcome, int quantity, UUID idempotencyKey, String notes) {
+        recordReconciliation(order, line, item, null, actor, outcome, quantity, idempotencyKey, notes);
+    }
+
+    private void recordReconciliation(FactionOrder order, FactionOrderLine line, Item item, AssetInstance asset,
+            UserAccount actor, DomainEnums.ReconciliationOutcome outcome, int quantity, UUID idempotencyKey, String notes) {
         if (quantity <= 0) return;
         var reconciliation = new ReturnReconciliation();
         reconciliation.order = order;
         reconciliation.orderLine = line;
         reconciliation.item = item;
+        reconciliation.assetInstance = asset;
         reconciliation.recordedBy = actor;
         reconciliation.outcome = outcome;
         reconciliation.quantity = quantity;
@@ -691,54 +740,82 @@ public class OrderService {
     }
 
     private void applySerializedAssetOutcomes(Item item, FactionOrder order, UserAccount actor,
-            ApiModels.ReturnLine outcome, int currentMissing, UUID clientCommandId) {
-        var candidates = new ArrayList<AssetInstance>();
-        for (var assignment : orm.assetAssignments(order, item)) {
-            var asset = orm.findLocked(AssetInstance.class, assignment.assetInstance.id);
-            if (asset.availabilityStatus == DomainEnums.AssetState.in_field
-                    || asset.availabilityStatus == DomainEnums.AssetState.in_custody
-                    || asset.availabilityStatus == DomainEnums.AssetState.lost) {
-                candidates.add(asset);
+            ApiModels.ReturnLine summary, UUID clientCommandId, Map<UUID, ApiModels.AssetReturnLine> outcomes,
+            Map<UUID, OrderLineAssetAssignment> assignmentsByAsset, List<ReturnHandoverDetail> handoverDetails) {
+        if (summary.consumed() > 0) throw ApiException.badRequest("Serialized assets cannot be consumed");
+        int returned = 0;
+        int damaged = 0;
+        for (var entry : outcomes.entrySet()) {
+            var assignment = assignmentsByAsset.get(entry.getKey());
+            if (assignment == null || !assignment.assetInstance.item.id.equals(item.id)) continue;
+            var asset = orm.findLocked(AssetInstance.class, entry.getKey());
+            boolean wasMissing = asset.availabilityStatus == DomainEnums.AssetState.lost;
+            if (!wasMissing && asset.availabilityStatus != DomainEnums.AssetState.in_field
+                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody) {
+                throw ApiException.conflict("Asset " + asset.assetCode + " is not outstanding on this order");
             }
-        }
-        candidates.sort(Comparator
-                .comparing((AssetInstance asset) -> asset.availabilityStatus == DomainEnums.AssetState.lost ? 0 : 1)
-                .thenComparing(asset -> asset.assetCode));
-
-        int newlyMissing = Math.max(0, outcome.missing() - currentMissing);
-        int required = outcome.returned() + outcome.damaged() + newlyMissing;
-        if (required > candidates.size())
-            throw ApiException.conflict("Not enough outstanding serialized assets for " + item.name);
-
-        for (int i = 0; i < outcome.returned(); i++) {
-            var asset = candidates.remove(0);
-            if (asset.conditionStatus == DomainEnums.ConditionStatus.lost)
-                asset.conditionStatus = DomainEnums.ConditionStatus.fair;
-            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
-                    DomainEnums.AssetState.available, clientCommandId, "returned", outcome.notes());
-        }
-        for (int i = 0; i < outcome.damaged(); i++) {
-            var asset = candidates.remove(0);
-            asset.conditionStatus = DomainEnums.ConditionStatus.damaged;
-            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
-                    DomainEnums.AssetState.damaged, clientCommandId, "damaged", outcome.notes());
-        }
-        for (int i = 0; i < newlyMissing; i++) {
-            int availableIndex = -1;
-            for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
-                if (candidates.get(candidateIndex).availabilityStatus != DomainEnums.AssetState.lost) {
-                    availableIndex = candidateIndex;
-                    break;
+            var line = assignment.orderLine;
+            var assetOutcome = entry.getValue();
+            String notes = assetOutcome.notes() == null ? summary.notes() : assetOutcome.notes();
+            switch (assetOutcome.outcome()) {
+                case returned_good -> {
+                    if (wasMissing) line.missingQuantity--;
+                    line.returnedQuantity++;
+                    if (asset.conditionStatus == DomainEnums.ConditionStatus.lost) asset.conditionStatus = DomainEnums.ConditionStatus.fair;
+                    recordReconciliation(order, line, item, asset, actor,
+                            wasMissing ? DomainEnums.ReconciliationOutcome.returned_late
+                                    : DomainEnums.ReconciliationOutcome.returned_good,
+                            1, clientCommandId, notes);
+                    createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
+                            DomainEnums.AssetState.available, clientCommandId, "returned", notes);
+                    handoverDetails.add(new ReturnHandoverDetail(line, asset, 1, notes));
+                    returned++;
                 }
+                case returned_damaged -> {
+                    if (wasMissing) line.missingQuantity--;
+                    line.damagedQuantity++;
+                    asset.conditionStatus = DomainEnums.ConditionStatus.damaged;
+                    recordReconciliation(order, line, item, asset, actor,
+                            DomainEnums.ReconciliationOutcome.returned_damaged, 1, clientCommandId, notes);
+                    createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
+                            DomainEnums.AssetState.damaged, clientCommandId, "damaged", notes);
+                    var damage = new DamageReport();
+                    damage.item = item;
+                    damage.assetInstance = asset;
+                    damage.reporter = actor;
+                    damage.factionOrder = order;
+                    damage.quantity = 1;
+                    damage.severity = DomainEnums.DamageSeverity.high;
+                    damage.description = notes == null ? "Damage recorded during order return" : notes;
+                    orm.persist(damage);
+                    handoverDetails.add(new ReturnHandoverDetail(line, asset, 1, notes));
+                    damaged++;
+                }
+                case missing -> {
+                    if (wasMissing) throw ApiException.badRequest("Asset " + asset.assetCode + " is already missing");
+                    line.missingQuantity++;
+                    asset.conditionStatus = DomainEnums.ConditionStatus.lost;
+                    recordReconciliation(order, line, item, asset, actor,
+                            DomainEnums.ReconciliationOutcome.missing, 1, clientCommandId, notes);
+                    createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.missing,
+                            DomainEnums.AssetState.lost, clientCommandId, "missing", notes);
+                }
+                default -> throw ApiException.badRequest("Unsupported serialized asset return outcome " + assetOutcome.outcome());
             }
-            if (availableIndex < 0)
-                throw ApiException.conflict("No additional serialized asset can be marked missing for " + item.name);
-            var asset = candidates.remove(availableIndex);
-            asset.conditionStatus = DomainEnums.ConditionStatus.lost;
-            createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.missing,
-                    DomainEnums.AssetState.lost, clientCommandId, "missing", outcome.notes());
+            if (assetOutcome.operatingHours() != null) asset.operatingHours = assetOutcome.operatingHours();
+        }
+        int remainingMissing = assignmentsByAsset.values().stream()
+                .filter(assignment -> assignment.assetInstance.item.id.equals(item.id))
+                .map(assignment -> assignment.assetInstance)
+                .map(asset -> orm.findLocked(AssetInstance.class, asset.id))
+                .mapToInt(asset -> asset.availabilityStatus == DomainEnums.AssetState.lost ? 1 : 0)
+                .sum();
+        if (returned != summary.returned() || damaged != summary.damaged() || remainingMissing != summary.missing()) {
+            throw ApiException.badRequest("Serialized return quantities must match the submitted per-asset outcomes for " + item.name);
         }
     }
+
+    private record ReturnHandoverDetail(FactionOrderLine line, AssetInstance asset, int quantity, String notes) {}
 
     private void createSerializedReturnTransaction(Item item, FactionOrder order, UserAccount actor,
             AssetInstance asset, DomainEnums.TransactionType type, DomainEnums.AssetState targetState,
@@ -850,26 +927,13 @@ public class OrderService {
     }
 
     private RequestedContents requestedContents(FactionOrder order) {
-        var items = new LinkedHashMap<String, Integer>();
-        var assemblyLines = new LinkedHashMap<String, List<FactionOrderLine>>();
-        for (var line : orm.lines(order)) {
-            if (line.sourceAssembly == null) {
-                items.merge(line.item.id.toString(), line.requestedQuantity, Integer::sum);
-            } else {
-                assemblyLines.computeIfAbsent(line.sourceAssembly.id.toString(), ignored -> new ArrayList<>()).add(line);
-            }
-        }
-        var assemblies = new LinkedHashMap<String, Integer>();
-        for (var entry : assemblyLines.entrySet()) {
-            int requestedCount = Integer.MAX_VALUE;
-            for (var line : entry.getValue()) {
-                var component = orm.assemblyItem(line.sourceAssembly, line.item);
-                int componentQuantity = component == null ? 1 : component.quantity;
-                requestedCount = Math.min(requestedCount, line.requestedQuantity / componentQuantity);
-            }
-            assemblies.put(entry.getKey(), requestedCount == Integer.MAX_VALUE ? 0 : requestedCount);
-        }
-        return new RequestedContents(items, assemblies);
+        var lines = orm.lines(order);
+        var assemblyIds = lines.stream().filter(line -> line.sourceAssembly != null)
+                .map(line -> line.sourceAssembly.id).distinct().toList();
+        var components = new LinkedHashMap<AssemblyItemId, Integer>();
+        for (var component : orm.assemblyItems(assemblyIds)) components.put(component.id, component.quantity);
+        var quantities = OrderQuantities.from(lines, components);
+        return new RequestedContents(quantities.requested(), quantities.requestedAssemblies());
     }
 
     private Map<String, Object> contentChanges(RequestedContents before, RequestedContents after) {
@@ -918,6 +982,7 @@ public class OrderService {
         String factionPart = faction.slug.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(Locale.ROOT);
         String prefix = event.eventType.toUpperCase(Locale.ROOT)
                 + String.format("%02d", event.startDate.getYear() % 100) + "-" + factionPart + "-";
+        orm.lockOrderCodeScope(faction);
         long sequence = orm.countOrderCodes(prefix + "%") + 1;
         return prefix + String.format("%02d", sequence);
     }

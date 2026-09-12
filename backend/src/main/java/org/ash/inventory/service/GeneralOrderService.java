@@ -1,7 +1,6 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.GeneralOrder;
@@ -10,8 +9,13 @@ import org.ash.inventory.resource.ApiModels;
 
 @ApplicationScoped
 public class GeneralOrderService {
-    @Inject ActorService actors;
-    @Inject GeneralOrderOrm orm;
+    private final ActorService actors;
+    private final GeneralOrderOrm orm;
+
+    public GeneralOrderService(ActorService actors, GeneralOrderOrm orm) {
+        this.actors = actors;
+        this.orm = orm;
+    }
 
     @Transactional
     public GeneralOrder create(ApiModels.GeneralOrderInput input) {

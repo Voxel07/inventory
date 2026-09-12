@@ -12,6 +12,9 @@ import org.ash.inventory.service.DomainEventService;
 
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -149,6 +152,185 @@ class InventoryApiTest {
 
         request().body(Map.of("name", "BBs 0.28g", "category", "Ammo", "trackingMode", "serialized"))
                 .patch("/api/items/" + bulkId).then().statusCode(400);
+    }
+
+    @Test
+    void overdueAssetScheduleBlocksCheckoutUntilMaintenanceIsRecorded() {
+        String itemId = request().body(Map.of(
+                        "sku", "SCHEDULE-BLOCK-001", "name", "Scheduled test asset", "category", "Test",
+                        "amount", 1, "value", 0, "trackingMode", "serialized"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String assetId = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .extract().path("[0].id");
+
+        String scheduleId = request().body(Map.of(
+                        "itemId", itemId,
+                        "assetInstanceId", assetId,
+                        "maintenanceType", "generator_service",
+                        "intervalType", "date",
+                        "intervalValue", 30,
+                        "nextDueAt", "2020-01-01T00:00:00Z",
+                        "checkoutBlocking", true))
+                .post("/api/maintenance-schedules").then().statusCode(201)
+                .body("assetInstanceId", equalTo(assetId)).extract().path("id");
+
+        request().body(Map.of(
+                        "itemId", itemId, "assetInstanceId", assetId,
+                        "transactionType", "checkout", "quantityChanged", 1,
+                        "eventType", "DE", "faction", "KGG"))
+                .post("/api/transactions").then().statusCode(409)
+                .body("error", org.hamcrest.Matchers.containsString("overdue generator_service"));
+
+        request().body(Map.of(
+                        "itemId", itemId,
+                        "assetInstanceId", assetId,
+                        "scheduleId", scheduleId,
+                        "type", "generator_service",
+                        "performedAt", "2030-01-01T00:00:00Z",
+                        "result", "passed"))
+                .post("/api/maintenance").then().statusCode(200)
+                .body("nextDueAt", equalTo("2030-01-31T00:00:00Z"));
+
+        request().body(Map.of(
+                        "itemId", itemId, "assetInstanceId", assetId,
+                        "transactionType", "checkout", "quantityChanged", 1,
+                        "eventType", "DE", "faction", "KGG"))
+                .post("/api/transactions").then().statusCode(200);
+    }
+
+    @Test
+    void purchaseReceiptPostsStockDamageAndPositionIdempotently() {
+        String locationId = request().body(Map.of("name", "Receipt bay 001", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of(
+                        "sku", "RECEIPT-BULK-001", "name", "Receipt bulk item", "category", "Test",
+                        "amount", 0, "value", 0, "trackingMode", "bulk"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String vendorId = request().body(Map.of("name", "Receipt Vendor 001", "preferredVendor", true))
+                .post("/api/vendors").then().statusCode(201).extract().path("id");
+        String purchaseOrderId = request().body(Map.of(
+                        "vendorId", vendorId,
+                        "orderDate", "2026-09-12",
+                        "lines", java.util.List.of(Map.of(
+                                "itemId", itemId, "orderedQuantity", 5, "unitPriceCents", 125))))
+                .post("/api/purchase-orders").then().statusCode(201)
+                .body("status", equalTo("draft")).extract().path("id");
+        String purchaseOrderLineId = request().get("/api/purchase-orders").then().statusCode(200)
+                .extract().path("find { it.id == '" + purchaseOrderId + "' }.lines[0].id");
+        request().body(Map.of("status", "ordered"))
+                .post("/api/purchase-orders/" + purchaseOrderId + "/transitions")
+                .then().statusCode(200).body("status", equalTo("ordered"));
+
+        String idempotencyKey = java.util.UUID.randomUUID().toString();
+        var receipt = Map.of(
+                "purchaseOrderId", purchaseOrderId,
+                "receivingLocationId", locationId,
+                "idempotencyKey", idempotencyKey,
+                "lines", java.util.List.of(Map.of(
+                        "purchaseOrderLineId", purchaseOrderLineId,
+                        "acceptedQuantity", 2,
+                        "damagedQuantity", 1,
+                        "rejectedQuantity", 1)));
+        request().body(receipt).post("/api/goods-receipts").then().statusCode(201)
+                .body("status", equalTo("partially_accepted"))
+                .body("lines[0].expectedQuantity", equalTo(5));
+        request().body(receipt).post("/api/goods-receipts").then().statusCode(201);
+
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.totalOwned", equalTo(3))
+                .body("stock.damaged", equalTo(1))
+                .body("stock.available", equalTo(2));
+        request().queryParam("itemId", itemId).queryParam("locationId", locationId)
+                .get("/api/inventory-positions").then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].quantityOnHand", equalTo(3))
+                .body("[0].quantityDamaged", equalTo(1));
+        request().queryParam("itemId", itemId).get("/api/damage-reports").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].amount", equalTo(1));
+        request().queryParam("purchaseOrderId", purchaseOrderId).get("/api/goods-receipts")
+                .then().statusCode(200).body("size()", equalTo(1));
+    }
+
+    @Test
+    void serializedTransferPreservesIdentityAcrossTransit() {
+        String sourceId = request().body(Map.of("name", "Transfer source 001", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String destinationId = request().body(Map.of("name", "Transfer destination 001", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of(
+                        "sku", "TRANSFER-ASSET-001", "name", "Transferred asset", "category", "Test",
+                        "amount", 1, "value", 0, "trackingMode", "serialized", "storageLocation", sourceId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String assetId = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .extract().path("[0].id");
+
+        String transferId = request().body(Map.of(
+                        "sourceLocationId", sourceId,
+                        "destinationLocationId", destinationId,
+                        "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                        "lines", java.util.List.of(Map.of(
+                                "itemId", itemId, "assetInstanceId", assetId, "quantity", 1))))
+                .post("/api/transfers").then().statusCode(201).extract().path("id");
+        String lineId = request().get("/api/transfers").then().statusCode(200)
+                .extract().path("find { it.id == '" + transferId + "' }.lines[0].id");
+        request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString()))
+                .post("/api/transfers/" + transferId + "/dispatch").then().statusCode(200)
+                .body("status", equalTo("in_transit"));
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[0].availabilityStatus", equalTo("in_transit"))
+                .body("[0].currentLocationId", nullValue());
+
+        String receiveKey = java.util.UUID.randomUUID().toString();
+        var receive = Map.of(
+                "idempotencyKey", receiveKey,
+                "lines", java.util.List.of(Map.of(
+                        "transferLineId", lineId, "receivedQuantity", 1, "discrepancyQuantity", 0)));
+        request().body(receive).post("/api/transfers/" + transferId + "/receive").then().statusCode(200)
+                .body("status", equalTo("received"));
+        request().body(receive).post("/api/transfers/" + transferId + "/receive").then().statusCode(200);
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[0].availabilityStatus", equalTo("available"))
+                .body("[0].currentLocationId", equalTo(destinationId));
+    }
+
+    @Test
+    void approvedInventoryCountPostsSignedAdjustment() {
+        String locationId = request().body(Map.of("name", "Count location 001", "mapZoom", 16))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of(
+                        "sku", "COUNT-BULK-001", "name", "Count bulk item", "category", "Test",
+                        "amount", 2, "value", 0, "trackingMode", "bulk", "storageLocation", locationId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        QuarkusTransaction.requiringNew().run(() -> {
+            var position = new org.ash.inventory.model.InventoryPosition();
+            position.item = entityManager.find(org.ash.inventory.model.Item.class, java.util.UUID.fromString(itemId));
+            position.location = entityManager.find(org.ash.inventory.model.StorageLocation.class,
+                    java.util.UUID.fromString(locationId));
+            position.quantityOnHand = 2;
+            entityManager.persist(position);
+        });
+
+        String countId = request().body(Map.of(
+                        "locationId", locationId, "itemId", itemId, "blindCount", true))
+                .post("/api/inventory-counts").then().statusCode(201)
+                .body("lines[0].expectedQuantity", nullValue()).extract().path("id");
+        String countLineId = request().body(Map.of()).post("/api/inventory-counts/" + countId + "/start")
+                .then().statusCode(200).body("status", equalTo("counting"))
+                .extract().path("lines[0].id");
+        var submission = Map.of("lines", java.util.List.of(Map.of("lineId", countLineId, "quantity", 1)));
+        request().body(submission).post("/api/inventory-counts/" + countId + "/submit")
+                .then().statusCode(200).body("status", equalTo("awaiting_recount"));
+        request().body(submission).post("/api/inventory-counts/" + countId + "/recount")
+                .then().statusCode(200).body("status", equalTo("awaiting_approval"));
+        request().body(Map.of()).post("/api/inventory-counts/" + countId + "/approve")
+                .then().statusCode(200).body("lines[0].varianceQuantity", equalTo(-1));
+        request().body(Map.of()).post("/api/inventory-counts/" + countId + "/post")
+                .then().statusCode(200).body("status", equalTo("posted"));
+
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.totalOwned", equalTo(1)).body("stock.available", equalTo(1));
+        request().queryParam("itemId", itemId).get("/api/inventory-positions").then().statusCode(200)
+                .body("[0].quantityOnHand", equalTo(1));
     }
 
     @Test
@@ -811,6 +993,72 @@ class InventoryApiTest {
     }
 
     @Test
+    void itemListsAreBoundedAndRejectInvalidPageSizes() {
+        request().body(Map.of(
+                        "sku", "PAGE-ITEM-001", "name", "Pagination sentinel alpha", "category", "Test",
+                        "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200);
+        request().body(Map.of(
+                        "sku", "PAGE-ITEM-002", "name", "Pagination sentinel beta", "category", "Test",
+                        "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200);
+
+        request().queryParam("search", "Pagination sentinel").queryParam("page", 0).queryParam("size", 1)
+                .get("/api/items").then().statusCode(200).body("size()", equalTo(1));
+        request().queryParam("search", "Pagination sentinel").queryParam("page", 1).queryParam("size", 1)
+                .get("/api/items").then().statusCode(200).body("size()", equalTo(1));
+        request().queryParam("search", "Pagination sentinel").queryParam("page", 2).queryParam("size", 1)
+                .get("/api/items").then().statusCode(200).body("size()", equalTo(0));
+        request().queryParam("size", 201).get("/api/items").then().statusCode(400);
+    }
+
+    @Test
+    void concurrentOrdersReceiveUniqueCodesAndListAsCompactPages() throws Exception {
+        String itemId = request().body(Map.of(
+                        "sku", "ORDER-CODE-RACE-001", "name", "Order code race item", "category", "Test",
+                        "amount", 4, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String eventId = request().body(Map.of(
+                        "eventType", "RACE", "name", "Order code race event",
+                        "startDate", "2041-05-03", "endDate", "2041-05-03", "status", "planned"))
+                .post("/api/events").then().statusCode(200).extract().path("id");
+        String factionId = request().body(Map.of("eventType", "RACE", "name", "Order code race faction"))
+                .post("/api/factions").then().statusCode(200).extract().path("id");
+        var orderBody = Map.of(
+                "eventOccurrenceId", eventId,
+                "factionId", factionId,
+                "requestedQuantities", Map.of(itemId, 1),
+                "requestedAssemblyQuantities", Map.of());
+
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<String> createOrder = () -> {
+                ready.countDown();
+                start.await(10, TimeUnit.SECONDS);
+                return request().body(orderBody).post("/api/orders").then().statusCode(200)
+                        .extract().path("orderCode");
+            };
+            var first = executor.submit(createOrder);
+            var second = executor.submit(createOrder);
+            org.junit.jupiter.api.Assertions.assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            String firstCode = first.get(20, TimeUnit.SECONDS);
+            String secondCode = second.get(20, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertNotEquals(firstCode, secondCode);
+        }
+
+        request().queryParam("eventType", "RACE").queryParam("faction", "Order code race faction")
+                .queryParam("page", 0).queryParam("size", 1)
+                .get("/api/orders").then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].requestedQuantities.'" + itemId + "'", equalTo(1))
+                .body("[0].history", nullValue())
+                .body("[0].lines", nullValue())
+                .body("[0].assetAssignments", nullValue());
+    }
+
+    @Test
     void deletingStorageLocationUnassignsItemsAndAssets() {
         String locationId = request().body(Map.of("name", "Location to delete", "mapZoom", 16))
                 .post("/api/storage-locations").then().statusCode(200).extract().path("id");
@@ -832,7 +1080,7 @@ class InventoryApiTest {
     }
 
     @Test
-    void deletingItemRemovesItsTransactionHistory() {
+    void retiringItemPreservesItsTransactionHistory() {
         String itemId = request().body(Map.of(
                         "sku", "DELETE-HISTORY-001", "name", "Item with history", "category", "Test",
                         "amount", 3, "value", 0))
@@ -844,6 +1092,7 @@ class InventoryApiTest {
         request().delete("/api/items/" + itemId).then().statusCode(204);
 
         request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
-                .body("size()", equalTo(0));
+                .body("size()", equalTo(1))
+                .body("[0].reason", equalTo("Initial stock"));
     }
 }

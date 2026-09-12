@@ -3,7 +3,6 @@ package org.ash.inventory.resource;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -21,14 +20,19 @@ import java.util.Map;
 @Priority(Priorities.AUTHORIZATION)
 @ApplicationScoped
 public class ApiRateLimitFilter implements ContainerRequestFilter {
-    @Inject SecurityIdentity identity;
-    @Inject DistributedRateLimiterService rateLimiter;
+    private final SecurityIdentity identity;
+    private final DistributedRateLimiterService rateLimiter;
+    private final int requestLimit;
+    private final long windowSeconds;
 
-    @ConfigProperty(name = "inventory.api.rate-limit.requests", defaultValue = "300")
-    int requestLimit;
-
-    @ConfigProperty(name = "inventory.api.rate-limit.window-seconds", defaultValue = "60")
-    long windowSeconds;
+    public ApiRateLimitFilter(SecurityIdentity identity, DistributedRateLimiterService rateLimiter,
+            @ConfigProperty(name = "inventory.api.rate-limit.requests", defaultValue = "300") int requestLimit,
+            @ConfigProperty(name = "inventory.api.rate-limit.window-seconds", defaultValue = "60") long windowSeconds) {
+        this.identity = identity;
+        this.rateLimiter = rateLimiter;
+        this.requestLimit = requestLimit;
+        this.windowSeconds = windowSeconds;
+    }
 
     @Override
     public void filter(ContainerRequestContext request) {

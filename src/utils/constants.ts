@@ -1,13 +1,1 @@
-export const COLLECTIONS = {
-  ITEMS: 'inventory_items',
-  ASSEMBLIES: 'inventory_assemblies',
-  STOCK_TRANSACTIONS: 'inventory_stock_transactions',
-  DAMAGE_REPORTS: 'inventory_damage_reports',
-  USERS: 'users',
-} as const;
-
 export const SEVERITY_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
-
-export const DAMAGE_STATUSES = ['reported', 'in_review', 'repaired', 'written_off'] as const;
-
-export const ITEM_STATUSES = ['available', 'checked_out', 'damaged', 'retired'] as const;

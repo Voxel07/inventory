@@ -1,7 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.AssetInstance;
@@ -22,14 +21,18 @@ import java.util.UUID;
 /** Database access for the catalogue aggregate. */
 @ApplicationScoped
 public class CatalogOrm {
-    @Inject EntityManager entityManager;
+    private final EntityManager entityManager;
 
-    public List<Item> items(String search) {
+    public CatalogOrm(EntityManager entityManager) { this.entityManager = entityManager; }
+
+    public List<Item> items(String search, int offset, int limit) {
         if (search == null || search.isBlank()) {
-            return entityManager.createQuery("from Item i where i.active = true order by i.createdAt desc", Item.class).getResultList();
+            return entityManager.createQuery("from Item i where i.active = true order by i.createdAt desc", Item.class)
+                    .setFirstResult(offset).setMaxResults(limit).getResultList();
         }
         return entityManager.createQuery("from Item i where i.active = true and lower(i.name) like :search order by i.name", Item.class)
                 .setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%")
+                .setFirstResult(offset).setMaxResults(limit)
                 .getResultList();
     }
 
@@ -118,11 +121,6 @@ public class CatalogOrm {
     public long countTransactions(Item item) {
         return entityManager.createQuery("select count(tx) from StockTransaction tx where tx.item = :item", Long.class)
                 .setParameter("item", item).getSingleResult();
-    }
-
-    public void deleteTransactionHistory(Item item) {
-        entityManager.createQuery("delete from StockTransaction tx where tx.item = :item")
-                .setParameter("item", item).executeUpdate();
     }
 
     public AssetInstance findAssetByCode(String code) {

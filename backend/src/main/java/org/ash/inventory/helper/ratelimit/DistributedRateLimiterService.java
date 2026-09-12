@@ -3,7 +3,6 @@ package org.ash.inventory.helper.ratelimit;
 import io.quarkus.redis.datasource.RedisDataSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -34,14 +33,16 @@ public class DistributedRateLimiterService implements RateLimiter {
             return {1, 0}
             """;
 
-    @Inject
-    InMemoryRateLimiter inMemory;
+    private final InMemoryRateLimiter inMemory;
+    private final Instance<RedisDataSource> redisDataSource;
+    private final String backend;
 
-    @Inject
-    Instance<RedisDataSource> redisDataSource;
-
-    @ConfigProperty(name = "inventory.api.rate-limit.backend", defaultValue = "memory")
-    String backend;
+    public DistributedRateLimiterService(InMemoryRateLimiter inMemory, Instance<RedisDataSource> redisDataSource,
+            @ConfigProperty(name = "inventory.api.rate-limit.backend", defaultValue = "memory") String backend) {
+        this.inMemory = inMemory;
+        this.redisDataSource = redisDataSource;
+        this.backend = backend;
+    }
 
     @Override
     public Result tryAcquire(String key, int limit, long windowSeconds) {

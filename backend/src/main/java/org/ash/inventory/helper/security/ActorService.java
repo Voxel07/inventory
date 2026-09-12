@@ -2,7 +2,6 @@ package org.ash.inventory.helper.security;
 
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.RequestScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.ash.inventory.resource.ApiException;
@@ -12,16 +11,25 @@ import org.ash.inventory.orm.UserOrm;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Set;
 
 @RequestScoped
 public class ActorService {
-    @Inject SecurityIdentity identity;
-    @Inject HttpHeaders headers;
-    @Inject UserOrm users;
-    @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled;
+    private final SecurityIdentity identity;
+    private final HttpHeaders headers;
+    private final UserOrm users;
+    private final boolean devAuthEnabled;
 
     private UserAccount cached;
+
+    public ActorService(SecurityIdentity identity, HttpHeaders headers, UserOrm users,
+            @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled) {
+        this.identity = identity;
+        this.headers = headers;
+        this.users = users;
+        this.devAuthEnabled = devAuthEnabled;
+    }
 
     @Transactional
     public UserAccount current() {
@@ -64,9 +72,15 @@ public class ActorService {
             cached.factions = new ArrayList<>(factions);
             users.persist(cached);
         } else {
-            cached.name = name;
-            if (email != null) cached.email = email;
-            if (devAuthEnabled || (identity != null && !identity.isAnonymous())) cached.role = role;
+            if (!Objects.equals(cached.name, name)) cached.name = name;
+            if (email != null && !Objects.equals(cached.email, email)) cached.email = email;
+            if ((devAuthEnabled || (identity != null && !identity.isAnonymous())) && cached.role != role) {
+                cached.role = role;
+            }
+            if (identity != null && !identity.isAnonymous()
+                    && !Set.copyOf(cached.factions).equals(factions)) {
+                cached.factions = new ArrayList<>(factions);
+            }
         }
         return cached;
     }

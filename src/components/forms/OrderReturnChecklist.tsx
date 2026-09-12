@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, DialogActions, Stack, TextField, Typography } from '@mui/material';
-import type { FactionOrder, Item } from '../../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import type { AssetInstance, FactionOrder, Item } from '../../types';
+import type { AssetReturnOutcome } from '../../services/factionOrderService';
 import { useLocalizedText } from '../../utils/naming';
 
 type Outcome = { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
@@ -10,7 +11,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   items: Item[];
   busy?: boolean;
   onCancel: () => void;
-  onSubmit: (lines: Record<string, Outcome>) => void;
+  onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;
 }) {
   const t = useLocalizedText();
   const outstanding = useMemo<Record<string, number>>(() => Object.fromEntries(items.map((item) => {
@@ -21,8 +22,28 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       + (order.writtenOffQuantities?.[item.id] ?? 0);
     return [item.id, Math.max(0, handedOver - reconciled)];
   }).filter(([, quantity]) => Number(quantity) > 0)), [items, order]);
+  const outstandingAssets = useMemo<Record<string, AssetInstance[]>>(() => Object.fromEntries(
+    Object.entries(order.assetAssignments ?? {}).map(([itemId, assets]) => [
+      itemId,
+      assets.filter((asset) => ['in_field', 'in_custody', 'lost'].includes(asset.availabilityStatus)),
+    ]).filter(([, assets]) => (assets as AssetInstance[]).length > 0),
+  ) as Record<string, AssetInstance[]>, [order.assetAssignments]);
+  const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>(() => Object.fromEntries(
+    Object.values(outstandingAssets).flatMap((assets) => assets
+      .filter((asset) => asset.availabilityStatus !== 'lost')
+      .map((asset) => [asset.id, { outcome: 'returned_good' as const }])),
+  ));
   const [lines, setLines] = useState<Record<string, Outcome>>(() => Object.fromEntries(
     Object.entries(outstanding).map(([itemId, quantity]) => {
+      const assets = outstandingAssets[itemId] ?? [];
+      if (assets.length) {
+        return [itemId, {
+          returned: assets.filter((asset) => asset.availabilityStatus !== 'lost').length,
+          consumed: 0,
+          missing: assets.filter((asset) => asset.availabilityStatus === 'lost').length,
+          damaged: 0,
+        }];
+      }
       const existingMissing = Math.min(Number(quantity), order.missingQuantities?.[itemId] ?? 0);
       return [itemId, {
         returned: Number(quantity) - existingMissing,
@@ -36,11 +57,32 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   function setValue(itemId: string, field: keyof Outcome, raw: string) {
     setLines((current) => ({ ...current, [itemId]: { ...current[itemId], [field]: field === 'notes' ? raw : raw === '' ? undefined : Number(raw) } }));
   }
+  const summarizeAssets = useCallback((itemId: string, next: Record<string, AssetReturnOutcome>) => {
+    const assets = outstandingAssets[itemId] ?? [];
+    return {
+      returned: assets.filter((asset) => next[asset.id]?.outcome === 'returned_good').length,
+      consumed: 0,
+      damaged: assets.filter((asset) => next[asset.id]?.outcome === 'returned_damaged').length,
+      missing: assets.filter((asset) => next[asset.id]?.outcome === 'missing'
+        || (asset.availabilityStatus === 'lost' && !next[asset.id])).length,
+    };
+  }, [outstandingAssets]);
+  const setAssetOutcome = useCallback((itemId: string, assetId: string, outcome: string) => {
+    setAssetOutcomes((current) => {
+      const next = { ...current };
+      if (outcome === 'unchanged_missing') delete next[assetId];
+      else next[assetId] = { ...next[assetId], outcome: outcome as AssetReturnOutcome['outcome'] };
+      setLines((currentLines) => ({ ...currentLines, [itemId]: { ...currentLines[itemId], ...summarizeAssets(itemId, next) } }));
+      return next;
+    });
+  }, [summarizeAssets]);
   const invalid = Object.entries(lines).some(([itemId, value]) =>
     value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0
     || value.returned + value.consumed + value.missing + value.damaged > Number(outstanding[itemId]));
 
   function markAllReturned() {
+    setAssetOutcomes(Object.fromEntries(Object.values(outstandingAssets).flatMap((assets) =>
+      assets.map((asset) => [asset.id, { outcome: 'returned_good' as const }]))));
     setLines(Object.fromEntries(
       Object.entries(outstanding).map(([itemId, quantity]) => [
         itemId,
@@ -74,6 +116,12 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   }
 
   function markItemComplete(itemId: string, quantity: number, isConsumable?: boolean) {
+    if ((outstandingAssets[itemId] ?? []).length) {
+      setAssetOutcomes((current) => ({
+        ...current,
+        ...Object.fromEntries(outstandingAssets[itemId].map((asset) => [asset.id, { outcome: 'returned_good' as const }])),
+      }));
+    }
     setLines((current) => ({
       ...current,
       [itemId]: {
@@ -97,6 +145,14 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
         code = itemUrlMatch[1];
       }
       const scannedCode = code.toLowerCase();
+      const matchedAssetEntry = Object.entries(outstandingAssets).flatMap(([itemId, assets]) =>
+        assets.map((asset) => ({ itemId, asset }))).find(({ asset }) =>
+          asset.id.toLowerCase() === scannedCode || asset.assetCode.toLowerCase() === scannedCode);
+      if (matchedAssetEntry) {
+        e.preventDefault();
+        setAssetOutcome(matchedAssetEntry.itemId, matchedAssetEntry.asset.id, 'returned_good');
+        return;
+      }
       const matchedItem = items.find((i) =>
         i.id.toLowerCase() === scannedCode ||
         (i.sku && i.sku.toLowerCase() === scannedCode) ||
@@ -122,7 +178,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
     }
     window.addEventListener('ash-barcode-scanned', onBarcodeScanned);
     return () => window.removeEventListener('ash-barcode-scanned', onBarcodeScanned);
-  }, [items, outstanding]);
+  }, [items, outstanding, outstandingAssets, setAssetOutcome]);
 
   return (
     <>
@@ -188,11 +244,36 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                 </Stack>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                <TextField size="small" type="number" label={item?.isConsumable ? t('Ungeöffnet zurück', 'Returned unopened') : t('Zurück', 'Returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                {item?.isConsumable && <TextField size="small" type="number" label={t('Verbraucht', 'Consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
-                <TextField size="small" type="number" label={t('Fehlt', 'Missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                <TextField size="small" type="number" label={t('Beschädigt', 'Damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('Betriebsstunden', 'Operating hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
+                {(outstandingAssets[itemId] ?? []).length ? (
+                  <Stack spacing={1} sx={{ width: '100%' }}>
+                    {outstandingAssets[itemId].map((asset) => (
+                      <Stack key={asset.id} direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                        <Typography sx={{ minWidth: 180, fontWeight: 700 }}>{asset.assetCode}</Typography>
+                        <TextField
+                          select
+                          size="small"
+                          label={t('Ergebnis', 'Outcome')}
+                          value={assetOutcomes[asset.id]?.outcome ?? 'unchanged_missing'}
+                          onChange={(event) => setAssetOutcome(itemId, asset.id, event.target.value)}
+                          sx={{ minWidth: 210 }}
+                        >
+                          {asset.availabilityStatus === 'lost' && <MenuItem value="unchanged_missing">{t('Weiterhin fehlend', 'Still missing')}</MenuItem>}
+                          <MenuItem value="returned_good">{t('Intakt zurück', 'Returned good')}</MenuItem>
+                          <MenuItem value="returned_damaged">{t('Beschädigt zurück', 'Returned damaged')}</MenuItem>
+                          {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('Fehlend', 'Missing')}</MenuItem>}
+                        </TextField>
+                      </Stack>
+                    ))}
+                  </Stack>
+                ) : (
+                  <>
+                    <TextField size="small" type="number" label={item?.isConsumable ? t('Ungeöffnet zurück', 'Returned unopened') : t('Zurück', 'Returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    {item?.isConsumable && <TextField size="small" type="number" label={t('Verbraucht', 'Consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
+                    <TextField size="small" type="number" label={t('Fehlt', 'Missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    <TextField size="small" type="number" label={t('Beschädigt', 'Damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('Betriebsstunden', 'Operating hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
+                  </>
+                )}
               </Stack>
               {(value.damaged > 0 || value.missing > 0) && <TextField fullWidth size="small" sx={{ mt: 1 }} label={t('Notiz zu Schaden/Fehlteil', 'Damage/missing note')} value={value.notes ?? ''} onChange={(e) => setValue(itemId, 'notes', e.target.value)} />}
             </Box>
@@ -202,7 +283,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       {invalid && <Alert severity="error" sx={{ mt: 2 }}>{t('Die Summe darf die offene Menge nicht überschreiten.', 'The outcome total cannot exceed the outstanding quantity.')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
         <Button onClick={onCancel}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines)}>{t('Rückgabe buchen', 'Record return')}</Button>
+        <Button variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('Rückgabe buchen', 'Record return')}</Button>
       </DialogActions>
     </>
   );

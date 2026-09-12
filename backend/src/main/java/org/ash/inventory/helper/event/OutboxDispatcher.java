@@ -2,7 +2,6 @@ package org.ash.inventory.helper.event;
 
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.ash.inventory.service.DomainEventService;
 import org.jboss.logging.Logger;
 
@@ -14,8 +13,13 @@ import java.util.ArrayList;
 public class OutboxDispatcher {
     private static final Logger LOG = Logger.getLogger(OutboxDispatcher.class);
 
-    @Inject DomainEventService events;
-    @Inject EventBroadcaster broadcaster;
+    private final DomainEventService events;
+    private final EventBroadcaster broadcaster;
+
+    public OutboxDispatcher(DomainEventService events, EventBroadcaster broadcaster) {
+        this.events = events;
+        this.broadcaster = broadcaster;
+    }
 
     @Scheduled(every = "${inventory.events.outbox.dispatch-every:1s}",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)

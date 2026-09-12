@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import org.hibernate.proxy.HibernateProxy;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -34,10 +35,24 @@ public abstract class BaseEntity {
         updatedAt = Instant.now();
     }
 
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    @Override
+    public final boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null || effectiveClass(this) != effectiveClass(other)) return false;
+        var entity = (BaseEntity) other;
+        return id != null && id.equals(entity.id);
+    }
+
+    @Override
+    public final int hashCode() {
+        // A class-based hash remains stable while a generated id is assigned.
+        return effectiveClass(this).hashCode();
+    }
+
+    private static Class<?> effectiveClass(Object entity) {
+        return entity instanceof HibernateProxy proxy
+                ? proxy.getHibernateLazyInitializer().getPersistentClass()
+                : entity.getClass();
+    }
+
 }

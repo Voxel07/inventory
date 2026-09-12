@@ -1,7 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.AssetInstance;
@@ -10,6 +9,7 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
+import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StockReservation;
 
@@ -24,9 +24,12 @@ import java.util.UUID;
 /** Database access for stock, damage, maintenance, and procurement views. */
 @ApplicationScoped
 public class OperationsOrm {
-    @Inject EntityManager entityManager;
+    private final EntityManager entityManager;
 
-    public List<StockTransaction> transactions(UUID itemId, UUID userId, String type, Instant start, Instant end) {
+    public OperationsOrm(EntityManager entityManager) { this.entityManager = entityManager; }
+
+    public List<StockTransaction> transactions(UUID itemId, UUID userId, String type, Instant start, Instant end,
+            int offset, int limit) {
         var jpql = new StringBuilder("from StockTransaction tx where 1 = 1");
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -40,19 +43,40 @@ public class OperationsOrm {
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<DamageReport> damageReports(UUID itemId, int offset, int limit) {
+        if (itemId == null) return entityManager.createQuery("from DamageReport d order by d.createdAt desc", DamageReport.class)
+                .setFirstResult(offset).setMaxResults(limit).getResultList();
+        return entityManager.createQuery("from DamageReport d where d.item.id = :itemId order by d.createdAt desc", DamageReport.class)
+                .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<MaintenanceRecord> maintenanceRecords(UUID itemId, int offset, int limit) {
+        if (itemId == null) return entityManager.createQuery("from MaintenanceRecord m order by m.performedAt desc", MaintenanceRecord.class)
+                .setFirstResult(offset).setMaxResults(limit).getResultList();
+        return entityManager.createQuery("from MaintenanceRecord m where m.item.id = :itemId order by m.performedAt desc", MaintenanceRecord.class)
+                .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<MaintenanceSchedule> blockingSchedules(Item item, AssetInstance asset) {
+        var jpql = asset == null
+                ? "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and schedule.checkoutBlocking = true and schedule.assetInstance is null"
+                : "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and schedule.checkoutBlocking = true and (schedule.assetInstance is null or schedule.assetInstance = :asset)";
+        var query = entityManager.createQuery(jpql, MaintenanceSchedule.class).setParameter("item", item);
+        if (asset != null) query.setParameter("asset", asset);
         return query.getResultList();
     }
 
-    public List<DamageReport> damageReports(UUID itemId) {
-        if (itemId == null) return entityManager.createQuery("from DamageReport d order by d.createdAt desc", DamageReport.class).getResultList();
-        return entityManager.createQuery("from DamageReport d where d.item.id = :itemId order by d.createdAt desc", DamageReport.class)
-                .setParameter("itemId", itemId).getResultList();
-    }
-
-    public List<MaintenanceRecord> maintenanceRecords(UUID itemId) {
-        if (itemId == null) return entityManager.createQuery("from MaintenanceRecord m order by m.performedAt desc", MaintenanceRecord.class).getResultList();
-        return entityManager.createQuery("from MaintenanceRecord m where m.item.id = :itemId order by m.performedAt desc", MaintenanceRecord.class)
-                .setParameter("itemId", itemId).getResultList();
+    public long checkoutCount(Item item, AssetInstance asset) {
+        var jpql = asset == null
+                ? "select count(tx) from StockTransaction tx where tx.item = :item and tx.type = :type"
+                : "select count(tx) from StockTransaction tx where tx.assetInstance = :asset and tx.type = :type";
+        var query = entityManager.createQuery(jpql, Long.class)
+                .setParameter("type", DomainEnums.TransactionType.checkout);
+        if (asset == null) query.setParameter("item", item); else query.setParameter("asset", asset);
+        return query.getSingleResult();
     }
 
     public StockTransaction transactionByIdempotencyKey(UUID key) {

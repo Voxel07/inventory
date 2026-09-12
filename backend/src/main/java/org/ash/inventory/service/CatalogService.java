@@ -2,7 +2,6 @@ package org.ash.inventory.service;
 
 import io.quarkus.cache.CacheInvalidateAll;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
@@ -25,13 +24,21 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
-    @Inject org.ash.inventory.helper.storage.MediaService media;
-    @Inject ActorService actorService;
-    @Inject CatalogOrm orm;
-    @Inject DomainEventService events;
+    private final org.ash.inventory.helper.storage.MediaService media;
+    private final ActorService actorService;
+    private final CatalogOrm orm;
+    private final DomainEventService events;
 
-    public List<Item> getItems(String search) {
-        return orm.items(search);
+    public CatalogService(org.ash.inventory.helper.storage.MediaService media, ActorService actorService,
+            CatalogOrm orm, DomainEventService events) {
+        this.media = media;
+        this.actorService = actorService;
+        this.orm = orm;
+        this.events = events;
+    }
+
+    public List<Item> getItems(String search, int offset, int limit) {
+        return orm.items(search, offset, limit);
     }
 
     public List<StorageLocation> getLocations() {
@@ -48,6 +55,10 @@ public class CatalogService {
 
     public List<Faction> getFactions(String eventType) {
         return orm.factions(eventType);
+    }
+
+    public <T> T find(Class<T> type, UUID id) {
+        return orm.find(type, id);
     }
 
     @Transactional
@@ -92,6 +103,9 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
+        if (input.amount() != null && input.amount() != item.baseAmount) {
+            throw ApiException.badRequest("Existing stock cannot be edited on the item; create a stock adjustment instead");
+        }
         if (input.trackingMode() != null && input.trackingMode() != item.trackingMode) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
@@ -117,7 +131,6 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
-        orm.deleteTransactionHistory(item);
         item.active = false;
         catalogChanged("items", item.id);
     }
@@ -199,6 +212,7 @@ public class CatalogService {
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
         target.mapOverlayUrl = input.mapOverlay();
         target.overlayBounds = input.overlayBounds();
+        target.warehouse = input.warehouseId() == null ? null : required(Warehouse.class, input.warehouseId(), "Warehouse");
     }
 
     @Transactional
@@ -358,9 +372,24 @@ public class CatalogService {
         return orm.assetInstances(item);
     }
 
+    public AssetInstance getAssetByCode(String code) {
+        var asset = orm.findAssetByCode(code);
+        if (asset == null) throw ApiException.notFound("Asset not found");
+        return asset;
+    }
+
     @Transactional
     public List<AssetInstance> createAssets(UUID itemId, ApiModels.AssetInstanceInput input) {
         var item = locked(Item.class, itemId, "Item");
+        if (item.trackingMode != DomainEnums.TrackingMode.serialized) {
+            throw ApiException.badRequest("Asset instances can only be registered for serialized items");
+        }
+        if (input.availabilityStatus() != null && input.availabilityStatus() != DomainEnums.AssetState.available) {
+            throw ApiException.badRequest("New assets must start in the available state");
+        }
+        if (input.currentCustodianId() != null) {
+            throw ApiException.badRequest("Custody can only be assigned through a checkout or handover workflow");
+        }
         var created = new ArrayList<AssetInstance>();
         int batchCount = input.batchCount() != null && input.batchCount() > 1 ? input.batchCount() : 1;
         String prefix = input.codePrefix() != null && !input.codePrefix().isBlank() ? input.codePrefix().trim() : item.sku + "-";
@@ -438,19 +467,26 @@ public class CatalogService {
         var item = locked(Item.class, itemId, "Item");
         var asset = locked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
+        assertExpectedVersion(asset, input.expectedVersion());
+        if (input.availabilityStatus() != null && input.availabilityStatus() != asset.availabilityStatus) {
+            throw ApiException.badRequest("Asset availability can only be changed through a lifecycle command");
+        }
+        if (input.conditionStatus() != null && input.conditionStatus() != asset.conditionStatus) {
+            throw ApiException.badRequest("Asset condition can only be changed through a condition command");
+        }
+        if (input.currentLocationId() != null
+                && (asset.currentLocation == null || !input.currentLocationId().equals(asset.currentLocation.id))) {
+            throw ApiException.badRequest("Asset location can only be changed through the relocation command");
+        }
+        if (input.currentCustodianId() != null
+                && (asset.currentCustodian == null || !input.currentCustodianId().equals(asset.currentCustodian.id))) {
+            throw ApiException.badRequest("Asset custody can only be changed through a handover workflow");
+        }
         if (input.assetCode() != null && !input.assetCode().isBlank() && !input.assetCode().equalsIgnoreCase(asset.assetCode)) {
             if (orm.assetCodeExists(input.assetCode())) throw ApiException.conflict("Asset code already exists");
             asset.assetCode = input.assetCode().trim().toUpperCase(Locale.ROOT);
         }
         if (input.serialNumber() != null) asset.serialNumber = input.serialNumber().trim();
-        if (input.conditionStatus() != null) asset.conditionStatus = input.conditionStatus();
-        if (input.availabilityStatus() != null) asset.availabilityStatus = input.availabilityStatus();
-        if (input.currentLocationId() != null) {
-            asset.currentLocation = required(StorageLocation.class, input.currentLocationId(), "Storage location");
-        }
-        if (input.currentCustodianId() != null) {
-            asset.currentCustodian = required(UserAccount.class, input.currentCustodianId(), "User");
-        }
         if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
         if (input.notes() != null) asset.notes = input.notes();
         catalogChanged("items", item.id);
@@ -464,10 +500,98 @@ public class CatalogService {
         var item = locked(Item.class, itemId, "Item");
         var asset = locked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
+        if (!asset.active) return;
+        if (asset.availabilityStatus == DomainEnums.AssetState.reserved
+                || asset.availabilityStatus == DomainEnums.AssetState.staged
+                || asset.availabilityStatus == DomainEnums.AssetState.in_custody
+                || asset.availabilityStatus == DomainEnums.AssetState.in_field) {
+            throw ApiException.conflict("Asset must be released from reservations and custody before write-off");
+        }
+        var actor = actorService.current();
+        var transaction = new StockTransaction();
+        transaction.item = item;
+        transaction.assetInstance = asset;
+        transaction.user = actor;
+        transaction.type = DomainEnums.TransactionType.written_off;
+        transaction.quantity = 1;
+        transaction.sourceLocation = asset.currentLocation;
+        transaction.reason = "Asset write-off";
+        transaction.notes = "Retired asset " + asset.assetCode;
+        transaction.idempotencyKey = UUID.randomUUID();
+        orm.persist(transaction);
+        asset.availabilityStatus = DomainEnums.AssetState.written_off;
         asset.active = false;
         catalogChanged("items", item.id);
-        events.record("asset.retired", "asset", asset.id, actorService.current().id, null,
+        events.record("asset.written_off", "asset", asset.id, actor.id, transaction.idempotencyKey,
                 Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
+    }
+
+    @Transactional
+    public AssetInstance relocateAsset(UUID itemId, UUID assetId, ApiModels.AssetRelocationInput input) {
+        var item = locked(Item.class, itemId, "Item");
+        var asset = locked(AssetInstance.class, assetId, "Asset");
+        assertOwnedActiveAsset(item, asset);
+        assertExpectedVersion(asset, input.expectedVersion());
+        if (asset.availabilityStatus != DomainEnums.AssetState.available
+                && asset.availabilityStatus != DomainEnums.AssetState.damaged
+                && asset.availabilityStatus != DomainEnums.AssetState.in_repair
+                && asset.availabilityStatus != DomainEnums.AssetState.in_maintenance) {
+            throw ApiException.conflict("Asset cannot be relocated while it is " + asset.availabilityStatus);
+        }
+        var destination = required(StorageLocation.class, input.locationId(), "Storage location");
+        if (asset.currentLocation != null && asset.currentLocation.id.equals(destination.id)) return asset;
+        var actor = actorService.current();
+        var transaction = new StockTransaction();
+        transaction.item = item;
+        transaction.assetInstance = asset;
+        transaction.user = actor;
+        transaction.type = DomainEnums.TransactionType.adjusted;
+        transaction.quantity = 1;
+        transaction.sourceLocation = asset.currentLocation;
+        transaction.destinationLocation = destination;
+        transaction.reason = "Asset relocation";
+        transaction.notes = input.notes();
+        transaction.idempotencyKey = UUID.randomUUID();
+        orm.persist(transaction);
+        asset.currentLocation = destination;
+        events.record("asset.relocated", "asset", asset.id, actor.id, transaction.idempotencyKey,
+                Map.of("itemId", item.id.toString(), "locationId", destination.id.toString()));
+        return asset;
+    }
+
+    @Transactional
+    public AssetInstance updateAssetCondition(UUID itemId, UUID assetId, ApiModels.AssetConditionInput input) {
+        var item = locked(Item.class, itemId, "Item");
+        var asset = locked(AssetInstance.class, assetId, "Asset");
+        assertOwnedActiveAsset(item, asset);
+        assertExpectedVersion(asset, input.expectedVersion());
+        if (input.conditionStatus() == DomainEnums.ConditionStatus.lost) {
+            throw ApiException.badRequest("Lost assets must be recorded through custody reconciliation");
+        }
+        var actor = actorService.current();
+        var previous = asset.conditionStatus;
+        asset.conditionStatus = input.conditionStatus();
+        if (input.conditionStatus() == DomainEnums.ConditionStatus.damaged
+                || input.conditionStatus() == DomainEnums.ConditionStatus.unsafe) {
+            asset.availabilityStatus = DomainEnums.AssetState.damaged;
+        } else if (asset.availabilityStatus == DomainEnums.AssetState.damaged) {
+            asset.availabilityStatus = DomainEnums.AssetState.available;
+        }
+        events.record("asset.condition_changed", "asset", asset.id, actor.id, null,
+                Map.of("itemId", item.id.toString(), "from", previous.name(), "to", input.conditionStatus().name()));
+        return asset;
+    }
+
+    private void assertOwnedActiveAsset(Item item, AssetInstance asset) {
+        if (!asset.item.id.equals(item.id) || !asset.active) throw ApiException.notFound("Asset not found for item");
+    }
+
+    private void assertExpectedVersion(AssetInstance asset, Long expectedVersion) {
+        if (expectedVersion == null) throw ApiException.badRequest("expectedVersion is required");
+        if (asset.version != expectedVersion) {
+            throw ApiException.conflict("Asset version conflict; current version is " + asset.version
+                    + " and current state is " + asset.availabilityStatus);
+        }
     }
 
     private String generateSku(String name) {

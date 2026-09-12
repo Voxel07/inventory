@@ -7,7 +7,7 @@ import io.quarkus.cache.CacheResult;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.event.EventBroadcaster;
 import org.ash.inventory.service.CatalogService;
 import org.jboss.logging.Logger;
@@ -24,12 +24,21 @@ import java.util.Set;
 @ApplicationScoped
 public class CatalogResponseCache {
     private static final Logger LOG = Logger.getLogger(CatalogResponseCache.class);
-    @Inject CatalogService catalog;
-    @Inject ApiMapper mapper;
-    @Inject ObjectMapper objectMapper;
-    @Inject CacheManager cacheManager;
-    @Inject EventBroadcaster broadcaster;
+    private final CatalogService catalog;
+    private final ApiMapper mapper;
+    private final ObjectMapper objectMapper;
+    private final CacheManager cacheManager;
+    private final EventBroadcaster broadcaster;
     private Runnable removeEventListener = () -> {};
+
+    public CatalogResponseCache(CatalogService catalog, ApiMapper mapper, ObjectMapper objectMapper,
+            CacheManager cacheManager, EventBroadcaster broadcaster) {
+        this.catalog = catalog;
+        this.mapper = mapper;
+        this.objectMapper = objectMapper;
+        this.cacheManager = cacheManager;
+        this.broadcaster = broadcaster;
+    }
 
     @PostConstruct
     void initializeInvalidationListener() {
@@ -45,21 +54,25 @@ public class CatalogResponseCache {
     }
 
     @CacheResult(cacheName = "locations-cache")
+    @Transactional
     public String locations() {
         return json(catalog.getLocations().stream().map(mapper::location).toList());
     }
 
     @CacheResult(cacheName = "assemblies-cache")
+    @Transactional
     public String assemblies() {
         return json(catalog.getAssemblies().stream().map(mapper::assembly).toList());
     }
 
     @CacheResult(cacheName = "events-cache")
+    @Transactional
     public String events(String eventType) {
         return json(catalog.getEvents(eventType).stream().map(mapper::event).toList());
     }
 
     @CacheResult(cacheName = "factions-cache")
+    @Transactional
     public String factions(String eventType) {
         return json(catalog.getFactions(eventType).stream().map(mapper::faction).toList());
     }

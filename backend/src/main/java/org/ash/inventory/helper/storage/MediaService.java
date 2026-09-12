@@ -1,28 +1,40 @@
 package org.ash.inventory.helper.storage;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import org.ash.inventory.resource.ApiException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,46 +42,109 @@ import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class MediaService {
-    @Inject TransactionSynchronizationRegistry transactions;
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(MediaService.class);
     private static final Pattern STAGED_IMAGE = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-image\\.webp");
-    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build();
-    @ConfigProperty(name = "inventory.media.mode") String mode;
-    @ConfigProperty(name = "inventory.media.local-directory") String localDirectory;
-    @ConfigProperty(name = "inventory.media.s3.endpoint") String endpoint;
-    @ConfigProperty(name = "inventory.media.s3.bucket") String bucket;
-    @ConfigProperty(name = "inventory.media.s3.region") String region;
-    @ConfigProperty(name = "inventory.media.s3.access-key") Optional<String> accessKey;
-    @ConfigProperty(name = "inventory.media.s3.secret-key") Optional<String> secretKey;
+    private static final Pattern STAGED_UPLOAD = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-.+");
+
+    private final TransactionSynchronizationRegistry transactions;
+    private final String mode;
+    private final String localDirectory;
+    private final String endpoint;
+    private final String bucket;
+    private final String region;
+    private final Optional<String> accessKey;
+    private final Optional<String> secretKey;
+    private volatile S3Client s3Client;
+
+    public MediaService(TransactionSynchronizationRegistry transactions,
+            @ConfigProperty(name = "inventory.media.mode") String mode,
+            @ConfigProperty(name = "inventory.media.local-directory") String localDirectory,
+            @ConfigProperty(name = "inventory.media.s3.endpoint") String endpoint,
+            @ConfigProperty(name = "inventory.media.s3.bucket") String bucket,
+            @ConfigProperty(name = "inventory.media.s3.region") String region,
+            @ConfigProperty(name = "inventory.media.s3.access-key") Optional<String> accessKey,
+            @ConfigProperty(name = "inventory.media.s3.secret-key") Optional<String> secretKey) {
+        this.transactions = transactions;
+        this.mode = mode;
+        this.localDirectory = localDirectory;
+        this.endpoint = endpoint;
+        this.bucket = bucket;
+        this.region = region;
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
+    }
 
     public record StoredMedia(String key, String url) {}
-    public record MediaContent(byte[] bytes, String contentType) {}
+    public record MediaContent(InputStream stream, String contentType, long contentLength) {}
+    public record StoredDocument(String key, String contentType, long contentLength, String checksum) {}
 
+    public StoredMedia store(String originalName, String contentType, Path source) {
+        String key = newKey(originalName);
+        try {
+            if (isS3()) {
+                s3().putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
+                        RequestBody.fromFile(source));
+            } else {
+                putLocal(key, source);
+            }
+            return new StoredMedia(key, null);
+        } catch (IOException exception) {
+            throw new ApiException(500, "Could not store media");
+        } catch (SdkException exception) {
+            throw storageFailure("store", exception);
+        }
+    }
+
+    /** Convenience overload for small in-memory callers; HTTP uploads use the Path overload. */
     public StoredMedia store(String originalName, String contentType, byte[] bytes) {
-        String safeName = (originalName == null ? "upload" : originalName).replaceAll("[^a-zA-Z0-9._-]", "_");
-        String key = Instant.now().atZone(ZoneOffset.UTC).getYear() + "-" + UUID.randomUUID() + "-" + safeName;
-        if ("s3".equalsIgnoreCase(mode)) putS3(key, contentType, bytes);
-        else putLocal(key, bytes);
+        String key = newKey(originalName);
+        if (isS3()) {
+            try {
+                s3().putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
+                        RequestBody.fromBytes(bytes));
+            } catch (SdkException exception) {
+                throw storageFailure("store", exception);
+            }
+        } else {
+            try (var input = new ByteArrayInputStream(bytes)) {
+                putLocal(key, input);
+            } catch (IOException exception) {
+                throw new ApiException(500, "Could not store media");
+            }
+        }
         return new StoredMedia(key, null);
     }
 
     public MediaContent read(String key) {
         validateKey(key);
-        if ("s3".equalsIgnoreCase(mode)) {
-            var response = requestS3("GET", key, "application/octet-stream", new byte[0]);
-            return new MediaContent(response.body(), response.headers().firstValue("Content-Type").orElse(contentType(key)));
+        if (isS3()) {
+            try {
+                ResponseInputStream<GetObjectResponse> stream = s3().getObject(
+                        GetObjectRequest.builder().bucket(bucket).key(key).build());
+                String responseType = stream.response().contentType();
+                return new MediaContent(stream, responseType == null ? contentType(key) : responseType,
+                        stream.response().contentLength());
+            } catch (S3Exception exception) {
+                if (exception.statusCode() == 404) throw ApiException.notFound("Media not found");
+                throw storageFailure("read", exception);
+            } catch (SdkException exception) {
+                throw storageFailure("read", exception);
+            }
         }
-        return new MediaContent(readLocal(key), contentType(key));
+        try {
+            Path file = localFile(key);
+            return new MediaContent(Files.newInputStream(file), contentType(key), Files.size(file));
+        } catch (IOException exception) {
+            throw new ApiException(500, "Could not read media");
+        }
     }
 
-    /** Accept only canonical object keys stored by this application. */
     public String mediaReference(String value) {
         if (value == null) return null;
         validateKey(value);
         return value;
     }
 
-    /** Promote newly converted uploads once the database has assigned the item's ID. */
     public String attachToItem(String reference, UUID itemId) {
         return attachToRecord(reference, itemId, "items");
     }
@@ -78,14 +153,40 @@ public class MediaService {
         return attachToRecord(reference, assemblyId, "assemblies");
     }
 
-    /** Delete only an unattached browser upload; permanent item/assembly media cannot be removed through this endpoint. */
+    public StoredDocument attachToVendorDocument(String reference, UUID documentId, String originalFilename) {
+        String source = mediaReference(reference);
+        if (!STAGED_UPLOAD.matcher(source).matches()) {
+            throw ApiException.badRequest("Only staged uploads can be attached as vendor documents");
+        }
+        var content = read(source);
+        String checksum;
+        try (var stream = content.stream()) {
+            var digest = MessageDigest.getInstance("SHA-256");
+            stream.transferTo(new java.security.DigestOutputStream(OutputStream.nullOutputStream(), digest));
+            checksum = HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException exception) {
+            throw new ApiException(500, "Could not inspect vendor document");
+        }
+        String safeName = (originalFilename == null ? "document" : originalFilename)
+                .replaceAll("[^a-zA-Z0-9._-]", "_");
+        String destination = "vendor-documents/" + documentId + "/" + safeName;
+        copy(source, destination);
+        transactions.registerInterposedSynchronization(new Synchronization() {
+            public void beforeCompletion() {}
+            public void afterCompletion(int status) {
+                try { delete(status == Status.STATUS_COMMITTED ? source : destination); }
+                catch (RuntimeException exception) { LOG.warn("Could not clean up vendor document object", exception); }
+            }
+        });
+        return new StoredDocument(destination, content.contentType(), content.contentLength(), checksum);
+    }
+
     public void deleteStaged(String reference) {
         String key = mediaReference(reference);
         if (!STAGED_IMAGE.matcher(key).matches()) throw ApiException.badRequest("Only staged images can be deleted");
         delete(key);
     }
 
-    /** Remove superseded permanent media only after its database update has committed. */
     public void deleteAfterCommit(String reference) {
         String key = mediaReference(reference);
         transactions.registerInterposedSynchronization(new Synchronization() {
@@ -102,10 +203,7 @@ public class MediaService {
         String key = mediaReference(reference);
         if (!STAGED_IMAGE.matcher(key).matches()) return key;
         String destination = directory + "/" + UUID.randomUUID() + "/" + recordId + ".webp";
-        var content = read(key);
-        if ("s3".equalsIgnoreCase(mode)) putS3(destination, "image/webp", content.bytes());
-        else putLocal(destination, content.bytes());
-        // Keep the source available until commit; a failed item save can safely be retried.
+        copy(key, destination);
         transactions.registerInterposedSynchronization(new Synchronization() {
             public void beforeCompletion() {}
             public void afterCompletion(int status) {
@@ -116,18 +214,76 @@ public class MediaService {
         return destination;
     }
 
+    private void copy(String source, String destination) {
+        validateKey(source);
+        validateKey(destination);
+        if (isS3()) {
+            try {
+                s3().copyObject(CopyObjectRequest.builder()
+                        .destinationBucket(bucket).destinationKey(destination)
+                        .sourceBucket(bucket).sourceKey(source).build());
+            } catch (SdkException exception) {
+                throw storageFailure("copy", exception);
+            }
+            return;
+        }
+        try {
+            Path destinationFile = resolvedLocalPath(destination);
+            Files.createDirectories(destinationFile.getParent());
+            Files.copy(localFile(source), destinationFile, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            throw new ApiException(500, "Could not copy media");
+        }
+    }
+
     private void delete(String key) {
         validateKey(key);
-        if ("s3".equalsIgnoreCase(mode)) requestS3("DELETE", key, "application/octet-stream", new byte[0]);
-        else {
-            try { Files.deleteIfExists(Path.of(localDirectory).toAbsolutePath().normalize().resolve(key)); }
+        if (isS3()) {
+            try {
+                s3().deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+            } catch (SdkException exception) {
+                throw storageFailure("delete", exception);
+            }
+        } else {
+            try { Files.deleteIfExists(resolvedLocalPath(key)); }
             catch (IOException exception) { throw new ApiException(500, "Could not delete media"); }
         }
     }
 
+    private Path localFile(String key) {
+        Path file = resolvedLocalPath(key);
+        if (!Files.isRegularFile(file)) throw ApiException.notFound("Media not found");
+        return file;
+    }
+
+    private Path resolvedLocalPath(String key) {
+        Path root = Path.of(localDirectory).toAbsolutePath().normalize();
+        Path file = root.resolve(key).normalize();
+        if (!file.startsWith(root)) throw ApiException.badRequest("Invalid media key");
+        return file;
+    }
+
+    private void putLocal(String key, Path source) throws IOException {
+        Path file = resolvedLocalPath(key);
+        Files.createDirectories(file.getParent());
+        Files.copy(source, file, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private void putLocal(String key, InputStream source) throws IOException {
+        Path file = resolvedLocalPath(key);
+        Files.createDirectories(file.getParent());
+        Files.copy(source, file, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private String newKey(String originalName) {
+        String safeName = (originalName == null ? "upload" : originalName).replaceAll("[^a-zA-Z0-9._-]", "_");
+        return Instant.now().atZone(ZoneOffset.UTC).getYear() + "-" + UUID.randomUUID() + "-" + safeName;
+    }
+
     private void validateKey(String key) {
         if (key == null || key.isBlank() || key.startsWith("/") || key.contains("\\")
-                || java.util.Arrays.stream(key.split("/", -1)).anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
+                || java.util.Arrays.stream(key.split("/", -1))
+                        .anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
             throw ApiException.badRequest("Invalid media key");
         }
     }
@@ -141,67 +297,40 @@ public class MediaService {
         return "application/octet-stream";
     }
 
-    public byte[] readLocal(String key) {
-        validateKey(key);
-        if ("s3".equalsIgnoreCase(mode)) throw ApiException.notFound("Media is served by object storage");
-        try {
-            Path root = Path.of(localDirectory).toAbsolutePath().normalize();
-            Path file = root.resolve(key).normalize();
-            if (!file.startsWith(root) || !Files.isRegularFile(file)) throw ApiException.notFound("Media not found");
-            return Files.readAllBytes(file);
-        } catch (IOException exception) { throw new ApiException(500, "Could not read media"); }
+    private boolean isS3() {
+        return "s3".equalsIgnoreCase(mode);
     }
 
-    private void putLocal(String key, byte[] bytes) {
-        try {
-            Path root = Path.of(localDirectory).toAbsolutePath().normalize();
-            Path file = root.resolve(key).normalize();
-            if (!file.startsWith(root)) throw ApiException.badRequest("Invalid media key");
-            Files.createDirectories(file.getParent());
-            Files.write(file, bytes);
-        } catch (IOException exception) { throw new ApiException(500, "Could not store media"); }
+    private S3Client s3() {
+        S3Client client = s3Client;
+        if (client != null) return client;
+        synchronized (this) {
+            if (s3Client != null) return s3Client;
+            String configuredAccessKey = accessKey.orElse("");
+            String configuredSecretKey = secretKey.orElse("");
+            if (configuredAccessKey.isBlank() || configuredSecretKey.isBlank()) {
+                throw new ApiException(503, "S3 media storage is not configured");
+            }
+            s3Client = S3Client.builder()
+                    .endpointOverride(URI.create(endpoint))
+                    .region(Region.of(region))
+                    .httpClientBuilder(UrlConnectionHttpClient.builder())
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(configuredAccessKey, configuredSecretKey)))
+                    .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                    .build();
+            return s3Client;
+        }
     }
 
-    private void putS3(String key, String contentType, byte[] bytes) {
-        requestS3("PUT", key, contentType, bytes);
+    private ApiException storageFailure(String operation, SdkException cause) {
+        LOG.warnf(cause, "Object storage %s failed", operation);
+        return new ApiException(502, "Object storage is unavailable");
     }
 
-    private HttpResponse<byte[]> requestS3(String method, String key, String contentType, byte[] bytes) {
-        validateKey(key);
-        String configuredAccessKey = accessKey.orElse("");
-        String configuredSecretKey = secretKey.orElse("");
-        if (configuredAccessKey.isBlank() || configuredSecretKey.isBlank()) throw new ApiException(503, "S3 media storage is not configured");
-        try {
-            var now = Instant.now();
-            String amzDate = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC).format(now);
-            String date = amzDate.substring(0, 8);
-            String payloadHash = sha256Hex(bytes);
-            URI uri = URI.create(endpoint.replaceAll("/$", "") + "/" + bucket + "/" + encodePath(key));
-            String canonicalUri = uri.getRawPath();
-            String host = uri.getHost() + (uri.getPort() > 0 ? ":" + uri.getPort() : "");
-            String canonicalHeaders = "content-type:" + contentType + "\n" + "host:" + host + "\n" + "x-amz-content-sha256:" + payloadHash + "\n" + "x-amz-date:" + amzDate + "\n";
-            String signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
-            String canonicalRequest = method + "\n" + canonicalUri + "\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash;
-            String scope = date + "/" + region + "/s3/aws4_request";
-            String stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + scope + "\n" + sha256Hex(canonicalRequest.getBytes(StandardCharsets.UTF_8));
-            byte[] signingKey = hmac(hmac(hmac(hmac(("AWS4" + configuredSecretKey).getBytes(StandardCharsets.UTF_8), date), region), "s3"), "aws4_request");
-            String signature = HexFormat.of().formatHex(hmac(signingKey, stringToSign));
-            String authorization = "AWS4-HMAC-SHA256 Credential=" + configuredAccessKey + "/" + scope + ", SignedHeaders=" + signedHeaders + ", Signature=" + signature;
-            var request = HttpRequest.newBuilder(uri).method(method, HttpRequest.BodyPublishers.ofByteArray(bytes))
-                    .timeout(java.time.Duration.ofSeconds(30))
-                    .header("Content-Type", contentType).header("x-amz-content-sha256", payloadHash)
-                    .header("x-amz-date", amzDate).header("Authorization", authorization).build();
-            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() == 404 && method.equals("GET")) throw ApiException.notFound("Media not found");
-            if (response.statusCode() < 200 || response.statusCode() >= 300) throw new ApiException(502, "Object storage rejected " + method + " (" + response.statusCode() + ")");
-            return response;
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new ApiException(502, "Object storage request interrupted");
-        } catch (IOException exception) { throw new ApiException(502, "Object storage is unavailable"); }
+    @PreDestroy
+    void closeClient() {
+        S3Client client = s3Client;
+        if (client != null) client.close();
     }
-
-    private String encodePath(String path) { return java.util.Arrays.stream(path.split("/")).map(value -> URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")).collect(java.util.stream.Collectors.joining("/")); }
-    private String sha256Hex(byte[] value) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value)); } catch (Exception exception) { throw new IllegalStateException(exception); } }
-    private byte[] hmac(byte[] key, String value) { try { var mac = Mac.getInstance("HmacSHA256"); mac.init(new SecretKeySpec(key, "HmacSHA256")); return mac.doFinal(value.getBytes(StandardCharsets.UTF_8)); } catch (Exception exception) { throw new IllegalStateException(exception); } }
 }

@@ -1,52 +1,37 @@
 package org.ash.inventory.resource;
 
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
-import org.ash.inventory.model.Notification;
-import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.orm.NotificationOrm;
+import org.ash.inventory.resource.dto.ApiResponses;
+import org.ash.inventory.service.ApiQueryService;
 
-import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
 @Path("/api/notifications")
 @Produces(MediaType.APPLICATION_JSON)
-@Transactional
 public class NotificationResource {
-    @Inject ActorService actors;
-    @Inject NotificationOrm orm;
+    private final ApiQueryService queries;
+
+    public NotificationResource(ApiQueryService queries) {
+        this.queries = queries;
+    }
 
     @GET
-    public List<?> list() {
-        var actor = actors.current();
-        return orm.forRecipient(actor).stream().map(this::view).toList();
+    public List<ApiResponses.NotificationResponse> list(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.notifications(page, size);
     }
 
     @PATCH @Path("/{id}/read")
-    public Object read(@PathParam("id") UUID id) {
-        var actor = actors.current();
-        var notification = orm.find(id);
-        if (notification == null || !notification.recipient.id.equals(actor.id)) throw ApiException.notFound("Notification not found");
-        notification.readAt = Instant.now();
-        return view(notification);
-    }
-
-    private Object view(Notification value) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("id", value.id);
-        result.put("type", value.type);
-        result.put("payload", value.payload);
-        result.put("createdAt", value.createdAt);
-        result.put("readAt", value.readAt);
-        if (value.factionOrder != null) result.put("orderId", value.factionOrder.id);
-        return result;
+    public ApiResponses.NotificationResponse read(@PathParam("id") UUID id) {
+        return queries.markNotificationRead(id);
     }
 }

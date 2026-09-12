@@ -17,24 +17,27 @@ class MediaServiceTest {
     @TempDir Path directory;
 
     private MediaService service() {
-        var media = new MediaService();
-        media.mode = "local";
-        media.localDirectory = directory.toString();
-        media.endpoint = "http://garage:3900";
-        media.bucket = "inventory";
-        media.region = "garage";
-        media.accessKey = Optional.of("test-key");
-        media.secretKey = Optional.of("test-secret");
-        return media;
+        return service("local", "http://garage:3900");
+    }
+
+    private MediaService service(String mode, String endpoint) {
+        return new MediaService(null, mode, directory.toString(), endpoint, "inventory", "garage",
+                Optional.of("test-key"), Optional.of("test-secret"));
+    }
+
+    private byte[] bytes(MediaService.MediaContent content) throws Exception {
+        try (var stream = content.stream()) {
+            return stream.readAllBytes();
+        }
     }
 
     @Test
-    void localMediaHasAnImageContentTypeAndRejectsTraversal() {
+    void localMediaHasAnImageContentTypeAndRejectsTraversal() throws Exception {
         var media = service();
         byte[] bytes = {1, 2, 3};
         var stored = media.store("image.webp", "image/webp", bytes);
         assertNull(stored.url());
-        assertArrayEquals(bytes, media.read(stored.key()).bytes());
+        assertArrayEquals(bytes, bytes(media.read(stored.key())));
         assertEquals("image/webp", media.read(stored.key()).contentType());
         assertEquals(400, assertThrows(ApiException.class, () -> media.read("../outside")).status);
         assertEquals(400, assertThrows(ApiException.class, () -> media.read("items/../outside")).status);
@@ -71,15 +74,13 @@ class MediaServiceTest {
         });
         server.start();
         try {
-            var media = service();
-            media.mode = "s3";
-            media.endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+            var media = service("s3", "http://127.0.0.1:" + server.getAddress().getPort());
             var content = media.read("items/one/a b.webp");
             assertEquals("GET", method.get());
             assertEquals("/inventory/items/one/a%20b.webp", path.get());
             assertTrue(authorization.get().startsWith("AWS4-HMAC-SHA256 Credential=test-key/"));
             assertTrue(authorization.get().matches(".*Signature=[0-9a-f]{64}"));
-            assertArrayEquals(bytes, content.bytes());
+            assertArrayEquals(bytes, bytes(content));
             assertEquals("image/webp", content.contentType());
             assertEquals(404, assertThrows(ApiException.class, () -> media.read("missing.webp")).status);
         } finally {

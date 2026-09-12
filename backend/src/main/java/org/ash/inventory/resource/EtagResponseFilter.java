@@ -6,7 +6,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -31,18 +30,24 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class EtagResponseFilter implements ContainerRequestFilter, ContainerResponseFilter {
     private static final Set<String> CATALOG_LIST_PATHS = Set.of(
-            "api/items", "api/storage-locations", "api/assemblies", "api/events", "api/factions");
+            "api/storage-locations", "api/assemblies", "api/events", "api/factions");
     private static final int MAX_TRACKED_VARIANTS = 1_000;
 
-    @Inject ObjectMapper objectMapper;
-    @Inject EventBroadcaster broadcaster;
+    private final ObjectMapper objectMapper;
+    private final EventBroadcaster broadcaster;
     private final ConcurrentHashMap<String, String> knownEtags = new ConcurrentHashMap<>();
     private Runnable removeEventListener = () -> {};
+
+    public EtagResponseFilter(ObjectMapper objectMapper, EventBroadcaster broadcaster) {
+        this.objectMapper = objectMapper;
+        this.broadcaster = broadcaster;
+    }
 
     @PostConstruct
     void initialize() {
         removeEventListener = broadcaster.addListener(event -> {
-            if ("catalog.changed".equals(event.get("type"))) knownEtags.clear();
+            String type = String.valueOf(event.get("type"));
+            if ("catalog.changed".equals(type)) knownEtags.clear();
         });
     }
 

@@ -406,9 +406,9 @@ export function FactionOrderDetail() {
             items={orderItems}
             busy={returnOrderItems.isPending}
             onCancel={() => setReturnOpen(false)}
-            onSubmit={(lines) => {
+            onSubmit={(lines, assets) => {
               returnOrderItems.mutate(
-                { id: order.id, lines },
+                { id: order.id, lines, assets },
                 {
                   onSuccess: () => {
                     setReturnOpen(false);

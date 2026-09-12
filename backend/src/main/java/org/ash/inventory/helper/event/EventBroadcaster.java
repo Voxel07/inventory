@@ -4,16 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands;
+import io.quarkus.scheduler.Scheduled;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import jakarta.transaction.Status;
-import jakarta.transaction.Synchronization;
-import jakarta.transaction.TransactionSynchronizationRegistry;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -21,6 +18,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -32,17 +31,34 @@ public class EventBroadcaster {
     private static final Logger LOG = Logger.getLogger(EventBroadcaster.class);
     private static final String CHANNEL = "ash-inventory-events";
 
-    @Inject TransactionSynchronizationRegistry transactions;
-    @Inject Instance<RedisDataSource> redisDataSource;
-    @Inject ObjectMapper objectMapper;
-    @ConfigProperty(name = "inventory.events.backend", defaultValue = "memory") String backend;
+    private final Instance<RedisDataSource> redisDataSource;
+    private final ObjectMapper objectMapper;
+    private final String backend;
     private final BroadcastProcessor<Map<String, Object>> processor = BroadcastProcessor.create();
     private final CopyOnWriteArrayList<Consumer<Map<String, Object>>> internalListeners = new CopyOnWriteArrayList<>();
-    private PubSubCommands.RedisSubscriber redisSubscriber;
+    private final Set<String> deliveredEventIds = ConcurrentHashMap.newKeySet();
+    private volatile PubSubCommands.RedisSubscriber redisSubscriber;
+
+    public EventBroadcaster(Instance<RedisDataSource> redisDataSource,
+            ObjectMapper objectMapper,
+            @ConfigProperty(name = "inventory.events.backend", defaultValue = "memory") String backend) {
+        this.redisDataSource = redisDataSource;
+        this.objectMapper = objectMapper;
+        this.backend = backend;
+    }
 
     @PostConstruct
     void initialize() {
-        if (!usesRedis() || !redisDataSource.isResolvable()) return;
+        ensureRedisSubscription();
+    }
+
+    @Scheduled(every = "10s", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    void reconnectRedisSubscription() {
+        ensureRedisSubscription();
+    }
+
+    private synchronized void ensureRedisSubscription() {
+        if (!usesRedis() || redisSubscriber != null || !redisDataSource.isResolvable()) return;
         try {
             redisSubscriber = redisDataSource.get().pubsub(String.class).subscribe(CHANNEL, this::receiveRedisEvent);
         } catch (RuntimeException exception) {
@@ -56,18 +72,7 @@ public class EventBroadcaster {
     }
 
     public void broadcast(String type, Map<String, Object> data) {
-        Map<String, Object> payload = payload(type, data);
-        int status = transactions.getTransactionStatus();
-        if (status == Status.STATUS_ACTIVE || status == Status.STATUS_MARKED_ROLLBACK) {
-            transactions.registerInterposedSynchronization(new Synchronization() {
-                @Override public void beforeCompletion() {}
-                @Override public void afterCompletion(int completionStatus) {
-                    if (completionStatus == Status.STATUS_COMMITTED) publish(payload);
-                }
-            });
-            return;
-        }
-        publish(payload);
+        publish(payload(type, data));
     }
 
     private Map<String, Object> payload(String type, Map<String, Object> data) {
@@ -93,12 +98,16 @@ public class EventBroadcaster {
     }
 
     private void publish(Map<String, Object> payload) {
-        if (usesRedis() && redisDataSource.isResolvable() && redisSubscriber != null) {
+        if (usesRedis()) {
+            deliver(payload);
+            if (!redisDataSource.isResolvable()) {
+                throw new IllegalStateException("Redis event backend is configured but no Redis data source is available");
+            }
             try {
                 redisDataSource.get().pubsub(String.class).publish(CHANNEL, objectMapper.writeValueAsString(payload));
                 return;
             } catch (Exception exception) {
-                LOG.warnv("Redis event publication failed; delivering locally: {0}", exception.getMessage());
+                throw new IllegalStateException("Redis event publication failed", exception);
             }
         }
         deliver(payload);
@@ -113,6 +122,9 @@ public class EventBroadcaster {
     }
 
     private void deliver(Map<String, Object> payload) {
+        Object eventId = payload.get("eventId");
+        if (deliveredEventIds.size() >= 10_000) deliveredEventIds.clear();
+        if (eventId != null && !deliveredEventIds.add(eventId.toString())) return;
         processor.onNext(payload);
         for (var listener : internalListeners) {
             try {

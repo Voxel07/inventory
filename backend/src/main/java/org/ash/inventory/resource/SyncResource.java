@@ -1,21 +1,24 @@
 package org.ash.inventory.resource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.resource.dto.ApiResponses;
 import org.ash.inventory.service.InventoryOperationsService;
 import org.ash.inventory.service.OrderService;
+import org.ash.inventory.service.SyncAuditService;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -23,31 +26,64 @@ import java.util.UUID;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class SyncResource {
-    @Inject ObjectMapper objectMapper;
-    @Inject OrderService orders;
-    @Inject InventoryOperationsService inventory;
-    @Inject ApiMapper mapper;
-    @Inject ActorService actors;
+    private final ObjectMapper objectMapper;
+    private final OrderService orders;
+    private final InventoryOperationsService inventory;
+    private final ApiMapper mapper;
+    private final ActorService actors;
+    private final SyncAuditService audits;
+
+    public SyncResource(ObjectMapper objectMapper, OrderService orders, InventoryOperationsService inventory,
+            ApiMapper mapper, ActorService actors, SyncAuditService audits) {
+        this.objectMapper = objectMapper;
+        this.orders = orders;
+        this.inventory = inventory;
+        this.mapper = mapper;
+        this.actors = actors;
+        this.audits = audits;
+    }
 
     @POST
-    public Object sync(@Valid ApiModels.SyncBatch batch) {
-        var results = new ArrayList<Map<String, Object>>();
+    public ApiResponses.SyncBatchResponse sync(@Valid ApiModels.SyncBatch batch) {
+        var actor = actors.current();
+        var results = new ArrayList<ApiResponses.SyncActionResponse>();
         for (var action : batch.actions()) {
-            var result = new LinkedHashMap<String, Object>();
-            result.put("idempotencyKey", action.idempotencyKey());
-            try {
-                result.put("entity", QuarkusTransaction.requiringNew().call(() -> execute(action)));
-                result.put("status", "applied");
-            } catch (ApiException exception) {
-                result.put("status", exception.status == 409 ? "conflict" : "rejected");
-                result.put("error", exception.getMessage());
-            } catch (RuntimeException exception) {
-                result.put("status", "rejected");
-                result.put("error", exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
+            var previous = audits.existing(action.idempotencyKey());
+            if (previous != null && "applied".equals(previous.syncStatus)) {
+                results.add(new ApiResponses.SyncActionResponse(action.idempotencyKey(), "applied",
+                        previous.serverResult, null));
+                continue;
             }
-            results.add(result);
+            try {
+                Object entity = QuarkusTransaction.requiringNew().call(() -> execute(action));
+                audits.record(action, actor.id, "applied", entity, null);
+                results.add(new ApiResponses.SyncActionResponse(
+                        action.idempotencyKey(), "applied", entity, null));
+            } catch (ApiException exception) {
+                String status = exception.status == 409 ? "conflict" : "rejected";
+                audits.record(action, actor.id, status, null, exception.getMessage());
+                results.add(new ApiResponses.SyncActionResponse(
+                        action.idempotencyKey(), status, null,
+                        exception.getMessage()));
+            } catch (RuntimeException exception) {
+                String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+                audits.record(action, actor.id, "rejected", null, message);
+                results.add(new ApiResponses.SyncActionResponse(
+                        action.idempotencyKey(), "rejected", null,
+                        message));
+            }
         }
-        return Map.of("results", results);
+        return new ApiResponses.SyncBatchResponse(results);
+    }
+
+    @GET
+    @Path("/audit")
+    public java.util.List<ApiResponses.SyncAuditResponse> audit(
+            @QueryParam("status") String status,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        actors.requireAdmin();
+        return audits.list(status, page, size).stream().map(mapper::syncAudit).toList();
     }
 
     private Object execute(ApiModels.SyncAction action) {
@@ -94,17 +130,19 @@ public class SyncResource {
                 actors.requireMarshal();
                 UUID orderId = uuid(action.payload(), "orderId");
                 var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.ReturnInput.class);
-                yield mapper.order(orders.returnItems(orderId, new ApiModels.ReturnInput(value.lines(), action.idempotencyKey(), value.notes())));
+                yield mapper.order(orders.returnItems(orderId,
+                        new ApiModels.ReturnInput(value.lines(), value.assets(), action.idempotencyKey(), value.notes())));
             }
             case "damage.create" -> {
                 actors.requireMarshal();
                 var value = objectMapper.convertValue(action.payload(), ApiModels.DamageInput.class);
-                yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(), action.idempotencyKey())));
+                yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(
+                        value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(),
+                        action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact())));
             }
             default -> throw ApiException.badRequest("Unsupported offline action type: " + action.type());
         };
     }
 
     private UUID uuid(Map<String, Object> payload, String key) { return UUID.fromString(payload.get(key).toString()); }
-    private String text(Map<String, Object> payload, String key) { Object value = payload.get(key); return value == null ? null : value.toString(); }
 }

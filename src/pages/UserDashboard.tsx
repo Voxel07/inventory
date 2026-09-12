@@ -125,6 +125,9 @@ export function UserDashboard() {
                             notes: data.notes || undefined,
                         },
                     },
+                    assets: data.assetInstanceId ? {
+                        [data.assetInstanceId]: { outcome: 'returned_good' as const, notes: data.notes || undefined },
+                    } : undefined,
                 },
                 {
                     onSuccess: () => {

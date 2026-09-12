@@ -15,6 +15,7 @@ import {
   updateFactionOrder,
 } from '../services/factionOrderService';
 import type { EventType, FactionOrderFormData } from '../types';
+import type { AssetReturnOutcome } from '../services/factionOrderService';
 
 export function useFactionOrders(eventType?: EventType, faction?: string) {
   return useQuery({
@@ -103,7 +104,11 @@ export function useReturnFactionOrder() {
 }
 
 export function useReturnFactionOrderItems() {
-  return useOrderMutation(({ id, lines }: { id: string; lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }> }) => returnFactionOrderItems(id, lines));
+  return useOrderMutation(({ id, lines, assets }: {
+    id: string;
+    lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }>;
+    assets?: Record<string, AssetReturnOutcome>;
+  }) => returnFactionOrderItems(id, lines, assets));
 }
 
 export function useCancelFactionOrder() {

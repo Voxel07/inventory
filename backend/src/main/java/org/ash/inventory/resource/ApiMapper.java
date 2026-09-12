@@ -1,43 +1,53 @@
 package org.ash.inventory.resource;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.Assembly;
+import org.ash.inventory.model.AssemblyItemId;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
+import org.ash.inventory.model.DomainEvent;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderHistory;
+import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.GeneralOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
+import org.ash.inventory.model.Notification;
 import org.ash.inventory.model.StockTransaction;
+import org.ash.inventory.model.SyncCommandAudit;
 import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.orm.OrderOrm;
 import org.ash.inventory.resource.dto.ApiResponses;
 import org.ash.inventory.service.InventoryOperationsService;
+import org.ash.inventory.service.OrderQuantities;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ApiMapper {
-    @Inject
-    MediaService media;
-    @Inject
-    CatalogOrm catalogOrm;
-    @Inject
-    OrderOrm orderOrm;
-    @Inject
-    InventoryOperationsService operations;
+    private final MediaService media;
+    private final CatalogOrm catalogOrm;
+    private final OrderOrm orderOrm;
+    private final InventoryOperationsService operations;
+
+    public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm,
+            InventoryOperationsService operations) {
+        this.media = media;
+        this.catalogOrm = catalogOrm;
+        this.orderOrm = orderOrm;
+        this.operations = operations;
+    }
 
     public ApiResponses.UserResponse user(UserAccount value) {
         return new ApiResponses.UserResponse(
@@ -79,7 +89,10 @@ public class ApiMapper {
                 value.longitude,
                 value.mapZoom,
                 media.mediaReference(value.mapOverlayUrl),
-                value.overlayBounds
+                value.overlayBounds,
+                value.warehouse == null ? null : value.warehouse.id.toString(),
+                value.warehouse == null ? null : value.warehouse.name,
+                value.active
         );
     }
 
@@ -233,39 +246,30 @@ public class ApiMapper {
     }
 
     public ApiResponses.OrderResponse order(FactionOrder value) {
-        var requested = new LinkedHashMap<String, Integer>();
-        var prepared = new LinkedHashMap<String, Integer>();
-        var allocated = new LinkedHashMap<String, Integer>();
-        var reserved = new LinkedHashMap<String, Integer>();
-        var handedOver = new LinkedHashMap<String, Integer>();
-        var returned = new LinkedHashMap<String, Integer>();
-        var consumed = new LinkedHashMap<String, Integer>();
-        var missing = new LinkedHashMap<String, Integer>();
-        var damaged = new LinkedHashMap<String, Integer>();
-        var writtenOff = new LinkedHashMap<String, Integer>();
-        var requestedAssemblies = new LinkedHashMap<String, Integer>();
-        var preparedAssemblies = new LinkedHashMap<String, Integer>();
         var assemblyViews = new ArrayList<ApiResponses.AssemblyResponse>();
         var itemViews = new ArrayList<ApiResponses.ItemResponse>();
         var orderLines = new ArrayList<ApiResponses.OrderLineResponse>();
         var assetAssignments = new LinkedHashMap<String, List<ApiResponses.AssetInstanceResponse>>();
 
         var lines = orderOrm.lines(value);
+        var assemblyIds = lines.stream().filter(line -> line.sourceAssembly != null)
+                .map(line -> line.sourceAssembly.id).distinct().toList();
+        var componentQuantities = new LinkedHashMap<AssemblyItemId, Integer>();
+        for (var component : orderOrm.assemblyItems(assemblyIds)) componentQuantities.put(component.id, component.quantity);
+        var quantities = OrderQuantities.from(lines, componentQuantities);
+        var requested = quantities.requested();
+        var prepared = quantities.prepared();
+        var allocated = quantities.allocated();
+        var reserved = quantities.reserved();
+        var handedOver = quantities.handedOver();
+        var returned = quantities.returned();
+        var consumed = quantities.consumed();
+        var missing = quantities.missing();
+        var damaged = quantities.damaged();
+        var writtenOff = quantities.writtenOff();
+        var requestedAssemblies = quantities.requestedAssemblies();
+        var preparedAssemblies = quantities.preparedAssemblies();
         for (var line : lines) {
-            String id = line.item.id.toString();
-            if (line.sourceAssembly == null) {
-                requested.merge(id, line.requestedQuantity, Integer::sum);
-                prepared.merge(id, line.preparedQuantity, Integer::sum);
-            }
-            allocated.merge(id, line.allocatedQuantity, Integer::sum);
-            reserved.merge(id, line.reservedQuantity, Integer::sum);
-            handedOver.merge(id, line.handedOverQuantity, Integer::sum);
-            returned.merge(id, line.returnedQuantity, Integer::sum);
-            consumed.merge(id, line.consumedQuantity, Integer::sum);
-            missing.merge(id, line.missingQuantity, Integer::sum);
-            damaged.merge(id, line.damagedQuantity, Integer::sum);
-            writtenOff.merge(id, line.writtenOffQuantity, Integer::sum);
-
             orderLines.add(new ApiResponses.OrderLineResponse(
                     line.id,
                     line.item.id,
@@ -290,23 +294,6 @@ public class ApiMapper {
                     .noneMatch(existing -> line.sourceAssembly.id.equals(existing.id()))) {
                 assemblyViews.add(assembly(line.sourceAssembly));
             }
-        }
-
-        for (var assemblyView : assemblyViews) {
-            String assemblyId = assemblyView.id().toString();
-            var assemblyLines = lines.stream()
-                    .filter(line -> line.sourceAssembly != null && line.sourceAssembly.id.toString().equals(assemblyId))
-                    .toList();
-            int requestedCount = Integer.MAX_VALUE;
-            int preparedCount = Integer.MAX_VALUE;
-            for (var line : assemblyLines) {
-                var component = orderOrm.assemblyItem(line.sourceAssembly, line.item);
-                int componentQuantity = component == null ? 1 : component.quantity;
-                requestedCount = Math.min(requestedCount, line.requestedQuantity / componentQuantity);
-                preparedCount = Math.min(preparedCount, line.preparedQuantity / componentQuantity);
-            }
-            requestedAssemblies.put(assemblyId, requestedCount == Integer.MAX_VALUE ? 0 : requestedCount);
-            preparedAssemblies.put(assemblyId, preparedCount == Integer.MAX_VALUE ? 0 : preparedCount);
         }
 
         var history = orderOrm.history(value).stream().map(this::history).toList();
@@ -375,6 +362,37 @@ public class ApiMapper {
         );
     }
 
+    public ApiResponses.OrderSummaryResponse orderSummary(FactionOrder value, List<FactionOrderLine> lines,
+            Map<AssemblyItemId, Integer> componentQuantities) {
+        var quantities = OrderQuantities.from(lines, componentQuantities);
+        var requested = quantities.requested();
+        var prepared = quantities.prepared();
+        var allocated = quantities.allocated();
+        var reserved = quantities.reserved();
+        var handedOver = quantities.handedOver();
+        var returned = quantities.returned();
+        var consumed = quantities.consumed();
+        var missing = quantities.missing();
+        var damaged = quantities.damaged();
+        var writtenOff = quantities.writtenOff();
+        var requestedAssemblies = quantities.requestedAssemblies();
+        var preparedAssemblies = quantities.preparedAssemblies();
+
+        Map<String, Object> expand = value.pickupLocation == null
+                ? Map.of()
+                : Map.of("pickupLocation", location(value.pickupLocation));
+        return new ApiResponses.OrderSummaryResponse(
+                value.id, value.createdAt, value.updatedAt, value.orderCode,
+                value.eventOccurrence.eventType, value.eventOccurrence.id, value.eventOccurrence.startDate,
+                value.requestedPickupDate, value.faction.name, value.faction.id,
+                value.faction.eventType + ":" + value.faction.name, value.status.name(),
+                value.pickupLocation == null ? null : value.pickupLocation.id.toString(),
+                value.pickupLatitude, value.pickupLongitude, value.collectorName, value.notes,
+                requested.keySet(), requested, prepared, allocated, reserved, handedOver, returned, consumed,
+                missing, damaged, writtenOff, requestedAssemblies.keySet(), requestedAssemblies,
+                preparedAssemblies, expand);
+    }
+
     public ApiResponses.DamageResponse damage(DamageReport value) {
         var expand = new LinkedHashMap<String, Object>();
         expand.put("reportedBy", user(value.reporter));
@@ -396,6 +414,10 @@ public class ApiMapper {
                 value.severity.name(),
                 value.status.name(),
                 value.createdAt,
+                value.assetInstance == null ? null : value.assetInstance.id.toString(),
+                value.handover == null ? null : value.handover.id.toString(),
+                value.safetyImpact,
+                value.resolutionNotes,
                 expand
         );
     }
@@ -411,9 +433,29 @@ public class ApiMapper {
                 value.operatingHours,
                 value.result.name(),
                 value.certificateNumber,
+                value.certificateObjectKey,
                 value.notes,
-                value.createdAt
+                value.createdAt,
+                value.assetInstance == null ? null : value.assetInstance.id.toString(),
+                value.schedule == null ? null : value.schedule.id.toString()
         );
+    }
+
+    public ApiResponses.NotificationResponse notification(Notification value) {
+        return new ApiResponses.NotificationResponse(
+                value.id,
+                value.type,
+                value.payload,
+                value.createdAt,
+                value.readAt,
+                value.factionOrder == null ? null : value.factionOrder.id);
+    }
+
+    public ApiResponses.DeficitResponse deficit(InventoryOperationsService.Deficit value) {
+        return new ApiResponses.DeficitResponse(
+                value.itemId(), value.sku(), value.name(), value.category(), value.supplier(), value.classification(),
+                value.demand(), value.onHandStock(), value.totalOwnedStock(), value.availableStock(),
+                value.reservedStock(), value.projectedStock(), value.netDeficit(), value.recommendedAction());
     }
 
     public ApiResponses.OrderHistoryResponse history(FactionOrderHistory value) {
@@ -463,11 +505,26 @@ public class ApiMapper {
                 value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
                 value.currentCustodian == null ? null : value.currentCustodian.name,
                 value.notes,
-                value.active
+                value.active,
+                value.version
         );
     }
 
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
         return values.stream().map(this::asset).toList();
+    }
+
+    public ApiResponses.OutboxEventResponse outboxEvent(DomainEvent value) {
+        return new ApiResponses.OutboxEventResponse(
+                value.id, value.eventId, value.eventType, value.aggregateType, value.aggregateId,
+                value.actorId, value.idempotencyKey, value.occurredAt, value.status.name(),
+                value.attemptCount, value.availableAt, value.publishedAt, value.lastError, Map.copyOf(value.payload));
+    }
+
+    public ApiResponses.SyncAuditResponse syncAudit(SyncCommandAudit value) {
+        return new ApiResponses.SyncAuditResponse(value.id, value.commandId, value.user.id, value.deviceId,
+                value.operationType, new LinkedHashMap<>(value.payload), value.localTimestamp, value.syncStatus,
+                value.retryCount, value.serverResult == null ? null : new LinkedHashMap<>(value.serverResult),
+                value.conflictMessage, value.createdAt, value.updatedAt);
     }
 }

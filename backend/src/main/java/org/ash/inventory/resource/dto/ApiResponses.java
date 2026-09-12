@@ -46,6 +46,13 @@ public final class ApiResponses {
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 
+    public record DevLoginResponse(
+            String token,
+            UserResponse user
+    ) {}
+
+    public record MediaResponse(String key, String url) {}
+
     public record StorageLocationResponse(
             UUID id,
             Instant created,
@@ -60,7 +67,10 @@ public final class ApiResponses {
             Double longitude,
             Integer mapZoom,
             String mapOverlay,
-            List<List<Double>> overlayBounds
+            List<List<Double>> overlayBounds,
+            String warehouseId,
+            String warehouseName,
+            boolean active
     ) {}
 
     public record ItemResponse(
@@ -233,6 +243,42 @@ public final class ApiResponses {
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 
+    /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */
+    public record OrderSummaryResponse(
+            UUID id,
+            Instant created,
+            Instant updated,
+            String orderCode,
+            String eventType,
+            UUID eventOccurrenceId,
+            LocalDate eventDate,
+            LocalDate requestedPickupDate,
+            String faction,
+            UUID factionId,
+            String factionKey,
+            String status,
+            String pickupLocation,
+            Double pickupLatitude,
+            Double pickupLongitude,
+            String collectorName,
+            String notes,
+            Set<String> itemIds,
+            Map<String, Integer> requestedQuantities,
+            Map<String, Integer> preparedQuantities,
+            Map<String, Integer> allocatedQuantities,
+            Map<String, Integer> reservedQuantities,
+            Map<String, Integer> handedOverQuantities,
+            Map<String, Integer> returnedQuantities,
+            Map<String, Integer> consumedQuantities,
+            Map<String, Integer> missingQuantities,
+            Map<String, Integer> damagedQuantities,
+            Map<String, Integer> writtenOffQuantities,
+            Set<String> assemblyIds,
+            Map<String, Integer> requestedAssemblyQuantities,
+            Map<String, Integer> preparedAssemblyQuantities,
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+    ) {}
+
     public record DamageResponse(
             UUID id,
             Instant created,
@@ -248,6 +294,10 @@ public final class ApiResponses {
             String severity,
             String status,
             Instant timestamp,
+            String assetInstanceId,
+            String handoverId,
+            boolean safetyImpact,
+            String resolutionNotes,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 
@@ -261,8 +311,11 @@ public final class ApiResponses {
             BigDecimal operatingHours,
             String result,
             String certificateNumber,
+            String certificateObjectKey,
             String notes,
-            Instant created
+            Instant created,
+            String assetInstanceId,
+            String scheduleId
     ) {}
 
     public record AssetInstanceResponse(
@@ -283,6 +336,77 @@ public final class ApiResponses {
             String currentCustodianId,
             String currentCustodianName,
             String notes,
-            boolean active
+            boolean active,
+            long version
+    ) {}
+
+    public record OutboxEventResponse(
+            UUID id,
+            UUID eventId,
+            String eventType,
+            String aggregateType,
+            UUID aggregateId,
+            UUID actorId,
+            UUID idempotencyKey,
+            Instant occurredAt,
+            String status,
+            int attemptCount,
+            Instant availableAt,
+            Instant publishedAt,
+            String lastError,
+            Map<String, Object> payload
+    ) {}
+
+    public record OutboxStatusResponse(Map<String, Long> counts) {}
+
+    public record NotificationResponse(
+            UUID id,
+            String type,
+            Map<String, Object> payload,
+            Instant createdAt,
+            Instant readAt,
+            UUID orderId
+    ) {}
+
+    public record DeficitResponse(
+            UUID itemId,
+            String sku,
+            String name,
+            String category,
+            String supplier,
+            String classification,
+            int demand,
+            int onHandStock,
+            int totalOwnedStock,
+            int availableStock,
+            int reservedStock,
+            int projectedStock,
+            int netDeficit,
+            String recommendedAction
+    ) {}
+
+    public record SyncActionResponse(
+            UUID idempotencyKey,
+            String status,
+            Object entity,
+            String error
+    ) {}
+
+    public record SyncBatchResponse(List<SyncActionResponse> results) {}
+
+    public record SyncAuditResponse(
+            UUID id,
+            UUID commandId,
+            UUID userId,
+            String deviceId,
+            String operationType,
+            Map<String, Object> payload,
+            Instant localTimestamp,
+            String syncStatus,
+            int retryCount,
+            Map<String, Object> serverResult,
+            String conflictMessage,
+            Instant createdAt,
+            Instant updatedAt
     ) {}
 }

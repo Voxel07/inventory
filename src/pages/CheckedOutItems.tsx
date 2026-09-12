@@ -42,7 +42,7 @@ export function CheckedOutItemsPage() {
             if (!item) continue;
             const order = tx.expand?.factionOrderId;
             const eventKey = order ? `${order.eventType}:${order.faction}` : tx.eventType && tx.faction ? `${tx.eventType}:${tx.faction}` : t('Ohne Event', 'No event');
-            const key = `${tx.itemId}:${tx.userId}:${tx.factionOrderId ?? 'manual'}`;
+            const key = `${tx.itemId}:${tx.assetInstanceId ?? 'bulk'}:${tx.userId}:${tx.factionOrderId ?? 'manual'}`;
             const existing = rows.get(key);
             const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
             const loc = item.expand?.storageLocation;
@@ -58,6 +58,7 @@ export function CheckedOutItemsPage() {
                 eventKey: existing?.eventKey ?? eventKey,
                 event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
                 factionOrderId: tx.factionOrderId,
+                assetInstanceId: tx.assetInstanceId,
             });
         }
         return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
@@ -86,6 +87,12 @@ export function CheckedOutItemsPage() {
                             notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
                         },
                     },
+                    assets: row.assetInstanceId ? {
+                        [row.assetInstanceId]: {
+                            outcome: 'returned_good' as const,
+                            notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
+                        },
+                    } : undefined,
                 },
                 {
                     onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),

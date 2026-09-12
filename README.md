@@ -46,9 +46,17 @@ The Authentik group is authoritative at sign-in; the corresponding internal role
 
 ## PostgreSQL schema and API
 
-OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Hibernate currently updates the production schema; the required Flyway cutover is tracked in the architecture document.
+OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Flyway owns production schema changes and Hibernate validates the migrated schema. Before the first deployment over an existing pre-Flyway database, follow the baseline procedure in [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md#first-flyway-deployment).
 
 Roles are enforced by the backend using the seven canonical values listed above. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
+
+The backend exposes explicit workflow APIs rather than generic entity CRUD:
+
+- stock master data: `/api/warehouses`, `/api/storage-locations`, `/api/inventory-codes`, `/api/inventory-lots`, and `/api/inventory-positions`
+- purchasing: `/api/vendors`, `/api/purchase-orders`, `/api/goods-receipts`, and `/api/vendor-documents`
+- controlled movements: `/api/transfers` and `/api/inventory-counts`
+- lifecycle and custody: `/api/maintenance-schedules`, `/api/repairs`, and the nested order handover/reconciliation resources
+- operations: `/api/sync/audit` and the administrator-only outbox status, dead-letter, and retry resources
 
 ## Deployment
 

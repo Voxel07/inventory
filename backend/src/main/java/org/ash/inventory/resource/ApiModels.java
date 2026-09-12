@@ -28,7 +28,7 @@ public final class ApiModels {
     public record StorageLocationInput(
             @NotBlank String name, String description, String area, String location, String position,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
-            DomainEnums.LocationType locationType) {}
+            DomainEnums.LocationType locationType, UUID warehouseId) {}
 
     public record AssemblyInput(
             @NotBlank String name, String description, String hint, List<String> eventTypes,
@@ -59,29 +59,47 @@ public final class ApiModels {
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
             BigDecimal operatingHours, String notes) {}
-    public record ReturnInput(@NotEmpty Map<UUID, ReturnLine> lines, UUID idempotencyKey, String notes) {}
+    public record AssetReturnLine(
+            @NotNull DomainEnums.ReconciliationOutcome outcome,
+            BigDecimal operatingHours,
+            String notes) {}
+    public record ReturnInput(
+            @NotEmpty Map<UUID, ReturnLine> lines,
+            Map<UUID, AssetReturnLine> assets,
+            UUID idempotencyKey,
+            String notes) {}
     public record TransitionInput(
             UUID idempotencyKey, String notes, String collectorName,
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude) {}
 
     public record DamageInput(
             @NotNull UUID itemId, @Min(1) int amount, @NotBlank String description,
-            @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey) {}
+            @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey,
+            UUID assetInstanceId, UUID handoverId, boolean safetyImpact) {}
     public record DamageResolutionInput(@NotNull DomainEnums.DamageStatus status, @Min(1) int amount, String notes, UUID idempotencyKey) {}
 
     public record MaintenanceInput(
             @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, Instant performedAt,
             Instant nextDueAt, BigDecimal operatingHours, @NotNull DomainEnums.MaintenanceResult result,
-            String certificateNumber, String notes) {}
+            String certificateNumber, String notes, UUID assetInstanceId, UUID scheduleId,
+            String certificateObjectKey) {}
 
     public record UserPermissionsInput(@NotNull DomainEnums.UserRole role, List<String> faction) {}
     public record DevLoginInput(@NotBlank String email, String password) {}
-    public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type, @NotNull Map<String, Object> payload, Instant localTimestamp) {}
+    public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type,
+            @NotNull Map<String, Object> payload, Instant localTimestamp, String deviceId, Integer retryCount) {}
     public record SyncBatch(@NotEmpty List<SyncAction> actions) {}
 
     public record AssetInstanceInput(
             String assetCode, String serialNumber, String manufacturer, String model,
             DomainEnums.ConditionStatus conditionStatus, DomainEnums.AssetState availabilityStatus,
             UUID currentLocationId, UUID currentCustodianId, BigDecimal operatingHours, String notes,
-            Integer batchCount, String codePrefix, Integer startNumber) {}
+            Integer batchCount, String codePrefix, Integer startNumber, Long expectedVersion) {}
+
+    public record AssetRelocationInput(@NotNull UUID locationId, @NotNull Long expectedVersion, String notes) {}
+
+    public record AssetConditionInput(
+            @NotNull DomainEnums.ConditionStatus conditionStatus,
+            @NotNull Long expectedVersion,
+            String notes) {}
 }

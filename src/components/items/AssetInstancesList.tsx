@@ -171,11 +171,9 @@ export function AssetInstancesList({ item }: Props) {
         setEditInput({
             assetCode: asset.assetCode,
             serialNumber: asset.serialNumber || '',
-            conditionStatus: asset.conditionStatus,
-            availabilityStatus: asset.availabilityStatus,
-            currentLocationId: asset.currentLocationId || '',
             operatingHours: asset.operatingHours,
             notes: asset.notes || '',
+            expectedVersion: asset.version,
         });
     }
 
@@ -571,44 +569,6 @@ export function AssetInstancesList({ item }: Props) {
                         onChange={(e) => updateEdit({ serialNumber: e.target.value })}
                         fullWidth
                     />
-                    <TextField
-                        select
-                        label={t('Status', 'Status')}
-                        value={editInput.availabilityStatus || 'available'}
-                        onChange={(e) => updateEdit({ availabilityStatus: e.target.value as AssetAvailabilityStatus })}
-                        fullWidth
-                    >
-                        <MenuItem value="available">{t('Verfügbar', 'Available')}</MenuItem>
-                        <MenuItem value="in_custody">{t('Ausgeliehen / Im Einsatz', 'In custody')}</MenuItem>
-                        <MenuItem value="in_maintenance">{t('In Wartung', 'In maintenance')}</MenuItem>
-                        <MenuItem value="in_repair">{t('In Reparatur', 'In repair')}</MenuItem>
-                        <MenuItem value="damaged">{t('Defekt', 'Damaged')}</MenuItem>
-                        <MenuItem value="written_off">{t('Ausgemustert', 'Written off')}</MenuItem>
-                    </TextField>
-                    <TextField
-                        select
-                        label={t('Zustand', 'Condition')}
-                        value={editInput.conditionStatus || 'good'}
-                        onChange={(e) => updateEdit({ conditionStatus: e.target.value as AssetConditionStatus })}
-                        fullWidth
-                    >
-                        <MenuItem value="new_condition">{t('Neu', 'New')}</MenuItem>
-                        <MenuItem value="good">{t('Gut', 'Good')}</MenuItem>
-                        <MenuItem value="fair">{t('Gebraucht', 'Fair')}</MenuItem>
-                        <MenuItem value="damaged">{t('Beschädigt', 'Damaged')}</MenuItem>
-                        <MenuItem value="unsafe">{t('Unsicher', 'Unsafe')}</MenuItem>
-                    </TextField>
-                    <TextField
-                        select
-                        label={t('Lagerort', 'Storage location')}
-                        value={editInput.currentLocationId || ''}
-                        onChange={(e) => updateEdit({ currentLocationId: e.target.value })}
-                        fullWidth
-                    >
-                        {storageLocations?.map((loc) => (
-                            <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
-                        ))}
-                    </TextField>
                     <TextField
                         label={t('Betriebsstunden', 'Operating hours')}
                         type="number"

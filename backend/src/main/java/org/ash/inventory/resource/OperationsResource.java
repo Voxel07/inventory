@@ -1,9 +1,9 @@
 package org.ash.inventory.resource;
 
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
@@ -12,11 +12,11 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
-import org.ash.inventory.model.DamageReport;
-import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.orm.OperationsOrm;
+import org.ash.inventory.service.ApiQueryService;
 import org.ash.inventory.service.InventoryOperationsService;
+import org.ash.inventory.service.DomainEventService;
+import org.ash.inventory.resource.dto.ApiResponses;
 
 import java.time.Instant;
 import java.util.List;
@@ -25,77 +25,114 @@ import java.util.UUID;
 @Path("/api")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@Transactional
 public class OperationsResource {
-    @Inject
-    InventoryOperationsService service;
-    @Inject
-    ApiMapper mapper;
-    @Inject
-    ActorService actor;
-    @Inject
-    OperationsOrm orm;
+    private final InventoryOperationsService service;
+    private final ApiMapper mapper;
+    private final ActorService actor;
+    private final ApiQueryService queries;
+    private final DomainEventService domainEvents;
+
+    public OperationsResource(InventoryOperationsService service, ApiMapper mapper, ActorService actor,
+            ApiQueryService queries, DomainEventService domainEvents) {
+        this.service = service;
+        this.mapper = mapper;
+        this.actor = actor;
+        this.queries = queries;
+        this.domainEvents = domainEvents;
+    }
 
     @GET
     @Path("/transactions")
-    @Transactional
-    public List<org.ash.inventory.resource.dto.ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId, @QueryParam("userId") UUID userId,
+    public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId, @QueryParam("userId") UUID userId,
             @QueryParam("transactionType") String type, @QueryParam("startDate") Instant start,
-            @QueryParam("endDate") Instant end) {
-        actor.current();
-        return orm.transactions(itemId, userId, type, start, end).stream().map(mapper::transaction).toList();
+            @QueryParam("endDate") Instant end,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.transactions(itemId, userId, type, start, end, page, size);
     }
 
     @POST
     @Path("/transactions")
-    public org.ash.inventory.resource.dto.ApiResponses.TransactionResponse transaction(@Valid ApiModels.TransactionInput input) {
+    @Transactional
+    public ApiResponses.TransactionResponse transaction(@Valid ApiModels.TransactionInput input) {
         actor.requireWarehouse();
         return mapper.transaction(service.transact(input));
     }
 
     @GET
     @Path("/damage-reports")
-    @Transactional
-    public List<org.ash.inventory.resource.dto.ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId) {
-        actor.current();
-        List<DamageReport> reports = orm.damageReports(itemId);
-        return reports.stream().map(mapper::damage).toList();
+    public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.damageReports(itemId, page, size);
     }
 
     @POST
     @Path("/damage-reports")
-    public org.ash.inventory.resource.dto.ApiResponses.DamageResponse createDamage(@Valid ApiModels.DamageInput input) {
+    @Transactional
+    public ApiResponses.DamageResponse createDamage(@Valid ApiModels.DamageInput input) {
         actor.requireMarshal();
         return mapper.damage(service.createDamage(input));
     }
 
     @PATCH
     @Path("/damage-reports/{id}")
-    public org.ash.inventory.resource.dto.ApiResponses.DamageResponse resolveDamage(@PathParam("id") UUID id, @Valid ApiModels.DamageResolutionInput input) {
+    @Transactional
+    public ApiResponses.DamageResponse resolveDamage(@PathParam("id") UUID id, @Valid ApiModels.DamageResolutionInput input) {
         actor.requireMaintenance();
         return mapper.damage(service.resolveDamage(id, input));
     }
 
     @GET
     @Path("/maintenance")
-    @Transactional
-    public List<org.ash.inventory.resource.dto.ApiResponses.MaintenanceResponse> maintenance(@QueryParam("itemId") UUID itemId) {
-        actor.current();
-        List<MaintenanceRecord> records = orm.maintenanceRecords(itemId);
-        return records.stream().map(mapper::maintenance).toList();
+    public List<ApiResponses.MaintenanceResponse> maintenance(@QueryParam("itemId") UUID itemId,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.maintenance(itemId, page, size);
     }
 
     @POST
     @Path("/maintenance")
-    public org.ash.inventory.resource.dto.ApiResponses.MaintenanceResponse maintenance(@Valid ApiModels.MaintenanceInput input) {
+    @Transactional
+    public ApiResponses.MaintenanceResponse maintenance(@Valid ApiModels.MaintenanceInput input) {
         actor.requireMaintenance();
         return mapper.maintenance(service.recordMaintenance(input));
     }
 
     @GET
     @Path("/procurement/deficits")
-    public Object deficits(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId) {
-        actor.current();
-        return service.deficits(eventOccurrenceId);
+    public List<ApiResponses.DeficitResponse> deficits(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId) {
+        return queries.deficits(eventOccurrenceId);
+    }
+
+    @GET
+    @Path("/outbox/status")
+    public ApiResponses.OutboxStatusResponse outboxStatus() {
+        actor.requireAdmin();
+        var counts = new java.util.LinkedHashMap<String, Long>();
+        domainEvents.statusCounts().forEach((status, count) -> counts.put(status.name(), count));
+        return new ApiResponses.OutboxStatusResponse(counts);
+    }
+
+    @GET
+    @Path("/outbox/dead-letters")
+    public List<ApiResponses.OutboxEventResponse> deadLetters(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        actor.requireAdmin();
+        return domainEvents.deadLetters(page, size).stream().map(mapper::outboxEvent).toList();
+    }
+
+    @POST
+    @Path("/outbox/dead-letters/{id}/retry")
+    public ApiResponses.OutboxEventResponse retryDeadLetter(@PathParam("id") UUID id) {
+        actor.requireAdmin();
+        try {
+            var event = domainEvents.retryDeadLetter(id);
+            if (event == null) throw ApiException.notFound("Outbox event not found");
+            return mapper.outboxEvent(event);
+        } catch (IllegalStateException exception) {
+            throw ApiException.conflict(exception.getMessage());
+        }
     }
 }

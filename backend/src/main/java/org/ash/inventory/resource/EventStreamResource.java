@@ -2,7 +2,6 @@ package org.ash.inventory.resource;
 
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -19,10 +18,13 @@ import java.util.Map;
  */
 @Path("/api/events/stream")
 public class EventStreamResource {
-    @Inject
-    EventBroadcaster broadcaster;
-    @Inject
-    ActorService actors;
+    private final EventBroadcaster broadcaster;
+    private final ActorService actors;
+
+    public EventStreamResource(EventBroadcaster broadcaster, ActorService actors) {
+        this.broadcaster = broadcaster;
+        this.actors = actors;
+    }
 
     @GET
     @Blocking

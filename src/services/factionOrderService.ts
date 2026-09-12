@@ -107,8 +107,18 @@ export function returnFactionOrder(id: string): Promise<FactionOrder> {
   const body = { idempotencyKey: crypto.randomUUID() };
   return normalizedOrder(apiRequest(`/api/orders/${id}/return-all`, { method: 'POST', body }));
 }
-export function returnFactionOrderItems(id: string, lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }>): Promise<FactionOrder> {
-  const input = { lines, idempotencyKey: crypto.randomUUID() };
+export type AssetReturnOutcome = {
+  outcome: 'returned_good' | 'returned_damaged' | 'missing';
+  operatingHours?: number;
+  notes?: string;
+};
+
+export function returnFactionOrderItems(
+  id: string,
+  lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }>,
+  assets?: Record<string, AssetReturnOutcome>,
+): Promise<FactionOrder> {
+  const input = { lines, assets, idempotencyKey: crypto.randomUUID() };
   return normalizedOrder(apiRequest(`/api/orders/${id}/return`, {
     method: 'POST', body: input,
     offline: { type: 'order.return', payload: { orderId: id, input } },

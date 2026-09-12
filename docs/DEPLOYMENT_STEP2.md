@@ -100,6 +100,20 @@ export default {
 
 ## Backup & disaster recovery
 
+### First Flyway deployment
+
+A fresh, empty production database applies `V1.0.0__init.sql` automatically. For an
+existing installation that predates Flyway:
+
+1. Take and verify a restorable database backup.
+2. Compare the live schema with `backend/src/main/resources/db/migration/V1.0.0__init.sql`.
+3. Set `FLYWAY_BASELINE_ON_MIGRATE=true` for the first deployment only. This records
+   the inspected schema as version `1.0.0` instead of replaying the creation script.
+4. Remove the setting after that deployment; subsequent migrations are applied and
+   Hibernate validates the resulting schema.
+
+Do not enable the baseline switch for a partially initialized or unknown schema.
+
 1. **Streaming replication** — PostgreSQL primary on VPS 1 streams to the replica
    on VPS 3 (`wal_level=logical` is already set in the compose files).
 2. **WAL archiving** — `wal-g` / `pgbackrest` pushes WAL to the Storage Box

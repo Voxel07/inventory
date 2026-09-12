@@ -14,7 +14,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "repair_cases")
 public class RepairCase extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "damage_report_id") public DamageReport damageReport;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "damage_report_id", unique = true) public DamageReport damageReport;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handover_id") public CustodyHandover handover;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.RepairStatus status = DomainEnums.RepairStatus.reported;
