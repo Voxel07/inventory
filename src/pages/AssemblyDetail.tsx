@@ -37,14 +37,16 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useTransactions, useAssemblyCheckout } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
+import { useCreateDamageReport, useDamageReports } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
+import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { useUIStore } from '../store/uiStore';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
-import type { AssemblyFormData, EventType, Item } from '../types';
+import type { AssemblyFormData, DamageReportFormData, EventType, Item } from '../types';
 import { calculateItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
@@ -68,10 +70,12 @@ export function AssemblyDetail() {
     const { data: transactions } = useTransactions();
     const { data: damageReports } = useDamageReports();
     const updateAssembly = useUpdateAssembly();
+    const createDamageReport = useCreateDamageReport();
     const checkoutAssembly = useAssemblyCheckout();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [editOpen, setEditOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const [damageOpen, setDamageOpen] = useState(false);
     const [checkoutReason, setCheckoutReason] = useState('');
     const [checkoutNotes, setCheckoutNotes] = useState('');
     const [checkoutAmount, setCheckoutAmount] = useState(1);
@@ -126,6 +130,19 @@ export function AssemblyDetail() {
                 },
             },
         );
+    }
+
+    function handleDamage(data: DamageReportFormData) {
+        createDamageReport.mutate(data, {
+            onSuccess: () => {
+                setDamageOpen(false);
+                showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
+            },
+            onError: (error) => {
+                if (isOfflineQueuedError(error)) return;
+                showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
+            },
+        });
     }
 
     function handleAddItem(itemId: string) {
@@ -262,6 +279,14 @@ export function AssemblyDetail() {
                     tooltipText={t('Baugruppendetails bearbeiten', 'Edit assembly details')}
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
+                />
+                <TooltipButton
+                    tooltipText={t('Schaden an dieser Baugruppe melden', 'Report damage to this assembly')}
+                    icon={<ReportProblemOutlinedIcon />}
+                    label={t('Schaden melden', 'Report damage')}
+                    variant="outlined"
+                    color="error"
+                    onClick={() => setDamageOpen(true)}
                 />
                 <TooltipButton
                     tooltipText={t('Alle Artikel dieser Baugruppe ausleihen', 'Check out all items in this assembly')}
@@ -616,6 +641,19 @@ export function AssemblyDetail() {
                         items={items ?? []}
                         onSubmit={handleUpdate}
                         isLoading={updateAssembly.isPending}
+                    />
+                </DialogContent>
+            </Dialog>
+            <Dialog open={damageOpen} fullScreen={isMobile} onClose={() => setDamageOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>{t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}</DialogTitle>
+                <DialogContent sx={{ pt: '24px !important' }}>
+                    <DamageReportForm
+                        key={assembly.id}
+                        items={items ?? []}
+                        assemblies={[assembly]}
+                        preselectedAssemblyId={assembly.id}
+                        onSubmit={handleDamage}
+                        isLoading={createDamageReport.isPending}
                     />
                 </DialogContent>
             </Dialog>

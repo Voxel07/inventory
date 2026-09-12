@@ -71,6 +71,10 @@ interface Props {
   storageLocations: StorageLocation[];
 }
 
+function getPreviewRows<T extends { status: string }>(rows: T[]): T[] {
+  return rows.slice(0, 50).concat(rows.slice(50).filter((row) => row.status === 'error'));
+}
+
 export function CsvImportDialog({
   open,
   onClose,
@@ -169,6 +173,26 @@ export function CsvImportDialog({
     + parsedEvents.filter((event) => event.status === 'error').length
     + parsedOrders.filter((order) => order.status === 'error').length;
   const totalDuplicatesCount = parsedItems.filter((i) => i.status === 'duplicate').length + parsedAssemblies.filter((a) => a.status === 'duplicate').length;
+
+  function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders', rows: { index: number; status: string }[]) {
+    const row = rows.find((candidate) => candidate.status === 'error');
+    return row ? { section, index: row.index } : undefined;
+  }
+
+  function handleErrorSummaryClick() {
+    const firstError = tabType === 'items'
+      ? firstErrorTarget('items', parsedItems)
+      : tabType === 'assemblies'
+        ? firstErrorTarget('assemblies', parsedAssemblies)
+        : firstErrorTarget('items', parsedItems)
+          ?? firstErrorTarget('assemblies', parsedAssemblies)
+          ?? firstErrorTarget('events', parsedEvents)
+          ?? firstErrorTarget('orders', parsedOrders);
+
+    if (!firstError) return;
+
+    document.getElementById(`csv-import-${firstError.section}-row-${firstError.index}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 
   const totalToImport = (tabType === 'assemblies' ? 0 : validItemsCount)
     + (tabType === 'items' ? 0 : validAssembliesCount)
@@ -684,6 +708,9 @@ export function CsvImportDialog({
                   icon={<ErrorIcon />}
                   color="error"
                   variant="outlined"
+                  clickable
+                  onClick={handleErrorSummaryClick}
+                  aria-label={t('Zur ersten fehlerhaften Zeile springen', 'Jump to the first error row')}
                   label={t(`${totalErrorsCount} Fehlerhafte Zeilen`, `${totalErrorsCount} error rows`)}
                 />
               )}
@@ -757,8 +784,8 @@ export function CsvImportDialog({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {parsedItems.slice(0, 50).map((row) => (
-                        <TableRow key={row.index} hover>
+                      {getPreviewRows(parsedItems).map((row) => (
+                        <TableRow key={row.index} id={`csv-import-items-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
                             {row.status === 'valid' && <Chip size="small" color="success" label={t('Gültig', 'Valid')} />}
@@ -836,8 +863,8 @@ export function CsvImportDialog({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {parsedAssemblies.slice(0, 50).map((row) => (
-                        <TableRow key={row.index} hover>
+                      {getPreviewRows(parsedAssemblies).map((row) => (
+                        <TableRow key={row.index} id={`csv-import-assemblies-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
                             {row.status === 'valid' && <Chip size="small" color="success" label={t('Gültig', 'Valid')} />}
@@ -894,7 +921,7 @@ export function CsvImportDialog({
                     </TableHead>
                     <TableBody>
                       {parsedEvents.map((row) => (
-                        <TableRow key={row.index} hover>
+                        <TableRow key={row.index} id={`csv-import-events-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
                             {row.status === 'valid' ? (
@@ -936,7 +963,7 @@ export function CsvImportDialog({
                     </TableHead>
                     <TableBody>
                       {parsedOrders.map((row) => (
-                        <TableRow key={row.index} hover>
+                        <TableRow key={row.index} id={`csv-import-orders-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
                             {row.status === 'valid' ? (

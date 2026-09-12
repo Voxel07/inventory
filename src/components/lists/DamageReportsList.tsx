@@ -1,28 +1,32 @@
 import {
     Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Skeleton, Stack,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
-    useMediaQuery, useTheme,
+    IconButton, MenuItem, Tooltip, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useState } from 'react';
-import type { DamageReport, DamageStatus, Item, User } from '../../types';
+import EditIcon from '@mui/icons-material/Edit';
+import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
-import { useLocalizedText } from '../../utils/naming';
+import { nameFor, useLocalizedText } from '../../utils/naming';
+import { SEVERITY_LEVELS } from '../../utils/constants';
 
 interface Props {
     reports: DamageReport[] | undefined;
     items: Item[] | undefined;
+    assemblies?: Assembly[];
     users?: User[];
     isLoading: boolean;
     view?: 'open' | 'history';
     isUpdating?: boolean;
     onUpdateStatus?: (id: string, status: DamageStatus, amount?: number) => void;
+    onEdit?: (id: string, data: DamageReportUpdateData) => void;
 }
 
 const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> = {
     low: 'info', medium: 'warning', high: 'error', critical: 'error',
 };
 
-export function DamageReportsList({ reports, items, users, isLoading, view = 'open', isUpdating, onUpdateStatus }: Props) {
+export function DamageReportsList({ reports, items, assemblies, users, isLoading, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -31,6 +35,9 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
         : report.status === 'reported' || report.status === 'in_review');
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
+    const [editing, setEditing] = useState<DamageReport | null>(null);
+    const [editDescription, setEditDescription] = useState('');
+    const [editSeverity, setEditSeverity] = useState<DamageSeverity>('medium');
 
     if (isLoading) return <Paper sx={{ p: 2 }}>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={48} />)}</Paper>;
     if (!visibleReports?.length) return (
@@ -41,7 +48,11 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
         </Paper>
     );
 
-    const getItemName = (itemId: string) => items?.find((item) => item.id === itemId)?.name ?? itemId;
+    const getTargetName = (report: DamageReport) => {
+        if (report.assemblyId) return report.assemblyName ?? assemblies?.find((assembly) => assembly.id === report.assemblyId)?.name ?? report.assemblyId;
+        const itemName = report.itemId ? items?.find((item) => item.id === report.itemId)?.name ?? report.itemId : t('Unbekanntes Ziel', 'Unknown target');
+        return report.assetCode ? `${itemName} · ${report.assetCode}` : itemName;
+    };
     const getUserName = (userId?: string, expanded?: User) => {
         const user = expanded ?? users?.find((candidate) => candidate.id === userId);
         return user?.name?.trim() || user?.username?.trim() || user?.email?.trim() || userId || '—';
@@ -67,13 +78,18 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
         setResolution({ report, status });
         setResolutionAmount('1');
     };
-    const statusControl = (report: DamageReport) => onUpdateStatus && view === 'open' ? (
+    const statusControl = (report: DamageReport) => onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             {report.status === 'reported' && <Button size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('Prüfung starten', 'Start review')}</Button>}
             <Button size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('Teil reparieren', 'Repair units')}</Button>
             <Button size="small" variant="contained" color="error" disabled={isUpdating} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
         </Stack>
     ) : <Chip label={formatStatus(report.status)} size="small" />;
+    const openEdit = (report: DamageReport) => {
+        setEditing(report);
+        setEditDescription(report.description);
+        setEditSeverity(report.severity);
+    };
     const maxResolutionAmount = resolution ? getUnresolvedAmount(resolution.report) : 0;
     const parsedResolutionAmount = Number(resolutionAmount);
     const resolutionAmountValid = Number.isInteger(parsedResolutionAmount) && parsedResolutionAmount >= 1 && parsedResolutionAmount <= maxResolutionAmount;
@@ -81,7 +97,7 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
         <Dialog open={Boolean(resolution)} onClose={() => setResolution(null)} maxWidth="xs" fullWidth>
             <DialogTitle>{resolution?.status === 'repaired' ? t('Teilmenge reparieren', 'Repair quantity') : t('Teilmenge abschreiben', 'Write off quantity')}</DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
-                <Typography sx={{ mb: 2 }}>{resolution ? getItemName(resolution.report.itemId) : ''}</Typography>
+                <Typography sx={{ mb: 2 }}>{resolution ? getTargetName(resolution.report) : ''}</Typography>
                 <TextField
                     autoFocus
                     fullWidth
@@ -111,6 +127,28 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
             </DialogActions>
         </Dialog>
     );
+    const editDialog = (
+        <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} maxWidth="sm" fullWidth>
+            <DialogTitle>{t('Schadensbericht bearbeiten', 'Edit damage report')}</DialogTitle>
+            <DialogContent sx={{ pt: '20px !important' }}>
+                <Stack spacing={2}>
+                    <Typography variant="body2" color="text.secondary">{editing ? getTargetName(editing) : ''}</Typography>
+                    <TextField select label={t('Schweregrad', 'Severity')} value={editSeverity} onChange={(event) => setEditSeverity(event.target.value as DamageSeverity)} fullWidth>
+                        {SEVERITY_LEVELS.map((severity) => <MenuItem key={severity} value={severity}>{nameFor('severity', severity)}</MenuItem>)}
+                    </TextField>
+                    <TextField label={t('Beschreibung', 'Description')} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} multiline rows={4} required fullWidth />
+                </Stack>
+            </DialogContent>
+            <DialogActions>
+                <Button color="inherit" onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
+                <Button variant="contained" disabled={!editing || !editDescription.trim() || isUpdating} onClick={() => {
+                    if (!editing || !editDescription.trim()) return;
+                    onEdit?.(editing.id, { description: editDescription.trim(), severity: editSeverity });
+                    setEditing(null);
+                }}>{t('Speichern', 'Save')}</Button>
+            </DialogActions>
+        </Dialog>
+    );
 
     if (isMobile) return (
         <>
@@ -118,7 +156,7 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
             {visibleReports.map((report) => (
                 <Paper key={report.id} sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
-                        <Box><Typography sx={{ fontWeight: 700 }}>{getItemName(report.itemId)}</Typography><Typography variant="caption" color="text.secondary">{new Date(report.timestamp).toLocaleString()}</Typography></Box>
+                        <Box><Typography sx={{ fontWeight: 700 }}>{getTargetName(report)}</Typography><Typography variant="caption" color="text.secondary">{new Date(report.timestamp).toLocaleString()}</Typography></Box>
                         <Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" />
                     </Box>
                     <Typography variant="body2" sx={{ my: 1.5 }}>{report.description}</Typography>
@@ -130,11 +168,15 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
                         <Box><Typography variant="caption" color="text.secondary">{t('Repariert', 'Repaired')}</Typography><Typography sx={{ fontWeight: 700, color: 'success.main' }}>{getRepairedAmount(report)}</Typography></Box>
                         <Box><Typography variant="caption" color="text.secondary">{t('Abgeschrieben', 'Written off')}</Typography><Typography sx={{ fontWeight: 700, color: 'error.main' }}>{getWrittenOffAmount(report)}</Typography></Box>
                     </Box>
-                    {statusControl(report)}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                        {statusControl(report)}
+                        {onEdit && <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
+                    </Stack>
                 </Paper>
             ))}
         </Stack>
         {resolutionDialog}
+        {editDialog}
         </>
     );
 
@@ -143,14 +185,14 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
         <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
             <Table size="small">
                 <TableHead><TableRow>
-                    <TableCell>{t('Datum', 'Date')}</TableCell><TableCell>{t('Artikel', 'Item')}</TableCell><TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                    <TableCell>{t('Datum', 'Date')}</TableCell><TableCell>{t('Objekt', 'Target')}</TableCell><TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
                     <TableCell>{t('Schweregrad', 'Severity')}</TableCell><TableCell>{t('Beschreibung', 'Description')}</TableCell>
                     <TableCell>{t('Gemeldet von', 'Reported by')}</TableCell><TableCell>{t('Bearbeitet von', 'Handled by')}</TableCell>
                     {view === 'history' && <TableCell>{t('Verlauf', 'Activity')}</TableCell>}<TableCell>{t('Status', 'Status')}</TableCell>
                 </TableRow></TableHead>
                 <TableBody>{visibleReports.map((report) => (
                     <TableRow key={report.id} hover>
-                        <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell><TableCell>{getItemName(report.itemId)}</TableCell><TableCell align="right">
+                        <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell><TableCell>{getTargetName(report)}</TableCell><TableCell align="right">
                             <Typography>{getUnresolvedAmount(report)} {t('offen', 'remaining')}</Typography>
                             <Typography variant="caption" color="text.secondary">{report.amount} {t('gesamt', 'total')} · {getRepairedAmount(report)} {t('repariert', 'repaired')} · {getWrittenOffAmount(report)} {t('abgeschrieben', 'written off')}</Typography>
                         </TableCell>
@@ -158,12 +200,18 @@ export function DamageReportsList({ reports, items, users, isLoading, view = 'op
                         <TableCell>{report.description}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
                         <TableCell>{getUserName(report.handledBy, report.expand?.handledBy)}{report.handledAt && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{new Date(report.handledAt).toLocaleString()}</Typography>}</TableCell>
                         {view === 'history' && <TableCell><Typography variant="caption" sx={{ whiteSpace: 'pre-line' }}>{getActivity(report)}</Typography></TableCell>}
-                        <TableCell>{statusControl(report)}</TableCell>
+                        <TableCell>
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                {statusControl(report)}
+                                {onEdit && <Tooltip title={t('Schadensbericht bearbeiten', 'Edit damage report')}><IconButton size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
+                            </Stack>
+                        </TableCell>
                     </TableRow>
                 ))}</TableBody>
             </Table>
         </TableContainer>
         {resolutionDialog}
+        {editDialog}
         </>
     );
 }

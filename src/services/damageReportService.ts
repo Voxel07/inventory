@@ -1,4 +1,4 @@
-import type { DamageReport, DamageReportFormData, DamageStatus } from '../types';
+import type { DamageReport, DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
 import { apiRequest } from './apiClient';
 import { createCreateResourceApi } from './resourceFactory';
 
@@ -15,8 +15,12 @@ export const damageReportApi = createCreateResourceApi<DamageReport, DamageRepor
   },
 );
 
-export const getDamageReports = (itemId?: string) => damageReportApi.getAll(itemId ? { itemId } : undefined);
+export const getDamageReports = (filters?: { itemId?: string; assetInstanceId?: string; assemblyId?: string; size?: number }) => damageReportApi.getAll(filters);
 export const createDamageReport = damageReportApi.create;
 export function updateDamageReportStatus(id: string, status: DamageStatus, amount = 1): Promise<DamageReport> {
   return apiRequest(`/api/damage-reports/${id}`, { method: 'PATCH', body: { status, amount } });
+}
+
+export function updateDamageReport(id: string, data: DamageReportUpdateData): Promise<DamageReport> {
+  return apiRequest(`/api/damage-reports/${id}`, { method: 'PATCH', body: data });
 }

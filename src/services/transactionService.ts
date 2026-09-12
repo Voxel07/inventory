@@ -17,7 +17,7 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
   },
 );
 
-type Filters = { itemId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string };
+type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; size?: number };
 export const getTransactions = (filters?: Filters): Promise<StockTransaction[]> => transactionApi.getAll(filters);
 export const createTransaction = transactionApi.create;
 export const updateTransaction = (_id: string, _data: Partial<TransactionFormData>): Promise<StockTransaction> => {

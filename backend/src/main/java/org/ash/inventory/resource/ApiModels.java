@@ -73,10 +73,12 @@ public final class ApiModels {
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude) {}
 
     public record DamageInput(
-            @NotNull UUID itemId, @Min(1) int amount, @NotBlank String description,
+            UUID itemId, @Min(1) int amount, @NotBlank String description,
             @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey,
-            UUID assetInstanceId, UUID handoverId, boolean safetyImpact) {}
-    public record DamageResolutionInput(@NotNull DomainEnums.DamageStatus status, @Min(1) int amount, String notes, UUID idempotencyKey) {}
+            UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId) {}
+    public record DamageResolutionInput(
+            DomainEnums.DamageStatus status, @Min(1) Integer amount, String notes, UUID idempotencyKey,
+            String description, DomainEnums.DamageSeverity severity) {}
 
     public record MaintenanceInput(
             @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, Instant performedAt,

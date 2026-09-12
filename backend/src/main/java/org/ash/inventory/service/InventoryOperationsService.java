@@ -7,6 +7,7 @@ import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.AssetInstance;
+import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.CustodyHandover;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.FactionOrderLine;
@@ -309,8 +310,12 @@ public class InventoryOperationsService {
             if (existing != null)
                 return existing;
         }
+        if ((input.itemId() == null) == (input.assemblyId() == null)) {
+            throw ApiException.badRequest("Exactly one of itemId or assemblyId is required");
+        }
         var report = new DamageReport();
-        report.item = lockedItem(input.itemId());
+        if (input.itemId() != null) report.item = lockedItem(input.itemId());
+        else report.assembly = required(Assembly.class, input.assemblyId(), "Assembly");
         report.reporter = actors.current();
         report.quantity = input.amount();
         report.description = input.description();
@@ -320,6 +325,7 @@ public class InventoryOperationsService {
         if (input.factionOrderId() != null)
             report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
         if (input.assetInstanceId() != null) {
+            if (report.item == null) throw ApiException.badRequest("An asset can only be reported with its item");
             var asset = orm.findLockedAsset(input.assetInstanceId());
             if (asset == null || !asset.active || !asset.item.id.equals(report.item.id)) {
                 throw ApiException.badRequest("Asset does not belong to the damaged item");
@@ -329,15 +335,19 @@ public class InventoryOperationsService {
             asset.conditionStatus = input.safetyImpact()
                     ? DomainEnums.ConditionStatus.unsafe : DomainEnums.ConditionStatus.damaged;
             asset.availabilityStatus = DomainEnums.AssetState.damaged;
-        } else if (report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+        } else if (report.item != null && report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
         }
         if (input.handoverId() != null) {
             report.handover = required(CustodyHandover.class, input.handoverId(), "Custody handover");
         }
         orm.persist(report);
+        var payload = new LinkedHashMap<String, Object>();
+        if (report.item != null) payload.put("itemId", report.item.id.toString());
+        if (report.assembly != null) payload.put("assemblyId", report.assembly.id.toString());
+        payload.put("quantity", report.quantity);
         events.record("damage.reported", "damage_report", report.id, report.reporter.id, input.idempotencyKey(),
-                Map.of("itemId", report.item.id.toString(), "quantity", report.quantity));
+                payload);
         return report;
     }
 
@@ -353,8 +363,19 @@ public class InventoryOperationsService {
         var report = orm.findLockedDamage(id);
         if (report == null)
             throw ApiException.notFound("Damage report not found");
+        if (input.description() != null) {
+            if (input.description().isBlank()) throw ApiException.badRequest("Damage description must not be blank");
+            report.description = input.description().trim();
+        }
+        if (input.severity() != null) report.severity = input.severity();
+        if (input.status() == null) {
+            events.record("damage.updated", "damage_report", report.id, actors.current().id, input.idempotencyKey(),
+                    Map.of("severity", report.severity.name()));
+            return report;
+        }
+        int resolutionAmount = input.amount() == null ? 1 : input.amount();
         var unresolved = report.quantity - report.repairedQuantity - report.writtenOffQuantity;
-        if (input.amount() > unresolved)
+        if (resolutionAmount > unresolved)
             throw ApiException.badRequest("Resolution quantity exceeds unresolved damage quantity " + unresolved);
         if (input.status() != DomainEnums.DamageStatus.repaired
                 && input.status() != DomainEnums.DamageStatus.written_off
@@ -365,28 +386,38 @@ public class InventoryOperationsService {
         report.resolutionNotes = input.notes();
         if (input.status() == DomainEnums.DamageStatus.in_review) {
             report.status = DomainEnums.DamageStatus.in_review;
+            var payload = new LinkedHashMap<String, Object>();
+            if (report.item != null) payload.put("itemId", report.item.id.toString());
+            if (report.assembly != null) payload.put("assemblyId", report.assembly.id.toString());
+            payload.put("quantity", resolutionAmount);
             events.record("damage.triaged", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
-                    Map.of("itemId", report.item.id.toString(), "quantity", input.amount()));
+                    payload);
             return report;
         }
-        int availabilityBefore = stock(report.item).available();
         if (input.status() == DomainEnums.DamageStatus.repaired)
-            report.repairedQuantity += input.amount();
+            report.repairedQuantity += resolutionAmount;
         else
-            report.writtenOffQuantity += input.amount();
+            report.writtenOffQuantity += resolutionAmount;
         int remaining = report.quantity - report.repairedQuantity - report.writtenOffQuantity;
         report.status = remaining > 0 ? DomainEnums.DamageStatus.in_review
                 : report.repairedQuantity == report.quantity ? DomainEnums.DamageStatus.repaired
                         : report.writtenOffQuantity == report.quantity ? DomainEnums.DamageStatus.written_off
                                 : DomainEnums.DamageStatus.resolved;
 
+        if (report.item == null) {
+            events.record("damage.resolved", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
+                    Map.of("assemblyId", report.assembly.id.toString(), "type", input.status().name(), "quantity", resolutionAmount));
+            return report;
+        }
+
+        int availabilityBefore = stock(report.item).available();
         var transaction = new StockTransaction();
         transaction.item = report.item;
         transaction.assetInstance = report.assetInstance;
         transaction.user = report.handler;
         transaction.type = input.status() == DomainEnums.DamageStatus.repaired ? DomainEnums.TransactionType.repaired
                 : DomainEnums.TransactionType.written_off;
-        transaction.quantity = input.amount();
+        transaction.quantity = resolutionAmount;
         transaction.damageReport = report;
         transaction.factionOrder = report.factionOrder;
         transaction.reason = input.status() == DomainEnums.DamageStatus.repaired ? "Damage repaired"

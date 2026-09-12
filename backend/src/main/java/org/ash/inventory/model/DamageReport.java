@@ -12,7 +12,8 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "damage_reports")
 public class DamageReport extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "assembly_id") public Assembly assembly;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reporter_id") public UserAccount reporter;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handler_id") public UserAccount handler;

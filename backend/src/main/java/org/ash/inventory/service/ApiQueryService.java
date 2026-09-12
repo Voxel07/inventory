@@ -141,19 +141,19 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.TransactionResponse> transactions(UUID itemId, UUID userId, String type,
+    public List<ApiResponses.TransactionResponse> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type,
             Instant start, Instant end, int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
-        return operations.transactions(itemId, userId, type, start, end, bounds.offset(), bounds.limit())
+        return operations.transactions(itemId, assetInstanceId, userId, type, start, end, bounds.offset(), bounds.limit())
                 .stream().map(mapper::transaction).toList();
     }
 
     @Transactional
-    public List<ApiResponses.DamageResponse> damageReports(UUID itemId, int page, int size) {
+    public List<ApiResponses.DamageResponse> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
-        return operations.damageReports(itemId, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
+        return operations.damageReports(itemId, assetInstanceId, assemblyId, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
     }
 
     @Transactional

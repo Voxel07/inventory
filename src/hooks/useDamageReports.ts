@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   damageReportApi,
   getDamageReports,
+  updateDamageReport,
   updateDamageReportStatus,
 } from '../services/damageReportService';
 import { createCreateResourceHooks } from './useResourceApi';
-import type { DamageReport, DamageReportFormData, DamageStatus } from '../types';
+import type { DamageReport, DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
 
 const relatedKeys = ['items', 'transactions'];
 const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
@@ -16,10 +17,11 @@ const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
 
 export const useCreateDamageReport = baseHooks.useCreate;
 
-export function useDamageReports(itemId?: string) {
+export function useDamageReports(itemId?: string, filters?: { assetInstanceId?: string; assemblyId?: string; size?: number }) {
+  const query = { itemId, ...filters };
   return useQuery({
-    queryKey: ['damageReports', itemId],
-    queryFn: () => getDamageReports(itemId),
+    queryKey: ['damageReports', query],
+    queryFn: () => getDamageReports(query),
   });
 }
 
@@ -32,5 +34,13 @@ export function useUpdateDamageReportStatus() {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
       relatedKeys.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
     },
+  });
+}
+
+export function useUpdateDamageReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: DamageReportUpdateData }) => updateDamageReport(id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['damageReports'] }),
   });
 }

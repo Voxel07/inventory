@@ -43,12 +43,13 @@ public class OperationsResource {
 
     @GET
     @Path("/transactions")
-    public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId, @QueryParam("userId") UUID userId,
+    public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId,
+            @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("userId") UUID userId,
             @QueryParam("transactionType") String type, @QueryParam("startDate") Instant start,
             @QueryParam("endDate") Instant end,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.transactions(itemId, userId, type, start, end, page, size);
+        return queries.transactions(itemId, assetInstanceId, userId, type, start, end, page, size);
     }
 
     @POST
@@ -62,9 +63,10 @@ public class OperationsResource {
     @GET
     @Path("/damage-reports")
     public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,
+            @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("assemblyId") UUID assemblyId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.damageReports(itemId, page, size);
+        return queries.damageReports(itemId, assetInstanceId, assemblyId, page, size);
     }
 
     @POST

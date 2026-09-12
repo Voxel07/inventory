@@ -115,6 +115,46 @@ class InventoryApiTest {
     }
 
     @Test
+    void damageReportsSupportSerializedAssetsAssembliesAndMetadataEditing() {
+        String itemId = request().body(Map.of("sku", "DAMAGE-TARGET-001", "name", "Damage target generator",
+                        "category", "Test", "amount", 1, "value", 0, "trackingMode", "serialized"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String assetId = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .extract().path("[0].id");
+
+        request().body(Map.of("itemId", itemId, "amount", 1, "description", "Missing concrete asset", "severity", "high"))
+                .post("/api/damage-reports").then().statusCode(400);
+        request().body(Map.of("itemId", itemId, "assetInstanceId", assetId, "amount", 1,
+                        "description", "Starter housing cracked", "severity", "high"))
+                .post("/api/damage-reports").then().statusCode(200)
+                .body("itemId", equalTo(itemId))
+                .body("assetInstanceId", equalTo(assetId))
+                .body("assetCode", equalTo("DAMAGE-TARGET-001-001"));
+        request().queryParam("assetInstanceId", assetId).get("/api/damage-reports").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].assetInstanceId", equalTo(assetId));
+
+        String assemblyId = request().body(Map.of("name", "Damage target assembly", "itemQuantities", Map.of(itemId, 1)))
+                .post("/api/assemblies").then().statusCode(200).extract().path("id");
+        String reportId = request().body(Map.of("assemblyId", assemblyId, "amount", 1,
+                        "description", "Frame bent", "severity", "medium"))
+                .post("/api/damage-reports").then().statusCode(200)
+                .body("itemId", nullValue())
+                .body("assemblyId", equalTo(assemblyId))
+                .body("assemblyName", equalTo("Damage target assembly"))
+                .extract().path("id");
+        request().queryParam("assemblyId", assemblyId).get("/api/damage-reports").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].id", equalTo(reportId));
+
+        request().body(Map.of("description", "Frame and latch bent", "severity", "critical"))
+                .patch("/api/damage-reports/" + reportId).then().statusCode(200)
+                .body("description", equalTo("Frame and latch bent"))
+                .body("severity", equalTo("critical"));
+        request().body(Map.of("status", "repaired", "amount", 1))
+                .patch("/api/damage-reports/" + reportId).then().statusCode(200)
+                .body("status", equalTo("repaired"));
+    }
+
+    @Test
     void serializedItemCreationProvisionsAssetsAndBlocksTrackingModeChangeWithStock() {
         // 1. Create a serialized item with amount = 3
         String itemId = request().body(Map.of("sku", "GEN-HONDA-01", "name", "Honda 2kW Generator",

@@ -3,12 +3,13 @@ import { Box, Typography, Dialog, DialogTitle, DialogContent, Tabs, Tab, useMedi
 import AddIcon from '@mui/icons-material/Add';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { DamageReportsList } from '../components/lists/DamageReportsList';
-import { useDamageReports, useCreateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
+import { useDamageReports, useCreateDamageReport, useUpdateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
+import { useAssemblies } from '../hooks/useAssemblies';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
-import type { DamageReportFormData, DamageStatus } from '../types';
+import type { DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
@@ -18,9 +19,11 @@ export function DamageReportsPage() {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: reports, isLoading } = useDamageReports();
     const { data: items } = useItems();
+    const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
     const createReport = useCreateDamageReport();
     const updateStatus = useUpdateDamageReportStatus();
+    const updateReport = useUpdateDamageReport();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [formOpen, setFormOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
@@ -55,6 +58,13 @@ export function DamageReportsPage() {
         );
     }
 
+    function handleEdit(id: string, data: DamageReportUpdateData) {
+        updateReport.mutate({ id, data }, {
+            onSuccess: () => showSnackbar(t('Schadensbericht aktualisiert', 'Damage report updated'), 'success'),
+            onError: () => showSnackbar(t('Fehler beim Aktualisieren des Schadensberichts', 'Could not update damage report'), 'error'),
+        });
+    }
+
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
@@ -77,17 +87,19 @@ export function DamageReportsPage() {
             <DamageReportsList
                 reports={reports}
                 items={items}
+                assemblies={assemblies}
                 users={users}
                 isLoading={isLoading}
                 view={activeTab}
-                isUpdating={updateStatus.isPending}
-                onUpdateStatus={activeTab === 'open' ? handleStatusUpdate : undefined}
+                isUpdating={updateStatus.isPending || updateReport.isPending}
+                onUpdateStatus={handleStatusUpdate}
+                onEdit={handleEdit}
             />
 
             <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t('Schaden melden', 'Report damage')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <DamageReportForm items={items ?? []} onSubmit={handleSubmit} isLoading={createReport.isPending} />
+                <DialogContent sx={{ pt: '24px !important' }}>
+                    <DamageReportForm items={items ?? []} assemblies={assemblies ?? []} onSubmit={handleSubmit} isLoading={createReport.isPending} />
                 </DialogContent>
             </Dialog>
         </Box>

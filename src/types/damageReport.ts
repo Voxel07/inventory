@@ -9,7 +9,11 @@ export interface DamageStatusHistoryEntry {
 
 export interface DamageReport {
   id: string;
-  itemId: string;
+  itemId?: string;
+  assemblyId?: string;
+  assemblyName?: string;
+  assetInstanceId?: string;
+  assetCode?: string;
   amount: number;
   repairedAmount?: number;
   writtenOffAmount?: number;
@@ -34,8 +38,15 @@ export type DamageSeverity = 'low' | 'medium' | 'high' | 'critical' | 'total_los
 export type DamageStatus = 'reported' | 'in_review' | 'repaired' | 'written_off' | 'resolved';
 
 export interface DamageReportFormData {
-  itemId: string;
+  itemId?: string;
+  assemblyId?: string;
+  assetInstanceId?: string;
   amount: number;
+  description: string;
+  severity: DamageSeverity;
+}
+
+export interface DamageReportUpdateData {
   description: string;
   severity: DamageSeverity;
 }

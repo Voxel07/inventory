@@ -138,7 +138,7 @@ public class SyncResource {
                 var value = objectMapper.convertValue(action.payload(), ApiModels.DamageInput.class);
                 yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(
                         value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(),
-                        action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact())));
+                        action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact(), value.assemblyId())));
             }
             default -> throw ApiException.badRequest("Unsupported offline action type: " + action.type());
         };

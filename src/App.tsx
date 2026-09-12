@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Items } from './pages/Items';
 import { ItemDetail } from './pages/ItemDetail';
+import { AssetDetail } from './pages/AssetDetail';
 import { Assemblies } from './pages/Assemblies';
 import { AssemblyDetail } from './pages/AssemblyDetail';
 import { DamageReportsPage } from './pages/DamageReports';
@@ -390,6 +391,7 @@ function AppContent() {
             <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
             <Route path="/items" element={<InventoryManagerGuard><Items /></InventoryManagerGuard>} />
             <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
+            <Route path="/items/:itemId/assets/:assetId" element={<InventoryManagerGuard><AssetDetail /></InventoryManagerGuard>} />
             <Route path="/assemblies" element={<InventoryManagerGuard><Assemblies /></InventoryManagerGuard>} />
             <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
             <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />

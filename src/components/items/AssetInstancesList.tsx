@@ -32,6 +32,9 @@ import DynamicFeedIcon from '@mui/icons-material/DynamicFeed';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import { useNavigate } from 'react-router-dom';
 import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
@@ -57,6 +60,7 @@ export function AssetInstancesList({ item }: Props) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const navigate = useNavigate();
 
     const { data: assets, isLoading } = useItemAssets(item.id);
     const { data: storageLocations } = useStorageLocations();
@@ -346,6 +350,12 @@ export function AssetInstancesList({ item }: Props) {
                                     )}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                                    <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={t('Infoseite', 'Info page')}>
+                                        <InfoOutlinedIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={t('Schaden melden', 'Report damage')}>
+                                        <ReportProblemOutlinedIcon fontSize="small" />
+                                    </IconButton>
                                     <IconButton size="small" onClick={() => setQrAsset(asset)} title={t('QR-Code', 'QR Code')}>
                                         <QrCode2Icon fontSize="small" />
                                     </IconButton>
@@ -402,6 +412,16 @@ export function AssetInstancesList({ item }: Props) {
                                     <TableCell>{asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}</TableCell>
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>
                                     <TableCell align="right">
+                                        <Tooltip title={t('Asset-Infoseite öffnen', 'Open asset info page')}>
+                                            <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)}>
+                                                <InfoOutlinedIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={t('Schaden an diesem Asset melden', 'Report damage to this asset')}>
+                                            <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)}>
+                                                <ReportProblemOutlinedIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
                                         <Tooltip title={t('QR-Code anzeigen', 'Show QR code')}>
                                             <IconButton size="small" onClick={() => setQrAsset(asset)}>
                                                 <QrCode2Icon fontSize="small" />
@@ -428,7 +448,7 @@ export function AssetInstancesList({ item }: Props) {
             {/* Dialog: Add Single Asset */}
             <Dialog open={addSingleOpen} onClose={() => setAddSingleOpen(false)} maxWidth="xs" fullWidth>
                 <DialogTitle>{t('Einzelnes Asset anlegen', 'Add Single Asset')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <DialogContent sx={{ pt: '24px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <TextField
                         label={t('Asset-Code / Identifikationsnummer', 'Asset Code / ID')}
                         value={singleInput.assetCode || ''}

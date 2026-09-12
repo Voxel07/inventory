@@ -10,6 +10,7 @@ export type {
   DamageSeverity,
   DamageStatus,
   DamageReportFormData,
+  DamageReportUpdateData,
   DamageStatusHistoryEntry,
 } from './damageReport';
 export type { User, UserRole, AccessRole, UserPermissionsFormData } from './user';

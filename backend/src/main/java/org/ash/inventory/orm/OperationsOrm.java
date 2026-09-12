@@ -28,10 +28,11 @@ public class OperationsOrm {
 
     public OperationsOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<StockTransaction> transactions(UUID itemId, UUID userId, String type, Instant start, Instant end,
+    public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             int offset, int limit) {
         var jpql = new StringBuilder("from StockTransaction tx where 1 = 1");
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
+        if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
         if (type != null && !type.isBlank()) jpql.append(" and tx.type = :type");
         if (start != null) jpql.append(" and tx.occurredAt >= :start");
@@ -39,6 +40,7 @@ public class OperationsOrm {
         jpql.append(" order by tx.occurredAt desc");
         var query = entityManager.createQuery(jpql.toString(), StockTransaction.class);
         if (itemId != null) query.setParameter("itemId", itemId);
+        if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (userId != null) query.setParameter("userId", userId);
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
@@ -46,11 +48,17 @@ public class OperationsOrm {
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    public List<DamageReport> damageReports(UUID itemId, int offset, int limit) {
-        if (itemId == null) return entityManager.createQuery("from DamageReport d order by d.createdAt desc", DamageReport.class)
-                .setFirstResult(offset).setMaxResults(limit).getResultList();
-        return entityManager.createQuery("from DamageReport d where d.item.id = :itemId order by d.createdAt desc", DamageReport.class)
-                .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
+    public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int offset, int limit) {
+        var jpql = new StringBuilder("from DamageReport d where 1 = 1");
+        if (itemId != null) jpql.append(" and d.item.id = :itemId");
+        if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
+        if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
+        jpql.append(" order by d.createdAt desc");
+        var query = entityManager.createQuery(jpql.toString(), DamageReport.class);
+        if (itemId != null) query.setParameter("itemId", itemId);
+        if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
+        if (assemblyId != null) query.setParameter("assemblyId", assemblyId);
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<MaintenanceRecord> maintenanceRecords(UUID itemId, int offset, int limit) {
