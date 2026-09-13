@@ -38,12 +38,12 @@ import {
   findPreviousFactionOrder,
 } from '../../utils/factionOrderHistory';
 import { useUIStore } from '../../store/uiStore';
-import { useTransactions } from '../../hooks/useTransactions';
-import { useDamageReports } from '../../hooks/useDamageReports';
-import { calculateItemStock } from '../../utils/stock';
+import { useFactions } from '../../hooks/useFactionOrders';
+import { getItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { apiFileUrl } from '../../services/apiClient';
+import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 
 type ResourceViewMode = 'list' | 'tiles';
 
@@ -59,14 +59,6 @@ interface Props {
   isLoading?: boolean;
   allowedFactionKeys?: string[];
   onSubmit: (data: FactionOrderFormData) => void;
-}
-
-function numericValues(values: Record<string, string>): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(values)
-      .map(([id, value]) => [id, Number(value)] as const)
-      .filter(([, value]) => Number.isInteger(value) && value > 0),
-  );
 }
 
 export function FactionOrderForm({
@@ -85,11 +77,25 @@ export function FactionOrderForm({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
+  const { data: dynamicFactions } = useFactions();
+  const factionsByEvent = useMemo(() => {
+    const result: Record<EventType, readonly string[]> = { ...FACTIONS_BY_EVENT };
+    if (dynamicFactions && dynamicFactions.length > 0) {
+      for (const type of EVENT_TYPES) {
+        const matching = dynamicFactions.filter((f) => f.eventType === type && f.active !== false).map((f) => f.name);
+        if (matching.length > 0) {
+          result[type] = matching;
+        }
+      }
+    }
+    return result;
+  }, [dynamicFactions]);
+
   const initialEventType = initialData?.eventType ?? defaultEventType;
-  const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || FACTIONS_BY_EVENT[type].some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
+  const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || (factionsByEvent[type] ?? []).some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
   const allowedFactions = useCallback(
-    (type: EventType) => FACTIONS_BY_EVENT[type].filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`)),
-    [allowedFactionKeys],
+    (type: EventType) => (factionsByEvent[type] ?? []).filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`)),
+    [allowedFactionKeys, factionsByEvent],
   );
   const [eventType, setEventType] = useState<EventType>(initialEventType);
   const [faction, setFaction] = useState(
@@ -115,14 +121,12 @@ export function FactionOrderForm({
     return saved === 'tiles' ? 'tiles' : 'list';
   });
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
-  const { data: transactions } = useTransactions();
-  const { data: damageReports } = useDamageReports();
   const categories = useMemo(() => [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
 
   const availableByItem = useMemo(() => new Map(items.map((item) => [
     item.id,
-    calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item).remaining,
-  ])), [damageReports, items, transactions]);
+    getItemStock(item).remaining,
+  ])), [items]);
 
   useEffect(() => {
     if (initialData) return;
@@ -193,8 +197,8 @@ export function FactionOrderForm({
   );
   const selectedEntryCount = selectedAssemblies.length + selectedItems.length;
 
-  const currentQuantities = useMemo(() => numericValues(quantities), [quantities]);
-  const currentAssemblyQuantities = useMemo(() => numericValues(assemblyQuantities), [assemblyQuantities]);
+  const currentQuantities = useMemo(() => toPositiveIntegerQuantities(quantities), [quantities]);
+  const currentAssemblyQuantities = useMemo(() => toPositiveIntegerQuantities(assemblyQuantities), [assemblyQuantities]);
   const orderDemandByItem = useMemo(() => {
     const demand = new Map<string, number>(Object.entries(currentQuantities));
     for (const [assemblyId, assemblyCount] of Object.entries(currentAssemblyQuantities)) {
@@ -273,8 +277,8 @@ export function FactionOrderForm({
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const requestedQuantities = numericValues(quantities);
-    const requestedAssemblyQuantities = numericValues(assemblyQuantities);
+    const requestedQuantities = toPositiveIntegerQuantities(quantities);
+    const requestedAssemblyQuantities = toPositiveIntegerQuantities(assemblyQuantities);
     onSubmit({
       eventType,
       faction,

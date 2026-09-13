@@ -106,7 +106,8 @@ public class CatalogService {
         if (input.amount() != null && input.amount() != item.baseAmount) {
             throw ApiException.badRequest("Existing stock cannot be edited on the item; create a stock adjustment instead");
         }
-        if (input.trackingMode() != null && input.trackingMode() != item.trackingMode) {
+        var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
+        if (targetTrackingMode != item.trackingMode) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
             if (item.baseAmount > 0 || assetCount > 0 || txCount > 0) {
@@ -144,7 +145,9 @@ public class CatalogService {
         item.supplier = input.supplier();
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
         item.consumable = input.consumable();
-        item.trackingMode = input.trackingMode() == null ? DomainEnums.TrackingMode.bulk : input.trackingMode();
+        item.trackingMode = input.trackingMode() == null
+                ? (item.trackingMode != null ? item.trackingMode : DomainEnums.TrackingMode.bulk)
+                : input.trackingMode();
         item.inventoryRole = input.inventoryRole() == null
                 ? (input.consumable() ? DomainEnums.InventoryRole.consumable : DomainEnums.InventoryRole.returnable)
                 : input.inventoryRole();

@@ -41,9 +41,10 @@ public class OrderResource {
     @GET
     public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") String eventType,
             @QueryParam("faction") String faction,
+            @QueryParam("orderCode") String orderCode,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.orders(eventType, faction, page, size);
+        return queries.orders(eventType, faction, orderCode, page, size);
     }
 
     @GET

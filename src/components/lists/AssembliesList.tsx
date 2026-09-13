@@ -29,23 +29,21 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
-import type { Assembly, DamageReport, Item, StockTransaction } from '../../types';
+import type { Assembly, Item } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
-import { calculateItemStock } from '../../utils/stock';
+import { getItemStock } from '../../utils/stock';
 
 interface Props {
     assemblies: Assembly[] | undefined;
     items: Item[] | undefined;
-    transactions: StockTransaction[] | undefined;
-    damageReports: DamageReport[] | undefined;
     isLoading: boolean;
     onEdit: (assembly: Assembly) => void;
     onDelete: (id: string) => void;
     onDeleteMany: (ids: string[]) => void;
 }
 
-export function AssembliesList({ assemblies, items, transactions, damageReports, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
+export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
     const t = useLocalizedText();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -53,8 +51,8 @@ export function AssembliesList({ assemblies, items, transactions, damageReports,
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
     const stockByItemId = useMemo(() => new Map((items ?? []).map((item) => [
         item.id,
-        calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item),
-    ])), [damageReports, items, transactions]);
+        getItemStock(item),
+    ])), [items]);
 
     useEffect(() => {
         const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);

@@ -175,6 +175,11 @@ class InventoryApiTest {
         request().body(Map.of("name", "Honda 2kW Generator", "category", "Power", "trackingMode", "bulk"))
                 .patch("/api/items/" + itemId).then().statusCode(400);
 
+        // Omitting trackingMode from an otherwise valid update must preserve it.
+        request().body(Map.of("name", "Honda 2kW Generator updated", "category", "Power"))
+                .patch("/api/items/" + itemId).then().statusCode(200)
+                .body("trackingMode", equalTo("serialized"));
+
         // 4. Batch add 2 more assets
         request().body(Map.of("batchCount", 2, "codePrefix", "GEN-HONDA-01-"))
                 .post("/api/items/" + itemId + "/assets").then().statusCode(200)
@@ -783,6 +788,20 @@ class InventoryApiTest {
     }
 
     @Test
+    void procurementDeficitsRequirePlannerAccess() {
+        factionLeaderRequest()
+                .get("/api/procurement/deficits")
+                .then().statusCode(403);
+
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-event-planner")
+                .header("X-Actor-Name", "Test Event Planner")
+                .header("X-Actor-Role", "event_planner")
+                .get("/api/procurement/deficits")
+                .then().statusCode(200);
+    }
+
+    @Test
     void factionLeaderCannotUseTheApiForAnUnassignedFaction() {
         String userId = assignedFactionLeaderRequest()
                 .get("/api/auth/me")
@@ -1049,6 +1068,10 @@ class InventoryApiTest {
                 .get("/api/items").then().statusCode(200).body("size()", equalTo(1));
         request().queryParam("search", "Pagination sentinel").queryParam("page", 2).queryParam("size", 1)
                 .get("/api/items").then().statusCode(200).body("size()", equalTo(0));
+        request().queryParam("search", "page-item-002")
+                .get("/api/items").then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].sku", equalTo("PAGE-ITEM-002"));
         request().queryParam("size", 201).get("/api/items").then().statusCode(400);
     }
 
@@ -1069,6 +1092,7 @@ class InventoryApiTest {
                 "factionId", factionId,
                 "requestedQuantities", Map.of(itemId, 1),
                 "requestedAssemblyQuantities", Map.of());
+        String[] orderCodes = new String[2];
 
         var ready = new CountDownLatch(2);
         var start = new CountDownLatch(1);
@@ -1083,10 +1107,15 @@ class InventoryApiTest {
             var second = executor.submit(createOrder);
             org.junit.jupiter.api.Assertions.assertTrue(ready.await(10, TimeUnit.SECONDS));
             start.countDown();
-            String firstCode = first.get(20, TimeUnit.SECONDS);
-            String secondCode = second.get(20, TimeUnit.SECONDS);
-            org.junit.jupiter.api.Assertions.assertNotEquals(firstCode, secondCode);
+            orderCodes[0] = first.get(20, TimeUnit.SECONDS);
+            orderCodes[1] = second.get(20, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertNotEquals(orderCodes[0], orderCodes[1]);
         }
+
+        request().queryParam("orderCode", orderCodes[0].toLowerCase(java.util.Locale.ROOT))
+                .get("/api/orders").then().statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].orderCode", equalTo(orderCodes[0]));
 
         request().queryParam("eventType", "RACE").queryParam("faction", "Order code race faction")
                 .queryParam("page", 0).queryParam("size", 1)

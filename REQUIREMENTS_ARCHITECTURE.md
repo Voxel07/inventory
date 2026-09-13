@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** Implemented architecture baseline, 2026-09-11
+> **Status:** Implemented architecture baseline
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -42,29 +42,31 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 |---|---|---:|---|
 | CAT-01 | Maintain items, images, categories, event tags, hints, value, and storage location | Implemented | `CatalogResource`, `CatalogService`, `Item`, Items UI |
 | CAT-02 | Maintain assemblies with fixed component quantities | Implemented | `Assembly`, catalog service, Assemblies UI |
-| CAT-03 | Consolidated serialized item tracking: single parent catalog entry with aggregate stock, min-stock alerting, asset ID provisioning, and instance drill-down | Planned | `CatalogService`, `AssetInstance`, Items UI |
+| CAT-03 | Consolidated serialized item tracking: single parent catalog entry with aggregate stock, min-stock alerting, asset ID provisioning, and instance drill-down | Implemented | `CatalogService`, `AssetInstance`, Items UI |
 | LOC-01 | Maintain hierarchical/georeferenced storage and pickup locations | Implemented | `StorageLocation`, map components, pickup map dialog |
 | INV-01 | Distinguish total owned, on-hand, checked-out, damaged, reserved, and available stock | Implemented | `InventoryOperationsService.StockState`, `StockDto` |
 | INV-02 | Block over-allocation and unsafe/overdue checkout | Implemented | locked transaction paths and maintenance guard |
 | INV-03 | Require event and faction context for every direct checkout and retain that context on the immutable transaction | Implemented | `TransactionForm`, assembly checkout, `InventoryOperationsService`, `StockTransaction` |
-| INV-04 | Enforce tracking mode immutability once stock/movements exist; prohibit quantity-only mutations on serialized assets and support faction batching | Planned | `CatalogService`, `InventoryOperationsService`, `OrderService` |
+| INV-04 | Enforce tracking mode immutability once stock/movements exist; prohibit quantity-only mutations on serialized assets and support faction batching | Implemented | `CatalogService`, `InventoryOperationsService`, `OrderService` |
 | ORD-01 | Support `draft → submitted → preparing → ready → picked_up → partially_returned/returned → closed` plus cancellation | Implemented | `OrderService`, order resources and hooks |
 | ORD-02 | Commission individual items and assemblies on desktop and mobile | Implemented | `OrderPickListTable` |
 | ORD-03 | Reserve prepared quantities and atomically convert them to custody on pickup | Implemented | reservations, order service, stock transactions |
 | ORD-04 | Reconcile returned, consumed, missing, damaged, and written-off units | Implemented | `OrderReturnChecklist`, return service path |
 | ORD-05 | Compare the current order with the previous event-year baseline | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
-| ORD-06 | Resolve item QR codes directly to stock handling, show checked-out quantity, and reconcile returns against an optional originating order | Implemented | QR resolver, `TransactionForm`, faction-order return endpoint |
+| ORD-06 | Resolve item SKU/QR, serialized asset code, and exact order code through targeted server queries; open stock handling, show checked-out quantity, and reconcile returns against an optional originating order | Implemented | `codeResolver.ts`, inventory/order services, `TransactionForm`, faction-order return endpoint |
 | AUD-01 | Preserve append-only order history with actor, timestamp, action, note, and delta | Implemented | `FactionOrderHistory`, mapper, `OrderTraceability` |
 | AUD-02 | Display create/prepare/ready/pickup/return actors and timestamps | Implemented | `OrderTraceability` |
 | DAM-01 | Report, repair, verify, and write off damaged stock without creating stock | Implemented | damage service/resource and regression tests |
 | MNT-01 | Track maintenance cycles and block checkout where required | Implemented | maintenance models and operations service |
-| PRC-01 | Calculate demand deficit against total owned stock | Implemented | procurement service/resource and UI |
+| PRC-01 | Calculate demand deficit against total owned stock and expose the workflow only to planners and administrators | Implemented | procurement service/resource, `ProcurementGuard`, navigation policy, and UI |
 | OFF-01 | Queue supported field commands offline and replay them idempotently | Implemented | IndexedDB queue, `/api/sync`, command IDs |
 | OFF-02 | Keep filtered offline catalogs isolated by normalized query | Implemented | query-scoped keys in `resourceFactory.ts` |
 | SEC-01 | Authenticate with Authentik OIDC and authorize on the server | Implemented | Quarkus OIDC and `ActorService` |
 | SEC-02 | Use only canonical roles and namespaced Authentik groups | Implemented | Section 6 |
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
+
+Counts, transfers, purchasing, custody, and stock management are first-class backend modules even where the current frontend offers only a narrower workflow. The absence of a dedicated page is product scope/backlog, not by itself evidence that the backend module is dead code.
 
 ## 4. Architectural boundaries
 
@@ -108,6 +110,13 @@ The service factory is capability-based:
 
 Transactions, damage reports, and general orders therefore cannot acquire unsupported update/delete calls through a generic type. Realtime invalidation is handled centrally rather than by fabricated per-resource records.
 
+Additional frontend rules:
+
+- Route pages are loaded with `React.lazy` behind the application `Suspense` boundary. The login page is imported statically so authentication fallback rendering never depends on that boundary.
+- Pages and generic utilities do not call the HTTP client directly. Services own transport contracts, including item/SKU, asset-code, and exact order-code resolution.
+- The `stock` projection returned with an item is authoritative. The client must not download global transaction, damage, or order ledgers merely to recompute current stock.
+- Route access and navigation visibility share the same access helpers. Hiding a navigation entry is a UX measure only; the backend remains the authorization boundary.
+
 ## 5. Inventory semantics
 
 For a bulk item, the authoritative read model is:
@@ -124,13 +133,14 @@ Invariants:
 - `totalOwned` includes material currently in custody; valuation and procurement must not treat checkout as loss.
 - `onHand` is physically at an inventory location.
 - `available` is the only quantity allocatable to a new order.
+- Order preparation displays the authoritative `available` value. While editing an order that already owns an active reservation, the UI adds only that order's reservation back to the allocatable amount; it must not subtract all reservations a second time.
 - Damage repair changes condition, not physical quantity.
 - A write-off is the explicit operation that reduces owned stock.
 - Serialized items require asset-specific transactions; quantity-only stock movements and order handovers are rejected.
 - Direct checkout commands require an event and faction snapshot. Order checkout and return transactions derive the same snapshot from their source order.
 - A return associated with a faction order must use the order reconciliation use case; the generic transaction endpoint rejects order-linked stock changes.
 
-The item collection is intentionally **not server-cached** because it carries dynamic stock. Its stock projection is computed with three grouped queries—transaction totals, unresolved damage, and active reservations—rather than per-item queries. Stable catalog collections may use server caching and ETags.
+The item collection is intentionally **not server-cached** because it carries dynamic stock. Its stock projection is computed with three grouped queries—transaction totals, unresolved damage, and active reservations—rather than per-item queries. Stable catalog collections may use server caching and ETags. Exact SKU/code resolution uses bounded server-side filters; barcode handling must not fetch an unbounded collection and search it in the browser.
 
 ### 5.1 Serialized inventory and tracking mode rules
 
@@ -165,7 +175,7 @@ Production authentication uses Authentik OIDC bearer tokens. Development header 
 | `hq_admin` | `inventory_hq_admin` | users and all operational functions |
 | `warehouse_crew` | `inventory_warehouse_crew` | catalog, warehouse, commissioning |
 | `marshal` | `inventory_marshal` | handover and reconciliation |
-| `event_planner` | `inventory_event_planner` | events and planning |
+| `event_planner` | `inventory_event_planner` | events, planning, and procurement deficits |
 | `maintenance_crew` | `inventory_maintenance_crew` | maintenance and damage workflows |
 | `faction_leader` | `inventory_faction_leader` | assigned factions only |
 | `read_only` | `inventory_read_only` | read-only operational visibility |
@@ -185,22 +195,23 @@ Every transition appends a history entry with:
 - item/assembly additions, removals, and before/after quantity changes;
 - idempotency key for replayable commands.
 
-The detail UI exposes the immutable history, lifecycle actors, timestamps, and the previous comparable faction order. Editing a current order never overwrites its prior history snapshots. Item QR codes open the transaction workflow directly; returns show the total quantity currently out and offer only picked-up orders with an outstanding quantity for that item. Selecting an order records the return through its reconciliation aggregate rather than creating an unrelated stock entry.
+The detail UI exposes the immutable history, lifecycle actors, timestamps, and the previous comparable faction order. The order collection is loaded where it is genuinely required for previous-order comparison and editing; current availability does not trigger global transaction or damage-report downloads. Editing a current order never overwrites its prior history snapshots. Item QR codes open the transaction workflow directly; returns show the total quantity currently out and offer only picked-up orders with an outstanding quantity for that item. Selecting an order records the return through its reconciliation aggregate rather than creating an unrelated stock entry.
 
 ## 8. Offline and consistency model
 
 - The server remains authoritative; cached client data never bypasses server validation.
 - Supported offline writes receive a client command/idempotency key.
 - Replay is atomic per command. A rejected command rolls back its partial changes and is surfaced as a conflict.
+- IndexedDB replay cleanup is batched across affected stores so a successfully replayed command and its cached projections cannot be left half-updated by a multi-store client transaction.
 - Catalog fallback entries are keyed by resource plus sorted query arguments, so filters cannot return another query's cached result.
 - The transactional outbox publishes invalidation events after commit; SSE tells clients which query families to refresh.
 - Dynamic stock is fetched live after invalidation and is not hidden behind the catalog response cache.
 
 ## 9. Persistence and schema state
 
-The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panache is not part of the persistence model. Production currently uses Hibernate schema management with `strategy=update`; Flyway dependencies are present but automatic migration is disabled and no versioned migration set is committed.
+The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panache is not part of the persistence model. Production schema ownership is explicit: `%prod` enables Flyway at startup and configures Hibernate with `strategy=validate`. Versioned migrations are committed under `backend/src/main/resources/db/migration`, beginning with `V1.0.0__init.sql` and `V1.1.0__damage_report_targets.sql`. Baseline-on-migrate is opt-in for an explicitly reviewed existing database; an empty database runs the initial migration normally.
 
-This is the principal remaining production-hardening debt. Before a multi-node or audited production rollout, replace schema update with reviewed, forward-only Flyway migrations and include a deployment migration that converts any non-canonical role values before the application starts. Until then, database backup and restore validation are deployment prerequisites.
+The unqualified local profile still uses Hibernate `strategy=update`, while development and test use disposable `drop-and-create` schemas with Flyway disabled. Shared staging, production-like, and multi-node deployments must use the production-equivalent Flyway/validate policy rather than the local default. Remaining hardening work is to retire `update` outside explicitly disposable/local use, keep all future changes forward-only, test upgrades from supported database versions, and validate backup/restore before release.
 
 Core persisted concepts include users, storage locations, items and images, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, reconciliations, stock transactions (including immutable event/faction checkout snapshots), damage reports, maintenance, and domain outbox events.
 
@@ -212,13 +223,21 @@ Database records contain canonical relative object keys only, for example `items
 
 | Finding | Resolution | Regression evidence |
 |---|---|---|
+| P0 — frontend did not compile after the architecture refactor | Repaired malformed item-detail JSX, restored live order-detail dependencies, corrected form callback typing, and restored imports that are still used | `npm.cmd run build`, `npm.cmd run lint` |
+| P0 — item detail route read the wrong parameter | `ItemDetail` now reads the canonical `/items/:itemId` parameter and renders immutable item transactions and serialized-asset detail | TypeScript production build |
+| P0 — prepared-order availability double-counted reservations | UI consumes server-projected stock and adds back only the current order's own reservation while editing | TypeScript production build; order reservation API tests |
+| P0 — SKU/order scanning fell back to broad collection downloads | Item search matches name or SKU; order lookup accepts an exact normalized `orderCode`; code resolution goes through bounded service calls | `itemListsAreBoundedAndRejectInvalidPageSizes`, `concurrentOrdersReceiveUniqueCodesAndListAsCompactPages`, TypeScript production build |
+| P0 — procurement data and UI were accessible beyond planner/admin scope | Backend requires planner access; route guard and navigation share the same planner/admin policy | `procurementDeficitsRequirePlannerAccess`, TypeScript production build and lint |
+| Tracking mode was reset when omitted from an item update | Partial updates preserve the current mode; a real mode change still runs the stock/asset/history guard | `serializedItemCreationProvisionsAssetsAndBlocksTrackingModeChangeWithStock` |
 | P1 — mobile commissioning controls missing | Responsive quantity chips and prepare controls restored for items and assemblies | TypeScript production build |
-| P1 — cached dynamic stock and N+1 calculation | Item collection bypasses server response cache; grouped stock projection added | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout` |
+| P1 — duplicated client/server stock arithmetic and redundant global queries | Legacy client ledger arithmetic removed; screens consume `Item.stock`; item collection bypasses server response cache and its projection uses grouped queries | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout`, TypeScript production build |
 | P1 — total stock dropped checked-out units | DTO separates `totalOwned` and `onHand`; valuation/procurement use owned stock | same stock regression test |
 | P1 — order traceability removed | Actor cards, previous-order diff, and immutable history extracted to `OrderTraceability` | TypeScript production build |
 | P2 — offline cache ignored filters | Stable sorted query tuple is part of the IndexedDB cache key | TypeScript production build |
 | P2 — destructive dialog used for checkout | Action-neutral `ConfirmDialog` with explicit label, tooltip, and color | TypeScript production build |
 | P2 — generic API advertised unsupported CRUD | Capability-specific APIs and hooks introduced | TypeScript compiler |
+| Resource hook implementations were duplicated | Full CRUD hooks compose the create/mutable hook layers and add only delete capabilities | TypeScript production build and lint |
+| Quantity-map conversion was duplicated | Event and order forms share typed conversion helpers with explicit non-negative or positive-integer rules | TypeScript production build and lint |
 | P2 — Panache dependency without a Panache model | Panache dependency and entity inheritance removed | Maven clean test |
 | Legacy authentication/authorization | Old local storage reads, old enum values, role aliases, and old group mappings removed | `ActorServiceRoleTest`, API auth test |
 | Legacy order/media representations | old pickup quantity fallback and URL-to-key conversion removed | order/API tests and `MediaServiceTest` |
@@ -226,6 +245,8 @@ Database records contain canonical relative object keys only, for example `items
 | Checkout lacked event/faction traceability | UI requires both fields; API rejects context-free checkout; transaction response exposes the stored snapshot | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout` |
 | General orders tab remained inactive | Canonical `tab=general` URL state replaces the contradictory empty-query fallback | TypeScript production build |
 | Dense assembly media layout | Image, event tags, description, instruction, and metrics share one responsive summary panel | TypeScript production build |
+| Monolithic eager route loading | Authenticated route pages are lazy-loaded behind a common `Suspense` boundary; login remains an independent static fallback | Vite production chunk output |
+| Render-time clock access failed React purity checks | Dashboard time is held in state and advanced by an effect-driven interval | ESLint and TypeScript production build |
 
 Required verification before merge:
 
@@ -240,9 +261,9 @@ mvn.cmd clean test
 
 These are not compatibility work and are not represented as already implemented:
 
-1. Adopt forward-only Flyway migrations and disable Hibernate schema mutation in production.
+1. Require every shared/staging PostgreSQL deployment to use Flyway plus Hibernate validation; retire the unqualified `update` strategy outside explicitly local use and add upgrade/backfill tests for each forward migration.
 2. Generate the TypeScript transport models from the OpenAPI document to reduce remaining manual DTO duplication.
-3. Add browser-level tests for mobile commissioning, offline filtered reads, and the traceability panel.
+3. Add browser-level tests for mobile commissioning, scan resolution, order reservation editing, procurement access, offline filtered reads, and the traceability panel.
 4. Validate backup restore, outbox recovery, and offline-conflict workflows in a production-like environment.
-5. Add route-level code splitting to reduce the largest frontend bundle.
-6. Refactor `TrackingMode` and serialized inventory: prohibit tracking mode mutation on items with stock, consolidate serialized assets into parent catalog entries with instance drill-down, support asset ID batch registration, and enable faction batch distribution.
+5. Add route prefetching and enforce bundle-size budgets; the largest shared vendor chunks remain substantial even though route-level code splitting is active.
+6. Expand serialized-inventory browser coverage and UX for high-volume asset registration, scanner-assisted assignment, and faction batch reconciliation.

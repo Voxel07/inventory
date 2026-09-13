@@ -10,8 +10,6 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useTransactions } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
 import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
@@ -23,8 +21,6 @@ export function Items() {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading } = useItems();
     const { data: assemblies } = useAssemblies();
-    const { data: transactions } = useTransactions();
-    const { data: damageReports } = useDamageReports();
     const { data: storageLocations } = useStorageLocations();
 
     const createItem = useCreateItem();
@@ -67,8 +63,6 @@ export function Items() {
 
             <ItemsList
                 items={items}
-                transactions={transactions}
-                damageReports={damageReports}
                 isLoading={isLoading}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}

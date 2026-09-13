@@ -16,6 +16,34 @@ import {
 } from '../services/factionOrderService';
 import type { EventType, FactionOrderFormData } from '../types';
 import type { AssetReturnOutcome } from '../services/factionOrderService';
+import { apiRequest } from '../services/apiClient';
+
+export interface FactionDto {
+  id: string;
+  eventType: string;
+  name: string;
+  slug: string;
+  active?: boolean;
+}
+
+export function useFactions(eventType?: string) {
+  return useQuery({
+    queryKey: ['factions', eventType],
+    queryFn: async () => {
+      try {
+        const query = eventType ? { eventType } : undefined;
+        const res = await apiRequest<FactionDto[]>('/api/factions', { query });
+        if (Array.isArray(res) && res.length > 0) {
+          return res;
+        }
+      } catch {
+        // Fallback to static if backend endpoint fails
+      }
+      return null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useFactionOrders(eventType?: EventType, faction?: string) {
   return useQuery({

@@ -15,10 +15,10 @@ import {
     TableRow,
     Chip,
     Dialog,
+    DialogActions,
+    DialogContentText,
     DialogTitle,
     DialogContent,
-    DialogContentText,
-    DialogActions,
     Skeleton,
     Alert,
     TextField,
@@ -40,14 +40,14 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
-import { useTransactions, useAssemblyCheckout } from '../hooks/useTransactions';
-import { useCreateDamageReport, useDamageReports } from '../hooks/useDamageReports';
+import { useAssemblyCheckout } from '../hooks/useTransactions';
+import { useCreateDamageReport } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { useUIStore } from '../store/uiStore';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
 import type { AssemblyFormData, DamageReportFormData, EventType, Item } from '../types';
-import { calculateItemStock } from '../utils/stock';
+import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -67,8 +67,6 @@ export function AssemblyDetail() {
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
     const { data: items } = useItems();
-    const { data: transactions } = useTransactions();
-    const { data: damageReports } = useDamageReports();
     const updateAssembly = useUpdateAssembly();
     const createDamageReport = useCreateDamageReport();
     const checkoutAssembly = useAssemblyCheckout();
@@ -189,14 +187,14 @@ export function AssemblyDetail() {
 
     // Calculate available stock for each item
     const stockInfo = useMemo(() => {
-        if (!items || !transactions) return new Map<string, number>();
+        if (!items) return new Map<string, number>();
         const map = new Map<string, number>();
         for (const item of items) {
-            const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
+            const { remaining } = getItemStock(item);
             map.set(item.id, remaining);
         }
         return map;
-    }, [items, transactions, damageReports]);
+    }, [items]);
 
     if (isLoading) {
         return (

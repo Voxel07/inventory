@@ -40,8 +40,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import BuildIcon from '@mui/icons-material/Build';
 import { EVENT_TYPES, type EventType } from '../../types';
-import type { User } from '../../types';
-import { canManageInventory } from '../../utils/access';
+import { canAccessProcurement, canManageInventory } from '../../utils/access';
 
 const DRAWER_WIDTH = 260;
 
@@ -57,7 +56,7 @@ export function Navigation() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout, user } = useAuth();
-    const isManager = canManageInventory(user as unknown as User);
+    const isManager = canManageInventory(user);
     const managerNavItems = [
         { label: t('nav.globalDashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
         { label: t('nav.myDashboard'), path: '/', icon: <DashboardIcon /> },
@@ -70,7 +69,9 @@ export function Navigation() {
         { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         { label: t('nav.printQr'), path: '/print-qr', icon: <QrCode2Icon /> },
         { label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemIcon /> },
-        { label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartIcon /> },
+        ...(canAccessProcurement(user)
+            ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartIcon /> }]
+            : []),
         { label: t('nav.maintenance'), path: '/maintenance', icon: <BuildIcon /> },
         { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsIcon /> },
     ];

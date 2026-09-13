@@ -9,8 +9,6 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useTransactions } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
 import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
@@ -22,8 +20,6 @@ export function Assemblies() {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: assemblies, isLoading } = useAssemblies();
     const { data: items } = useItems();
-    const { data: transactions, isLoading: transactionsLoading } = useTransactions();
-    const { data: damageReports, isLoading: damageReportsLoading } = useDamageReports();
     const { data: storageLocations } = useStorageLocations();
 
     const createAssembly = useCreateAssembly();
@@ -63,9 +59,7 @@ export function Assemblies() {
             <AssembliesList
                 assemblies={assemblies}
                 items={items}
-                transactions={transactions}
-                damageReports={damageReports}
-                isLoading={isLoading || transactionsLoading || damageReportsLoading}
+                isLoading={isLoading}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}

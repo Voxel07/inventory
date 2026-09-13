@@ -39,11 +39,9 @@ import MapIcon from '@mui/icons-material/Map';
 import { useNavigate } from 'react-router-dom';
 import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
 import { useItems } from '../hooks/useItems';
-import { useTransactions } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
-import { calculateItemStock } from '../utils/stock';
+import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
@@ -60,8 +58,6 @@ export function StorageLocations() {
 
     const { data: locations, isLoading: locationsLoading } = useStorageLocations();
     const { data: items, isLoading: itemsLoading } = useItems();
-    const { data: transactions } = useTransactions();
-    const { data: damageReports } = useDamageReports();
 
     const createMutation = useCreateStorageLocation();
     const updateMutation = useUpdateStorageLocation();
@@ -112,10 +108,10 @@ export function StorageLocations() {
     // Enriched items with checkouts and damage calculations
     const enrichedStoredItems = useMemo(() => {
         return storedItems.map((item) => {
-            const { totalStock, remaining, checkedOut } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
+            const { totalStock, remaining, checkedOut } = getItemStock(item);
             return { item, totalStock, remaining, checkedOut };
         });
-    }, [storedItems, transactions, damageReports]);
+    }, [storedItems]);
 
     function handleOpenCreate() {
         setEditingLoc(null);

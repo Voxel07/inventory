@@ -22,27 +22,12 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SaveIcon from '@mui/icons-material/Save';
 import { useItems } from '../hooks/useItems';
-import { useTransactions } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
 import { useCreateEventReport, useEventReports } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
-import { calculateItemStock } from '../utils/stock';
+import { getItemStock } from '../utils/stock';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
-
-type QuantityInputs = Record<string, string>;
-
-function toInputs(values: Record<string, number> | undefined): QuantityInputs {
-  return Object.fromEntries(Object.entries(values ?? {}).map(([id, value]) => [id, String(value)]));
-}
-
-function toQuantities(values: QuantityInputs): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(values)
-      .map(([id, value]) => [id, Number(value)] as const)
-      .filter(([, value]) => Number.isFinite(value) && value >= 0),
-  );
-}
+import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 
 export function Events() {
   const navigate = useNavigate();
@@ -56,8 +41,6 @@ export function Events() {
   const [used, setUsed] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
   const { data: items, isLoading: itemsLoading } = useItems();
-  const { data: transactions } = useTransactions();
-  const { data: damageReports } = useDamageReports();
   const { data: reports, isLoading: reportsLoading } = useEventReports(eventType);
   const createReport = useCreateEventReport();
 
@@ -84,7 +67,7 @@ export function Events() {
   }, [items, usageReports]);
 
   useEffect(() => {
-    setPlanned(toInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
+    setPlanned(toQuantityInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
     setUsed({});
     setNotes('');
   }, [eventType, lastCompleted?.id, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
@@ -94,12 +77,12 @@ export function Events() {
   }
 
   function stockFor(item: Item) {
-    return calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item).remaining;
+    return getItemStock(item).remaining;
   }
 
   function save(status: EventReportStatus) {
-    const plannedQuantities = toQuantities(planned);
-    const usedQuantities = toQuantities(used);
+    const plannedQuantities = toNonNegativeQuantities(planned);
+    const usedQuantities = toNonNegativeQuantities(used);
     const itemIds = [...new Set([
       ...Object.entries(usedQuantities).filter(([, quantity]) => quantity > 0).map(([itemId]) => itemId),
     ])];

@@ -13,8 +13,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin === self.location.origin && url.pathname === '/config.js') {
     event.respondWith(fetch(request, { cache: 'no-store' }).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE).then((cache) => cache.put(request, copy));
+      if (response.ok && response.status === 200) {
+        const copy = response.clone();
+        caches.open(CACHE).then((cache) => cache.put(request, copy));
+      }
       return response;
     }).catch(() => caches.match(request)));
     return;
@@ -26,8 +28,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-    const copy = response.clone();
-    caches.open(CACHE).then((cache) => cache.put(request, copy));
+    if (response.ok && response.status === 200) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+    }
     return response;
   })));
 });

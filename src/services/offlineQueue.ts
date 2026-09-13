@@ -160,25 +160,33 @@ export async function flushOfflineQueue(): Promise<void> {
       flushAttempt = 0;
       const payload = await response.json() as { results: Array<{ idempotencyKey: string; status: string; error?: string }> };
       const db = await openDatabase();
-      for (const result of payload.results) {
-        if (result.status === 'applied') {
-          await transactionPromise(db, STORE, 'readwrite', (store) => store.delete(result.idempotencyKey));
-          await transactionPromise(db, FAILURES_STORE, 'readwrite', (store) => store.delete(result.idempotencyKey));
-        } else {
-          const action = actions.find((candidate) => candidate.idempotencyKey === result.idempotencyKey);
-          await transactionPromise(db, STORE, 'readwrite', (store) => store.delete(result.idempotencyKey));
-          if (action) {
-            await transactionPromise(db, FAILURES_STORE, 'readwrite', (store) => store.put({
-              idempotencyKey: result.idempotencyKey,
-              type: action.type,
-              payload: action.payload,
-              status: result.status === 'conflict' ? 'conflict' : 'rejected',
-              error: result.error || result.status,
-              timestamp: new Date().toISOString(),
-            } satisfies SyncFailure));
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([STORE, FAILURES_STORE], 'readwrite');
+        const queueStore = tx.objectStore(STORE);
+        const failuresStore = tx.objectStore(FAILURES_STORE);
+
+        for (const result of payload.results) {
+          queueStore.delete(result.idempotencyKey);
+          if (result.status === 'applied') {
+            failuresStore.delete(result.idempotencyKey);
+          } else {
+            const action = actions.find((candidate) => candidate.idempotencyKey === result.idempotencyKey);
+            if (action) {
+              failuresStore.put({
+                idempotencyKey: result.idempotencyKey,
+                type: action.type,
+                payload: action.payload,
+                status: result.status === 'conflict' ? 'conflict' : 'rejected',
+                error: result.error || result.status,
+                timestamp: new Date().toISOString(),
+              } satisfies SyncFailure);
+            }
           }
         }
-      }
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
       await notifyQueueChanged();
       window.dispatchEvent(new CustomEvent('ash-api-change'));
     }

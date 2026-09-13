@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   transactionApi,
   getTransactions,
-  updateTransaction,
   assemblyCheckout,
 } from '../services/transactionService';
 import { createCreateResourceHooks } from './useResourceApi';
@@ -20,17 +19,6 @@ export function useTransactions(filters?: { itemId?: string; assetInstanceId?: s
   return useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => getTransactions(filters),
-  });
-}
-
-export function useUpdateTransaction() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<TransactionFormData> }) => updateTransaction(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    },
   });
 }
 

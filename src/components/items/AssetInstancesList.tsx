@@ -362,7 +362,7 @@ export function AssetInstancesList({ item }: Props) {
                                     <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={t('Bearbeiten', 'Edit')}>
                                         <EditIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={t('Löschen', 'Delete')}>
+                                    <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
                                         <DeleteIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
@@ -432,7 +432,7 @@ export function AssetInstancesList({ item }: Props) {
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={t('Ausmustern / Löschen', 'Retire / Delete')}>
+                                        <Tooltip title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
                                             <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)}>
                                                 <DeleteIcon fontSize="small" />
                                             </IconButton>
@@ -630,16 +630,16 @@ export function AssetInstancesList({ item }: Props) {
                 </DialogActions>
             </Dialog>
 
-            {/* Delete Confirmation */}
+            {/* Delete / Retire Confirmation */}
             <ConfirmDialog
                 open={!!deleteTarget}
-                title={t('Asset ausmustern', 'Retire Asset')}
+                title={t('Asset ausbuchen / ausmustern', 'Retire / Write Off Asset')}
                 message={t(
-                    `Möchten Sie das Einzelgerät ${deleteTarget?.assetCode} wirklich ausmustern?`,
-                    `Are you sure you want to retire asset ${deleteTarget?.assetCode}?`
+                    `Möchten Sie das Einzelgerät ${deleteTarget?.assetCode} wirklich ausmustern? Das Gerät wird deaktiviert und der Lagerbestand dauerhaft ausgebucht.`,
+                    `Are you sure you want to retire asset ${deleteTarget?.assetCode}? The asset will be deactivated and inventory written off.`
                 )}
-                actionLabel={t('Ausmustern', 'Retire')}
-                actionTooltip={t('Asset als inaktiv markieren', 'Mark asset as inactive')}
+                actionLabel={t('Ausbuchen', 'Write off')}
+                actionTooltip={t('Asset dauerhaft ausbuchen', 'Permanently write off asset')}
                 actionColor="error"
                 onClose={() => setDeleteTarget(null)}
                 onConfirm={handleDeleteConfirm}

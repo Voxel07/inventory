@@ -104,6 +104,7 @@ public class OperationsResource {
     @GET
     @Path("/procurement/deficits")
     public List<ApiResponses.DeficitResponse> deficits(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId) {
+        actor.requirePlanner();
         return queries.deficits(eventOccurrenceId);
     }
 

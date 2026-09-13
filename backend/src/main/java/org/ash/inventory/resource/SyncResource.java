@@ -108,13 +108,26 @@ public class SyncResource {
             case "order.prepare" -> {
                 actors.requireWarehouse();
                 UUID orderId = uuid(action.payload(), "orderId");
-                var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.PreparationInput.class);
+                Object inputObj = action.payload().get("input");
+                if (inputObj == null) {
+                    throw ApiException.badRequest("Missing required property 'input' in order.prepare payload");
+                }
+                var value = objectMapper.convertValue(inputObj, ApiModels.PreparationInput.class);
                 yield mapper.order(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
                         value.assetAssignments(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes())));
             }
             case "order.transition" -> {
                 UUID orderId = uuid(action.payload(), "orderId");
-                var target = DomainEnums.OrderStatus.valueOf(action.payload().get("status").toString());
+                Object statusObj = action.payload().get("status");
+                if (statusObj == null || statusObj.toString().isBlank()) {
+                    throw ApiException.badRequest("Missing required property 'status' in order.transition payload");
+                }
+                DomainEnums.OrderStatus target;
+                try {
+                    target = DomainEnums.OrderStatus.valueOf(statusObj.toString().trim());
+                } catch (IllegalArgumentException e) {
+                    throw ApiException.badRequest("Invalid order status: " + statusObj);
+                }
                 if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft) actors.current();
                 else if (target == DomainEnums.OrderStatus.picked_up || target == DomainEnums.OrderStatus.closed)
                     actors.requireMarshal();
@@ -129,7 +142,11 @@ public class SyncResource {
             case "order.return" -> {
                 actors.requireMarshal();
                 UUID orderId = uuid(action.payload(), "orderId");
-                var value = objectMapper.convertValue(action.payload().get("input"), ApiModels.ReturnInput.class);
+                Object inputObj = action.payload().get("input");
+                if (inputObj == null) {
+                    throw ApiException.badRequest("Missing required property 'input' in order.return payload");
+                }
+                var value = objectMapper.convertValue(inputObj, ApiModels.ReturnInput.class);
                 yield mapper.order(orders.returnItems(orderId,
                         new ApiModels.ReturnInput(value.lines(), value.assets(), action.idempotencyKey(), value.notes())));
             }
@@ -144,5 +161,18 @@ public class SyncResource {
         };
     }
 
-    private UUID uuid(Map<String, Object> payload, String key) { return UUID.fromString(payload.get(key).toString()); }
+    private UUID uuid(Map<String, Object> payload, String key) {
+        if (payload == null) {
+            throw ApiException.badRequest("Action payload is required");
+        }
+        Object value = payload.get(key);
+        if (value == null || value.toString().isBlank()) {
+            throw ApiException.badRequest("Missing required property in sync action payload: " + key);
+        }
+        try {
+            return UUID.fromString(value.toString().trim());
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest("Invalid UUID format for property '" + key + "': " + value);
+        }
+    }
 }

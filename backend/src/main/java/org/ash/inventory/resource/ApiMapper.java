@@ -102,11 +102,17 @@ public class ApiMapper {
 
     public List<ApiResponses.ItemResponse> items(List<Item> values) {
         var stock = operations.stock(values);
-        return values.stream().map(value -> item(value, stock.get(value.id))).toList();
+        var imagesMap = catalogOrm.itemImages(values);
+        return values.stream().map(value -> item(value, stock.get(value.id), imagesMap.get(value.id))).toList();
     }
 
     private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state) {
-        var images = catalogOrm.itemImages(value).stream()
+        return item(value, state, null);
+    }
+
+    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state, List<org.ash.inventory.model.ItemImage> preloadedImages) {
+        var imageEntities = preloadedImages != null ? preloadedImages : catalogOrm.itemImages(value);
+        var images = imageEntities.stream()
                 .map(image -> media.mediaReference(image.objectKey))
                 .toList();
         Map<String, Object> expand = value.storageLocation != null
@@ -178,6 +184,42 @@ public class ApiMapper {
                 quantities,
                 Map.of("itemIds", items)
         );
+    }
+
+    public List<ApiResponses.AssemblyResponse> assemblies(List<Assembly> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        var componentsByAssembly = catalogOrm.assemblyItems(values);
+        var allComponentItems = componentsByAssembly.values().stream()
+                .flatMap(List::stream)
+                .map(ai -> ai.item)
+                .distinct()
+                .toList();
+        var imagesMap = catalogOrm.itemImages(allComponentItems);
+
+        return values.stream().map(assembly -> {
+            var components = componentsByAssembly.getOrDefault(assembly.id, List.of());
+            var quantities = new LinkedHashMap<String, Integer>();
+            var items = new ArrayList<ApiResponses.ItemResponse>();
+            for (var component : components) {
+                quantities.put(component.item.id.toString(), component.quantity);
+                items.add(item(component.item, null, imagesMap.get(component.item.id)));
+            }
+            return new ApiResponses.AssemblyResponse(
+                    assembly.id,
+                    assembly.createdAt,
+                    assembly.updatedAt,
+                    assembly.name,
+                    assembly.description,
+                    assembly.hint,
+                    media.mediaReference(assembly.imageObjectKey),
+                    assembly.eventTags == null ? List.of() : assembly.eventTags,
+                    quantities.keySet(),
+                    quantities,
+                    Map.of("itemIds", items)
+            );
+        }).toList();
     }
 
     public ApiResponses.EventResponse event(EventOccurrence value) {

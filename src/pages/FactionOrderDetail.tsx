@@ -23,17 +23,15 @@ import {
   useSubmitFactionOrder,
   useUpdateFactionOrder,
 } from '../hooks/useFactionOrders';
-import { useDamageReports } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
-import { useTransactions } from '../hooks/useTransactions';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
-import type { Assembly, Item, User } from '../types';
+import type { Assembly, Item } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
-import { calculateItemStock } from '../utils/stock';
-import { assemblyAvailability, expandFactionOrderComponents } from '../utils/factionOrderQuantities';
+import { assemblyAvailability } from '../utils/factionOrderQuantities';
+import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 
@@ -53,8 +51,6 @@ export function FactionOrderDetail() {
   const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
-  const { data: transactions } = useTransactions();
-  const { data: damageReports } = useDamageReports();
   const { data: storageLocations = [] } = useStorageLocations();
 
   const updateOrder = useUpdateFactionOrder();
@@ -110,22 +106,14 @@ export function FactionOrderDetail() {
     [orderItems],
   );
 
-  const reservedByOthers = useMemo(() => {
-    const result: Record<string, number> = {};
-    for (const candidate of allOrders) {
-      if (candidate.id === order?.id || !['preparing', 'ready'].includes(candidate.status)) continue;
-      for (const [itemId, quantity] of Object.entries(expandFactionOrderComponents(candidate, assemblies, 'prepared'))) {
-        result[itemId] = (result[itemId] ?? 0) + quantity;
-      }
-    }
-    return result;
-  }, [allOrders, assemblies, order?.id]);
-
   function availableForItemId(itemId: string) {
     const item = itemMap.get(itemId);
     if (!item) return 0;
-    const current = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item).remaining;
-    return Math.max(0, current - (reservedByOthers[item.id] ?? 0));
+    // The authoritative projection already subtracts every active reservation.
+    // Add this order's reservation back so its own prepared units remain usable
+    // while editing, without downloading the global transaction/damage ledgers.
+    const ownReservation = order?.reservedQuantities?.[itemId] ?? 0;
+    return Math.max(0, getItemStock(item).remaining + ownReservation);
   }
 
   function availableFor(item: Item) {
@@ -242,7 +230,7 @@ export function FactionOrderDetail() {
     );
   }
 
-  const currentUser = user as unknown as User;
+  const currentUser = user;
   if (!canAccessFaction(currentUser, order.eventType, order.faction)) {
     return (
       <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>

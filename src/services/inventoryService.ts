@@ -3,6 +3,12 @@ import { apiRequest } from './apiClient';
 import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 
+export interface InventoryCodeResolution {
+  code: string;
+  targetType: 'product' | 'asset' | 'location' | 'assembly' | string;
+  targetId: string;
+}
+
 async function uploadItemImages(files: File[] = []): Promise<string[]> {
   return Promise.all(files.map(stageImage));
 }
@@ -49,6 +55,14 @@ export const deleteItems = itemApi.deleteMany;
 
 export async function getItemAssets(itemId: string): Promise<AssetInstance[]> {
   return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`);
+}
+
+export function resolveInventoryCode(code: string): Promise<InventoryCodeResolution> {
+  return apiRequest(`/api/inventory-codes/resolve/${encodeURIComponent(code)}`);
+}
+
+export function getAssetByCode(code: string): Promise<AssetInstance> {
+  return apiRequest(`/api/assets/by-code/${encodeURIComponent(code)}`);
 }
 
 export async function createItemAssets(itemId: string, input: AssetInstanceInput): Promise<AssetInstance[]> {

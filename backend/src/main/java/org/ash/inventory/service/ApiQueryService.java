@@ -103,7 +103,7 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, int page, int size) {
+    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode, int page, int size) {
         var actor = actors.current();
         var bounds = bounds(page, size);
         List<String> factionNames = null;
@@ -112,7 +112,7 @@ public class ApiQueryService {
             factionNames = actor.factions.stream().filter(value -> !value.contains(":")).toList();
             factionKeys = actor.factions.stream().filter(value -> value.contains(":")).toList();
         }
-        var values = orders.orders(eventType, faction, factionNames, factionKeys, bounds.offset(), bounds.limit());
+        var values = orders.orders(eventType, faction, orderCode, factionNames, factionKeys, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
         var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.FactionOrderLine>>();
@@ -166,6 +166,7 @@ public class ApiQueryService {
 
     @Transactional
     public List<ApiResponses.DeficitResponse> deficits(UUID eventOccurrenceId) {
+        actors.requirePlanner();
         return inventory.deficits(eventOccurrenceId).stream().map(mapper::deficit).toList();
     }
 

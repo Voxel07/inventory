@@ -15,6 +15,7 @@ import org.ash.inventory.model.StockReservation;
 
 import java.util.List;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.UUID;
 
 /** Database access for faction orders and their related models. */
@@ -24,7 +25,7 @@ public class OrderOrm {
 
     public OrderOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<FactionOrder> orders(String eventType, String faction, Collection<String> factionNames,
+    public List<FactionOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionNames,
             Collection<String> factionKeys, int offset, int limit) {
         if (factionNames != null && factionNames.isEmpty() && factionKeys != null && factionKeys.isEmpty()) {
             return List.of();
@@ -33,6 +34,7 @@ public class OrderOrm {
                 + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where 1 = 1");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
+        if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
         if (factionNames != null || factionKeys != null) {
             jpql.append(" and (");
             if (factionNames != null && !factionNames.isEmpty()) jpql.append("o.faction.name in :factionNames");
@@ -48,6 +50,7 @@ public class OrderOrm {
         var query = entityManager.createQuery(jpql.toString(), FactionOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
+        if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
         if (factionNames != null && !factionNames.isEmpty()) query.setParameter("factionNames", factionNames);
         if (factionKeys != null && !factionKeys.isEmpty()) query.setParameter("factionKeys", factionKeys);
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();

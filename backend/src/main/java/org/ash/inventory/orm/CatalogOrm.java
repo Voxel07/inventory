@@ -27,10 +27,10 @@ public class CatalogOrm {
 
     public List<Item> items(String search, int offset, int limit) {
         if (search == null || search.isBlank()) {
-            return entityManager.createQuery("from Item i where i.active = true order by i.createdAt desc", Item.class)
+            return entityManager.createQuery("from Item i left join fetch i.storageLocation where i.active = true order by i.createdAt desc", Item.class)
                     .setFirstResult(offset).setMaxResults(limit).getResultList();
         }
-        return entityManager.createQuery("from Item i where i.active = true and lower(i.name) like :search order by i.name", Item.class)
+        return entityManager.createQuery("from Item i left join fetch i.storageLocation where i.active = true and (lower(i.name) like :search or lower(i.sku) like :search) order by i.name", Item.class)
                 .setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%")
                 .setFirstResult(offset).setMaxResults(limit)
                 .getResultList();
@@ -77,13 +77,35 @@ public class CatalogOrm {
     }
 
     public List<AssemblyItem> assemblyItems(Assembly assembly) {
-        return entityManager.createQuery("from AssemblyItem ai where ai.assembly = :assembly", AssemblyItem.class)
+        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation where ai.assembly = :assembly", AssemblyItem.class)
                 .setParameter("assembly", assembly).getResultList();
+    }
+
+    public java.util.Map<UUID, List<AssemblyItem>> assemblyItems(List<Assembly> assemblies) {
+        if (assemblies == null || assemblies.isEmpty()) {
+            return java.util.Map.of();
+        }
+        var items = entityManager.createQuery(
+                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation where ai.assembly in :assemblies", AssemblyItem.class)
+                .setParameter("assemblies", assemblies)
+                .getResultList();
+        return items.stream().collect(java.util.stream.Collectors.groupingBy(ai -> ai.assembly.id));
     }
 
     public List<ItemImage> itemImages(Item item) {
         return entityManager.createQuery("from ItemImage image where image.item = :item order by image.displayOrder", ItemImage.class)
                 .setParameter("item", item).getResultList();
+    }
+
+    public java.util.Map<UUID, List<ItemImage>> itemImages(List<Item> items) {
+        if (items == null || items.isEmpty()) {
+            return java.util.Map.of();
+        }
+        var images = entityManager.createQuery(
+                "from ItemImage image where image.item in :items order by image.item.id, image.displayOrder", ItemImage.class)
+                .setParameter("items", items)
+                .getResultList();
+        return images.stream().collect(java.util.stream.Collectors.groupingBy(img -> img.item.id));
     }
 
     public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }

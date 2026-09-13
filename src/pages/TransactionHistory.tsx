@@ -1,19 +1,15 @@
-import { useState } from 'react';
-import { Box, Button, Dialog, DialogContent, DialogTitle, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Button, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
-import { TransactionForm } from '../components/forms/TransactionForm';
-import { useTransactions, useUpdateTransaction } from '../hooks/useTransactions';
+import { useTransactions } from '../hooks/useTransactions';
 import { useItems } from '../hooks/useItems';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
-import type { StockTransaction, TransactionFormData } from '../types';
 import { nameFor, useNames, useLocalizedText } from '../utils/naming';
 
 export function TransactionHistoryPage() {
   const names = useNames();
   const t = useLocalizedText();
   const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
-  const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: transactions, isLoading } = useTransactions({
     itemId: transactionFilters.itemId || undefined,
     userId: transactionFilters.userId || undefined,
@@ -23,19 +19,6 @@ export function TransactionHistoryPage() {
   });
   const { data: items } = useItems();
   const { data: users } = useUsers();
-  const updateTransaction = useUpdateTransaction();
-  const [editingTransaction, setEditingTransaction] = useState<StockTransaction | null>(null);
-
-  function handleUpdate(data: TransactionFormData) {
-    if (!editingTransaction) return;
-    updateTransaction.mutate({ id: editingTransaction.id, data }, {
-      onSuccess: () => {
-        setEditingTransaction(null);
-        showSnackbar(t('Transaktion erfolgreich aktualisiert', 'Transaction updated successfully'), 'success');
-      },
-      onError: () => showSnackbar(t('Fehler beim Aktualisieren der Transaktion', 'Could not update transaction'), 'error'),
-    });
-  }
 
   return (
     <Box>
@@ -60,14 +43,7 @@ export function TransactionHistoryPage() {
         </Tooltip>
       </Stack>
 
-      <TransactionHistoryList transactions={transactions} items={items} users={users} isLoading={isLoading} onEdit={setEditingTransaction} />
-
-      <Dialog open={Boolean(editingTransaction)} onClose={() => setEditingTransaction(null)} keepMounted maxWidth="sm" fullWidth>
-        <DialogTitle>{t('Transaktion bearbeiten', 'Edit transaction')}</DialogTitle>
-        <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-          {editingTransaction && <TransactionForm key={editingTransaction.id} items={items ?? []} initialData={editingTransaction} onSubmit={handleUpdate} isLoading={updateTransaction.isPending} />}
-        </DialogContent>
-      </Dialog>
+      <TransactionHistoryList transactions={transactions} items={items} users={users} isLoading={isLoading} />
     </Box>
   );
 }

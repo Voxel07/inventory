@@ -38,11 +38,10 @@ import {
     CartesianGrid,
     Tooltip,
 } from 'recharts';
-import { useItem, useItems, useUpdateItem } from '../hooks/useItems';
-import { useTransactions, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
-import { useDamageReports } from '../hooks/useDamageReports';
+import { useItem, useUpdateItem } from '../hooks/useItems';
+import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useFactionOrders, useReturnFactionOrderItems } from '../hooks/useFactionOrders';
-import { calculateItemStock } from '../utils/stock';
+import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
@@ -95,25 +94,22 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 export function ItemDetail() {
     const t = useLocalizedText();
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { itemId } = useParams<{ itemId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const { data: item, isLoading } = useItem(itemId ?? '');
-    const { data: allItems } = useItems();
-    const { data: allTransactions } = useTransactions();
-    const { data: itemDamageReports } = useDamageReports(itemId);
+    const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
-    const updateTransaction = useUpdateTransaction();
     const { data: factionOrders = [] } = useFactionOrders();
     const returnFactionOrderItems = useReturnFactionOrderItems();
+    const { data: storageLocations } = useStorageLocations();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState<StockTransaction | null>(null);
 
     useEffect(() => {
         if (searchParams.get('transaction') !== '1') return;
@@ -123,34 +119,14 @@ export function ItemDetail() {
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    function handleUpdateTransaction(data: TransactionFormData) {
-        if (!editingTransaction) return;
-        updateTransaction.mutate(
-            { id: editingTransaction.id, data },
-            {
-                onSuccess: () => {
-                    setEditingTransaction(null);
-                    showSnackbar(t('Transaktion erfolgreich aktualisiert', 'Transaction updated successfully'), 'success');
-                },
-                onError: () => showSnackbar(t('Fehler beim Aktualisieren der Transaktion', 'Could not update transaction'), 'error'),
-            },
-        );
-    }
-
-    const { data: storageLocations } = useStorageLocations();
-    const categories = useMemo(
-        () => [...new Set(allItems?.map((i) => i.category).filter(Boolean) ?? [])],
-        [allItems],
-    );
-
     const itemTransactions = useMemo(
-        () => allTransactions?.filter((tx) => tx.itemId === itemId) ?? [],
-        [allTransactions, itemId],
+        () => itemTransactionsData ?? [],
+        [itemTransactionsData],
     );
 
-    const { totalStock, checkedOut, damaged, remaining } = useMemo(() => {
-        return calculateItemStock(itemId ?? '', allTransactions, itemDamageReports, item?.amount ?? 0, item);
-    }, [itemId, item, allTransactions, itemDamageReports]);
+    const categories = item?.category ? [item.category] : [];
+
+    const { totalStock, checkedOut, damaged, remaining } = getItemStock(item);
 
     const stockHistory = useMemo(
         () => buildStockHistory(itemTransactions, item?.amount ?? 0),
@@ -523,13 +499,6 @@ export function ItemDetail() {
                                                             {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${tx.quantityChanged}` : tx.quantityChanged}
                                                         </Typography>
                                                     </Stack>
-                                                    <TooltipButton
-                                                        variant="icon"
-                                                        tooltipText={t('Transaktion bearbeiten', 'Edit transaction')}
-                                                        icon={<EditIcon sx={{ fontSize: 18 }} />}
-                                                        onClick={() => setEditingTransaction(tx)}
-                                                        size="small"
-                                                    />
                                                 </Box>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                                                     {new Date(tx.timestamp).toLocaleString()} · {tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—'}
@@ -563,7 +532,6 @@ export function ItemDetail() {
                                             <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
                                             <TableCell>{t('Grund', 'Reason')}</TableCell>
                                             <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
-                                            <TableCell align="center" sx={{ width: 80 }}>{t('Aktionen', 'Actions')}</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -584,7 +552,7 @@ export function ItemDetail() {
                                                     <TableCell>
                                                         {tx.reason || '—'}
                                                         {tx.expand?.assetInstanceId && (
-                                                            <Chip
+                                                             <Chip
                                                                 size="small"
                                                                 variant="outlined"
                                                                 color="secondary"
@@ -594,15 +562,6 @@ export function ItemDetail() {
                                                         )}
                                                     </TableCell>
                                                     <TableCell>{tx.notes || '—'}</TableCell>
-                                                    <TableCell align="center">
-                                                        <TooltipButton
-                                                            variant="icon"
-                                                            tooltipText={t('Transaktion bearbeiten', 'Edit transaction')}
-                                                            icon={<EditIcon sx={{ fontSize: 18 }} />}
-                                                            onClick={() => setEditingTransaction(tx)}
-                                                            size="small"
-                                                        />
-                                                    </TableCell>
                                                 </TableRow>
                                             ))}
                                     </TableBody>
@@ -635,29 +594,6 @@ export function ItemDetail() {
                 </DialogContent>
             </Dialog>
 
-            {/* Edit Transaction Dialog */}
-            <Dialog
-                open={Boolean(editingTransaction)}
-                fullScreen={isMobile}
-                onClose={() => setEditingTransaction(null)}
-                keepMounted
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>{t('Transaktion bearbeiten', 'Edit transaction')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    {editingTransaction && (
-                        <TransactionForm
-                            key={editingTransaction.id}
-                            items={allItems ?? []}
-                            initialData={editingTransaction}
-                            onSubmit={handleUpdateTransaction}
-                            isLoading={updateTransaction.isPending}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
             {/* Checkout Dialog */}
             <Dialog
                 open={checkoutOpen}
@@ -670,7 +606,7 @@ export function ItemDetail() {
                 <DialogTitle>{t('Neue Transaktion', 'New transaction')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     <TransactionForm
-                        items={allItems ?? []}
+                        items={[item]}
                         preselectedItemId={item.id}
                         orders={factionOrders}
                         onSubmit={handleTransaction}

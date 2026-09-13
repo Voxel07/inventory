@@ -14,6 +14,10 @@ export function canManageUsers(user: User | null | undefined): boolean {
   return effectiveAccess(user) === 'hq_admin';
 }
 
+export function canAccessProcurement(user: User | null | undefined): boolean {
+  return ['hq_admin', 'event_planner'].includes(effectiveAccess(user));
+}
+
 export function canAccessFaction(
   user: User | null | undefined,
   eventType: EventType,

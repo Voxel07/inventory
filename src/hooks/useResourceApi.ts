@@ -61,44 +61,8 @@ export function createResourceHooks<T extends { id: string }, TForm = Partial<T>
   queryKey: string,
   options?: ResourceHooksOptions | string[],
 ) {
+  const mutableHooks = createMutableResourceHooks(api, queryKey, options);
   const relatedKeys = relatedKeysFrom(options);
-
-  function useList(query?: Record<string, string | number | boolean | undefined>) {
-    return useQuery({
-      queryKey: [queryKey, query],
-      queryFn: () => api.getAll(query),
-    });
-  }
-
-  function useDetail(id?: string) {
-    return useQuery({
-      queryKey: [queryKey, id],
-      queryFn: () => api.getById(id!),
-      enabled: Boolean(id),
-    });
-  }
-
-  function useCreate() {
-    const queryClient = useQueryClient();
-    return useMutation({
-      mutationFn: (data: TForm) => api.create(data),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKey] });
-        relatedKeys?.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
-      },
-    });
-  }
-
-  function useUpdate() {
-    const queryClient = useQueryClient();
-    return useMutation({
-      mutationFn: ({ id, data }: { id: string; data: Partial<TForm> }) => api.update(id, data),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKey] });
-        relatedKeys?.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
-      },
-    });
-  }
 
   function useDelete() {
     const queryClient = useQueryClient();
@@ -123,10 +87,7 @@ export function createResourceHooks<T extends { id: string }, TForm = Partial<T>
   }
 
   return {
-    useList,
-    useDetail,
-    useCreate,
-    useUpdate,
+    ...mutableHooks,
     useDelete,
     useDeleteMany,
   };

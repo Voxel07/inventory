@@ -27,20 +27,7 @@ import { useItems } from '../hooks/useItems';
 import { EVENT_TYPES, type EventReportStatus, type EventType } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
-
-type QuantityInputs = Record<string, string>;
-
-function toInputs(values: Record<string, number> | undefined): QuantityInputs {
-  return Object.fromEntries(Object.entries(values ?? {}).map(([id, value]) => [id, String(value)]));
-}
-
-function toQuantities(values: QuantityInputs): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(values)
-      .map(([id, value]) => [id, Number(value)] as const)
-      .filter(([, value]) => Number.isFinite(value) && value >= 0),
-  );
-}
+import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 
 export function EventDetail() {
   const { reportId = '' } = useParams<{ reportId: string }>();
@@ -65,8 +52,8 @@ export function EventDetail() {
     setEventType(report.eventType);
     setEventDate(report.eventDate.slice(0, 10));
     setStatus(report.status);
-    setPlanned(toInputs(report.plannedQuantities));
-    setUsed(toInputs(report.usedQuantities));
+    setPlanned(toQuantityInputs(report.plannedQuantities));
+    setUsed(toQuantityInputs(report.usedQuantities));
     setNotes(report.notes ?? '');
     setSearch('');
   }, [report]);
@@ -100,8 +87,8 @@ export function EventDetail() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [editing, eventType, items, planned, report?.status, search, used]);
 
-  const plannedQuantities = toQuantities(planned);
-  const usedQuantities = toQuantities(used);
+  const plannedQuantities = toNonNegativeQuantities(planned);
+  const usedQuantities = toNonNegativeQuantities(used);
   const plannedTotal = Object.values(plannedQuantities).reduce((sum, value) => sum + value, 0);
   const usedTotal = Object.values(usedQuantities).reduce((sum, value) => sum + value, 0);
   const usedLines = Object.values(usedQuantities).filter((value) => value > 0).length;

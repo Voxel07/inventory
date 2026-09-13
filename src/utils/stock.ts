@@ -1,4 +1,4 @@
-import type { StockTransaction, DamageReport, Item } from '../types';
+import type { Item } from '../types';
 
 export interface StockCalculation {
   totalStock: number;
@@ -7,13 +7,7 @@ export interface StockCalculation {
   remaining: number;
 }
 
-export function calculateItemStock(
-  itemId: string,
-  transactions: StockTransaction[] | undefined,
-  damageReports: DamageReport[] | undefined,
-  initialAmount = 0,
-  item?: Item,
-): StockCalculation {
+export function getItemStock(item: Item | null | undefined): StockCalculation {
   if (item?.stock) {
     return {
       totalStock: item.stock.totalOwned,
@@ -22,56 +16,11 @@ export function calculateItemStock(
       remaining: item.stock.available,
     };
   }
-
-  let totalAdded = 0;
-  let checkedOut = 0;
-  let hasAddedTransaction = false;
-
-  for (const tx of transactions ?? []) {
-    if (tx.itemId !== itemId) continue;
-    if (tx.transactionType === 'added') {
-      hasAddedTransaction = true;
-      totalAdded += tx.quantityChanged;
-    } else if (tx.transactionType === 'checkout') {
-      checkedOut += tx.quantityChanged;
-    } else if (tx.transactionType === 'checkin') {
-      checkedOut -= tx.quantityChanged;
-    }
-  }
-  checkedOut = Math.max(0, checkedOut);
-
-  // New items store their opening stock on the item record as well as in an
-  // initial transaction. Use the record value until that transaction exists,
-  // but never add both values and double-count the opening stock.
-  if (!hasAddedTransaction) {
-    totalAdded = Math.max(0, initialAmount);
-  }
-
-  let damaged = 0;
-  let writtenOff = 0;
-
-  if (damageReports) {
-    for (const report of damageReports) {
-      if (report.itemId !== itemId) continue;
-      const storedRepaired = report.repairedAmount ?? 0;
-      const storedWrittenOff = report.writtenOffAmount ?? 0;
-      const hasStoredResolution = storedRepaired + storedWrittenOff > 0;
-      const repairedAmount = !hasStoredResolution && report.status === 'repaired' ? report.amount : storedRepaired;
-      const writtenOffAmount = !hasStoredResolution && report.status === 'written_off' ? report.amount : storedWrittenOff;
-      damaged += Math.max(0, (report.amount ?? 0) - repairedAmount - writtenOffAmount);
-      writtenOff += writtenOffAmount;
-    }
-  }
-
-  const totalStock = Math.max(0, totalAdded - writtenOff);
-  // Keep shortages visible. A negative value is meaningful when demand or
-  // imported transaction history exceeds the physical stock.
-  const remaining = totalStock - checkedOut - damaged;
-
+  const base = item?.amount ?? 0;
   return {
-    totalStock,
-    checkedOut,
-    damaged,
-    remaining,
+    totalStock: base,
+    checkedOut: 0,
+    damaged: 0,
+    remaining: base,
   };
 }

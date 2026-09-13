@@ -1,41 +1,48 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, MutationCache, useQueryClient } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, useMediaQuery, useTheme } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
-import { Dashboard } from './pages/Dashboard';
-import { Items } from './pages/Items';
-import { ItemDetail } from './pages/ItemDetail';
-import { AssetDetail } from './pages/AssetDetail';
-import { Assemblies } from './pages/Assemblies';
-import { AssemblyDetail } from './pages/AssemblyDetail';
-import { DamageReportsPage } from './pages/DamageReports';
-import { CheckedOutItemsPage } from './pages/CheckedOutItems';
-import { PrintQRCodesPage } from './pages/PrintQRCodes';
-import { UserDashboard } from './pages/UserDashboard';
-import { StorageLocations } from './pages/StorageLocations';
-import { Events } from './pages/Events';
-import { EventDetail } from './pages/EventDetail';
-import { Orders } from './pages/Orders';
-import { FactionOrderDetail } from './pages/FactionOrderDetail';
-import { LoginPage } from './pages/LoginPage';
-import { UserManagement } from './pages/UserManagement';
-import { TransactionHistoryPage } from './pages/TransactionHistory';
-import { Procurement } from './pages/Procurement';
-import { Maintenance } from './pages/Maintenance';
-import { Profile } from './pages/Profile';
-import { InventoryManagerGuard } from './components/shared/AccessGuard';
+import { InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { canManageInventory } from './utils/access';
-import type { User } from './types';
-import { Navigate } from 'react-router-dom';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
-import { useEffect, useMemo } from 'react';
 import { useAppLanguage, translate } from './utils/naming';
 import { OfflineQueuedError, subscribeToApiChanges } from './services/apiClient';
 import { invalidateForApiChange } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
+import { LoginPage } from './pages/LoginPage';
+
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Items = lazy(() => import('./pages/Items').then((m) => ({ default: m.Items })));
+const ItemDetail = lazy(() => import('./pages/ItemDetail').then((m) => ({ default: m.ItemDetail })));
+const AssetDetail = lazy(() => import('./pages/AssetDetail').then((m) => ({ default: m.AssetDetail })));
+const Assemblies = lazy(() => import('./pages/Assemblies').then((m) => ({ default: m.Assemblies })));
+const AssemblyDetail = lazy(() => import('./pages/AssemblyDetail').then((m) => ({ default: m.AssemblyDetail })));
+const DamageReportsPage = lazy(() => import('./pages/DamageReports').then((m) => ({ default: m.DamageReportsPage })));
+const CheckedOutItemsPage = lazy(() => import('./pages/CheckedOutItems').then((m) => ({ default: m.CheckedOutItemsPage })));
+const PrintQRCodesPage = lazy(() => import('./pages/PrintQRCodes').then((m) => ({ default: m.PrintQRCodesPage })));
+const UserDashboard = lazy(() => import('./pages/UserDashboard').then((m) => ({ default: m.UserDashboard })));
+const StorageLocations = lazy(() => import('./pages/StorageLocations').then((m) => ({ default: m.StorageLocations })));
+const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
+const EventDetail = lazy(() => import('./pages/EventDetail').then((m) => ({ default: m.EventDetail })));
+const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })));
+const FactionOrderDetail = lazy(() => import('./pages/FactionOrderDetail').then((m) => ({ default: m.FactionOrderDetail })));
+const UserManagement = lazy(() => import('./pages/UserManagement').then((m) => ({ default: m.UserManagement })));
+const TransactionHistoryPage = lazy(() => import('./pages/TransactionHistory').then((m) => ({ default: m.TransactionHistoryPage })));
+const Procurement = lazy(() => import('./pages/Procurement').then((m) => ({ default: m.Procurement })));
+const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ default: m.Maintenance })));
+const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
+
+function RouteLoadingFallback() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+      <CircularProgress size={36} />
+    </Box>
+  );
+}
 
 const queryClient = new QueryClient({
   mutationCache: new MutationCache({
@@ -386,31 +393,33 @@ function AppContent() {
       >
         <Toolbar />
         <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<HomeRoute />} />
-            <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
-            <Route path="/items" element={<InventoryManagerGuard><Items /></InventoryManagerGuard>} />
-            <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
-            <Route path="/items/:itemId/assets/:assetId" element={<InventoryManagerGuard><AssetDetail /></InventoryManagerGuard>} />
-            <Route path="/assemblies" element={<InventoryManagerGuard><Assemblies /></InventoryManagerGuard>} />
-            <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
-            <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
-            <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
-            <Route path="/events/orders" element={<Navigate to="/orders?tab=faction" replace />} />
-            <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
-            <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
-            <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
-            <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
-            <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
-            <Route path="/procurement" element={<InventoryManagerGuard><Procurement /></InventoryManagerGuard>} />
-            <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
-            <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
+              <Route path="/items" element={<InventoryManagerGuard><Items /></InventoryManagerGuard>} />
+              <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
+              <Route path="/items/:itemId/assets/:assetId" element={<InventoryManagerGuard><AssetDetail /></InventoryManagerGuard>} />
+              <Route path="/assemblies" element={<InventoryManagerGuard><Assemblies /></InventoryManagerGuard>} />
+              <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
+              <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
+              <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
+              <Route path="/events/orders" element={<Navigate to="/orders?tab=faction" replace />} />
+              <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
+              <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
+              <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
+              <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
+              <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
+              <Route path="/procurement" element={<ProcurementGuard><Procurement /></ProcurementGuard>} />
+              <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
+              <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </Box>
       <Snackbar
@@ -430,7 +439,7 @@ function AppContent() {
 
 function HomeRoute() {
   const { user } = useAuth();
-  return canManageInventory(user as unknown as User) ? <UserDashboard /> : <Navigate to="/orders?tab=faction" replace />;
+  return canManageInventory(user) ? <UserDashboard /> : <Navigate to="/orders?tab=faction" replace />;
 }
 
 export default function App() {

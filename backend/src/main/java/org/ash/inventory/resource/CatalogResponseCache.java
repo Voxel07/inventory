@@ -62,7 +62,7 @@ public class CatalogResponseCache {
     @CacheResult(cacheName = "assemblies-cache")
     @Transactional
     public String assemblies() {
-        return json(catalog.getAssemblies().stream().map(mapper::assembly).toList());
+        return json(mapper.assemblies(catalog.getAssemblies()));
     }
 
     @CacheResult(cacheName = "events-cache")

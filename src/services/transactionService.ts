@@ -20,11 +20,6 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
 type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; size?: number };
 export const getTransactions = (filters?: Filters): Promise<StockTransaction[]> => transactionApi.getAll(filters);
 export const createTransaction = transactionApi.create;
-export const updateTransaction = (_id: string, _data: Partial<TransactionFormData>): Promise<StockTransaction> => {
-  void _id;
-  void _data;
-  return Promise.reject(new Error('Stock transactions are immutable audit records'));
-};
 export async function bulkCheckout(itemIds: string[], reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string) {
   return Promise.all(itemIds.map((itemId) => createTransaction({ itemId, transactionType: 'checkout', quantityChanged: 1, reason, notes, eventType, faction })));
 }

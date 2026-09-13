@@ -35,7 +35,7 @@ function normalizedOrder(request: Promise<FactionOrder>): Promise<FactionOrder> 
   return request.then(normalizeFactionOrder);
 }
 
-export async function getFactionOrders(filters?: { eventType?: string; faction?: string }): Promise<FactionOrder[]> {
+export async function getFactionOrders(filters?: { eventType?: string; faction?: string; orderCode?: string }): Promise<FactionOrder[]> {
   const orders = await apiRequest<FactionOrder[]>('/api/orders', { query: filters });
   return orders.map(normalizeFactionOrder);
 }

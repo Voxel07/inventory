@@ -34,42 +34,58 @@ interface QREntry {
     id: string;
     name: string;
     type: 'item' | 'assembly';
-    qrDataUrl: string;
+}
+
+const qrCache = new Map<string, string>();
+
+async function getOrGenerateQR(id: string, type: 'item' | 'assembly'): Promise<string> {
+    const key = `${type}:${id}`;
+    const cached = qrCache.get(key);
+    if (cached) return cached;
+    const url = await generateQRCodeDataURL(id, type);
+    qrCache.set(key, url);
+    return url;
+}
+
+function QRCodeThumbnail({ id, type, name }: { id: string; type: 'item' | 'assembly'; name: string }) {
+    const [qrUrl, setQrUrl] = useState<string | null>(() => qrCache.get(`${type}:${id}`) ?? null);
+
+    useEffect(() => {
+        let active = true;
+        if (!qrUrl) {
+            getOrGenerateQR(id, type).then((url) => {
+                if (active) setQrUrl(url);
+            });
+        }
+        return () => { active = false; };
+    }, [id, type, qrUrl]);
+
+    return (
+        <Box sx={{ width: '100%', maxWidth: 150, height: 150, mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {qrUrl ? (
+                <Box
+                    component="img"
+                    src={qrUrl}
+                    alt={`QR: ${name}`}
+                    sx={{ width: '100%', height: 'auto', maxHeight: 150 }}
+                />
+            ) : (
+                <CircularProgress size={24} />
+            )}
+        </Box>
+    );
 }
 
 export function PrintQRCodesPage() {
     const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: assemblies, isLoading: assembliesLoading } = useAssemblies();
-    const [entries, setEntries] = useState<QREntry[]>([]);
-    const [generating, setGenerating] = useState(false);
     const [pdfGenerating, setPdfGenerating] = useState(false);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [labelFormatId, setLabelFormatId] = useState<LabelFormatId>('40x30');
 
-    useEffect(() => {
-        if (itemsLoading || assembliesLoading) return;
-
-        const allEntries = [
-            ...(items ?? []).map((item) => ({ id: item.id, name: item.name, type: 'item' as const })),
-            ...(assemblies ?? []).map((a) => ({ id: a.id, name: a.name, type: 'assembly' as const })),
-        ];
-
-        if (allEntries.length === 0) return;
-
-        Promise.all(
-            allEntries.map(async (entry) => {
-                const qrDataUrl = await generateQRCodeDataURL(entry.id, entry.type);
-                return { ...entry, qrDataUrl };
-            }),
-        ).then((results) => {
-            setEntries(results);
-            setGenerating(false);
-        });
-    }, [items, assemblies, itemsLoading, assembliesLoading]);
-
-    const allOptions = useMemo(() => {
+    const allEntries = useMemo<QREntry[]>(() => {
         return [
             ...(items ?? []).map((item) => ({ id: item.id, name: item.name, type: 'item' as const })),
             ...(assemblies ?? []).map((a) => ({ id: a.id, name: a.name, type: 'assembly' as const })),
@@ -79,15 +95,15 @@ export function PrintQRCodesPage() {
     const filteredEntries = useMemo(() => {
         switch (filterMode) {
             case 'items':
-                return entries.filter((e) => e.type === 'item');
+                return allEntries.filter((e) => e.type === 'item');
             case 'assemblies':
-                return entries.filter((e) => e.type === 'assembly');
+                return allEntries.filter((e) => e.type === 'assembly');
             case 'single':
-                return selectedId ? entries.filter((e) => `${e.type}:${e.id}` === selectedId) : [];
+                return selectedId ? allEntries.filter((e) => `${e.type}:${e.id}` === selectedId) : [];
             default:
-                return entries;
+                return allEntries;
         }
-    }, [entries, filterMode, selectedId]);
+    }, [allEntries, filterMode, selectedId]);
 
     async function handleGeneratePDF() {
         if (filteredEntries.length === 0) return;
@@ -119,7 +135,8 @@ export function PrintQRCodesPage() {
                 const qrX = (pageWidth - qrSize) / 2;
                 const qrY = (pageHeight - contentHeight) / 2;
 
-                doc.addImage(entry.qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+                const qrDataUrl = await getOrGenerateQR(entry.id, entry.type);
+                doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
 
                 doc.setFontSize(pageWidth <= 40 ? 7 : 9);
                 const maxTextWidth = pageWidth - margin * 2;
@@ -142,11 +159,11 @@ export function PrintQRCodesPage() {
         }
     }
 
-    if (itemsLoading || assembliesLoading || generating) {
+    if (itemsLoading || assembliesLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>{t('QR-Codes werden generiert...', 'Generating QR codes...')}</Typography>
+                <Typography sx={{ ml: 2 }}>{t('Lade Daten...', 'Loading data...')}</Typography>
             </Box>
         );
     }
@@ -190,9 +207,9 @@ export function PrintQRCodesPage() {
 
                     {filterMode === 'single' && (
                         <Autocomplete
-                            options={allOptions}
+                            options={allEntries}
                             getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
-                            value={allOptions.find((o) => `${o.type}:${o.id}` === selectedId) ?? null}
+                            value={allEntries.find((o) => `${o.type}:${o.id}` === selectedId) ?? null}
                             onChange={(_e, newValue) => setSelectedId(newValue ? `${newValue.type}:${newValue.id}` : null)}
                             renderInput={(params) => (
                                 <TextField {...params} label={t('Artikel oder Baugruppe auswählen', 'Select item or assembly')} size="small" />
@@ -233,14 +250,9 @@ export function PrintQRCodesPage() {
             ) : (
                 <Grid container spacing={2}>
                     {filteredEntries.map((entry) => (
-                        <Grid size={{ xs: 6, sm: 4, md: 3, lg: 2 }} key={entry.id}>
+                        <Grid size={{ xs: 6, sm: 4, md: 3, lg: 2 }} key={`${entry.type}:${entry.id}`}>
                             <Paper sx={{ p: 1.5, textAlign: 'center' }}>
-                                <Box
-                                    component="img"
-                                    src={entry.qrDataUrl}
-                                    alt={`QR: ${entry.name}`}
-                                    sx={{ width: '100%', maxWidth: 150, height: 'auto' }}
-                                />
+                                <QRCodeThumbnail id={entry.id} type={entry.type} name={entry.name} />
                                 <Typography
                                     variant="caption"
                                     sx={{ display: 'block', mt: 0.5, wordBreak: 'break-word' }}

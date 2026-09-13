@@ -16,10 +16,8 @@ import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import AddBoxIcon from '@mui/icons-material/AddBox';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import type { EventType, FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
-import { useTransactions } from '../../hooks/useTransactions';
-import { useDamageReports } from '../../hooks/useDamageReports';
 import { useItemAssets } from '../../hooks/useItems';
-import { calculateItemStock } from '../../utils/stock';
+import { getItemStock } from '../../utils/stock';
 import { useNames, useLocalizedText } from '../../utils/naming';
 
 interface Props {
@@ -45,8 +43,6 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const names = useNames();
     const t = useLocalizedText();
     const transactionReasons = Object.values(names.reason);
-    const { data: transactions } = useTransactions();
-    const { data: damageReports } = useDamageReports();
     const [formData, setFormData] = useState<TransactionFormData>({
         itemId: initialData?.itemId ?? preselectedItemId ?? '',
         transactionType: initialData?.transactionType ?? 'checkout',
@@ -62,13 +58,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
-    const selectedStock = calculateItemStock(
-        formData.itemId,
-        transactions,
-        damageReports,
-        selectedItem?.amount ?? 0,
-        selectedItem,
-    );
+    const selectedStock = getItemStock(selectedItem);
     const eligibleOrders = useMemo(
         () => orders.filter((order) => (
             order.status === 'picked_up' || order.status === 'partially_returned'
@@ -124,7 +114,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                 >
                     {items.map((item) => {
-                        const { remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
+                        const { remaining } = getItemStock(item);
                         return (
                             <MenuItem key={item.id} value={item.id}>
                                 {item.name} ({t('Verfügbar', 'Available')}: {remaining})

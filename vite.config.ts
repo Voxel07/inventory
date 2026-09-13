@@ -53,6 +53,9 @@ export default defineConfig({
             if (id.includes('jspdf')) {
               return 'jspdf-vendor';
             }
+            if (id.includes('leaflet')) {
+              return 'leaflet-vendor';
+            }
           }
         }
       }

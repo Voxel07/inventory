@@ -35,16 +35,14 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import GridViewIcon from '@mui/icons-material/GridView';
 import { useNavigate } from 'react-router-dom';
-import { EVENT_TYPES, type DamageReport, type EventType, type Item, type StockTransaction } from '../../types';
-import { calculateItemStock } from '../../utils/stock';
+import { EVENT_TYPES, type EventType, type Item } from '../../types';
+import { getItemStock } from '../../utils/stock';
 import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { itemImageUrl } from '../../utils/itemImages';
 
 interface Props {
     items: Item[] | undefined;
-    transactions: StockTransaction[] | undefined;
-    damageReports: DamageReport[] | undefined;
     isLoading: boolean;
     onEdit: (item: Item) => void;
     onDelete: (id: string) => void;
@@ -61,7 +59,7 @@ function stockColor(remaining: number, minStock: number) {
     return 'success.main';
 }
 
-export function ItemsList({ items, transactions, damageReports, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
+export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
     const navigate = useNavigate();
     const t = useLocalizedText();
     const theme = useTheme();
@@ -92,10 +90,10 @@ export function ItemsList({ items, transactions, damageReports, isLoading, onEdi
     const enrichedItems = useMemo(() => {
         if (!items) return [];
         return items.map((item) => {
-            const { totalStock, damaged, remaining } = calculateItemStock(item.id, transactions, damageReports, item.amount ?? 0, item);
+            const { totalStock, damaged, remaining } = getItemStock(item);
             return { item, totalStock, damaged, remaining };
         });
-    }, [items, transactions, damageReports]);
+    }, [items]);
 
     const filteredAndSorted = useMemo(() => {
         let result = enrichedItems;

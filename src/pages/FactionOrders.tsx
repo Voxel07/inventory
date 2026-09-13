@@ -34,7 +34,6 @@ import { useUIStore } from '../store/uiStore';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
-import type { User } from '../types';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 
@@ -62,7 +61,7 @@ export function FactionOrders() {
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { user } = useAuth();
-  const currentUser = user as unknown as User;
+  const currentUser = user;
   const isManager = canManageInventory(currentUser);
   const allowedKeys = allowedFactionKeys(currentUser);
   const selectableEvents = EVENT_TYPES.filter((type) => FACTIONS_BY_EVENT[type]
