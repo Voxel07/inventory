@@ -41,21 +41,21 @@ export function Items() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 1 }}>
                 <Typography variant="h4">{t('Artikel', 'Items')}</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: { xs: 0.25, sm: 1 }, flexShrink: 0 }}>
                     <TooltipButton
                         tooltipText={t('Artikel und Baugruppen aus CSV importieren', 'Import items and assemblies from CSV')}
                         icon={<FileUploadIcon />}
-                        label={t('CSV Import', 'CSV import')}
-                        variant="outlined"
+                        label={isMobile ? undefined : t('CSV Import', 'CSV import')}
+                        variant={isMobile ? 'icon' : 'outlined'}
                         onClick={() => setImportOpen(true)}
                     />
                     <TooltipButton
                         tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
                         icon={<AddIcon />}
-                        label={t('Artikel hinzufügen', 'Add item')}
-                        variant="contained"
+                        label={isMobile ? undefined : t('Artikel hinzufügen', 'Add item')}
+                        variant={isMobile ? 'icon' : 'contained'}
                         onClick={crud.openCreate}
                     />
                 </Box>

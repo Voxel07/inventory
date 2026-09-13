@@ -365,38 +365,21 @@ export function StorageLocations() {
                                         <Typography color="text.secondary">{t('In diesem Lagerort sind noch keine Artikel gelagert.', 'No items are stored at this location yet.')}</Typography>
                                     </Box>
                                 ) : isMobile ? (
-                                    <Stack spacing={1}>
-                                        {enrichedStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
+                                    <Stack spacing={0.5}>
+                                        {enrichedStoredItems.map(({ item, remaining }) => (
                                             <Card
                                                 key={item.id}
                                                 variant="outlined"
                                                 onClick={() => navigate(`/items/${item.id}`)}
                                                 sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }}
                                             >
-                                                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
-                                                        <Box sx={{ minWidth: 0, mr: 1 }}>
-                                                            <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                                                            {item.category && <Typography variant="caption" color="text.secondary">{item.category}</Typography>}
-                                                        </Box>
-                                                        <Chip
-                                                            label={formatStatus(item.status)}
-                                                            color={
-                                                                item.status === 'available'
-                                                                    ? 'success'
-                                                                    : item.status === 'checked_out'
-                                                                        ? 'warning'
-                                                                        : item.status === 'damaged'
-                                                                            ? 'error'
-                                                                            : 'default'
-                                                            }
-                                                            size="small"
-                                                        />
-                                                    </Box>
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                                                        <Typography variant="body2" color="text.secondary">
-                                                            <strong>{remaining}</strong> {t('verfügbar', 'available')} / {totalStock} {t('gesamt', 'total')}
-                                                            {checkedOut > 0 && ` (${checkedOut} ${t('ausgeliehen', 'out')})`}
+                                                <CardContent sx={{ px: 1.5, py: 1, '&:last-child': { pb: 1 } }}>
+                                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                                        <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700 }}>
+                                                            {item.name}
+                                                        </Typography>
+                                                        <Typography sx={{ flexShrink: 0, color: remaining > 0 ? 'success.main' : 'error.main', fontWeight: 800 }}>
+                                                            {remaining}
                                                         </Typography>
                                                         <ArrowForwardIosIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
                                                     </Box>

@@ -176,13 +176,6 @@ export function FactionOrderForm({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [assemblies, assemblyQuantities, eventType, search]);
 
-  const hasActiveSearch = Boolean(search.trim());
-  const displayedAssemblies = useMemo(
-    () => isMobile && !hasActiveSearch
-      ? visibleAssemblies.filter((assembly) => !(Number(assemblyQuantities[assembly.id]) > 0))
-      : visibleAssemblies,
-    [assemblyQuantities, hasActiveSearch, isMobile, visibleAssemblies],
-  );
   const selectedAssemblies = useMemo(
     () => assemblies
       .filter((assembly) => Number(assemblyQuantities[assembly.id]) > 0)
@@ -430,7 +423,7 @@ export function FactionOrderForm({
           </Stack>
           {viewMode === 'tiles' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
-              {displayedAssemblies.map((assembly) => {
+              {visibleAssemblies.map((assembly) => {
                 const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -459,7 +452,7 @@ export function FactionOrderForm({
             </Box>
           ) : (
             <Stack spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
-              {displayedAssemblies.map((assembly) => {
+              {visibleAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -490,7 +483,7 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!displayedAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
         </Box>
 
         <Box>

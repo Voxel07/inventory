@@ -35,7 +35,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import GridViewIcon from '@mui/icons-material/GridView';
 import { useNavigate } from 'react-router-dom';
-import { EVENT_TYPES, type EventType, type Item } from '../../types';
+import type { Item } from '../../types';
 import { getItemStock } from '../../utils/stock';
 import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
@@ -65,9 +65,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const activeEventType = useUIStore((state) => state.activeEventType);
-    const setActiveEventType = useUIStore((state) => state.setActiveEventType);
     const [search, setSearch] = useState('');
-    const [eventFilter, setEventFilter] = useState<EventType | ''>(activeEventType);
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -77,7 +75,6 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
     const [actionMenu, setActionMenu] = useState<{ anchorEl: HTMLElement; item: Item } | null>(null);
 
-    useEffect(() => setEventFilter(activeEventType), [activeEventType]);
     useEffect(() => {
         const saved = window.localStorage.getItem(isMobile ? 'inventory-item-view-mobile' : 'inventory-item-view-desktop');
         setViewMode(saved === 'list' || saved === 'tiles' ? saved : isMobile ? 'tiles' : 'list');
@@ -107,9 +104,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
             );
         }
 
-        if (eventFilter) {
-            result = result.filter(({ item }) => item.eventTypes?.includes(eventFilter));
-        }
+        result = result.filter(({ item }) => item.eventTypes?.includes(activeEventType));
 
         if (sortField) {
             result = [...result].sort((a, b) => {
@@ -121,7 +116,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
         }
 
         return result;
-    }, [enrichedItems, search, eventFilter, sortField, sortDir]);
+    }, [enrichedItems, search, activeEventType, sortField, sortDir]);
 
     function handleSort(field: SortField) {
         if (sortField === field) {
@@ -174,21 +169,6 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                     size="small"
                     sx={{ flex: '1 1 280px' }}
                 />
-                <TextField
-                    select
-                    label={t('Event filtern', 'Filter event')}
-                    value={eventFilter}
-                    onChange={(event) => {
-                        const value = event.target.value as EventType | '';
-                        setEventFilter(value);
-                        if (value) setActiveEventType(value);
-                    }}
-                    size="small"
-                    sx={{ minWidth: { xs: '100%', sm: 170 } }}
-                >
-                    <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
-                    {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
-                </TextField>
                 <ToggleButtonGroup
                     exclusive
                     size="small"
@@ -280,54 +260,35 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                     {filteredAndSorted.length === 0 && <Grid size={{ xs: 12 }}><Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper></Grid>}
                 </Grid>
             ) : isMobile ? (
-                <Stack spacing={0.75}>
-                    {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
+                <Stack spacing={0.5}>
+                    {filteredAndSorted.map(({ item, totalStock, remaining }) => {
                         const minStock = item.minStock ?? 5;
                         const color = stockColor(remaining, minStock);
-                        const location = item.expand?.storageLocation
-                            ? [item.expand.storageLocation.name, item.expand.storageLocation.location, item.expand.storageLocation.position].filter(Boolean).join(' / ')
-                            : item.storageLocation || '—';
                         return (
-                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ p: 1, cursor: 'pointer' }}>
-                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start' }}>
+                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
+                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                                     <Checkbox
                                         size="small"
                                         checked={selectedIds.has(item.id)}
                                         onClick={(event) => event.stopPropagation()}
                                         onChange={() => toggleSelection(item.id)}
                                         slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
-                                        sx={{ p: 0.5, ml: -0.5 }}
+                                        sx={{ p: 0.5 }}
                                     />
-                                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                                            <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', overflowWrap: 'anywhere' }}>{item.name}</Typography>
-                                            {item.trackingMode === 'serialized' && (
-                                                <Chip size="small" label={t('Einzelgeräte', 'Serialized')} variant="outlined" color="info" sx={{ height: 18, fontSize: '0.65rem' }} />
-                                            )}
-                                        </Box>
-                                        <Typography variant="caption" color="text.secondary">{item.category || t('Ohne Kategorie', 'No category')}</Typography>
-                                    </Box>
+                                    <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
+                                        {item.name}
+                                    </Typography>
+                                    <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
+                                        {remaining}/{totalStock}
+                                    </Typography>
                                     <IconButton
                                         size="small"
                                         aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
                                         onClick={(event) => openActionMenu(event, item)}
-                                        sx={{ mt: -0.5, mr: -0.5 }}
+                                        sx={{ p: 0.5 }}
                                     >
                                         <MoreVertIcon fontSize="small" />
                                     </IconButton>
-                                </Box>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(72px, auto) 1fr', gap: 1, mt: 0.5, pl: 4 }}>
-                                    <Box>
-                                        <Typography sx={{ color, fontWeight: 800, lineHeight: 1.2 }}>{remaining}/{totalStock}</Typography>
-                                        {damaged > 0 && (
-                                            <Typography variant="caption" color="text.secondary" noWrap>
-                                                {damaged} {t('defekt', 'damaged')}
-                                            </Typography>
-                                        )}
-                                    </Box>
-                                    <Box>
-                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{location}</Typography>
-                                    </Box>
                                 </Box>
                             </Paper>
                         );

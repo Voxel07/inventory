@@ -18,15 +18,17 @@ import {
     IconButton,
     ListItemIcon,
     ListItemText,
-    Tooltip,
     Box,
     Button,
     Checkbox,
+    TextField,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import MenuIcon from '@mui/icons-material/Menu';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useNavigate } from 'react-router-dom';
 import { TooltipButton } from '../shared/TooltipButton';
 import type { Assembly, Item } from '../../types';
@@ -46,6 +48,9 @@ interface Props {
 export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
     const t = useLocalizedText();
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const [search, setSearch] = useState('');
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -53,6 +58,11 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
         item.id,
         getItemStock(item),
     ])), [items]);
+    const filteredAssemblies = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+        if (!normalizedSearch) return assemblies ?? [];
+        return (assemblies ?? []).filter((assembly) => assembly.name.toLowerCase().includes(normalizedSearch));
+    }, [assemblies, search]);
 
     useEffect(() => {
         const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);
@@ -142,6 +152,14 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
 
     return (
         <Box>
+            <TextField
+                label={t('Nach Name suchen', 'Search by name')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                size="small"
+                fullWidth
+                sx={{ mb: 2 }}
+            />
             {selectedIds.size > 0 && (
                 <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 700 }}>
@@ -152,6 +170,47 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                     </Button>
                 </Paper>
             )}
+            {isMobile ? (
+                <Stack spacing={0.5}>
+                    {filteredAssemblies.map((assembly) => {
+                        const { totalStock, remaining } = getAssemblyStock(assembly);
+                        const color = remaining > 0 ? 'success.main' : 'error.main';
+                        return (
+                            <Paper key={assembly.id} onClick={() => navigate(`/assemblies/${assembly.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
+                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                    <Checkbox
+                                        size="small"
+                                        checked={selectedIds.has(assembly.id)}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onChange={() => toggleSelection(assembly.id)}
+                                        slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
+                                        sx={{ p: 0.5 }}
+                                    />
+                                    <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
+                                        {assembly.name}
+                                    </Typography>
+                                    <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
+                                        {remaining}/{totalStock}
+                                    </Typography>
+                                    <IconButton
+                                        size="small"
+                                        aria-label={t('Baugruppenaktionen öffnen', 'Open assembly actions')}
+                                        onClick={(event) => handleOpenMenu(event, assembly)}
+                                        sx={{ p: 0.5 }}
+                                    >
+                                        <MoreVertIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                            </Paper>
+                        );
+                    })}
+                    {filteredAssemblies.length === 0 && (
+                        <Paper sx={{ p: 3 }}>
+                            <Typography color="text.secondary">{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</Typography>
+                        </Paper>
+                    )}
+                </Stack>
+            ) : (
             <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                 <Table size="small">
                 <TableHead>
@@ -159,11 +218,19 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                         <TableCell padding="checkbox">
                             <Checkbox
                                 size="small"
-                                checked={assemblies.length > 0 && assemblies.every((assembly) => selectedIds.has(assembly.id))}
-                                indeterminate={assemblies.some((assembly) => selectedIds.has(assembly.id)) && !assemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                checked={filteredAssemblies.length > 0 && filteredAssemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                indeterminate={filteredAssemblies.some((assembly) => selectedIds.has(assembly.id)) && !filteredAssemblies.every((assembly) => selectedIds.has(assembly.id))}
                                 onChange={() => {
-                                    const allSelected = assemblies.every((assembly) => selectedIds.has(assembly.id));
-                                    setSelectedIds(allSelected ? new Set() : new Set(assemblies.map((assembly) => assembly.id)));
+                                    const visibleIds = filteredAssemblies.map((assembly) => assembly.id);
+                                    const allSelected = visibleIds.every((id) => selectedIds.has(id));
+                                    setSelectedIds((current) => {
+                                        const next = new Set(current);
+                                        for (const id of visibleIds) {
+                                            if (allSelected) next.delete(id);
+                                            else next.add(id);
+                                        }
+                                        return next;
+                                    });
                                 }}
                                 slotProps={{ input: { 'aria-label': t('Alle Baugruppen auswählen', 'Select all assemblies') } }}
                             />
@@ -177,7 +244,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {assemblies.map((assembly) => {
+                    {filteredAssemblies.map((assembly) => {
                         const assemblyItems = getExpandedItems(assembly);
                         const { totalStock, remaining } = getAssemblyStock(assembly);
                         return (
@@ -232,20 +299,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                                     {getAssemblyTotalValue(assembly).toFixed(2)} €
                                 </TableCell>
                                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                    {/* Burger menu for small screens (xs) */}
-                                    <Box sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
-                                        <Tooltip title={t('Aktionen', 'Actions')} arrow>
-                                            <IconButton
-                                                onClick={(e) => handleOpenMenu(e, assembly)}
-                                                size="small"
-                                            >
-                                                <MenuIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Box>
-
-                                    {/* Individual buttons for larger screens (sm and up) */}
-                                    <Box sx={{ display: { xs: 'none', sm: 'inline-flex' }, gap: 0.5 }}>
+                                    <Box sx={{ display: 'inline-flex', gap: 0.5 }}>
                                         <TooltipButton
                                             variant="icon"
                                             tooltipText={t('Baugruppendetails anzeigen', 'View assembly details')}
@@ -275,9 +329,15 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                             </TableRow>
                         );
                     })}
+                    {filteredAssemblies.length === 0 && (
+                        <TableRow>
+                            <TableCell colSpan={7}>{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</TableCell>
+                        </TableRow>
+                    )}
                 </TableBody>
                 </Table>
-
+            </TableContainer>
+            )}
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -303,7 +363,6 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                     <ListItemText>{t('Löschen', 'Delete')}</ListItemText>
                 </MenuItem>
             </Menu>
-            </TableContainer>
         </Box>
     );
 }
