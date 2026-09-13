@@ -4,9 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardActionArea,
-  CardContent,
   Chip,
   Dialog,
   DialogContent,
@@ -36,6 +33,12 @@ import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
+
+const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
+
+function isHistoricalOrder(order: FactionOrder) {
+  return HISTORY_ORDER_STATUSES.includes(order.status);
+}
 
 function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error' {
   if (status === 'draft') return 'default';
@@ -79,9 +82,15 @@ export function FactionOrders() {
     [allOrders, currentUser, eventType],
   );
 
-  const ordersByFaction = useMemo(() => Object.fromEntries(
-    visibleFactions.map((faction) => [faction, orders.filter((order) => order.faction === faction)]),
-  ), [orders, visibleFactions]);
+  const activeOrderGroups = useMemo(() => [...new Set(orders
+    .filter((order) => !isHistoricalOrder(order))
+    .map((order) => order.faction))]
+    .map((faction) => ({
+      faction,
+      orders: orders.filter((order) => order.faction === faction && !isHistoricalOrder(order)),
+    })), [orders]);
+  const activeOrderCount = activeOrderGroups.reduce((count, group) => count + group.orders.length, 0);
+  const historyOrders = useMemo(() => orders.filter(isHistoricalOrder), [orders]);
 
   useEffect(() => {
     if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
@@ -170,78 +179,80 @@ export function FactionOrders() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(3, minmax(0, 1fr))' },
-          gap: 2,
-          mb: 4,
-        }}
-      >
-        {visibleFactions.map((faction) => {
-          const factionOrders = ordersByFaction[faction] ?? [];
-          const latest = factionOrders[0];
-          const totals = latest ? progress(latest) : undefined;
-          return (
-            <Card key={`${eventType}-${faction}`} sx={{ borderColor: latest?.status === 'ready' ? 'success.main' : 'divider' }}>
-              {latest ? (
-                <CardActionArea onClick={() => navigate(`/orders/faction/${latest.id}`)} sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Box>
-                        <Typography variant="overline" color="text.secondary">{eventType === 'LS' ? 'LightSim' : eventType}</Typography>
-                        <Typography variant="h5">{faction}</Typography>
-                      </Box>
-                      <Chip size="small" color={statusColor(latest.status)} label={statusLabel(latest.status)} />
-                    </Stack>
-                    <Typography sx={{ mt: 2 }}>
-                      {new Date(latest.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
-                    </Typography>
-                    {latest.requestedPickupDate && (
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(latest.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary">
-                      {['picked_up', 'returned'].includes(latest.status) ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')}: {totals?.prepared ?? 0}/{totals?.requested ?? 0} · {Object.keys(latest.requestedQuantities).length + Object.keys(latest.requestedAssemblyQuantities ?? {}).length} {t('Positionen', 'lines')}
-                    </Typography>
-                    <Typography variant="caption" color={latest.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block', mt: 0.5, fontWeight: latest.status === 'ready' ? 800 : 400 }}>
-                      {t('Abholort', 'Pickup location')}: {pickupLabel(latest)}
-                    </Typography>
-                    <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {factionOrders.length} {t('Listen im Verlauf', 'lists in history')}
-                      </Typography>
-                      <ArrowForwardIcon color="primary" />
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
-              ) : (
-                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                    <GroupsIcon color="primary" />
-                    <Typography variant="h5">{faction}</Typography>
-                  </Stack>
-                  <Typography color="text.secondary" sx={{ mt: 1, mb: 2, flex: 1 }}>
-                    {isLoading ? t('Wird geladen …', 'Loading …') : t('Noch keine Bestellliste vorhanden.', 'No order list yet.')}
-                  </Typography>
-                  <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openCreate(faction)}>
-                    {t('Liste erstellen', 'Create list')}
-                  </Button>
-                </CardContent>
-              )}
-            </Card>
-          );
-        })}
-      </Box>
+      <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktive Bestellungen', 'Active orders')}</Typography>
+      <Paper sx={{ mb: 4, overflow: 'hidden' }}>
+        {!activeOrderCount && !isLoading && (
+          <Typography color="text.secondary" sx={{ p: 2 }}>
+            {t('Für dieses Event gibt es keine aktiven Bestellungen.', 'There are no active orders for this event.')}
+          </Typography>
+        )}
+        {isLoading && !activeOrderCount && (
+          <Typography color="text.secondary" sx={{ p: 2 }}>{t('Wird geladen …', 'Loading …')}</Typography>
+        )}
+        <Stack>
+          {activeOrderGroups.map(({ faction, orders: factionOrders }) => (
+            <Box
+              key={`${eventType}-${faction}`}
+              sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}
+            >
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ px: 2, py: 1, alignItems: 'center', bgcolor: 'action.hover' }}
+              >
+                <GroupsIcon color="primary" fontSize="small" />
+                <Typography sx={{ flex: 1, fontWeight: 800 }}>{faction}</Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`${factionOrders.length} ${t('aktiv', 'active')}`}
+                />
+              </Stack>
+              <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
+                {factionOrders.map((order) => {
+                  const totals = progress(order);
+                  return (
+                    <Button
+                      key={order.id}
+                      color="inherit"
+                      onClick={() => navigate(`/orders/faction/${order.id}`)}
+                      sx={{ px: 2, py: 1.25, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}
+                    >
+                      <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center' }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 700 }}>{order.orderCode}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
+                            {['picked_up', 'partially_returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
+                          </Typography>
+                          {order.requestedPickupDate && (
+                            <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
+                              {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: order.status === 'ready' ? 800 : 400 }}>
+                            {t('Abholort', 'Pickup location')}: {pickupLabel(order)}
+                          </Typography>
+                        </Box>
+                        <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
+                        <ArrowForwardIcon fontSize="small" />
+                      </Stack>
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
+      </Paper>
 
-      <Typography variant="h6" sx={{ mb: 1 }}>{t('Verlauf aller Listen', 'All list history')}</Typography>
+      <Typography variant="h6" sx={{ mb: 1 }}>{t('Bestellverlauf', 'Order history')}</Typography>
       <Paper sx={{ overflow: 'hidden' }}>
-        {!orders.length && !isLoading && (
-          <Typography color="text.secondary" sx={{ p: 2 }}>{t('Für dieses Event gibt es noch keine Listen.', 'There are no lists for this event yet.')}</Typography>
+        {!historyOrders.length && !isLoading && (
+          <Typography color="text.secondary" sx={{ p: 2 }}>{t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}</Typography>
         )}
         <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-          {orders.map((order) => {
+          {historyOrders.map((order) => {
             const totals = progress(order);
             return (
               <Button
