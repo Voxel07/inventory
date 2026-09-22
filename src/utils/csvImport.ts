@@ -95,6 +95,18 @@ export interface ParsedReturnRow {
   statusMessage?: string;
 }
 
+export interface ParsedCheckoutRow {
+  index: number;
+  itemName: string;
+  quantity: number;
+  assetCodes: string[];
+  eventType?: EventType;
+  faction?: string;
+  notes: string;
+  status: 'valid' | 'error';
+  statusMessage?: string;
+}
+
 export type CsvImportType = 'items' | 'assemblies' | 'combined';
 
 /**
@@ -1125,6 +1137,30 @@ export function parseReturnsFromCsv(
   return results;
 }
 
+/** Explicit checkout rows make imported sample stock usable for return flows. */
+export function parseCheckoutsFromCsv(rows: Record<string, string>[], items: Item[]): ParsedCheckoutRow[] {
+  const names = new Set(items.map((item) => item.name.toLowerCase().trim()));
+  return rows.flatMap((raw, index) => {
+    const type = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
+    if (!['checkout', 'ausleihe', 'ausgabe'].includes(type ?? '')) return [];
+    const itemName = getField(raw, ITEM_NAME_ALIASES) ?? '';
+    const quantity = Math.round(parseNumber(getField(raw, AMOUNT_ALIASES), 1));
+    const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
+    const event = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
+    const eventType = (EVENT_TYPES as readonly string[]).includes(event ?? '') ? event as EventType : undefined;
+    const faction = getField(raw, ORDER_FACTION_ALIASES);
+    const notes = getField(raw, HINT_ALIASES) ?? '';
+    const statusMessage = !names.has(itemName.toLowerCase().trim()) ? `Artikel "${itemName}" nicht gefunden`
+      : quantity < 1 ? 'Menge muss mindestens 1 sein'
+      : !eventType || !faction ? 'Eventtyp und Fraktion sind erforderlich'
+      : !FACTIONS_BY_EVENT[eventType].some((value) => value.toLowerCase() === faction.toLowerCase()) ? `Fraktion "${faction}" gehört nicht zum Eventtyp ${eventType}`
+      : assetCodes.length > 0 && assetCodes.length !== quantity ? 'AssetCodes müssen der Menge entsprechen'
+      : undefined;
+    return [{ index: index + 1, itemName, quantity, assetCodes, eventType, faction, notes,
+      status: statusMessage ? 'error' as const : 'valid' as const, statusMessage }];
+  });
+}
+
 /**
  * Generates sample CSV files for download
  */
@@ -1148,7 +1184,7 @@ export function generateSampleAssembliesCsv(): string {
 
 export function generateSampleCombinedCsv(): string {
   return [
-    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes;Eventtyp;Eventdatum;BestellteArtikel;RueckgabeArtikel;VerbrauchteArtikel;Bestellstatus;Zweck;Bestellname',
+    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes;Eventtyp;Eventdatum;BestellteArtikel;RueckgabeArtikel;VerbrauchteArtikel;Bestellstatus;Zweck;Bestellname;Fraktion',
     'Artikel;Feld-PC;IT & Elektronik;2;1;650,00;Lager A; ;DE,TNO;Live-Map Rechner;serialized;"PC-01, PC-02"',
     'Artikel;Zeltgestänge 4x4m;Infrastruktur;6;2;120,00;Lager Zelt; ;DE,TNO;Auf Vollständigkeit prüfen;bulk;',
     'Artikel;Zeltplane 4x4m;Infrastruktur;6;2;180,00;Lager Zelt; ;DE,TNO;Trocken lagern;bulk;',
@@ -1157,5 +1193,6 @@ export function generateSampleCombinedCsv(): string {
     'Event;;;;;;;;;;;;DE;2026-06-13;;;;;',
     'AllgemeineBestellung;Catering;;;;;;;;;;;DE;2026-06-13;"Heringe 30cm (10er Set): 2";"Heringe 30cm (10er Set): 1";;partially_returned;Catering-Zelt;',
     'Return;Heringe 30cm (10er Set);;1;;;;;;;;;DE;2026-06-13;;;;;;Catering',
+    'Ausleihe;Zeltgestänge 4x4m;;1;;;;;;;;;DE;;;;;;;;KGG',
   ].join('\r\n');
 }

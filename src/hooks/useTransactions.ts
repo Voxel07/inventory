@@ -15,7 +15,7 @@ const baseHooks = createCreateResourceHooks<StockTransaction, TransactionFormDat
 
 export const useCreateTransaction = baseHooks.useCreate;
 
-export function useTransactions(filters?: { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; size?: number }) {
+export function useTransactions(filters?: { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; page?: number; size?: number }) {
   return useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => getTransactions(filters),

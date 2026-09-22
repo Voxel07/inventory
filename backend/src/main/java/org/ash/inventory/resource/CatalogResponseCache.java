@@ -89,6 +89,7 @@ public class CatalogResponseCache {
         Set<String> cacheNames = new LinkedHashSet<>();
         switch (resource) {
             case "items" -> cacheNames.add("assemblies-cache");
+            case "category-maintenance" -> cacheNames.add("assemblies-cache");
             case "storage-locations" -> cacheNames.addAll(Set.of("locations-cache", "assemblies-cache"));
             case "assemblies" -> cacheNames.add("assemblies-cache");
             case "events" -> cacheNames.add("events-cache");

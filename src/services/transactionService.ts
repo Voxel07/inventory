@@ -17,7 +17,7 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
   },
 );
 
-type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; size?: number };
+type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; page?: number; size?: number };
 export const getTransactions = (filters?: Filters): Promise<StockTransaction[]> => transactionApi.getAll(filters);
 export const createTransaction = transactionApi.create;
 export async function bulkCheckout(itemIds: string[], reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string) {

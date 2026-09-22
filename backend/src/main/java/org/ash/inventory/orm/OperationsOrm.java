@@ -37,7 +37,7 @@ public class OperationsOrm {
         if (type != null && !type.isBlank()) jpql.append(" and tx.type = :type");
         if (start != null) jpql.append(" and tx.occurredAt >= :start");
         if (end != null) jpql.append(" and tx.occurredAt <= :end");
-        jpql.append(" order by tx.occurredAt desc");
+        jpql.append(" order by tx.occurredAt desc, tx.id desc");
         var query = entityManager.createQuery(jpql.toString(), StockTransaction.class);
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);

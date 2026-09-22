@@ -147,6 +147,13 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </ToggleButton>
                         <ToggleButton value="added" disabled={isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
                     </ToggleButtonGroup>
+                    {isSerialized && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                            {t('Seriengeräte werden einzeln mit einem Asset-Code angelegt. Nutzen Sie „Seriengeräte“ in den Artikeldetails, um Bestand hinzuzufügen.', 'Serialized assets are added individually with an asset code. Use “Serialized assets” on the item detail page to add stock.')}
+                            {(selectedStock.remaining < 1 || (formData.transactionType === 'checkout' && !assetsLoading && selectableAssets.length === 0))
+                                && ` ${t('Die Ausleihe ist gesperrt, bis ein verfügbares Seriengerät vorhanden ist.', 'Checkout is disabled until an available serialized asset exists.')}`}
+                        </Typography>
+                    )}
                 </Box>
                 {formData.transactionType === 'checkout' && (
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>

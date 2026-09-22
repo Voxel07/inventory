@@ -59,6 +59,7 @@ import {
   type ParsedReturnRow,
   type FactionOrderImportStatus,
   parseReturnsFromCsv,
+  parseCheckoutsFromCsv,
 } from '../../utils/csvImport';
 import type { Item, Assembly, StorageLocation } from '../../types';
 import { createItem, updateItem, createItemAssets, getItemAssets } from '../../services/inventoryService';
@@ -74,7 +75,7 @@ import {
   pickUpFactionOrder,
   returnFactionOrder,
 } from '../../services/factionOrderService';
-import { createTransaction } from '../../services/transactionService';
+import { createTransaction, getTransactions } from '../../services/transactionService';
 import { createOrder, getOrders, returnOrder, transitionOrder } from '../../services/orderService';
 import { createStorageLocation } from '../../services/storageLocationService';
 import { useQueryClient } from '@tanstack/react-query';
@@ -146,6 +147,7 @@ export function CsvImportDialog({
     successOrders: number;
     successGeneralOrders: number;
     successReturns: number;
+    successCheckouts: number;
     errors: string[];
   } | null>(null);
 
@@ -209,6 +211,8 @@ export function CsvImportDialog({
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations);
   }, [rows, tabType, effectiveItemsForAssemblies, storageLocations]);
+  const parsedCheckouts = useMemo(() => tabType === 'combined'
+    ? parseCheckoutsFromCsv(rows, effectiveItemsForAssemblies) : [], [rows, tabType, effectiveItemsForAssemblies]);
 
   // Statistics
   const validItemsCount = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems)).length;
@@ -217,15 +221,17 @@ export function CsvImportDialog({
   const validOrdersCount = parsedOrders.filter((order) => order.status === 'valid').length;
   const validGeneralOrdersCount = parsedGeneralOrders.filter((order) => order.status === 'valid').length;
   const validReturnsCount = parsedReturns.filter((r) => r.status === 'valid').length;
+  const validCheckoutsCount = parsedCheckouts.filter((r) => r.status === 'valid').length;
   const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length
     + parsedAssemblies.filter((a) => a.status === 'error').length
     + parsedEvents.filter((event) => event.status === 'error').length
     + parsedOrders.filter((order) => order.status === 'error').length
     + parsedGeneralOrders.filter((order) => order.status === 'error').length
-    + parsedReturns.filter((r) => r.status === 'error').length;
+    + parsedReturns.filter((r) => r.status === 'error').length
+    + parsedCheckouts.filter((r) => r.status === 'error').length;
   const totalDuplicatesCount = parsedItems.filter((i) => i.status === 'duplicate').length + parsedAssemblies.filter((a) => a.status === 'duplicate').length;
 
-  function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns', rows: { index: number; status: string }[]) {
+  function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns' | 'checkouts', rows: { index: number; status: string }[]) {
     const row = rows.find((candidate) => candidate.status === 'error');
     return row ? { section, index: row.index } : undefined;
   }
@@ -240,7 +246,8 @@ export function CsvImportDialog({
           ?? firstErrorTarget('events', parsedEvents)
           ?? firstErrorTarget('orders', parsedOrders)
           ?? firstErrorTarget('orders', parsedGeneralOrders)
-          ?? firstErrorTarget('returns', parsedReturns);
+          ?? firstErrorTarget('returns', parsedReturns)
+          ?? firstErrorTarget('checkouts', parsedCheckouts);
 
     if (!firstError) return;
 
@@ -252,7 +259,7 @@ export function CsvImportDialog({
     + validEventsCount
     + validOrdersCount
     + validGeneralOrdersCount
-    + validReturnsCount;
+    + validReturnsCount + validCheckoutsCount;
 
   function handleFileSelected(file: File) {
     setFileName(file.name);
@@ -355,7 +362,7 @@ export function CsvImportDialog({
       + validEventsCount
       + validOrdersCount
       + validGeneralOrdersCount
-      + validReturnsCount;
+      + validReturnsCount + validCheckoutsCount;
     let currentStep = 0;
 
     if (tabType !== 'assemblies') {
@@ -673,6 +680,44 @@ export function CsvImportDialog({
       }
     }
 
+    // Step 8: Apply explicit checkout rows after item and asset creation.
+    let successCheckouts = 0;
+    for (const row of parsedCheckouts.filter((entry) => entry.status === 'valid')) {
+      currentStep++;
+      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      try {
+        const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
+        if (!item) throw new Error(`Artikel "${row.itemName}" nicht gefunden`);
+        const marker = `CSV checkout row ${row.index}`;
+        const previous = await getTransactions({ itemId: item.id, size: 200 });
+        const imported = previous.filter((tx) => tx.transactionType === 'checkout' && tx.notes?.includes(marker));
+        if (item.trackingMode === 'serialized') {
+          const assets = await getItemAssets(item.id);
+          const selected = row.assetCodes.length
+            ? row.assetCodes.map((code) => assets.find((asset) => asset.assetCode === code))
+            : assets.filter((asset) => asset.availabilityStatus === 'available').slice(0, row.quantity - imported.length);
+          if ((row.assetCodes.length ? selected.length !== row.quantity : selected.length !== row.quantity - imported.length)
+            || selected.some((asset) => !asset || (asset.availabilityStatus !== 'available' && !imported.some((tx) => tx.assetInstanceId === asset.id)))) {
+            throw new Error('Nicht genügend passende Seriengeräte verfügbar');
+          }
+          for (const asset of selected) {
+            if (imported.some((tx) => tx.assetInstanceId === asset!.id)) continue;
+            await createTransaction({ itemId: item.id, transactionType: 'checkout', quantityChanged: 1,
+              assetInstanceId: asset!.id, eventType: row.eventType, faction: row.faction,
+              reason: 'CSV-Import Ausleihe', notes: `${marker}: ${row.notes}` });
+          }
+        } else {
+          if (imported.length) continue;
+          await createTransaction({ itemId: item.id, transactionType: 'checkout', quantityChanged: row.quantity,
+            eventType: row.eventType, faction: row.faction,
+            reason: 'CSV-Import Ausleihe', notes: `${marker}: ${row.notes}` });
+        }
+        successCheckouts++;
+      } catch (err: unknown) {
+        errors.push(`Ausleihe ${row.itemName}: ${(err as Error).message || err}`);
+      }
+    }
+
     // Invalidate caches
     queryClient.invalidateQueries({ queryKey: ['items'] });
     queryClient.invalidateQueries({ queryKey: ['assemblies'] });
@@ -693,10 +738,11 @@ export function CsvImportDialog({
       successOrders,
       successGeneralOrders,
       successReturns,
+      successCheckouts,
       errors,
     });
 
-    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successGeneralOrders + successReturns;
+    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successGeneralOrders + successReturns + successCheckouts;
     if (totalSuccess > 0) {
       showSnackbar(
         t(
@@ -911,6 +957,7 @@ export function CsvImportDialog({
                   {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
                   {importResult.successGeneralOrders > 0 && `${importResult.successGeneralOrders} ${t('allgemeine Bestellungen importiert', 'general orders imported')}. `}
                   {importResult.successReturns > 0 && `${importResult.successReturns} ${t('Rückgaben erfasst', 'returns recorded')}. `}
+                  {importResult.successCheckouts > 0 && `${importResult.successCheckouts} ${t('Ausleihen erfasst', 'checkouts recorded')}. `}
                 </Typography>
                 {importResult.errors.length > 0 && (
                   <Box sx={{ mt: 1 }}>
@@ -1237,6 +1284,27 @@ export function CsvImportDialog({
                         </TableRow>
                       ))}
                     </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+            {tabType === 'combined' && parsedCheckouts.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('Ausleihen-Vorschau', 'Checkouts preview')} ({parsedCheckouts.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('Status', 'Status')}</TableCell>
+                      <TableCell>{t('Artikel', 'Item')}</TableCell><TableCell>{t('Menge', 'Quantity')}</TableCell>
+                      <TableCell>{t('Asset-Codes', 'Asset codes')}</TableCell><TableCell>{t('Event / Fraktion', 'Event / faction')}</TableCell></TableRow></TableHead>
+                    <TableBody>{parsedCheckouts.map((row) => <TableRow key={row.index} id={`csv-import-checkouts-row-${row.index}`} hover>
+                      <TableCell>{row.index}</TableCell>
+                      <TableCell>{row.status === 'valid' ? <Chip size="small" color="success" label={t('Bereit', 'Ready')} />
+                        : <Tooltip title={row.statusMessage || ''} arrow><Chip size="small" color="error" label={t('Fehler', 'Error')} /></Tooltip>}</TableCell>
+                      <TableCell>{row.itemName}</TableCell><TableCell>{row.quantity}</TableCell>
+                      <TableCell>{row.assetCodes.join(', ') || '—'}</TableCell><TableCell>{row.eventType} · {row.faction}</TableCell>
+                    </TableRow>)}</TableBody>
                   </Table>
                 </TableContainer>
               </Box>

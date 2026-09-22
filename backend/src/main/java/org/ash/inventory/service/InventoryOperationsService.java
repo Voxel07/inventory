@@ -473,7 +473,9 @@ public class InventoryOperationsService {
         record.inspector = actors.current();
         record.type = input.type();
         record.performedAt = input.performedAt() == null ? Instant.now() : input.performedAt();
-        record.nextDueAt = input.nextDueAt();
+        record.nextDueAt = input.nextDueAt() != null ? input.nextDueAt()
+                : item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
+                    ? record.performedAt.plus(java.time.Duration.ofDays(item.maintenanceIntervalDays)) : null;
         record.operatingHours = input.operatingHours();
         record.result = input.result();
         record.certificateNumber = input.certificateNumber();

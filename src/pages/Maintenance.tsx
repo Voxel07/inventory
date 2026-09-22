@@ -22,20 +22,25 @@ import HistoryIcon from '@mui/icons-material/History';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useItems } from '../hooks/useItems';
 import { createMaintenanceRecord, getMaintenanceRecords } from '../services/maintenanceService';
+import { getCategoryMaintenancePolicies, saveCategoryMaintenancePolicy } from '../services/categoryMaintenanceService';
 import { useUIStore } from '../store/uiStore';
 import { useLocalizedText } from '../utils/naming';
 import type { Item } from '../types';
 
+function dateInputValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function addMonths(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return dateInputValue(d);
 }
 
 function addYears(years: number): string {
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
-  return d.toISOString().slice(0, 10);
+  return dateInputValue(d);
 }
 
 export function Maintenance() {
@@ -45,12 +50,27 @@ export function Maintenance() {
   const formRef = useRef<HTMLDivElement | null>(null);
 
   const { data: items = [] } = useItems();
+  const { data: categoryPolicies = [] } = useQuery({ queryKey: ['category-maintenance'], queryFn: getCategoryMaintenancePolicies });
   const { data: records = [], isLoading: recordsLoading } = useQuery({
     queryKey: ['maintenance'],
     queryFn: () => getMaintenanceRecords(),
   });
 
   const [itemId, setItemId] = useState('');
+  const [policyCategory, setPolicyCategory] = useState('');
+  const [policyInterval, setPolicyInterval] = useState('');
+  const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort();
+  const maintenanceItems = items.filter((item) => (item.maintenanceIntervalDays ?? 0) > 0);
+  const maintenanceItemIds = new Set(maintenanceItems.map((item) => item.id));
+  const policyMutation = useMutation({
+    mutationFn: () => saveCategoryMaintenancePolicy(policyCategory, Number(policyInterval) || 0),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['category-maintenance'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      showSnackbar(t('Wartungsintervall gespeichert', 'Maintenance interval saved'), 'success');
+    },
+    onError: (err) => showSnackbar(err instanceof Error ? err.message : t('Fehler beim Speichern', 'Failed to save'), 'error'),
+  });
   const [type, setType] = useState<'dguv_v3' | 'generator_service' | 'battery_test' | 'chrono_fps'>('dguv_v3');
   const [result, setResult] = useState<'passed' | 'failed' | 'advisory'>('passed');
   const [nextDueAt, setNextDueAt] = useState('');
@@ -85,12 +105,11 @@ export function Maintenance() {
     },
   });
 
-  const attention = items.filter(
-    (item) =>
-      item.maintenanceStatus === 'overdue' ||
-      item.maintenanceStatus === 'due_soon' ||
-      item.maintenanceStatus === 'in_service'
-  );
+  const warningDate = new Date();
+  warningDate.setDate(warningDate.getDate() + 30);
+  const today = dateInputValue(new Date());
+  const attention = maintenanceItems.filter((item) => item.maintenanceStatus === 'in_service'
+    || !item.nextMaintenanceDue || item.nextMaintenanceDue <= dateInputValue(warningDate));
 
   function prefillInspection(item: Item) {
     setItemId(item.id);
@@ -105,7 +124,9 @@ export function Maintenance() {
     } else {
       setType('dguv_v3');
     }
-    setNextDueAt(addYears(1));
+    const due = new Date();
+    due.setDate(due.getDate() + (item.maintenanceIntervalDays || 365));
+    setNextDueAt(dateInputValue(due));
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -117,6 +138,27 @@ export function Maintenance() {
           {t('DGUV V3, Serviceintervalle, Batterietests und Chrono-Protokolle.', 'DGUV V3, service intervals, battery tests, and chrono records.')}
         </Typography>
       </Box>
+
+      <Paper sx={{ p: 2.5, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>{t('Wartung nach Kategorie', 'Maintenance by category')}</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <TextField select fullWidth label={t('Kategorie', 'Category')} value={policyCategory}
+            onChange={(event) => {
+              const category = event.target.value;
+              setPolicyCategory(category);
+              setPolicyInterval(String(categoryPolicies.find((policy) => policy.category.toLowerCase() === category.toLowerCase())?.intervalDays
+                ?? items.find((item) => item.category.toLowerCase() === category.toLowerCase() && (item.maintenanceIntervalDays ?? 0) > 0)?.maintenanceIntervalDays ?? 0));
+            }}>
+            {categories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
+          </TextField>
+          <TextField fullWidth type="number" label={t('Wartungsintervall (Tage)', 'Maintenance interval (days)')}
+            value={policyInterval} onChange={(event) => setPolicyInterval(event.target.value)}
+            helperText={t('0 = keine regelmäßige Wartung', '0 = no scheduled maintenance')}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }} />
+          <Button variant="contained" disabled={!policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
+            onClick={() => policyMutation.mutate()}>{t('Speichern', 'Save')}</Button>
+        </Stack>
+      </Paper>
 
       {/* Attention / Overdue Section */}
       {!!attention.length && (
@@ -143,13 +185,13 @@ export function Maintenance() {
                         <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
                         <Chip
                           size="small"
-                          icon={item.maintenanceStatus === 'overdue' ? <ErrorIcon /> : <WarningAmberIcon />}
-                          color={item.maintenanceStatus === 'overdue' ? 'error' : item.maintenanceStatus === 'in_service' ? 'info' : 'warning'}
+                          icon={item.nextMaintenanceDue && item.nextMaintenanceDue < today ? <ErrorIcon /> : <WarningAmberIcon />}
+                          color={item.maintenanceStatus === 'in_service' ? 'info' : item.nextMaintenanceDue && item.nextMaintenanceDue < today ? 'error' : 'warning'}
                           label={
-                            item.maintenanceStatus === 'overdue'
-                              ? t('Überfällig', 'Overdue')
-                              : item.maintenanceStatus === 'in_service'
+                            item.maintenanceStatus === 'in_service'
                               ? t('Im Service', 'In service')
+                              : item.nextMaintenanceDue && item.nextMaintenanceDue < today
+                              ? t('Überfällig', 'Overdue')
                               : t('Bald fällig', 'Due soon')
                           }
                         />
@@ -157,7 +199,7 @@ export function Maintenance() {
                       <Typography variant="caption" color="text.secondary">
                         {item.category ? `${item.category} · ` : ''}
                         {item.expand?.storageLocation?.name || item.storageLocation || t('Kein Lagerort', 'No location')}
-                        {item.nextMaintenanceDue ? ` · ${t('Fällig seit', 'Due since')}: ${new Date(item.nextMaintenanceDue).toLocaleDateString()}` : ''}
+                        {item.nextMaintenanceDue ? ` · ${t('Fällig am', 'Due on')}: ${new Date(item.nextMaintenanceDue).toLocaleDateString()}` : ''}
                       </Typography>
                     </Box>
                     <Button
@@ -177,6 +219,7 @@ export function Maintenance() {
           </Stack>
         </Paper>
       )}
+      {!attention.length && <Alert severity="success" sx={{ mb: 3 }}>{t('Keine Wartung fällig.', 'No maintenance due.')}</Alert>}
 
       {/* Record Inspection Form */}
       <Paper ref={formRef} sx={{ p: 2.5, mb: 3 }}>
@@ -186,10 +229,17 @@ export function Maintenance() {
         </Stack>
         <Stack spacing={2}>
           <Autocomplete
-            options={items}
+            options={maintenanceItems}
             getOptionLabel={(item) => `${item.name} (${item.maintenanceStatus || 'certified'})`}
-            value={items.find((item) => item.id === itemId) || null}
-            onChange={(_, item) => setItemId(item?.id || '')}
+            value={maintenanceItems.find((item) => item.id === itemId) || null}
+            onChange={(_, item) => {
+              setItemId(item?.id || '');
+              if (item?.maintenanceIntervalDays) {
+                const due = new Date();
+                due.setDate(due.getDate() + item.maintenanceIntervalDays);
+                setNextDueAt(dateInputValue(due));
+              } else setNextDueAt('');
+            }}
             renderInput={(params) => <TextField {...params} label={t('Artikel auswählen', 'Select item')} required />}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -296,13 +346,13 @@ export function Maintenance() {
 
       {recordsLoading ? (
         <Typography color="text.secondary">{t('Prüfungen werden geladen...', 'Loading inspections...')}</Typography>
-      ) : !records.length ? (
+      ) : !records.some((record) => maintenanceItemIds.has(record.itemId)) ? (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="text.secondary">{t('Noch keine Prüfungen erfasst.', 'No inspections recorded yet.')}</Typography>
         </Paper>
       ) : (
         <Stack spacing={1}>
-          {records.slice(0, 50).map((record) => {
+          {records.filter((record) => maintenanceItemIds.has(record.itemId)).slice(0, 50).map((record) => {
             const item = items.find((candidate) => candidate.id === record.itemId);
             return (
               <Card key={record.id} variant="outlined">

@@ -34,7 +34,7 @@ public class CatalogOrm {
         var query = entityManager.createQuery(
                 "select distinct i from Item i left join fetch i.storageLocation left join fetch i.returnLocation"
                         + " left join fetch i.assignedUser where i.active = true" + visibility + filtering
-                        + " order by i.createdAt desc", Item.class)
+                        + " order by i.createdAt desc, i.id desc", Item.class)
                 .setParameter("manager", manager)
                 .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
                 .setParameter("actorId", actorId)

@@ -271,7 +271,7 @@ export function ItemDetail() {
                 </Box>
             )}
             {item.hint && (
-                <Alert severity="info" sx={{ mb: 2, alignItems: 'flex-start', '& .MuiAlert-icon': { pt: '2px' } }}>
+                <Alert severity="info" sx={{ mb: 2, alignItems: 'center', '& .MuiAlert-icon': { alignSelf: 'center', py: 0 } }}>
                     <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
                     <Typography variant="body2">{item.hint}</Typography>
                 </Alert>
@@ -471,7 +471,6 @@ export function ItemDetail() {
                             variant="contained"
                             size="small"
                             onClick={() => setCheckoutOpen(true)}
-                            disabled={remaining <= 0 && checkedOut <= 0}
                         />
                     </Paper>
                 </Grid>

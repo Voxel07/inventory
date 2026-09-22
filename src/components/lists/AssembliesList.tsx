@@ -272,7 +272,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                                     {assembly.description}
                                 </TableCell>
                                 <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
+                                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', maxHeight: 28, overflow: 'hidden' }} useFlexGap>
                                         {assemblyItems.map((item) => {
                                             const qty = assembly.itemQuantities?.[item.id] ?? 1;
                                             return (

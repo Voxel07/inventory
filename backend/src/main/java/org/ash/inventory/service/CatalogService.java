@@ -3,6 +3,8 @@ package org.ash.inventory.service;
 import io.quarkus.cache.CacheInvalidateAll;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.CatalogOrm;
@@ -24,6 +26,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
+    @Inject EntityManager entityManager;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -194,6 +197,12 @@ public class CatalogService {
         item.containerRemainingPercent = input.containerRemainingPercent();
         item.maintenanceIntervalDays = input.maintenanceIntervalDays();
         item.nextMaintenanceDue = input.nextMaintenanceDue();
+        var categoryPolicy = entityManager.createQuery("select p from CategoryMaintenancePolicy p where lower(p.category) = lower(:category)", CategoryMaintenancePolicy.class)
+                .setParameter("category", item.category).getResultList();
+        if (!categoryPolicy.isEmpty()) {
+            item.maintenanceIntervalDays = categoryPolicy.getFirst().intervalDays;
+            if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = LocalDate.now().plusDays(item.maintenanceIntervalDays);
+        }
         if (input.currentOperatingHours() != null) item.currentOperatingHours = input.currentOperatingHours();
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();

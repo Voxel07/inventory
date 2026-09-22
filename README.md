@@ -44,6 +44,12 @@ Authentik supplies application roles through its `groups` claim. Use these names
 
 The Authentik group is authoritative at sign-in; the corresponding internal role is stored in `app_users`. A token without a recognized inventory group receives the least-privileged `faction_leader` role.
 
+## Sample inventory import
+
+Import [`sample_inventory_lightsim.csv`](sample_imports/sample_inventory_lightsim.csv) through **Items → CSV import**. The file contains 334 items and three `Ausleihe` rows that leave stock checked out for return testing. Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). Checkout rows run after item and asset creation.
+
+On **Maintenance**, set a category's interval in days to schedule its items. An interval of `0` disables scheduled maintenance for that category. Existing items inherit the setting immediately, and newly created items inherit it when saved.
+
 ## PostgreSQL schema and API
 
 OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Flyway owns production schema changes and Hibernate validates the migrated schema. Before the first deployment over an existing pre-Flyway database, follow the baseline procedure in [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md#first-flyway-deployment).

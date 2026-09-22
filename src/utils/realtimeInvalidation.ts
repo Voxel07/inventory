@@ -3,6 +3,7 @@ import type { ApiChangeDetail } from '../services/apiClient';
 
 const ALL_PREFIXES: string[][] = [
   ['items'],
+  ['category-maintenance'],
   ['assemblies'],
   ['storageLocations'],
   ['event-reports'],
@@ -33,6 +34,9 @@ export function invalidateForApiChange(queryClient: QueryClient, detail?: ApiCha
       case 'items':
         // Item creation/amount edits can create an initial stock transaction.
         prefixes.push(['items'], ['transactions'], ['procurement-deficits']);
+        break;
+      case 'category-maintenance':
+        prefixes.push(['category-maintenance'], ['items'], ['assemblies']);
         break;
       case 'assemblies':
         prefixes.push(['assemblies'], ['faction-orders'], ['procurement-deficits']);

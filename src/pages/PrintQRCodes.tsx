@@ -12,6 +12,7 @@ import {
     TextField,
     Tooltip,
     MenuItem,
+    Pagination,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { jsPDF } from 'jspdf';
@@ -84,6 +85,8 @@ export function PrintQRCodesPage() {
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [labelFormatId, setLabelFormatId] = useState<LabelFormatId>('40x30');
+    const [page, setPage] = useState(1);
+    const pageSize = 36;
 
     const allEntries = useMemo<QREntry[]>(() => {
         return [
@@ -104,6 +107,12 @@ export function PrintQRCodesPage() {
                 return allEntries;
         }
     }, [allEntries, filterMode, selectedId]);
+    useEffect(() => setPage(1), [filterMode, selectedId]);
+    const pageCount = Math.ceil(filteredEntries.length / pageSize);
+    useEffect(() => {
+        if (page > Math.max(1, pageCount)) setPage(Math.max(1, pageCount));
+    }, [page, pageCount]);
+    const visibleEntries = filteredEntries.slice((page - 1) * pageSize, page * pageSize);
 
     async function handleGeneratePDF() {
         if (filteredEntries.length === 0) return;
@@ -249,7 +258,7 @@ export function PrintQRCodesPage() {
                 </Paper>
             ) : (
                 <Grid container spacing={2}>
-                    {filteredEntries.map((entry) => (
+                    {visibleEntries.map((entry) => (
                         <Grid size={{ xs: 6, sm: 4, md: 3, lg: 2 }} key={`${entry.type}:${entry.id}`}>
                             <Paper sx={{ p: 1.5, textAlign: 'center' }}>
                                 <QRCodeThumbnail id={entry.id} type={entry.type} name={entry.name} />
@@ -267,6 +276,7 @@ export function PrintQRCodesPage() {
                     ))}
                 </Grid>
             )}
+            {pageCount > 1 && <Pagination count={pageCount} page={page} onChange={(_, value) => setPage(value)} sx={{ display: 'flex', justifyContent: 'center', mt: 3 }} />}
         </Box>
     );
 }

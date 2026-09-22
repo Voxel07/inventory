@@ -1,16 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
 import { itemApi, getItemAssets, createItemAssets, updateItemAsset, deleteItemAsset } from '../services/inventoryService';
+import { getAllItems } from '../services/inventoryService';
 import type { Item, ItemFormData, AssetInstanceInput } from '../types';
 
 export const {
-  useList: useItems,
+  useList: usePagedItems,
   useDetail: useItem,
   useCreate: useCreateItem,
   useUpdate: useUpdateItem,
   useDelete: useDeleteItem,
   useDeleteMany: useDeleteItems,
 } = createResourceHooks<Item, ItemFormData>(itemApi, 'items', ['transactions']);
+
+/** Catalog views need the complete inventory; the API defaults to only 100 rows. */
+export function useItems() {
+  return useQuery({ queryKey: ['items'], queryFn: getAllItems });
+}
 
 export function useItemAssets(itemId: string | undefined) {
   return useQuery({

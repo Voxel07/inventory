@@ -418,3 +418,6 @@ Rückgabe;Teleskopleiter 3.8m;;1;;;Garage Markus;;;;Rückgabe an Garagenstandort
 Rückgabe;Masterschlüssel Schranke & Tore;;1;;;Technik-Lager 1;;;;Schrankenschlüssel nach Schließung der Zufahrt übergeben.;;;KEY-GATE-01;LS;2025-06-15;Bestätigt;;;TERA;;;
 Rückgabe;Akku-Bohrschrauber 18 V;;2;;;Werkstattlager;;;;Beide Bohrschrauber zurückgegeben.;;;PWR-DRL-03, PWR-DRL-04;LS;2025-06-15;Bestätigt;;;TERA;;;
 Rückgabe;Klappleiter Aluminium 3m;;1;;;Werkstattlager;;;;Vorangemeldete Rückgabe nach LightSim 2026.;;;LDR-003;LS;2026-06-14;Ausstehend;;;TERA;;;
+Ausleihe;Feld-PC Intel;;1;;;;;;;;Testausleihe fuer Rueckgabe und Bestandsanzeige;;;;;LS;;;;;TERA;;;;;;;;;
+Ausleihe;Router (Cloud Gateway);;1;;;;;;;;Seriengeraet im Einsatz;;;;RTR-CGW-03;LS;;;;;TERA;;;;;;;;;
+Ausleihe;Hesco-Barriere klein (1x1m);;2;;;;;;;;Feldaufbau noch nicht zurueckgegeben;;;;;LS;;;;;TERA;;;;;;;;;

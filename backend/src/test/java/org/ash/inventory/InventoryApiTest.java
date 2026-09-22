@@ -27,6 +27,34 @@ class InventoryApiTest {
     @Inject DomainEventService domainEvents;
 
     @Test
+    void categoryMaintenanceIntervalAppliesToExistingAndNewItems() {
+        String category = "Maintenance policy test";
+        String firstId = request().body(Map.of("sku", "MAINT-POLICY-001", "name", "Policy first item",
+                        "category", category, "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        request().body(Map.of("category", category, "intervalDays", 180))
+                .put("/api/category-maintenance").then().statusCode(200)
+                .body("intervalDays", equalTo(180)).body("category", equalTo(category));
+        request().get("/api/items/" + firstId).then().statusCode(200)
+                .body("maintenanceIntervalDays", equalTo(180))
+                .body("nextMaintenanceDue", notNullValue());
+
+        String secondId = request().body(Map.of("sku", "MAINT-POLICY-002", "name", "Policy second item",
+                        "category", category, "amount", 1, "value", 0))
+                .post("/api/items").then().statusCode(200)
+                .body("maintenanceIntervalDays", equalTo(180))
+                .extract().path("id");
+        request().body(Map.of("itemId", secondId, "type", "dguv_v3", "result", "passed"))
+                .post("/api/maintenance").then().statusCode(200).body("nextDueAt", notNullValue());
+        request().body(Map.of("category", category, "intervalDays", 0))
+                .put("/api/category-maintenance").then().statusCode(200);
+        request().get("/api/items/" + firstId).then().statusCode(200)
+                .body("maintenanceIntervalDays", nullValue()).body("nextMaintenanceDue", nullValue());
+        request().get("/api/items/" + secondId).then().statusCode(200)
+                .body("maintenanceIntervalDays", nullValue());
+    }
+
+    @Test
     void eventUsageComesFromOrdersAndReturns() {
         String usedItemId = request().body(Map.of("sku", "EVENT-USED-001", "name", "Used event item",
                         "category", "Test", "amount", 10, "value", 0))
