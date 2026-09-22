@@ -978,6 +978,7 @@ export function parseReturnsFromCsv(
 
   const results: ParsedReturnRow[] = [];
   for (let index = 0; index < rows.length; index++) {
+    const raw = rows[index];
     const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim() || '';
     const normRowType = rowType.replace(/ü/g, 'ue').replace(/[^a-z]/g, '');
     const isReturn =
