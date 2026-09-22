@@ -54,12 +54,25 @@ import {
   type ParsedAssemblyRow,
   type ParsedEventReportRow,
   type ParsedFactionOrderRow,
+  type ParsedReturnRow,
+  type FactionOrderImportStatus,
+  parseReturnsFromCsv,
 } from '../../utils/csvImport';
 import type { Item, Assembly, StorageLocation } from '../../types';
 import { createItem, updateItem, createItemAssets } from '../../services/inventoryService';
 import { createAssembly } from '../../services/assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from '../../services/eventService';
-import { createFactionOrder, getFactionOrders, submitFactionOrder, updateFactionOrder } from '../../services/factionOrderService';
+import {
+  createFactionOrder,
+  getFactionOrders,
+  submitFactionOrder,
+  updateFactionOrder,
+  saveFactionOrderPreparation,
+  markFactionOrderReady,
+  pickUpFactionOrder,
+  returnFactionOrder,
+} from '../../services/factionOrderService';
+import { createTransaction } from '../../services/transactionService';
 import { createStorageLocation } from '../../services/storageLocationService';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -73,6 +86,25 @@ interface Props {
 
 function getPreviewRows<T extends { status: string }>(rows: T[]): T[] {
   return rows.slice(0, 50).concat(rows.slice(50).filter((row) => row.status === 'error'));
+}
+
+function getOrderStatusChip(status: FactionOrderImportStatus, t: (de: string, en: string) => string) {
+  switch (status) {
+    case 'closed':
+      return <Chip size="small" color="default" variant="outlined" label={t('Abgeschlossen', 'Closed')} />;
+    case 'returned':
+      return <Chip size="small" color="success" label={t('Zurückgegeben', 'Returned')} />;
+    case 'partially_returned':
+      return <Chip size="small" color="warning" label={t('Teilrückgabe', 'Partially returned')} />;
+    case 'picked_up':
+      return <Chip size="small" color="info" label={t('Ausgegeben', 'Picked up')} />;
+    case 'ready':
+      return <Chip size="small" color="primary" label={t('Bereit', 'Ready')} />;
+    case 'submitted':
+      return <Chip size="small" color="primary" variant="outlined" label={t('Eingereicht', 'Submitted')} />;
+    default:
+      return <Chip size="small" color="default" label={t('Entwurf', 'Draft')} />;
+  }
 }
 
 export function CsvImportDialog({
@@ -109,6 +141,7 @@ export function CsvImportDialog({
     successAssemblies: number;
     successEvents: number;
     successOrders: number;
+    successReturns: number;
     errors: string[];
   } | null>(null);
 
@@ -163,18 +196,25 @@ export function CsvImportDialog({
     return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies);
   }, [rows, tabType, effectiveItemsForAssemblies]);
 
+  const parsedReturns: ParsedReturnRow[] = useMemo(() => {
+    if (tabType !== 'combined' || rows.length === 0) return [];
+    return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations);
+  }, [rows, tabType, effectiveItemsForAssemblies, storageLocations]);
+
   // Statistics
   const validItemsCount = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems)).length;
   const validAssembliesCount = parsedAssemblies.filter((a) => a.status === 'valid').length;
   const validEventsCount = parsedEvents.filter((event) => event.status === 'valid').length;
   const validOrdersCount = parsedOrders.filter((order) => order.status === 'valid').length;
+  const validReturnsCount = parsedReturns.filter((r) => r.status === 'valid').length;
   const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length
     + parsedAssemblies.filter((a) => a.status === 'error').length
     + parsedEvents.filter((event) => event.status === 'error').length
-    + parsedOrders.filter((order) => order.status === 'error').length;
+    + parsedOrders.filter((order) => order.status === 'error').length
+    + parsedReturns.filter((r) => r.status === 'error').length;
   const totalDuplicatesCount = parsedItems.filter((i) => i.status === 'duplicate').length + parsedAssemblies.filter((a) => a.status === 'duplicate').length;
 
-  function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders', rows: { index: number; status: string }[]) {
+  function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns', rows: { index: number; status: string }[]) {
     const row = rows.find((candidate) => candidate.status === 'error');
     return row ? { section, index: row.index } : undefined;
   }
@@ -187,7 +227,8 @@ export function CsvImportDialog({
         : firstErrorTarget('items', parsedItems)
           ?? firstErrorTarget('assemblies', parsedAssemblies)
           ?? firstErrorTarget('events', parsedEvents)
-          ?? firstErrorTarget('orders', parsedOrders);
+          ?? firstErrorTarget('orders', parsedOrders)
+          ?? firstErrorTarget('returns', parsedReturns);
 
     if (!firstError) return;
 
@@ -197,7 +238,8 @@ export function CsvImportDialog({
   const totalToImport = (tabType === 'assemblies' ? 0 : validItemsCount)
     + (tabType === 'items' ? 0 : validAssembliesCount)
     + validEventsCount
-    + validOrdersCount;
+    + validOrdersCount
+    + validReturnsCount;
 
   function handleFileSelected(file: File) {
     setFileName(file.name);
@@ -297,7 +339,8 @@ export function CsvImportDialog({
     const totalSteps = itemsToProcess.length
       + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length)
       + validEventsCount
-      + validOrdersCount;
+      + validOrdersCount
+      + validReturnsCount;
     let currentStep = 0;
 
     if (tabType !== 'assemblies') {
@@ -489,13 +532,64 @@ export function CsvImportDialog({
         const saved = existing
           ? await updateFactionOrder(existing.id, data)
           : await createFactionOrder(data);
-        const finalOrder = row.targetStatus === 'submitted' && saved.status === 'draft'
-          ? await submitFactionOrder(saved.id)
-          : saved;
+        let finalOrder = saved;
+        if (row.targetStatus !== 'draft') {
+          if (finalOrder.status === 'draft') {
+            finalOrder = await submitFactionOrder(finalOrder.id);
+          }
+          if (['ready', 'picked_up', 'returned', 'closed'].includes(row.targetStatus)) {
+            try {
+              await saveFactionOrderPreparation(
+                finalOrder.id,
+                finalOrder.requestedQuantities || {},
+                finalOrder.requestedAssemblyQuantities || {},
+                {},
+              );
+              finalOrder = await markFactionOrderReady(finalOrder.id, 'Automatisch vorbereitet');
+              if (['picked_up', 'returned', 'closed'].includes(row.targetStatus)) {
+                finalOrder = await pickUpFactionOrder(finalOrder.id);
+                if (['returned', 'closed'].includes(row.targetStatus)) {
+                  finalOrder = await returnFactionOrder(finalOrder.id);
+                }
+              }
+            } catch (transitionErr) {
+              console.warn(`Status-Übergang für Bestellung ${finalOrder.orderCode} (${row.targetStatus}) konnte nicht vollständig ausgeführt werden:`, transitionErr);
+            }
+          }
+        }
         if (!existing) existingOrders.push(finalOrder);
         successOrders++;
       } catch (err: unknown) {
         errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
+      }
+    }
+
+    // Step 6: Import standalone returns if any
+    let successReturns = 0;
+    for (const ret of parsedReturns.filter((r) => r.status === 'valid')) {
+      currentStep++;
+      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      setImportStatusText(t(
+        `Importiere Rückgabe für ${ret.itemName}...`,
+        `Importing return for ${ret.itemName}...`,
+      ));
+
+      try {
+        const item = items.find((candidate) => candidate.id === ret.itemId) || createdItemsMap.get(ret.itemName.toLowerCase().trim());
+        if (!item) throw new Error(`Artikel "${ret.itemName}" nicht gefunden`);
+
+        await createTransaction({
+          itemId: item.id,
+          transactionType: 'checkin',
+          quantityChanged: ret.quantity,
+          reason: 'CSV-Import Rückgabe',
+          notes: ret.notes || 'Rückgabe aus CSV-Import',
+          eventType: ret.eventType,
+          faction: ret.faction,
+        });
+        successReturns++;
+      } catch (err: unknown) {
+        errors.push(`Rückgabe ${ret.itemName}: ${(err as Error).message || err}`);
       }
     }
 
@@ -516,10 +610,11 @@ export function CsvImportDialog({
       successAssemblies,
       successEvents,
       successOrders,
+      successReturns,
       errors,
     });
 
-    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders;
+    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successReturns;
     if (totalSuccess > 0) {
       showSnackbar(
         t(
@@ -732,6 +827,7 @@ export function CsvImportDialog({
                   {importResult.successAssemblies > 0 && `${importResult.successAssemblies} ${t('Baugruppen erstellt', 'assemblies created')}. `}
                   {importResult.successEvents > 0 && `${importResult.successEvents} ${t('Events erstellt', 'events created')}. `}
                   {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
+                  {importResult.successReturns > 0 && `${importResult.successReturns} ${t('Rückgaben erfasst', 'returns recorded')}. `}
                 </Typography>
                 {importResult.errors.length > 0 && (
                   <Box sx={{ mt: 1 }}>
@@ -967,7 +1063,7 @@ export function CsvImportDialog({
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
                             {row.status === 'valid' ? (
-                              <Chip size="small" color="success" label={row.targetStatus === 'submitted' ? t('Bereit', 'Submitted') : t('Entwurf', 'Draft')} />
+                              getOrderStatusChip(row.targetStatus, t)
                             ) : (
                               <Tooltip title={row.statusMessage || ''} arrow>
                                 <Chip size="small" color="error" icon={<ErrorIcon />} label={t('Fehler', 'Error')} />
@@ -978,6 +1074,61 @@ export function CsvImportDialog({
                           <TableCell>{row.data.eventDate}</TableCell>
                           <TableCell>{row.data.faction}</TableCell>
                           <TableCell>{row.requestedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {tabType === 'combined' && parsedReturns.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('Rückgaben-Vorschau', 'Returns Preview')} ({parsedReturns.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>#</TableCell>
+                        <TableCell>{t('Status', 'Status')}</TableCell>
+                        <TableCell>{t('Artikel', 'Item')}</TableCell>
+                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                        <TableCell>{t('Lagerort', 'Storage Location')}</TableCell>
+                        <TableCell>{t('Event / Fraktion', 'Event / Faction')}</TableCell>
+                        <TableCell>{t('Hinweis', 'Notes')}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {parsedReturns.map((row) => (
+                        <TableRow key={row.index} id={`csv-import-returns-row-${row.index}`} hover>
+                          <TableCell>{row.index}</TableCell>
+                          <TableCell>
+                            {row.status === 'valid' ? (
+                              <Chip
+                                size="small"
+                                color={row.targetStatus === 'accepted' ? 'success' : row.targetStatus === 'pending' ? 'warning' : 'error'}
+                                label={row.targetStatus === 'accepted' ? t('Bestätigt', 'Accepted') : row.targetStatus === 'pending' ? t('Ausstehend', 'Pending') : t('Abgelehnt', 'Rejected')}
+                              />
+                            ) : (
+                              <Tooltip title={row.statusMessage || ''} arrow>
+                                <Chip size="small" color="error" icon={<ErrorIcon />} label={t('Fehler', 'Error')} />
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <span>{row.itemName}</span>
+                              {row.assetCode && (
+                                <Chip size="small" variant="outlined" color="primary" sx={{ height: 20, fontSize: '0.7rem' }} label={row.assetCode} />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">{row.quantity}</TableCell>
+                          <TableCell>{row.storageLocationName || '—'}</TableCell>
+                          <TableCell>{[row.eventType, row.faction, row.person].filter(Boolean).join(' · ') || '—'}</TableCell>
+                          <TableCell>{row.notes || '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

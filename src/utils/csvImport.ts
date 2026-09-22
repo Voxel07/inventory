@@ -41,12 +41,41 @@ export interface ParsedEventReportRow {
   statusMessage?: string;
 }
 
+export type FactionOrderImportStatus =
+  | 'draft'
+  | 'submitted'
+  | 'ready'
+  | 'picked_up'
+  | 'returned'
+  | 'closed'
+  | 'partially_returned';
+
 export interface ParsedFactionOrderRow {
   index: number;
   data: FactionOrderFormData;
   rawRow: Record<string, string>;
   requestedItems: ParsedAssemblyComponent[];
-  targetStatus: 'draft' | 'submitted';
+  returnedItems?: ParsedAssemblyComponent[];
+  targetStatus: FactionOrderImportStatus;
+  status: 'valid' | 'error';
+  statusMessage?: string;
+}
+
+export interface ParsedReturnRow {
+  index: number;
+  rawRow: Record<string, string>;
+  itemName: string;
+  itemId?: string;
+  quantity: number;
+  assetCode?: string;
+  storageLocationName?: string;
+  storageLocationId?: string;
+  eventType?: EventType;
+  faction?: string;
+  person?: string;
+  date?: string;
+  notes?: string;
+  targetStatus: 'pending' | 'accepted' | 'rejected';
   status: 'valid' | 'error';
   statusMessage?: string;
 }
@@ -254,6 +283,26 @@ const EVENT_USED_ALIASES = ['used', 'useditems', 'verwendet', 'verwendetemengen'
 const ORDER_FACTION_ALIASES = ['faction', 'fraktion'];
 const ORDER_ITEMS_ALIASES = ['ordereditems', 'requesteditems', 'bestellteartikel', 'angeforderteartikel'];
 const ORDER_STATUS_ALIASES = ['orderstatus', 'bestellstatus'];
+const ORDER_RETURNED_ITEMS_ALIASES = [
+  'returneditems',
+  'rueckgabeartikel',
+  'rückgabeartikel',
+  'zurueckgegeben',
+  'zurückgegeben',
+  'rueckgabe',
+  'rückgabe',
+  'retoure',
+];
+const RETURN_PERSON_ALIASES = [
+  'person',
+  'user',
+  'benutzer',
+  'mitarbeiter',
+  'name',
+  'rueckgebendevon',
+  'rückgabedurch',
+  'ausleiher',
+];
 
 export function detectCsvType(headers: string[]): CsvImportType {
   const normHeaders = headers.map(normalizeKey);
@@ -833,7 +882,37 @@ export function parseFactionOrdersFromCsv(
       if (item) requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
     }
     const rawOrderStatus = getField(raw, ORDER_STATUS_ALIASES)?.toLowerCase().trim();
-    const targetStatus = ['submitted', 'eingereicht', 'bereit'].includes(rawOrderStatus ?? '') ? 'submitted' : 'draft';
+    let targetStatus: FactionOrderImportStatus = 'draft';
+    if (['closed', 'abgeschlossen', 'erledigt', 'archiviert'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'closed';
+    } else if (['returned', 'zurückgegeben', 'zurueckgegeben', 'retoure', 'vollständig zurückgegeben', 'vollstaendig zurueckgegeben'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'returned';
+    } else if (['partially_returned', 'teilweise zurückgegeben', 'teilweise_zurueckgegeben', 'teilrückgabe', 'teilrueckgabe'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'partially_returned';
+    } else if (['picked_up', 'pickedup', 'ausgegeben', 'abgeholt', 'im_einsatz', 'in_field'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'picked_up';
+    } else if (['ready', 'bereit', 'gerüstet', 'geruestet'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'ready';
+    } else if (['submitted', 'eingereicht', 'angefordert'].includes(rawOrderStatus ?? '')) {
+      targetStatus = 'submitted';
+    }
+
+    const rawReturned = getField(raw, ORDER_RETURNED_ITEMS_ALIASES);
+    const returnedItems: ParsedAssemblyComponent[] = [];
+    if (rawReturned) {
+      for (const component of parseInlineComponents(rawReturned)) {
+        const item = itemLookup.get(component.name.toLowerCase().trim());
+        returnedItems.push({
+          itemName: item?.name ?? component.name,
+          quantity: component.quantity,
+          itemId: item?.id,
+          matched: Boolean(item),
+        });
+      }
+    } else if (['returned', 'closed'].includes(targetStatus)) {
+      returnedItems.push(...requestedItems);
+    }
+
     const unmatched = requestedItems.filter((component) => !component.matched);
 
     let validationStatus: ParsedFactionOrderRow['status'] = 'valid';
@@ -869,11 +948,102 @@ export function parseFactionOrdersFromCsv(
       },
       rawRow: raw,
       requestedItems,
+      returnedItems: returnedItems.length > 0 ? returnedItems : undefined,
       targetStatus,
       status: validationStatus,
       statusMessage,
     });
   }
+  return results;
+}
+
+/** Parses standalone return / checkin rows from a combined CSV. */
+export function parseReturnsFromCsv(
+  rows: Record<string, string>[],
+  items: Item[],
+  storageLocations: StorageLocation[],
+): ParsedReturnRow[] {
+  const itemLookup = new Map<string, Item>();
+  for (const item of items) {
+    itemLookup.set(item.name.toLowerCase().trim(), item);
+    itemLookup.set(item.id.toLowerCase().trim(), item);
+    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
+  }
+
+  const locMap = new Map<string, StorageLocation>();
+  for (const loc of storageLocations) {
+    locMap.set(loc.name.toLowerCase().trim(), loc);
+    locMap.set(loc.id.toLowerCase().trim(), loc);
+  }
+
+  const results: ParsedReturnRow[] = [];
+  for (let index = 0; index < rows.length; index++) {
+    const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim() || '';
+    const normRowType = rowType.replace(/ü/g, 'ue').replace(/[^a-z]/g, '');
+    const isReturn =
+      ['return', 'rückgabe', 'rueckgabe', 'retoure', 'checkin', 'rücknahme', 'ruecknahme'].includes(rowType)
+      || ['return', 'rueckgabe', 'retoure', 'checkin', 'ruecknahme'].includes(normRowType)
+      || (rowType.startsWith('r') && rowType.endsWith('ckgabe'));
+    if (!isReturn) continue;
+
+    const itemName = getField(raw, ITEM_NAME_ALIASES) || '';
+    const item = itemLookup.get(itemName.toLowerCase().trim());
+    const rawQty = getField(raw, AMOUNT_ALIASES) || getField(raw, COMPONENT_QTY_ALIASES);
+    const quantity = Math.max(1, Math.round(parseNumber(rawQty, 1)));
+    const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
+    const assetCode = assetCodes[0] || undefined;
+
+    const rawLoc = getField(raw, LOCATION_ALIASES);
+    const loc = rawLoc ? locMap.get(rawLoc.toLowerCase().trim()) : undefined;
+
+    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES) || getField(raw, EVENT_TYPES_ALIASES);
+    const normEventType = rawEventType?.toUpperCase().trim();
+    const eventType = (EVENT_TYPES as readonly string[]).includes(normEventType ?? '') ? (normEventType as EventType) : undefined;
+
+    const faction = getField(raw, ORDER_FACTION_ALIASES);
+    const person = getField(raw, RETURN_PERSON_ALIASES);
+    const date = getField(raw, EVENT_DATE_ALIASES);
+    const notes = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES) || '';
+
+    const rawStatus = getField(raw, ['status', 'returnstatus', 'rueckgabestatus', 'rückgabestatus'])?.toLowerCase().trim();
+    let targetStatus: 'pending' | 'accepted' | 'rejected' = 'accepted';
+    if (['rejected', 'abgelehnt'].includes(rawStatus ?? '')) {
+      targetStatus = 'rejected';
+    } else if (['pending', 'offen', 'ausstehend', 'in_pruefung'].includes(rawStatus ?? '')) {
+      targetStatus = 'pending';
+    }
+
+    let validationStatus: ParsedReturnRow['status'] = 'valid';
+    let statusMessage: string | undefined;
+
+    if (!itemName) {
+      validationStatus = 'error';
+      statusMessage = 'Fehlender Artikelname für Rückgabe';
+    } else if (!item) {
+      validationStatus = 'error';
+      statusMessage = `Artikel "${itemName}" nicht gefunden`;
+    }
+
+    results.push({
+      index: index + 1,
+      rawRow: raw,
+      itemName: item?.name || itemName,
+      itemId: item?.id,
+      quantity,
+      assetCode,
+      storageLocationName: loc?.name || rawLoc,
+      storageLocationId: loc?.id,
+      eventType,
+      faction,
+      person,
+      date,
+      notes,
+      targetStatus,
+      status: validationStatus,
+      statusMessage,
+    });
+  }
+
   return results;
 }
 
