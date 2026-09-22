@@ -199,6 +199,22 @@ const DESCRIPTION_ALIASES = ['description', 'beschreibung', 'details', 'info'];
 const CONTAINER_SIZE_ALIASES = ['containersize', 'gebindegroesse', 'gebindegröße', 'packungsgroesse'];
 const CONTAINER_COUNT_ALIASES = ['containercount', 'gebindeanzahl', 'packungsanzahl'];
 const MAINTENANCE_DAYS_ALIASES = ['maintenanceintervaldays', 'wartungsintervall', 'wartungsintervalltage'];
+const NEXT_MAINTENANCE_DUE_ALIASES = ['nextmaintenancedue', 'naechstewartung', 'nächstewartung', 'wartungfaellig', 'wartungfällig'];
+const CURRENT_OPERATING_HOURS_ALIASES = ['currentoperatinghours', 'operatinghours', 'betriebsstunden', 'laufstunden'];
+const MAINTENANCE_STATUS_ALIASES = ['maintenancestatus', 'wartungsstatus'];
+const FUEL_CONSUMPTION_ALIASES = [
+  'fuelconsumptionlitersper100km',
+  'fuelconsumptionl100km',
+  'kraftstoffverbrauchl100km',
+  'verbrauchl100km',
+];
+const BATTERY_REPLACEMENT_DUE_ALIASES = [
+  'batteryreplacementdue',
+  'batteriewechselfaellig',
+  'batteriewechselfällig',
+  'akkuwechsel',
+];
+const BEST_BEFORE_DATE_ALIASES = ['bestbeforedate', 'bestbefore', 'mindesthaltbarbis', 'mhd'];
 const TRACKING_MODE_ALIASES = [
   'trackingmode',
   'tracking_mode',
@@ -271,6 +287,18 @@ function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lo
   if (['bulk', 'masse', 'mengenbasiert', 'menge'].includes(lower)) {
     return 'bulk';
   }
+  return undefined;
+}
+
+function parseMaintenanceStatus(
+  val: string | undefined,
+): 'certified' | 'due_soon' | 'overdue' | 'in_service' | undefined {
+  if (!val) return undefined;
+  const lower = val.toLowerCase().trim();
+  if (['certified', 'freigegeben', 'geprüft', 'geprueft'].includes(lower)) return 'certified';
+  if (['due_soon', 'bald_fällig', 'bald_faellig', 'bald fällig', 'bald faellig'].includes(lower)) return 'due_soon';
+  if (['overdue', 'überfällig', 'ueberfaellig'].includes(lower)) return 'overdue';
+  if (['in_service', 'in wartung', 'wartung'].includes(lower)) return 'in_service';
   return undefined;
 }
 
@@ -382,6 +410,12 @@ export function parseItemsFromCsv(
     const containerSizeStr = getField(raw, CONTAINER_SIZE_ALIASES);
     const containerCountStr = getField(raw, CONTAINER_COUNT_ALIASES);
     const maintenanceDaysStr = getField(raw, MAINTENANCE_DAYS_ALIASES);
+    const nextMaintenanceDue = getField(raw, NEXT_MAINTENANCE_DUE_ALIASES) || undefined;
+    const currentOperatingHoursStr = getField(raw, CURRENT_OPERATING_HOURS_ALIASES);
+    const maintenanceStatus = parseMaintenanceStatus(getField(raw, MAINTENANCE_STATUS_ALIASES));
+    const fuelConsumptionStr = getField(raw, FUEL_CONSUMPTION_ALIASES);
+    const batteryReplacementDue = getField(raw, BATTERY_REPLACEMENT_DUE_ALIASES) || undefined;
+    const bestBeforeDate = getField(raw, BEST_BEFORE_DATE_ALIASES) || undefined;
 
     const data: ItemFormData = {
       name,
@@ -400,6 +434,12 @@ export function parseItemsFromCsv(
       containerSize: containerSizeStr ? parseNumber(containerSizeStr, 0) : undefined,
       containerCount: containerCountStr ? Math.round(parseNumber(containerCountStr, 0)) : undefined,
       maintenanceIntervalDays: maintenanceDaysStr ? Math.round(parseNumber(maintenanceDaysStr, 0)) : undefined,
+      nextMaintenanceDue,
+      currentOperatingHours: currentOperatingHoursStr ? parseNumber(currentOperatingHoursStr, 0) : undefined,
+      maintenanceStatus,
+      fuelConsumptionLitersPer100Km: fuelConsumptionStr ? parseNumber(fuelConsumptionStr, 0) : undefined,
+      batteryReplacementDue,
+      bestBeforeDate,
     };
 
     const existing = existingMap.get(name.toLowerCase().trim());

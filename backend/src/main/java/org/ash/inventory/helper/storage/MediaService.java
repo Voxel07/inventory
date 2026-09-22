@@ -153,6 +153,10 @@ public class MediaService {
         return attachToRecord(reference, assemblyId, "assemblies");
     }
 
+    public String attachToReturnSubmission(String reference, UUID returnSubmissionId) {
+        return attachToRecord(reference, returnSubmissionId, "returns");
+    }
+
     public StoredDocument attachToVendorDocument(String reference, UUID documentId, String originalFilename) {
         String source = mediaReference(reference);
         if (!STAGED_UPLOAD.matcher(source).matches()) {

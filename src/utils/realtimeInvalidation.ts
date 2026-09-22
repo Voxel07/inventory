@@ -13,6 +13,7 @@ const ALL_PREFIXES: string[][] = [
   ['users'],
   ['general-orders'],
   ['notifications'],
+  ['return-submissions'],
 ];
 
 /**

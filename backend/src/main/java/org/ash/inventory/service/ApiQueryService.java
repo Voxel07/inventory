@@ -68,8 +68,7 @@ public class ApiQueryService {
 
     @Transactional
     public ApiResponses.ItemResponse item(UUID id) {
-        actors.current();
-        return mapper.item(required(Item.class, id, "Item"));
+        return mapper.item(catalog.getVisibleItem(id));
     }
 
     @Transactional
@@ -199,6 +198,13 @@ public class ApiQueryService {
     @Transactional
     public List<ApiResponses.UserResponse> users(int page, int size) {
         actors.requireAdmin();
+        var bounds = bounds(page, size);
+        return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+    }
+
+    @Transactional
+    public List<ApiResponses.UserResponse> assignableUsers(int page, int size) {
+        actors.requireManager();
         var bounds = bounds(page, size);
         return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }

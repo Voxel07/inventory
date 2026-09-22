@@ -751,7 +751,8 @@ public class OrderService {
             var asset = orm.findLocked(AssetInstance.class, entry.getKey());
             boolean wasMissing = asset.availabilityStatus == DomainEnums.AssetState.lost;
             if (!wasMissing && asset.availabilityStatus != DomainEnums.AssetState.in_field
-                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody) {
+                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody
+                    && asset.availabilityStatus != DomainEnums.AssetState.returned_pending_check) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not outstanding on this order");
             }
             var line = assignment.orderLine;

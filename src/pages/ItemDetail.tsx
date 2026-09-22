@@ -40,10 +40,11 @@ import {
 } from 'recharts';
 import { useItem, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
-import { useFactionOrders, useReturnFactionOrderItems } from '../hooks/useFactionOrders';
+import { useFactionOrders } from '../hooks/useFactionOrders';
 import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useStorageLocations } from '../hooks/useStorageLocations';
+import { useAssignableUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
@@ -53,6 +54,9 @@ import type { ItemFormData, TransactionFormData, StockTransaction } from '../typ
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
+import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
+import { useQuery } from '@tanstack/react-query';
+import { getMaintenanceRecords } from '../services/maintenanceService';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -103,13 +107,23 @@ export function ItemDetail() {
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
     const { data: factionOrders = [] } = useFactionOrders();
-    const returnFactionOrderItems = useReturnFactionOrderItems();
+    const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
+    const { data: assignableUsers } = useAssignableUsers();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const normalizedCategory = item?.category.trim().toLocaleLowerCase() ?? '';
+    const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
+    const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
+    const isFood = ['food', 'lebensmittel', 'verpflegung'].some((value) => normalizedCategory.includes(value));
+    const { data: maintenanceRecords = [] } = useQuery({
+        queryKey: ['maintenance', itemId],
+        queryFn: () => getMaintenanceRecords(itemId),
+        enabled: Boolean(itemId && isGenerator),
+    });
 
     useEffect(() => {
         if (searchParams.get('transaction') !== '1') return;
@@ -149,31 +163,30 @@ export function ItemDetail() {
 
     function handleTransaction(data: TransactionFormData) {
         if (data.transactionType === 'checkin' && data.factionOrderId) {
-            returnFactionOrderItems.mutate(
-                {
-                    id: data.factionOrderId,
-                    lines: {
-                        [data.itemId]: {
-                            returned: data.quantityChanged,
-                            consumed: 0,
-                            missing: 0,
-                            damaged: 0,
-                            notes: data.notes || undefined,
-                        },
-                    },
-                    assets: data.assetInstanceId ? {
-                        [data.assetInstanceId]: { outcome: 'returned_good' as const, notes: data.notes || undefined },
-                    } : undefined,
-                },
+            createReturn.mutate(
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, factionOrderId: data.factionOrderId, notes: data.notes },
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);
-                        showSnackbar(t('Bestellrückgabe abgeschlossen', 'Order return completed'), 'success');
+                        showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
                     },
                     onError: (error) => {
                         if (isOfflineQueuedError(error)) return;
                         showSnackbar(t('Bestellrückgabe fehlgeschlagen', 'Order return failed'), 'error');
                     },
+                },
+            );
+            return;
+        }
+        if (data.transactionType === 'checkin') {
+            createReturn.mutate(
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, notes: data.notes },
+                {
+                    onSuccess: () => {
+                        setCheckoutOpen(false);
+                        showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
+                    },
+                    onError: () => showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error'),
                 },
             );
             return;
@@ -263,6 +276,12 @@ export function ItemDetail() {
                     <Typography variant="body2">{item.hint}</Typography>
                 </Alert>
             )}
+            {item.description && (
+                <Paper sx={{ p: 2, mb: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 0.75 }}>{t('Produktdetails', 'Product details')}</Typography>
+                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>{item.description}</Typography>
+                </Paper>
+            )}
 
             <Grid container spacing={2}>
                 {/* Info Cards */}
@@ -332,6 +351,22 @@ export function ItemDetail() {
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
+                                    {t('Vorgesehener Rückgabeort', 'Expected return location')}
+                                </Typography>
+                                <Typography>{item.expand?.returnLocation?.name || item.returnLocation || '—'}</Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    {t('Sichtbarkeit', 'Visibility')}
+                                </Typography>
+                                <Typography>
+                                    {item.visibilityScope || 'global'}
+                                    {item.assignedUserName ? ` · ${item.assignedUserName}` : ''}
+                                    {item.assignedGroup ? ` · ${item.assignedGroup}` : ''}
+                                </Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="subtitle2" color="text.secondary">
                                     Position
                                 </Typography>
                                 <Typography>{item.expand?.storageLocation?.position || '—'}</Typography>
@@ -377,6 +412,49 @@ export function ItemDetail() {
                         </Box>
                     </Paper>
                 </Grid>
+
+                {(isVehicle || isGenerator || isFood) && (
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Paper sx={{ p: 3 }}>
+                            <Typography variant="h6" sx={{ mb: 2 }}>{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
+                            <Stack spacing={1.5}>
+                                {isVehicle && (
+                                    <>
+                                        <Box><Typography variant="caption" color="text.secondary">{t('Kraftstoffverbrauch', 'Fuel consumption')}</Typography><Typography>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Typography></Box>
+                                        <Box><Typography variant="caption" color="text.secondary">{t('Batteriewechsel fällig', 'Battery replacement due')}</Typography><Typography>{item.batteryReplacementDue ? new Date(item.batteryReplacementDue).toLocaleDateString() : '—'}</Typography></Box>
+                                    </>
+                                )}
+                                {isGenerator && (
+                                    <>
+                                        <Box><Typography variant="caption" color="text.secondary">{t('Betriebsstunden', 'Running hours')}</Typography><Typography>{item.currentOperatingHours ?? 0}</Typography></Box>
+                                        <Box><Typography variant="caption" color="text.secondary">{t('Nächste Wartung', 'Next maintenance')}</Typography><Typography>{item.nextMaintenanceDue ? new Date(item.nextMaintenanceDue).toLocaleDateString() : '—'}</Typography></Box>
+                                    </>
+                                )}
+                                {isFood && <Box><Typography variant="caption" color="text.secondary">{t('Mindestens haltbar bis', 'Best before date')}</Typography><Typography>{item.bestBeforeDate ? new Date(item.bestBeforeDate).toLocaleDateString() : '—'}</Typography></Box>}
+                            </Stack>
+                        </Paper>
+                    </Grid>
+                )}
+
+                {isGenerator && (
+                    <Grid size={12}>
+                        <Paper sx={{ p: 3 }}>
+                            <Typography variant="h6" sx={{ mb: 2 }}>{t('Wartungsprotokoll', 'Maintenance log')}</Typography>
+                            {maintenanceRecords.length === 0 ? (
+                                <Typography color="text.secondary">{t('Noch keine Wartungseinträge.', 'No maintenance records yet.')}</Typography>
+                            ) : (
+                                <Stack spacing={1}>
+                                    {maintenanceRecords.map((record) => (
+                                        <Box key={record.id} sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                                            <Typography>{new Date(record.performedAt).toLocaleDateString()} · {record.type.replaceAll('_', ' ')}</Typography>
+                                            <Chip size="small" label={record.result} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
+                                        </Box>
+                                    ))}
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Grid>
+                )}
 
                 {/* Checkout card */}
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -582,6 +660,7 @@ export function ItemDetail() {
                         isLoading={updateItem.isPending}
                         storageLocations={storageLocations ?? []}
                         categories={categories}
+                        assignableUsers={assignableUsers ?? []}
                     />
                 </DialogContent>
             </Dialog>
@@ -610,7 +689,7 @@ export function ItemDetail() {
                         preselectedItemId={item.id}
                         orders={factionOrders}
                         onSubmit={handleTransaction}
-                        isLoading={createTransaction.isPending || returnFactionOrderItems.isPending}
+                        isLoading={createTransaction.isPending || createReturn.isPending}
                     />
                 </DialogContent>
             </Dialog>

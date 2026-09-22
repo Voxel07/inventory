@@ -8,6 +8,7 @@ import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItem;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
+import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.ItemImage;
 import org.ash.inventory.model.StockTransaction;
@@ -25,15 +26,22 @@ public class CatalogOrm {
 
     public CatalogOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<Item> items(String search, int offset, int limit) {
-        if (search == null || search.isBlank()) {
-            return entityManager.createQuery("from Item i left join fetch i.storageLocation where i.active = true order by i.createdAt desc", Item.class)
-                    .setFirstResult(offset).setMaxResults(limit).getResultList();
-        }
-        return entityManager.createQuery("from Item i left join fetch i.storageLocation where i.active = true and (lower(i.name) like :search or lower(i.sku) like :search) order by i.name", Item.class)
-                .setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%")
-                .setFirstResult(offset).setMaxResults(limit)
-                .getResultList();
+    public List<Item> items(String search, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
+        String visibility = " and (:manager = true or i.visibilityScope in (:publicScopes)"
+                + " or i.assignedUser.id = :actorId or i.assignedGroup in (:actorGroups))";
+        String filtering = search == null || search.isBlank() ? ""
+                : " and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)";
+        var query = entityManager.createQuery(
+                "select distinct i from Item i left join fetch i.storageLocation left join fetch i.returnLocation"
+                        + " left join fetch i.assignedUser where i.active = true" + visibility + filtering
+                        + " order by i.createdAt desc", Item.class)
+                .setParameter("manager", manager)
+                .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
+                .setParameter("actorId", actorId)
+                .setParameter("actorGroups", actorGroups == null || actorGroups.isEmpty() ? List.of("__none__") : actorGroups)
+                .setFirstResult(offset).setMaxResults(limit);
+        if (!filtering.isEmpty()) query.setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%");
+        return query.getResultList();
     }
 
     public List<StorageLocation> locations() {
@@ -125,6 +133,8 @@ public class CatalogOrm {
 
     public void clearActiveLocationAssignments(StorageLocation location) {
         entityManager.createQuery("update Item i set i.storageLocation = null where i.storageLocation = :location")
+                .setParameter("location", location).executeUpdate();
+        entityManager.createQuery("update Item i set i.returnLocation = null where i.returnLocation = :location")
                 .setParameter("location", location).executeUpdate();
         entityManager.createQuery("update AssetInstance a set a.currentLocation = null where a.currentLocation = :location")
                 .setParameter("location", location).executeUpdate();

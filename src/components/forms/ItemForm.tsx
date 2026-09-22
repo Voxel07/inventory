@@ -14,10 +14,11 @@ import {
     Checkbox,
     FormControlLabel,
     MenuItem,
+    Typography,
 } from '@mui/material';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
-import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation } from '../../types';
+import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
     storageLocations?: StorageLocation[];
     categories?: string[];
     existingNames?: string[];
+    assignableUsers?: User[];
     onSubmit: (data: ItemFormData) => void;
     isLoading?: boolean;
 }
@@ -34,20 +36,26 @@ export function ItemForm({
     storageLocations = [],
     categories = [],
     existingNames = [],
+    assignableUsers = [],
     onSubmit,
     isLoading,
 }: Props) {
     const t = useLocalizedText();
     const [formData, setFormData] = useState<ItemFormData>({
         name: initialData?.name ?? '',
+        description: initialData?.description ?? '',
         amount: undefined,
         minStock: initialData?.minStock ?? 5,
         value: initialData?.value ?? 0,
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
         supplier: initialData?.supplier ?? '',
+        visibilityScope: initialData?.visibilityScope ?? 'global',
+        assignedUserId: initialData?.assignedUserId ?? '',
+        assignedGroup: initialData?.assignedGroup ?? '',
         eventTypes: initialData ? (initialData.eventTypes ?? []) : [...EVENT_TYPES],
         storageLocation: initialData?.storageLocation ?? '',
+        returnLocation: initialData?.returnLocation ?? initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
         isConsumable: initialData?.isConsumable ?? false,
         trackingMode: initialData?.trackingMode ?? 'bulk',
@@ -58,6 +66,13 @@ export function ItemForm({
         containerCount: initialData?.containerCount ?? undefined,
         containersOpened: initialData?.containersOpened ?? undefined,
         containerRemainingPercent: initialData?.containerRemainingPercent ?? undefined,
+        maintenanceIntervalDays: initialData?.maintenanceIntervalDays,
+        nextMaintenanceDue: initialData?.nextMaintenanceDue ?? '',
+        currentOperatingHours: initialData?.currentOperatingHours,
+        maintenanceStatus: initialData?.maintenanceStatus ?? 'certified',
+        fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
+        batteryReplacementDue: initialData?.batteryReplacementDue ?? '',
+        bestBeforeDate: initialData?.bestBeforeDate ?? '',
     });
     const [isBulkPackage, setIsBulkPackage] = useState((initialData?.containerSize ?? 0) > 0);
     const [numericInputs, setNumericInputs] = useState({
@@ -68,6 +83,9 @@ export function ItemForm({
         containerCount: initialData?.containerCount == null ? '' : String(initialData.containerCount),
         containersOpened: initialData?.containersOpened == null ? '' : String(initialData.containersOpened),
         containerRemainingPercent: initialData?.containerRemainingPercent == null ? '' : String(initialData.containerRemainingPercent),
+        maintenanceIntervalDays: initialData?.maintenanceIntervalDays == null ? '' : String(initialData.maintenanceIntervalDays),
+        currentOperatingHours: initialData?.currentOperatingHours == null ? '' : String(initialData.currentOperatingHours),
+        fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km == null ? '' : String(initialData.fuelConsumptionLitersPer100Km),
     });
     const [nameError, setNameError] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
@@ -136,6 +154,9 @@ export function ItemForm({
                 : undefined,
             containersOpened: isBulkPackage ? parseOptional(numericInputs.containersOpened) : undefined,
             containerRemainingPercent: isBulkPackage ? parseOptional(numericInputs.containerRemainingPercent) : undefined,
+            maintenanceIntervalDays: parseOptional(numericInputs.maintenanceIntervalDays),
+            currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
+            fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
         };
         onSubmit(submitData);
     }
@@ -145,7 +166,15 @@ export function ItemForm({
         || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
         && numericInputs.value !== '' && Number(numericInputs.value) >= 0;
-    const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid || !requiredNumbersValid;
+    const assignmentValid = formData.visibilityScope !== 'person' || Boolean(formData.assignedUserId);
+    const groupValid = formData.visibilityScope !== 'group' || Boolean(formData.assignedGroup?.trim());
+    const eventScopeValid = formData.visibilityScope !== 'event' || Boolean(formData.eventTypes?.length);
+    const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid
+        || !requiredNumbersValid || !assignmentValid || !groupValid || !eventScopeValid;
+    const normalizedCategory = formData.category.trim().toLocaleLowerCase();
+    const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
+    const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
+    const isFood = ['food', 'lebensmittel', 'verpflegung'].some((value) => normalizedCategory.includes(value));
 
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
@@ -158,6 +187,14 @@ export function ItemForm({
                     fullWidth
                     error={!!nameError}
                     helperText={nameError}
+                />
+                <TextField
+                    label={t('Produktdetails / zusätzliche Informationen', 'Product details / additional information')}
+                    value={formData.description ?? ''}
+                    onChange={handleChange('description')}
+                    multiline
+                    minRows={3}
+                    fullWidth
                 />
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', columnGap: 2, flexWrap: 'wrap' }}>
                     <FormControlLabel
@@ -297,6 +334,63 @@ export function ItemForm({
                     onChange={handleChange('subcategory')}
                     fullWidth
                 />
+                {(isVehicle || isGenerator || isFood) && (
+                    <Stack spacing={2} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Typography variant="subtitle2">{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
+                        {isVehicle && (
+                            <>
+                                <TextField
+                                    label={t('Kraftstoffverbrauch (l/100 km)', 'Fuel consumption (L/100 km)')}
+                                    type="number"
+                                    value={numericInputs.fuelConsumptionLitersPer100Km}
+                                    onChange={handleNumberChange('fuelConsumptionLitersPer100Km')}
+                                    slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+                                />
+                                <TextField
+                                    label={t('Batteriewechsel fällig', 'Battery replacement due')}
+                                    type="date"
+                                    value={formData.batteryReplacementDue ?? ''}
+                                    onChange={handleChange('batteryReplacementDue')}
+                                    slotProps={{ inputLabel: { shrink: true } }}
+                                />
+                            </>
+                        )}
+                        {isGenerator && (
+                            <>
+                                <TextField
+                                    label={t('Betriebsstunden', 'Running hours')}
+                                    type="number"
+                                    value={numericInputs.currentOperatingHours}
+                                    onChange={handleNumberChange('currentOperatingHours')}
+                                    slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+                                />
+                                <TextField
+                                    label={t('Wartungsintervall (Tage)', 'Maintenance interval (days)')}
+                                    type="number"
+                                    value={numericInputs.maintenanceIntervalDays}
+                                    onChange={handleNumberChange('maintenanceIntervalDays')}
+                                    slotProps={{ htmlInput: { min: 0 } }}
+                                />
+                                <TextField
+                                    label={t('Nächste Wartung', 'Next maintenance')}
+                                    type="date"
+                                    value={formData.nextMaintenanceDue ?? ''}
+                                    onChange={handleChange('nextMaintenanceDue')}
+                                    slotProps={{ inputLabel: { shrink: true } }}
+                                />
+                            </>
+                        )}
+                        {isFood && (
+                            <TextField
+                                label={t('Mindestens haltbar bis', 'Best before date')}
+                                type="date"
+                                value={formData.bestBeforeDate ?? ''}
+                                onChange={handleChange('bestBeforeDate')}
+                                slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                        )}
+                    </Stack>
+                )}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                     <Autocomplete
                         options={storageLocations}
@@ -317,6 +411,51 @@ export function ItemForm({
                         +
                     </Button>
                 </Box>
+
+                <Autocomplete
+                    options={storageLocations}
+                    getOptionLabel={(option) => option.name || ''}
+                    isOptionEqualToValue={(option, val) => option.id === val.id}
+                    value={storageLocations.find((loc) => loc.id === formData.returnLocation) || null}
+                    onChange={(_event, value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))}
+                    renderInput={(params) => (
+                        <TextField {...params} label={t('Vorgesehener Rückgabeort', 'Expected return location')} fullWidth />
+                    )}
+                />
+
+                <TextField
+                    select
+                    label={t('Sichtbarkeit / Zuordnung', 'Visibility / assignment')}
+                    value={formData.visibilityScope ?? 'global'}
+                    onChange={(event) => setFormData((prev) => ({
+                        ...prev,
+                        visibilityScope: event.target.value as ItemFormData['visibilityScope'],
+                    }))}
+                >
+                    <MenuItem value="global">{t('Allgemeiner Bestand', 'Shared inventory')}</MenuItem>
+                    <MenuItem value="event">{t('Eventbezogen', 'Event driven')}</MenuItem>
+                    <MenuItem value="person">{t('Nur für eine Person', 'Assigned to one person')}</MenuItem>
+                    <MenuItem value="group">{t('Nur für eine Gruppe', 'Assigned to one group')}</MenuItem>
+                </TextField>
+                {formData.visibilityScope === 'person' && (
+                    <Autocomplete
+                        options={assignableUsers}
+                        getOptionLabel={(user) => user.name || user.email}
+                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                        value={assignableUsers.find((user) => user.id === formData.assignedUserId) || null}
+                        onChange={(_event, user) => setFormData((prev) => ({ ...prev, assignedUserId: user?.id ?? '' }))}
+                        renderInput={(params) => <TextField {...params} required label={t('Zugeordnete Person', 'Assigned person')} />}
+                    />
+                )}
+                {formData.visibilityScope === 'group' && (
+                    <TextField
+                        required
+                        label={t('Zugeordnete Gruppe', 'Assigned group')}
+                        value={formData.assignedGroup ?? ''}
+                        onChange={handleChange('assignedGroup')}
+                        helperText={t('Zum Beispiel eine Fraktion oder ein lokales Team', 'For example a faction or local team')}
+                    />
+                )}
 
                 <Autocomplete
                     multiple

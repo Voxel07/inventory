@@ -55,6 +55,13 @@ public class UserResource {
         return queries.users(page, size);
     }
 
+    @GET @Path("/users/assignable")
+    public List<ApiResponses.UserResponse> assignableUsers(
+            @jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
+            @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size) {
+        return queries.assignableUsers(page, size);
+    }
+
     @PATCH @Path("/users/{id}") @Transactional
     public ApiResponses.UserResponse updatePermissions(@PathParam("id") UUID id, @Valid ApiModels.UserPermissionsInput input) {
         return mapper.user(users.updatePermissions(id, input));

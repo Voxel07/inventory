@@ -28,6 +28,14 @@ public class Item extends BaseEntity {
     public String category;
     public String subcategory;
     public String supplier;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility_scope", nullable = false)
+    public DomainEnums.ItemVisibilityScope visibilityScope = DomainEnums.ItemVisibilityScope.global;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_user_id")
+    public UserAccount assignedUser;
+    @Column(name = "assigned_group")
+    public String assignedGroup;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "event_tags", columnDefinition = "jsonb", nullable = false)
     public List<String> eventTags = new ArrayList<>();
@@ -48,6 +56,9 @@ public class Item extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "storage_location_id")
     public StorageLocation storageLocation;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "return_location_id")
+    public StorageLocation returnLocation;
     @Column(name = "position_details")
     public String positionDetails;
     public String hint;
@@ -65,6 +76,12 @@ public class Item extends BaseEntity {
     public LocalDate nextMaintenanceDue;
     @Column(name = "current_operating_hours", nullable = false)
     public BigDecimal currentOperatingHours = BigDecimal.ZERO;
+    @Column(name = "fuel_consumption_l_100km")
+    public BigDecimal fuelConsumptionLitersPer100Km;
+    @Column(name = "battery_replacement_due")
+    public LocalDate batteryReplacementDue;
+    @Column(name = "best_before_date")
+    public LocalDate bestBeforeDate;
     @Enumerated(EnumType.STRING)
     @Column(name = "maintenance_status", nullable = false)
     public DomainEnums.MaintenanceStatus maintenanceStatus = DomainEnums.MaintenanceStatus.certified;

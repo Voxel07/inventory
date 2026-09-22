@@ -23,7 +23,16 @@ public final class ApiModels {
             BigDecimal containerSize, Integer containerCount, Integer containersOpened, Integer containerRemainingPercent,
             Integer maintenanceIntervalDays, LocalDate nextMaintenanceDue, BigDecimal currentOperatingHours,
             DomainEnums.MaintenanceStatus maintenanceStatus, List<String> images,
-            DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole) {}
+            DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
+            DomainEnums.ItemVisibilityScope visibilityScope, UUID assignedUserId, String assignedGroup,
+            UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
+            LocalDate batteryReplacementDue, LocalDate bestBeforeDate) {}
+
+    public record ReturnSubmissionInput(
+            @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
+            UUID returnedForUserId, UUID factionOrderId, String placementImage, String notes) {}
+
+    public record ReturnDecisionInput(String notes) {}
 
     public record StorageLocationInput(
             @NotBlank String name, String description, String area, String location, String position,

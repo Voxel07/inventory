@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
     Box,
+    Dialog,
+    DialogContent,
+    DialogTitle,
     MenuItem,
     Paper,
     Skeleton,
@@ -9,26 +12,26 @@ import {
     Typography,
 } from '@mui/material';
 import { useItems } from '../hooks/useItems';
-import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useTransactions } from '../hooks/useTransactions';
 import { useAssemblies } from '../hooks/useAssemblies';
-import { useReturnFactionOrderItems } from '../hooks/useFactionOrders';
 import { useUIStore } from '../store/uiStore';
-import { useNames, useLocalizedText } from '../utils/naming';
-import { isOfflineQueuedError } from '../utils/offline';
+import { useLocalizedText } from '../utils/naming';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
+import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
+import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
+import type { ReturnSubmissionFormData } from '../types';
 
 export function CheckedOutItemsPage() {
-    const names = useNames();
     const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: assemblies } = useAssemblies();
-    const createTransaction = useCreateTransaction();
-    const returnFactionOrderItems = useReturnFactionOrderItems();
+    const createReturn = useCreateReturnSubmission();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [search, setSearch] = useState('');
     const [personFilter, setPersonFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
+    const [returnRow, setReturnRow] = useState<CheckedOutRow>();
 
     const checkedOutRows = useMemo<CheckedOutRow[]>(() => {
         if (!items?.length) return [];
@@ -74,50 +77,17 @@ export function CheckedOutItemsPage() {
     }), [checkedOutRows, eventFilter, personFilter, search]);
 
     function handleQuickReturn(row: CheckedOutRow) {
-        if (row.factionOrderId) {
-            returnFactionOrderItems.mutate(
-                {
-                    id: row.factionOrderId,
-                    lines: {
-                        [row.itemId]: {
-                            returned: 1,
-                            consumed: 0,
-                            missing: 0,
-                            damaged: 0,
-                            notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
-                        },
-                    },
-                    assets: row.assetInstanceId ? {
-                        [row.assetInstanceId]: {
-                            outcome: 'returned_good' as const,
-                            notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
-                        },
-                    } : undefined,
-                },
-                {
-                    onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
-                    onError: () => showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error'),
-                },
-            );
-            return;
-        }
-        createTransaction.mutate(
-            {
-                itemId: row.itemId,
-                transactionType: 'checkin',
-                quantityChanged: 1,
-                reason: names.reason.returnAfterUse,
-                notes: t('Schnelle Rückgabe aus der Ansicht für ausgeliehene Artikel', 'Quick return from the checked-out items view'),
-                userId: row.personId,
+        setReturnRow(row);
+    }
+
+    function submitReturn(data: ReturnSubmissionFormData) {
+        createReturn.mutate(data, {
+            onSuccess: () => {
+                setReturnRow(undefined);
+                showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
             },
-            {
-                onSuccess: () => showSnackbar(t('Artikel zurückgegeben', 'Item returned'), 'success'),
-                onError: (error) => {
-                    if (isOfflineQueuedError(error)) return;
-                    showSnackbar(t('Fehler bei der Rückgabe des Artikels', 'Could not return item'), 'error');
-                },
-            },
-        );
+            onError: () => showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error'),
+        });
     }
 
     if (itemsLoading || txLoading) {
@@ -156,8 +126,24 @@ export function CheckedOutItemsPage() {
                 showPerson
                 linkToItem
                 onQuickReturn={handleQuickReturn}
-                returnPending={createTransaction.isPending || returnFactionOrderItems.isPending}
+                returnPending={createReturn.isPending}
             />
+            <Dialog open={Boolean(returnRow)} onClose={() => setReturnRow(undefined)} maxWidth="sm" fullWidth>
+                <DialogTitle>{t('Rückgabe melden', 'Submit return')}</DialogTitle>
+                <DialogContent>
+                    {returnRow && items?.find((item) => item.id === returnRow.itemId) && (
+                        <ReturnSubmissionForm
+                            item={items.find((item) => item.id === returnRow.itemId)!}
+                            maxQuantity={returnRow.checkedOut}
+                            assetInstanceId={returnRow.assetInstanceId}
+                            returnedForUserId={returnRow.personId}
+                            factionOrderId={returnRow.factionOrderId}
+                            onSubmit={submitReturn}
+                            isLoading={createReturn.isPending}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

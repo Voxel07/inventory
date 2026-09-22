@@ -1164,4 +1164,96 @@ class InventoryApiTest {
                 .body("size()", equalTo(1))
                 .body("[0].reason", equalTo("Initial stock"));
     }
+
+    @Test
+    void personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers() {
+        String assigneeId = factionLeaderRequest().get("/api/auth/me").then().statusCode(200)
+                .extract().path("id");
+        String returnLocationId = request().body(Map.of("name", "Private return shelf"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+
+        var item = new java.util.HashMap<String, Object>();
+        item.put("sku", "PRIVATE-VEHICLE-001");
+        item.put("name", "Private support vehicle");
+        item.put("description", "Vehicle details visible to its assigned crew member.");
+        item.put("category", "Vehicles");
+        item.put("amount", 1);
+        item.put("value", 0);
+        item.put("visibilityScope", "person");
+        item.put("assignedUserId", assigneeId);
+        item.put("returnLocation", returnLocationId);
+        item.put("fuelConsumptionLitersPer100Km", 8.5);
+        item.put("batteryReplacementDue", "2027-03-01");
+        String itemId = request().body(item).post("/api/items").then().statusCode(200)
+                .body("description", equalTo("Vehicle details visible to its assigned crew member."))
+                .body("visibilityScope", equalTo("person"))
+                .body("assignedUserId", equalTo(assigneeId))
+                .body("returnLocation", equalTo(returnLocationId))
+                .body("fuelConsumptionLitersPer100Km", equalTo(8.5f))
+                .body("batteryReplacementDue", equalTo("2027-03-01"))
+                .extract().path("id");
+
+        factionLeaderRequest().get("/api/items/" + itemId).then().statusCode(200);
+        otherFactionLeaderRequest().get("/api/items/" + itemId).then().statusCode(404);
+        otherFactionLeaderRequest().get("/api/items").then().statusCode(200)
+                .body("find { it.id == '" + itemId + "' }", nullValue());
+        request().get("/api/items/" + itemId).then().statusCode(200);
+    }
+
+    @Test
+    void submittedReturnDoesNotChangeStockUntilWarehouseAcknowledgement() {
+        String userId = factionLeaderRequest().get("/api/auth/me").then().statusCode(200)
+                .extract().path("id");
+        String locationId = request().body(Map.of("name", "Return intake counter"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String itemId = request().body(Map.of(
+                        "sku", "RETURN-STAGE-001",
+                        "name", "Staged return item",
+                        "category", "Equipment",
+                        "amount", 2,
+                        "value", 0,
+                        "storageLocation", locationId,
+                        "returnLocation", locationId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+
+        request().body(Map.of(
+                        "itemId", itemId,
+                        "transactionType", "checkout",
+                        "quantityChanged", 1,
+                        "userId", userId,
+                        "eventType", "DE",
+                        "faction", "Return test"))
+                .post("/api/transactions").then().statusCode(200);
+
+        String submissionId = factionLeaderRequest().body(Map.of(
+                        "itemId", itemId,
+                        "quantity", 1,
+                        "notes", "Placed on the marked shelf"))
+                .post("/api/returns").then().statusCode(200)
+                .body("status", equalTo("pending"))
+                .body("expectedReturnLocationId", equalTo(locationId))
+                .extract().path("id");
+
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.onHand", equalTo(1))
+                .body("stock.checkedOut", equalTo(1))
+                .body("stock.available", equalTo(1));
+
+        request().body(Map.of("notes", "Counted and shelved"))
+                .post("/api/returns/" + submissionId + "/acknowledge").then().statusCode(200)
+                .body("status", equalTo("accepted"))
+                .body("acknowledgedByName", equalTo("Test Admin"));
+
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.onHand", equalTo(2))
+                .body("stock.checkedOut", equalTo(0))
+                .body("stock.available", equalTo(2));
+    }
+
+    private static io.restassured.specification.RequestSpecification otherFactionLeaderRequest() {
+        return given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "other-faction-leader")
+                .header("X-Actor-Name", "Other Faction Leader")
+                .header("X-Actor-Role", "faction_leader");
+    }
 }

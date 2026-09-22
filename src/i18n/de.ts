@@ -8,6 +8,7 @@ export default {
     events: 'Events',
     orders: 'Bestellungen',
     checkedOut: 'Ausgeliehen',
+    returnedItems: 'Gemeldete Rückgaben',
     transactions: 'Transaktionsverlauf',
     printQr: 'QR-Codes drucken',
     damageReports: 'Schadensberichte',

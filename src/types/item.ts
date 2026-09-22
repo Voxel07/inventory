@@ -45,14 +45,20 @@ export interface Item {
   sku?: string;
   barcode?: string;
   name: string;
+  description?: string;
   amount?: number;
   minStock?: number;
   value: number;
   category: string;
   subcategory?: string;
   supplier?: string;
+  visibilityScope?: 'global' | 'event' | 'person' | 'group';
+  assignedUserId?: string;
+  assignedUserName?: string;
+  assignedGroup?: string;
   eventTypes?: EventType[];
   storageLocation: string;
+  returnLocation?: string;
   status: ItemStatus;
   images?: string[];
   hint?: string;
@@ -66,12 +72,17 @@ export interface Item {
   maintenanceIntervalDays?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
+  fuelConsumptionLitersPer100Km?: number;
+  batteryReplacementDue?: string;
+  bestBeforeDate?: string;
   maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
   created: string;
   updated: string;
   stock?: ItemStock;
   expand?: {
     storageLocation?: StorageLocation;
+    returnLocation?: StorageLocation;
+    assignedUser?: User;
   };
 }
 
@@ -79,14 +90,19 @@ export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
 
 export interface ItemFormData {
   name: string;
+  description?: string;
   amount?: number;
   minStock: number;
   value: number;
   category: string;
   subcategory?: string;
   supplier?: string;
+  visibilityScope?: 'global' | 'event' | 'person' | 'group';
+  assignedUserId?: string;
+  assignedGroup?: string;
   eventTypes?: EventType[];
   storageLocation: string;
+  returnLocation?: string;
   hint?: string;
   isConsumable?: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
@@ -101,7 +117,47 @@ export interface ItemFormData {
   maintenanceIntervalDays?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
+  fuelConsumptionLitersPer100Km?: number;
+  batteryReplacementDue?: string;
+  bestBeforeDate?: string;
   maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
+}
+
+export type ReturnSubmissionStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface ReturnSubmission {
+  id: string;
+  created: string;
+  updated: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  assetInstanceId?: string;
+  assetCode?: string;
+  returnedForUserId: string;
+  returnedForUserName: string;
+  submittedById: string;
+  submittedByName: string;
+  factionOrderId?: string;
+  expectedReturnLocationId?: string;
+  expectedReturnLocationName?: string;
+  placementImage?: string;
+  notes?: string;
+  status: ReturnSubmissionStatus;
+  acknowledgedById?: string;
+  acknowledgedByName?: string;
+  acknowledgedAt?: string;
+  acknowledgementNotes?: string;
+}
+
+export interface ReturnSubmissionFormData {
+  itemId: string;
+  quantity: number;
+  assetInstanceId?: string;
+  returnedForUserId?: string;
+  factionOrderId?: string;
+  placementImageFile?: File;
+  notes?: string;
 }
 
 export type AssetConditionStatus = 'new_condition' | 'good' | 'fair' | 'damaged' | 'unsafe' | 'lost';
@@ -147,3 +203,4 @@ export interface AssetInstanceInput {
 }
 
 import type { EventType } from './event';
+import type { User } from './user';

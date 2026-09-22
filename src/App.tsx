@@ -23,6 +23,7 @@ const Assemblies = lazy(() => import('./pages/Assemblies').then((m) => ({ defaul
 const AssemblyDetail = lazy(() => import('./pages/AssemblyDetail').then((m) => ({ default: m.AssemblyDetail })));
 const DamageReportsPage = lazy(() => import('./pages/DamageReports').then((m) => ({ default: m.DamageReportsPage })));
 const CheckedOutItemsPage = lazy(() => import('./pages/CheckedOutItems').then((m) => ({ default: m.CheckedOutItemsPage })));
+const ReturnedItemsPage = lazy(() => import('./pages/ReturnedItems').then((m) => ({ default: m.ReturnedItemsPage })));
 const PrintQRCodesPage = lazy(() => import('./pages/PrintQRCodes').then((m) => ({ default: m.PrintQRCodesPage })));
 const UserDashboard = lazy(() => import('./pages/UserDashboard').then((m) => ({ default: m.UserDashboard })));
 const StorageLocations = lazy(() => import('./pages/StorageLocations').then((m) => ({ default: m.StorageLocations })));
@@ -409,6 +410,7 @@ function AppContent() {
               <Route path="/events/orders" element={<Navigate to="/orders?tab=faction" replace />} />
               <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
               <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
+              <Route path="/returns" element={<InventoryManagerGuard><ReturnedItemsPage /></InventoryManagerGuard>} />
               <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
               <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
               <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />

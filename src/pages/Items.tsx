@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
+import { useAssignableUsers } from '../hooks/useUsers';
 import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
@@ -22,6 +23,7 @@ export function Items() {
     const { data: items, isLoading } = useItems();
     const { data: assemblies } = useAssemblies();
     const { data: storageLocations } = useStorageLocations();
+    const { data: assignableUsers } = useAssignableUsers();
 
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
@@ -79,6 +81,7 @@ export function Items() {
                         storageLocations={storageLocations ?? []}
                         categories={categories}
                         existingNames={allNames}
+                        assignableUsers={assignableUsers ?? []}
                     />
                 </DialogContent>
             </Dialog>
@@ -95,6 +98,7 @@ export function Items() {
                             storageLocations={storageLocations ?? []}
                             categories={categories}
                             existingNames={allNames.filter((n) => n !== crud.editingEntity?.name)}
+                            assignableUsers={assignableUsers ?? []}
                         />
                     )}
                 </DialogContent>

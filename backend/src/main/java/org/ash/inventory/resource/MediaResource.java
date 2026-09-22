@@ -30,7 +30,7 @@ public class MediaResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public ApiResponses.MediaResponse upload(@RestForm("file") FileUpload upload) {
-        actors.requireManager();
+        actors.current();
         if (upload == null) throw ApiException.badRequest("A file is required");
         String contentType = upload.contentType() == null ? "application/octet-stream" : upload.contentType();
         var stored = media.store(upload.fileName(), contentType, upload.uploadedFile());
@@ -55,7 +55,7 @@ public class MediaResource {
 
     @DELETE @Path("/{key:.+}")
     public Response deleteStaged(@PathParam("key") String key) {
-        actors.requireManager();
+        actors.current();
         media.deleteStaged(key);
         return Response.noContent().build();
     }

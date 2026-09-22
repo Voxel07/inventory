@@ -38,7 +38,15 @@ public class CatalogService {
     }
 
     public List<Item> getItems(String search, int offset, int limit) {
-        return orm.items(search, offset, limit);
+        var actor = actorService.current();
+        return orm.items(search, actor.id, actor.factions, canManageInventory(actor), offset, limit);
+    }
+
+    public Item getVisibleItem(UUID id) {
+        var actor = actorService.current();
+        var item = orm.find(Item.class, id);
+        if (item == null || !item.active || !canView(item, actor)) throw ApiException.notFound("Item not found");
+        return item;
     }
 
     public List<StorageLocation> getLocations() {
@@ -143,6 +151,23 @@ public class CatalogService {
         item.category = input.category().trim();
         item.subcategory = input.subcategory();
         item.supplier = input.supplier();
+        item.visibilityScope = input.visibilityScope() == null
+                ? DomainEnums.ItemVisibilityScope.global : input.visibilityScope();
+        item.assignedUser = input.assignedUserId() == null ? null
+                : required(UserAccount.class, input.assignedUserId(), "Assigned user");
+        item.assignedGroup = blankToNull(input.assignedGroup());
+        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person && item.assignedUser == null) {
+            throw ApiException.badRequest("Person-scoped items require an assigned user");
+        }
+        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.group && item.assignedGroup == null) {
+            throw ApiException.badRequest("Group-scoped items require an assigned group");
+        }
+        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.event
+                && (input.eventTypes() == null || input.eventTypes().isEmpty())) {
+            throw ApiException.badRequest("Event-scoped items require at least one event type");
+        }
+        if (item.visibilityScope != DomainEnums.ItemVisibilityScope.person) item.assignedUser = null;
+        if (item.visibilityScope != DomainEnums.ItemVisibilityScope.group) item.assignedGroup = null;
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
         item.consumable = input.consumable();
         item.trackingMode = input.trackingMode() == null
@@ -159,6 +184,8 @@ public class CatalogService {
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
         item.storageLocation = input.storageLocation() == null ? null : required(StorageLocation.class, input.storageLocation(), "Storage location");
+        item.returnLocation = input.returnLocation() == null ? item.storageLocation
+                : required(StorageLocation.class, input.returnLocation(), "Return location");
         item.positionDetails = input.positionDetails();
         item.hint = input.hint();
         item.containerSize = input.containerSize();
@@ -168,7 +195,28 @@ public class CatalogService {
         item.maintenanceIntervalDays = input.maintenanceIntervalDays();
         item.nextMaintenanceDue = input.nextMaintenanceDue();
         if (input.currentOperatingHours() != null) item.currentOperatingHours = input.currentOperatingHours();
+        item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
+        item.batteryReplacementDue = input.batteryReplacementDue();
+        item.bestBeforeDate = input.bestBeforeDate();
         if (input.maintenanceStatus() != null) item.maintenanceStatus = input.maintenanceStatus();
+    }
+
+    private boolean canManageInventory(UserAccount actor) {
+        return actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew;
+    }
+
+    private boolean canView(Item item, UserAccount actor) {
+        if (canManageInventory(actor) || item.visibilityScope == null
+                || item.visibilityScope == DomainEnums.ItemVisibilityScope.global
+                || item.visibilityScope == DomainEnums.ItemVisibilityScope.event) return true;
+        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person) {
+            return item.assignedUser != null && item.assignedUser.id.equals(actor.id);
+        }
+        return item.assignedGroup != null && actor.factions.contains(item.assignedGroup);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Transactional
@@ -371,13 +419,13 @@ public class CatalogService {
     }
 
     public List<AssetInstance> getAssets(UUID itemId) {
-        var item = required(Item.class, itemId, "Item");
+        var item = getVisibleItem(itemId);
         return orm.assetInstances(item);
     }
 
     public AssetInstance getAssetByCode(String code) {
         var asset = orm.findAssetByCode(code);
-        if (asset == null) throw ApiException.notFound("Asset not found");
+        if (asset == null || !canView(asset.item, actorService.current())) throw ApiException.notFound("Asset not found");
         return asset;
     }
 

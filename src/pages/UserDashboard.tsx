@@ -18,23 +18,22 @@ import ListAltIcon from '@mui/icons-material/ListAlt';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { useNavigate } from 'react-router-dom';
 import { useItems } from '../hooks/useItems';
-import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports, useCreateDamageReport } from '../hooks/useDamageReports';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
-import { useFactionOrders, useReturnFactionOrderItems } from '../hooks/useFactionOrders';
 import { useUIStore } from '../store/uiStore';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
-import { TransactionForm } from '../components/forms/TransactionForm';
+import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { CheckedOutList, type CheckedOutRow } from '../components/lists/CheckedOutList';
-import type { DamageReportFormData, Item, TransactionFormData } from '../types';
-import { useNames, useLocalizedText } from '../utils/naming';
+import type { DamageReportFormData, Item, ReturnSubmissionFormData } from '../types';
+import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
+import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 
 export function UserDashboard() {
-    const names = useNames();
     const t = useLocalizedText();
     const navigate = useNavigate();
     const theme = useTheme();
@@ -47,12 +46,10 @@ export function UserDashboard() {
     const { data: damageReports } = useDamageReports();
     const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
-    const createTransaction = useCreateTransaction();
-    const { data: factionOrders = [] } = useFactionOrders();
-    const returnFactionOrderItems = useReturnFactionOrderItems();
+    const createReturn = useCreateReturnSubmission();
     const createDamageReport = useCreateDamageReport();
 
-    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number; factionOrderId?: string } | null>(null);
+    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number; factionOrderId?: string; assetInstanceId?: string } | null>(null);
     const [damageItem, setDamageItem] = useState<{ item: Item; quantity: number } | null>(null);
 
     // 1. Transactions belonging to this user
@@ -91,6 +88,7 @@ export function UserDashboard() {
                 eventKey: existing?.eventKey ?? eventKey,
                 event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
                 factionOrderId: tx.factionOrderId,
+                assetInstanceId: tx.assetInstanceId,
             });
         }
         return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
@@ -111,43 +109,13 @@ export function UserDashboard() {
         { label: t('Meine offenen Schadensberichte', 'My open damage reports'), value: userDamageReportsCount, icon: <ReportProblemIcon />, color: '#ff5252' },
     ];
 
-    function handleReturnSubmit(data: TransactionFormData) {
-        if (data.factionOrderId) {
-            returnFactionOrderItems.mutate(
-                {
-                    id: data.factionOrderId,
-                    lines: {
-                        [data.itemId]: {
-                            returned: data.quantityChanged,
-                            consumed: 0,
-                            missing: 0,
-                            damaged: 0,
-                            notes: data.notes || undefined,
-                        },
-                    },
-                    assets: data.assetInstanceId ? {
-                        [data.assetInstanceId]: { outcome: 'returned_good' as const, notes: data.notes || undefined },
-                    } : undefined,
-                },
-                {
-                    onSuccess: () => {
-                        setReturnItem(null);
-                        showSnackbar(t('Artikel erfolgreich zurückgegeben', 'Item returned successfully'), 'success');
-                    },
-                    onError: () => showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not record return'), 'error'),
-                },
-            );
-            return;
-        }
-        createTransaction.mutate(data, {
+    function handleReturnSubmit(data: ReturnSubmissionFormData) {
+        createReturn.mutate(data, {
             onSuccess: () => {
                 setReturnItem(null);
-                showSnackbar(t('Artikel erfolgreich zurückgegeben', 'Item returned successfully'), 'success');
+                showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
             },
-            onError: (error) => {
-                if (isOfflineQueuedError(error)) return;
-                showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not record return'), 'error');
-            }
+            onError: () => showSnackbar(t('Fehler beim Erfassen der Rückgabe', 'Could not submit return'), 'error'),
         });
     }
 
@@ -218,13 +186,13 @@ export function UserDashboard() {
                     linkToItem
                     onQuickReturn={(row) => {
                         const item = items?.find((i) => i.id === row.itemId);
-                        if (item) setReturnItem({ item, quantity: row.checkedOut, factionOrderId: row.factionOrderId });
+                        if (item) setReturnItem({ item, quantity: row.checkedOut, factionOrderId: row.factionOrderId, assetInstanceId: row.assetInstanceId });
                     }}
                     onDamageReport={(row) => {
                         const item = items?.find((i) => i.id === row.itemId);
                         if (item) setDamageItem({ item, quantity: row.checkedOut });
                     }}
-                    returnPending={createTransaction.isPending || returnFactionOrderItems.isPending}
+                    returnPending={createReturn.isPending}
                 />
             </Box>
 
@@ -253,21 +221,14 @@ export function UserDashboard() {
                 <DialogTitle>{t(`${returnItem?.item.name ?? ''} zurückgeben`, `Return ${returnItem?.item.name ?? ''}`)}</DialogTitle>
                 <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
                     {returnItem && (
-                        <TransactionForm
-                            key={returnItem.item.id}
-                            items={items ?? []}
-                            preselectedItemId={returnItem.item.id}
-                            orders={factionOrders}
+                        <ReturnSubmissionForm
+                            item={returnItem.item}
+                            maxQuantity={returnItem.quantity}
+                            assetInstanceId={returnItem.assetInstanceId}
+                            returnedForUserId={currentUser?.id}
+                            factionOrderId={returnItem.factionOrderId}
                             onSubmit={handleReturnSubmit}
-                            isLoading={createTransaction.isPending || returnFactionOrderItems.isPending}
-                            initialData={{
-                                itemId: returnItem.item.id,
-                                transactionType: 'checkin',
-                                quantityChanged: returnItem.quantity,
-                                reason: names.reason.returnAfterUse,
-                                notes: '',
-                                factionOrderId: returnItem.factionOrderId,
-                            }}
+                            isLoading={createReturn.isPending}
                         />
                     )}
                 </DialogContent>

@@ -157,7 +157,8 @@ public class InventoryOperationsService {
             asset.currentCustodian = null;
         } else {
             if (asset.availabilityStatus != DomainEnums.AssetState.in_field
-                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody) {
+                    && asset.availabilityStatus != DomainEnums.AssetState.in_custody
+                    && asset.availabilityStatus != DomainEnums.AssetState.returned_pending_check) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not checked out");
             }
             transaction.sourceLocation = asset.currentLocation;
@@ -246,7 +247,8 @@ public class InventoryOperationsService {
                     || asset.conditionStatus == DomainEnums.ConditionStatus.damaged
                     || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe;
             boolean isCheckedOut = asset.availabilityStatus == DomainEnums.AssetState.in_custody
-                    || asset.availabilityStatus == DomainEnums.AssetState.in_field;
+                    || asset.availabilityStatus == DomainEnums.AssetState.in_field
+                    || asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check;
             boolean isReserved = asset.availabilityStatus == DomainEnums.AssetState.reserved
                     || asset.availabilityStatus == DomainEnums.AssetState.staged;
             boolean isLostOrWrittenOff = asset.availabilityStatus == DomainEnums.AssetState.lost

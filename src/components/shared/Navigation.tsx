@@ -66,6 +66,7 @@ export function Navigation() {
         { label: t('nav.events'), path: '/events', icon: <EventIcon /> },
         { label: t('nav.orders'), path: '/orders', icon: <GroupsIcon /> },
         { label: t('nav.checkedOut'), path: '/checked-out', icon: <AssignmentReturnIcon /> },
+        { label: t('nav.returnedItems'), path: '/returns', icon: <AssignmentReturnIcon /> },
         { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         { label: t('nav.printQr'), path: '/print-qr', icon: <QrCode2Icon /> },
         { label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemIcon /> },

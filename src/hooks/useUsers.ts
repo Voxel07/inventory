@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUsers, updateUserPermissions } from '../services/userService';
+import { getAssignableUsers, getUsers, updateUserPermissions } from '../services/userService';
 import type { UserPermissionsFormData } from '../types';
 
 export function useUsers() {
@@ -15,4 +15,8 @@ export function useUpdateUserPermissions() {
     mutationFn: ({ userId, data }: { userId: string; data: UserPermissionsFormData }) => updateUserPermissions(userId, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
+}
+
+export function useAssignableUsers() {
+  return useQuery({ queryKey: ['users', 'assignable'], queryFn: getAssignableUsers });
 }

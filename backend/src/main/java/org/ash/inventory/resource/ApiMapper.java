@@ -17,6 +17,7 @@ import org.ash.inventory.model.GeneralOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.Notification;
+import org.ash.inventory.model.ReturnSubmission;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.SyncCommandAudit;
 import org.ash.inventory.model.StorageLocation;
@@ -115,9 +116,10 @@ public class ApiMapper {
         var images = imageEntities.stream()
                 .map(image -> media.mediaReference(image.objectKey))
                 .toList();
-        Map<String, Object> expand = value.storageLocation != null
-                ? Map.of("storageLocation", location(value.storageLocation))
-                : Map.of();
+        Map<String, Object> expand = new LinkedHashMap<>();
+        if (value.storageLocation != null) expand.put("storageLocation", location(value.storageLocation));
+        if (value.returnLocation != null) expand.put("returnLocation", location(value.returnLocation));
+        if (value.assignedUser != null) expand.put("assignedUser", user(value.assignedUser));
 
         ApiResponses.StockDto stockDto = state == null ? null : new ApiResponses.StockDto(
                 state.totalOwned(),
@@ -141,11 +143,16 @@ public class ApiMapper {
                 value.category,
                 value.subcategory,
                 value.supplier,
+                value.visibilityScope == null ? DomainEnums.ItemVisibilityScope.global.name() : value.visibilityScope.name(),
+                value.assignedUser == null ? null : value.assignedUser.id.toString(),
+                value.assignedUser == null ? null : value.assignedUser.name,
+                value.assignedGroup,
                 value.eventTags == null ? List.of() : value.eventTags,
                 value.consumable,
                 value.trackingMode.name(),
                 value.inventoryRole.name(),
                 value.storageLocation == null ? null : value.storageLocation.id.toString(),
+                value.returnLocation == null ? null : value.returnLocation.id.toString(),
                 value.active ? "available" : "retired",
                 images,
                 value.hint,
@@ -157,9 +164,39 @@ public class ApiMapper {
                 value.maintenanceIntervalDays,
                 value.nextMaintenanceDue,
                 value.currentOperatingHours,
+                value.fuelConsumptionLitersPer100Km,
+                value.batteryReplacementDue,
+                value.bestBeforeDate,
                 value.maintenanceStatus == null ? null : value.maintenanceStatus.name(),
                 stockDto,
                 expand
+        );
+    }
+
+    public ApiResponses.ReturnSubmissionResponse returnSubmission(ReturnSubmission value) {
+        return new ApiResponses.ReturnSubmissionResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.item.id.toString(),
+                value.item.name,
+                value.quantity,
+                value.assetInstance == null ? null : value.assetInstance.id.toString(),
+                value.assetInstance == null ? null : value.assetInstance.assetCode,
+                value.returnedFor.id.toString(),
+                value.returnedFor.name,
+                value.submittedBy.id.toString(),
+                value.submittedBy.name,
+                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.expectedReturnLocation == null ? null : value.expectedReturnLocation.id.toString(),
+                value.expectedReturnLocation == null ? null : value.expectedReturnLocation.name,
+                media.mediaReference(value.placementImageObjectKey),
+                value.notes,
+                value.status.name(),
+                value.acknowledgedBy == null ? null : value.acknowledgedBy.id.toString(),
+                value.acknowledgedBy == null ? null : value.acknowledgedBy.name,
+                value.acknowledgedAt,
+                value.acknowledgementNotes
         );
     }
 

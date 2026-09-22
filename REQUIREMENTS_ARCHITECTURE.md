@@ -43,6 +43,9 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | CAT-01 | Maintain items, images, categories, event tags, hints, value, and storage location | Implemented | `CatalogResource`, `CatalogService`, `Item`, Items UI |
 | CAT-02 | Maintain assemblies with fixed component quantities | Implemented | `Assembly`, catalog service, Assemblies UI |
 | CAT-03 | Consolidated serialized item tracking: single parent catalog entry with aggregate stock, min-stock alerting, asset ID provisioning, and instance drill-down | Implemented | `CatalogService`, `AssetInstance`, Items UI |
+| CAT-04 | Provide an item details view in which free-form product information and category-specific operational data can be added and reviewed | Implemented | `ItemDetail`, `ItemForm`, `Item`, maintenance query |
+| CAT-05 | Support shared, event-driven, person-local, and group-local items; person/group items are excluded from other users' catalog reads while inventory managers retain operational access | Implemented | `ItemVisibilityScope`, `CatalogOrm`, `CatalogService`, item form |
+| CAT-06 | Category-aware fields include vehicle fuel consumption and battery replacement date, generator running hours and maintenance log, and food best-before date | Implemented | `Item`, `ItemForm`, `ItemDetail`, `MaintenanceRecord` |
 | LOC-01 | Maintain hierarchical/georeferenced storage and pickup locations | Implemented | `StorageLocation`, map components, pickup map dialog |
 | INV-01 | Distinguish total owned, on-hand, checked-out, damaged, reserved, and available stock | Implemented | `InventoryOperationsService.StockState`, `StockDto` |
 | INV-02 | Block over-allocation and unsafe/overdue checkout | Implemented | locked transaction paths and maintenance guard |
@@ -54,6 +57,8 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | ORD-04 | Reconcile returned, consumed, missing, damaged, and written-off units | Implemented | `OrderReturnChecklist`, return service path |
 | ORD-05 | Compare the current order with the previous event-year baseline | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve item SKU/QR, serialized asset code, and exact order code through targeted server queries; open stock handling, show checked-out quantity, and reconcile returns against an optional originating order | Implemented | `codeResolver.ts`, inventory/order services, `TransactionForm`, faction-order return endpoint |
+| RET-01 | Define the expected return location per item and allow the returning person to attach an image showing where the item was placed | Implemented | `Item.returnLocation`, `ReturnSubmission`, `ReturnSubmissionForm`, media service |
+| RET-02 | Keep submitted returns out of available/on-hand stock until a warehouse worker acknowledges them; provide a separate pending/history view with accept and reject actions | Implemented | `ReturnSubmissionService`, `/api/returns`, `ReturnedItems`, stock transaction/order reconciliation services |
 | AUD-01 | Preserve append-only order history with actor, timestamp, action, note, and delta | Implemented | `FactionOrderHistory`, mapper, `OrderTraceability` |
 | AUD-02 | Display create/prepare/ready/pickup/return actors and timestamps | Implemented | `OrderTraceability` |
 | DAM-01 | Report, repair, verify, and write off damaged stock without creating stock | Implemented | damage service/resource and regression tests |
@@ -166,6 +171,40 @@ The item collection is intentionally **not server-cached** because it carries dy
    - High-value serialized items often need to be distributed in subsets to multiple factions during events (e.g., 50 walkie-talkies partitioned into batches of 10 for different faction headquarters).
    - Order commissioning and custody handovers must support selecting or assigning batches of specific serialized assets to faction orders, while maintaining 100% individual asset identity and return reconciliation for each handed-over unit.
 
+### 5.2 Item detail, category data, and visibility
+
+1. Every catalog item has a dedicated details route. In addition to stock, images, transactions, and serialized assets, it displays a free-form product description, expected return location, visibility assignment, and any applicable category-specific fields.
+2. Category-specific fields are first-class typed data rather than prose-only conventions:
+   - vehicles expose fuel consumption in litres per 100 km and the next battery replacement date;
+   - generators expose current running hours, the next maintenance date/interval, and their maintenance-record history;
+   - food exposes a best-before date.
+3. An item's `visibilityScope` is one of `global`, `event`, `person`, or `group`.
+   - `event` requires at least one event type tag;
+   - `person` requires an assigned user and is visible only to that user and inventory managers;
+   - `group` requires an assigned group and is visible only to members of that group and inventory managers;
+   - inventory managers retain access because catalog maintenance, return acknowledgement, and stock correctness require operational oversight.
+4. Collection and item-detail endpoints enforce the same visibility policy. Client-side hiding is not a security boundary.
+
+### 5.3 Two-stage return intake
+
+Returns initiated from a user's checked-out-item flow are submissions, not stock movements. A submission records the item, quantity or serialized asset, the person for whom it is returned, optional originating order, the item's configured return location, notes, and an optional placement image.
+
+The return lifecycle is:
+
+```text
+checked out → return submitted (pending) → warehouse accepted → stock check-in/reconciliation
+                                      └→ warehouse rejected → remains checked out
+```
+
+Invariants:
+
+- A pending submission does not create a `checkin` transaction and does not increase on-hand or available stock.
+- Pending serialized assets use `returned_pending_check`, which still counts as checked out and cannot be allocated.
+- A worker acknowledgement is the only operation that invokes the canonical direct check-in or faction-order reconciliation path.
+- Rejection restores a serialized asset to its prior checked-out state; bulk quantity remains unchanged throughout rejection.
+- The submitted placement image is evidence for locating the physical item, not proof of stock acceptance.
+- The separate returned-items view defaults to pending submissions and also exposes accepted/rejected history.
+
 ## 6. Authentication and authorization
 
 Production authentication uses Authentik OIDC bearer tokens. Development header authentication exists only when `inventory.dev-auth.enabled=true` and uses the same canonical roles.
@@ -213,11 +252,13 @@ The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panach
 
 The unqualified local profile still uses Hibernate `strategy=update`, while development and test use disposable `drop-and-create` schemas with Flyway disabled. Shared staging, production-like, and multi-node deployments must use the production-equivalent Flyway/validate policy rather than the local default. Remaining hardening work is to retire `update` outside explicitly disposable/local use, keep all future changes forward-only, test upgrades from supported database versions, and validate backup/restore before release.
 
-Core persisted concepts include users, storage locations, items and images, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, reconciliations, stock transactions (including immutable event/faction checkout snapshots), damage reports, maintenance, and domain outbox events.
+Core persisted concepts include users, storage locations, items and images, scoped item assignments, category-specific item data, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, two-stage return submissions, reconciliations, stock transactions (including immutable event/faction checkout snapshots), damage reports, maintenance, and domain outbox events.
 
 ## 10. Media contract
 
 Database records contain canonical relative object keys only, for example `items/<uuid>/<uuid>.webp`. API media URLs are generated by the client against `/api/media/{key}`. Absolute or external URLs are rejected by the media boundary; the backend does not infer keys from historical public URLs.
+
+Authenticated users may stage a return-placement image. Once the return submission is persisted, the media service atomically promotes the staged object to a canonical `returns/...` key; warehouse acknowledgement does not depend on an external URL.
 
 ## 11. Verification and finding traceability
 
@@ -247,6 +288,9 @@ Database records contain canonical relative object keys only, for example `items
 | Dense assembly media layout | Image, event tags, description, instruction, and metrics share one responsive summary panel | TypeScript production build |
 | Monolithic eager route loading | Authenticated route pages are lazy-loaded behind a common `Suspense` boundary; login remains an independent static fallback | Vite production chunk output |
 | Render-time clock access failed React purity checks | Dashboard time is held in state and advanced by an effect-driven interval | ESLint and TypeScript production build |
+| Item details could not capture operational category data | Added typed vehicle, generator, and food fields plus generator maintenance history to the existing item-detail route | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers`, TypeScript production build |
+| Person/group-local catalog entries leaked through unfiltered item reads | Catalog list and detail queries now apply the canonical visibility scope with an explicit inventory-manager operational override | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers` |
+| Returns immediately changed stock with no physical acknowledgement | Added pending return submissions, optional placement photos, and a worker-only acknowledgement view; only acceptance reaches canonical stock/reconciliation services | `submittedReturnDoesNotChangeStockUntilWarehouseAcknowledgement`, TypeScript production build |
 
 Required verification before merge:
 
@@ -267,3 +311,4 @@ These are not compatibility work and are not represented as already implemented:
 4. Validate backup restore, outbox recovery, and offline-conflict workflows in a production-like environment.
 5. Add route prefetching and enforce bundle-size budgets; the largest shared vendor chunks remain substantial even though route-level code splitting is active.
 6. Expand serialized-inventory browser coverage and UX for high-volume asset registration, scanner-assisted assignment, and faction batch reconciliation.
+7. Add browser-level coverage for scoped catalog visibility and the pending-return photo/acknowledgement workflow.
