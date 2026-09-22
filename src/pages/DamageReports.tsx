@@ -41,9 +41,9 @@ export function DamageReportsPage() {
         });
     }
 
-    function handleStatusUpdate(id: string, status: DamageStatus, amount?: number) {
+    function handleStatusUpdate(id: string, status: DamageStatus, amount?: number, notes?: string, itemHint?: string) {
         updateStatus.mutate(
-            { id, status, amount },
+            { id, status, amount, notes, itemHint },
             {
                 onSuccess: () => showSnackbar(
                     status === 'repaired'

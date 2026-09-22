@@ -25,6 +25,7 @@ import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.CatalogOrm;
 import org.ash.inventory.orm.OrderOrm;
+import org.ash.inventory.orm.PurchasingOrm;
 import org.ash.inventory.resource.dto.ApiResponses;
 import org.ash.inventory.service.InventoryOperationsService;
 import org.ash.inventory.service.OrderQuantities;
@@ -41,14 +42,16 @@ public class ApiMapper {
     private final MediaService media;
     private final CatalogOrm catalogOrm;
     private final OrderOrm orderOrm;
+    private final PurchasingOrm purchasingOrm;
     private final InventoryOperationsService operations;
     private final EntityManager entityManager;
 
-    public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm,
+    public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm, PurchasingOrm purchasingOrm,
             InventoryOperationsService operations, EntityManager entityManager) {
         this.media = media;
         this.catalogOrm = catalogOrm;
         this.orderOrm = orderOrm;
+        this.purchasingOrm = purchasingOrm;
         this.operations = operations;
         this.entityManager = entityManager;
     }
@@ -114,20 +117,23 @@ public class ApiMapper {
     }
 
     public ApiResponses.ItemResponse item(Item value) {
-        return item(value, operations.stock(value));
+        return item(value, operations.stock(value), null,
+                purchasingOrm.outstandingQuantities(List.of(value.id)).getOrDefault(value.id, 0));
     }
 
     public List<ApiResponses.ItemResponse> items(List<Item> values) {
         var stock = operations.stock(values);
         var imagesMap = catalogOrm.itemImages(values);
-        return values.stream().map(value -> item(value, stock.get(value.id), imagesMap.get(value.id))).toList();
+        var ordered = purchasingOrm.outstandingQuantities(values.stream().map(value -> value.id).toList());
+        return values.stream().map(value -> item(value, stock.get(value.id), imagesMap.get(value.id),
+                ordered.getOrDefault(value.id, 0))).toList();
     }
 
     private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state) {
-        return item(value, state, null);
+        return item(value, state, null, 0);
     }
 
-    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state, List<org.ash.inventory.model.ItemImage> preloadedImages) {
+    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state, List<org.ash.inventory.model.ItemImage> preloadedImages, int ordered) {
         var imageEntities = preloadedImages != null ? preloadedImages : catalogOrm.itemImages(value);
         var images = imageEntities.stream()
                 .map(image -> media.mediaReference(image.objectKey))
@@ -143,7 +149,8 @@ public class ApiMapper {
                 state.checkedOut(),
                 state.damaged(),
                 state.reserved(),
-                state.available()
+                state.available(),
+                ordered
         );
 
         return new ApiResponses.ItemResponse(
@@ -257,7 +264,7 @@ public class ApiMapper {
             var items = new ArrayList<ApiResponses.ItemResponse>();
             for (var component : components) {
                 quantities.put(component.item.id.toString(), component.quantity);
-                items.add(item(component.item, null, imagesMap.get(component.item.id)));
+                items.add(item(component.item, null, imagesMap.get(component.item.id), 0));
             }
             return new ApiResponses.AssemblyResponse(
                     assembly.id,
@@ -583,7 +590,7 @@ public class ApiMapper {
         return new ApiResponses.DeficitResponse(
                 value.itemId(), value.sku(), value.name(), value.category(), value.supplier(), value.classification(),
                 value.demand(), value.onHandStock(), value.totalOwnedStock(), value.availableStock(),
-                value.reservedStock(), value.projectedStock(), value.netDeficit(), value.recommendedAction());
+                value.reservedStock(), value.projectedStock(), value.netDeficit(), value.orderedStock(), value.recommendedAction());
     }
 
     public ApiResponses.OrderHistoryResponse history(FactionOrderHistory value) {

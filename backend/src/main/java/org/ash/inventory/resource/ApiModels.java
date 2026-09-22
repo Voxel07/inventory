@@ -91,7 +91,7 @@ public final class ApiModels {
             UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId) {}
     public record DamageResolutionInput(
             DomainEnums.DamageStatus status, @Min(1) Integer amount, String notes, UUID idempotencyKey,
-            String description, DomainEnums.DamageSeverity severity) {}
+            String description, DomainEnums.DamageSeverity severity, String itemHint) {}
 
     public record MaintenanceInput(
             @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, Instant performedAt,

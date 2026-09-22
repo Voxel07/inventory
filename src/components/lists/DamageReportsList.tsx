@@ -18,7 +18,7 @@ interface Props {
     isLoading: boolean;
     view?: 'open' | 'history';
     isUpdating?: boolean;
-    onUpdateStatus?: (id: string, status: DamageStatus, amount?: number) => void;
+    onUpdateStatus?: (id: string, status: DamageStatus, amount?: number, notes?: string, itemHint?: string) => void;
     onEdit?: (id: string, data: DamageReportUpdateData) => void;
 }
 
@@ -35,6 +35,8 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
         : report.status === 'reported' || report.status === 'in_review');
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
+    const [resolutionNotes, setResolutionNotes] = useState('');
+    const [itemHint, setItemHint] = useState('');
     const [editing, setEditing] = useState<DamageReport | null>(null);
     const [editDescription, setEditDescription] = useState('');
     const [editSeverity, setEditSeverity] = useState<DamageSeverity>('medium');
@@ -77,6 +79,8 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const openResolution = (report: DamageReport, status: 'repaired' | 'written_off') => {
         setResolution({ report, status });
         setResolutionAmount('1');
+        setResolutionNotes('');
+        setItemHint('');
     };
     const statusControl = (report: DamageReport) => onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -109,6 +113,18 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     error={resolutionAmount !== '' && !resolutionAmountValid}
                     slotProps={{ htmlInput: { min: 1, max: maxResolutionAmount, step: 1 } }}
                 />
+                <TextField
+                    fullWidth multiline minRows={2} sx={{ mt: 2 }}
+                    label={t('Was wurde getan?', 'What was done?')}
+                    value={resolutionNotes} onChange={(event) => setResolutionNotes(event.target.value)}
+                />
+                {resolution?.report.itemId && <TextField
+                    fullWidth multiline minRows={2} sx={{ mt: 2 }}
+                    label={t('Artikelhinweis aktualisieren (optional)', 'Update item hint (optional)')}
+                    helperText={items?.find((item) => item.id === resolution.report.itemId)?.hint || t('Dieser Hinweis erscheint beim Artikel.', 'This hint appears on the item.')}
+                    value={itemHint} onChange={(event) => setItemHint(event.target.value)}
+                    slotProps={{ htmlInput: { maxLength: 255 } }}
+                />}
             </DialogContent>
             <DialogActions>
                 <Button color="inherit" onClick={() => setResolution(null)}>{t('Abbrechen', 'Cancel')}</Button>
@@ -118,7 +134,8 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     disabled={!resolution || !resolutionAmountValid || isUpdating}
                     onClick={() => {
                         if (!resolution || !resolutionAmountValid) return;
-                        onUpdateStatus?.(resolution.report.id, resolution.status, parsedResolutionAmount);
+                        onUpdateStatus?.(resolution.report.id, resolution.status, parsedResolutionAmount,
+                            resolutionNotes.trim() || undefined, itemHint.trim() || undefined);
                         setResolution(null);
                     }}
                 >
@@ -160,6 +177,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                         <Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" />
                     </Box>
                     <Typography variant="body2" sx={{ my: 1.5 }}>{report.description}</Typography>
+                    {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}
                     <Typography variant="body2" color="text.secondary">{t('Gemeldet von', 'Reported by')}: {getUserName(report.reportedBy, report.expand?.reportedBy)}</Typography>
                     <Typography variant="body2" color="text.secondary">{t('Bearbeitet von', 'Handled by')}: {getUserName(report.handledBy, report.expand?.handledBy)}</Typography>
                     {view === 'history' && <Typography component="div" variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line', mt: 1.5 }}>{getActivity(report)}</Typography>}
@@ -197,7 +215,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                             <Typography variant="caption" color="text.secondary">{report.amount} {t('gesamt', 'total')} · {getRepairedAmount(report)} {t('repariert', 'repaired')} · {getWrittenOffAmount(report)} {t('abgeschrieben', 'written off')}</Typography>
                         </TableCell>
                         <TableCell><Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" /></TableCell>
-                        <TableCell>{report.description}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
+                        <TableCell>{report.description}{report.resolutionNotes && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
                         <TableCell>{getUserName(report.handledBy, report.expand?.handledBy)}{report.handledAt && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{new Date(report.handledAt).toLocaleString()}</Typography>}</TableCell>
                         {view === 'history' && <TableCell><Typography variant="caption" sx={{ whiteSpace: 'pre-line' }}>{getActivity(report)}</Typography></TableCell>}
                         <TableCell>

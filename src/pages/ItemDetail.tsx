@@ -318,6 +318,10 @@ export function ItemDetail() {
                             <Typography variant="h6">{item.minStock ?? 5}</Typography>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">{t('Bestellt / unterwegs', 'Ordered / in transit')}</Typography>
+                            <Typography variant="h6" color="info.main">{item.stock?.ordered ?? 0}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
                             <Typography variant="caption" color="text.secondary">Einzelwert</Typography>
                             <Typography variant="h6">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
                         </Paper>

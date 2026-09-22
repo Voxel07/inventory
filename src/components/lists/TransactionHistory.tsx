@@ -68,9 +68,8 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
             <Chip
                 size="small"
                 variant="outlined"
-                color="secondary"
                 label={[asset.assetCode, asset.serialNumber && `SN ${asset.serialNumber}`].filter(Boolean).join(' · ')}
-                sx={{ height: 20, fontSize: '0.7rem' }}
+                sx={{ height: 20, fontSize: '0.7rem', color: 'text.primary', borderColor: 'divider' }}
             />
         );
     }

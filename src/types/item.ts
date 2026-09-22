@@ -38,6 +38,7 @@ export interface ItemStock {
   damaged: number;
   reserved: number;
   available: number;
+  ordered: number;
 }
 
 export interface Item {

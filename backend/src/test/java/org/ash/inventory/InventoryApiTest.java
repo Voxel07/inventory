@@ -298,12 +298,22 @@ class InventoryApiTest {
                         "lines", java.util.List.of(Map.of(
                                 "itemId", itemId, "orderedQuantity", 5, "unitPriceCents", 125))))
                 .post("/api/purchase-orders").then().statusCode(201)
-                .body("status", equalTo("draft")).extract().path("id");
+                .body("status", equalTo("draft"))
+                .body("vendorName", equalTo("Receipt Vendor 001"))
+                .body("createdByName", equalTo("Test Admin"))
+                .body("orderDate", equalTo("2026-09-12"))
+                .body("lines[0].unitPriceCents", equalTo(125)).extract().path("id");
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.ordered", equalTo(0)).body("stock.available", equalTo(0));
         String purchaseOrderLineId = request().get("/api/purchase-orders").then().statusCode(200)
                 .extract().path("find { it.id == '" + purchaseOrderId + "' }.lines[0].id");
         request().body(Map.of("status", "ordered"))
                 .post("/api/purchase-orders/" + purchaseOrderId + "/transitions")
                 .then().statusCode(200).body("status", equalTo("ordered"));
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.ordered", equalTo(5)).body("stock.available", equalTo(0));
+        request().queryParam("search", "RECEIPT-BULK-001").get("/api/items").then().statusCode(200)
+                .body("find { it.id == '" + itemId + "' }.stock.ordered", equalTo(5));
 
         String idempotencyKey = java.util.UUID.randomUUID().toString();
         var receipt = Map.of(
@@ -323,7 +333,8 @@ class InventoryApiTest {
         request().get("/api/items/" + itemId).then().statusCode(200)
                 .body("stock.totalOwned", equalTo(3))
                 .body("stock.damaged", equalTo(1))
-                .body("stock.available", equalTo(2));
+                .body("stock.available", equalTo(2))
+                .body("stock.ordered", equalTo(2));
         request().queryParam("itemId", itemId).queryParam("locationId", locationId)
                 .get("/api/inventory-positions").then().statusCode(200)
                 .body("size()", equalTo(1))
@@ -333,6 +344,11 @@ class InventoryApiTest {
                 .body("size()", equalTo(1)).body("[0].amount", equalTo(1));
         request().queryParam("purchaseOrderId", purchaseOrderId).get("/api/goods-receipts")
                 .then().statusCode(200).body("size()", equalTo(1));
+        request().body(Map.of("status", "cancelled"))
+                .post("/api/purchase-orders/" + purchaseOrderId + "/transitions")
+                .then().statusCode(200).body("status", equalTo("cancelled"));
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.ordered", equalTo(0)).body("stock.available", equalTo(2));
     }
 
     @Test
@@ -831,12 +847,19 @@ class InventoryApiTest {
         factionLeaderRequest()
                 .get("/api/procurement/deficits")
                 .then().statusCode(403);
+        factionLeaderRequest().get("/api/purchase-orders").then().statusCode(403);
 
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-event-planner")
                 .header("X-Actor-Name", "Test Event Planner")
                 .header("X-Actor-Role", "event_planner")
                 .get("/api/procurement/deficits")
+                .then().statusCode(200);
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-event-planner")
+                .header("X-Actor-Name", "Test Event Planner")
+                .header("X-Actor-Role", "event_planner")
+                .get("/api/purchase-orders")
                 .then().statusCode(200);
     }
 
@@ -1202,6 +1225,28 @@ class InventoryApiTest {
         request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
                 .body("size()", equalTo(1))
                 .body("[0].reason", equalTo("Initial stock"));
+    }
+
+    @Test
+    void damageResolutionStoresActionCommentAndItemHint() {
+        String itemId = request().body(Map.of("sku", "DAMAGE-NOTES-001", "name", "Damage notes item",
+                        "category", "Test", "amount", 2, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String reportId = request().body(Map.of("itemId", itemId, "amount", 2,
+                        "description", "Broken latch", "severity", "medium"))
+                .post("/api/damage-reports").then().statusCode(200).extract().path("id");
+        request().body(Map.of("status", "repaired", "amount", 1,
+                        "notes", "Replaced latch and tested fit", "itemHint", "Check latch before checkout"))
+                .patch("/api/damage-reports/" + reportId).then().statusCode(200)
+                .body("resolutionNotes", equalTo("Replaced latch and tested fit"));
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("hint", equalTo("Check latch before checkout"));
+        request().body(Map.of("status", "written_off", "amount", 1,
+                        "notes", "Second unit could not be repaired"))
+                .patch("/api/damage-reports/" + reportId).then().statusCode(200)
+                .body("resolutionNotes", equalTo("Replaced latch and tested fit\nSecond unit could not be repaired"));
+        request().queryParam("itemId", itemId).get("/api/damage-reports").then().statusCode(200)
+                .body("[0].resolutionNotes", equalTo("Replaced latch and tested fit\nSecond unit could not be repaired"));
     }
 
     @Test

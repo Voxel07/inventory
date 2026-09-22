@@ -62,8 +62,11 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | AUD-01 | Preserve append-only order history with actor, timestamp, action, note, and delta | Implemented | `FactionOrderHistory`, mapper, `OrderTraceability` |
 | AUD-02 | Display create/prepare/ready/pickup/return actors and timestamps | Implemented | `OrderTraceability` |
 | DAM-01 | Report, repair, verify, and write off damaged stock without creating stock | Implemented | damage service/resource and regression tests |
+| DAM-02 | Record a resolution comment describing the action taken and optionally update the affected item's hint | Implemented | `DamageReportsList`, damage resolution DTO/service, item hint |
 | MNT-01 | Track maintenance cycles and block checkout where required | Implemented | maintenance models and operations service |
-| PRC-01 | Calculate demand deficit against total owned stock and expose the workflow only to planners and administrators | Implemented | procurement service/resource, `ProcurementGuard`, navigation policy, and UI |
+| PRC-01 | Calculate demand deficit against usable on-hand stock and expose the planning workflow only to planners and administrators | Implemented | procurement service/resource, `ProcurementGuard`, navigation policy, and UI |
+| PRC-02 | Record external orders for shortages with supplier, order date, ordering user, quantity, unit price, reference, and expected delivery; link shortage and order rows to item detail | Implemented | `Procurement`, `ProcurementOrders`, purchasing API |
+| PRC-03 | Show outstanding ordered units separately as in transit on item stock and procurement views; exclude them from on-hand, owned, and available until goods receipt | Implemented | purchase order line aggregate, item stock DTO, deficit response, item detail |
 | OFF-01 | Queue supported field commands offline and replay them idempotently | Implemented | IndexedDB queue, `/api/sync`, command IDs |
 | OFF-02 | Keep filtered offline catalogs isolated by normalized query | Implemented | query-scoped keys in `resourceFactory.ts` |
 | SEC-01 | Authenticate with Authentik OIDC and authorize on the server | Implemented | Quarkus OIDC and `ActorService` |
@@ -71,7 +74,7 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
 
-Counts, transfers, purchasing, custody, and stock management are first-class backend modules even where the current frontend offers only a narrower workflow. The absence of a dedicated page is product scope/backlog, not by itself evidence that the backend module is dead code.
+Counts, transfers, purchasing, custody, and stock management are first-class backend modules. The procurement page now records and displays external purchase orders; goods receipt remains a warehouse workflow.
 
 ## 4. Architectural boundaries
 
@@ -138,6 +141,7 @@ Invariants:
 - `totalOwned` includes material currently in custody; valuation and procurement must not treat checkout as loss.
 - `onHand` is physically at an inventory location.
 - `available` is the only quantity allocatable to a new order.
+- `ordered` is the unreceived quantity on external purchase orders in `ordered` or `partially_received` status. It is shown as in transit and is excluded from physical, owned, and available stock until a goods receipt posts. Draft and cancelled orders do not contribute.
 - Order preparation displays the authoritative `available` value. While editing an order that already owns an active reservation, the UI adds only that order's reservation back to the allocatable amount; it must not subtract all reservations a second time.
 - Damage repair changes condition, not physical quantity.
 - A write-off is the explicit operation that reduces owned stock.

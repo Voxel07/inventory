@@ -17,8 +17,8 @@ export const damageReportApi = createCreateResourceApi<DamageReport, DamageRepor
 
 export const getDamageReports = (filters?: { itemId?: string; assetInstanceId?: string; assemblyId?: string; size?: number }) => damageReportApi.getAll(filters);
 export const createDamageReport = damageReportApi.create;
-export function updateDamageReportStatus(id: string, status: DamageStatus, amount = 1): Promise<DamageReport> {
-  return apiRequest(`/api/damage-reports/${id}`, { method: 'PATCH', body: { status, amount } });
+export function updateDamageReportStatus(id: string, status: DamageStatus, amount = 1, notes?: string, itemHint?: string): Promise<DamageReport> {
+  return apiRequest(`/api/damage-reports/${id}`, { method: 'PATCH', body: { status, amount, notes, itemHint } });
 }
 
 export function updateDamageReport(id: string, data: DamageReportUpdateData): Promise<DamageReport> {

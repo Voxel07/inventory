@@ -8,6 +8,8 @@ import org.ash.inventory.model.*;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -52,6 +54,19 @@ public class PurchasingOrm {
         if (orders.isEmpty()) return List.of();
         return entityManager.createQuery("select line from PurchaseOrderLine line join fetch line.item where line.purchaseOrder in :orders order by line.createdAt", PurchaseOrderLine.class)
                 .setParameter("orders", orders).getResultList();
+    }
+    public Map<UUID, Integer> outstandingQuantities(Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return Map.of();
+        var rows = entityManager.createQuery("select line.item.id, sum(line.orderedQuantity - line.receivedQuantity) "
+                        + "from PurchaseOrderLine line where line.item.id in :itemIds "
+                        + "and line.purchaseOrder.status in :statuses group by line.item.id", Object[].class)
+                .setParameter("itemIds", itemIds)
+                .setParameter("statuses", List.of(DomainEnums.PurchaseOrderStatus.ordered,
+                        DomainEnums.PurchaseOrderStatus.partially_received))
+                .getResultList();
+        var result = new LinkedHashMap<UUID, Integer>();
+        for (var row : rows) result.put((UUID) row[0], Math.max(0, Math.toIntExact(((Number) row[1]).longValue())));
+        return result;
     }
     public List<PurchaseOrderLine> lockedPurchaseOrderLines(PurchaseOrder order) {
         return entityManager.createQuery("select line from PurchaseOrderLine line join fetch line.item where line.purchaseOrder = :order order by line.createdAt", PurchaseOrderLine.class)

@@ -22,7 +22,8 @@ public final class ApiResponses {
             int checkedOut,
             int damaged,
             int reserved,
-            int available
+            int available,
+            int ordered
     ) {}
 
     public record UserResponse(
@@ -427,6 +428,7 @@ public final class ApiResponses {
             int reservedStock,
             int projectedStock,
             int netDeficit,
+            int orderedStock,
             String recommendedAction
     ) {}
 

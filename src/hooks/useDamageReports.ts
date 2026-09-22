@@ -28,8 +28,8 @@ export function useDamageReports(itemId?: string, filters?: { assetInstanceId?: 
 export function useUpdateDamageReportStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status, amount }: { id: string; status: DamageStatus; amount?: number }) =>
-      updateDamageReportStatus(id, status, amount),
+    mutationFn: ({ id, status, amount, notes, itemHint }: { id: string; status: DamageStatus; amount?: number; notes?: string; itemHint?: string }) =>
+      updateDamageReportStatus(id, status, amount, notes, itemHint),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['damageReports'] });
       relatedKeys.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));

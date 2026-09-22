@@ -114,6 +114,11 @@ public class ActorService {
                 DomainEnums.UserRole.event_planner);
     }
 
+    public void requireProcurement() {
+        requireAny("Procurement access required", DomainEnums.UserRole.hq_admin,
+                DomainEnums.UserRole.event_planner, DomainEnums.UserRole.warehouse_crew);
+    }
+
     public boolean canAccessFaction(UserAccount actor, String eventType, String faction) {
         if (actor.role != DomainEnums.UserRole.faction_leader) return true;
         String key = eventType + ":" + faction;

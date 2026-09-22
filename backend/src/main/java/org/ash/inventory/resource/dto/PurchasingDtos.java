@@ -31,7 +31,7 @@ public final class PurchasingDtos {
             String notes) {}
     public record PurchaseOrderResponse(UUID id, String orderNumber, UUID vendorId, String vendorName,
             LocalDate orderDate, LocalDate expectedDeliveryDate, String status, UUID eventOccurrenceId,
-            UUID createdById, String notes, List<PurchaseOrderLineResponse> lines) {}
+            UUID createdById, String createdByName, String notes, List<PurchaseOrderLineResponse> lines) {}
     public record PurchaseOrderTransitionInput(@NotNull org.ash.inventory.model.DomainEnums.PurchaseOrderStatus status,
             String notes) {}
 

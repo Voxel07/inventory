@@ -18,6 +18,7 @@ import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.orm.OperationsOrm;
+import org.ash.inventory.orm.PurchasingOrm;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,11 +39,13 @@ public class InventoryOperationsService {
             DomainEnums.TransactionType.added,
             DomainEnums.TransactionType.adjusted);
     private final OperationsOrm orm;
+    private final PurchasingOrm purchasingOrm;
     private final ActorService actors;
     private final DomainEventService events;
 
-    public InventoryOperationsService(OperationsOrm orm, ActorService actors, DomainEventService events) {
+    public InventoryOperationsService(OperationsOrm orm, PurchasingOrm purchasingOrm, ActorService actors, DomainEventService events) {
         this.orm = orm;
+        this.purchasingOrm = purchasingOrm;
         this.actors = actors;
         this.events = events;
     }
@@ -56,7 +59,7 @@ public class InventoryOperationsService {
     public record Deficit(
             UUID itemId, String sku, String name, String category, String supplier, String classification,
             int demand, int onHandStock, int totalOwnedStock, int availableStock, int reservedStock,
-            int projectedStock, int netDeficit, String recommendedAction) {}
+            int projectedStock, int netDeficit, int orderedStock, String recommendedAction) {}
 
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
@@ -370,6 +373,12 @@ public class InventoryOperationsService {
             report.description = input.description().trim();
         }
         if (input.severity() != null) report.severity = input.severity();
+        if (input.itemHint() != null) {
+            if (report.item == null) throw ApiException.badRequest("An item hint requires an item damage report");
+            var hint = input.itemHint().trim();
+            if (hint.length() > 255) throw ApiException.badRequest("Item hint must be 255 characters or less");
+            report.item.hint = hint.isEmpty() ? null : hint;
+        }
         if (input.status() == null) {
             events.record("damage.updated", "damage_report", report.id, actors.current().id, input.idempotencyKey(),
                     Map.of("severity", report.severity.name()));
@@ -385,7 +394,11 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Unsupported damage resolution status");
         }
         report.handler = actors.current();
-        report.resolutionNotes = input.notes();
+        if (input.notes() != null && !input.notes().isBlank()) {
+            var note = input.notes().trim();
+            report.resolutionNotes = report.resolutionNotes == null || report.resolutionNotes.isBlank()
+                    ? note : report.resolutionNotes + "\n" + note;
+        }
         if (input.status() == DomainEnums.DamageStatus.in_review) {
             report.status = DomainEnums.DamageStatus.in_review;
             var payload = new LinkedHashMap<String, Object>();
@@ -561,6 +574,7 @@ public class InventoryOperationsService {
         for (var line : lines)
             demand.merge(line.item, line.requestedQuantity, Integer::sum);
         var stockByItem = stock(List.copyOf(demand.keySet()));
+        var orderedByItem = purchasingOrm.outstandingQuantities(demand.keySet().stream().map(item -> item.id).toList());
         var result = new ArrayList<Deficit>();
         for (var entry : demand.entrySet()) {
             var state = stockByItem.get(entry.getKey().id);
@@ -586,6 +600,7 @@ public class InventoryOperationsService {
                     state.reserved(),
                     projectedStock,
                     deficit,
+                    orderedByItem.getOrDefault(entry.getKey().id, 0),
                     entry.getKey().consumable ? "purchase" : "rent_or_purchase"));
         }
         result.sort(Comparator.comparingInt(Deficit::netDeficit).reversed());

@@ -36,13 +36,13 @@ public class PurchasingService {
 
     @Transactional
     public List<PurchasingDtos.VendorResponse> vendors(int page, int size) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         return orm.vendors(offset(page, size), size).stream().map(this::vendor).toList();
     }
 
     @Transactional
     public PurchasingDtos.VendorResponse createVendor(PurchasingDtos.VendorInput input) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         if (orm.vendorNameExists(input.name(), null)) throw ApiException.conflict("Vendor name already exists");
         var value = new Vendor();
         apply(value, input);
@@ -53,7 +53,7 @@ public class PurchasingService {
 
     @Transactional
     public PurchasingDtos.VendorResponse updateVendor(UUID id, PurchasingDtos.VendorInput input) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         var value = requiredLocked(Vendor.class, id, "Vendor");
         if (orm.vendorNameExists(input.name(), id)) throw ApiException.conflict("Vendor name already exists");
         apply(value, input);
@@ -63,7 +63,7 @@ public class PurchasingService {
 
     @Transactional
     public void retireVendor(UUID id) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         var value = requiredLocked(Vendor.class, id, "Vendor");
         value.active = false;
         events.record("vendor.retired", "vendor", value.id, actors.current().id, null, Map.of("name", value.name));
@@ -71,7 +71,7 @@ public class PurchasingService {
 
     @Transactional
     public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(String status, int page, int size) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         List<PurchaseOrder> values;
         try {
             values = orm.purchaseOrders(status, offset(page, size), size);
@@ -84,7 +84,7 @@ public class PurchasingService {
     @Transactional
     public PurchasingDtos.PurchaseOrderResponse createPurchaseOrder(PurchasingDtos.PurchaseOrderInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
+        actors.requireProcurement();
         var vendor = required(Vendor.class, input.vendorId(), "Vendor");
         if (!vendor.active) throw ApiException.conflict("Vendor is inactive");
         var order = new PurchaseOrder();
@@ -108,7 +108,7 @@ public class PurchasingService {
 
     @Transactional
     public PurchasingDtos.PurchaseOrderResponse updatePurchaseOrder(UUID id, PurchasingDtos.PurchaseOrderInput input) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         var order = requiredLocked(PurchaseOrder.class, id, "Purchase order");
         if (order.status != DomainEnums.PurchaseOrderStatus.draft) {
             throw ApiException.conflict("Only draft purchase orders can be edited");
@@ -134,7 +134,7 @@ public class PurchasingService {
     @Transactional
     public PurchasingDtos.PurchaseOrderResponse transitionPurchaseOrder(UUID id,
             PurchasingDtos.PurchaseOrderTransitionInput input) {
-        actors.requireWarehouse();
+        actors.requireProcurement();
         var order = requiredLocked(PurchaseOrder.class, id, "Purchase order");
         boolean allowed = switch (order.status) {
             case draft -> input.status() == DomainEnums.PurchaseOrderStatus.ordered
@@ -423,7 +423,8 @@ public class PurchasingService {
     private PurchasingDtos.PurchaseOrderResponse purchaseOrder(PurchaseOrder value, List<PurchaseOrderLine> lines) {
         return new PurchasingDtos.PurchaseOrderResponse(value.id, value.orderNumber, value.vendor.id,
                 value.vendor.name, value.orderDate, value.expectedDeliveryDate, value.status.name(),
-                value.eventOccurrence == null ? null : value.eventOccurrence.id, value.createdBy.id, value.notes,
+                value.eventOccurrence == null ? null : value.eventOccurrence.id, value.createdBy.id,
+                value.createdBy.name, value.notes,
                 lines.stream().map(line -> new PurchasingDtos.PurchaseOrderLineResponse(line.id, line.item.id,
                         line.item.sku, line.item.name, line.orderedQuantity, line.unitPriceCents,
                         line.receivedQuantity, line.remainingQuantity(), line.notes)).toList());
