@@ -1,6 +1,7 @@
 package org.ash.inventory.resource;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.persistence.EntityManager;
 import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItemId;
@@ -41,13 +42,15 @@ public class ApiMapper {
     private final CatalogOrm catalogOrm;
     private final OrderOrm orderOrm;
     private final InventoryOperationsService operations;
+    private final EntityManager entityManager;
 
     public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm,
-            InventoryOperationsService operations) {
+            InventoryOperationsService operations, EntityManager entityManager) {
         this.media = media;
         this.catalogOrm = catalogOrm;
         this.orderOrm = orderOrm;
         this.operations = operations;
+        this.entityManager = entityManager;
     }
 
     public ApiResponses.UserResponse user(UserAccount value) {
@@ -64,6 +67,11 @@ public class ApiMapper {
     }
 
     public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value) {
+        var itemNames = new LinkedHashMap<String, String>();
+        for (var itemId : value.requestedQuantities.keySet()) {
+            var item = entityManager.find(Item.class, UUID.fromString(itemId));
+            if (item != null) itemNames.put(itemId, item.name);
+        }
         return new ApiResponses.GeneralOrderResponse(
                 value.id,
                 value.createdAt,
@@ -71,6 +79,14 @@ public class ApiMapper {
                 value.name,
                 value.purpose,
                 value.createdBy.id.toString(),
+                value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
+                value.status,
+                value.requestedQuantities,
+                value.handedOverQuantities,
+                value.returnedQuantities,
+                value.consumedQuantities,
+                value.assetAssignments,
+                itemNames,
                 Map.of("createdBy", user(value.createdBy))
         );
     }
@@ -261,7 +277,36 @@ public class ApiMapper {
 
     public ApiResponses.EventResponse event(EventOccurrence value) {
         var planned = value.plannedQuantities == null ? Map.<String, Integer>of() : value.plannedQuantities;
-        var used = value.usedQuantities == null ? Map.<String, Integer>of() : value.usedQuantities;
+        var used = new LinkedHashMap<String, Integer>();
+        var factionLines = entityManager.createQuery(
+                "from FactionOrderLine line where line.order.eventOccurrence = :event and line.order.status <> :cancelled",
+                FactionOrderLine.class)
+                .setParameter("event", value)
+                .setParameter("cancelled", DomainEnums.OrderStatus.cancelled)
+                .getResultList();
+        for (var line : factionLines) {
+            int quantity = Math.max(0, line.handedOverQuantity - line.returnedQuantity);
+            if (quantity > 0) used.merge(line.item.id.toString(), quantity, Integer::sum);
+        }
+        var generalOrders = entityManager.createQuery(
+                "from GeneralOrder orderEntry where orderEntry.eventOccurrence = :event and orderEntry.status not in ('draft', 'submitted', 'ready', 'cancelled')",
+                GeneralOrder.class).setParameter("event", value).getResultList();
+        for (var order : generalOrders) {
+            for (var entry : order.handedOverQuantities.entrySet()) {
+                int quantity = Math.max(0, entry.getValue() - order.returnedQuantities.getOrDefault(entry.getKey(), 0));
+                if (quantity > 0) used.merge(entry.getKey(), quantity, Integer::sum);
+            }
+        }
+        var itemNames = new LinkedHashMap<String, String>();
+        var itemIds = new java.util.HashSet<String>();
+        itemIds.addAll(planned.keySet());
+        itemIds.addAll(used.keySet());
+        for (var itemId : itemIds) {
+            try {
+                var item = entityManager.find(Item.class, UUID.fromString(itemId));
+                if (item != null) itemNames.put(itemId, item.name);
+            } catch (IllegalArgumentException ignored) { }
+        }
         return new ApiResponses.EventResponse(
                 value.id,
                 value.createdAt,
@@ -275,7 +320,8 @@ public class ApiMapper {
                 value.notes,
                 used.keySet().stream().filter(id -> used.getOrDefault(id, 0) > 0).toList(),
                 planned,
-                used
+                used,
+                itemNames
         );
     }
 

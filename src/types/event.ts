@@ -13,6 +13,7 @@ export interface EventReport {
   itemIds: string[];
   plannedQuantities: Record<string, number>;
   usedQuantities: Record<string, number>;
+  itemNames?: Record<string, string>;
   notes?: string;
   createdBy?: string;
   created: string;

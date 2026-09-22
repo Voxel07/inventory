@@ -61,7 +61,11 @@ public final class ApiModels {
             Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities,
             UUID idempotencyKey) {}
 
-    public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose) {}
+    public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose,
+            UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities) {}
+    public record GeneralOrderReturnInput(Map<UUID, Integer> returnedQuantities,
+            Map<UUID, Integer> consumedQuantities) {}
+    public record GeneralOrderPickupInput(Map<UUID, List<UUID>> assetAssignments) {}
 
     public record PreparationInput(Map<UUID, Integer> preparedQuantities, Map<UUID, List<UUID>> assetAssignments,
             boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}

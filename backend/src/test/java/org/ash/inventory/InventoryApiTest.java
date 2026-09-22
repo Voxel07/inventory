@@ -27,7 +27,7 @@ class InventoryApiTest {
     @Inject DomainEventService domainEvents;
 
     @Test
-    void eventReportsPersistQuantitiesAndExposeOnlyActuallyUsedItems() {
+    void eventUsageComesFromOrdersAndReturns() {
         String usedItemId = request().body(Map.of("sku", "EVENT-USED-001", "name", "Used event item",
                         "category", "Test", "amount", 10, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
@@ -47,15 +47,26 @@ class InventoryApiTest {
         String eventId = request().body(event).post("/api/events").then().statusCode(200)
                 .body("plannedQuantities.'" + usedItemId + "'", equalTo(8))
                 .body("plannedQuantities.'" + plannedOnlyItemId + "'", equalTo(3))
-                .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
-                .body("usedQuantities.size()", equalTo(1))
-                .body("itemIds.size()", equalTo(1))
-                .body("itemIds[0]", equalTo(usedItemId))
+                .body("usedQuantities.size()", equalTo(0))
+                .body("itemIds.size()", equalTo(0))
+                .body("itemNames.'" + usedItemId + "'", equalTo("Used event item"))
                 .extract().path("id");
+
+        String orderId = request().body(Map.of("name", "Event catering", "purpose", "Test use",
+                        "eventOccurrenceId", eventId, "requestedQuantities", Map.of(usedItemId, 6)))
+                .post("/api/general-orders").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/general-orders/" + orderId + "/submit").then().statusCode(200);
+        request().body(Map.of()).post("/api/general-orders/" + orderId + "/ready").then().statusCode(200);
+        request().body(Map.of()).post("/api/general-orders/" + orderId + "/pickup").then().statusCode(200);
 
         request().get("/api/events/" + eventId).then().statusCode(200)
                 .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
                 .body("itemIds[0]", equalTo(usedItemId));
+        request().body(Map.of("returnedQuantities", Map.of(usedItemId, 2), "consumedQuantities", Map.of()))
+                .post("/api/general-orders/" + orderId + "/return").then().statusCode(200)
+                .body("status", equalTo("partially_returned"));
+        request().get("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.'" + usedItemId + "'", equalTo(4));
     }
 
     @Test
@@ -1163,6 +1174,37 @@ class InventoryApiTest {
         request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
                 .body("size()", equalTo(1))
                 .body("[0].reason", equalTo("Initial stock"));
+    }
+
+    @Test
+    void generalOrderTracksSerializedPickupAndReturn() {
+        String itemId = request().body(Map.of("sku", "GENERAL-SERIAL-001", "name", "General order asset",
+                        "category", "Test", "amount", 1, "value", 0, "trackingMode", "serialized"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String assetId = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .extract().path("[0].id");
+        String eventId = request().body(Map.of("eventType", "DE", "startDate", "2037-04-10", "status", "planned"))
+                .post("/api/events").then().statusCode(200).extract().path("id");
+        String orderId = request().body(Map.of("name", "Stage", "purpose", "Light the stage",
+                        "eventOccurrenceId", eventId, "requestedQuantities", Map.of(itemId, 1)))
+                .post("/api/general-orders").then().statusCode(200).extract().path("id");
+        request().get("/api/events?eventType=DE").then().statusCode(200);
+        request().body(Map.of()).post("/api/general-orders/" + orderId + "/submit").then().statusCode(200);
+        request().body(Map.of()).post("/api/general-orders/" + orderId + "/ready").then().statusCode(200);
+        request().body(Map.of("assetAssignments", Map.of(itemId, java.util.List.of(assetId))))
+                .post("/api/general-orders/" + orderId + "/pickup").then().statusCode(200)
+                .body("status", equalTo("picked_up"));
+        request().get("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.'" + itemId + "'", equalTo(1));
+        request().get("/api/events?eventType=DE").then().statusCode(200)
+                .body("find { it.id == '" + eventId + "' }.usedQuantities.'" + itemId + "'", equalTo(1));
+        request().body(Map.of("returnedQuantities", Map.of(itemId, 1)))
+                .post("/api/general-orders/" + orderId + "/return").then().statusCode(200)
+                .body("status", equalTo("returned"));
+        request().get("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.size()", equalTo(0));
+        request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("[0].availabilityStatus", equalTo("available"));
     }
 
     @Test

@@ -1,4 +1,4 @@
-import { EVENT_TYPES, FACTIONS_BY_EVENT, type Assembly, type AssemblyFormData, type EventReportFormData, type EventReportStatus, type EventType, type FactionOrderFormData, type Item, type ItemFormData, type StorageLocation } from '../types';
+import { EVENT_TYPES, FACTIONS_BY_EVENT, type Assembly, type AssemblyFormData, type EventReportFormData, type EventReportStatus, type EventType, type FactionOrderFormData, type GeneralOrderFormData, type Item, type ItemFormData, type StorageLocation } from '../types';
 
 export interface ParsedItemRow {
   index: number;
@@ -61,6 +61,20 @@ export interface ParsedFactionOrderRow {
   statusMessage?: string;
 }
 
+export interface ParsedGeneralOrderRow {
+  index: number;
+  rawRow: Record<string, string>;
+  data: GeneralOrderFormData;
+  eventType?: EventType;
+  eventDate: string;
+  requestedItems: ParsedAssemblyComponent[];
+  returnedItems: ParsedAssemblyComponent[];
+  consumedItems: ParsedAssemblyComponent[];
+  targetStatus: FactionOrderImportStatus;
+  status: 'valid' | 'error';
+  statusMessage?: string;
+}
+
 export interface ParsedReturnRow {
   index: number;
   rawRow: Record<string, string>;
@@ -74,6 +88,7 @@ export interface ParsedReturnRow {
   faction?: string;
   person?: string;
   date?: string;
+  generalOrderName?: string;
   notes?: string;
   targetStatus: 'pending' | 'accepted' | 'rejected';
   status: 'valid' | 'error';
@@ -293,6 +308,9 @@ const ORDER_RETURNED_ITEMS_ALIASES = [
   'rückgabe',
   'retoure',
 ];
+const GENERAL_ORDER_NAME_ALIASES = ['name', 'ordername', 'bestellname'];
+const GENERAL_ORDER_PURPOSE_ALIASES = ['purpose', 'zweck', 'beschreibung'];
+const ORDER_CONSUMED_ITEMS_ALIASES = ['consumeditems', 'verbrauchteartikel', 'verbraucht'];
 const RETURN_PERSON_ALIASES = [
   'person',
   'user',
@@ -818,9 +836,6 @@ export function parseEventReportsFromCsv(
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
-    } else if (status === 'completed' && used.components.length === 0) {
-      validationStatus = 'error';
-      statusMessage = 'Ein abgeschlossenes Event benötigt mindestens einen tatsächlich verwendeten Artikel';
     }
 
     results.push({
@@ -957,6 +972,66 @@ export function parseFactionOrdersFromCsv(
   return results;
 }
 
+/** General order rows can simulate the same submit, pickup, and return flow as the UI. */
+export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items: Item[]): ParsedGeneralOrderRow[] {
+  const lookup = new Map<string, Item>();
+  for (const item of items) {
+    lookup.set(item.id.toLowerCase(), item);
+    lookup.set(item.name.toLowerCase().trim(), item);
+    if (item.sku) lookup.set(item.sku.toLowerCase().trim(), item);
+  }
+  const resolve = (value?: string): ParsedAssemblyComponent[] => parseInlineComponents(value ?? '').map((component) => {
+    const item = lookup.get(component.name.toLowerCase().trim());
+    return { itemName: item?.name ?? component.name, itemId: item?.id, quantity: component.quantity, matched: Boolean(item) };
+  });
+  return rows.flatMap((raw, index) => {
+    const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().replace(/[^a-zäöü]/g, '');
+    if (!['generalorder', 'allgemeinebestellung', 'allgemeinbestellung'].includes(rowType ?? '')) return [];
+    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
+    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
+    const name = getField(raw, GENERAL_ORDER_NAME_ALIASES) ?? '';
+    const purpose = getField(raw, GENERAL_ORDER_PURPOSE_ALIASES) ?? '';
+    const requestedItems = resolve(getField(raw, ORDER_ITEMS_ALIASES));
+    const returnedItems = resolve(getField(raw, ORDER_RETURNED_ITEMS_ALIASES));
+    const consumedItems = resolve(getField(raw, ORDER_CONSUMED_ITEMS_ALIASES));
+    const rawStatus = getField(raw, ORDER_STATUS_ALIASES)?.toLowerCase().trim();
+    let targetStatus: FactionOrderImportStatus = 'draft';
+    if (['closed', 'abgeschlossen'].includes(rawStatus ?? '')) targetStatus = 'closed';
+    else if (['returned', 'zurückgegeben', 'zurueckgegeben'].includes(rawStatus ?? '')) targetStatus = 'returned';
+    else if (['partially_returned', 'teilrückgabe', 'teilrueckgabe'].includes(rawStatus ?? '')) targetStatus = 'partially_returned';
+    else if (['picked_up', 'pickedup', 'ausgegeben', 'abgeholt'].includes(rawStatus ?? '')) targetStatus = 'picked_up';
+    else if (['ready', 'bereit'].includes(rawStatus ?? '')) targetStatus = 'ready';
+    else if (['submitted', 'eingereicht'].includes(rawStatus ?? '')) targetStatus = 'submitted';
+    const requestedQuantities: Record<string, number> = {};
+    for (const component of requestedItems) if (component.itemId) requestedQuantities[component.itemId] = (requestedQuantities[component.itemId] ?? 0) + component.quantity;
+    let status: ParsedGeneralOrderRow['status'] = 'valid';
+    let statusMessage: string | undefined;
+    const unmatched = [...requestedItems, ...returnedItems, ...consumedItems].filter((component) => !component.matched);
+    if (!name || !purpose) { status = 'error'; statusMessage = 'Name und Zweck fehlen'; }
+    else if (!eventType || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+      status = 'error'; statusMessage = 'Eventtyp oder Eventdatum fehlt';
+    } else if (!requestedItems.length) { status = 'error'; statusMessage = 'Bestellte Artikel fehlen'; }
+    else if (unmatched.length) { status = 'error'; statusMessage = `Unbekannte Artikel: ${unmatched.map((item) => item.itemName).join(', ')}`; }
+    else if (consumedItems.some((component) => !lookup.get(component.itemName.toLowerCase().trim())?.isConsumable)) {
+      status = 'error'; statusMessage = 'Nur Verbrauchsmaterial kann als verbraucht erfasst werden';
+    }
+    else if (['returned', 'closed', 'partially_returned'].includes(targetStatus) && !returnedItems.length && !consumedItems.length) {
+      status = 'error'; statusMessage = 'Rückgabeartikel oder verbrauchte Artikel fehlen';
+    }
+    const returnedTotals: Record<string, number> = {};
+    for (const component of [...returnedItems, ...consumedItems]) if (component.itemId) returnedTotals[component.itemId] = (returnedTotals[component.itemId] ?? 0) + component.quantity;
+    if (Object.entries(returnedTotals).some(([id, quantity]) => quantity > (requestedQuantities[id] ?? 0))) {
+      status = 'error'; statusMessage = 'Rückgabe überschreitet bestellte Menge';
+    }
+    if (['returned', 'closed'].includes(targetStatus) && Object.entries(requestedQuantities).some(([id, quantity]) => (returnedTotals[id] ?? 0) !== quantity)) {
+      status = 'error'; statusMessage = 'Vollständige Rückgabe benötigt Mengen für alle bestellten Artikel';
+    }
+    return [{ index: index + 1, rawRow: raw, data: { name, purpose, requestedQuantities }, eventType, eventDate,
+      requestedItems, returnedItems, consumedItems, targetStatus, status, statusMessage }];
+  });
+}
+
 /** Parses standalone return / checkin rows from a combined CSV. */
 export function parseReturnsFromCsv(
   rows: Record<string, string>[],
@@ -1004,6 +1079,7 @@ export function parseReturnsFromCsv(
     const faction = getField(raw, ORDER_FACTION_ALIASES);
     const person = getField(raw, RETURN_PERSON_ALIASES);
     const date = getField(raw, EVENT_DATE_ALIASES);
+    const generalOrderName = getField(raw, ['generalorder', 'generalordername', 'allgemeinebestellung', 'bestellname', 'ordername']);
     const notes = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES) || '';
 
     const rawStatus = getField(raw, ['status', 'returnstatus', 'rueckgabestatus', 'rückgabestatus'])?.toLowerCase().trim();
@@ -1038,6 +1114,7 @@ export function parseReturnsFromCsv(
       faction,
       person,
       date,
+      generalOrderName,
       notes,
       targetStatus,
       status: validationStatus,
@@ -1071,11 +1148,14 @@ export function generateSampleAssembliesCsv(): string {
 
 export function generateSampleCombinedCsv(): string {
   return [
-    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes',
+    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes;Eventtyp;Eventdatum;BestellteArtikel;RueckgabeArtikel;VerbrauchteArtikel;Bestellstatus;Zweck;Bestellname',
     'Artikel;Feld-PC;IT & Elektronik;2;1;650,00;Lager A; ;DE,TNO;Live-Map Rechner;serialized;"PC-01, PC-02"',
     'Artikel;Zeltgestänge 4x4m;Infrastruktur;6;2;120,00;Lager Zelt; ;DE,TNO;Auf Vollständigkeit prüfen;bulk;',
     'Artikel;Zeltplane 4x4m;Infrastruktur;6;2;180,00;Lager Zelt; ;DE,TNO;Trocken lagern;bulk;',
     'Artikel;Heringe 30cm (10er Set);Infrastruktur;12;4;15,00;Lager Zelt; ;DE,TNO,LS;Immer nachzählen;bulk;',
     'Baugruppe;SG-Zelt komplett;Zelte; ; ; ; ;"Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2";DE,TNO;Komplettes Zelt mit Heringen;;',
+    'Event;;;;;;;;;;;;DE;2026-06-13;;;;;',
+    'AllgemeineBestellung;Catering;;;;;;;;;;;DE;2026-06-13;"Heringe 30cm (10er Set): 2";"Heringe 30cm (10er Set): 1";;partially_returned;Catering-Zelt;',
+    'Return;Heringe 30cm (10er Set);;1;;;;;;;;;DE;2026-06-13;;;;;;Catering',
   ].join('\r\n');
 }

@@ -43,6 +43,14 @@ public final class ApiResponses {
             String name,
             String purpose,
             String createdBy,
+            String eventOccurrenceId,
+            String status,
+            Map<String, Integer> requestedQuantities,
+            Map<String, Integer> handedOverQuantities,
+            Map<String, Integer> returnedQuantities,
+            Map<String, Integer> consumedQuantities,
+            Map<String, List<String>> assetAssignments,
+            Map<String, String> itemNames,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 
@@ -167,7 +175,8 @@ public final class ApiResponses {
             String notes,
             List<String> itemIds,
             Map<String, Integer> plannedQuantities,
-            Map<String, Integer> usedQuantities
+            Map<String, Integer> usedQuantities,
+            Map<String, String> itemNames
     ) {}
 
     public record FactionResponse(

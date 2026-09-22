@@ -22,7 +22,7 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SaveIcon from '@mui/icons-material/Save';
 import { useItems } from '../hooks/useItems';
-import { useCreateEventReport, useEventReports } from '../hooks/useEvents';
+import { useCreateEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
@@ -38,17 +38,18 @@ export function Events() {
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
   const [planned, setPlanned] = useState<QuantityInputs>({});
-  const [used, setUsed] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
   const { data: items, isLoading: itemsLoading } = useItems();
   const { data: reports, isLoading: reportsLoading } = useEventReports(eventType);
   const createReport = useCreateEventReport();
+  const updateReport = useUpdateEventReport();
 
   const completedReports = useMemo(
     () => reports?.filter((report) => report.status === 'completed') ?? [],
     [reports],
   );
   const lastCompleted = completedReports[0];
+  const currentEvent = reports?.find((report) => report.status === 'planned');
   const eventItems = useMemo(
     () => items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [],
     [eventType, items],
@@ -68,12 +69,15 @@ export function Events() {
 
   useEffect(() => {
     setPlanned(toQuantityInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
-    setUsed({});
     setNotes('');
   }, [eventType, lastCompleted?.id, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
 
-  function itemName(itemId: string): string {
-    return items?.find((item) => item.id === itemId)?.name ?? itemId;
+  useEffect(() => {
+    setEventDate(currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  }, [eventType, currentEvent?.id, currentEvent?.eventDate]);
+
+  function itemName(itemId: string, report?: { itemNames?: Record<string, string> }): string {
+    return items?.find((item) => item.id === itemId)?.name ?? report?.itemNames?.[itemId] ?? usageReports.find((entry) => entry.itemNames?.[itemId])?.itemNames?.[itemId] ?? itemId;
   }
 
   function stockFor(item: Item) {
@@ -82,20 +86,18 @@ export function Events() {
 
   function save(status: EventReportStatus) {
     const plannedQuantities = toNonNegativeQuantities(planned);
-    const usedQuantities = toNonNegativeQuantities(used);
-    const itemIds = [...new Set([
-      ...Object.entries(usedQuantities).filter(([, quantity]) => quantity > 0).map(([itemId]) => itemId),
-    ])];
 
-    createReport.mutate({
+    const data = {
       eventType,
       eventDate: new Date(`${eventDate}T12:00:00.000Z`).toISOString(),
       status,
-      itemIds,
+      itemIds: [],
       plannedQuantities,
-      usedQuantities,
+      usedQuantities: {},
       notes: notes.trim(),
-    }, {
+    };
+    const existing = reports?.find((report) => report.eventDate.slice(0, 10) === eventDate);
+    const callbacks = {
       onSuccess: () => {
         showSnackbar(
           status === 'completed'
@@ -103,11 +105,12 @@ export function Events() {
             : t('Eventplanung gespeichert', 'Event plan saved'),
           'success',
         );
-        setUsed({});
         setNotes('');
       },
       onError: () => showSnackbar(t('Event konnte nicht gespeichert werden', 'Could not save event'), 'error'),
-    });
+    };
+    if (existing) updateReport.mutate({ id: existing.id, data }, callbacks);
+    else createReport.mutate(data, callbacks);
   }
 
   const isLoading = itemsLoading || reportsLoading;
@@ -186,7 +189,6 @@ export function Events() {
               <TableCell align="right">{t('Zuletzt geplant', 'Last planned')}</TableCell>
               <TableCell align="right">{t('Zuletzt verwendet', 'Last used')}</TableCell>
               <TableCell align="right">{t('Nächstes Event', 'Next event')}</TableCell>
-              <TableCell align="right">{t('Tatsächlich verwendet', 'Actually used')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -211,22 +213,23 @@ export function Events() {
                       sx={{ width: 100 }}
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={used[item.id] ?? ''}
-                      onChange={(event) => setUsed((current) => ({ ...current, [item.id]: event.target.value }))}
-                      slotProps={{ htmlInput: { min: 0, step: 1, 'aria-label': t(`Verwendete Menge ${item.name}`, `Used quantity ${item.name}`) } }}
-                      sx={{ width: 100 }}
-                    />
-                  </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>{t('Verbrauch des aktuellen Events', 'Current event usage')}</Typography>
+        {currentEvent && Object.entries(currentEvent.usedQuantities ?? {}).some(([, quantity]) => quantity > 0) ? (
+          <Stack spacing={0.5}>
+            {Object.entries(currentEvent.usedQuantities).filter(([, quantity]) => quantity > 0).map(([id, quantity]) => (
+              <Typography key={id}>{itemName(id, currentEvent)}: {quantity}</Typography>
+            ))}
+          </Stack>
+        ) : <Typography color="text.secondary">{t('Noch keine Artikel über Bestellungen ausgegeben.', 'No items have been picked up through orders yet.')}</Typography>}
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Stack spacing={2}>
@@ -246,10 +249,10 @@ export function Events() {
             minRows={2}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button startIcon={<SaveIcon />} variant="outlined" disabled={createReport.isPending} onClick={() => save('planned')}>
+            <Button startIcon={<SaveIcon />} variant="outlined" disabled={createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
               {t('Als Planung speichern', 'Save as plan')}
             </Button>
-            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={createReport.isPending} onClick={() => save('completed')}>
+            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
               {t('Als abgeschlossen speichern', 'Save as completed')}
             </Button>
           </Stack>
@@ -280,7 +283,7 @@ export function Events() {
               <TableBody>
                 {usageItemIds.map((itemId) => (
                   <TableRow key={itemId} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
                     {usageReports.map((report) => (
                       <TableCell key={report.id} align="right">
                         {report.usedQuantities?.[itemId] ?? '—'}
@@ -301,9 +304,6 @@ export function Events() {
             <TableRow>
               <TableCell>{t('Datum', 'Date')}</TableCell>
               <TableCell>{t('Status', 'Status')}</TableCell>
-              <TableCell>{t('Geplant', 'Planned')}</TableCell>
-              <TableCell>{t('Verwendet', 'Used')}</TableCell>
-              <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
               <TableCell align="right">{t('Details', 'Details')}</TableCell>
             </TableRow>
           </TableHead>
@@ -318,9 +318,6 @@ export function Events() {
                     label={report.status === 'completed' ? t('Abgeschlossen', 'Completed') : t('Geplant', 'Planned')}
                   />
                 </TableCell>
-                <TableCell>{Object.entries(report.plannedQuantities ?? {}).filter(([, value]) => value > 0).map(([id, value]) => `${itemName(id)}: ${value}`).join(', ') || '—'}</TableCell>
-                <TableCell>{Object.entries(report.usedQuantities ?? {}).filter(([, value]) => value > 0).map(([id, value]) => `${itemName(id)}: ${value}`).join(', ') || '—'}</TableCell>
-                <TableCell>{report.notes || '—'}</TableCell>
                 <TableCell align="right">
                   <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
                     {t('Öffnen', 'Open')}
@@ -329,7 +326,7 @@ export function Events() {
               </TableRow>
             ))}
             {!reports?.length && (
-              <TableRow><TableCell colSpan={6}>{t('Noch keine Eventberichte vorhanden.', 'No event reports yet.')}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={3}>{t('Noch keine Eventberichte vorhanden.', 'No event reports yet.')}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

@@ -46,6 +46,7 @@ import {
   parseAssembliesFromCsv,
   parseEventReportsFromCsv,
   parseFactionOrdersFromCsv,
+  parseGeneralOrdersFromCsv,
   generateSampleItemsCsv,
   generateSampleAssembliesCsv,
   generateSampleCombinedCsv,
@@ -54,12 +55,13 @@ import {
   type ParsedAssemblyRow,
   type ParsedEventReportRow,
   type ParsedFactionOrderRow,
+  type ParsedGeneralOrderRow,
   type ParsedReturnRow,
   type FactionOrderImportStatus,
   parseReturnsFromCsv,
 } from '../../utils/csvImport';
 import type { Item, Assembly, StorageLocation } from '../../types';
-import { createItem, updateItem, createItemAssets } from '../../services/inventoryService';
+import { createItem, updateItem, createItemAssets, getItemAssets } from '../../services/inventoryService';
 import { createAssembly } from '../../services/assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from '../../services/eventService';
 import {
@@ -73,6 +75,7 @@ import {
   returnFactionOrder,
 } from '../../services/factionOrderService';
 import { createTransaction } from '../../services/transactionService';
+import { createOrder, getOrders, returnOrder, transitionOrder } from '../../services/orderService';
 import { createStorageLocation } from '../../services/storageLocationService';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -141,6 +144,7 @@ export function CsvImportDialog({
     successAssemblies: number;
     successEvents: number;
     successOrders: number;
+    successGeneralOrders: number;
     successReturns: number;
     errors: string[];
   } | null>(null);
@@ -196,6 +200,11 @@ export function CsvImportDialog({
     return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies);
   }, [rows, tabType, effectiveItemsForAssemblies]);
 
+  const parsedGeneralOrders: ParsedGeneralOrderRow[] = useMemo(() => {
+    if (tabType !== 'combined' || rows.length === 0) return [];
+    return parseGeneralOrdersFromCsv(rows, effectiveItemsForAssemblies);
+  }, [rows, tabType, effectiveItemsForAssemblies]);
+
   const parsedReturns: ParsedReturnRow[] = useMemo(() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations);
@@ -206,11 +215,13 @@ export function CsvImportDialog({
   const validAssembliesCount = parsedAssemblies.filter((a) => a.status === 'valid').length;
   const validEventsCount = parsedEvents.filter((event) => event.status === 'valid').length;
   const validOrdersCount = parsedOrders.filter((order) => order.status === 'valid').length;
+  const validGeneralOrdersCount = parsedGeneralOrders.filter((order) => order.status === 'valid').length;
   const validReturnsCount = parsedReturns.filter((r) => r.status === 'valid').length;
   const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length
     + parsedAssemblies.filter((a) => a.status === 'error').length
     + parsedEvents.filter((event) => event.status === 'error').length
     + parsedOrders.filter((order) => order.status === 'error').length
+    + parsedGeneralOrders.filter((order) => order.status === 'error').length
     + parsedReturns.filter((r) => r.status === 'error').length;
   const totalDuplicatesCount = parsedItems.filter((i) => i.status === 'duplicate').length + parsedAssemblies.filter((a) => a.status === 'duplicate').length;
 
@@ -228,6 +239,7 @@ export function CsvImportDialog({
           ?? firstErrorTarget('assemblies', parsedAssemblies)
           ?? firstErrorTarget('events', parsedEvents)
           ?? firstErrorTarget('orders', parsedOrders)
+          ?? firstErrorTarget('orders', parsedGeneralOrders)
           ?? firstErrorTarget('returns', parsedReturns);
 
     if (!firstError) return;
@@ -239,6 +251,7 @@ export function CsvImportDialog({
     + (tabType === 'items' ? 0 : validAssembliesCount)
     + validEventsCount
     + validOrdersCount
+    + validGeneralOrdersCount
     + validReturnsCount;
 
   function handleFileSelected(file: File) {
@@ -303,6 +316,7 @@ export function CsvImportDialog({
     let successAssemblies = 0;
     let successEvents = 0;
     let successOrders = 0;
+    let successGeneralOrders = 0;
 
     const locCache = new Map<string, string>();
     for (const loc of storageLocations) {
@@ -340,6 +354,7 @@ export function CsvImportDialog({
       + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length)
       + validEventsCount
       + validOrdersCount
+      + validGeneralOrdersCount
       + validReturnsCount;
     let currentStep = 0;
 
@@ -452,7 +467,7 @@ export function CsvImportDialog({
 
     // Step 4: Import event history after all referenced items exist. Matching
     // type/date records are updated so retrying a sample import is safe.
-    const existingEvents = parsedEvents.length > 0 ? await getEventReports() : [];
+    const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 ? await getEventReports() : [];
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
       currentStep++;
       setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
@@ -564,7 +579,64 @@ export function CsvImportDialog({
       }
     }
 
-    // Step 6: Import standalone returns if any
+    // Step 6: Simulate general orders using the same lifecycle as the order page.
+    const existingGeneralOrders = parsedGeneralOrders.length > 0 ? await getOrders() : [];
+    for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
+      currentStep++;
+      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      setImportStatusText(t(`Importiere allgemeine Bestellung ${row.data.name}...`, `Importing general order ${row.data.name}...`));
+      try {
+        const resolve = (components: ParsedGeneralOrderRow['requestedItems']) => {
+          const quantities: Record<string, number> = {};
+          for (const component of components) {
+            const item = items.find((candidate) => candidate.id === component.itemId)
+              ?? createdItemsMap.get(component.itemName.toLowerCase().trim());
+            if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+            quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
+          }
+          return quantities;
+        };
+        let event = existingEvents.find((candidate) => candidate.eventType === row.eventType && candidate.eventDate.slice(0, 10) === row.eventDate);
+        if (!event) {
+          event = await createEventReport({ eventType: row.eventType!, eventDate: row.eventDate,
+            status: 'planned', itemIds: [], plannedQuantities: {}, usedQuantities: {}, notes: '' });
+          existingEvents.push(event);
+        }
+        const requestedQuantities = resolve(row.requestedItems);
+        let order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === row.data.name.toLowerCase()
+          && candidate.eventOccurrenceId === event.id);
+        if (order) {
+          successGeneralOrders++;
+          continue;
+        }
+        order = await createOrder({ name: row.data.name, purpose: row.data.purpose,
+          eventOccurrenceId: event.id, requestedQuantities });
+        existingGeneralOrders.push(order);
+        if (row.targetStatus !== 'draft') order = await transitionOrder(order.id, 'submit');
+        if (['ready', 'picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) order = await transitionOrder(order.id, 'ready');
+        if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) {
+          const assetAssignments: Record<string, string[]> = {};
+          for (const [id, quantity] of Object.entries(requestedQuantities)) {
+            const item = items.find((candidate) => candidate.id === id) ?? [...createdItemsMap.values()].find((candidate) => candidate.id === id);
+            if (item?.trackingMode === 'serialized') {
+              const available = (await getItemAssets(id)).filter((asset) => asset.availabilityStatus === 'available');
+              if (available.length < quantity) throw new Error(`Nicht genügend Assets für ${item.name}`);
+              assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
+            }
+          }
+          order = await transitionOrder(order.id, 'pickup', assetAssignments);
+        }
+        if (['partially_returned', 'returned', 'closed'].includes(row.targetStatus)) {
+          order = await returnOrder(order.id, resolve(row.returnedItems), resolve(row.consumedItems));
+        }
+        if (row.targetStatus === 'closed') await transitionOrder(order.id, 'close');
+        successGeneralOrders++;
+      } catch (err: unknown) {
+        errors.push(`Allgemeine Bestellung ${row.data.name}: ${(err as Error).message || err}`);
+      }
+    }
+
+    // Step 7: Import standalone returns if any
     let successReturns = 0;
     for (const ret of parsedReturns.filter((r) => r.status === 'valid')) {
       currentStep++;
@@ -578,15 +650,23 @@ export function CsvImportDialog({
         const item = items.find((candidate) => candidate.id === ret.itemId) || createdItemsMap.get(ret.itemName.toLowerCase().trim());
         if (!item) throw new Error(`Artikel "${ret.itemName}" nicht gefunden`);
 
-        await createTransaction({
-          itemId: item.id,
-          transactionType: 'checkin',
-          quantityChanged: ret.quantity,
-          reason: 'CSV-Import Rückgabe',
-          notes: ret.notes || 'Rückgabe aus CSV-Import',
-          eventType: ret.eventType,
-          faction: ret.faction,
-        });
+        if (ret.generalOrderName) {
+          const order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === ret.generalOrderName?.toLowerCase()
+            && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
+          if (!order) throw new Error(`Allgemeine Bestellung "${ret.generalOrderName}" nicht gefunden`);
+          const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
+          existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
+        } else {
+          await createTransaction({
+            itemId: item.id,
+            transactionType: 'checkin',
+            quantityChanged: ret.quantity,
+            reason: 'CSV-Import Rückgabe',
+            notes: ret.notes || 'Rückgabe aus CSV-Import',
+            eventType: ret.eventType,
+            faction: ret.faction,
+          });
+        }
         successReturns++;
       } catch (err: unknown) {
         errors.push(`Rückgabe ${ret.itemName}: ${(err as Error).message || err}`);
@@ -600,6 +680,7 @@ export function CsvImportDialog({
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     queryClient.invalidateQueries({ queryKey: ['event-reports'] });
     queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
+    queryClient.invalidateQueries({ queryKey: ['general-orders'] });
 
     setIsImporting(false);
     setImportProgress(100);
@@ -610,11 +691,12 @@ export function CsvImportDialog({
       successAssemblies,
       successEvents,
       successOrders,
+      successGeneralOrders,
       successReturns,
       errors,
     });
 
-    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successReturns;
+    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successGeneralOrders + successReturns;
     if (totalSuccess > 0) {
       showSnackbar(
         t(
@@ -827,6 +909,7 @@ export function CsvImportDialog({
                   {importResult.successAssemblies > 0 && `${importResult.successAssemblies} ${t('Baugruppen erstellt', 'assemblies created')}. `}
                   {importResult.successEvents > 0 && `${importResult.successEvents} ${t('Events erstellt', 'events created')}. `}
                   {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
+                  {importResult.successGeneralOrders > 0 && `${importResult.successGeneralOrders} ${t('allgemeine Bestellungen importiert', 'general orders imported')}. `}
                   {importResult.successReturns > 0 && `${importResult.successReturns} ${t('Rückgaben erfasst', 'returns recorded')}. `}
                 </Typography>
                 {importResult.errors.length > 0 && (
@@ -1077,6 +1160,28 @@ export function CsvImportDialog({
                         </TableRow>
                       ))}
                     </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {tabType === 'combined' && parsedGeneralOrders.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('Allgemeine Bestellungen', 'General orders')} ({parsedGeneralOrders.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('Status', 'Status')}</TableCell>
+                      <TableCell>{t('Name', 'Name')}</TableCell><TableCell>{t('Event', 'Event')}</TableCell>
+                      <TableCell>{t('Bestellte Artikel', 'Requested items')}</TableCell></TableRow></TableHead>
+                    <TableBody>{parsedGeneralOrders.map((row) => <TableRow key={row.index} id={`csv-import-orders-row-${row.index}`}>
+                      <TableCell>{row.index}</TableCell>
+                      <TableCell>{row.status === 'valid' ? getOrderStatusChip(row.targetStatus, t)
+                        : <Tooltip title={row.statusMessage || ''} arrow><Chip size="small" color="error" label={t('Fehler', 'Error')} /></Tooltip>}</TableCell>
+                      <TableCell>{row.data.name}</TableCell><TableCell>{row.eventType} · {row.eventDate}</TableCell>
+                      <TableCell>{row.requestedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ')}</TableCell>
+                    </TableRow>)}</TableBody>
                   </Table>
                 </TableContainer>
               </Box>

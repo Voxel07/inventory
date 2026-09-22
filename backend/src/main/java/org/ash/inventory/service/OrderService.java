@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import io.quarkus.cache.CacheInvalidateAll;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.resource.ApiException;
@@ -173,6 +175,7 @@ public class OrderService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
     public FactionOrder transition(UUID id, DomainEnums.OrderStatus target, ApiModels.TransitionInput input) {
         var order = lockedOrder(id);
         var actor = actors.current();
@@ -216,6 +219,7 @@ public class OrderService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
     public FactionOrder returnItems(UUID id, ApiModels.ReturnInput input) {
         actors.requireMarshal();
         var order = lockedOrder(id);
@@ -292,6 +296,7 @@ public class OrderService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
         var order = lockedOrder(id);
         var lines = orm.lines(order);

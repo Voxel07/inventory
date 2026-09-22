@@ -66,6 +66,7 @@ function useOrderMutation<TVariables, TResult>(mutationFn: (variables: TVariable
     mutationFn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['event-reports'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-deficits'] });

@@ -179,8 +179,8 @@ export function EventDetail() {
       {editing && (
         <Alert severity="info" sx={{ mb: 2 }}>
           {t(
-            'Abgeschlossene Events können für nachträgliche Korrekturen bearbeitet werden. Suchen Sie nach einem beliebigen Artikel, um ihn hinzuzufügen.',
-            'Completed events can be edited for later corrections. Search for any item to add it.',
+            'Planmengen können korrigiert werden. Verwendete Mengen werden aus Bestellungen und Rückgaben berechnet.',
+            'Planned quantities can be corrected. Used quantities are calculated from orders and returns.',
           )}
         </Alert>
       )}
@@ -230,17 +230,14 @@ export function EventDetail() {
                   ) : plannedQuantities[item.id] ?? 0}
                 </TableCell>
                 <TableCell align="right">
-                  {editing ? (
-                    <TextField type="number" size="small" value={used[item.id] ?? ''} onChange={(event) => setUsed((current) => ({ ...current, [item.id]: event.target.value }))} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 100 }} />
-                  ) : usedQuantities[item.id] ?? 0}
+                  {usedQuantities[item.id] ?? 0}
                 </TableCell>
               </TableRow>
             ))}
             {missingItemIds.map((itemId) => (
               <TableRow key={itemId}>
                 <TableCell>
-                  <Typography sx={{ fontWeight: 600 }}>{itemId}</Typography>
-                  <Typography variant="caption" color="warning.main">{t('Artikel nicht mehr im Inventar', 'Item no longer in inventory')}</Typography>
+                  <Typography sx={{ fontWeight: 600 }}>{report.itemNames?.[itemId] ?? itemId}</Typography>
                 </TableCell>
                 <TableCell>—</TableCell>
                 <TableCell align="right">{plannedQuantities[itemId] ?? 0}</TableCell>

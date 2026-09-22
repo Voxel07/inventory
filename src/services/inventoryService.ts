@@ -47,6 +47,14 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
 );
 
 export const getItems = itemApi.getAll;
+export async function getAllItems(): Promise<Item[]> {
+  const result: Item[] = [];
+  for (let page = 0; ; page++) {
+    const batch = await itemApi.getAll({ page, size: 200 });
+    result.push(...batch);
+    if (batch.length < 200) return result;
+  }
+}
 export const getItem = itemApi.getById;
 export const createItem = itemApi.create;
 export const updateItem = itemApi.update;

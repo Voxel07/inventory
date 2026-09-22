@@ -6,6 +6,8 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PATCH;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
@@ -16,6 +18,7 @@ import org.ash.inventory.service.ApiQueryService;
 import org.ash.inventory.service.GeneralOrderService;
 
 import java.util.List;
+import java.util.UUID;
 
 @Path("/api/general-orders")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -46,5 +49,27 @@ public class GeneralOrderResource {
     public ApiResponses.GeneralOrderResponse create(@Valid ApiModels.GeneralOrderInput input) {
         actors.current();
         return mapper.generalOrder(service.create(input));
+    }
+
+    @PATCH
+    @Path("/{id}")
+    @Transactional
+    public ApiResponses.GeneralOrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.GeneralOrderInput input) {
+        return mapper.generalOrder(service.update(id, input));
+    }
+
+    @POST
+    @Path("/{id}/{action}")
+    @Transactional
+    public ApiResponses.GeneralOrderResponse transition(@PathParam("id") UUID id, @PathParam("action") String action,
+            ApiModels.GeneralOrderPickupInput input) {
+        return mapper.generalOrder(service.transition(id, action, input));
+    }
+
+    @POST
+    @Path("/{id}/return")
+    @Transactional
+    public ApiResponses.GeneralOrderResponse returnItems(@PathParam("id") UUID id, ApiModels.GeneralOrderReturnInput input) {
+        return mapper.generalOrder(service.returnItems(id, input));
     }
 }

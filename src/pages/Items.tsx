@@ -15,6 +15,8 @@ import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
+import { useQuery } from '@tanstack/react-query';
+import { getAllItems } from '../services/inventoryService';
 
 export function Items() {
     const t = useLocalizedText();
@@ -36,6 +38,7 @@ export function Items() {
     );
 
     const [importOpen, setImportOpen] = useState(false);
+    const { data: allImportItems } = useQuery({ queryKey: ['items', 'all'], queryFn: getAllItems, enabled: importOpen });
     const [qrItem, setQrItem] = useState<Item | undefined>();
 
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
@@ -132,7 +135,7 @@ export function Items() {
             <CsvImportDialog
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
-                items={items ?? []}
+                items={allImportItems ?? items ?? []}
                 assemblies={assemblies ?? []}
                 storageLocations={storageLocations ?? []}
             />
