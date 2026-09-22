@@ -138,7 +138,7 @@ public class LifecycleService {
             inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
                     input.status() == DomainEnums.RepairStatus.repaired ? DomainEnums.DamageStatus.repaired
                             : DomainEnums.DamageStatus.written_off,
-                    amount, input.notes(), input.idempotencyKey(), null, null));
+                    amount, input.notes(), input.idempotencyKey(), null, null, null));
             if (input.status() == DomainEnums.RepairStatus.repaired && repair.assetInstance != null) {
                 // Completion of the workshop step is not approval to return the asset to stock.
                 repair.assetInstance.availabilityStatus = DomainEnums.AssetState.in_repair;
