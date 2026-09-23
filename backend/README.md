@@ -19,7 +19,7 @@ The API exposes:
 For a local JVM run, use a Java 25 installation and Maven:
 
 ```bash
-mvn quarkus:dev
+mvn -Ddev quarkus:dev
 ```
 
 The development profile uses an in-memory H2 database and disables the

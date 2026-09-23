@@ -16,7 +16,7 @@ Backend (Java 25):
 
 ```bash
 cd backend
-mvn quarkus:dev
+mvn -Ddev quarkus:dev
 ```
 
 Development mode uses an in-memory H2 database and does not require Docker,
