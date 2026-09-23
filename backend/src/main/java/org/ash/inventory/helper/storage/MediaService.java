@@ -82,8 +82,9 @@ public class MediaService {
         String key = newKey(originalName);
         try {
             if (isS3()) {
-                s3().putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
-                        RequestBody.fromFile(source));
+                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder()
+                        .bucket(bucket).key(key).contentType(contentType).build();
+                s3().putObject(request, RequestBody.fromFile(source));
             } else {
                 putLocal(key, source);
             }
@@ -100,8 +101,9 @@ public class MediaService {
         String key = newKey(originalName);
         if (isS3()) {
             try {
-                s3().putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
-                        RequestBody.fromBytes(bytes));
+                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder()
+                        .bucket(bucket).key(key).contentType(contentType).build();
+                s3().putObject(request, RequestBody.fromBytes(bytes));
             } catch (SdkException exception) {
                 throw storageFailure("store", exception);
             }
@@ -119,8 +121,8 @@ public class MediaService {
         validateKey(key);
         if (isS3()) {
             try {
-                ResponseInputStream<GetObjectResponse> stream = s3().getObject(
-                        GetObjectRequest.builder().bucket(bucket).key(key).build());
+                GetObjectRequest request = (GetObjectRequest) GetObjectRequest.builder().bucket(bucket).key(key).build();
+                ResponseInputStream<GetObjectResponse> stream = s3().getObject(request);
                 String responseType = stream.response().contentType();
                 return new MediaContent(stream, responseType == null ? contentType(key) : responseType,
                         stream.response().contentLength());
@@ -223,9 +225,10 @@ public class MediaService {
         validateKey(destination);
         if (isS3()) {
             try {
-                s3().copyObject(CopyObjectRequest.builder()
+                CopyObjectRequest request = (CopyObjectRequest) CopyObjectRequest.builder()
                         .destinationBucket(bucket).destinationKey(destination)
-                        .sourceBucket(bucket).sourceKey(source).build());
+                        .sourceBucket(bucket).sourceKey(source).build();
+                s3().copyObject(request);
             } catch (SdkException exception) {
                 throw storageFailure("copy", exception);
             }
@@ -244,7 +247,9 @@ public class MediaService {
         validateKey(key);
         if (isS3()) {
             try {
-                s3().deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+                DeleteObjectRequest request = (DeleteObjectRequest) DeleteObjectRequest.builder()
+                        .bucket(bucket).key(key).build();
+                s3().deleteObject(request);
             } catch (SdkException exception) {
                 throw storageFailure("delete", exception);
             }
