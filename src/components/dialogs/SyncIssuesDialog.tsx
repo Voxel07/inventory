@@ -1,7 +1,7 @@
+import { Dialog } from '../shared/ClosableDialog';
 import {
     Box,
     Button,
-    Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,

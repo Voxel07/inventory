@@ -1,5 +1,6 @@
+import { Dialog } from '../shared/ClosableDialog';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
 import { calculateImageCrop, decodeImage, prepareItemImage } from '../../utils/prepareItemImage';
 import { useLocalizedText } from '../../utils/naming';
 

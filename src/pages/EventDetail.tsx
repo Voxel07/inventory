@@ -147,7 +147,7 @@ export function EventDetail() {
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
         <Box>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h4">{report.eventType === 'LS' ? 'LightSim' : report.eventType}</Typography>
+            <Typography variant="h4">{report.name || (report.eventType === 'LS' ? 'LightSim' : report.eventType)}</Typography>
             <Chip
               size="small"
               color={report.status === 'completed' ? 'success' : 'info'}

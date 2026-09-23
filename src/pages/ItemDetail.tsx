@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -7,7 +8,6 @@ import {
     Paper,
     Grid,
     Chip,
-    Dialog,
     DialogTitle,
     DialogContent,
     Skeleton,
@@ -28,7 +28,6 @@ import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
-import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import {
     ResponsiveContainer,
     LineChart,
@@ -251,12 +250,6 @@ export function ItemDetail() {
                 />
                 <TooltipButton
                     variant="icon"
-                    tooltipText={t('Ausleihe oder Rückgabe erfassen', 'Record a checkout or return')}
-                    icon={<ShoppingCartCheckoutIcon />}
-                    onClick={() => setCheckoutOpen(true)}
-                />
-                <TooltipButton
-                    variant="icon"
                     tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')}
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
@@ -269,12 +262,6 @@ export function ItemDetail() {
                         <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
                     ))}
                 </Box>
-            )}
-            {item.hint && (
-                <Alert severity="info" sx={{ mb: 2, alignItems: 'center', '& .MuiAlert-icon': { alignSelf: 'center', py: 0 } }}>
-                    <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
-                    <Typography variant="body2">{item.hint}</Typography>
-                </Alert>
             )}
             {item.description && (
                 <Paper sx={{ p: 2, mb: 2 }}>
@@ -460,24 +447,12 @@ export function ItemDetail() {
                     </Grid>
                 )}
 
-                {/* Checkout card */}
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="subtitle2">Schnelle Erfassung</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {t('Diesen Artikel ausleihen oder zurückgeben', 'Check out or return this item')}
-                            </Typography>
-                        </Box>
-                        <TooltipButton
-                            tooltipText={t('Ausleihe oder Rückgabe erfassen', 'Record a checkout or return')}
-                            label={t('Transaktion', 'Transaction')}
-                            variant="contained"
-                            size="small"
-                            onClick={() => setCheckoutOpen(true)}
-                        />
-                    </Paper>
-                </Grid>
+                {item.hint && <Grid size={{ xs: 12, md: 6 }}>
+                    <Alert severity="info" sx={{ height: '100%', alignItems: 'center' }}>
+                        <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
+                    </Alert>
+                </Grid>}
 
                 {/* Container info */}
                 {(item.containerSize ?? 0) > 0 && (

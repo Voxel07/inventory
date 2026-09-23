@@ -1,5 +1,6 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Box, Typography, Dialog, DialogTitle, DialogContent, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, DialogTitle, DialogContent, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';

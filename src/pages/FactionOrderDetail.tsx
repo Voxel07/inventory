@@ -1,6 +1,7 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, Button, Dialog, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';

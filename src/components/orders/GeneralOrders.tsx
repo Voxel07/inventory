@@ -1,5 +1,6 @@
+import { Dialog } from '../shared/ClosableDialog';
 import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+import { Alert, Box, Button, Checkbox, Chip, DialogActions, DialogContent, DialogTitle,
   FormControlLabel, InputAdornment, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
@@ -10,8 +11,8 @@ import { useItems } from '../../hooks/useItems';
 import type { AssetInstance, GeneralOrder, Item } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
+import { Link as RouterLink } from 'react-router-dom';
 import { ListPagination } from '../shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -38,6 +39,8 @@ export function GeneralOrders() {
   const [itemSearch, setItemSearch] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
   const [pickup, setPickup] = useState<GeneralOrder | null>(null);
   const [assets, setAssets] = useState<Record<string, AssetInstance[]>>({});
   const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({});
@@ -52,8 +55,8 @@ export function GeneralOrders() {
     const term = search.trim().toLocaleLowerCase();
     return !term ? orders : orders.filter((order) => `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
   }, [orders, search]);
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleOrders.length / LIST_PAGE_SIZE)));
-  const pageOrders = visibleOrders.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleOrders.length / effectivePageSize)));
+  const pageOrders = visibleOrders.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return [...items].filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term))
@@ -63,7 +66,7 @@ export function GeneralOrders() {
   function itemName(id: string) { return itemMap.get(id)?.name ?? id; }
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
-    return event ? `${event.eventType} · ${new Date(event.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}` : t('Kein Event', 'No event');
+    return event ? `${event.name || event.eventType} · ${new Date(event.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}` : t('Kein Event', 'No event');
   }
   function errorMessage(error: unknown) { return error instanceof Error ? error.message : t('Aktion fehlgeschlagen', 'Action failed'); }
   function startEditing(order?: GeneralOrder) {
@@ -153,7 +156,7 @@ export function GeneralOrders() {
         {['draft', 'submitted', 'ready'].includes(order.status) && <Button size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
       </Stack>
     </Paper>)}</Stack>
-    <ListPagination count={visibleOrders.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+    <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleOrders.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
     <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="md">
       <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>
@@ -162,9 +165,9 @@ export function GeneralOrders() {
           <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
           <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
             <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
-            {activeEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.eventType} · {new Date(event.eventDate).toLocaleDateString()}</MenuItem>)}
+            {activeEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name || event.eventType} · {new Date(event.eventDate).toLocaleDateString()}</MenuItem>)}
           </TextField>
-          {!activeEvents.length && <Alert severity="info">{t('Legen Sie zuerst ein geplantes Event an.', 'Create a planned event first.')}</Alert>}
+          {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein geplantes Event an.', 'Create a planned event first.')}</Alert>}
           <TextField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} />
           <Box sx={{ maxHeight: 350, overflowY: 'auto' }}><Stack spacing={1}>{visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0).map(editItem)}</Stack></Box>
         </Stack></DialogContent><DialogActions><Button onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>

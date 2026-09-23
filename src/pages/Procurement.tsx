@@ -120,7 +120,7 @@ export function Procurement() {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const selectedEvent = events.find((e) => e.id === eventId);
     const scopeLabel = selectedEvent
-      ? `${selectedEvent.eventType} (${new Date(selectedEvent.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')})`
+      ? `${selectedEvent.name || selectedEvent.eventType} (${new Date(selectedEvent.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')})`
       : t('Alle geplanten Events', 'All planned events');
 
     let y = 18;
@@ -203,7 +203,7 @@ export function Procurement() {
         <Box>
           <Typography variant="h4">{t('Beschaffung & Fehlmengen', 'Procurement & shortages')}</Typography>
           <Typography color="text.secondary">
-            {t('Aktiver Bedarf minus verfügbarer Bestand, nach Lieferant gruppiert.', 'Active demand minus available stock, grouped by supplier.')}
+            {t('Aktiver Bedarf und Mindestbestandslücken, nach Lieferant gruppiert.', 'Active demand and minimum stock shortages, grouped by supplier.')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -284,7 +284,7 @@ export function Procurement() {
           <MenuItem value="">{t('Alle geplanten Events', 'All planned events')}</MenuItem>
           {events.map((event) => (
             <MenuItem key={event.id} value={event.id}>
-              {event.eventType} · {new Date(event.eventDate).toLocaleDateString()}
+              {event.name || event.eventType} · {new Date(event.eventDate).toLocaleDateString()}
             </MenuItem>
           ))}
         </Select>
@@ -325,6 +325,7 @@ export function Procurement() {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
                         <Box sx={{ minWidth: 0, mr: 1 }}>
                           <Typography sx={{ fontWeight: 700 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link></Typography>
+                          {row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} />}
                           {row.sku && (
                             <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
                               SKU: {row.sku}
@@ -417,7 +418,7 @@ export function Procurement() {
                     {rows.map((row) => (
                       <TableRow key={row.itemId} hover>
                         <TableCell sx={{ fontFamily: 'monospace' }}>{row.sku || '—'}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link></TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link>{row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} sx={{ ml: 1 }} />}</TableCell>
                         <TableCell>
                           <Chip
                             size="small"

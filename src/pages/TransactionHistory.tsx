@@ -7,13 +7,14 @@ import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { nameFor, useNames, useLocalizedText } from '../utils/naming';
 import { ListPagination } from '../components/shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 export function TransactionHistoryPage() {
   const names = useNames();
   const t = useLocalizedText();
   const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
   const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
   const [search, setSearch] = useState('');
   useEffect(() => setPage(1), [transactionFilters]);
   const filters = {
@@ -36,8 +37,8 @@ export function TransactionHistoryPage() {
       tx.reason, tx.notes, tx.eventType, tx.faction,
     ].some((value) => value?.toLocaleLowerCase().includes(term)));
   }, [transactions, items, users, search]);
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredTransactions.length / LIST_PAGE_SIZE)));
-  const pageTransactions = filteredTransactions.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredTransactions.length / effectivePageSize)));
+  const pageTransactions = filteredTransactions.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
 
   return (
     <Box>
@@ -64,7 +65,7 @@ export function TransactionHistoryPage() {
       </Stack>
 
       <TransactionHistoryList transactions={pageTransactions} items={items} users={users} isLoading={isLoading} />
-      <ListPagination count={filteredTransactions.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+      <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredTransactions.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
     </Box>
   );
 }

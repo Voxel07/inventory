@@ -1228,6 +1228,22 @@ class InventoryApiTest {
     }
 
     @Test
+    void belowMinimumStockAppearsWithoutAnEventOrder() {
+        String itemId = request()
+                .body(Map.of("sku", "PROC-MIN-001", "name", "Minimum stock cable", "category", "Equipment",
+                        "amount", 3, "minStock", 8, "value", 0))
+                .post("/api/items")
+                .then().statusCode(200)
+                .extract().path("id");
+
+        request().get("/api/procurement/deficits")
+                .then().statusCode(200)
+                .body("find { it.itemId == '" + itemId + "' }.demand", equalTo(0))
+                .body("find { it.itemId == '" + itemId + "' }.totalOwnedStock", equalTo(3))
+                .body("find { it.itemId == '" + itemId + "' }.netDeficit", equalTo(5));
+    }
+
+    @Test
     void damageResolutionStoresActionCommentAndItemHint() {
         String itemId = request().body(Map.of("sku", "DAMAGE-NOTES-001", "name", "Damage notes item",
                         "category", "Test", "amount", 2, "value", 0))

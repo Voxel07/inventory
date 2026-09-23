@@ -28,6 +28,10 @@ public class OperationsOrm {
 
     public OperationsOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
+    public List<Item> minStockItems() {
+        return entityManager.createQuery("from Item i where i.active = true and i.minStock > 0", Item.class).getResultList();
+    }
+
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             int offset, int limit) {
         var jpql = new StringBuilder("from StockTransaction tx where 1 = 1");

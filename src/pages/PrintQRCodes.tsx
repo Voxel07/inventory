@@ -12,7 +12,6 @@ import {
     TextField,
     Tooltip,
     MenuItem,
-    Pagination,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { jsPDF } from 'jspdf';
@@ -20,8 +19,9 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
 import { useLocalizedText } from '../utils/naming';
+import { ListPagination } from '../components/shared/ListPagination';
 
-type FilterMode = 'all' | 'items' | 'assemblies' | 'single';
+type FilterMode = 'all' | 'items' | 'assemblies' | 'single' | 'selected';
 
 const M221_LABEL_FORMATS = [
     { id: '40x30', width: 40, height: 30, label: '40 × 30 mm' },
@@ -84,9 +84,10 @@ export function PrintQRCodesPage() {
     const [pdfGenerating, setPdfGenerating] = useState(false);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [labelFormatId, setLabelFormatId] = useState<LabelFormatId>('40x30');
     const [page, setPage] = useState(1);
-    const pageSize = 36;
+    const [pageSize, setPageSize] = useState(20);
 
     const allEntries = useMemo<QREntry[]>(() => {
         return [
@@ -103,16 +104,19 @@ export function PrintQRCodesPage() {
                 return allEntries.filter((e) => e.type === 'assembly');
             case 'single':
                 return selectedId ? allEntries.filter((e) => `${e.type}:${e.id}` === selectedId) : [];
+            case 'selected':
+                return allEntries.filter((e) => selectedIds.includes(`${e.type}:${e.id}`));
             default:
                 return allEntries;
         }
-    }, [allEntries, filterMode, selectedId]);
-    useEffect(() => setPage(1), [filterMode, selectedId]);
-    const pageCount = Math.ceil(filteredEntries.length / pageSize);
+    }, [allEntries, filterMode, selectedId, selectedIds]);
+    useEffect(() => setPage(1), [filterMode, selectedId, selectedIds]);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
+    const pageCount = Math.ceil(filteredEntries.length / effectivePageSize);
     useEffect(() => {
         if (page > Math.max(1, pageCount)) setPage(Math.max(1, pageCount));
     }, [page, pageCount]);
-    const visibleEntries = filteredEntries.slice((page - 1) * pageSize, page * pageSize);
+    const visibleEntries = filteredEntries.slice((page - 1) * effectivePageSize, page * effectivePageSize);
 
     async function handleGeneratePDF() {
         if (filteredEntries.length === 0) return;
@@ -212,6 +216,7 @@ export function PrintQRCodesPage() {
                         <ToggleButton value="items">{t('Nur Artikel', 'Items only')}</ToggleButton>
                         <ToggleButton value="assemblies">{t('Nur Baugruppen', 'Assemblies only')}</ToggleButton>
                         <ToggleButton value="single">{t('Einzeln', 'Single')}</ToggleButton>
+                        <ToggleButton value="selected">{t('Auswahl', 'Selection')}</ToggleButton>
                     </ToggleButtonGroup>
 
                     {filterMode === 'single' && (
@@ -226,6 +231,13 @@ export function PrintQRCodesPage() {
                             sx={{ minWidth: 280 }}
                         />
                     )}
+                    {filterMode === 'selected' && <Autocomplete multiple options={allEntries}
+                        getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
+                        isOptionEqualToValue={(option, value) => option.id === value.id && option.type === value.type}
+                        value={allEntries.filter((entry) => selectedIds.includes(`${entry.type}:${entry.id}`))}
+                        onChange={(_event, values) => setSelectedIds(values.map((entry) => `${entry.type}:${entry.id}`))}
+                        renderInput={(params) => <TextField {...params} label={t('QR-Codes auswählen', 'Select QR codes')} size="small" />}
+                        sx={{ minWidth: 300, flex: 1 }} />}
 
                     <TextField
                         select
@@ -276,7 +288,8 @@ export function PrintQRCodesPage() {
                     ))}
                 </Grid>
             )}
-            {pageCount > 1 && <Pagination count={pageCount} page={page} onChange={(_, value) => setPage(value)} sx={{ display: 'flex', justifyContent: 'center', mt: 3 }} />}
+            <ListPagination count={filteredEntries.length} page={page} onChange={setPage} pageSize={pageSize}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         </Box>
     );
 }

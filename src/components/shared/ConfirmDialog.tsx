@@ -1,5 +1,6 @@
+import { Dialog } from './ClosableDialog';
 import type { ButtonProps } from '@mui/material';
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip } from '@mui/material';
+import { Button, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
 
 export interface ConfirmDialogProps {

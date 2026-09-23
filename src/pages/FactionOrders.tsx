@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -5,10 +6,8 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
   DialogContent,
   DialogTitle,
-  IconButton,
   Paper,
   Stack,
   ToggleButton,
@@ -19,7 +18,6 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import CloseIcon from '@mui/icons-material/Close';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
@@ -34,7 +32,6 @@ import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../uti
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { ListPagination } from '../components/shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 
@@ -67,6 +64,10 @@ export function FactionOrders() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [activePageSize, setActivePageSize] = useState(20);
+  const [historyPageSize, setHistoryPageSize] = useState(20);
+  const activeSize = activePageSize === -1 ? Number.MAX_SAFE_INTEGER : activePageSize;
+  const historySize = historyPageSize === -1 ? Number.MAX_SAFE_INTEGER : historyPageSize;
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
@@ -87,8 +88,8 @@ export function FactionOrders() {
   );
 
   const activeOrders = useMemo(() => orders.filter((order) => !isHistoricalOrder(order)), [orders]);
-  const currentActivePage = Math.min(activePage, Math.max(1, Math.ceil(activeOrders.length / LIST_PAGE_SIZE)));
-  const pageActiveOrders = activeOrders.slice((currentActivePage - 1) * LIST_PAGE_SIZE, currentActivePage * LIST_PAGE_SIZE);
+  const currentActivePage = Math.min(activePage, Math.max(1, Math.ceil(activeOrders.length / activeSize)));
+  const pageActiveOrders = activeOrders.slice((currentActivePage - 1) * activeSize, currentActivePage * activeSize);
   const activeOrderGroups = useMemo(() => [...new Set(pageActiveOrders
     .map((order) => order.faction))]
     .map((faction) => ({
@@ -97,8 +98,8 @@ export function FactionOrders() {
     })), [pageActiveOrders]);
   const activeOrderCount = activeOrders.length;
   const historyOrders = useMemo(() => orders.filter(isHistoricalOrder), [orders]);
-  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / LIST_PAGE_SIZE)));
-  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * LIST_PAGE_SIZE, currentHistoryPage * LIST_PAGE_SIZE);
+  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / historySize)));
+  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * historySize, currentHistoryPage * historySize);
 
   useEffect(() => {
     if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
@@ -255,7 +256,7 @@ export function FactionOrders() {
           ))}
         </Stack>
       </Paper>
-      <ListPagination count={activeOrderCount} page={currentActivePage} onChange={setActivePage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+      <ListPagination count={activeOrderCount} page={currentActivePage} onChange={setActivePage} pageSize={activePageSize} onPageSizeChange={(size) => { setActivePageSize(size); setActivePage(1); }} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
       <Typography variant="h6" sx={{ mb: 1 }}>{t('Bestellverlauf', 'Order history')}</Typography>
       <Paper sx={{ overflow: 'hidden' }}>
@@ -294,14 +295,11 @@ export function FactionOrders() {
           })}
         </Stack>
       </Paper>
-      <ListPagination count={historyOrders.length} page={currentHistoryPage} onChange={setHistoryPage} />
+      <ListPagination count={historyOrders.length} page={currentHistoryPage} onChange={setHistoryPage} pageSize={historyPageSize} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }} />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
         <DialogTitle sx={{ pr: 7 }}>
           {t('Neue Fraktions-Bestellliste', 'New faction order list')}
-          <IconButton onClick={() => setDialogOpen(false)} sx={{ position: 'absolute', right: 12, top: 8 }} aria-label={t('Schließen', 'Close')}>
-            <CloseIcon />
-          </IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <FactionOrderForm

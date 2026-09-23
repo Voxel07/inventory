@@ -1,7 +1,8 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-    Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, Paper, Skeleton,
+    Alert, Box, Button, Chip, DialogContent, DialogTitle, Divider, Paper, Skeleton,
     Stack, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';

@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { apiFileUrl } from '../services/apiClient';
 import { useState, useMemo } from 'react';
@@ -14,7 +15,6 @@ import {
     TableHead,
     TableRow,
     Chip,
-    Dialog,
     DialogActions,
     DialogContentText,
     DialogTitle,

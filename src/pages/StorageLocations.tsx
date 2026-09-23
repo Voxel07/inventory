@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, useMemo, useEffect } from 'react';
 import {
     Box,
@@ -9,7 +10,6 @@ import {
     Grid,
     Button,
     TextField,
-    Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
@@ -49,7 +49,6 @@ import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { ListPagination } from '../components/shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 export function StorageLocations() {
     const t = useLocalizedText();
@@ -72,6 +71,10 @@ export function StorageLocations() {
     const [searchQuery, setSearchQuery] = useState('');
     const [locationPage, setLocationPage] = useState(1);
     const [itemPage, setItemPage] = useState(1);
+    const [locationPageSize, setLocationPageSize] = useState(20);
+    const [itemPageSize, setItemPageSize] = useState(20);
+    const locationSize = locationPageSize === -1 ? Number.MAX_SAFE_INTEGER : locationPageSize;
+    const itemSize = itemPageSize === -1 ? Number.MAX_SAFE_INTEGER : itemPageSize;
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -102,8 +105,8 @@ export function StorageLocations() {
                 (l.area && l.area.toLowerCase().includes(lower))
         );
     }, [locations, searchQuery]);
-    const currentLocationPage = Math.min(locationPage, Math.max(1, Math.ceil(filteredLocations.length / LIST_PAGE_SIZE)));
-    const pageLocations = filteredLocations.slice((currentLocationPage - 1) * LIST_PAGE_SIZE, currentLocationPage * LIST_PAGE_SIZE);
+    const currentLocationPage = Math.min(locationPage, Math.max(1, Math.ceil(filteredLocations.length / locationSize)));
+    const pageLocations = filteredLocations.slice((currentLocationPage - 1) * locationSize, currentLocationPage * locationSize);
 
     // Items stored in the selected location
     const storedItems = useMemo(() => {
@@ -118,8 +121,8 @@ export function StorageLocations() {
             return { item, totalStock, remaining, checkedOut };
         });
     }, [storedItems]);
-    const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(enrichedStoredItems.length / LIST_PAGE_SIZE)));
-    const pageStoredItems = enrichedStoredItems.slice((currentItemPage - 1) * LIST_PAGE_SIZE, currentItemPage * LIST_PAGE_SIZE);
+    const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(enrichedStoredItems.length / itemSize)));
+    const pageStoredItems = enrichedStoredItems.slice((currentItemPage - 1) * itemSize, currentItemPage * itemSize);
 
     function handleOpenCreate() {
         setEditingLoc(null);
@@ -296,7 +299,7 @@ export function StorageLocations() {
                                     })}
                                 </List>
                             )}
-                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} />
+                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} pageSize={locationPageSize} onPageSizeChange={(size) => { setLocationPageSize(size); setLocationPage(1); }} />
                         </Paper>
                     </Grid>
                 )}
@@ -452,7 +455,7 @@ export function StorageLocations() {
                                         </Table>
                                     </TableContainer>
                                 )}
-                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} />
+                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} pageSize={itemPageSize} onPageSizeChange={(size) => { setItemPageSize(size); setItemPage(1); }} />
                             </Paper>
                         ) : (
                             <Paper

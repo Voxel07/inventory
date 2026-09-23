@@ -36,7 +36,6 @@ import { useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
 import { ListPagination } from '../shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -57,6 +56,8 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -69,8 +70,8 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         if (!normalizedSearch) return assemblies ?? [];
         return (assemblies ?? []).filter((assembly) => assembly.name.toLowerCase().includes(normalizedSearch));
     }, [assemblies, search]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssemblies.length / LIST_PAGE_SIZE)));
-    const pageAssemblies = filteredAssemblies.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssemblies.length / effectivePageSize)));
+    const pageAssemblies = filteredAssemblies.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
 
     useEffect(() => {
         const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);
@@ -347,7 +348,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 </Table>
             </TableContainer>
             )}
-            <ListPagination count={filteredAssemblies.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAssemblies.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}

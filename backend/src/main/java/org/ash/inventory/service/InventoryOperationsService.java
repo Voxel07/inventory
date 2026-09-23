@@ -573,6 +573,8 @@ public class InventoryOperationsService {
         var demand = new LinkedHashMap<Item, Integer>();
         for (var line : lines)
             demand.merge(line.item, line.requestedQuantity, Integer::sum);
+        // A minimum stock shortage matters even when no event order requests the item.
+        for (var item : orm.minStockItems()) demand.putIfAbsent(item, 0);
         var stockByItem = stock(List.copyOf(demand.keySet()));
         var orderedByItem = purchasingOrm.outstandingQuantities(demand.keySet().stream().map(item -> item.id).toList());
         var result = new ArrayList<Deficit>();
@@ -582,7 +584,7 @@ public class InventoryOperationsService {
             // usable physical stock instead of subtracting reservations twice.
             int usableStock = Math.max(0, state.onHand() - state.damaged());
             int projectedStock = usableStock - entry.getValue();
-            int deficit = Math.max(0, -projectedStock);
+            int deficit = Math.max(0, Math.max(-projectedStock, entry.getKey().minStock - state.totalOwned()));
             if (deficit == 0)
                 continue;
             result.add(new Deficit(

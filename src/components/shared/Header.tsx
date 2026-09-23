@@ -1,3 +1,4 @@
+import { Dialog } from './ClosableDialog';
 import {
     AppBar,
     Toolbar,
@@ -10,7 +11,6 @@ import {
     Menu,
     MenuItem,
     Tooltip,
-    Dialog,
     DialogTitle,
     DialogContent,
     TextField,

@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -5,6 +6,10 @@ import {
   Box,
   Button,
   Chip,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -37,6 +42,11 @@ export function Events() {
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
   const { data: items, isLoading: itemsLoading } = useItems();
@@ -49,7 +59,8 @@ export function Events() {
     [reports],
   );
   const lastCompleted = completedReports[0];
-  const currentEvent = reports?.find((report) => report.status === 'planned');
+  const selectedEvent = reports?.find((report) => report.id === selectedEventId) ?? reports?.find((report) => report.status === 'planned') ?? reports?.[0];
+  const currentEvent = selectedEvent;
   const eventItems = useMemo(
     () => items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [],
     [eventType, items],
@@ -68,13 +79,33 @@ export function Events() {
   }, [items, usageReports]);
 
   useEffect(() => {
-    setPlanned(toQuantityInputs(lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
+    setPlanned(toQuantityInputs(selectedEvent?.plannedQuantities ?? lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
     setNotes('');
-  }, [eventType, lastCompleted?.id, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
+  }, [eventType, selectedEvent?.id, selectedEvent?.plannedQuantities, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
 
   useEffect(() => {
     setEventDate(currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
   }, [eventType, currentEvent?.id, currentEvent?.eventDate]);
+
+  function createEvent() {
+    if (!newName.trim() || !newDate) return;
+    createReport.mutate({
+      eventType,
+      name: newName.trim(),
+      eventDate: `${newDate}T12:00:00.000Z`,
+      status: 'planned',
+      itemIds: [],
+      plannedQuantities: {},
+      usedQuantities: {},
+    }, {
+      onSuccess: (created) => {
+        setSelectedEventId(created.id);
+        setCreateOpen(false);
+        showSnackbar(t('Event erstellt', 'Event created'), 'success');
+      },
+      onError: () => showSnackbar(t('Event konnte nicht erstellt werden', 'Could not create event'), 'error'),
+    });
+  }
 
   function itemName(itemId: string, report?: { itemNames?: Record<string, string> }): string {
     return items?.find((item) => item.id === itemId)?.name ?? report?.itemNames?.[itemId] ?? usageReports.find((entry) => entry.itemNames?.[itemId])?.itemNames?.[itemId] ?? itemId;
@@ -96,7 +127,7 @@ export function Events() {
       usedQuantities: {},
       notes: notes.trim(),
     };
-    const existing = reports?.find((report) => report.eventDate.slice(0, 10) === eventDate);
+    const existing = selectedEvent;
     const callbacks = {
       onSuccess: () => {
         showSnackbar(
@@ -106,11 +137,11 @@ export function Events() {
           'success',
         );
         setNotes('');
+        setPlanOpen(false);
       },
       onError: () => showSnackbar(t('Event konnte nicht gespeichert werden', 'Could not save event'), 'error'),
     };
     if (existing) updateReport.mutate({ id: existing.id, data }, callbacks);
-    else createReport.mutate(data, callbacks);
   }
 
   const isLoading = itemsLoading || reportsLoading;
@@ -135,6 +166,21 @@ export function Events() {
       >
         {EVENT_TYPES.map((type) => <ToggleButton key={type} value={type}>{type}</ToggleButton>)}
       </ToggleButtonGroup>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
+        <TextField select label={t('Event auswählen', 'Select event')} value={selectedEvent?.id ?? ''}
+          onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: 260 }}>
+          {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
+            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+          </MenuItem>)}
+        </TextField>
+        <Button variant="contained" onClick={() => {
+          setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
+          setNewDate(new Date().toISOString().slice(0, 10));
+          setCreateOpen(true);
+        }}>{t('Event erstellen', 'Create event')}</Button>
+        {selectedEvent?.status === 'planned' && <Button variant="outlined" onClick={() => setPlanOpen(true)}>{t('Plan bearbeiten', 'Edit plan')}</Button>}
+      </Stack>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Paper sx={{ p: 2, flex: 1 }}>
@@ -179,6 +225,7 @@ export function Events() {
         </Alert>
       )}
 
+      {/* used items table */}
       <TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
@@ -186,13 +233,14 @@ export function Events() {
               <TableCell>{t('Artikel', 'Item')}</TableCell>
               <TableCell>{t('Kategorie', 'Category')}</TableCell>
               <TableCell align="right">{t('Verfügbar', 'Available')}</TableCell>
-              <TableCell align="right">{t('Zuletzt geplant', 'Last planned')}</TableCell>
-              <TableCell align="right">{t('Zuletzt verwendet', 'Last used')}</TableCell>
-              <TableCell align="right">{t('Nächstes Event', 'Next event')}</TableCell>
+              <TableCell align="right">{t('Geplant', 'Planned')}</TableCell>
+              <TableCell align="right">{t('Über Bestellungen verwendet', 'Used through orders')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {eventItems.map((item) => {
+            {Object.entries(selectedEvent?.usedQuantities ?? {}).filter(([, quantity]) => quantity > 0).map(([itemId]) => {
+              const item = items?.find((entry) => entry.id === itemId);
+              if (!item) return <TableRow key={itemId}><TableCell>{itemName(itemId, selectedEvent)}</TableCell><TableCell>—</TableCell><TableCell align="right">—</TableCell><TableCell align="right">—</TableCell><TableCell align="right">{selectedEvent?.usedQuantities[itemId]}</TableCell></TableRow>;
               const available = stockFor(item);
               return (
                 <TableRow key={item.id} hover>
@@ -201,21 +249,13 @@ export function Events() {
                   <TableCell align="right">
                     <Chip size="small" color={available > 0 ? 'success' : 'error'} label={available} />
                   </TableCell>
-                  <TableCell align="right">{lastCompleted?.plannedQuantities?.[item.id] ?? 0}</TableCell>
-                  <TableCell align="right">{lastCompleted?.usedQuantities?.[item.id] ?? 0}</TableCell>
-                  <TableCell align="right">
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={planned[item.id] ?? ''}
-                      onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))}
-                      slotProps={{ htmlInput: { min: 0, step: 1, 'aria-label': t(`Geplante Menge ${item.name}`, `Planned quantity ${item.name}`) } }}
-                      sx={{ width: 100 }}
-                    />
-                  </TableCell>
+                  <TableCell align="right">{selectedEvent?.plannedQuantities?.[item.id] ?? 0}</TableCell>
+                  <TableCell align="right">{selectedEvent?.usedQuantities?.[item.id] ?? 0}</TableCell>
                 </TableRow>
               );
             })}
+            {!Object.values(selectedEvent?.usedQuantities ?? {}).some((quantity) => quantity > 0) &&
+              <TableRow><TableCell colSpan={5}>{t('Für dieses Event wurden noch keine Artikel über Bestellungen ausgegeben.', 'No items have been picked up through orders for this event yet.')}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </TableContainer>
@@ -249,10 +289,10 @@ export function Events() {
             minRows={2}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button startIcon={<SaveIcon />} variant="outlined" disabled={createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
+            <Button startIcon={<SaveIcon />} variant="outlined" disabled={!selectedEvent || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
               {t('Als Planung speichern', 'Save as plan')}
             </Button>
-            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
+            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={!selectedEvent || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
               {t('Als abgeschlossen speichern', 'Save as completed')}
             </Button>
           </Stack>
@@ -283,7 +323,7 @@ export function Events() {
               <TableBody>
                 {usageItemIds.map((itemId) => (
                   <TableRow key={itemId} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
                     {usageReports.map((report) => (
                       <TableCell key={report.id} align="right">
                         {report.usedQuantities?.[itemId] ?? '—'}
@@ -310,7 +350,7 @@ export function Events() {
           <TableBody>
             {reports?.map((report) => (
               <TableRow key={report.id}>
-                <TableCell>{new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}</TableCell>
+                <TableCell>{report.name || report.eventType} · {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}</TableCell>
                 <TableCell>
                   <Chip
                     size="small"
@@ -331,6 +371,28 @@ export function Events() {
           </TableBody>
         </Table>
       </TableContainer>
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{t('Event erstellen', 'Create event')}</DialogTitle>
+        <DialogContent sx={{ pt: '20px !important' }}>
+          <Stack spacing={2}>
+            <TextField required autoFocus label={t('Eventname', 'Event name')} value={newName} onChange={(event) => setNewName(event.target.value)} />
+            <TextField required type="date" label={t('Eventdatum', 'Event date')} value={newDate} onChange={(event) => setNewDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          </Stack>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setCreateOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={!newName.trim() || !newDate || createReport.isPending} onClick={createEvent}>{t('Erstellen', 'Create')}</Button></DialogActions>
+      </Dialog>
+      <Dialog open={planOpen} onClose={() => setPlanOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('Event planen', 'Plan event')}: {selectedEvent?.name}</DialogTitle>
+        <DialogContent dividers><Stack spacing={1}>
+          {eventItems.map((item) => <Stack key={item.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography sx={{ flex: 1 }}>{item.name}</Typography>
+            <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={planned[item.id] ?? ''}
+              onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))}
+              slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 100 }} />
+          </Stack>)}
+        </Stack></DialogContent>
+        <DialogActions><Button onClick={() => setPlanOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={updateReport.isPending} onClick={() => save('planned')}>{t('Plan speichern', 'Save plan')}</Button></DialogActions>
+      </Dialog>
     </Box>
   );
 }

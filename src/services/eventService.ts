@@ -5,7 +5,7 @@ function formatEventPayload(data: Partial<EventReportFormData>) {
   const eventDate = data.eventDate?.slice(0, 10);
   return {
     eventType: data.eventType,
-    name: eventDate ? `${data.eventType} ${eventDate.slice(0, 4)}` : undefined,
+    name: data.name,
     startDate: eventDate,
     endDate: eventDate,
     status: data.status,

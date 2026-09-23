@@ -1,3 +1,4 @@
+import { Dialog } from '../shared/ClosableDialog';
 import { useState, useMemo } from 'react';
 import {
     Box,
@@ -15,7 +16,6 @@ import {
     TableHead,
     TableRow,
     IconButton,
-    Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
@@ -42,7 +42,6 @@ import { useLocalizedText } from '../../utils/naming';
 import { QRCodeGenerator } from '../qr/QRCodeGenerator';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     item: Item;
@@ -73,6 +72,8 @@ export function AssetInstancesList({ item }: Props) {
 
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -131,8 +132,8 @@ export function AssetInstancesList({ item }: Props) {
             return matchesSearch && matchesStatus;
         });
     }, [assets, search, statusFilter]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssets.length / LIST_PAGE_SIZE)));
-    const pageAssets = filteredAssets.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssets.length / effectivePageSize)));
+    const pageAssets = filteredAssets.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
 
     // Metrics
     const metrics = useMemo(() => {
@@ -450,7 +451,7 @@ export function AssetInstancesList({ item }: Props) {
                 </TableContainer>
             )}
 
-            <ListPagination count={filteredAssets.length} page={currentPage} onChange={setPage}
+            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAssets.length} page={currentPage} onChange={setPage}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
             {/* Dialog: Add Single Asset */}

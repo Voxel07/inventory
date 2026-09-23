@@ -8,6 +8,7 @@ export type EventReportStatus = 'planned' | 'completed';
 export interface EventReport {
   id: string;
   eventType: EventType;
+  name: string;
   eventDate: string;
   status: EventReportStatus;
   itemIds: string[];
@@ -25,6 +26,7 @@ export interface EventReport {
 
 export interface EventReportFormData {
   eventType: EventType;
+  name?: string;
   eventDate: string;
   status: EventReportStatus;
   itemIds: string[];

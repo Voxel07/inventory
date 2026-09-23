@@ -1,5 +1,6 @@
+import { Dialog } from '../shared/ClosableDialog';
 import {
-    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Skeleton, Stack,
+    Box, Button, Chip, DialogActions, DialogContent, DialogTitle, Paper, Skeleton, Stack,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
     IconButton, MenuItem, Tooltip, useMediaQuery, useTheme,
 } from '@mui/material';
@@ -10,7 +11,6 @@ import { formatStatus } from '../../utils/formatters';
 import { nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 import { ListPagination } from '../shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     reports: DamageReport[] | undefined;
@@ -36,11 +36,13 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
     const visibleReports = reports?.filter((report) => view === 'history'
         ? true
         : report.status === 'reported' || report.status === 'in_review');
-    const currentPage = Math.min(page, Math.max(1, Math.ceil((visibleReports?.length ?? 0) / LIST_PAGE_SIZE)));
-    const pageReports = visibleReports?.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE) ?? [];
+    const currentPage = Math.min(page, Math.max(1, Math.ceil((visibleReports?.length ?? 0) / effectivePageSize)));
+    const pageReports = visibleReports?.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize) ?? [];
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -204,7 +206,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </Paper>
             ))}
         </Stack>
-        <ListPagination count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>
@@ -240,7 +242,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 ))}</TableBody>
             </Table>
         </TableContainer>
-        <ListPagination count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>

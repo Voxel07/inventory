@@ -41,7 +41,6 @@ import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { itemImageUrl } from '../../utils/itemImages';
 import { ListPagination } from '../shared/ListPagination';
-import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     items: Item[] | undefined;
@@ -72,6 +71,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const activeEventType = useUIStore((state) => state.activeEventType);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -123,8 +124,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
         return result;
     }, [enrichedItems, search, activeEventType, sortField, sortDir]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAndSorted.length / LIST_PAGE_SIZE)));
-    const pageItems = filteredAndSorted.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAndSorted.length / effectivePageSize)));
+    const pageItems = filteredAndSorted.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
 
     function handleSort(field: SortField) {
         setPage(1);
@@ -428,7 +429,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                     </TableBody>
                 </Table>
             </TableContainer>}
-            <ListPagination count={filteredAndSorted.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAndSorted.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
             <Menu
                 anchorEl={actionMenu?.anchorEl}
                 open={Boolean(actionMenu)}

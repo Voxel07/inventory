@@ -1,3 +1,4 @@
+import { Dialog } from '../shared/ClosableDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import {
@@ -7,7 +8,6 @@ import {
     Stack,
     Autocomplete,
     Tooltip,
-    Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,

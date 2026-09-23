@@ -1,8 +1,9 @@
+import { Dialog } from '../shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Chip, DialogActions, DialogContent, DialogTitle,
   Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, TextField, Typography,
 } from '@mui/material';
@@ -34,6 +35,8 @@ export function ProcurementOrders({ selected, eventId, onClose }: Props) {
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const effectivePageSize = pageSize === -1 ? orders.length || 1 : pageSize;
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
@@ -108,7 +111,7 @@ export function ProcurementOrders({ selected, eventId, onClose }: Props) {
             <TableCell align="right">{t('Preis', 'Price')}</TableCell>
             <TableCell>{t('Status', 'Status')}</TableCell>
           </TableRow></TableHead>
-          <TableBody>{orders.slice(page * 10, page * 10 + 10).flatMap((order) => order.lines.map((line) => (
+          <TableBody>{orders.slice(page * effectivePageSize, page * effectivePageSize + effectivePageSize).flatMap((order) => order.lines.map((line) => (
             <TableRow key={line.id}>
               <TableCell><Typography variant="caption" color="text.secondary">{order.orderNumber}</Typography><br />
                 <Link component={RouterLink} to={`/items/${line.itemId}`}>{line.itemName}</Link></TableCell>
@@ -124,8 +127,9 @@ export function ProcurementOrders({ selected, eventId, onClose }: Props) {
           )))}</TableBody>
         </Table>
       </TableContainer>
-      <TablePagination component="div" count={orders.length} rowsPerPage={10} rowsPerPageOptions={[10]}
-        page={Math.min(page, Math.max(0, Math.ceil(orders.length / 10) - 1))} onPageChange={(_, next) => setPage(next)} />
+      <TablePagination component="div" count={orders.length} rowsPerPage={pageSize} rowsPerPageOptions={[20, 100, { label: t('Alle', 'All'), value: -1 }]}
+        page={Math.min(page, Math.max(0, Math.ceil(orders.length / effectivePageSize) - 1))} onPageChange={(_, next) => setPage(next)}
+        onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} />
     </Paper>
     <Dialog open={Boolean(selected)} onClose={record.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{t('Externe Bestellung erfassen', 'Record external order')}</DialogTitle>

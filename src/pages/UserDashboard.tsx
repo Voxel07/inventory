@@ -1,3 +1,4 @@
+import { Dialog } from '../components/shared/ClosableDialog';
 import { useMemo, useState } from 'react';
 import {
     Box,
@@ -5,7 +6,6 @@ import {
     Grid,
     Paper,
     Button,
-    Dialog,
     DialogTitle,
     DialogContent,
     Stack,
