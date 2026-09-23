@@ -47,22 +47,14 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
 );
 
 export const getItems = itemApi.getAll;
-export async function getAllItems(): Promise<Item[]> {
-  const result: Item[] = [];
-  for (let page = 0; ; page++) {
-    const batch = await itemApi.getAll({ page, size: 200 });
-    result.push(...batch);
-    if (batch.length < 200) return result;
-  }
-}
 export const getItem = itemApi.getById;
 export const createItem = itemApi.create;
 export const updateItem = itemApi.update;
 export const deleteItem = itemApi.delete;
 export const deleteItems = itemApi.deleteMany;
 
-export async function getItemAssets(itemId: string): Promise<AssetInstance[]> {
-  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`);
+export async function getItemAssets(itemId: string, query?: { page?: number; size?: number }): Promise<AssetInstance[]> {
+  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query });
 }
 
 export function resolveInventoryCode(code: string): Promise<InventoryCodeResolution> {

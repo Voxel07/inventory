@@ -29,6 +29,8 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { Link } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 export interface CheckedOutRow {
   key: string;
@@ -88,13 +90,19 @@ export function CheckedOutList({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(1);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE)));
+  const pageRows = useMemo(
+    () => rows.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE),
+    [rows, currentPage],
+  );
 
   // Build assembly groups: group rows that share a factionOrderId and belong to an assembly
   const { groups, ungroupedRows } = useMemo(() => {
-    if (!assemblies?.length) return { groups: [], ungroupedRows: rows };
+    if (!assemblies?.length) return { groups: [], ungroupedRows: pageRows };
     // For each factionOrderId, figure out which assemblies are represented
     const byOrder = new Map<string, CheckedOutRow[]>();
-    for (const row of rows) {
+    for (const row of pageRows) {
       if (!row.factionOrderId) continue;
       const existing = byOrder.get(row.factionOrderId) ?? [];
       existing.push(row);
@@ -121,9 +129,9 @@ export function CheckedOutList({
       void orderItemIds; // used implicitly
     }
 
-    const ungrouped = rows.filter((r) => !groupedRowKeys.has(r.key));
+    const ungrouped = pageRows.filter((r) => !groupedRowKeys.has(r.key));
     return { groups: groupList, ungroupedRows: ungrouped };
-  }, [assemblies, rows]);
+  }, [assemblies, pageRows]);
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -147,6 +155,7 @@ export function CheckedOutList({
 
   if (isMobile) {
     return (
+      <>
       <Stack spacing={1.25}>
         {groups.map((group) => {
           const groupKey = `${group.assembly.id}:${group.factionOrderId}`;
@@ -183,6 +192,8 @@ export function CheckedOutList({
         })}
         {ungroupedRows.map((row) => renderMobileRow(row))}
       </Stack>
+      <ListPagination count={rows.length} page={currentPage} onChange={setPage} />
+      </>
     );
   }
 
@@ -194,6 +205,7 @@ export function CheckedOutList({
 
   // Desktop table
   return (
+    <>
     <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
       <Table size="small" sx={{ width: '100%', minWidth: 900 }}>
         <TableHead>
@@ -251,6 +263,8 @@ export function CheckedOutList({
         </TableBody>
       </Table>
     </TableContainer>
+    <ListPagination count={rows.length} page={currentPage} onChange={setPage} />
+    </>
   );
 
   function renderMobileRow(row: CheckedOutRow) {

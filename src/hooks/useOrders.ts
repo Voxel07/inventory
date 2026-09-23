@@ -2,12 +2,16 @@ import type { GeneralOrder, GeneralOrderFormData } from '../types';
 import { generalOrderApi, returnOrder, transitionOrder } from '../services/orderService';
 import { createMutableResourceHooks } from './useResourceApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useProgressiveList } from './useProgressiveList';
 
 export const {
-  useList: useOrders,
   useCreate: useCreateOrder,
   useUpdate: useUpdateOrder,
 } = createMutableResourceHooks<GeneralOrder, GeneralOrderFormData>(generalOrderApi, 'general-orders', ['event-reports', 'items', 'transactions']);
+
+export function useOrders() {
+  return useProgressiveList<GeneralOrder>(['general-orders'], (page, size) => generalOrderApi.getAll({ page, size }));
+}
 
 export function useTransitionOrder() {
   const queryClient = useQueryClient();

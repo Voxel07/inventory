@@ -56,8 +56,11 @@ public class CatalogResource {
     @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { actor.requireManager(); service.retireItem(id); return Response.noContent().build(); }
 
     @GET @Path("/items/{id}/assets")
-    public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id) {
-        return queries.itemAssets(id);
+    public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id,
+            @QueryParam("page") Integer page, @QueryParam("size") Integer size) {
+        return page == null && size == null
+                ? queries.itemAssets(id)
+                : queries.itemAssets(id, page == null ? 0 : page, size == null ? 100 : size);
     }
 
     @GET @Path("/assets/by-code/{code:.+}")

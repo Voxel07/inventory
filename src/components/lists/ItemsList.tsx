@@ -40,10 +40,15 @@ import { getItemStock } from '../../utils/stock';
 import { useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { itemImageUrl } from '../../utils/itemImages';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     items: Item[] | undefined;
     isLoading: boolean;
+    loadingMore?: boolean;
+    loadError?: boolean;
+    onRetry?: () => void;
     onEdit: (item: Item) => void;
     onDelete: (id: string) => void;
     onDeleteMany: (ids: string[]) => void;
@@ -59,13 +64,14 @@ function stockColor(remaining: number, minStock: number) {
     return 'success.main';
 }
 
-export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
     const navigate = useNavigate();
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const activeEventType = useUIStore((state) => state.activeEventType);
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -117,8 +123,11 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
 
         return result;
     }, [enrichedItems, search, activeEventType, sortField, sortDir]);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAndSorted.length / LIST_PAGE_SIZE)));
+    const pageItems = filteredAndSorted.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
 
     function handleSort(field: SortField) {
+        setPage(1);
         if (sortField === field) {
             setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
         } else {
@@ -155,6 +164,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <Typography color="text.secondary">{t('Keine Artikel gefunden', 'No items found')}</Typography>
+                {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
             </Paper>
         );
     }
@@ -165,7 +175,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                 <TextField
                     label={t('Nach Name oder Kategorie suchen', 'Search by name or category')}
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     size="small"
                     sx={{ flex: '1 1 280px' }}
                 />
@@ -201,7 +211,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
             )}
             {viewMode === 'tiles' ? (
                 <Grid container spacing={{ xs: 1, sm: 1.5 }}>
-                    {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
+                    {pageItems.map(({ item, totalStock, damaged, remaining }) => {
                         const image = itemImageUrl(item);
                         const color = stockColor(remaining, item.minStock ?? 5);
                         return (
@@ -261,7 +271,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                 </Grid>
             ) : isMobile ? (
                 <Stack spacing={0.5}>
-                    {filteredAndSorted.map(({ item, totalStock, remaining }) => {
+                    {pageItems.map(({ item, totalStock, remaining }) => {
                         const minStock = item.minStock ?? 5;
                         const color = stockColor(remaining, minStock);
                         return (
@@ -302,10 +312,10 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                             <TableCell padding="checkbox">
                                 <Checkbox
                                     size="small"
-                                    checked={filteredAndSorted.length > 0 && filteredAndSorted.every(({ item }) => selectedIds.has(item.id))}
-                                    indeterminate={filteredAndSorted.some(({ item }) => selectedIds.has(item.id)) && !filteredAndSorted.every(({ item }) => selectedIds.has(item.id))}
+                                    checked={pageItems.length > 0 && pageItems.every(({ item }) => selectedIds.has(item.id))}
+                                    indeterminate={pageItems.some(({ item }) => selectedIds.has(item.id)) && !pageItems.every(({ item }) => selectedIds.has(item.id))}
                                     onChange={() => {
-                                        const visibleIds = filteredAndSorted.map(({ item }) => item.id);
+                                        const visibleIds = pageItems.map(({ item }) => item.id);
                                         const allSelected = visibleIds.every((id) => selectedIds.has(id));
                                         setSelectedIds((current) => {
                                             const next = new Set(current);
@@ -345,7 +355,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filteredAndSorted.map(({ item, totalStock, damaged, remaining }) => {
+                        {pageItems.map(({ item, totalStock, damaged, remaining }) => {
                             const minStock = item.minStock ?? 5;
                             const color = stockColor(remaining, minStock);
                             return (
@@ -418,6 +428,7 @@ export function ItemsList({ items, isLoading, onEdit, onDelete, onDeleteMany }: 
                     </TableBody>
                 </Table>
             </TableContainer>}
+            <ListPagination count={filteredAndSorted.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
             <Menu
                 anchorEl={actionMenu?.anchorEl}
                 open={Boolean(actionMenu)}

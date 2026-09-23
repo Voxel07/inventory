@@ -1,21 +1,21 @@
-import { Box, Button, MenuItem, Pagination, Stack, TextField, Tooltip, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Box, Button, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
 import { useTransactions } from '../hooks/useTransactions';
 import { useItems } from '../hooks/useItems';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
-import { getTransactions } from '../services/transactionService';
 import { nameFor, useNames, useLocalizedText } from '../utils/naming';
+import { ListPagination } from '../components/shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 export function TransactionHistoryPage() {
   const names = useNames();
   const t = useLocalizedText();
   const { transactionFilters, setTransactionFilters, resetTransactionFilters } = useUIStore();
-  const [page, setPage] = useState(0);
-  const pageSize = 50;
-  useEffect(() => setPage(0), [transactionFilters]);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  useEffect(() => setPage(1), [transactionFilters]);
   const filters = {
     itemId: transactionFilters.itemId || undefined,
     userId: transactionFilters.userId || undefined,
@@ -23,19 +23,27 @@ export function TransactionHistoryPage() {
     startDate: transactionFilters.startDate || undefined,
     endDate: transactionFilters.endDate || undefined,
   };
-  const { data: transactions, isLoading } = useTransactions({ ...filters, page, size: pageSize });
-  const { data: nextPage } = useQuery({
-    queryKey: ['transactions', 'page-exists', filters, page],
-    queryFn: () => getTransactions({ ...filters, page: (page + 1) * pageSize, size: 1 }),
-    enabled: transactions?.length === pageSize,
-  });
+  const { data: transactions, isLoading, isFetchingNextPage, hasNextPage, isError, refetch } = useTransactions(filters);
   const { data: items } = useItems();
   const { data: users } = useUsers();
+  const filteredTransactions = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    if (!term) return transactions ?? [];
+    const itemNames = new Map(items?.map((item) => [item.id, item.name]));
+    const userNames = new Map(users?.map((user) => [user.id, user.name || user.username || user.email]));
+    return (transactions ?? []).filter((tx) => [
+      itemNames.get(tx.itemId), tx.expand?.userId?.name, userNames.get(tx.userId),
+      tx.reason, tx.notes, tx.eventType, tx.faction,
+    ].some((value) => value?.toLocaleLowerCase().includes(term)));
+  }, [transactions, items, users, search]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredTransactions.length / LIST_PAGE_SIZE)));
+  const pageTransactions = filteredTransactions.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
 
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 3 }}>{t('Transaktionsverlauf', 'Transaction history')}</Typography>
       <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }} useFlexGap>
+        <TextField label={t('Transaktionen suchen', 'Search transactions')} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} size="small" sx={{ minWidth: 200 }} />
         <TextField select label={t('Artikel', 'Item')} value={transactionFilters.itemId} onChange={(event) => setTransactionFilters({ itemId: event.target.value })} size="small" sx={{ minWidth: 150 }}>
           <MenuItem value="">{t('Alle Artikel', 'All items')}</MenuItem>
           {items?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}
@@ -55,12 +63,8 @@ export function TransactionHistoryPage() {
         </Tooltip>
       </Stack>
 
-      <TransactionHistoryList transactions={transactions} items={items} users={users} isLoading={isLoading} />
-      {(page > 0 || Boolean(nextPage?.length)) && (
-        <Stack direction="row" sx={{ mt: 2, justifyContent: 'center' }}>
-          <Pagination page={page + 1} count={page + 1 + (nextPage?.length ? 1 : 0)} onChange={(_, value) => setPage(value - 1)} />
-        </Stack>
-      )}
+      <TransactionHistoryList transactions={pageTransactions} items={items} users={users} isLoading={isLoading} />
+      <ListPagination count={filteredTransactions.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
     </Box>
   );
 }

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   transactionApi,
   getTransactions,
@@ -6,6 +6,7 @@ import {
 } from '../services/transactionService';
 import { createCreateResourceHooks } from './useResourceApi';
 import type { StockTransaction, TransactionFormData } from '../types';
+import { useProgressiveList } from './useProgressiveList';
 
 const baseHooks = createCreateResourceHooks<StockTransaction, TransactionFormData>(
   transactionApi,
@@ -16,10 +17,11 @@ const baseHooks = createCreateResourceHooks<StockTransaction, TransactionFormDat
 export const useCreateTransaction = baseHooks.useCreate;
 
 export function useTransactions(filters?: { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; page?: number; size?: number }) {
-  return useQuery({
-    queryKey: ['transactions', filters],
-    queryFn: () => getTransactions(filters),
-  });
+  return useProgressiveList<StockTransaction>(
+    ['transactions', filters],
+    (page, size) => getTransactions({ ...filters, page, size }),
+    filters,
+  );
 }
 
 export function useAssemblyCheckout() {

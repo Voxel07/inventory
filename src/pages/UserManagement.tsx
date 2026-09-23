@@ -5,6 +5,8 @@ import { useUpdateUserPermissions, useUsers } from '../hooks/useUsers';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type AccessRole, type User } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
+import { ListPagination } from '../components/shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 const factionOptions = [...new Set(EVENT_TYPES.flatMap((eventType) => FACTIONS_BY_EVENT[eventType]))].sort();
 
@@ -98,7 +100,10 @@ function UserPermissionsEditor({ user }: { user: User }) {
 
 export function UserManagement() {
   const t = useLocalizedText();
-  const { data: users = [], isLoading, isError } = useUsers();
+  const [page, setPage] = useState(1);
+  const { data: users = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useUsers();
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(users.length / LIST_PAGE_SIZE)));
+  const pageUsers = users.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('Benutzerverwaltung', 'User management')}</Typography>
@@ -107,8 +112,9 @@ export function UserManagement() {
       </Typography>
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Benutzer konnten nicht geladen werden. Prüfen Sie OIDC und die API-Berechtigungen.', 'Users could not be loaded. Check OIDC and API permissions.')}</Alert>}
       <Stack spacing={{ xs: 0.75, sm: 1.5 }}>
-        {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : users.map((user) => <UserPermissionsEditor key={user.id} user={user} />)}
+        {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : pageUsers.map((user) => <UserPermissionsEditor key={user.id} user={user} />)}
       </Stack>
+      <ListPagination count={users.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
     </Box>
   );
 }

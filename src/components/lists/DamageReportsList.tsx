@@ -9,6 +9,8 @@ import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, Da
 import { formatStatus } from '../../utils/formatters';
 import { nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     reports: DamageReport[] | undefined;
@@ -16,6 +18,9 @@ interface Props {
     assemblies?: Assembly[];
     users?: User[];
     isLoading: boolean;
+    loadingMore?: boolean;
+    loadError?: boolean;
+    onRetry?: () => void;
     view?: 'open' | 'history';
     isUpdating?: boolean;
     onUpdateStatus?: (id: string, status: DamageStatus, amount?: number, notes?: string, itemHint?: string) => void;
@@ -26,13 +31,16 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
     low: 'info', medium: 'warning', high: 'error', critical: 'error',
 };
 
-export function DamageReportsList({ reports, items, assemblies, users, isLoading, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
+export function DamageReportsList({ reports, items, assemblies, users, isLoading, loadingMore, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const [page, setPage] = useState(1);
     const visibleReports = reports?.filter((report) => view === 'history'
         ? true
         : report.status === 'reported' || report.status === 'in_review');
+    const currentPage = Math.min(page, Math.max(1, Math.ceil((visibleReports?.length ?? 0) / LIST_PAGE_SIZE)));
+    const pageReports = visibleReports?.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE) ?? [];
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -45,8 +53,11 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     if (!visibleReports?.length) return (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography color="text.secondary">
-                {view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
+                {loadingMore
+                    ? t('Weitere Berichte werden geladen…', 'Loading more reports…')
+                    : view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
             </Typography>
+            {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
         </Paper>
     );
 
@@ -170,7 +181,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     if (isMobile) return (
         <>
         <Stack spacing={1.5}>
-            {visibleReports.map((report) => (
+            {pageReports.map((report) => (
                 <Paper key={report.id} sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
                         <Box><Typography sx={{ fontWeight: 700 }}>{getTargetName(report)}</Typography><Typography variant="caption" color="text.secondary">{new Date(report.timestamp).toLocaleString()}</Typography></Box>
@@ -193,6 +204,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </Paper>
             ))}
         </Stack>
+        <ListPagination count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>
@@ -208,7 +220,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     <TableCell>{t('Gemeldet von', 'Reported by')}</TableCell><TableCell>{t('Bearbeitet von', 'Handled by')}</TableCell>
                     {view === 'history' && <TableCell>{t('Verlauf', 'Activity')}</TableCell>}<TableCell>{t('Status', 'Status')}</TableCell>
                 </TableRow></TableHead>
-                <TableBody>{visibleReports.map((report) => (
+                <TableBody>{pageReports.map((report) => (
                     <TableRow key={report.id} hover>
                         <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell><TableCell>{getTargetName(report)}</TableCell><TableCell align="right">
                             <Typography>{getUnresolvedAmount(report)} {t('offen', 'remaining')}</Typography>
@@ -228,6 +240,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 ))}</TableBody>
             </Table>
         </TableContainer>
+        <ListPagination count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>

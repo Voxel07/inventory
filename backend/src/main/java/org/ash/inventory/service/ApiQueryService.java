@@ -78,6 +78,13 @@ public class ApiQueryService {
     }
 
     @Transactional
+    public List<ApiResponses.AssetInstanceResponse> itemAssets(UUID id, int page, int size) {
+        actors.current();
+        var pageBounds = bounds(page, size);
+        return mapper.assets(catalog.getAssets(id, pageBounds.offset(), pageBounds.limit()));
+    }
+
+    @Transactional
     public ApiResponses.AssetInstanceResponse assetByCode(String code) {
         actors.current();
         return mapper.asset(catalog.getAssetByCode(code));

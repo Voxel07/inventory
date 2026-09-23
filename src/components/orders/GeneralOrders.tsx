@@ -5,11 +5,13 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useReturnOrder, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
-import { useQuery } from '@tanstack/react-query';
-import { getAllItems, getItemAssets } from '../../services/inventoryService';
+import { getItemAssets } from '../../services/inventoryService';
+import { useItems } from '../../hooks/useItems';
 import type { AssetInstance, GeneralOrder, Item } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -21,9 +23,9 @@ export function GeneralOrders() {
   const t = useLocalizedText();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
-  const { data: orders = [], isLoading, isError } = useOrders();
+  const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
-  const { data: items = [] } = useQuery({ queryKey: ['items', 'all'], queryFn: getAllItems });
+  const { data: items = [] } = useItems();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const transitionOrder = useTransitionOrder();
@@ -35,6 +37,7 @@ export function GeneralOrders() {
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [itemSearch, setItemSearch] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [pickup, setPickup] = useState<GeneralOrder | null>(null);
   const [assets, setAssets] = useState<Record<string, AssetInstance[]>>({});
   const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({});
@@ -49,6 +52,8 @@ export function GeneralOrders() {
     const term = search.trim().toLocaleLowerCase();
     return !term ? orders : orders.filter((order) => `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
   }, [orders, search]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleOrders.length / LIST_PAGE_SIZE)));
+  const pageOrders = visibleOrders.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return [...items].filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term))
@@ -123,12 +128,12 @@ export function GeneralOrders() {
       <Button variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
     <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
-      onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
+      onChange={(event) => { setSearch(event.target.value); setPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
       sx={{ mb: 2, maxWidth: 520 }} />
     {isLoading && <LinearProgress sx={{ mb: 2 }} />}
     {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
     {!isLoading && !visibleOrders.length && <Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Noch keine passenden Bestellungen vorhanden.', 'No matching orders yet.')}</Typography></Paper>}
-    <Stack spacing={1.5}>{visibleOrders.map((order) => <Paper key={order.id} sx={{ p: 2 }}>
+    <Stack spacing={1.5}>{pageOrders.map((order) => <Paper key={order.id} sx={{ p: 2 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
         <Box><Typography variant="h6">{order.name}</Typography><Typography>{order.purpose}</Typography>
           <Typography variant="body2" color="text.secondary">{eventName(order.eventOccurrenceId)}</Typography></Box>
@@ -148,6 +153,7 @@ export function GeneralOrders() {
         {['draft', 'submitted', 'ready'].includes(order.status) && <Button size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
       </Stack>
     </Paper>)}</Stack>
+    <ListPagination count={visibleOrders.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
     <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="md">
       <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>

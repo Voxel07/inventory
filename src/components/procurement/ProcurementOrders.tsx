@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -11,6 +11,8 @@ import {
   type ProcurementDeficit,
 } from '../../services/procurementService';
 import { useLocalizedText } from '../../utils/naming';
+import { useProgressiveList } from '../../hooks/useProgressiveList';
+import type { PurchaseOrder, Vendor } from '../../services/procurementService';
 
 type Props = { selected: ProcurementDeficit | null; eventId: string; onClose: () => void };
 
@@ -22,8 +24,8 @@ function localDate() {
 export function ProcurementOrders({ selected, eventId, onClose }: Props) {
   const t = useLocalizedText();
   const queryClient = useQueryClient();
-  const { data: vendors = [], isLoading: vendorsLoading } = useQuery({ queryKey: ['vendors'], queryFn: getVendors });
-  const { data: orders = [], error } = useQuery({ queryKey: ['purchase-orders'], queryFn: getPurchaseOrders });
+  const { data: vendors = [], isLoading: vendorsLoading } = useProgressiveList<Vendor>(['vendors'], getVendors);
+  const { data: orders = [], error } = useProgressiveList<PurchaseOrder>(['purchase-orders'], getPurchaseOrders);
   const [supplier, setSupplier] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [price, setPrice] = useState('0');

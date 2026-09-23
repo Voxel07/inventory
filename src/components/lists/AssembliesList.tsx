@@ -35,22 +35,28 @@ import type { Assembly, Item } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     assemblies: Assembly[] | undefined;
     items: Item[] | undefined;
     isLoading: boolean;
+    loadingMore?: boolean;
+    loadError?: boolean;
+    onRetry?: () => void;
     onEdit: (assembly: Assembly) => void;
     onDelete: (id: string) => void;
     onDeleteMany: (ids: string[]) => void;
 }
 
-export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete, onDeleteMany }: Props) {
+export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
     const t = useLocalizedText();
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -63,6 +69,8 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
         if (!normalizedSearch) return assemblies ?? [];
         return (assemblies ?? []).filter((assembly) => assembly.name.toLowerCase().includes(normalizedSearch));
     }, [assemblies, search]);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssemblies.length / LIST_PAGE_SIZE)));
+    const pageAssemblies = filteredAssemblies.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
 
     useEffect(() => {
         const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);
@@ -124,6 +132,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <Typography color="text.secondary">{t('Keine Baugruppen gefunden', 'No assemblies found')}</Typography>
+                {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
             </Paper>
         );
     }
@@ -155,7 +164,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
             <TextField
                 label={t('Nach Name suchen', 'Search by name')}
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => { setSearch(event.target.value); setPage(1); }}
                 size="small"
                 fullWidth
                 sx={{ mb: 2 }}
@@ -172,7 +181,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
             )}
             {isMobile ? (
                 <Stack spacing={0.5}>
-                    {filteredAssemblies.map((assembly) => {
+                    {pageAssemblies.map((assembly) => {
                         const { totalStock, remaining } = getAssemblyStock(assembly);
                         const color = remaining > 0 ? 'success.main' : 'error.main';
                         return (
@@ -218,10 +227,10 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                         <TableCell padding="checkbox">
                             <Checkbox
                                 size="small"
-                                checked={filteredAssemblies.length > 0 && filteredAssemblies.every((assembly) => selectedIds.has(assembly.id))}
-                                indeterminate={filteredAssemblies.some((assembly) => selectedIds.has(assembly.id)) && !filteredAssemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                checked={pageAssemblies.length > 0 && pageAssemblies.every((assembly) => selectedIds.has(assembly.id))}
+                                indeterminate={pageAssemblies.some((assembly) => selectedIds.has(assembly.id)) && !pageAssemblies.every((assembly) => selectedIds.has(assembly.id))}
                                 onChange={() => {
-                                    const visibleIds = filteredAssemblies.map((assembly) => assembly.id);
+                                    const visibleIds = pageAssemblies.map((assembly) => assembly.id);
                                     const allSelected = visibleIds.every((id) => selectedIds.has(id));
                                     setSelectedIds((current) => {
                                         const next = new Set(current);
@@ -244,7 +253,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {filteredAssemblies.map((assembly) => {
+                    {pageAssemblies.map((assembly) => {
                         const assemblyItems = getExpandedItems(assembly);
                         const { totalStock, remaining } = getAssemblyStock(assembly);
                         return (
@@ -338,6 +347,7 @@ export function AssembliesList({ assemblies, items, isLoading, onEdit, onDelete,
                 </Table>
             </TableContainer>
             )}
+            <ListPagination count={filteredAssemblies.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}

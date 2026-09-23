@@ -41,6 +41,8 @@ import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useLocalizedText } from '../../utils/naming';
 import { QRCodeGenerator } from '../qr/QRCodeGenerator';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { ListPagination } from '../shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
     item: Item;
@@ -62,7 +64,7 @@ export function AssetInstancesList({ item }: Props) {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const navigate = useNavigate();
 
-    const { data: assets, isLoading } = useItemAssets(item.id);
+    const { data: assets, isLoading, hasNextPage, isFetchingNextPage, isError, refetch } = useItemAssets(item.id);
     const { data: storageLocations } = useStorageLocations();
 
     const createAsset = useCreateItemAsset(item.id);
@@ -70,6 +72,7 @@ export function AssetInstancesList({ item }: Props) {
     const deleteAsset = useDeleteItemAsset(item.id);
 
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -128,6 +131,8 @@ export function AssetInstancesList({ item }: Props) {
             return matchesSearch && matchesStatus;
         });
     }, [assets, search, statusFilter]);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssets.length / LIST_PAGE_SIZE)));
+    const pageAssets = filteredAssets.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
 
     // Metrics
     const metrics = useMemo(() => {
@@ -277,7 +282,7 @@ export function AssetInstancesList({ item }: Props) {
                     size="small"
                     placeholder={t('Nach Asset-ID, Seriennummer, Besitzer suchen...', 'Search asset ID, serial number, custodian...')}
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     sx={{ flexGrow: 1, minWidth: 200 }}
                 />
                 <TextField
@@ -285,7 +290,7 @@ export function AssetInstancesList({ item }: Props) {
                     size="small"
                     label={t('Status filtern', 'Filter status')}
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                     sx={{ minWidth: 160 }}
                 >
                     <MenuItem value="">{t('Alle Status', 'All statuses')}</MenuItem>
@@ -319,7 +324,7 @@ export function AssetInstancesList({ item }: Props) {
                 </Box>
             ) : isMobile ? (
                 <Stack spacing={1.5}>
-                    {filteredAssets.map((asset) => (
+                    {pageAssets.map((asset) => (
                         <Card key={asset.id} variant="outlined">
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
@@ -387,7 +392,7 @@ export function AssetInstancesList({ item }: Props) {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {filteredAssets.map((asset) => (
+                            {pageAssets.map((asset) => (
                                 <TableRow key={asset.id} hover selected={selectedIds.has(asset.id)}>
                                     <TableCell padding="checkbox">
                                         <Checkbox
@@ -444,6 +449,9 @@ export function AssetInstancesList({ item }: Props) {
                     </Table>
                 </TableContainer>
             )}
+
+            <ListPagination count={filteredAssets.length} page={currentPage} onChange={setPage}
+                loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
             {/* Dialog: Add Single Asset */}
             <Dialog open={addSingleOpen} onClose={() => setAddSingleOpen(false)} maxWidth="xs" fullWidth>

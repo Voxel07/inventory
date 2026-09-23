@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
 import { itemApi, getItemAssets, createItemAssets, updateItemAsset, deleteItemAsset } from '../services/inventoryService';
-import { getAllItems } from '../services/inventoryService';
-import type { Item, ItemFormData, AssetInstanceInput } from '../types';
+import { useProgressiveList } from './useProgressiveList';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
 
 export const {
   useList: usePagedItems,
@@ -13,17 +13,16 @@ export const {
   useDeleteMany: useDeleteItems,
 } = createResourceHooks<Item, ItemFormData>(itemApi, 'items', ['transactions']);
 
-/** Catalog views need the complete inventory; the API defaults to only 100 rows. */
 export function useItems() {
-  return useQuery({ queryKey: ['items'], queryFn: getAllItems });
+  return useProgressiveList<Item>(['items'], (page, size) => itemApi.getAll({ page, size }));
 }
 
 export function useItemAssets(itemId: string | undefined) {
-  return useQuery({
-    queryKey: ['items', itemId, 'assets'],
-    queryFn: () => getItemAssets(itemId!),
-    enabled: Boolean(itemId),
-  });
+  return useProgressiveList<AssetInstance>(
+    ['items', itemId, 'assets'],
+    (page, size) => getItemAssets(itemId!, { page, size }),
+    { enabled: Boolean(itemId) },
+  );
 }
 
 export function useCreateItemAsset(itemId: string | undefined) {

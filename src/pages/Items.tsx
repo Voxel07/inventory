@@ -20,8 +20,8 @@ export function Items() {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const { data: items, isLoading } = useItems();
-    const { data: assemblies } = useAssemblies();
+    const { data: items, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: itemsComplete } = useItems();
+    const { data: assemblies, isComplete: assembliesComplete, isError: assembliesError } = useAssemblies();
     const { data: storageLocations } = useStorageLocations();
     const { data: assignableUsers } = useAssignableUsers();
 
@@ -66,6 +66,9 @@ export function Items() {
             <ItemsList
                 items={items}
                 isLoading={isLoading}
+                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
+                loadError={isError}
+                onRetry={() => { void refetch(); }}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
@@ -133,8 +136,9 @@ export function Items() {
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
-                assemblies={assemblies ?? []}
-                storageLocations={storageLocations ?? []}
+                  assemblies={assemblies ?? []}
+                  storageLocations={storageLocations ?? []}
+                  catalogComplete={itemsComplete && assembliesComplete && !isError && !assembliesError && !!items && !!assemblies}
             />
         </Box>
     );

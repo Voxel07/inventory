@@ -41,8 +41,10 @@ export function UserDashboard() {
     const { user: currentUser } = useAuth();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
-    const { data: items, isLoading: itemsLoading } = useItems();
-    const { data: allTransactions, isLoading: txLoading } = useTransactions();
+    const { data: items, isLoading: itemsPending, isComplete: itemsComplete, isError: itemsError, refetch: refetchItems } = useItems();
+    const { data: allTransactions, isLoading: txPending, isComplete: txComplete, isError: txError, refetch: refetchTransactions } = useTransactions();
+    const itemsLoading = itemsPending || !itemsComplete;
+    const txLoading = txPending || !txComplete;
     const { data: damageReports } = useDamageReports();
     const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
@@ -131,6 +133,12 @@ export function UserDashboard() {
             },
         });
     }
+
+    if (itemsError || txError) return <Paper sx={{ p: 3 }}>
+        <Typography>{t('Die vollständige Übersicht konnte nicht geladen werden.', 'Could not load the complete overview.')}</Typography>
+        <Button onClick={() => { void refetchItems(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+    </Paper>;
+    if (itemsLoading || txLoading) return <Paper sx={{ p: 3 }}><Typography>{t('Übersicht wird geladen…', 'Loading overview…')}</Typography></Paper>;
 
     return (
         <Box>

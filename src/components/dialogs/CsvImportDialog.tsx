@@ -62,23 +62,27 @@ import {
   parseCheckoutsFromCsv,
 } from '../../utils/csvImport';
 import type { Item, Assembly, StorageLocation } from '../../types';
-import { createItem, updateItem, createItemAssets, getItemAssets } from '../../services/inventoryService';
+import { createItem, updateItem, createItemAssets, getItemAssets, getItem } from '../../services/inventoryService';
 import { createAssembly } from '../../services/assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from '../../services/eventService';
 import {
   createFactionOrder,
   getFactionOrders,
+  getFactionOrder,
   submitFactionOrder,
   updateFactionOrder,
   saveFactionOrderPreparation,
   markFactionOrderReady,
   pickUpFactionOrder,
   returnFactionOrder,
+  closeFactionOrder,
 } from '../../services/factionOrderService';
 import { createTransaction, getTransactions } from '../../services/transactionService';
 import { createOrder, getOrders, returnOrder, transitionOrder } from '../../services/orderService';
 import { createStorageLocation } from '../../services/storageLocationService';
 import { useQueryClient } from '@tanstack/react-query';
+import { getItemStock } from '../../utils/stock';
+import { LIST_PAGE_SIZE } from '../../hooks/useProgressiveList';
 
 interface Props {
   open: boolean;
@@ -86,6 +90,16 @@ interface Props {
   items: Item[];
   assemblies: Assembly[];
   storageLocations: StorageLocation[];
+  catalogComplete: boolean;
+}
+
+async function loadAllPages<T>(getPage: (page: number, size: number) => Promise<T[]>): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 0; ; page++) {
+    const batch = await getPage(page, LIST_PAGE_SIZE);
+    all.push(...batch);
+    if (batch.length < LIST_PAGE_SIZE) return all;
+  }
 }
 
 function getPreviewRows<T extends { status: string }>(rows: T[]): T[] {
@@ -117,6 +131,7 @@ export function CsvImportDialog({
   items,
   assemblies,
   storageLocations,
+  catalogComplete,
 }: Props) {
   const t = useLocalizedText();
   const theme = useTheme();
@@ -220,7 +235,7 @@ export function CsvImportDialog({
   const validEventsCount = parsedEvents.filter((event) => event.status === 'valid').length;
   const validOrdersCount = parsedOrders.filter((order) => order.status === 'valid').length;
   const validGeneralOrdersCount = parsedGeneralOrders.filter((order) => order.status === 'valid').length;
-  const validReturnsCount = parsedReturns.filter((r) => r.status === 'valid').length;
+  const validReturnsCount = parsedReturns.filter((r) => r.status === 'valid' && r.targetStatus === 'accepted').length;
   const validCheckoutsCount = parsedCheckouts.filter((r) => r.status === 'valid').length;
   const totalErrorsCount = parsedItems.filter((i) => i.status === 'error').length
     + parsedAssemblies.filter((a) => a.status === 'error').length
@@ -304,6 +319,7 @@ export function CsvImportDialog({
   }
 
   function resetState() {
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setCsvContent('');
     setFileName('');
     setImportResult(null);
@@ -312,12 +328,20 @@ export function CsvImportDialog({
   }
 
   async function executeImport() {
-    if (totalToImport === 0) return;
+    if (totalToImport === 0 || !catalogComplete) return;
     setIsImporting(true);
     setImportProgress(0);
     setImportResult(null);
 
-    const errors: string[] = [];
+    const errors: string[] = [
+      ...parsedItems.filter((row) => row.status === 'error').map((row) => `Artikel Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedAssemblies.filter((row) => row.status === 'error').map((row) => `Baugruppe Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedEvents.filter((row) => row.status === 'error').map((row) => `Event Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedOrders.filter((row) => row.status === 'error').map((row) => `Bestellung Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedGeneralOrders.filter((row) => row.status === 'error').map((row) => `Allgemeine Bestellung Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedReturns.filter((row) => row.status === 'error').map((row) => `Rückgabe Zeile ${row.index}: ${row.statusMessage}`),
+      ...parsedCheckouts.filter((row) => row.status === 'error').map((row) => `Ausleihe Zeile ${row.index}: ${row.statusMessage}`),
+    ];
     let successItems = 0;
     let updatedItems = 0;
     let successAssemblies = 0;
@@ -519,7 +543,8 @@ export function CsvImportDialog({
     }
 
     // Step 5: Import faction orders after their event occurrences exist.
-    const existingOrders = parsedOrders.length > 0 ? await getFactionOrders() : [];
+    const existingOrders = parsedOrders.length > 0
+      ? await loadAllPages((page, size) => getFactionOrders({ page, size })) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
       currentStep++;
       setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
@@ -547,39 +572,54 @@ export function CsvImportDialog({
           order.eventType === data.eventType
           && order.faction.toLowerCase() === data.faction.toLowerCase()
           && order.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
+          && (order.notes || '').trim() === (data.notes || '').trim()
         ));
-        if (existing && !['draft', 'submitted'].includes(existing.status)) {
-          throw new Error(`Bestehende Bestellung ${existing.orderCode} hat bereits den Status ${existing.status}`);
+        let finalOrder = existing ? await getFactionOrder(existing.id) : await createFactionOrder(data);
+        if (finalOrder.status === 'preparing') {
+          finalOrder = await submitFactionOrder(finalOrder.id);
         }
-        const saved = existing
-          ? await updateFactionOrder(existing.id, data)
-          : await createFactionOrder(data);
-        let finalOrder = saved;
-        if (row.targetStatus !== 'draft') {
-          if (finalOrder.status === 'draft') {
-            finalOrder = await submitFactionOrder(finalOrder.id);
-          }
-          if (['ready', 'picked_up', 'returned', 'closed'].includes(row.targetStatus)) {
-            try {
-              await saveFactionOrderPreparation(
-                finalOrder.id,
-                finalOrder.requestedQuantities || {},
-                finalOrder.requestedAssemblyQuantities || {},
-                {},
-              );
-              finalOrder = await markFactionOrderReady(finalOrder.id, 'Automatisch vorbereitet');
-              if (['picked_up', 'returned', 'closed'].includes(row.targetStatus)) {
-                finalOrder = await pickUpFactionOrder(finalOrder.id);
-                if (['returned', 'closed'].includes(row.targetStatus)) {
-                  finalOrder = await returnFactionOrder(finalOrder.id);
-                }
-              }
-            } catch (transitionErr) {
-              console.warn(`Status-Übergang für Bestellung ${finalOrder.orderCode} (${row.targetStatus}) konnte nicht vollständig ausgeführt werden:`, transitionErr);
+        if (['draft', 'submitted'].includes(finalOrder.status) && existing) {
+          finalOrder = await updateFactionOrder(finalOrder.id, data);
+        }
+        if (row.targetStatus !== 'draft' && finalOrder.status === 'draft') {
+          finalOrder = await submitFactionOrder(finalOrder.id);
+        }
+        if (['ready', 'picked_up', 'returned', 'closed'].includes(row.targetStatus)) {
+          if (finalOrder.status === 'submitted') {
+            const assetAssignments: Record<string, string[]> = {};
+            for (const [id, quantity] of Object.entries(finalOrder.requestedQuantities || {})) {
+              const item = [...createdItemsMap.values()].find((candidate) => candidate.id === id);
+              if (item?.trackingMode !== 'serialized') continue;
+              const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
+                .filter((asset) => asset.availabilityStatus === 'available');
+              if (available.length < quantity) throw new Error(`Nicht genügend Assets für ${item.name}`);
+              assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
+            finalOrder = await saveFactionOrderPreparation(
+              finalOrder.id,
+              finalOrder.requestedQuantities || {},
+              finalOrder.requestedAssemblyQuantities || {},
+              assetAssignments,
+            );
+          }
+          if (finalOrder.status === 'preparing') {
+            finalOrder = await markFactionOrderReady(finalOrder.id, 'Automatisch vorbereitet');
+          }
+          if (['picked_up', 'returned', 'closed'].includes(row.targetStatus) && finalOrder.status === 'ready') {
+            finalOrder = await pickUpFactionOrder(finalOrder.id);
+          }
+          if (['returned', 'closed'].includes(row.targetStatus) && ['picked_up', 'partially_returned'].includes(finalOrder.status)) {
+            finalOrder = await returnFactionOrder(finalOrder.id);
+          }
+          if (row.targetStatus === 'closed' && finalOrder.status === 'returned') {
+            finalOrder = await closeFactionOrder(finalOrder.id);
           }
         }
-        if (!existing) existingOrders.push(finalOrder);
+        if (finalOrder.status !== row.targetStatus) {
+          throw new Error(`Status ${finalOrder.status} statt ${row.targetStatus}`);
+        }
+        if (existing) existingOrders.splice(existingOrders.findIndex((order) => order.id === existing.id), 1, finalOrder);
+        else existingOrders.push(finalOrder);
         successOrders++;
       } catch (err: unknown) {
         errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
@@ -587,7 +627,8 @@ export function CsvImportDialog({
     }
 
     // Step 6: Simulate general orders using the same lifecycle as the order page.
-    const existingGeneralOrders = parsedGeneralOrders.length > 0 ? await getOrders() : [];
+    const existingGeneralOrders = parsedGeneralOrders.length > 0
+      ? await loadAllPages((page, size) => getOrders({ page, size })) : [];
     for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
       currentStep++;
       setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
@@ -626,7 +667,8 @@ export function CsvImportDialog({
           for (const [id, quantity] of Object.entries(requestedQuantities)) {
             const item = items.find((candidate) => candidate.id === id) ?? [...createdItemsMap.values()].find((candidate) => candidate.id === id);
             if (item?.trackingMode === 'serialized') {
-              const available = (await getItemAssets(id)).filter((asset) => asset.availabilityStatus === 'available');
+              const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
+                .filter((asset) => asset.availabilityStatus === 'available');
               if (available.length < quantity) throw new Error(`Nicht genügend Assets für ${item.name}`);
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
@@ -645,7 +687,7 @@ export function CsvImportDialog({
 
     // Step 7: Import standalone returns if any
     let successReturns = 0;
-    for (const ret of parsedReturns.filter((r) => r.status === 'valid')) {
+    for (const ret of parsedReturns.filter((r) => r.status === 'valid' && r.targetStatus === 'accepted')) {
       currentStep++;
       setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(
@@ -661,15 +703,46 @@ export function CsvImportDialog({
           const order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === ret.generalOrderName?.toLowerCase()
             && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
           if (!order) throw new Error(`Allgemeine Bestellung "${ret.generalOrderName}" nicht gefunden`);
+          if (['returned', 'closed'].includes(order.status)) continue;
           const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
           existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
+        } else if (item.trackingMode === 'serialized') {
+          const assets = await loadAllPages((page, size) => getItemAssets(item.id, { page, size }));
+          if (ret.assetCodes.length !== ret.quantity) throw new Error('AssetCodes müssen der Menge entsprechen');
+          let recorded = false;
+          for (const code of ret.assetCodes) {
+            const asset = assets.find((candidate) => candidate.assetCode.toLowerCase() === code.toLowerCase());
+            if (!asset) throw new Error(`Asset "${code}" nicht gefunden`);
+            if (asset.availabilityStatus === 'available') continue;
+            if (!['in_field', 'in_custody', 'returned_pending_check'].includes(asset.availabilityStatus)) {
+              throw new Error(`Asset "${code}" kann im Status ${asset.availabilityStatus} nicht zurückgegeben werden`);
+            }
+            await createTransaction({
+              itemId: item.id,
+              transactionType: 'checkin',
+              quantityChanged: 1,
+              assetInstanceId: asset.id,
+              reason: 'CSV-Import Rückgabe',
+              notes: `CSV return row ${ret.index}: ${ret.notes}`,
+              eventType: ret.eventType,
+              faction: ret.faction,
+            });
+            recorded = true;
+          }
+          if (!recorded) continue;
         } else {
+          const marker = `CSV return row ${ret.index}`;
+          const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id, page, size }));
+          if (previous.some((tx) => tx.transactionType === 'checkin' && tx.notes?.includes(marker))) continue;
+          const current = await getItem(item.id);
+          if (getItemStock(current).checkedOut === 0) continue;
+          if (getItemStock(current).checkedOut < ret.quantity) throw new Error('Rückgabemenge übersteigt den ausgeliehenen Bestand');
           await createTransaction({
             itemId: item.id,
             transactionType: 'checkin',
             quantityChanged: ret.quantity,
             reason: 'CSV-Import Rückgabe',
-            notes: ret.notes || 'Rückgabe aus CSV-Import',
+            notes: `${marker}: ${ret.notes}`,
             eventType: ret.eventType,
             faction: ret.faction,
           });
@@ -689,10 +762,10 @@ export function CsvImportDialog({
         const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
         if (!item) throw new Error(`Artikel "${row.itemName}" nicht gefunden`);
         const marker = `CSV checkout row ${row.index}`;
-        const previous = await getTransactions({ itemId: item.id, size: 200 });
+        const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id, page, size }));
         const imported = previous.filter((tx) => tx.transactionType === 'checkout' && tx.notes?.includes(marker));
         if (item.trackingMode === 'serialized') {
-          const assets = await getItemAssets(item.id);
+          const assets = await loadAllPages((page, size) => getItemAssets(item.id, { page, size }));
           const selected = row.assetCodes.length
             ? row.assetCodes.map((code) => assets.find((asset) => asset.assetCode === code))
             : assets.filter((asset) => asset.availabilityStatus === 'available').slice(0, row.quantity - imported.length);
@@ -741,6 +814,12 @@ export function CsvImportDialog({
       successCheckouts,
       errors,
     });
+    if (errors.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setCsvContent('');
+      setFileName('');
+      setPasteOpen(false);
+    }
 
     const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successGeneralOrders + successReturns + successCheckouts;
     if (totalSuccess > 0) {
@@ -749,7 +828,7 @@ export function CsvImportDialog({
           `Import abgeschlossen: ${totalSuccess} Einträge erfolgreich verarbeitet`,
           `Import finished: ${totalSuccess} entries successfully processed`,
         ),
-        'success',
+        errors.length ? 'warning' : 'success',
       );
     }
   }
@@ -773,6 +852,41 @@ export function CsvImportDialog({
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
+        {importResult && (
+          <Alert
+            severity={importResult.errors.length > 0 ? 'warning' : 'success'}
+            sx={{ mb: 2 }}
+            onClose={() => setImportResult(null)}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {importResult.errors.length > 0
+                ? t('Import mit Fehlern abgeschlossen', 'Import completed with errors')
+                : t('Import abgeschlossen!', 'Import completed!')}
+            </Typography>
+            <Typography variant="body2">
+              {importResult.successItems > 0 && `${importResult.successItems} ${t('Artikel neu angelegt', 'items created')}. `}
+              {importResult.updatedItems > 0 && `${importResult.updatedItems} ${t('Artikel aktualisiert', 'items updated')}. `}
+              {importResult.successAssemblies > 0 && `${importResult.successAssemblies} ${t('Baugruppen erstellt', 'assemblies created')}. `}
+              {importResult.successEvents > 0 && `${importResult.successEvents} ${t('Events erstellt', 'events created')}. `}
+              {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
+              {importResult.successGeneralOrders > 0 && `${importResult.successGeneralOrders} ${t('allgemeine Bestellungen importiert', 'general orders imported')}. `}
+              {importResult.successReturns > 0 && `${importResult.successReturns} ${t('Rückgaben erfasst', 'returns recorded')}. `}
+              {importResult.successCheckouts > 0 && `${importResult.successCheckouts} ${t('Ausleihen erfasst', 'checkouts recorded')}. `}
+            </Typography>
+            {importResult.errors.length > 0 && (
+              <Box sx={{ mt: 1, maxHeight: 300, overflowY: 'auto' }}>
+                <Typography variant="caption" color="error" sx={{ display: 'block', fontWeight: 600 }}>
+                  {t('Hinweise / Fehler:', 'Warnings / Errors:')}
+                </Typography>
+                {importResult.errors.map((err, idx) => (
+                  <Typography key={idx} variant="caption" color="error" sx={{ display: 'block' }}>
+                    • {err}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Alert>
+        )}
         <Tabs
           value={tabType}
           onChange={(_e, v) => setTabType(v)}
@@ -909,6 +1023,12 @@ export function CsvImportDialog({
             </Paper>
 
             {/* Statistics Banner */}
+            {!catalogComplete && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('Artikel und Baugruppen werden noch geladen. Der Import ist danach verfügbar.',
+                  'Items and assemblies are still loading. Import will be available when they finish.')}
+              </Alert>
+            )}
             <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }} useFlexGap>
               <Chip
                 icon={<CheckCircleIcon />}
@@ -938,46 +1058,6 @@ export function CsvImportDialog({
                 />
               )}
             </Stack>
-
-            {/* Results Alert */}
-            {importResult && (
-              <Alert
-                severity={importResult.errors.length > 0 ? 'warning' : 'success'}
-                sx={{ mb: 2 }}
-                onClose={() => setImportResult(null)}
-              >
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  {t('Import abgeschlossen!', 'Import completed!')}
-                </Typography>
-                <Typography variant="body2">
-                  {importResult.successItems > 0 && `${importResult.successItems} ${t('Artikel neu angelegt', 'items created')}. `}
-                  {importResult.updatedItems > 0 && `${importResult.updatedItems} ${t('Artikel aktualisiert', 'items updated')}. `}
-                  {importResult.successAssemblies > 0 && `${importResult.successAssemblies} ${t('Baugruppen erstellt', 'assemblies created')}. `}
-                  {importResult.successEvents > 0 && `${importResult.successEvents} ${t('Events erstellt', 'events created')}. `}
-                  {importResult.successOrders > 0 && `${importResult.successOrders} ${t('Bestellungen importiert', 'orders imported')}. `}
-                  {importResult.successGeneralOrders > 0 && `${importResult.successGeneralOrders} ${t('allgemeine Bestellungen importiert', 'general orders imported')}. `}
-                  {importResult.successReturns > 0 && `${importResult.successReturns} ${t('Rückgaben erfasst', 'returns recorded')}. `}
-                  {importResult.successCheckouts > 0 && `${importResult.successCheckouts} ${t('Ausleihen erfasst', 'checkouts recorded')}. `}
-                </Typography>
-                {importResult.errors.length > 0 && (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" color="error" sx={{ display: 'block', fontWeight: 600 }}>
-                      {t('Hinweise / Fehler:', 'Warnings / Errors:')}
-                    </Typography>
-                    {importResult.errors.slice(0, 5).map((err, idx) => (
-                      <Typography key={idx} variant="caption" color="error" sx={{ display: 'block' }}>
-                        • {err}
-                      </Typography>
-                    ))}
-                    {importResult.errors.length > 5 && (
-                      <Typography variant="caption" color="error" sx={{ display: 'block' }}>
-                        ... {t(`und ${importResult.errors.length - 5} weitere`, `and ${importResult.errors.length - 5} more`)}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </Alert>
-            )}
 
             {/* Progress Bar */}
             {isImporting && (
@@ -1321,7 +1401,7 @@ export function CsvImportDialog({
           <Button
             variant="contained"
             onClick={executeImport}
-            disabled={isImporting || totalToImport === 0}
+            disabled={isImporting || !catalogComplete || totalToImport === 0}
             startIcon={<CloudUploadIcon />}
           >
             {isImporting

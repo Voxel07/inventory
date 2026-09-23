@@ -48,6 +48,8 @@ import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
+import { ListPagination } from '../components/shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 export function StorageLocations() {
     const t = useLocalizedText();
@@ -68,6 +70,8 @@ export function StorageLocations() {
     const [editingLoc, setEditingLoc] = useState<StorageLocation | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [locationPage, setLocationPage] = useState(1);
+    const [itemPage, setItemPage] = useState(1);
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -98,6 +102,8 @@ export function StorageLocations() {
                 (l.area && l.area.toLowerCase().includes(lower))
         );
     }, [locations, searchQuery]);
+    const currentLocationPage = Math.min(locationPage, Math.max(1, Math.ceil(filteredLocations.length / LIST_PAGE_SIZE)));
+    const pageLocations = filteredLocations.slice((currentLocationPage - 1) * LIST_PAGE_SIZE, currentLocationPage * LIST_PAGE_SIZE);
 
     // Items stored in the selected location
     const storedItems = useMemo(() => {
@@ -112,6 +118,8 @@ export function StorageLocations() {
             return { item, totalStock, remaining, checkedOut };
         });
     }, [storedItems]);
+    const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(enrichedStoredItems.length / LIST_PAGE_SIZE)));
+    const pageStoredItems = enrichedStoredItems.slice((currentItemPage - 1) * LIST_PAGE_SIZE, currentItemPage * LIST_PAGE_SIZE);
 
     function handleOpenCreate() {
         setEditingLoc(null);
@@ -216,7 +224,7 @@ export function StorageLocations() {
                             <TextField
                                 label={t('Lagerorte suchen', 'Search storage locations')}
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => { setSearchQuery(e.target.value); setLocationPage(1); }}
                                 size="small"
                                 fullWidth
                                 sx={{ mb: 2 }}
@@ -230,13 +238,13 @@ export function StorageLocations() {
                                 </Typography>
                             ) : (
                                 <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
-                                    {filteredLocations.map((loc) => {
+                                    {pageLocations.map((loc) => {
                                         const count = items?.filter((i) => i.storageLocation === loc.id).length ?? 0;
                                         return (
                                             <ListItemButton
                                                 key={loc.id}
                                                 selected={selectedLocId === loc.id}
-                                                onClick={() => setSelectedLocId(loc.id)}
+                                                onClick={() => { setSelectedLocId(loc.id); setItemPage(1); }}
                                                 sx={{
                                                     borderRadius: 2,
                                                     mb: 1,
@@ -288,6 +296,7 @@ export function StorageLocations() {
                                     })}
                                 </List>
                             )}
+                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} />
                         </Paper>
                     </Grid>
                 )}
@@ -366,7 +375,7 @@ export function StorageLocations() {
                                     </Box>
                                 ) : isMobile ? (
                                     <Stack spacing={0.5}>
-                                        {enrichedStoredItems.map(({ item, remaining }) => (
+                                        {pageStoredItems.map(({ item, remaining }) => (
                                             <Card
                                                 key={item.id}
                                                 variant="outlined"
@@ -400,7 +409,7 @@ export function StorageLocations() {
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {enrichedStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
+                                                {pageStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
                                                     <TableRow
                                                         key={item.id}
                                                         hover
@@ -443,6 +452,7 @@ export function StorageLocations() {
                                         </Table>
                                     </TableContainer>
                                 )}
+                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} />
                             </Paper>
                         ) : (
                             <Paper

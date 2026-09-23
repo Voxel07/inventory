@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
     Box,
+    Button,
     Dialog,
     DialogContent,
     DialogTitle,
@@ -23,8 +24,8 @@ import type { ReturnSubmissionFormData } from '../types';
 
 export function CheckedOutItemsPage() {
     const t = useLocalizedText();
-    const { data: items, isLoading: itemsLoading } = useItems();
-    const { data: transactions, isLoading: txLoading } = useTransactions();
+    const { data: items, isLoading: itemsPending, isComplete: itemsComplete, isError: itemsError, refetch: refetchItems } = useItems();
+    const { data: transactions, isLoading: txPending, isComplete: txComplete, isError: txError, refetch: refetchTransactions } = useTransactions();
     const { data: assemblies } = useAssemblies();
     const createReturn = useCreateReturnSubmission();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -90,7 +91,14 @@ export function CheckedOutItemsPage() {
         });
     }
 
-    if (itemsLoading || txLoading) {
+    if (itemsError || txError) {
+        return <Paper sx={{ p: 3 }}>
+            <Typography>{t('Die vollständige Ausleihliste konnte nicht geladen werden.', 'Could not load the complete checkout list.')}</Typography>
+            <Button onClick={() => { void refetchItems(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+        </Paper>;
+    }
+
+    if (itemsPending || txPending || !itemsComplete || !txComplete) {
         return (
             <Paper sx={{ p: 2 }}>
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -121,6 +129,7 @@ export function CheckedOutItemsPage() {
             </Paper>
 
             <CheckedOutList
+                key={`${search}:${personFilter}:${eventFilter}`}
                 rows={visibleRows}
                 assemblies={assemblies}
                 showPerson

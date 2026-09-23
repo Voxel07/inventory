@@ -82,6 +82,7 @@ export interface ParsedReturnRow {
   itemId?: string;
   quantity: number;
   assetCode?: string;
+  assetCodes: string[];
   storageLocationName?: string;
   storageLocationId?: string;
   eventType?: EventType;
@@ -1078,23 +1079,33 @@ export function parseReturnsFromCsv(
     const item = itemLookup.get(itemName.toLowerCase().trim());
     const rawQty = getField(raw, AMOUNT_ALIASES) || getField(raw, COMPONENT_QTY_ALIASES);
     const quantity = Math.max(1, Math.round(parseNumber(rawQty, 1)));
-    const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
+    // Some older combined CSVs place return details several columns earlier than
+    // the header. Detect that layout by its date in AssetCodes and event in TrackingMode.
+    const shiftedDate = getField(raw, ASSET_CODE_ALIASES);
+    const shiftedEventType = getField(raw, ['trackingmode'])?.toUpperCase().trim();
+    const shiftedReturn = /^\d{4}-\d{2}-\d{2}$/.test(shiftedDate || '')
+      && (EVENT_TYPES as readonly string[]).includes(shiftedEventType || '');
+    const assetCodes = parseAssetCodes(shiftedReturn
+      ? getField(raw, DESCRIPTION_ALIASES) : shiftedDate);
     const assetCode = assetCodes[0] || undefined;
 
     const rawLoc = getField(raw, LOCATION_ALIASES);
     const loc = rawLoc ? locMap.get(rawLoc.toLowerCase().trim()) : undefined;
 
-    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES) || getField(raw, EVENT_TYPES_ALIASES);
+    const rawEventType = shiftedReturn ? shiftedEventType
+      : getField(raw, EVENT_REPORT_TYPE_ALIASES) || getField(raw, EVENT_TYPES_ALIASES);
     const normEventType = rawEventType?.toUpperCase().trim();
     const eventType = (EVENT_TYPES as readonly string[]).includes(normEventType ?? '') ? (normEventType as EventType) : undefined;
 
-    const faction = getField(raw, ORDER_FACTION_ALIASES);
+    const faction = shiftedReturn ? getField(raw, ['geplant']) : getField(raw, ORDER_FACTION_ALIASES);
     const person = getField(raw, RETURN_PERSON_ALIASES);
-    const date = getField(raw, EVENT_DATE_ALIASES);
+    const date = shiftedReturn ? shiftedDate : getField(raw, EVENT_DATE_ALIASES);
     const generalOrderName = getField(raw, ['generalorder', 'generalordername', 'allgemeinebestellung', 'bestellname', 'ordername']);
-    const notes = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES) || '';
+    const notes = shiftedReturn ? getField(raw, EVENT_TYPES_ALIASES) || ''
+      : getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES) || '';
 
-    const rawStatus = getField(raw, ['status', 'returnstatus', 'rueckgabestatus', 'rückgabestatus'])?.toLowerCase().trim();
+    const rawStatus = (shiftedReturn ? getField(raw, EVENT_REPORT_TYPE_ALIASES)
+      : getField(raw, ['status', 'returnstatus', 'rueckgabestatus', 'rückgabestatus']))?.toLowerCase().trim();
     let targetStatus: 'pending' | 'accepted' | 'rejected' = 'accepted';
     if (['rejected', 'abgelehnt'].includes(rawStatus ?? '')) {
       targetStatus = 'rejected';
@@ -1111,6 +1122,9 @@ export function parseReturnsFromCsv(
     } else if (!item) {
       validationStatus = 'error';
       statusMessage = `Artikel "${itemName}" nicht gefunden`;
+    } else if (item.trackingMode === 'serialized' && !generalOrderName && assetCodes.length !== quantity) {
+      validationStatus = 'error';
+      statusMessage = 'AssetCodes müssen der Menge entsprechen';
     }
 
     results.push({
@@ -1120,6 +1134,7 @@ export function parseReturnsFromCsv(
       itemId: item?.id,
       quantity,
       assetCode,
+      assetCodes,
       storageLocationName: loc?.name || rawLoc,
       storageLocationId: loc?.id,
       eventType,

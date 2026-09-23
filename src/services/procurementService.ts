@@ -22,17 +22,8 @@ export type Vendor = { id: string; name: string; active: boolean };
 export type PurchaseOrderLine = { id: string; itemId: string; itemName: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPriceCents: number };
 export type PurchaseOrder = { id: string; orderNumber: string; vendorName: string; orderDate: string; expectedDeliveryDate?: string; status: string; createdById: string; createdByName: string; notes?: string; lines: PurchaseOrderLine[] };
 
-async function allPages<T>(path: string): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 0; ; page += 1) {
-    const batch = await apiRequest<T[]>(path, { query: { page, size: 200 } });
-    rows.push(...batch);
-    if (batch.length < 200) return rows;
-  }
-}
-
-export const getVendors = () => allPages<Vendor>('/api/vendors');
-export const getPurchaseOrders = () => allPages<PurchaseOrder>('/api/purchase-orders');
+export const getVendors = (page = 0, size = 100) => apiRequest<Vendor[]>('/api/vendors', { query: { page, size } });
+export const getPurchaseOrders = (page = 0, size = 100) => apiRequest<PurchaseOrder[]>('/api/purchase-orders', { query: { page, size } });
 export function createVendor(name: string): Promise<Vendor> {
   return apiRequest('/api/vendors', { method: 'POST', body: { name, active: true } });
 }

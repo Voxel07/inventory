@@ -17,7 +17,7 @@ export function DamageReportsPage() {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const { data: reports, isLoading } = useDamageReports();
+    const { data: reports, isLoading, isFetchingNextPage, hasNextPage, isError, refetch } = useDamageReports();
     const { data: items } = useItems();
     const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
@@ -85,11 +85,15 @@ export function DamageReportsPage() {
             </Tabs>
 
             <DamageReportsList
+                key={activeTab}
                 reports={reports}
                 items={items}
                 assemblies={assemblies}
                 users={users}
                 isLoading={isLoading}
+                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
+                loadError={isError}
+                onRetry={() => { void refetch(); }}
                 view={activeTab}
                 isUpdating={updateStatus.isPending || updateReport.isPending}
                 onUpdateStatus={handleStatusUpdate}

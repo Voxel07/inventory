@@ -145,6 +145,11 @@ public class CatalogOrm {
                 .setParameter("item", item).getResultList();
     }
 
+    public List<AssetInstance> assetInstances(Item item, int offset, int limit) {
+        return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true order by a.assetCode asc", AssetInstance.class)
+                .setParameter("item", item).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
     public long countAssets(Item item) {
         return entityManager.createQuery("select count(a) from AssetInstance a where a.item = :item and a.active = true", Long.class)
                 .setParameter("item", item).getSingleResult();

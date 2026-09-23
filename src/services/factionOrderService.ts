@@ -35,7 +35,7 @@ function normalizedOrder(request: Promise<FactionOrder>): Promise<FactionOrder> 
   return request.then(normalizeFactionOrder);
 }
 
-export async function getFactionOrders(filters?: { eventType?: string; faction?: string; orderCode?: string }): Promise<FactionOrder[]> {
+export async function getFactionOrders(filters?: { eventType?: string; faction?: string; orderCode?: string; page?: number; size?: number }): Promise<FactionOrder[]> {
   const orders = await apiRequest<FactionOrder[]>('/api/orders', { query: filters });
   return orders.map(normalizeFactionOrder);
 }
@@ -125,4 +125,5 @@ export function returnFactionOrderItems(
   }));
 }
 export function cancelFactionOrder(id: string) { return transition(id, 'cancelled'); }
+export function closeFactionOrder(id: string) { return transition(id, 'closed'); }
 export function subscribeToFactionOrders(callback: () => void) { return subscribeToApiChanges(callback); }

@@ -14,9 +14,10 @@ import {
   submitFactionOrder,
   updateFactionOrder,
 } from '../services/factionOrderService';
-import type { EventType, FactionOrderFormData } from '../types';
+import type { EventType, FactionOrder, FactionOrderFormData } from '../types';
 import type { AssetReturnOutcome } from '../services/factionOrderService';
 import { apiRequest } from '../services/apiClient';
+import { useProgressiveList } from './useProgressiveList';
 
 export interface FactionDto {
   id: string;
@@ -46,10 +47,10 @@ export function useFactions(eventType?: string) {
 }
 
 export function useFactionOrders(eventType?: EventType, faction?: string) {
-  return useQuery({
-    queryKey: ['faction-orders', eventType, faction],
-    queryFn: () => getFactionOrders({ eventType, faction }),
-  });
+  return useProgressiveList<FactionOrder>(
+    ['faction-orders', eventType, faction],
+    (page, size) => getFactionOrders({ eventType, faction, page, size }),
+  );
 }
 
 export function useFactionOrder(id: string) {

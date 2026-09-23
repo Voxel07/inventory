@@ -18,8 +18,8 @@ export function Assemblies() {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const { data: assemblies, isLoading } = useAssemblies();
-    const { data: items } = useItems();
+    const { data: assemblies, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: assembliesComplete } = useAssemblies();
+    const { data: items, isComplete: itemsComplete, isError: itemsError } = useItems();
     const { data: storageLocations } = useStorageLocations();
 
     const createAssembly = useCreateAssembly();
@@ -60,6 +60,9 @@ export function Assemblies() {
                 assemblies={assemblies}
                 items={items}
                 isLoading={isLoading}
+                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
+                loadError={isError}
+                onRetry={() => { void refetch(); }}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
@@ -111,8 +114,9 @@ export function Assemblies() {
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
-                assemblies={assemblies ?? []}
-                storageLocations={storageLocations ?? []}
+                  assemblies={assemblies ?? []}
+                  storageLocations={storageLocations ?? []}
+                  catalogComplete={itemsComplete && assembliesComplete && !isError && !itemsError && !!items && !!assemblies}
             />
         </Box>
     );

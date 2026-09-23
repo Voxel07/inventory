@@ -432,6 +432,11 @@ public class CatalogService {
         return orm.assetInstances(item);
     }
 
+    public List<AssetInstance> getAssets(UUID itemId, int offset, int limit) {
+        var item = getVisibleItem(itemId);
+        return orm.assetInstances(item, offset, limit);
+    }
+
     public AssetInstance getAssetByCode(String code) {
         var asset = orm.findAssetByCode(code);
         if (asset == null || !canView(asset.item, actorService.current())) throw ApiException.notFound("Asset not found");

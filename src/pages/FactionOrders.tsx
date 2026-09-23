@@ -33,6 +33,8 @@ import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
+import { ListPagination } from '../components/shared/ListPagination';
+import { LIST_PAGE_SIZE } from '../hooks/useProgressiveList';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 
@@ -63,6 +65,8 @@ export function FactionOrders() {
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activePage, setActivePage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
@@ -74,7 +78,7 @@ export function FactionOrders() {
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: storageLocations = [] } = useStorageLocations();
-  const { data: allOrders = [], isLoading, isError } = useFactionOrders();
+  const { data: allOrders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = useMemo(
     () => allOrders.filter((order) => order.eventType === eventType
@@ -82,15 +86,19 @@ export function FactionOrders() {
     [allOrders, currentUser, eventType],
   );
 
-  const activeOrderGroups = useMemo(() => [...new Set(orders
-    .filter((order) => !isHistoricalOrder(order))
+  const activeOrders = useMemo(() => orders.filter((order) => !isHistoricalOrder(order)), [orders]);
+  const currentActivePage = Math.min(activePage, Math.max(1, Math.ceil(activeOrders.length / LIST_PAGE_SIZE)));
+  const pageActiveOrders = activeOrders.slice((currentActivePage - 1) * LIST_PAGE_SIZE, currentActivePage * LIST_PAGE_SIZE);
+  const activeOrderGroups = useMemo(() => [...new Set(pageActiveOrders
     .map((order) => order.faction))]
     .map((faction) => ({
       faction,
-      orders: orders.filter((order) => order.faction === faction && !isHistoricalOrder(order)),
-    })), [orders]);
-  const activeOrderCount = activeOrderGroups.reduce((count, group) => count + group.orders.length, 0);
+      orders: pageActiveOrders.filter((order) => order.faction === faction),
+    })), [pageActiveOrders]);
+  const activeOrderCount = activeOrders.length;
   const historyOrders = useMemo(() => orders.filter(isHistoricalOrder), [orders]);
+  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / LIST_PAGE_SIZE)));
+  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * LIST_PAGE_SIZE, currentHistoryPage * LIST_PAGE_SIZE);
 
   useEffect(() => {
     if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
@@ -104,6 +112,8 @@ export function FactionOrders() {
 
   function selectEvent(value: EventType | null) {
     if (!value) return;
+    setActivePage(1);
+    setHistoryPage(1);
     setEventType(value);
     const firstFaction = FACTIONS_BY_EVENT[value]
       .find((candidate) => canAccessFaction(currentUser, value, candidate));
@@ -245,6 +255,7 @@ export function FactionOrders() {
           ))}
         </Stack>
       </Paper>
+      <ListPagination count={activeOrderCount} page={currentActivePage} onChange={setActivePage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
       <Typography variant="h6" sx={{ mb: 1 }}>{t('Bestellverlauf', 'Order history')}</Typography>
       <Paper sx={{ overflow: 'hidden' }}>
@@ -252,7 +263,7 @@ export function FactionOrders() {
           <Typography color="text.secondary" sx={{ p: 2 }}>{t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}</Typography>
         )}
         <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-          {historyOrders.map((order) => {
+          {pageHistoryOrders.map((order) => {
             const totals = progress(order);
             return (
               <Button
@@ -283,6 +294,7 @@ export function FactionOrders() {
           })}
         </Stack>
       </Paper>
+      <ListPagination count={historyOrders.length} page={currentHistoryPage} onChange={setHistoryPage} />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
         <DialogTitle sx={{ pr: 7 }}>

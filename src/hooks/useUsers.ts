@@ -1,12 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAssignableUsers, getUsers, updateUserPermissions } from '../services/userService';
-import type { UserPermissionsFormData } from '../types';
+import type { User, UserPermissionsFormData } from '../types';
+import { useProgressiveList } from './useProgressiveList';
 
 export function useUsers() {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: getUsers,
-  });
+  return useProgressiveList<User>(['users'], (page, size) => getUsers({ page, size }));
 }
 
 export function useUpdateUserPermissions() {
@@ -18,5 +16,5 @@ export function useUpdateUserPermissions() {
 }
 
 export function useAssignableUsers() {
-  return useQuery({ queryKey: ['users', 'assignable'], queryFn: getAssignableUsers });
+  return useProgressiveList<User>(['users', 'assignable'], (page, size) => getAssignableUsers({ page, size }));
 }

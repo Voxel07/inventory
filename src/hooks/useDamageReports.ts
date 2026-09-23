@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   damageReportApi,
   getDamageReports,
@@ -7,6 +7,7 @@ import {
 } from '../services/damageReportService';
 import { createCreateResourceHooks } from './useResourceApi';
 import type { DamageReport, DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
+import { useProgressiveList } from './useProgressiveList';
 
 const relatedKeys = ['items', 'transactions'];
 const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
@@ -19,10 +20,11 @@ export const useCreateDamageReport = baseHooks.useCreate;
 
 export function useDamageReports(itemId?: string, filters?: { assetInstanceId?: string; assemblyId?: string; size?: number }) {
   const query = { itemId, ...filters };
-  return useQuery({
-    queryKey: ['damageReports', query],
-    queryFn: () => getDamageReports(query),
-  });
+  return useProgressiveList<DamageReport>(
+    ['damageReports', query],
+    (page, size) => getDamageReports({ ...query, page, size }),
+    filters,
+  );
 }
 
 export function useUpdateDamageReportStatus() {
