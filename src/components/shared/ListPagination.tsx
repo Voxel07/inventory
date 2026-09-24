@@ -10,15 +10,16 @@ interface Props {
   loadingMore?: boolean;
   loadError?: boolean;
   onRetry?: () => void;
+  pageSizeAtEnd?: boolean;
 }
 
-export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, loadingMore, loadError, onRetry }: Props) {
+export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, loadingMore, loadError, onRetry, pageSizeAtEnd = false }: Props) {
   const t = useLocalizedText();
   const pages = pageSize === -1 ? 1 : Math.ceil(count / pageSize);
   return (
     <Stack spacing={1} sx={{ mt: 2, alignItems: 'center' }}>
       <TextField select size="small" label={t('Einträge pro Seite', 'Items per page')} value={pageSize}
-        onChange={(event) => onPageSizeChange(Number(event.target.value))} sx={{ minWidth: 170 }}>
+        onChange={(event) => onPageSizeChange(Number(event.target.value))} sx={{ minWidth: 170, alignSelf: pageSizeAtEnd ? 'flex-end' : undefined }}>
         <MenuItem value={20}>20</MenuItem>
         <MenuItem value={100}>100</MenuItem>
         <MenuItem value={-1}>{t('Alle', 'All')}</MenuItem>

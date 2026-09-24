@@ -13,6 +13,8 @@ import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
+import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
+import { QuantityInput } from './QuantityInput';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -37,6 +39,8 @@ export function GeneralOrders() {
   const [eventId, setEventId] = useState('');
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [itemSearch, setItemSearch] = useState('');
+  const [itemPage, setItemPage] = useState(1);
+  const [catalogReady, setCatalogReady] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -50,6 +54,7 @@ export function GeneralOrders() {
   const [consumedInputs, setConsumedInputs] = useState<Record<string, string>>({});
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const sortedItems = useMemo(() => catalogReady ? [...items].sort((a, b) => a.name.localeCompare(b.name)) : [], [catalogReady, items]);
   const eventMap = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
   const activeEvents = events;
   const visibleOrders = useMemo(() => {
@@ -66,9 +71,12 @@ export function GeneralOrders() {
   const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * historySize, currentHistoryPage * historySize);
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
-    return [...items].filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [items, itemSearch]);
+    return sortedItems.filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term));
+  }, [sortedItems, itemSearch]);
+  const selectedEvent = eventMap.get(eventId);
+  const catalogItems = useMemo(() => visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0), [visibleItems, itemSearch, selectedEvent, quantities]);
+  const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(catalogItems.length / ORDER_CATALOG_PAGE_SIZE)));
+  const pageItems = catalogItems.slice((currentItemPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentItemPage * ORDER_CATALOG_PAGE_SIZE);
 
   function itemName(id: string) { return itemMap.get(id)?.name ?? id; }
   function eventName(id?: string) {
@@ -83,6 +91,8 @@ export function GeneralOrders() {
     setEventId(order?.eventOccurrenceId ?? activeEvents[0]?.id ?? '');
     setQuantities(Object.fromEntries(Object.entries(order?.requestedQuantities ?? {}).map(([id, quantity]) => [id, String(quantity)])));
     setItemSearch('');
+    setItemPage(1);
+    setCatalogReady(false);
   }
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -120,7 +130,6 @@ export function GeneralOrders() {
       onError: (error) => showSnackbar(errorMessage(error), 'error'),
     });
   }
-  const selectedEvent = eventMap.get(eventId);
   const editItem = (item: Item) => (
     <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -128,9 +137,8 @@ export function GeneralOrders() {
           <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
           <Typography variant="caption" color="text.secondary">{item.category} · {t('Verfügbar', 'Available')}: {item.stock?.available ?? item.amount ?? 0}</Typography>
         </Box>
-        <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={quantities[item.id] ?? ''}
-          onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
-          slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 90 }} />
+        <QuantityInput label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+          onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
       </Stack>
     </Paper>
   );
@@ -197,12 +205,13 @@ export function GeneralOrders() {
       onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
     />
 
-    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg">
+    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg"
+      slotProps={{ transition: { onEntered: () => setCatalogReady(true), onExit: () => setCatalogReady(false) } }}>
       <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>
         <DialogContent dividers><Stack spacing={2}>
           <TextField autoFocus required label={t('Name', 'Name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
           <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
-          <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
+          <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => { setEventId(event.target.value); setItemPage(1); }}>
             <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
             {EVENT_TYPES.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
@@ -215,18 +224,20 @@ export function GeneralOrders() {
           {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
           <Divider />
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
-          <TextField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} />
-          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0).map(editItem)}</Stack></Box>
-          {Object.values(quantities).some((value) => Number(value) > 0) && <Box>
+          <TextField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => { setItemSearch(event.target.value); setItemPage(1); }} />
+          {catalogReady && <>
+            <Box key={currentItemPage} sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{pageItems.map(editItem)}</Stack></Box>
+            <OrderCatalogPager count={catalogItems.length} page={currentItemPage} onPageChange={setItemPage} />
+          </>}
+          {catalogReady && Object.values(quantities).some((value) => Number(value) > 0) && <Box>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktuelle Bestellung', 'Current order')}</Typography>
             <Stack spacing={0.5}>
               {items.filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
-                  <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={quantities[item.id] ?? ''}
-                    onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
-                    slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 90 }} />
+                  <QuantityInput label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+                    onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
                   <Button size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
                 </Stack>
               </Paper>)}

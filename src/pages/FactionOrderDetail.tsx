@@ -68,6 +68,7 @@ export function FactionOrderDetail() {
   const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
   const [assetAssignments, setAssetAssignments] = useState<Record<string, string[]>>({});
   const [editOpen, setEditOpen] = useState(false);
+  const [editReady, setEditReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [pickupMapOpen, setPickupMapOpen] = useState(false);
@@ -346,10 +347,11 @@ export function FactionOrderDetail() {
       />
 
       {/* Edit Order Modal */}
-      <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth
+        slotProps={{ transition: { onEntered: () => setEditReady(true), onExit: () => setEditReady(false) } }}>
         <DialogTitle>{t('Fraktionsliste bearbeiten', 'Edit faction order')}</DialogTitle>
         <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-          <FactionOrderForm
+          {editReady && <FactionOrderForm
             initialData={order}
             items={items}
             assemblies={assemblies}
@@ -369,7 +371,7 @@ export function FactionOrderDetail() {
               );
             }}
             isLoading={updateOrder.isPending}
-          />
+          />}
         </DialogContent>
       </Dialog>
 

@@ -1,0 +1,16 @@
+.order-quantity-input {
+  box-sizing: border-box;
+  width: 76px;
+  height: 36px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.order-quantity-input:hover { border-color: currentColor; }
+.order-quantity-input:focus { border: 2px solid #e30613; outline: none; }

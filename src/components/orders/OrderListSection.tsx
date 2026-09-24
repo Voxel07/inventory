@@ -56,7 +56,7 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
       </Box>)}
     </Paper>
     <ListPagination count={count} page={page} onChange={onPageChange} pageSize={pageSize}
-      onPageSizeChange={onPageSizeChange} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+      onPageSizeChange={onPageSizeChange} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} pageSizeAtEnd />
   </Box>;
 }
 

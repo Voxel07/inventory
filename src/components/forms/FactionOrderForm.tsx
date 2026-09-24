@@ -49,6 +49,8 @@ import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { apiFileUrl } from '../../services/apiClient';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
+import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from '../orders/OrderCatalogPager';
+import { QuantityInput } from '../orders/QuantityInput';
 
 type ResourceViewMode = 'list' | 'tiles';
 
@@ -124,6 +126,8 @@ export function FactionOrderForm({
   );
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [itemPage, setItemPage] = useState(1);
+  const [assemblyPage, setAssemblyPage] = useState(1);
   const [viewMode, setViewMode] = useState<ResourceViewMode>(() => {
     const saved = window.localStorage.getItem('faction-order-resource-view');
     return saved === 'tiles' ? 'tiles' : 'list';
@@ -131,6 +135,8 @@ export function FactionOrderForm({
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
   const [infoAssembly, setInfoAssembly] = useState<Assembly | null>(null);
   const categories = useMemo(() => [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
+  const sortedItems = useMemo(() => [...items].sort((a, b) => a.name.localeCompare(b.name)), [items]);
+  const sortedAssemblies = useMemo(() => [...assemblies].sort((a, b) => a.name.localeCompare(b.name)), [assemblies]);
 
   const availableByItem = useMemo(() => new Map(items.map((item) => [
     item.id,
@@ -164,26 +170,28 @@ export function FactionOrderForm({
 
   const visibleItems = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
-    return items
+    return sortedItems
       .filter((item) => {
         if (category && item.category !== category) return false;
         if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
         if (Number(quantities[item.id]) > 0) return true;
         return item.eventTypes?.includes(eventType);
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [category, eventType, items, quantities, search]);
+      });
+  }, [category, eventType, quantities, search, sortedItems]);
 
   const visibleAssemblies = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
-    return assemblies
+    return sortedAssemblies
       .filter((assembly) => {
         if (term) return `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term);
         if (Number(assemblyQuantities[assembly.id]) > 0) return true;
         return assembly.eventTypes?.includes(eventType);
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [assemblies, assemblyQuantities, eventType, search]);
+      });
+  }, [assemblyQuantities, eventType, search, sortedAssemblies]);
+  const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(visibleItems.length / ORDER_CATALOG_PAGE_SIZE)));
+  const currentAssemblyPage = Math.min(assemblyPage, Math.max(1, Math.ceil(visibleAssemblies.length / ORDER_CATALOG_PAGE_SIZE)));
+  const pageItems = visibleItems.slice((currentItemPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentItemPage * ORDER_CATALOG_PAGE_SIZE);
+  const pageAssemblies = visibleAssemblies.slice((currentAssemblyPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentAssemblyPage * ORDER_CATALOG_PAGE_SIZE);
 
   const selectedAssemblies = useMemo(
     () => assemblies
@@ -314,6 +322,8 @@ export function FactionOrderForm({
               onChange={(event) => {
                 const value = event.target.value as EventType;
                 setEventType(value);
+                setItemPage(1);
+                setAssemblyPage(1);
                 if (!initialData) setActiveEventType(value);
               }}
             >
@@ -403,11 +413,11 @@ export function FactionOrderForm({
               size="small"
               label={t('Baugruppen oder Artikel suchen', 'Search assemblies or items')}
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => { setSearch(event.target.value); setItemPage(1); setAssemblyPage(1); }}
             />
             <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
               <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
-              <Select label={t('Kategorie', 'Category')} value={category} onChange={(event) => setCategory(event.target.value)}>
+              <Select label={t('Kategorie', 'Category')} value={category} onChange={(event) => { setCategory(event.target.value); setItemPage(1); }}>
                 <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
                 {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
               </Select>
@@ -438,8 +448,8 @@ export function FactionOrderForm({
             </Typography>
           </Stack>
           {viewMode === 'tiles' ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleAssemblies.map((assembly) => {
+            <Box key={currentAssemblyPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
+              {pageAssemblies.map((assembly) => {
                 const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -455,7 +465,7 @@ export function FactionOrderForm({
                     <Tooltip title={t('Baugruppe anzeigen', 'Show assembly contents')}><IconButton size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('Inhalt anzeigen', 'Show contents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
                       <IconButton size="small" disabled={!isSelected} onClick={() => changeQuantity(assembly.id, -1, true)}><RemoveIcon fontSize="small" /></IconButton>
-                      <TextField size="small" type="number" value={assemblyQuantities[assembly.id] ?? ''} onChange={(event) => setQuantity(assembly.id, event.target.value, true)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${assembly.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                      <QuantityInput label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
                     {isSelected && !isMobile && (
@@ -468,8 +478,8 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleAssemblies.map((assembly) => {
+            <Stack key={currentAssemblyPage} spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
+              {pageAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
@@ -483,7 +493,7 @@ export function FactionOrderForm({
                       <Tooltip title={t('Baugruppe anzeigen', 'Show assembly contents')}><IconButton size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('Inhalt anzeigen', 'Show contents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(assembly.id, -1, true)}><RemoveIcon fontSize="small" /></IconButton>
-                        <TextField size="small" type="number" value={assemblyQuantities[assembly.id] ?? ''} onChange={(event) => setQuantity(assembly.id, event.target.value, true)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${assembly.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                        <QuantityInput label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)}><AddIcon fontSize="small" /></IconButton>
                         {!isMobile && (
                           <Box sx={{ width: 34, flexShrink: 0 }}>
@@ -502,6 +512,7 @@ export function FactionOrderForm({
             </Stack>
           )}
           {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          <OrderCatalogPager count={visibleAssemblies.length} page={currentAssemblyPage} onPageChange={setAssemblyPage} />
         </Box>
 
         <Box>
@@ -517,8 +528,8 @@ export function FactionOrderForm({
             </Alert>
           )}
           {viewMode === 'tiles' ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleItems.map((item) => {
+            <Box key={currentItemPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
+              {pageItems.map((item) => {
                 const isSelected = Number(quantities[item.id]) > 0;
                 const image = itemImageUrl(item, undefined, '240x160');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -539,7 +550,7 @@ export function FactionOrderForm({
                     )}
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
                       <IconButton size="small" disabled={!isSelected} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>
-                      <TextField size="small" type="number" value={quantities[item.id] ?? ''} onChange={(event) => setQuantity(item.id, event.target.value)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${item.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                      <QuantityInput label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                       <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
                     {isSelected && !isMobile && (
@@ -552,8 +563,8 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
-              {visibleItems.map((item) => {
+            <Stack key={currentItemPage} spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
+              {pageItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
                 const available = availableByItem.get(item.id) ?? 0;
@@ -575,7 +586,7 @@ export function FactionOrderForm({
                       </Box>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
                         <IconButton size="small" disabled={!quantity} onClick={() => changeQuantity(item.id, -1)}><RemoveIcon fontSize="small" /></IconButton>
-                        <TextField size="small" type="number" value={quantities[item.id] ?? ''} onChange={(event) => setQuantity(item.id, event.target.value)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${item.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                        <QuantityInput label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)}><AddIcon fontSize="small" /></IconButton>
                         {!isMobile && (
                           <Box sx={{ width: 34, flexShrink: 0 }}>
@@ -594,6 +605,7 @@ export function FactionOrderForm({
             </Stack>
           )}
           {!visibleItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+          <OrderCatalogPager count={visibleItems.length} page={currentItemPage} onPageChange={setItemPage} />
         </Box>
 
         {selectedEntryCount > 0 && (
@@ -626,7 +638,7 @@ export function FactionOrderForm({
                     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
                       <Stack direction="row" sx={{ alignItems: 'center' }}>
                         <IconButton size="small" onClick={() => changeQuantity(assembly.id, -1, true)} aria-label={t('Menge verringern', 'Decrease quantity')}><RemoveIcon fontSize="small" /></IconButton>
-                        <TextField size="small" type="number" value={assemblyQuantities[assembly.id] ?? ''} onChange={(event) => setQuantity(assembly.id, event.target.value, true)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${assembly.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                        <QuantityInput label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(assembly.id, 1, true)} aria-label={t('Menge erhöhen', 'Increase quantity')}><AddIcon fontSize="small" /></IconButton>
                       </Stack>
                       <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(assembly.id, true)}>
@@ -647,7 +659,7 @@ export function FactionOrderForm({
                     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
                       <Stack direction="row" sx={{ alignItems: 'center' }}>
                         <IconButton size="small" onClick={() => changeQuantity(item.id, -1)} aria-label={t('Menge verringern', 'Decrease quantity')}><RemoveIcon fontSize="small" /></IconButton>
-                        <TextField size="small" type="number" value={quantities[item.id] ?? ''} onChange={(event) => setQuantity(item.id, event.target.value)} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': `${item.name} ${t('Menge', 'quantity')}` } }} sx={{ width: 72 }} />
+                        <QuantityInput label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                         <IconButton size="small" color="primary" onClick={() => changeQuantity(item.id, 1)} aria-label={t('Menge erhöhen', 'Increase quantity')}><AddIcon fontSize="small" /></IconButton>
                       </Stack>
                       <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(item.id)}>

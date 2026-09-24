@@ -64,6 +64,7 @@ export function FactionOrders() {
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogReady, setDialogReady] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
   const [activePageSize, setActivePageSize] = useState(20);
@@ -253,12 +254,13 @@ export function FactionOrders() {
         onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg"
+        slotProps={{ transition: { onEntered: () => setDialogReady(true), onExit: () => setDialogReady(false) } }}>
         <DialogTitle sx={{ pr: 7 }}>
           {t('Neue Fraktions-Bestellliste', 'New faction order list')}
         </DialogTitle>
         <DialogContent dividers>
-          <FactionOrderForm
+          {dialogReady && <FactionOrderForm
             items={items}
             assemblies={assemblies}
             storageLocations={storageLocations}
@@ -282,7 +284,7 @@ export function FactionOrders() {
                 showSnackbar(error instanceof Error ? error.message : t('Liste konnte nicht erstellt werden', 'Could not create list'), 'error');
               },
             })}
-          />
+          />}
         </DialogContent>
       </Dialog>
     </Box>
