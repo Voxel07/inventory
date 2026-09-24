@@ -16,8 +16,28 @@ import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog } from '../utils/access';
+import { ReadOnlyCatalogList } from '../components/lists/ReadOnlyCatalogList';
+import { getItemStock } from '../utils/stock';
 
 export function Items() {
+    const { user } = useAuth();
+    return canEditCatalog(user) ? <ManagedItems /> : <ReadOnlyItems />;
+}
+
+function ReadOnlyItems() {
+    const t = useLocalizedText();
+    const { data: items = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useItems();
+    return <ReadOnlyCatalogList title={t('Artikel', 'Items')} entries={items.map((item) => {
+        const stock = getItemStock(item);
+        return { id: item.id, name: item.name, subtitle: [item.category, item.subcategory, item.sku].filter(Boolean).join(' · '),
+            description: item.description, available: stock.remaining, total: stock.totalStock,
+            details: [item.hint, item.expand?.storageLocation?.name].filter((value): value is string => Boolean(value)) };
+    })} isLoading={isLoading} isError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />;
+}
+
+function ManagedItems() {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

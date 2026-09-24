@@ -1228,6 +1228,74 @@ class InventoryApiTest {
     }
 
     @Test
+    void factionLeaderCanReadCatalogButCannotChangeItemsOrAssemblies() {
+        String itemId = request().body(Map.of("sku", "LEADER-CATALOG-001", "name", "Leader catalog item",
+                        "category", "Test", "amount", 12, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var assemblyInput = Map.of("name", "Leader catalog assembly", "description", "Read only view",
+                "itemQuantities", Map.of(itemId, 2));
+        String assemblyId = request().body(assemblyInput).post("/api/assemblies")
+                .then().statusCode(200).extract().path("id");
+
+        factionLeaderRequest().queryParam("search", "LEADER-CATALOG-001").get("/api/items").then().statusCode(200)
+                .body("find { it.id == '" + itemId + "' }.stock.available", equalTo(12));
+        factionLeaderRequest().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.available", equalTo(12));
+        factionLeaderRequest().get("/api/assemblies").then().statusCode(200)
+                .body("find { it.id == '" + assemblyId + "' }.name", equalTo("Leader catalog assembly"));
+        factionLeaderRequest().get("/api/assemblies/" + assemblyId).then().statusCode(200);
+
+        var itemInput = Map.of("name", "Changed item", "category", "Test", "value", 0);
+        factionLeaderRequest().body(itemInput).post("/api/items").then().statusCode(403);
+        factionLeaderRequest().body(itemInput).patch("/api/items/" + itemId).then().statusCode(403);
+        factionLeaderRequest().delete("/api/items/" + itemId).then().statusCode(403);
+        factionLeaderRequest().body(assemblyInput).post("/api/assemblies").then().statusCode(403);
+        factionLeaderRequest().body(assemblyInput).patch("/api/assemblies/" + assemblyId).then().statusCode(403);
+        factionLeaderRequest().delete("/api/assemblies/" + assemblyId).then().statusCode(403);
+    }
+
+    @Test
+    void yearlyEventDatesAndSeparateFactionOrdersUseSelectedOccurrence() {
+        String itemId = request().body(Map.of("sku", "TNO-ORDER-2038", "name", "TNO tracker",
+                        "category", "Test", "amount", 200, "value", 0))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String eventId = request().body(Map.of("eventType", "TNO", "name", "TNO 2038",
+                        "startDate", "2038-07-12", "endDate", "2038-07-14", "status", "planned"))
+                .post("/api/events").then().statusCode(200)
+                .body("startDate", equalTo("2038-07-12"))
+                .body("endDate", equalTo("2038-07-14"))
+                .extract().path("id");
+        request().body(Map.of("eventType", "TNO", "name", "TNO summer 2038",
+                        "startDate", "2038-07-12", "endDate", "2038-07-15", "status", "planned"))
+                .patch("/api/events/" + eventId).then().statusCode(200)
+                .body("name", equalTo("TNO summer 2038"))
+                .body("endDate", equalTo("2038-07-15"));
+        String firstOrderId = null;
+        for (String faction : new String[] {"Freiheit", "Stalker"}) {
+            String orderId = request().body(Map.of("eventOccurrenceId", eventId, "eventType", "TNO",
+                            "faction", faction, "eventDate", "2038-01-01",
+                            "requestedQuantities", Map.of(itemId, 100),
+                            "requestedAssemblyQuantities", Map.of()))
+                    .post("/api/orders").then().statusCode(200)
+                    .body("eventOccurrenceId", equalTo(eventId))
+                    .body("eventDate", equalTo("2038-07-12"))
+                    .body("faction", equalTo(faction)).extract().path("id");
+            if (firstOrderId == null) firstOrderId = orderId;
+        }
+        String nextEventId = request().body(Map.of("eventType", "TNO", "name", "TNO 2039",
+                        "startDate", "2039-07-10", "endDate", "2039-07-12", "status", "planned"))
+                .post("/api/events").then().statusCode(200).extract().path("id");
+        request().body(Map.of("eventOccurrenceId", nextEventId, "eventType", "TNO",
+                        "faction", "Stalker", "eventDate", "2038-01-01",
+                        "requestedQuantities", Map.of(itemId, 100),
+                        "requestedAssemblyQuantities", Map.of()))
+                .patch("/api/orders/" + firstOrderId).then().statusCode(200)
+                .body("eventOccurrenceId", equalTo(nextEventId))
+                .body("eventDate", equalTo("2039-07-10"))
+                .body("faction", equalTo("Stalker"));
+    }
+
+    @Test
     void belowMinimumStockAppearsWithoutAnEventOrder() {
         String itemId = request()
                 .body(Map.of("sku", "PROC-MIN-001", "name", "Minimum stock cable", "category", "Equipment",

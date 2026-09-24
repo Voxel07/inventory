@@ -5,10 +5,12 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
+  FormControl,
+  InputLabel,
+  MenuItem,
   DialogContent,
   DialogTitle,
-  Paper,
+  Select,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
@@ -17,12 +19,11 @@ import {
   useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import GroupsIcon from '@mui/icons-material/Groups';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
+import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
@@ -31,7 +32,7 @@ import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
-import { ListPagination } from '../components/shared/ListPagination';
+import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 
@@ -61,6 +62,7 @@ export function FactionOrders() {
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
+  const [selectedEventId, setSelectedEventId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
@@ -71,20 +73,22 @@ export function FactionOrders() {
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
-  const allowedKeys = allowedFactionKeys(currentUser);
+  const allowedKeys = useMemo(() => allowedFactionKeys(currentUser), [currentUser]);
   const selectableEvents = EVENT_TYPES.filter((type) => FACTIONS_BY_EVENT[type]
     .some((faction) => canAccessFaction(currentUser, type, faction)));
   const visibleFactions = FACTIONS_BY_EVENT[eventType]
     .filter((faction) => canAccessFaction(currentUser, eventType, faction));
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
+  const { data: events = [] } = useEventReports();
   const { data: storageLocations = [] } = useStorageLocations();
   const { data: allOrders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = useMemo(
     () => allOrders.filter((order) => order.eventType === eventType
+      && (!selectedEventId || order.eventOccurrenceId === selectedEventId)
       && canAccessFaction(currentUser, order.eventType, order.faction)),
-    [allOrders, currentUser, eventType],
+    [allOrders, currentUser, eventType, selectedEventId],
   );
 
   const activeOrders = useMemo(() => orders.filter((order) => !isHistoricalOrder(order)), [orders]);
@@ -116,6 +120,7 @@ export function FactionOrders() {
     setActivePage(1);
     setHistoryPage(1);
     setEventType(value);
+    setSelectedEventId('');
     const firstFaction = FACTIONS_BY_EVENT[value]
       .find((candidate) => canAccessFaction(currentUser, value, candidate));
     if (firstFaction) setSelectedFaction(firstFaction);
@@ -160,6 +165,27 @@ export function FactionOrders() {
       : point ?? '—';
   }
 
+  function orderEntry(order: FactionOrder, history = false): OrderListEntry {
+    const totals = progress(order);
+    const date = new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US');
+    return {
+      id: order.id,
+      title: history ? `${order.faction} · ${order.orderCode}` : order.orderCode,
+      subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}`,
+      details: <>
+        {order.requestedPickupDate && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
+          {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+        </Typography>}
+        <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>
+          {t('Abholort', 'Pickup location')}: {pickupLabel(order)}
+        </Typography>
+      </>,
+      status: statusLabel(order.status),
+      statusColor: statusColor(order.status),
+      onOpen: () => navigate(`/orders/faction/${order.id}`),
+    };
+  }
+
   return (
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
@@ -188,114 +214,44 @@ export function FactionOrders() {
         {selectableEvents.map((type) => <ToggleButton key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
       </ToggleButtonGroup>
 
+      <FormControl sx={{ minWidth: 280, display: 'block', mb: 3 }}>
+        <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
+        <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }} sx={{ minWidth: 280 }}>
+          <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
+          {events.filter((entry) => entry.eventType === eventType).map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
+        </Select>
+      </FormControl>
+
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
 
-      <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktive Bestellungen', 'Active orders')}</Typography>
-      <Paper sx={{ mb: 4, overflow: 'hidden' }}>
-        {!activeOrderCount && !isLoading && (
-          <Typography color="text.secondary" sx={{ p: 2 }}>
-            {t('Für dieses Event gibt es keine aktiven Bestellungen.', 'There are no active orders for this event.')}
-          </Typography>
-        )}
-        {isLoading && !activeOrderCount && (
-          <Typography color="text.secondary" sx={{ p: 2 }}>{t('Wird geladen …', 'Loading …')}</Typography>
-        )}
-        <Stack>
-          {activeOrderGroups.map(({ faction, orders: factionOrders }) => (
-            <Box
-              key={`${eventType}-${faction}`}
-              sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}
-            >
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ px: 2, py: 1, alignItems: 'center', bgcolor: 'action.hover' }}
-              >
-                <GroupsIcon color="primary" fontSize="small" />
-                <Typography sx={{ flex: 1, fontWeight: 800 }}>{faction}</Typography>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`${factionOrders.length} ${t('aktiv', 'active')}`}
-                />
-              </Stack>
-              <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-                {factionOrders.map((order) => {
-                  const totals = progress(order);
-                  return (
-                    <Button
-                      key={order.id}
-                      color="inherit"
-                      onClick={() => navigate(`/orders/faction/${order.id}`)}
-                      sx={{ px: 2, py: 1.25, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}
-                    >
-                      <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center' }}>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 700 }}>{order.orderCode}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
-                            {['picked_up', 'partially_returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
-                          </Typography>
-                          {order.requestedPickupDate && (
-                            <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-                              {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
-                            </Typography>
-                          )}
-                          <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: order.status === 'ready' ? 800 : 400 }}>
-                            {t('Abholort', 'Pickup location')}: {pickupLabel(order)}
-                          </Typography>
-                        </Box>
-                        <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
-                        <ArrowForwardIcon fontSize="small" />
-                      </Stack>
-                    </Button>
-                  );
-                })}
-              </Stack>
-            </Box>
-          ))}
-        </Stack>
-      </Paper>
-      <ListPagination count={activeOrderCount} page={currentActivePage} onChange={setActivePage} pageSize={activePageSize} onPageSizeChange={(size) => { setActivePageSize(size); setActivePage(1); }} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
-
-      <Typography variant="h6" sx={{ mb: 1 }}>{t('Bestellverlauf', 'Order history')}</Typography>
-      <Paper sx={{ overflow: 'hidden' }}>
-        {!historyOrders.length && !isLoading && (
-          <Typography color="text.secondary" sx={{ p: 2 }}>{t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}</Typography>
-        )}
-        <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-          {pageHistoryOrders.map((order) => {
-            const totals = progress(order);
-            return (
-              <Button
-                key={order.id}
-                color="inherit"
-                onClick={() => navigate(`/orders/faction/${order.id}`)}
-                sx={{ p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}
-              >
-                <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center' }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{order.faction}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {totals.prepared}/{totals.requested}{' '}
-                      {['picked_up', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}
-                    </Typography>
-                    {order.requestedPickupDate && (
-                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-                        {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
-                      </Typography>
-                    )}
-                    <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: order.status === 'ready' ? 800 : 400 }}>{t('Abholort', 'Pickup location')}: {pickupLabel(order)}</Typography>
-                  </Box>
-                  <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
-                  <ArrowForwardIcon fontSize="small" />
-                </Stack>
-              </Button>
-            );
-          })}
-        </Stack>
-      </Paper>
-      <ListPagination count={historyOrders.length} page={currentHistoryPage} onChange={setHistoryPage} pageSize={historyPageSize} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }} />
+      <OrderListSection
+        title={t('Aktive Bestellungen', 'Active orders')}
+        emptyMessage={t('Für dieses Event gibt es keine aktiven Bestellungen.', 'There are no active orders for this event.')}
+        groups={activeOrderGroups.map(({ faction, orders: factionOrders }) => ({
+          label: faction,
+          entries: factionOrders.map((order) => orderEntry(order)),
+        }))}
+        count={activeOrderCount}
+        isLoading={isLoading}
+        page={currentActivePage}
+        pageSize={activePageSize}
+        onPageChange={setActivePage}
+        onPageSizeChange={(size) => { setActivePageSize(size); setActivePage(1); }}
+        loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
+        loadError={isError}
+        onRetry={() => { void refetch(); }}
+      />
+      <OrderListSection
+        title={t('Bestellverlauf', 'Order history')}
+        emptyMessage={t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}
+        groups={[{ entries: pageHistoryOrders.map((order) => orderEntry(order, true)) }]}
+        count={historyOrders.length}
+        isLoading={isLoading}
+        page={currentHistoryPage}
+        pageSize={historyPageSize}
+        onPageChange={setHistoryPage}
+        onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg">
         <DialogTitle sx={{ pr: 7 }}>
@@ -308,6 +264,7 @@ export function FactionOrders() {
             storageLocations={storageLocations}
             orders={allOrders}
             defaultEventType={eventType}
+            defaultEventOccurrenceId={selectedEventId}
             defaultFaction={selectedFaction}
             allowedFactionKeys={allowedKeys ?? undefined}
             isLoading={createOrder.isPending}

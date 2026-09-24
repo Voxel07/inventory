@@ -1,18 +1,18 @@
 import { Dialog } from '../shared/ClosableDialog';
 import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Checkbox, Chip, DialogActions, DialogContent, DialogTitle,
-  FormControlLabel, InputAdornment, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, DialogActions, DialogContent, DialogTitle, Divider,
+  FormControlLabel, InputAdornment, ListSubheader, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useReturnOrder, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemAssets } from '../../services/inventoryService';
 import { useItems } from '../../hooks/useItems';
-import type { AssetInstance, GeneralOrder, Item } from '../../types';
+import { EVENT_TYPES, type AssetInstance, type GeneralOrder, type Item } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { Link as RouterLink } from 'react-router-dom';
-import { ListPagination } from '../shared/ListPagination';
+import { OrderListSection, type OrderListEntry } from './OrderListSection';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -39,8 +39,9 @@ export function GeneralOrders() {
   const [itemSearch, setItemSearch] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
+  const [pageSize, setPageSize] = useState(20);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(20);
   const [pickup, setPickup] = useState<GeneralOrder | null>(null);
   const [assets, setAssets] = useState<Record<string, AssetInstance[]>>({});
   const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({});
@@ -50,13 +51,19 @@ export function GeneralOrders() {
 
   const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const eventMap = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
-  const activeEvents = useMemo(() => events.filter((event) => event.status === 'planned'), [events]);
+  const activeEvents = events;
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
     return !term ? orders : orders.filter((order) => `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
   }, [orders, search]);
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleOrders.length / effectivePageSize)));
-  const pageOrders = visibleOrders.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+  const activeOrders = visibleOrders.filter((order) => !['returned', 'closed', 'cancelled'].includes(order.status));
+  const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
+  const activeSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
+  const historySize = historyPageSize === -1 ? Number.MAX_SAFE_INTEGER : historyPageSize;
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(activeOrders.length / activeSize)));
+  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / historySize)));
+  const pageOrders = activeOrders.slice((currentPage - 1) * activeSize, currentPage * activeSize);
+  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * historySize, currentHistoryPage * historySize);
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return [...items].filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term))
@@ -115,14 +122,44 @@ export function GeneralOrders() {
   }
   const selectedEvent = eventMap.get(eventId);
   const editItem = (item: Item) => (
-    <Stack key={item.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-      <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-      <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available')}: {item.stock?.available ?? item.amount ?? 0}</Typography>
-      <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={quantities[item.id] ?? ''}
-        onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
-        slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 90 }} />
-    </Stack>
+    <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{item.category} · {t('Verfügbar', 'Available')}: {item.stock?.available ?? item.amount ?? 0}</Typography>
+        </Box>
+        <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={quantities[item.id] ?? ''}
+          onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+          slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 90 }} />
+      </Stack>
+    </Paper>
   );
+
+  function orderEntry(order: GeneralOrder): OrderListEntry {
+    const itemCount = Object.values(order.requestedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0);
+    const statusColor: OrderListEntry['statusColor'] = order.status === 'ready' || order.status === 'closed'
+      ? 'success' : order.status === 'submitted' ? 'info'
+        : order.status === 'picked_up' ? 'secondary'
+          : order.status === 'partially_returned' ? 'warning' : order.status === 'cancelled' ? 'error' : 'default';
+    return {
+      id: order.id,
+      title: order.name,
+      subtitle: <>{order.purpose} · {eventName(order.eventOccurrenceId)}</>,
+      details: <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        {t('Artikel', 'Items')}: {itemCount} · {Object.entries(order.requestedQuantities ?? {}).map(([id, quantity]) => `${order.itemNames?.[id] ?? itemName(id)} × ${quantity}`).join(', ')}
+      </Typography>,
+      status: t(...statusLabels[order.status ?? 'draft']),
+      statusColor,
+      actions: ['closed', 'cancelled'].includes(order.status) ? undefined : <>
+        {order.status === 'draft' && <><Button size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
+        {order.status === 'submitted' && <Button size="small" variant="contained" onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
+        {order.status === 'ready' && <Button size="small" variant="contained" onClick={() => void openPickup(order)}>{t('Ausgeben', 'Pick up')}</Button>}
+        {['picked_up', 'partially_returned'].includes(order.status) && <Button size="small" variant="contained" onClick={() => { setReturning(order); setReturnInputs({}); setConsumedInputs({}); }}>{t('Rückgabe erfassen', 'Record return')}</Button>}
+        {order.status === 'returned' && <Button size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
+        {['draft', 'submitted', 'ready'].includes(order.status) && <Button size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
+      </>,
+    };
+  }
 
   return <Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
@@ -131,45 +168,70 @@ export function GeneralOrders() {
       <Button variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
     <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
-      onChange={(event) => { setSearch(event.target.value); setPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
+      onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoryPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
       sx={{ mb: 2, maxWidth: 520 }} />
-    {isLoading && <LinearProgress sx={{ mb: 2 }} />}
     {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
-    {!isLoading && !visibleOrders.length && <Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Noch keine passenden Bestellungen vorhanden.', 'No matching orders yet.')}</Typography></Paper>}
-    <Stack spacing={1.5}>{pageOrders.map((order) => <Paper key={order.id} sx={{ p: 2 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-        <Box><Typography variant="h6">{order.name}</Typography><Typography>{order.purpose}</Typography>
-          <Typography variant="body2" color="text.secondary">{eventName(order.eventOccurrenceId)}</Typography></Box>
-        <Chip size="small" label={t(...statusLabels[order.status ?? 'draft'])} />
-      </Stack>
-      <Stack spacing={0.3} sx={{ mt: 1 }}>
-        {Object.entries(order.requestedQuantities ?? {}).map(([id, quantity]) => <Typography key={id} variant="body2">
-          {order.itemNames?.[id] ?? itemName(id)}: {quantity}{(order.handedOverQuantities?.[id] ?? 0) > 0 && ` · ${t('Ausgegeben', 'Picked up')}: ${order.handedOverQuantities[id]} · ${t('Zurück', 'Returned')}: ${order.returnedQuantities?.[id] ?? 0}`}
-        </Typography>)}
-      </Stack>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
-        {order.status === 'draft' && <><Button size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
-        {order.status === 'submitted' && <Button size="small" variant="contained" onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
-        {order.status === 'ready' && <Button size="small" variant="contained" onClick={() => void openPickup(order)}>{t('Ausgeben', 'Pick up')}</Button>}
-        {['picked_up', 'partially_returned'].includes(order.status) && <Button size="small" variant="contained" onClick={() => { setReturning(order); setReturnInputs({}); setConsumedInputs({}); }}>{t('Rückgabe erfassen', 'Record return')}</Button>}
-        {order.status === 'returned' && <Button size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
-        {['draft', 'submitted', 'ready'].includes(order.status) && <Button size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
-      </Stack>
-    </Paper>)}</Stack>
-    <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleOrders.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+    <OrderListSection
+      title={t('Aktive Bestellungen', 'Active orders')}
+      emptyMessage={t('Noch keine passenden aktiven Bestellungen vorhanden.', 'No matching active orders yet.')}
+      groups={[{ entries: pageOrders.map(orderEntry) }]}
+      count={activeOrders.length}
+      isLoading={isLoading}
+      page={currentPage}
+      pageSize={pageSize}
+      onPageChange={setPage}
+      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
+      loadError={isError}
+      onRetry={() => { void refetch(); }}
+    />
+    <OrderListSection
+      title={t('Bestellverlauf', 'Order history')}
+      emptyMessage={t('Noch kein abgeschlossener Bestellverlauf vorhanden.', 'No completed order history yet.')}
+      groups={[{ entries: pageHistoryOrders.map(orderEntry) }]}
+      count={historyOrders.length}
+      isLoading={isLoading}
+      page={currentHistoryPage}
+      pageSize={historyPageSize}
+      onPageChange={setHistoryPage}
+      onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
+    />
 
-    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="md">
+    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg">
       <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>
         <DialogContent dividers><Stack spacing={2}>
           <TextField autoFocus required label={t('Name', 'Name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
           <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
           <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
             <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
-            {activeEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name || event.eventType} · {new Date(event.eventDate).toLocaleDateString()}</MenuItem>)}
+            {EVENT_TYPES.flatMap((type) => {
+              const occurrences = activeEvents.filter((event) => event.eventType === type);
+              return occurrences.length ? [
+                <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,
+                ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}{event.endDate !== event.startDate ? ` – ${event.endDate}` : ''}</MenuItem>),
+              ] : [];
+            })}
           </TextField>
-          {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein geplantes Event an.', 'Create a planned event first.')}</Alert>}
+          {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
+          <Divider />
+          <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
           <TextField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} />
-          <Box sx={{ maxHeight: 350, overflowY: 'auto' }}><Stack spacing={1}>{visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0).map(editItem)}</Stack></Box>
+          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0).map(editItem)}</Stack></Box>
+          {Object.values(quantities).some((value) => Number(value) > 0) && <Box>
+            <Divider sx={{ mb: 2 }} />
+            <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktuelle Bestellung', 'Current order')}</Typography>
+            <Stack spacing={0.5}>
+              {items.filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
+                  <TextField type="number" size="small" label={t('Menge', 'Quantity')} value={quantities[item.id] ?? ''}
+                    onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+                    slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 90 }} />
+                  <Button size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
+                </Stack>
+              </Paper>)}
+            </Stack>
+          </Box>}
         </Stack></DialogContent><DialogActions><Button onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
           <Button type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>{t('Speichern', 'Save')}</Button></DialogActions>
       </Box>

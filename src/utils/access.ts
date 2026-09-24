@@ -10,6 +10,14 @@ export function canManageInventory(user: User | null | undefined): boolean {
     'event_planner', 'maintenance_crew'].includes(effectiveAccess(user));
 }
 
+export function canViewCatalog(user: User | null | undefined): boolean {
+  return canManageInventory(user) || effectiveAccess(user) === 'faction_leader';
+}
+
+export function canEditCatalog(user: User | null | undefined): boolean {
+  return ['hq_admin', 'warehouse_crew'].includes(effectiveAccess(user));
+}
+
 export function canManageUsers(user: User | null | undefined): boolean {
   return effectiveAccess(user) === 'hq_admin';
 }

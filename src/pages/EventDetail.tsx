@@ -41,6 +41,8 @@ export function EventDetail() {
   const [editing, setEditing] = useState(false);
   const [eventType, setEventType] = useState<EventType>('DE');
   const [eventDate, setEventDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [name, setName] = useState('');
   const [status, setStatus] = useState<EventReportStatus>('completed');
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [used, setUsed] = useState<QuantityInputs>({});
@@ -51,6 +53,8 @@ export function EventDetail() {
     if (!report) return;
     setEventType(report.eventType);
     setEventDate(report.eventDate.slice(0, 10));
+    setEndDate(report.endDate?.slice(0, 10) ?? report.eventDate.slice(0, 10));
+    setName(report.name);
     setStatus(report.status);
     setPlanned(toQuantityInputs(report.plannedQuantities));
     setUsed(toQuantityInputs(report.usedQuantities));
@@ -99,7 +103,7 @@ export function EventDetail() {
   }
 
   function save() {
-    if (!report || !eventDate) return;
+    if (!report || !eventDate || !endDate || endDate < eventDate || !name.trim()) return;
     const knownItemIds = [...new Set([
       ...Object.keys(plannedQuantities),
       ...Object.keys(usedQuantities),
@@ -109,6 +113,9 @@ export function EventDetail() {
       data: {
         eventType,
         eventDate: new Date(`${eventDate}T12:00:00.000Z`).toISOString(),
+        startDate: eventDate,
+        endDate,
+        name: name.trim(),
         status,
         itemIds: knownItemIds,
         plannedQuantities,
@@ -154,7 +161,7 @@ export function EventDetail() {
               label={report.status === 'completed' ? t('Abgeschlossen', 'Completed') : t('Geplant', 'Planned')}
             />
           </Stack>
-          <Typography color="text.secondary">{new Date(report.eventDate).toLocaleDateString(locale)}</Typography>
+          <Typography color="text.secondary">{new Date(report.eventDate).toLocaleDateString(locale)}{report.endDate !== report.startDate ? ` – ${new Date(report.endDate).toLocaleDateString(locale)}` : ''}</Typography>
         </Box>
         {!editing ? (
           <Button variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
@@ -163,7 +170,7 @@ export function EventDetail() {
         ) : (
           <Stack direction="row" spacing={1}>
             <Button startIcon={<CloseIcon />} onClick={cancelEditing}>{t('Abbrechen', 'Cancel')}</Button>
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate}>
+            <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
               {t('Änderungen speichern', 'Save changes')}
             </Button>
           </Stack>
@@ -188,11 +195,13 @@ export function EventDetail() {
       {editing && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack spacing={2}>
+            <TextField fullWidth label={t('Eventname', 'Event name')} value={name} onChange={(event) => setName(event.target.value)} required />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField select fullWidth label={t('Event', 'Event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
                 {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
               </TextField>
-              <TextField fullWidth type="date" label={t('Eventdatum', 'Event date')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
+              <TextField fullWidth type="date" label={t('Startdatum', 'Start date')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
+              <TextField fullWidth type="date" label={t('Enddatum', 'End date')} value={endDate} onChange={(event) => setEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(endDate && endDate < eventDate)} required />
               <TextField select fullWidth label={t('Status', 'Status')} value={status} onChange={(event) => setStatus(event.target.value as EventReportStatus)}>
                 <MenuItem value="planned">{t('Geplant', 'Planned')}</MenuItem>
                 <MenuItem value="completed">{t('Abgeschlossen', 'Completed')}</MenuItem>

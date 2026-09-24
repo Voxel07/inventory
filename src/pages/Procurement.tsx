@@ -9,6 +9,7 @@ import {
   Chip,
   FormControl,
   InputLabel,
+  ListSubheader,
   MenuItem,
   Paper,
   Select,
@@ -36,6 +37,7 @@ import { Link } from '@mui/material';
 import { getProcurementDeficits, type ProcurementDeficit } from '../services/procurementService';
 import { ProcurementOrders } from '../components/procurement/ProcurementOrders';
 import { useEventReports } from '../hooks/useEvents';
+import { EVENT_TYPES } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
@@ -282,11 +284,13 @@ export function Procurement() {
         <InputLabel>{t('Event-Umfang', 'Event scope')}</InputLabel>
         <Select value={eventId} label={t('Event-Umfang', 'Event scope')} onChange={(event) => setEventId(event.target.value)}>
           <MenuItem value="">{t('Alle geplanten Events', 'All planned events')}</MenuItem>
-          {events.map((event) => (
-            <MenuItem key={event.id} value={event.id}>
-              {event.name || event.eventType} · {new Date(event.eventDate).toLocaleDateString()}
-            </MenuItem>
-          ))}
+          {EVENT_TYPES.flatMap((type) => {
+            const occurrences = events.filter((event) => event.eventType === type);
+            return occurrences.length ? [
+              <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,
+              ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}{event.endDate !== event.startDate ? ` – ${event.endDate}` : ''}</MenuItem>),
+            ] : [];
+          })}
         </Select>
       </FormControl>
 

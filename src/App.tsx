@@ -5,7 +5,7 @@ import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
-import { InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
+import { CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { canManageInventory } from './utils/access';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
@@ -398,10 +398,10 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<HomeRoute />} />
               <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
-              <Route path="/items" element={<InventoryManagerGuard><Items /></InventoryManagerGuard>} />
+              <Route path="/items" element={<CatalogAccessGuard><Items /></CatalogAccessGuard>} />
               <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
               <Route path="/items/:itemId/assets/:assetId" element={<InventoryManagerGuard><AssetDetail /></InventoryManagerGuard>} />
-              <Route path="/assemblies" element={<InventoryManagerGuard><Assemblies /></InventoryManagerGuard>} />
+              <Route path="/assemblies" element={<CatalogAccessGuard><Assemblies /></CatalogAccessGuard>} />
               <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
               <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
               <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />

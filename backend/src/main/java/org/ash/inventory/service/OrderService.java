@@ -114,12 +114,32 @@ public class OrderService {
             throw ApiException.conflict("Only draft or submitted orders can be edited");
         }
         var before = requestedContents(order);
+        var previousEventId = order.eventOccurrence.id;
+        var previousFactionId = order.faction.id;
+        var event = input.eventOccurrenceId() == null
+                ? order.eventOccurrence
+                : required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
+        var faction = input.factionId() != null
+                ? required(Faction.class, input.factionId(), "Faction")
+                : input.faction() == null ? order.faction : catalog.findOrCreateFaction(event.eventType, input.faction());
+        if (!faction.eventType.equals(event.eventType))
+            throw ApiException.badRequest("Faction must belong to the selected event type");
+        assertFactionAccess(actors.current(), faction);
+        if (!order.faction.id.equals(faction.id)
+                || !order.eventOccurrence.eventType.equals(event.eventType)
+                || order.eventOccurrence.startDate.getYear() != event.startDate.getYear()) {
+            order.orderCode = nextOrderCode(event, faction);
+        }
+        order.eventOccurrence = event;
+        order.faction = faction;
         order.requestedPickupDate = input.requestedPickupDate();
         order.collectorName = input.collectorName();
         order.notes = input.notes();
         replaceLines(order, input);
-        audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(),
-                contentChanges(before, requestedContents(order)));
+        var changes = contentChanges(before, requestedContents(order));
+        if (!previousEventId.equals(event.id)) changes.put("eventOccurrenceId", event.id.toString());
+        if (!previousFactionId.equals(faction.id)) changes.put("factionId", faction.id.toString());
+        audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(), changes);
         orderEvent("order.updated", order, actors.current(), null);
         return order;
     }

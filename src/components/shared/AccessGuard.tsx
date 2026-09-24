@@ -2,13 +2,22 @@ import { Alert } from '@mui/material';
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { canAccessProcurement, canManageInventory } from '../../utils/access';
+import { canAccessProcurement, canManageInventory, canViewCatalog } from '../../utils/access';
 import { useLocalizedText } from '../../utils/naming';
 
 export function InventoryManagerGuard({ children }: { children: ReactNode }) {
   const t = useLocalizedText();
   const { user } = useAuth();
   if (!canManageInventory(user)) {
+    return <Navigate to="/orders?tab=faction" replace state={{ accessDenied: t('Zugriff verweigert', 'Access denied') }} />;
+  }
+  return children;
+}
+
+export function CatalogAccessGuard({ children }: { children: ReactNode }) {
+  const t = useLocalizedText();
+  const { user } = useAuth();
+  if (!canViewCatalog(user)) {
     return <Navigate to="/orders?tab=faction" replace state={{ accessDenied: t('Zugriff verweigert', 'Access denied') }} />;
   }
   return children;

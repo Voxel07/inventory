@@ -40,7 +40,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import BuildIcon from '@mui/icons-material/Build';
 import { EVENT_TYPES, type EventType } from '../../types';
-import { canAccessProcurement, canManageInventory } from '../../utils/access';
+import { canAccessProcurement, canManageInventory, canViewCatalog } from '../../utils/access';
 
 const DRAWER_WIDTH = 260;
 
@@ -78,7 +78,13 @@ export function Navigation() {
     ];
     const navItems = isManager
         ? managerNavItems
-        : [{ label: t('nav.orders'), path: '/orders', icon: <GroupsIcon /> }];
+        : [
+            ...(canViewCatalog(user) ? [
+                { label: t('nav.items'), path: '/items', icon: <InventoryIcon /> },
+                { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
+            ] : []),
+            { label: t('nav.orders'), path: '/orders', icon: <GroupsIcon /> },
+        ];
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -224,6 +230,7 @@ export function Navigation() {
                         value={
                             location.pathname === '/' ? '/' :
                             location.pathname.startsWith('/items') ? '/items' :
+                            location.pathname.startsWith('/assemblies') ? '/assemblies' :
                             location.pathname.startsWith('/checked-out') ? '/checked-out' :
                             location.pathname.startsWith('/orders') ? '/orders' :
                             false
@@ -237,6 +244,8 @@ export function Navigation() {
                         {isManager && <BottomNavigationAction label={t('nav.home')} value="/" icon={<DashboardIcon />} />}
                         {isManager && <BottomNavigationAction label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
                         {isManager && <BottomNavigationAction label={t('nav.return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
+                        {!isManager && canViewCatalog(user) && <BottomNavigationAction label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
+                        {!isManager && canViewCatalog(user) && <BottomNavigationAction label={t('nav.assemblies')} value="/assemblies" icon={<CategoryIcon />} />}
                         {!isManager && <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<GroupsIcon />} />}
                         <BottomNavigationAction label={t('nav.more')} value="more" icon={<MoreHorizIcon />} />
                     </BottomNavigation>

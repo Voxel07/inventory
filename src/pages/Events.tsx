@@ -42,11 +42,13 @@ export function Events() {
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [eventEndDate, setEventEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedEventId, setSelectedEventId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newEndDate, setNewEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
   const { data: items, isLoading: itemsLoading } = useItems();
@@ -85,14 +87,17 @@ export function Events() {
 
   useEffect(() => {
     setEventDate(currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-  }, [eventType, currentEvent?.id, currentEvent?.eventDate]);
+    setEventEndDate(currentEvent?.endDate?.slice(0, 10) ?? currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  }, [eventType, currentEvent?.id, currentEvent?.eventDate, currentEvent?.endDate]);
 
   function createEvent() {
-    if (!newName.trim() || !newDate) return;
+    if (!newName.trim() || !newDate || !newEndDate || newEndDate < newDate) return;
     createReport.mutate({
       eventType,
       name: newName.trim(),
       eventDate: `${newDate}T12:00:00.000Z`,
+      startDate: newDate,
+      endDate: newEndDate,
       status: 'planned',
       itemIds: [],
       plannedQuantities: {},
@@ -116,11 +121,15 @@ export function Events() {
   }
 
   function save(status: EventReportStatus) {
+    if (!selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate) return;
     const plannedQuantities = toNonNegativeQuantities(planned);
 
     const data = {
       eventType,
       eventDate: new Date(`${eventDate}T12:00:00.000Z`).toISOString(),
+      name: selectedEvent?.name,
+      startDate: eventDate,
+      endDate: eventEndDate,
       status,
       itemIds: [],
       plannedQuantities,
@@ -171,12 +180,13 @@ export function Events() {
         <TextField select label={t('Event auswählen', 'Select event')} value={selectedEvent?.id ?? ''}
           onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: 260 }}>
           {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
-            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {report.startDate}{report.endDate !== report.startDate ? ` – ${report.endDate}` : ''}
           </MenuItem>)}
         </TextField>
         <Button variant="contained" onClick={() => {
           setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
           setNewDate(new Date().toISOString().slice(0, 10));
+          setNewEndDate(new Date().toISOString().slice(0, 10));
           setCreateOpen(true);
         }}>{t('Event erstellen', 'Create event')}</Button>
         {selectedEvent?.status === 'planned' && <Button variant="outlined" onClick={() => setPlanOpen(true)}>{t('Plan bearbeiten', 'Edit plan')}</Button>}
@@ -275,12 +285,13 @@ export function Events() {
         <Stack spacing={2}>
           <Typography variant="h6">{t('Plan oder Bericht speichern', 'Save plan or report')}</Typography>
           <TextField
-            label={t('Eventdatum', 'Event date')}
+            label={t('Startdatum', 'Start date')}
             type="date"
             value={eventDate}
             onChange={(event) => setEventDate(event.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}
           />
+          <TextField label={t('Enddatum', 'End date')} type="date" value={eventEndDate} onChange={(event) => setEventEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(eventEndDate && eventEndDate < eventDate)} />
           <TextField
             label={t('Anmerkungen', 'Notes')}
             value={notes}
@@ -289,10 +300,10 @@ export function Events() {
             minRows={2}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button startIcon={<SaveIcon />} variant="outlined" disabled={!selectedEvent || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
+            <Button startIcon={<SaveIcon />} variant="outlined" disabled={!selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
               {t('Als Planung speichern', 'Save as plan')}
             </Button>
-            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={!selectedEvent || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
+            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={!selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
               {t('Als abgeschlossen speichern', 'Save as completed')}
             </Button>
           </Stack>
@@ -350,7 +361,7 @@ export function Events() {
           <TableBody>
             {reports?.map((report) => (
               <TableRow key={report.id}>
-                <TableCell>{report.name || report.eventType} · {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}</TableCell>
+                <TableCell>{report.name || report.eventType} · {report.startDate}{report.endDate !== report.startDate ? ` – ${report.endDate}` : ''}</TableCell>
                 <TableCell>
                   <Chip
                     size="small"
@@ -377,9 +388,10 @@ export function Events() {
           <Stack spacing={2}>
             <TextField required autoFocus label={t('Eventname', 'Event name')} value={newName} onChange={(event) => setNewName(event.target.value)} />
             <TextField required type="date" label={t('Eventdatum', 'Event date')} value={newDate} onChange={(event) => setNewDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField required type="date" label={t('Enddatum', 'End date')} value={newEndDate} onChange={(event) => setNewEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: newDate } }} error={Boolean(newEndDate && newEndDate < newDate)} />
           </Stack>
         </DialogContent>
-        <DialogActions><Button onClick={() => setCreateOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={!newName.trim() || !newDate || createReport.isPending} onClick={createEvent}>{t('Erstellen', 'Create')}</Button></DialogActions>
+        <DialogActions><Button onClick={() => setCreateOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={!newName.trim() || !newDate || !newEndDate || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('Erstellen', 'Create')}</Button></DialogActions>
       </Dialog>
       <Dialog open={planOpen} onClose={() => setPlanOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('Event planen', 'Plan event')}: {selectedEvent?.name}</DialogTitle>

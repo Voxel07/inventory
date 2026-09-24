@@ -10,6 +10,8 @@ export interface EventReport {
   eventType: EventType;
   name: string;
   eventDate: string;
+  startDate: string;
+  endDate: string;
   status: EventReportStatus;
   itemIds: string[];
   plannedQuantities: Record<string, number>;
@@ -28,6 +30,8 @@ export interface EventReportFormData {
   eventType: EventType;
   name?: string;
   eventDate: string;
+  startDate?: string;
+  endDate?: string;
   status: EventReportStatus;
   itemIds: string[];
   plannedQuantities: Record<string, number>;

@@ -14,8 +14,34 @@ import { useCrudManager } from '../hooks/useCrudManager';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog } from '../utils/access';
+import { ReadOnlyCatalogList } from '../components/lists/ReadOnlyCatalogList';
+import { assemblyAvailability } from '../utils/factionOrderQuantities';
+import { getItemStock } from '../utils/stock';
 
 export function Assemblies() {
+    const { user } = useAuth();
+    return canEditCatalog(user) ? <ManagedAssemblies /> : <ReadOnlyAssemblies />;
+}
+
+function ReadOnlyAssemblies() {
+    const t = useLocalizedText();
+    const { data: assemblies = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useAssemblies();
+    const { data: items = [], isLoading: itemsLoading } = useItems();
+    const stockByItemId = new Map(items.map((item) => [item.id, getItemStock(item)]));
+    return <ReadOnlyCatalogList title={t('Baugruppen', 'Assemblies')} entries={assemblies.map((assembly) => ({
+        id: assembly.id,
+        name: assembly.name,
+        subtitle: `${Object.keys(assembly.itemQuantities ?? {}).length} ${t('Komponenten', 'components')}`,
+        description: assembly.description,
+        available: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.remaining ?? 0),
+        total: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.totalStock ?? 0),
+        details: Object.entries(assembly.itemQuantities ?? {}).map(([itemId, quantity]) => `${quantity} × ${items.find((item) => item.id === itemId)?.name ?? assembly.expand?.itemIds?.find((item) => item.id === itemId)?.name ?? itemId}`),
+    }))} isLoading={isLoading || itemsLoading} isError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />;
+}
+
+function ManagedAssemblies() {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

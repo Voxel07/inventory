@@ -366,6 +366,7 @@ public class CatalogService {
         event.name = input.name() == null ? event.name : input.name();
         event.startDate = input.startDate();
         event.endDate = input.endDate() == null ? input.startDate() : input.endDate();
+        if (event.endDate.isBefore(event.startDate)) throw ApiException.badRequest("Event end date cannot be before its start date");
         event.status = input.status() == null ? event.status : input.status();
         event.notes = input.notes();
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
