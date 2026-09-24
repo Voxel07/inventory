@@ -2,6 +2,8 @@
 
 Responsive inventory and custody management for event logistics. The repository contains the React PWA and its transactional Quarkus/PostgreSQL backend.
 
+The [React Native client](mobile/README.md) provides Android, iOS, and desktop browser access focused on QR scanning and offline stock transactions.
+
 ## Development
 
 Frontend (Bun):

@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "ASH Inventory",
+    "slug": "ash-inventory",
+    "scheme": "ashinventory",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.ash.inventory"
+    },
+    "android": {
+      "package": "org.ash.inventory",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow ASH Inventory to scan QR and barcodes.",
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "57640a22-b6c2-41de-9110-cb14b047d79c"
+      }
+    },
+    "owner": "ash_matze"
+  }
+}

@@ -6,3 +6,4 @@ backend/data/
 .env
 .vscode
 .quarkus/
+tmp/
