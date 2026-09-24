@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   FormControl,
   InputLabel,
   MenuItem,
@@ -12,6 +13,7 @@ import {
   DialogTitle,
   Select,
   Stack,
+  Tooltip,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -83,7 +85,7 @@ export function FactionOrders() {
   const { data: assemblies = [] } = useAssemblies();
   const { data: events = [] } = useEventReports();
   const { data: storageLocations = [] } = useStorageLocations();
-  const { data: allOrders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
+  const { data: allOrders = [], isLoading, isError, isComplete, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = useMemo(
     () => allOrders.filter((order) => order.eventType === eventType
@@ -93,6 +95,13 @@ export function FactionOrders() {
   );
 
   const activeOrders = useMemo(() => orders.filter((order) => !isHistoricalOrder(order)), [orders]);
+  const factionOverview = visibleFactions.map((faction) => {
+    const factionOrders = orders.filter((order) => order.faction === faction && order.status !== 'cancelled');
+    const state = factionOrders.some((order) => order.status !== 'draft')
+      ? 'finished'
+      : factionOrders.length ? 'draft' : 'none';
+    return { faction, state };
+  });
   const currentActivePage = Math.min(activePage, Math.max(1, Math.ceil(activeOrders.length / activeSize)));
   const pageActiveOrders = activeOrders.slice((currentActivePage - 1) * activeSize, currentActivePage * activeSize);
   const activeOrderGroups = useMemo(() => [...new Set(pageActiveOrders
@@ -204,24 +213,46 @@ export function FactionOrders() {
         </Button>
       </Stack>
 
-      {!isManager && <Box sx={{ mb: 2 }}><FactionAccessNotice /></Box>}
-
-      <ToggleButtonGroup
+      {selectableEvents.length > 1 && <ToggleButtonGroup
         exclusive
         value={eventType}
         onChange={(_event, value: EventType | null) => selectEvent(value)}
         sx={{ mb: 3, flexWrap: 'wrap' }}
       >
         {selectableEvents.map((type) => <ToggleButton key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
-      </ToggleButtonGroup>
+      </ToggleButtonGroup>}
 
-      <FormControl sx={{ minWidth: 280, display: 'block', mb: 3 }}>
-        <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
-        <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }} sx={{ minWidth: 280 }}>
-          <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
-          {events.filter((entry) => entry.eventType === eventType).map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
-        </Select>
-      </FormControl>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
+        <FormControl sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
+          <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
+          <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }}>
+            <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
+            {events.filter((entry) => entry.eventType === eventType).map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>
+          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {t('Bestellstatus der Fraktionen', 'Faction order status')}
+          </Typography>
+          {isLoading || (!isComplete && !isError) ? <CircularProgress size={20} aria-label={t('Bestellstatus wird geladen', 'Loading order status')} /> : !isError && (
+            <Stack direction="row" sx={{ flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 1 }}>
+              {factionOverview.map(({ faction, state }) => {
+                const label = state === 'finished' ? t('Fertig', 'Finished')
+                  : state === 'draft' ? t('Entwurf', 'Draft') : t('Keine Bestellung', 'No order');
+                const color = state === 'finished' ? 'success.main'
+                  : state === 'draft' ? 'warning.main' : 'error.main';
+                return <Tooltip key={faction} title={label} arrow>
+                  <Stack direction="row" spacing={0.75} aria-label={`${faction}: ${label}`} sx={{ alignItems: 'center', flexShrink: 0, px: 1, py: 0.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Box aria-hidden="true" sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                    <Typography variant="body2" sx={{ lineHeight: 1.2, whiteSpace: 'nowrap' }}>{faction}</Typography>
+                  </Stack>
+                </Tooltip>;
+              })}
+            </Stack>
+          )}
+        </Box>
+        {!isManager && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
+      </Stack>
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
 
