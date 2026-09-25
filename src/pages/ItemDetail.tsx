@@ -453,7 +453,7 @@ export function ItemDetail() {
                 )}
 
                 {item.hint && <Grid size={{ xs: 12, md: 6 }}>
-                    <Alert severity="info" sx={{ height: '100%', alignItems: 'center' }}>
+                    <Alert severity="info" sx={{ height: '100%', alignItems: 'flex-start' }}>
                         <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
                     </Alert>

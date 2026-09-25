@@ -1,46 +1,16 @@
-import { MediaImage } from '../common/MediaImage';
-import { useEffect, useState, useMemo } from 'react';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TableSortLabel,
-    Paper,
-    Skeleton,
-    Typography,
-    TextField,
-    Box,
-    Button,
-    MenuItem,
-    Stack,
-    useMediaQuery,
-    useTheme,
-    Grid,
-    Card,
-    CardContent,
-    Checkbox,
-    Chip,
-    IconButton,
-    ListItemIcon,
-    Menu,
-    ToggleButton,
-    ToggleButtonGroup,
-} from '@mui/material';
+import { useMemo, useState } from 'react';
+import { Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import GridViewIcon from '@mui/icons-material/GridView';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
+import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock } from '../../utils/stock';
-import { useLocalizedText } from '../../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
-import { itemImageUrl } from '../../utils/itemImages';
-import { ListPagination } from '../shared/ListPagination';
+import { CatalogInstructionsDialog } from './CatalogInstructionsDialog';
 
 interface Props {
     items: Item[] | undefined;
@@ -53,404 +23,104 @@ interface Props {
     onDeleteMany?: (ids: string[]) => void;
 }
 
-type SortField = 'value' | 'stock' | null;
-type SortDir = 'asc' | 'desc';
-type ViewMode = 'list' | 'tiles';
-
-function stockColor(remaining: number, minStock: number) {
-    if (remaining <= 0) return 'error.main';
-    if (remaining <= minStock) return 'warning.main';
-    return 'success.main';
-}
+type ItemRow = {
+    id: string;
+    item: Item;
+    name: string;
+    category: string;
+    stock: number;
+    totalStock: number;
+    damaged: number;
+    value: number;
+    location: string;
+    events: string;
+};
 
 export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
     const t = useLocalizedText();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const language = useAppLanguage();
     const activeEventType = useUIStore((state) => state.activeEventType);
     const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-    const [sortField, setSortField] = useState<SortField>(null);
-    const [sortDir, setSortDir] = useState<SortDir>('asc');
-    const [viewMode, setViewMode] = useState<ViewMode>(() => {
-        const saved = window.localStorage.getItem(isMobile ? 'inventory-item-view-mobile' : 'inventory-item-view-desktop');
-        return saved === 'list' || saved === 'tiles' ? saved : isMobile ? 'tiles' : 'list';
-    });
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-    const [actionMenu, setActionMenu] = useState<{ anchorEl: HTMLElement; item: Item } | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [infoItem, setInfoItem] = useState<Item | null>(null);
 
-    useEffect(() => {
-        const saved = window.localStorage.getItem(isMobile ? 'inventory-item-view-mobile' : 'inventory-item-view-desktop');
-        setViewMode(saved === 'list' || saved === 'tiles' ? saved : isMobile ? 'tiles' : 'list');
-    }, [isMobile]);
-    useEffect(() => {
-        const validIds = new Set(items?.map((item) => item.id) ?? []);
-        setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
-    }, [items]);
+    const rows = useMemo<ItemRow[]>(() => (items ?? [])
+        .filter((item) => item.eventTypes?.includes(activeEventType))
+        .filter((item) => `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`
+            .toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+        .map((item) => {
+            const stock = getItemStock(item);
+            const location = item.expand?.storageLocation;
+            return {
+                id: item.id,
+                item,
+                name: item.name,
+                category: [item.category, item.subcategory].filter(Boolean).join(' · '),
+                stock: stock.remaining,
+                totalStock: stock.totalStock,
+                damaged: stock.damaged,
+                value: item.value ?? 0,
+                location: location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
+                events: item.eventTypes?.join(', ') || '—',
+            };
+        }), [items, activeEventType, search]);
 
-    const enrichedItems = useMemo(() => {
-        if (!items) return [];
-        return items.map((item) => {
-            const { totalStock, damaged, remaining } = getItemStock(item);
-            return { item, totalStock, damaged, remaining };
-        });
-    }, [items]);
+    const columns = useMemo<GridColDef<ItemRow>[]>(() => [
+        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 180,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography> },
+        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
+        { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 155,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock <= 0 ? 'error.main' : row.stock <= (row.item.minStock ?? 5) ? 'warning.main' : 'success.main', fontWeight: 700 }}>
+                {row.stock}/{row.totalStock}{row.damaged > 0 ? ` · ${row.damaged} ${t('defekt', 'damaged')}` : ''}
+            </Typography> },
+        { field: 'value', headerName: t('Einzelwert', 'Unit value'), type: 'number', width: 125,
+            valueFormatter: (value: number) => `${value.toFixed(2)} €` },
+        { field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 },
+        { field: 'events', headerName: t('Events', 'Events'), width: 145 },
+        { field: 'info', headerName: t('Hinweis', 'Instructions'), width: 90, sortable: false, filterable: false,
+            renderCell: ({ row }) => <Tooltip title={t('Besondere Anweisungen anzeigen', 'Show special instructions')}>
+                <IconButton color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
+                    onClick={(event) => { event.stopPropagation(); setInfoItem(row.item); }}>
+                    <InfoOutlinedIcon fontSize="small" />
+                </IconButton>
+            </Tooltip> },
+        ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
+            renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
+                <Tooltip title={t('Bearbeiten', 'Edit')}><IconButton size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                <Tooltip title={t('Löschen', 'Delete')}><IconButton size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+            </Stack> } satisfies GridColDef<ItemRow>] : []),
+    ], [canManage, onDelete, onEdit, t]);
 
-    const filteredAndSorted = useMemo(() => {
-        let result = enrichedItems;
-
-        if (search.trim()) {
-            const lower = search.toLowerCase();
-            result = result.filter(
-                ({ item }) =>
-                    item.name.toLowerCase().includes(lower) ||
-                    (item.category && item.category.toLowerCase().includes(lower)),
-            );
-        }
-
-        result = result.filter(({ item }) => item.eventTypes?.includes(activeEventType));
-
-        if (sortField) {
-            result = [...result].sort((a, b) => {
-                let cmp = 0;
-                if (sortField === 'value') cmp = (a.item.value ?? 0) - (b.item.value ?? 0);
-                else if (sortField === 'stock') cmp = a.remaining - b.remaining;
-                return sortDir === 'asc' ? cmp : -cmp;
-            });
-        }
-
-        return result;
-    }, [enrichedItems, search, activeEventType, sortField, sortDir]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAndSorted.length / effectivePageSize)));
-    const pageItems = filteredAndSorted.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
-
-    function handleSort(field: SortField) {
-        setPage(1);
-        if (sortField === field) {
-            setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-        } else {
-            setSortField(field);
-            setSortDir('asc');
-        }
+    function updateSelection(model: GridRowSelectionModel) {
+        const ids = model.type === 'exclude'
+            ? rows.map((row) => row.id).filter((id) => !model.ids.has(id))
+            : [...model.ids].map(String);
+        setSelectedIds(new Set(ids));
     }
 
-    function toggleSelection(id: string) {
-        setSelectedIds((current) => {
-            const next = new Set(current);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    }
-
-    function openActionMenu(event: React.MouseEvent<HTMLElement>, item: Item) {
-        event.stopPropagation();
-        setActionMenu({ anchorEl: event.currentTarget, item });
-    }
-
-    if (isLoading) {
-        return (
-            <Paper sx={{ p: 2 }}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} height={48} />
-                ))}
-            </Paper>
-        );
-    }
-
-    if (!items?.length) {
-        return (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">{t('Keine Artikel gefunden', 'No items found')}</Typography>
-                {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
-            </Paper>
-        );
-    }
-
-    return (
-        <Box>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                <TextField
-                    label={t('Nach Name oder Kategorie suchen', 'Search by name or category')}
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    size="small"
-                    sx={{ flex: '1 1 280px' }}
-                />
-                <ToggleButtonGroup
-                    exclusive
-                    size="small"
-                    value={viewMode}
-                    onChange={(_event, value: 'list' | 'tiles' | null) => {
-                        if (!value) return;
-                        setViewMode(value);
-                        window.localStorage.setItem(isMobile ? 'inventory-item-view-mobile' : 'inventory-item-view-desktop', value);
-                    }}
-                    aria-label={t('Ansicht', 'View')}
-                >
-                    <ToggleButton value="list" aria-label={t('Listenansicht', 'List view')}><ViewListIcon /></ToggleButton>
-                    <ToggleButton value="tiles" aria-label={t('Kachelansicht', 'Tile view')}><GridViewIcon /></ToggleButton>
-                </ToggleButtonGroup>
-            </Box>
-            {canManage && selectedIds.size > 0 && (
-                <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
-                    <Typography sx={{ fontWeight: 700 }}>
-                        {t(`${selectedIds.size} Artikel ausgewählt`, `${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'} selected`)}
-                    </Typography>
-                    <Button
-                        color="error"
-                        size="small"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => onDeleteMany?.([...selectedIds])}
-                    >
-                        {t('Auswahl löschen', 'Delete selected')}
-                    </Button>
-                </Paper>
-            )}
-            {viewMode === 'tiles' ? (
-                <Grid container spacing={{ xs: 1, sm: 1.5 }}>
-                    {pageItems.map(({ item, totalStock, damaged, remaining }) => {
-                        const image = itemImageUrl(item);
-                        const color = stockColor(remaining, item.minStock ?? 5);
-                        return (
-                            <Grid key={item.id} size={{ xs: 6, sm: 3, md: 2 }}>
-                                <Card onClick={() => navigate(`/items/${item.id}`)} sx={{ height: '100%', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
-                                    <Box sx={{ position: 'relative' }}>
-                                        {canManage && <Checkbox
-                                            size="small"
-                                            checked={selectedIds.has(item.id)}
-                                            onClick={(event) => event.stopPropagation()}
-                                            onChange={() => toggleSelection(item.id)}
-                                            slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
-                                            sx={{ position: 'absolute', zIndex: 1, top: 2, left: 2, bgcolor: 'rgba(255,255,255,0.82)', borderRadius: 1, p: 0.5 }}
-                                        />}
-                                        {image ? (
-                                            <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 72, sm: 84 }, objectFit: 'contain', bgcolor: 'grey.100' }} />
-                                        ) : (
-                                            <Box sx={{ height: { xs: 72, sm: 84 }, bgcolor: 'grey.100', display: 'grid', placeItems: 'center' }}>
-                                                <GridViewIcon sx={{ fontSize: { xs: 26, sm: 32 }, color: 'text.disabled' }} />
-                                            </Box>
-                                        )}
-                                    </Box>
-                                    <CardContent sx={{ flexGrow: 1, p: { xs: 0.75, sm: 1 }, '&:last-child': { pb: { xs: 0.75, sm: 1 } } }}>
-                                        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <Box sx={{ minWidth: 0 }}>
-                                                <Typography sx={{ fontWeight: 700, fontSize: { xs: '0.85rem', sm: '0.95rem' }, lineHeight: 1.15 }} noWrap>{item.name}</Typography>
-                                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category || t('Ohne Kategorie', 'No category')}</Typography>
-                                                    {item.trackingMode === 'serialized' && (
-                                                        <Chip size="small" label={t('SN', 'SN')} variant="outlined" color="info" sx={{ height: 16, fontSize: '0.62rem', px: 0.2 }} />
-                                                    )}
-                                                </Stack>
-                                            </Box>
-                                            {canManage && <IconButton
-                                                size="small"
-                                                aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
-                                                onClick={(event) => openActionMenu(event, item)}
-                                                sx={{ mt: -0.5, mr: -0.5 }}
-                                            >
-                                                <MoreVertIcon fontSize="small" />
-                                            </IconButton>}
-                                        </Stack>
-                                        <Typography sx={{ mt: 0.5, fontWeight: 800, fontSize: { xs: '1.1rem', sm: '1.2rem' }, lineHeight: 1, color }}>
-                                            {remaining}/{totalStock}
-                                        </Typography>
-                                        {damaged > 0 && (
-                                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.25 }}>
-                                                {damaged} {t('defekt', 'damaged')}
-                                            </Typography>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        );
-                    })}
-                    {filteredAndSorted.length === 0 && <Grid size={{ xs: 12 }}><Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper></Grid>}
-                </Grid>
-            ) : isMobile ? (
-                <Stack spacing={0.5}>
-                    {pageItems.map(({ item, totalStock, remaining }) => {
-                        const minStock = item.minStock ?? 5;
-                        const color = stockColor(remaining, minStock);
-                        return (
-                            <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
-                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                                    {canManage && <Checkbox
-                                        size="small"
-                                        checked={selectedIds.has(item.id)}
-                                        onClick={(event) => event.stopPropagation()}
-                                        onChange={() => toggleSelection(item.id)}
-                                        slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
-                                        sx={{ p: 0.5 }}
-                                    />}
-                                    <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
-                                        {item.name}
-                                    </Typography>
-                                    <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
-                                        {remaining}/{totalStock}
-                                    </Typography>
-                                    {canManage && <IconButton
-                                        size="small"
-                                        aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
-                                        onClick={(event) => openActionMenu(event, item)}
-                                        sx={{ p: 0.5 }}
-                                    >
-                                        <MoreVertIcon fontSize="small" />
-                                    </IconButton>}
-                                </Box>
-                            </Paper>
-                        );
-                    })}
-                    {filteredAndSorted.length === 0 && <Paper sx={{ p: 3 }}><Typography color="text.secondary">{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</Typography></Paper>}
-                </Stack>
-            ) : <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ '& .MuiTableCell-root': { py: 0.5 }, '& .MuiTableCell-head': { py: 0.75 } }}>
-                    <TableHead>
-                        <TableRow>
-                            {canManage && <TableCell padding="checkbox">
-                                <Checkbox
-                                    size="small"
-                                    checked={pageItems.length > 0 && pageItems.every(({ item }) => selectedIds.has(item.id))}
-                                    indeterminate={pageItems.some(({ item }) => selectedIds.has(item.id)) && !pageItems.every(({ item }) => selectedIds.has(item.id))}
-                                    onChange={() => {
-                                        const visibleIds = pageItems.map(({ item }) => item.id);
-                                        const allSelected = visibleIds.every((id) => selectedIds.has(id));
-                                        setSelectedIds((current) => {
-                                            const next = new Set(current);
-                                            for (const id of visibleIds) {
-                                                if (allSelected) next.delete(id);
-                                                else next.add(id);
-                                            }
-                                            return next;
-                                        });
-                                    }}
-                                    slotProps={{ input: { 'aria-label': t('Alle sichtbaren Artikel auswählen', 'Select all visible items') } }}
-                                />
-                            </TableCell>}
-                            <TableCell>{t('Name', 'Name')}</TableCell>
-                            <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                            <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>
-                                <TableSortLabel
-                                    active={sortField === 'stock'}
-                                    direction={sortField === 'stock' ? sortDir : 'asc'}
-                                    onClick={() => handleSort('stock')}
-                                >
-                                    {t('Bestand', 'Stock')}
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell align="right">
-                                <TableSortLabel
-                                    active={sortField === 'value'}
-                                    direction={sortField === 'value' ? sortDir : 'asc'}
-                                    onClick={() => handleSort('value')}
-                                >
-                                    {t('Einzelwert', 'Unit value')}
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-                            <TableCell>{t('Events', 'Events')}</TableCell>
-                            {canManage && <TableCell padding="checkbox" />}
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {pageItems.map(({ item, totalStock, damaged, remaining }) => {
-                            const minStock = item.minStock ?? 5;
-                            const color = stockColor(remaining, minStock);
-                            return (
-                                <TableRow
-                                    key={item.id}
-                                    hover
-                                    onClick={() => navigate(`/items/${item.id}`)}
-                                    sx={{ cursor: 'pointer' }}
-                                >
-                                    {canManage && <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
-                                        <Checkbox
-                                            size="small"
-                                            checked={selectedIds.has(item.id)}
-                                            onChange={() => toggleSelection(item.id)}
-                                            slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
-                                        />
-                                    </TableCell>}
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Typography component="span" variant="body2" sx={{ fontWeight: 500 }}>{item.name}</Typography>
-                                            {item.trackingMode === 'serialized' && (
-                                                <Chip size="small" label={t('Einzelgeräte', 'Serialized')} variant="outlined" color="info" sx={{ height: 20, fontSize: '0.7rem' }} />
-                                            )}
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                        {item.category}{item.subcategory ? ` · ${item.subcategory}` : ''}
-                                    </TableCell>
-                                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                        <Typography
-                                            component="span"
-                                            variant="body2"
-                                            sx={{ color, fontWeight: remaining <= minStock ? 700 : 400 }}
-                                        >
-                                            {remaining}/{totalStock}
-                                        </Typography>
-                                        {damaged > 0 && (
-                                            <Typography component="span" variant="caption" color="text.secondary" noWrap>
-                                                {' · '}{damaged} {t('defekt', 'damaged')}
-                                            </Typography>
-                                        )}
-                                    </TableCell>
-                                    <TableCell align="right">{item.value?.toFixed(2) ?? '0.00'} €</TableCell>
-                                    <TableCell>
-                                        {(() => {
-                                            const loc = item.expand?.storageLocation;
-                                            return loc
-                                                ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
-                                                : item.storageLocation || '—';
-                                        })()}
-                                    </TableCell>
-                                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                        {item.eventTypes?.join(', ') || '—'}
-                                    </TableCell>
-                                    {canManage && <TableCell align="right" padding="checkbox" onClick={(event) => event.stopPropagation()}>
-                                        <IconButton
-                                            size="small"
-                                            aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
-                                            onClick={(event) => openActionMenu(event, item)}
-                                        >
-                                            <MoreVertIcon fontSize="small" />
-                                        </IconButton>
-                                    </TableCell>}
-                                </TableRow>
-                            );
-                        })}
-                        {filteredAndSorted.length === 0 && (
-                            <TableRow><TableCell colSpan={canManage ? 8 : 6}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>}
-            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAndSorted.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
-            {canManage && <Menu
-                anchorEl={actionMenu?.anchorEl}
-                open={Boolean(actionMenu)}
-                onClose={() => setActionMenu(null)}
-            >
-                <MenuItem onClick={() => {
-                    if (actionMenu) onEdit?.(actionMenu.item);
-                    setActionMenu(null);
-                }}>
-                    <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-                    {t('Bearbeiten', 'Edit')}
-                </MenuItem>
-                <MenuItem sx={{ color: 'error.main' }} onClick={() => {
-                    if (actionMenu) onDelete?.(actionMenu.item.id);
-                    setActionMenu(null);
-                }}>
-                    <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
-                    {t('Löschen', 'Delete')}
-                </MenuItem>
-            </Menu>}
+    return <Box>
+        <TextField label={t('Nach Name oder Kategorie suchen', 'Search by name or category')} value={search}
+            onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />
+        {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
+            <Typography sx={{ fontWeight: 700 }}>{t(`${selectedIds.size} Artikel ausgewählt`, `${selectedIds.size} items selected`)}</Typography>
+            <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
+                {t('Auswahl löschen', 'Delete selected')}
+            </Button>
+        </Paper>}
+        <Box sx={{ width: '100%' }}>
+            <DataGrid rows={rows} columns={columns} loading={isLoading} density="compact" autoHeight checkboxSelection={canManage}
+                disableRowSelectionOnClick onRowClick={({ row }) => { if (canManage) navigate(`/items/${row.id}`); }}
+                rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
+                initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
+                pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
+                sx={{ '& .MuiDataGrid-row': { cursor: canManage ? 'pointer' : 'default' },
+                    '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
         </Box>
-    );
+        {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+        <CatalogInstructionsDialog open={Boolean(infoItem)} title={infoItem?.name ?? ''} hint={infoItem?.hint}
+            onClose={() => setInfoItem(null)} />
+    </Box>;
 }

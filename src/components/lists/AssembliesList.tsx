@@ -1,41 +1,16 @@
-import { MediaImage } from '../common/MediaImage';
-import { apiFileUrl } from '../../services/apiClient';
-import { useEffect, useMemo, useState } from 'react';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Chip,
-    Skeleton,
-    Typography,
-    Stack,
-    Menu,
-    MenuItem,
-    IconButton,
-    ListItemIcon,
-    ListItemText,
-    Box,
-    Button,
-    Checkbox,
-    TextField,
-    useMediaQuery,
-    useTheme,
-} from '@mui/material';
+import { useMemo, useState } from 'react';
+import { Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
+import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { useNavigate } from 'react-router-dom';
-import { TooltipButton } from '../shared/TooltipButton';
 import type { Assembly, Item } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
-import { ListPagination } from '../shared/ListPagination';
+import { CatalogInstructionsDialog } from './CatalogInstructionsDialog';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -49,332 +24,106 @@ interface Props {
     onDeleteMany?: (ids: string[]) => void;
 }
 
+type AssemblyPart = { id: string; name: string; quantity: number };
+type AssemblyRow = {
+    id: string;
+    assembly: Assembly;
+    name: string;
+    description: string;
+    parts: AssemblyPart[];
+    components: string;
+    stock: number;
+    totalStock: number;
+    totalValue: number;
+};
+
 export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const t = useLocalizedText();
+    const language = useAppLanguage();
     const navigate = useNavigate();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-    const stockByItemId = useMemo(() => new Map((items ?? []).map((item) => [
-        item.id,
-        getItemStock(item),
-    ])), [items]);
-    const filteredAssemblies = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-        if (!normalizedSearch) return assemblies ?? [];
-        return (assemblies ?? []).filter((assembly) => assembly.name.toLowerCase().includes(normalizedSearch));
-    }, [assemblies, search]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssemblies.length / effectivePageSize)));
-    const pageAssemblies = filteredAssemblies.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [infoRow, setInfoRow] = useState<AssemblyRow | null>(null);
 
-    useEffect(() => {
-        const validIds = new Set(assemblies?.map((assembly) => assembly.id) ?? []);
-        setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
-    }, [assemblies]);
+    const rows = useMemo<AssemblyRow[]>(() => {
+        const itemById = new Map((items ?? []).map((item) => [item.id, item]));
+        const stockById = new Map((items ?? []).map((item) => [item.id, getItemStock(item)]));
+        return (assemblies ?? []).map((assembly) => {
+            const expandedById = new Map((assembly.expand?.itemIds ?? []).map((item) => [item.id, item]));
+            const componentIds = [...new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})])];
+            const parts = componentIds.map((id) => ({
+                id,
+                name: itemById.get(id)?.name ?? expandedById.get(id)?.name ?? id,
+                quantity: assembly.itemQuantities?.[id] ?? 1,
+            }));
+            return {
+                id: assembly.id,
+                assembly,
+                name: assembly.name,
+                description: assembly.description,
+                parts,
+                components: parts.map((part) => `${part.quantity} × ${part.name}`).join(' · '),
+                stock: assemblyAvailability(assembly, (id) => stockById.get(id)?.remaining ?? 0),
+                totalStock: assemblyAvailability(assembly, (id) => stockById.get(id)?.totalStock ?? 0),
+                totalValue: parts.reduce((sum, part) => sum + (itemById.get(part.id)?.value ?? expandedById.get(part.id)?.value ?? 0) * part.quantity, 0),
+            };
+        }).filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    }, [assemblies, items, search]);
 
-    function toggleSelection(id: string) {
-        setSelectedIds((current) => {
-            const next = new Set(current);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
+    const columns = useMemo<GridColDef<AssemblyRow>[]>(() => [
+        { field: 'name', headerName: t('Name', 'Name'), flex: 1.2, minWidth: 180,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography> },
+        { field: 'description', headerName: t('Beschreibung', 'Description'), flex: 1, minWidth: 160 },
+        { field: 'components', headerName: t('Komponenten', 'Components'), flex: 2, minWidth: 260,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ whiteSpace: 'normal' }}>{row.components || '—'}</Typography> },
+        { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 120,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock > 0 ? 'success.main' : 'error.main', fontWeight: 700 }}>{row.stock}/{row.totalStock}</Typography> },
+        { field: 'totalValue', headerName: t('Gesamtwert', 'Total value'), type: 'number', width: 130,
+            valueFormatter: (value: number) => `${value.toFixed(2)} €` },
+        { field: 'info', headerName: t('Hinweis', 'Instructions'), width: 90, sortable: false, filterable: false,
+            renderCell: ({ row }) => <Tooltip title={t('Hinweise und enthaltene Artikel anzeigen', 'Show instructions and included items')}>
+                <IconButton color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
+                    onClick={(event) => { event.stopPropagation(); setInfoRow(row); }}>
+                    <InfoOutlinedIcon fontSize="small" />
+                </IconButton>
+            </Tooltip> },
+        ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
+            renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">
+                <Tooltip title={t('Bearbeiten', 'Edit')}><IconButton size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                <Tooltip title={t('Löschen', 'Delete')}><IconButton size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+            </Stack> } satisfies GridColDef<AssemblyRow>] : []),
+    ], [canManage, onDelete, onEdit, t]);
+
+    function updateSelection(model: GridRowSelectionModel) {
+        const ids = model.type === 'exclude'
+            ? rows.map((row) => row.id).filter((id) => !model.ids.has(id))
+            : [...model.ids].map(String);
+        setSelectedIds(new Set(ids));
     }
 
-    const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, assembly: Assembly) => {
-        event.stopPropagation();
-        setAnchorEl(event.currentTarget);
-        setSelectedAssembly(assembly);
-    };
-
-    const handleCloseMenu = () => {
-        setAnchorEl(null);
-        setSelectedAssembly(null);
-    };
-
-    const handleView = () => {
-        if (selectedAssembly) {
-            navigate(`/assemblies/${selectedAssembly.id}`);
-        }
-        handleCloseMenu();
-    };
-
-    const handleEdit = () => {
-        if (selectedAssembly) {
-            onEdit?.(selectedAssembly);
-        }
-        handleCloseMenu();
-    };
-
-    const handleDelete = () => {
-        if (selectedAssembly) {
-            onDelete?.(selectedAssembly.id);
-        }
-        handleCloseMenu();
-    };
-
-    if (isLoading) {
-        return (
-            <Paper sx={{ p: 2 }}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} height={48} />
-                ))}
-            </Paper>
-        );
-    }
-
-    if (!assemblies?.length) {
-        return (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">{t('Keine Baugruppen gefunden', 'No assemblies found')}</Typography>
-                {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
-            </Paper>
-        );
-    }
-
-    function getExpandedItems(assembly: Assembly): Item[] {
-        if (assembly.expand?.itemIds?.length) return assembly.expand.itemIds;
-        if (!Array.isArray(assembly.itemIds) || !items) return [];
-        return assembly.itemIds
-            .map((id) => items.find((i) => i.id === id))
-            .filter((i): i is Item => !!i);
-    }
-
-    function getAssemblyTotalValue(assembly: Assembly): number {
-        const quantities = assembly.itemQuantities ?? {};
-        return getExpandedItems(assembly).reduce(
-            (sum, item) => sum + (item.value ?? 0) * (quantities[item.id] ?? 1), 0,
-        );
-    }
-
-    function getAssemblyStock(assembly: Assembly) {
-        return {
-            totalStock: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.totalStock ?? 0),
-            remaining: assemblyAvailability(assembly, (itemId) => stockByItemId.get(itemId)?.remaining ?? 0),
-        };
-    }
-
-    return (
-        <Box>
-            <TextField
-                label={t('Nach Name suchen', 'Search by name')}
-                value={search}
-                onChange={(event) => { setSearch(event.target.value); setPage(1); }}
-                size="small"
-                fullWidth
-                sx={{ mb: 2 }}
-            />
-            {canManage && selectedIds.size > 0 && (
-                <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
-                    <Typography sx={{ fontWeight: 700 }}>
-                        {t(`${selectedIds.size} ${selectedIds.size === 1 ? 'Baugruppe' : 'Baugruppen'} ausgewählt`, `${selectedIds.size} assembl${selectedIds.size === 1 ? 'y' : 'ies'} selected`)}
-                    </Typography>
-                    <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
-                        {t('Auswahl löschen', 'Delete selected')}
-                    </Button>
-                </Paper>
-            )}
-            {isMobile ? (
-                <Stack spacing={0.5}>
-                    {pageAssemblies.map((assembly) => {
-                        const { totalStock, remaining } = getAssemblyStock(assembly);
-                        const color = remaining > 0 ? 'success.main' : 'error.main';
-                        return (
-                            <Paper key={assembly.id} onClick={() => navigate(`/assemblies/${assembly.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
-                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                                    {canManage && <Checkbox
-                                        size="small"
-                                        checked={selectedIds.has(assembly.id)}
-                                        onClick={(event) => event.stopPropagation()}
-                                        onChange={() => toggleSelection(assembly.id)}
-                                        slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
-                                        sx={{ p: 0.5 }}
-                                    />}
-                                    <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
-                                        {assembly.name}
-                                    </Typography>
-                                    <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
-                                        {remaining}/{totalStock}
-                                    </Typography>
-                                    {canManage && <IconButton
-                                        size="small"
-                                        aria-label={t('Baugruppenaktionen öffnen', 'Open assembly actions')}
-                                        onClick={(event) => handleOpenMenu(event, assembly)}
-                                        sx={{ p: 0.5 }}
-                                    >
-                                        <MoreVertIcon fontSize="small" />
-                                    </IconButton>}
-                                </Box>
-                            </Paper>
-                        );
-                    })}
-                    {filteredAssemblies.length === 0 && (
-                        <Paper sx={{ p: 3 }}>
-                            <Typography color="text.secondary">{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</Typography>
-                        </Paper>
-                    )}
-                </Stack>
-            ) : (
-            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                <Table size="small">
-                <TableHead>
-                    <TableRow>
-                        {canManage && <TableCell padding="checkbox">
-                            <Checkbox
-                                size="small"
-                                checked={pageAssemblies.length > 0 && pageAssemblies.every((assembly) => selectedIds.has(assembly.id))}
-                                indeterminate={pageAssemblies.some((assembly) => selectedIds.has(assembly.id)) && !pageAssemblies.every((assembly) => selectedIds.has(assembly.id))}
-                                onChange={() => {
-                                    const visibleIds = pageAssemblies.map((assembly) => assembly.id);
-                                    const allSelected = visibleIds.every((id) => selectedIds.has(id));
-                                    setSelectedIds((current) => {
-                                        const next = new Set(current);
-                                        for (const id of visibleIds) {
-                                            if (allSelected) next.delete(id);
-                                            else next.add(id);
-                                        }
-                                        return next;
-                                    });
-                                }}
-                                slotProps={{ input: { 'aria-label': t('Alle Baugruppen auswählen', 'Select all assemblies') } }}
-                            />
-                        </TableCell>}
-                        <TableCell>{t('Name', 'Name')}</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
-                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t('Bestand', 'Stock')}</TableCell>
-                        <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 120 }}>{t('Gesamtwert', 'Total value')}</TableCell>
-                        <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {pageAssemblies.map((assembly) => {
-                        const assemblyItems = getExpandedItems(assembly);
-                        const { totalStock, remaining } = getAssemblyStock(assembly);
-                        return (
-                            <TableRow
-                                key={assembly.id}
-                                hover
-                                onClick={() => navigate(`/assemblies/${assembly.id}`)}
-                                sx={{ cursor: 'pointer' }}
-                            >
-                                {canManage && <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
-                                    <Checkbox
-                                        size="small"
-                                        checked={selectedIds.has(assembly.id)}
-                                        onChange={() => toggleSelection(assembly.id)}
-                                        slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
-                                    />
-                                </TableCell>}
-                                <TableCell>
-                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                        {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 64, height: 48, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} />}
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
-                                    </Stack>
-                                </TableCell>
-                                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                                    {assembly.description}
-                                </TableCell>
-                                <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', maxHeight: 28, overflow: 'hidden' }} useFlexGap>
-                                        {assemblyItems.map((item) => {
-                                            const qty = assembly.itemQuantities?.[item.id] ?? 1;
-                                            return (
-                                                <Chip
-                                                    key={item.id}
-                                                    label={qty > 1 ? `${qty}× ${item.name}` : item.name}
-                                                    size="small"
-                                                    variant="outlined"
-                                                />
-                                            );
-                                        })}
-                                    </Stack>
-                                </TableCell>
-                                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                    <Typography
-                                        component="span"
-                                        variant="body2"
-                                        sx={{ color: remaining > 0 ? 'success.main' : 'error.main', fontWeight: remaining <= 0 ? 700 : 400 }}
-                                    >
-                                        {remaining}/{totalStock}
-                                    </Typography>
-                                </TableCell>
-                                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                    {getAssemblyTotalValue(assembly).toFixed(2)} €
-                                </TableCell>
-                                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                    <Box sx={{ display: 'inline-flex', gap: 0.5 }}>
-                                        <TooltipButton
-                                            variant="icon"
-                                            tooltipText={t('Baugruppendetails anzeigen', 'View assembly details')}
-                                            icon={<VisibilityIcon />}
-                                            size="small"
-                                            color="info"
-                                            onClick={() => navigate(`/assemblies/${assembly.id}`)}
-                                        />
-                                        {canManage && <TooltipButton
-                                            variant="icon"
-                                            tooltipText={t('Baugruppe bearbeiten', 'Edit assembly')}
-                                            icon={<EditIcon />}
-                                            size="small"
-                                            color="warning"
-                                            onClick={() => onEdit?.(assembly)}
-                                        />}
-                                        {canManage && <TooltipButton
-                                            variant="icon"
-                                            tooltipText={t('Baugruppe löschen', 'Delete assembly')}
-                                            icon={<DeleteIcon />}
-                                            size="small"
-                                            color="error"
-                                            onClick={() => onDelete?.(assembly.id)}
-                                        />}
-                                    </Box>
-                                </TableCell>
-                            </TableRow>
-                        );
-                    })}
-                    {filteredAssemblies.length === 0 && (
-                        <TableRow>
-                            <TableCell colSpan={canManage ? 7 : 6}>{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-                </Table>
-            </TableContainer>
-            )}
-            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAssemblies.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
-            {canManage && <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleCloseMenu}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <MenuItem onClick={handleView}>
-                    <ListItemIcon>
-                        <VisibilityIcon fontSize="small" color="info" />
-                    </ListItemIcon>
-                    <ListItemText>{t('Details anzeigen', 'View details')}</ListItemText>
-                </MenuItem>
-                <MenuItem onClick={handleEdit}>
-                    <ListItemIcon>
-                        <EditIcon fontSize="small" color="warning" />
-                    </ListItemIcon>
-                    <ListItemText>{t('Bearbeiten', 'Edit')}</ListItemText>
-                </MenuItem>
-                <MenuItem onClick={handleDelete}>
-                    <ListItemIcon>
-                        <DeleteIcon fontSize="small" color="error" />
-                    </ListItemIcon>
-                    <ListItemText>{t('Löschen', 'Delete')}</ListItemText>
-                </MenuItem>
-            </Menu>}
+    return <Box>
+        <TextField label={t('Nach Name oder Komponente suchen', 'Search by name or component')} value={search}
+            onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />
+        {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
+            <Typography sx={{ fontWeight: 700 }}>{t(`${selectedIds.size} Baugruppen ausgewählt`, `${selectedIds.size} assemblies selected`)}</Typography>
+            <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
+                {t('Auswahl löschen', 'Delete selected')}
+            </Button>
+        </Paper>}
+        <Box sx={{ width: '100%' }}>
+            <DataGrid rows={rows} columns={columns} loading={isLoading} density="compact" autoHeight checkboxSelection={canManage}
+                getRowHeight={() => 'auto'} disableRowSelectionOnClick
+                onRowClick={({ row }) => { if (canManage) navigate(`/assemblies/${row.id}`); }}
+                rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
+                initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
+                pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
+                sx={{ '& .MuiDataGrid-row': { cursor: canManage ? 'pointer' : 'default' },
+                    '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />
         </Box>
-    );
+        {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+        <CatalogInstructionsDialog open={Boolean(infoRow)} title={infoRow?.name ?? ''} hint={infoRow?.assembly.hint}
+            parts={infoRow?.parts} onClose={() => setInfoRow(null)} />
+    </Box>;
 }

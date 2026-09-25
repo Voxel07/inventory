@@ -41,6 +41,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (id.includes('@mui/x-data-grid') || id.includes('@mui/x-internals')) {
+              return 'mui-grid-vendor';
+            }
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
               return 'react-vendor';
             }
