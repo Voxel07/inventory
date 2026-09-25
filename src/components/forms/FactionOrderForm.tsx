@@ -1,5 +1,5 @@
 import { MediaImage } from '../common/MediaImage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -88,7 +88,7 @@ export function FactionOrderForm({
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
   const { data: dynamicFactions } = useFactions();
   const { data: events = [] } = useEventReports();
-  const factionsByEvent = useMemo(() => {
+  const factionsByEvent = (() => {
     const result: Record<EventType, readonly string[]> = { ...FACTIONS_BY_EVENT };
     if (dynamicFactions && dynamicFactions.length > 0) {
       for (const type of EVENT_TYPES) {
@@ -98,20 +98,17 @@ export function FactionOrderForm({
       }
     }
     return result;
-  }, [dynamicFactions]);
+  })();
 
   const initialEventType = initialData?.eventType ?? defaultEventType;
   const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || (factionsByEvent[type] ?? []).some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
-  const allowedFactions = useCallback(
-    (type: EventType) => (factionsByEvent[type] ?? []).filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`)),
-    [allowedFactionKeys, factionsByEvent],
-  );
+  const allowedFactions = (type: EventType) => (factionsByEvent[type] ?? []).filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`));
   const [eventType, setEventType] = useState<EventType>(initialEventType);
   const [faction, setFaction] = useState(
     initialData?.faction ?? defaultFaction ?? allowedFactions(initialEventType)[0] ?? '',
   );
   const [eventOccurrenceId, setEventOccurrenceId] = useState(initialData?.eventOccurrenceId ?? defaultEventOccurrenceId ?? '');
-  const eventOptions = useMemo(() => events.filter((event) => event.eventType === eventType), [events, eventType]);
+  const eventOptions = events.filter((event) => event.eventType === eventType);
   const selectedEvent = eventOptions.find((event) => event.id === eventOccurrenceId) ?? eventOptions[0];
   const eventDate = selectedEvent?.startDate?.slice(0, 10) ?? selectedEvent?.eventDate?.slice(0, 10) ?? '';
   const [requestedPickupDate, setRequestedPickupDate] = useState(
@@ -134,41 +131,45 @@ export function FactionOrderForm({
   });
   const [comparison, setComparison] = useState<FactionOrder | undefined>();
   const [infoAssembly, setInfoAssembly] = useState<Assembly | null>(null);
-  const categories = useMemo(() => [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
-  const sortedItems = useMemo(() => [...items].sort((a, b) => a.name.localeCompare(b.name)), [items]);
-  const sortedAssemblies = useMemo(() => [...assemblies].sort((a, b) => a.name.localeCompare(b.name)), [assemblies]);
+  const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedAssemblies = [...assemblies].sort((a, b) => a.name.localeCompare(b.name));
 
-  const availableByItem = useMemo(() => new Map(items.map((item) => [
+  const availableByItem = new Map(items.map((item) => [
     item.id,
     getItemStock(item).remaining,
-  ])), [items]);
+  ]));
 
-  useEffect(() => {
+  // Effect events: both effects must re-run on their real inputs only, not merely
+  // because `allowedFactions` is a new function on every render.
+  const applyDefaultFaction = useEffectEvent(() => {
     if (initialData) return;
     setEventType(defaultEventType);
-    setFaction(
-      defaultFaction && allowedFactions(defaultEventType).includes(defaultFaction)
-        ? defaultFaction
-        : allowedFactions(defaultEventType)[0] ?? '',
-    );
-  }, [allowedFactions, defaultEventType, defaultFaction, initialData]);
+    const options = allowedFactions(defaultEventType);
+    setFaction(defaultFaction && options.includes(defaultFaction) ? defaultFaction : options[0] ?? '');
+  });
 
-  useEffect(() => {
+  const clampFactionToAllowedOptions = useEffectEvent(() => {
     const options = allowedFactions(eventType);
     if (!options.includes(faction)) setFaction(options[0] ?? '');
-  }, [allowedFactions, eventType, faction]);
+  });
 
-  const previousOrder = useMemo(
-    () => findPreviousFactionOrder(orders, {
-      eventType,
-      faction,
-      eventDate,
-      excludeId: initialData?.id,
-    }),
-    [eventDate, eventType, faction, initialData?.id, orders],
-  );
+  useEffect(() => {
+    applyDefaultFaction();
+  }, [allowedFactionKeys, defaultEventType, defaultFaction, dynamicFactions, initialData]);
 
-  const visibleItems = useMemo(() => {
+  useEffect(() => {
+    clampFactionToAllowedOptions();
+  }, [allowedFactionKeys, dynamicFactions, eventType, faction]);
+
+  const previousOrder = findPreviousFactionOrder(orders, {
+    eventType,
+    faction,
+    eventDate,
+    excludeId: initialData?.id,
+  });
+
+  const visibleItems = (() => {
     const term = search.trim().toLocaleLowerCase();
     return sortedItems
       .filter((item) => {
@@ -177,9 +178,9 @@ export function FactionOrderForm({
         if (Number(quantities[item.id]) > 0) return true;
         return item.eventTypes?.includes(eventType);
       });
-  }, [category, eventType, quantities, search, sortedItems]);
+  })();
 
-  const visibleAssemblies = useMemo(() => {
+  const visibleAssemblies = (() => {
     const term = search.trim().toLocaleLowerCase();
     return sortedAssemblies
       .filter((assembly) => {
@@ -187,29 +188,23 @@ export function FactionOrderForm({
         if (Number(assemblyQuantities[assembly.id]) > 0) return true;
         return assembly.eventTypes?.includes(eventType);
       });
-  }, [assemblyQuantities, eventType, search, sortedAssemblies]);
+  })();
   const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(visibleItems.length / ORDER_CATALOG_PAGE_SIZE)));
   const currentAssemblyPage = Math.min(assemblyPage, Math.max(1, Math.ceil(visibleAssemblies.length / ORDER_CATALOG_PAGE_SIZE)));
   const pageItems = visibleItems.slice((currentItemPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentItemPage * ORDER_CATALOG_PAGE_SIZE);
   const pageAssemblies = visibleAssemblies.slice((currentAssemblyPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentAssemblyPage * ORDER_CATALOG_PAGE_SIZE);
 
-  const selectedAssemblies = useMemo(
-    () => assemblies
-      .filter((assembly) => Number(assemblyQuantities[assembly.id]) > 0)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [assemblies, assemblyQuantities],
-  );
-  const selectedItems = useMemo(
-    () => items
-      .filter((item) => Number(quantities[item.id]) > 0)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [items, quantities],
-  );
+  const selectedAssemblies = assemblies
+    .filter((assembly) => Number(assemblyQuantities[assembly.id]) > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const selectedItems = items
+    .filter((item) => Number(quantities[item.id]) > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const selectedEntryCount = selectedAssemblies.length + selectedItems.length;
 
-  const currentQuantities = useMemo(() => toPositiveIntegerQuantities(quantities), [quantities]);
-  const currentAssemblyQuantities = useMemo(() => toPositiveIntegerQuantities(assemblyQuantities), [assemblyQuantities]);
-  const orderDemandByItem = useMemo(() => {
+  const currentQuantities = toPositiveIntegerQuantities(quantities);
+  const currentAssemblyQuantities = toPositiveIntegerQuantities(assemblyQuantities);
+  const orderDemandByItem = (() => {
     const demand = new Map<string, number>(Object.entries(currentQuantities));
     for (const [assemblyId, assemblyCount] of Object.entries(currentAssemblyQuantities)) {
       const assembly = assemblies.find((candidate) => candidate.id === assemblyId);
@@ -219,14 +214,14 @@ export function FactionOrderForm({
       }
     }
     return demand;
-  }, [assemblies, currentAssemblyQuantities, currentQuantities]);
-  const projectedStockByItem = useMemo(() => new Map(items.map((item) => [
+  })();
+  const projectedStockByItem = new Map(items.map((item) => [
     item.id,
     (availableByItem.get(item.id) ?? 0) - (orderDemandByItem.get(item.id) ?? 0),
-  ])), [availableByItem, items, orderDemandByItem]);
-  const shortageCount = useMemo(() => [...projectedStockByItem.values()]
-    .reduce((total, projected) => total + Math.max(0, -projected), 0), [projectedStockByItem]);
-  const changes = useMemo(() => {
+  ]));
+  const shortageCount = [...projectedStockByItem.values()]
+    .reduce((total, projected) => total + Math.max(0, -projected), 0);
+  const changes = (() => {
     if (!comparison) return [];
     const comparisonItems = factionOrderItemBaseline(comparison);
     const comparisonAssemblies = factionOrderAssemblyBaseline(comparison);
@@ -250,7 +245,7 @@ export function FactionOrderForm({
       return [{ resourceKey: `assembly-${assemblyId}`, name: assembly?.name ?? assemblyId, before, after }];
     });
     return [...assemblyChanges, ...itemChanges];
-  }, [assemblies, comparison, currentAssemblyQuantities, currentQuantities, items]);
+  })();
 
   function copyPrevious() {
     if (!previousOrder) return;

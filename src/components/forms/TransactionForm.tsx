@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     Alert,
     Box,
@@ -59,12 +59,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = getItemStock(selectedItem);
-    const eligibleOrders = useMemo(
-        () => orders.filter((order) => (
-            order.status === 'picked_up' || order.status === 'partially_returned'
-        ) && outstandingForItem(order, formData.itemId) > 0),
-        [orders, formData.itemId],
-    );
+    const eligibleOrders = orders.filter((order) => (
+        order.status === 'picked_up' || order.status === 'partially_returned'
+    ) && outstandingForItem(order, formData.itemId) > 0);
     const selectedOrder = eligibleOrders.find((order) => order.id === formData.factionOrderId);
     const returnLimit = selectedOrder
         ? outstandingForItem(selectedOrder, formData.itemId)

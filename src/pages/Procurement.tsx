@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -31,7 +31,6 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import CategoryIcon from '@mui/icons-material/Category';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { jsPDF } from 'jspdf';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
 import { getProcurementDeficits, type ProcurementDeficit } from '../services/procurementService';
@@ -56,27 +55,18 @@ export function Procurement() {
     queryFn: () => getProcurementDeficits(eventId || undefined),
   });
 
-  const groups = useMemo(() => {
+  const groups = (() => {
     const result = new Map<string, typeof deficits>();
     for (const row of deficits) {
       result.set(row.supplier || 'Unassigned', [...(result.get(row.supplier || 'Unassigned') || []), row]);
     }
     return [...result.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [deficits]);
+  })();
 
   // KPI Calculations
-  const totalDeficitUnits = useMemo(
-    () => deficits.reduce((sum, row) => sum + row.netDeficit, 0),
-    [deficits]
-  );
-  const consumableDeficitUnits = useMemo(
-    () => deficits.filter((r) => r.classification === 'consumable').reduce((sum, r) => sum + toOrder(r), 0),
-    [deficits]
-  );
-  const assetDeficitUnits = useMemo(
-    () => deficits.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0),
-    [deficits]
-  );
+  const totalDeficitUnits = deficits.reduce((sum, row) => sum + row.netDeficit, 0);
+  const consumableDeficitUnits = deficits.filter((r) => r.classification === 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
+  const assetDeficitUnits = deficits.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
 
   function renderKpiValue(value: number, color?: string) {
     if (isLoading) {
@@ -118,7 +108,9 @@ export function Procurement() {
     URL.revokeObjectURL(url);
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    // Loaded on demand so jspdf (~630 kB incl. html2canvas/dompurify) stays out of the route bundle.
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const selectedEvent = events.find((e) => e.id === eventId);
     const scopeLabel = selectedEvent

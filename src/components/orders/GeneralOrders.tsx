@@ -1,5 +1,5 @@
 import { Dialog } from '../shared/ClosableDialog';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Box, Button, Checkbox, DialogActions, DialogContent, DialogTitle, Divider,
   FormControlLabel, InputAdornment, ListSubheader, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -15,6 +15,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityInput } from './QuantityInput';
+import { useClientPagination } from '../../hooks/useClientPagination';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -42,10 +43,6 @@ export function GeneralOrders() {
   const [itemPage, setItemPage] = useState(1);
   const [catalogReady, setCatalogReady] = useState(false);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyPageSize, setHistoryPageSize] = useState(20);
   const [pickup, setPickup] = useState<GeneralOrder | null>(null);
   const [assets, setAssets] = useState<Record<string, AssetInstance[]>>({});
   const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({});
@@ -53,28 +50,24 @@ export function GeneralOrders() {
   const [returnInputs, setReturnInputs] = useState<Record<string, string>>({});
   const [consumedInputs, setConsumedInputs] = useState<Record<string, string>>({});
 
-  const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
-  const sortedItems = useMemo(() => catalogReady ? [...items].sort((a, b) => a.name.localeCompare(b.name)) : [], [catalogReady, items]);
-  const eventMap = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const sortedItems = catalogReady ? [...items].sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const eventMap = new Map(events.map((event) => [event.id, event]));
   const activeEvents = events;
-  const visibleOrders = useMemo(() => {
+  const visibleOrders = (() => {
     const term = search.trim().toLocaleLowerCase();
     return !term ? orders : orders.filter((order) => `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
-  }, [orders, search]);
+  })();
   const activeOrders = visibleOrders.filter((order) => !['returned', 'closed', 'cancelled'].includes(order.status));
   const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
-  const activeSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-  const historySize = historyPageSize === -1 ? Number.MAX_SAFE_INTEGER : historyPageSize;
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(activeOrders.length / activeSize)));
-  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / historySize)));
-  const pageOrders = activeOrders.slice((currentPage - 1) * activeSize, currentPage * activeSize);
-  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * historySize, currentHistoryPage * historySize);
-  const visibleItems = useMemo(() => {
+  const { pageItems: pageOrders, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(activeOrders);
+  const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
+  const visibleItems = (() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return sortedItems.filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term));
-  }, [sortedItems, itemSearch]);
+  })();
   const selectedEvent = eventMap.get(eventId);
-  const catalogItems = useMemo(() => visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0), [visibleItems, itemSearch, selectedEvent, quantities]);
+  const catalogItems = visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0);
   const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(catalogItems.length / ORDER_CATALOG_PAGE_SIZE)));
   const pageItems = catalogItems.slice((currentItemPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentItemPage * ORDER_CATALOG_PAGE_SIZE);
 
@@ -188,7 +181,7 @@ export function GeneralOrders() {
       page={currentPage}
       pageSize={pageSize}
       onPageChange={setPage}
-      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      onPageSizeChange={onPageSizeChange}
       loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
       loadError={isError}
       onRetry={() => { void refetch(); }}
@@ -202,7 +195,7 @@ export function GeneralOrders() {
       page={currentHistoryPage}
       pageSize={historyPageSize}
       onPageChange={setHistoryPage}
-      onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
+      onPageSizeChange={onHistoryPageSizeChange}
     />
 
     <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg"

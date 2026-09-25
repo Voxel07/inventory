@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { generateQRCodeDataURL } from '../../../utils/qrCode';
 import type { Assembly, FactionOrder, Item } from '../../../types';
 
@@ -21,6 +20,9 @@ export async function generateOrderPdfSlip({
   language,
   t,
 }: GeneratePdfSlipOptions): Promise<void> {
+  // Loaded on demand: jspdf is ~630 kB with its transitive html2canvas/dompurify
+  // dependencies and is only needed when a slip is actually generated.
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const qr = await generateQRCodeDataURL(order.id, 'faction-order', order.orderCode);
 

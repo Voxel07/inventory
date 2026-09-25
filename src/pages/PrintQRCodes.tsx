@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Box,
     Typography,
@@ -14,12 +14,12 @@ import {
     MenuItem,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import { jsPDF } from 'jspdf';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
 import { useLocalizedText } from '../utils/naming';
 import { ListPagination } from '../components/shared/ListPagination';
+import { useClientPagination } from '../hooks/useClientPagination';
 
 type FilterMode = 'all' | 'items' | 'assemblies' | 'single' | 'selected';
 
@@ -86,17 +86,13 @@ export function PrintQRCodesPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [labelFormatId, setLabelFormatId] = useState<LabelFormatId>('40x30');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
 
-    const allEntries = useMemo<QREntry[]>(() => {
-        return [
-            ...(items ?? []).map((item) => ({ id: item.id, name: item.name, type: 'item' as const })),
-            ...(assemblies ?? []).map((a) => ({ id: a.id, name: a.name, type: 'assembly' as const })),
-        ];
-    }, [items, assemblies]);
+    const allEntries: QREntry[] = [
+        ...(items ?? []).map((item) => ({ id: item.id, name: item.name, type: 'item' as const })),
+        ...(assemblies ?? []).map((a) => ({ id: a.id, name: a.name, type: 'assembly' as const })),
+    ];
 
-    const filteredEntries = useMemo(() => {
+    const filteredEntries = (() => {
         switch (filterMode) {
             case 'items':
                 return allEntries.filter((e) => e.type === 'item');
@@ -109,14 +105,8 @@ export function PrintQRCodesPage() {
             default:
                 return allEntries;
         }
-    }, [allEntries, filterMode, selectedId, selectedIds]);
-    useEffect(() => setPage(1), [filterMode, selectedId, selectedIds]);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-    const pageCount = Math.ceil(filteredEntries.length / effectivePageSize);
-    useEffect(() => {
-        if (page > Math.max(1, pageCount)) setPage(Math.max(1, pageCount));
-    }, [page, pageCount]);
-    const visibleEntries = filteredEntries.slice((page - 1) * effectivePageSize, page * effectivePageSize);
+    })();
+    const { pageItems: visibleEntries, page, setPage, pageSize, onPageSizeChange } = useClientPagination(filteredEntries);
 
     async function handleGeneratePDF() {
         if (filteredEntries.length === 0) return;
@@ -125,6 +115,8 @@ export function PrintQRCodesPage() {
         try {
             const labelFormat = M221_LABEL_FORMATS.find((format) => format.id === labelFormatId) ?? M221_LABEL_FORMATS[0];
             const orientation = labelFormat.width >= labelFormat.height ? 'landscape' : 'portrait';
+            // Loaded on demand so jspdf (~630 kB incl. html2canvas/dompurify) stays out of the route bundle.
+            const { jsPDF } = await import('jspdf');
             const doc = new jsPDF({
                 orientation,
                 unit: 'mm',
@@ -208,7 +200,10 @@ export function PrintQRCodesPage() {
                         value={filterMode}
                         exclusive
                         onChange={(_e, value) => {
-                            if (value) setFilterMode(value);
+                            if (value) {
+                                setFilterMode(value);
+                                setPage(1);
+                            }
                         }}
                         size="small"
                     >
@@ -224,7 +219,10 @@ export function PrintQRCodesPage() {
                             options={allEntries}
                             getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
                             value={allEntries.find((o) => `${o.type}:${o.id}` === selectedId) ?? null}
-                            onChange={(_e, newValue) => setSelectedId(newValue ? `${newValue.type}:${newValue.id}` : null)}
+                            onChange={(_e, newValue) => {
+                                setSelectedId(newValue ? `${newValue.type}:${newValue.id}` : null);
+                                setPage(1);
+                            }}
                             renderInput={(params) => (
                                 <TextField {...params} label={t('Artikel oder Baugruppe auswählen', 'Select item or assembly')} size="small" />
                             )}
@@ -235,7 +233,10 @@ export function PrintQRCodesPage() {
                         getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
                         isOptionEqualToValue={(option, value) => option.id === value.id && option.type === value.type}
                         value={allEntries.filter((entry) => selectedIds.includes(`${entry.type}:${entry.id}`))}
-                        onChange={(_event, values) => setSelectedIds(values.map((entry) => `${entry.type}:${entry.id}`))}
+                        onChange={(_event, values) => {
+                            setSelectedIds(values.map((entry) => `${entry.type}:${entry.id}`));
+                            setPage(1);
+                        }}
                         renderInput={(params) => <TextField {...params} label={t('QR-Codes auswählen', 'Select QR codes')} size="small" />}
                         sx={{ minWidth: 300, flex: 1 }} />}
 
@@ -289,7 +290,7 @@ export function PrintQRCodesPage() {
                 </Grid>
             )}
             <ListPagination count={filteredEntries.length} page={page} onChange={setPage} pageSize={pageSize}
-                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+                onPageSizeChange={onPageSizeChange} />
         </Box>
     );
 }

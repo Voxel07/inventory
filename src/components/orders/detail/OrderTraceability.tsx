@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Alert, Box, Button, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
 import { useAppLanguage, useLocalizedText } from '../../../utils/naming';
@@ -20,14 +19,14 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
   const t = useLocalizedText();
   const language = useAppLanguage();
   const locale = language === 'de' ? 'de-DE' : 'en-US';
-  const previousOrder = useMemo(() => findPreviousFactionOrder(allOrders, {
+  const previousOrder = findPreviousFactionOrder(allOrders, {
     eventType: order.eventType,
     faction: order.faction,
     eventDate: order.eventDate,
     excludeId: order.id,
-  }), [allOrders, order]);
+  });
 
-  const comparison = useMemo(() => {
+  const comparison = (() => {
     if (!previousOrder) return [];
     const changes: Array<{ key: string; name: string; before: number; after: number }> = [];
     const currentItems = factionOrderItemBaseline(order);
@@ -45,7 +44,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
       if (before !== after) changes.push({ key: `assembly-${id}`, name: assemblyMap.get(id)?.name ?? id, before, after });
     }
     return changes;
-  }, [assemblyMap, itemMap, order, previousOrder]);
+  })();
 
   const labels: Record<FactionOrderHistoryAction, string> = {
     created: t('Liste erstellt', 'List created'),

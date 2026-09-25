@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -46,7 +46,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [infoRow, setInfoRow] = useState<AssemblyRow | null>(null);
 
-    const rows = useMemo<AssemblyRow[]>(() => {
+    const rows: AssemblyRow[] = (() => {
         const itemById = new Map((items ?? []).map((item) => [item.id, item]));
         const stockById = new Map((items ?? []).map((item) => [item.id, getItemStock(item)]));
         return (assemblies ?? []).map((assembly) => {
@@ -69,9 +69,9 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 totalValue: parts.reduce((sum, part) => sum + (itemById.get(part.id)?.value ?? expandedById.get(part.id)?.value ?? 0) * part.quantity, 0),
             };
         }).filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-    }, [assemblies, items, search]);
+    })();
 
-    const columns = useMemo<GridColDef<AssemblyRow>[]>(() => [
+    const columns: GridColDef<AssemblyRow>[] = [
         { field: 'name', headerName: t('Name', 'Name'), flex: 1.2, minWidth: 180,
             renderCell: ({ row }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography> },
         { field: 'description', headerName: t('Beschreibung', 'Description'), flex: 1, minWidth: 160 },
@@ -93,7 +93,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 <Tooltip title={t('Bearbeiten', 'Edit')}><IconButton size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
                 <Tooltip title={t('Löschen', 'Delete')}><IconButton size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
             </Stack> } satisfies GridColDef<AssemblyRow>] : []),
-    ], [canManage, onDelete, onEdit, t]);
+    ];
 
     function updateSelection(model: GridRowSelectionModel) {
         const ids = model.type === 'exclude'

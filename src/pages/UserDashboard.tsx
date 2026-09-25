@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     Box,
     Typography,
@@ -55,13 +55,13 @@ export function UserDashboard() {
     const [damageItem, setDamageItem] = useState<{ item: Item; quantity: number } | null>(null);
 
     // 1. Transactions belonging to this user
-    const userTransactions = useMemo(() => {
+    const userTransactions = (() => {
         if (!allTransactions || !currentUser) return [];
         return allTransactions.filter((tx) => tx.userId === currentUser.id);
-    }, [allTransactions, currentUser]);
+    })();
 
     // 2. Build CheckedOutRow format for the shared component and metrics
-    const checkedOutRows = useMemo<CheckedOutRow[]>(() => {
+    const checkedOutRows: CheckedOutRow[] = (() => {
         if (!items || !allTransactions || !currentUser) return [];
         const itemMap = new Map(items.map((item) => [item.id, item]));
         const rows = new Map<string, CheckedOutRow>();
@@ -94,15 +94,15 @@ export function UserDashboard() {
             });
         }
         return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
-    }, [items, allTransactions, currentUser, t]);
+    })();
 
     const totalUniqueCheckedOut = checkedOutRows.length;
     const totalUnitsCheckedOut = checkedOutRows.reduce((sum, r) => sum + r.checkedOut, 0);
     const totalUserTransactionsCount = userTransactions.length;
-    const userDamageReportsCount = useMemo(() => {
+    const userDamageReportsCount = (() => {
         if (!damageReports || !currentUser) return 0;
         return damageReports.filter((r) => r.reportedBy === currentUser.id && (r.status === 'reported' || r.status === 'in_review')).length;
-    }, [damageReports, currentUser]);
+    })();
 
     const metrics = [
         { label: t('Meine ausgeliehenen Artikel', 'My checked-out items'), value: totalUniqueCheckedOut, icon: <ShoppingBagIcon />, color: '#7c4dff' },

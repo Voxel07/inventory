@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
@@ -90,23 +90,20 @@ export function FactionOrderDetail() {
     ));
   }, [order?.assetAssignments, order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
 
-  const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
-  const assemblyMap = useMemo(() => new Map(assemblies.map((assembly) => [assembly.id, assembly])), [assemblies]);
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const assemblyMap = new Map(assemblies.map((assembly) => [assembly.id, assembly]));
 
-  const orderItems = useMemo(() => {
+  const orderItems = (() => {
     if (!order) return [];
     return (order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter(Boolean)) as Item[];
-  }, [itemMap, order]);
+  })();
 
-  const orderAssemblies = useMemo(() => {
+  const orderAssemblies = (() => {
     if (!order) return [];
     return (order.expand?.assemblyIds ?? Object.keys(order.requestedAssemblyQuantities ?? {}).map((id) => assemblyMap.get(id)).filter(Boolean)) as Assembly[];
-  }, [assemblyMap, order]);
+  })();
 
-  const orderItemCategories = useMemo(
-    () => [...new Set(orderItems.map((item) => item.category).filter(Boolean))],
-    [orderItems],
-  );
+  const orderItemCategories = [...new Set(orderItems.map((item) => item.category).filter(Boolean))];
 
   function availableForItemId(itemId: string) {
     const item = itemMap.get(itemId);

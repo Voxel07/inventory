@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     Box,
     Button,
@@ -34,7 +34,7 @@ export function CheckedOutItemsPage() {
     const [eventFilter, setEventFilter] = useState('');
     const [returnRow, setReturnRow] = useState<CheckedOutRow>();
 
-    const checkedOutRows = useMemo<CheckedOutRow[]>(() => {
+    const checkedOutRows: CheckedOutRow[] = (() => {
         if (!items?.length) return [];
 
         const itemMap = new Map(items.map((item) => [item.id, item]));
@@ -66,16 +66,16 @@ export function CheckedOutItemsPage() {
             });
         }
         return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
-    }, [items, transactions, t]);
+    })();
 
-    const people = useMemo(() => [...new Map(checkedOutRows.map((row) => [row.personId, row.person])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [checkedOutRows]);
-    const events = useMemo(() => [...new Map(checkedOutRows.map((row) => [row.eventKey, row.event])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [checkedOutRows]);
-    const visibleRows = useMemo(() => checkedOutRows.filter((row) => {
+    const people = [...new Map(checkedOutRows.map((row) => [row.personId, row.person])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    const events = [...new Map(checkedOutRows.map((row) => [row.eventKey, row.event])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    const visibleRows = checkedOutRows.filter((row) => {
         const term = search.trim().toLocaleLowerCase();
         return (!term || `${row.name} ${row.category} ${row.person} ${row.event}`.toLocaleLowerCase().includes(term))
             && (!personFilter || row.personId === personFilter)
             && (!eventFilter || row.eventKey === eventFilter);
-    }), [checkedOutRows, eventFilter, personFilter, search]);
+    });
 
     function handleQuickReturn(row: CheckedOutRow) {
         setReturnRow(row);

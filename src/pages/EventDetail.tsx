@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -50,7 +50,7 @@ export function EventDetail() {
   const [notes, setNotes] = useState('');
   const [search, setSearch] = useState('');
 
-  const resetForm = useCallback(() => {
+  const resetForm = () => {
     if (!report) return;
     setEventType(report.eventType);
     setEventDate(report.eventDate.slice(0, 10));
@@ -61,24 +61,25 @@ export function EventDetail() {
     setUsed(toQuantityInputs(report.usedQuantities));
     setNotes(report.notes ?? '');
     setSearch('');
-  }, [report]);
+  };
+
+  // Effect event: the effect below must re-run when the loaded report changes, but
+  // must not re-run merely because `resetForm` is a new function on each render.
+  const resetFormOnReportChange = useEffectEvent(resetForm);
 
   useEffect(() => {
-    resetForm();
-  }, [resetForm]);
+    resetFormOnReportChange();
+  }, [report]);
 
-  const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
-  const recordedIds = useMemo(() => new Set([
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const recordedIds = new Set([
     ...Object.keys(planned),
     ...Object.keys(used),
-  ]), [planned, used]);
-  const missingItemIds = useMemo(
-    () => [...recordedIds].filter((id) => !itemMap.has(id) && (
+  ]);
+  const missingItemIds = [...recordedIds].filter((id) => !itemMap.has(id) && (
       Number(used[id]) > 0 || ((editing || report?.status !== 'completed') && Number(planned[id]) > 0)
-    )),
-    [editing, itemMap, planned, recordedIds, report?.status, used],
-  );
-  const visibleItems = useMemo(() => {
+    ));
+  const visibleItems = (() => {
     const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
@@ -90,7 +91,7 @@ export function EventDetail() {
         return item.eventTypes?.includes(eventType);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [editing, eventType, items, planned, report?.status, search, used]);
+  })();
 
   const plannedQuantities = toNonNegativeQuantities(planned);
   const usedQuantities = toNonNegativeQuantities(used);

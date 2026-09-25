@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -49,6 +49,7 @@ import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { ListPagination } from '../components/shared/ListPagination';
+import { useClientPagination } from '../hooks/useClientPagination';
 
 export function StorageLocations() {
     const t = useLocalizedText();
@@ -69,12 +70,6 @@ export function StorageLocations() {
     const [editingLoc, setEditingLoc] = useState<StorageLocation | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [locationPage, setLocationPage] = useState(1);
-    const [itemPage, setItemPage] = useState(1);
-    const [locationPageSize, setLocationPageSize] = useState(20);
-    const [itemPageSize, setItemPageSize] = useState(20);
-    const locationSize = locationPageSize === -1 ? Number.MAX_SAFE_INTEGER : locationPageSize;
-    const itemSize = itemPageSize === -1 ? Number.MAX_SAFE_INTEGER : itemPageSize;
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -86,16 +81,21 @@ export function StorageLocations() {
         longitude: 11.826278,
         mapZoom: 19,
     });
-    const overlayPreview = useMemo(() => formData.mapOverlayFile ? URL.createObjectURL(formData.mapOverlayFile) : undefined, [formData.mapOverlayFile]);
-    useEffect(() => () => {
-        if (overlayPreview) URL.revokeObjectURL(overlayPreview);
-    }, [overlayPreview]);
+    const [loadedOverlayPreview, setLoadedOverlayPreview] = useState<{ file: File; url: string }>();
+    useEffect(() => {
+        const file = formData.mapOverlayFile;
+        if (!dialogOpen || !file) return;
+        const url = URL.createObjectURL(file);
+        setLoadedOverlayPreview({ file, url });
+        return () => URL.revokeObjectURL(url);
+    }, [dialogOpen, formData.mapOverlayFile]);
+    const overlayPreview = dialogOpen && loadedOverlayPreview && loadedOverlayPreview.file === formData.mapOverlayFile
+        ? loadedOverlayPreview.url
+        : undefined;
 
-    const activeLocation = useMemo(() => {
-        return locations?.find((l) => l.id === selectedLocId) || null;
-    }, [locations, selectedLocId]);
+    const activeLocation = locations?.find((l) => l.id === selectedLocId) || null;
 
-    const filteredLocations = useMemo(() => {
+    const filteredLocations = (() => {
         if (!locations) return [];
         if (!searchQuery.trim()) return locations;
         const lower = searchQuery.toLowerCase();
@@ -104,25 +104,21 @@ export function StorageLocations() {
                 l.name.toLowerCase().includes(lower) ||
                 (l.area && l.area.toLowerCase().includes(lower))
         );
-    }, [locations, searchQuery]);
-    const currentLocationPage = Math.min(locationPage, Math.max(1, Math.ceil(filteredLocations.length / locationSize)));
-    const pageLocations = filteredLocations.slice((currentLocationPage - 1) * locationSize, currentLocationPage * locationSize);
+    })();
+    const { pageItems: pageLocations, page: currentLocationPage, setPage: setLocationPage, pageSize: locationPageSize, onPageSizeChange: onLocationPageSizeChange } = useClientPagination(filteredLocations);
 
     // Items stored in the selected location
-    const storedItems = useMemo(() => {
+    const storedItems = (() => {
         if (!items || !selectedLocId) return [];
         return items.filter((item) => item.storageLocation === selectedLocId);
-    }, [items, selectedLocId]);
+    })();
 
     // Enriched items with checkouts and damage calculations
-    const enrichedStoredItems = useMemo(() => {
-        return storedItems.map((item) => {
-            const { totalStock, remaining, checkedOut } = getItemStock(item);
-            return { item, totalStock, remaining, checkedOut };
-        });
-    }, [storedItems]);
-    const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(enrichedStoredItems.length / itemSize)));
-    const pageStoredItems = enrichedStoredItems.slice((currentItemPage - 1) * itemSize, currentItemPage * itemSize);
+    const enrichedStoredItems = storedItems.map((item) => {
+        const { totalStock, remaining, checkedOut } = getItemStock(item);
+        return { item, totalStock, remaining, checkedOut };
+    });
+    const { pageItems: pageStoredItems, page: currentItemPage, setPage: setItemPage, pageSize: itemPageSize, onPageSizeChange: onItemPageSizeChange } = useClientPagination(enrichedStoredItems);
 
     function handleOpenCreate() {
         setEditingLoc(null);
@@ -299,7 +295,7 @@ export function StorageLocations() {
                                     })}
                                 </List>
                             )}
-                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} pageSize={locationPageSize} onPageSizeChange={(size) => { setLocationPageSize(size); setLocationPage(1); }} />
+                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} pageSize={locationPageSize} onPageSizeChange={onLocationPageSizeChange} />
                         </Paper>
                     </Grid>
                 )}
@@ -455,7 +451,7 @@ export function StorageLocations() {
                                         </Table>
                                     </TableContainer>
                                 )}
-                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} pageSize={itemPageSize} onPageSizeChange={(size) => { setItemPageSize(size); setItemPage(1); }} />
+                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} pageSize={itemPageSize} onPageSizeChange={onItemPageSizeChange} />
                             </Paper>
                         ) : (
                             <Paper

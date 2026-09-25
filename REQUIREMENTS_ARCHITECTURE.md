@@ -124,6 +124,10 @@ Additional frontend rules:
 - Pages and generic utilities do not call the HTTP client directly. Services own transport contracts, including item/SKU, asset-code, and exact order-code resolution.
 - The `stock` projection returned with an item is authoritative. The client must not download global transaction, damage, or order ledgers merely to recompute current stock.
 - Route access and navigation visibility share the same access helpers. Hiding a navigation entry is a UX measure only; the backend remains the authorization boundary.
+- Referential stability is provided by React Compiler, not by hand. `useMemo`, `useCallback`, and `React.memo` are used nowhere; values are computed directly during render, and multi-statement derivations use an inline immediately-invoked function. Do not reintroduce manual memoization — the compiler is configured through `reactCompilerPreset()` and enforced by the `react-compiler/react-compiler` lint rule at error level.
+- When an effect must invoke a render-scoped function without making that function a reactive dependency, use `useEffectEvent`. It is the sanctioned replacement for the `useCallback` that the compiler no longer needs.
+- Client-side pagination of already-loaded collections goes through `useClientPagination`. `SHOW_ALL_PAGE_SIZE` (`-1`) is the canonical "all entries" sentinel and must keep working; the hook clamps the current page during render rather than syncing it in an effect.
+- Heavy dependencies that are needed only by an explicit user action are imported with `await import()` inside the handler that needs them, never at module scope. `jspdf` (with its `html2canvas` and `dompurify` transitives) is the current example.
 
 ## 5. Inventory semantics
 
@@ -252,7 +256,7 @@ The detail UI exposes the immutable history, lifecycle actors, timestamps, and t
 
 ## 9. Persistence and schema state
 
-The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panache is not part of the persistence model. Production schema ownership is explicit: `%prod` enables Flyway at startup and configures Hibernate with `strategy=validate`. Versioned migrations are committed under `backend/src/main/resources/db/migration`, beginning with `V1.0.0__init.sql` and `V1.1.0__damage_report_targets.sql`. Baseline-on-migrate is opt-in for an explicitly reviewed existing database; an empty database runs the initial migration normally.
+The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panache is not part of the persistence model. Production schema ownership is explicit: `%prod` enables Flyway at startup and configures Hibernate with `strategy=validate`. Versioned migrations are committed under `backend/src/main/resources/db/migration`: `V1.0.0__init.sql`, `V1.0.1__category_maintenance.sql`, `V1.1.0__damage_report_targets.sql`, and `V1.1.1__general_order_flow.sql`. Baseline-on-migrate is opt-in for an explicitly reviewed existing database; an empty database runs the initial migration normally.
 
 The unqualified local profile still uses Hibernate `strategy=update`, while development and test use disposable `drop-and-create` schemas with Flyway disabled. Shared staging, production-like, and multi-node deployments must use the production-equivalent Flyway/validate policy rather than the local default. Remaining hardening work is to retire `update` outside explicitly disposable/local use, keep all future changes forward-only, test upgrades from supported database versions, and validate backup/restore before release.
 
@@ -295,6 +299,9 @@ Authenticated users may stage a return-placement image. Once the return submissi
 | Item details could not capture operational category data | Added typed vehicle, generator, and food fields plus generator maintenance history to the existing item-detail route | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers`, TypeScript production build |
 | Person/group-local catalog entries leaked through unfiltered item reads | Catalog list and detail queries now apply the canonical visibility scope with an explicit inventory-manager operational override | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers` |
 | Returns immediately changed stock with no physical acknowledgement | Added pending return submissions, optional placement photos, and a worker-only acknowledgement view; only acceptance reaches canonical stock/reconciliation services | `submittedReturnDoesNotChangeStockUntilWarehouseAcknowledgement`, TypeScript production build |
+| Manual memoization duplicated what React Compiler already provides | Removed all 124 `useMemo`/`useCallback` wrappers; derivation is inline, and `useEffectEvent` replaced the three `useCallback`s that effects depended on | `npm.cmd run lint` (`react-compiler/react-compiler` at error level), TypeScript production build |
+| Client-side pagination was copied into 13 list surfaces | Extracted `useClientPagination`, which derives the clamped page during render and keeps the `-1` "all entries" sentinel; adopted in 13 surfaces across 10 components | TypeScript production build; `npm.cmd run lint` |
+| `jspdf` was pulled into every route bundle that could export a PDF | Replaced the three module-scope imports with `await import('jspdf')` inside the exporting handlers | Vite chunk output: `jspdf-vendor` and `html2canvas` are demand-loaded only |
 
 Required verification before merge:
 
@@ -313,6 +320,44 @@ These are not compatibility work and are not represented as already implemented:
 2. Generate the TypeScript transport models from the OpenAPI document to reduce remaining manual DTO duplication.
 3. Add browser-level tests for mobile commissioning, scan resolution, order reservation editing, procurement access, offline filtered reads, and the traceability panel.
 4. Validate backup restore, outbox recovery, and offline-conflict workflows in a production-like environment.
-5. Add route prefetching and enforce bundle-size budgets; the largest shared vendor chunks remain substantial even though route-level code splitting is active.
+5. Add route prefetching and enforce bundle-size budgets. Route-level code splitting is active and `jspdf` is now demand-loaded, but `mui-grid-vendor` (~757 kB) and `recharts-vendor` (~347 kB) remain the largest chunks.
 6. Expand serialized-inventory browser coverage and UX for high-volume asset registration, scanner-assisted assignment, and faction batch reconciliation.
 7. Add browser-level coverage for scoped catalog visibility and the pending-return photo/acknowledgement workflow.
+
+## 13. Frontend consolidation state
+
+### 13.1 Decisions taken
+
+- **Virtualization is retained, not replaced by removing the "all entries" option.** `SHOW_ALL_PAGE_SIZE` (`-1`) stays supported, and `@mui/x-data-grid` continues to virtualize the DataGrid-backed lists. `@tanstack/react-virtual` is deliberately *not* added to those lists, because double virtualization is a defect source.
+- **The hybrid layout is retained.** `pages/`, `components/`, `hooks/`, `services/`, `types/`, and `utils/` remain the organizing structure; §4.2 describes it. A wholesale move to `features/*` is not planned.
+- **Radix UI and Ark UI are not adopted.** MUI already supplies the dialog, menu, select, focus-trap, and ARIA behaviour; there is no hand-rolled focus trap or portal in the codebase. Swapping primitive libraries would re-author the Emotion styling layer and grow the codebase rather than shrink it.
+
+### 13.2 Completed consolidations
+
+| Change | Effect |
+|---|---|
+| Removed every `useMemo` and `useCallback` wrapper (124 sites across 28 files); no `React.memo` existed | Derivation happens directly during render; React Compiler supplies referential stability |
+| Added `hooks/useClientPagination.ts` and adopted it in 13 list surfaces across 10 components | Replaced 13 copies of the `pageSize === -1` / `Math.min(page, …)` / `slice()` block with one derived hook |
+| Removed the `setPage(1)` effects in `PrintQRCodes` and `TransactionHistory` | Filter handlers reset pagination directly; the hook clamps the current page when loaded collections shrink |
+| Replaced three effect-dependency `useCallback`s in `EventDetail`, `OrderReturnChecklist`, and `FactionOrderForm` with `useEffectEvent` | Effects now depend only on real inputs; the barcode listener in `OrderReturnChecklist` is registered once instead of on every items/outstanding change |
+| Removed the `UserPermissionsEditor` prop-to-state sync effect | The editor is remounted from the persisted server snapshot via a composed `key`, per the derive-don't-sync rule |
+| Moved `jspdf` to `await import()` in all three consumers | ~628 kB (`jspdf` + `html2canvas` + `dompurify`) leaves the route bundle and loads only when a PDF is actually generated |
+
+### 13.3 Derived state conversion backlog
+
+`react-hooks/set-state-in-effect` remains off, with the offending sites enumerated in `eslint.config.js`. Each is a prop- or query-parameter-to-state synchronisation that still needs behavioural verification, which requires the browser test suite from §12.3:
+
+`components/common/ImageAttachments.tsx`, `components/forms/FactionOrderForm.tsx` (×2), `components/orders/detail/OrderPickupMapDialog.tsx`, `components/procurement/ProcurementOrders.tsx`, `pages/EventDetail.tsx`, `pages/Events.tsx` (×2), `pages/FactionOrderDetail.tsx`, `pages/FactionOrders.tsx`, `pages/ItemDetail.tsx`.
+
+Turn this rule back on once those are converted.
+
+### 13.4 Remaining consolidation not yet done
+
+These were analysed and quantified but not implemented, because each changes working behaviour and needs test coverage first:
+
+1. **Extract the catalog item/assembly picker.** The same search + category filter + paging + quantity-map + tile/list toggle interaction is implemented three times (`FactionOrderForm`, `OrderPickListTable`, `GeneralOrders`). This is the largest remaining duplication (roughly 600–900 lines).
+2. **Extract a shared mutation-feedback helper.** Around 50 call sites repeat an inline `onSuccess`/`onError` pair with `showSnackbar(t(…))`.
+3. **Move list filters and pagination into the URL.** `CheckedOutItems`, `StorageLocations`, `GeneralOrders`, `FactionOrders`, `PrintQRCodes`, `AssetInstancesList`, `UserManagement` and `ProcurementOrders` still hold filters in `useState`, so views are not shareable and are lost on navigation.
+4. **Compose `OrderDetailHeader` from slots.** It currently takes roughly fourteen `on*` callbacks, and `OrderPickListTable` drills three `React.Dispatch<SetStateAction<…>>` setters down.
+5. **Optimistic updates.** Only `Header.tsx` uses `onMutate`; order transitions, damage status changes, and return acknowledgement still wait for the server round trip.
+6. **Convert the remaining effect-based fetch loops** (`Events`, `FactionOrders`, `FactionOrderDetail`, `UserManagement`, `ProcurementOrders`, `OrderReturnChecklist`) to TanStack Query, and replace `GeneralOrders.openPickup`'s `Promise.all` with `useQueries`.

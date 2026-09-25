@@ -1,6 +1,6 @@
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -137,19 +137,13 @@ export function ItemDetail() {
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams, canTransact]);
 
-    const itemTransactions = useMemo(
-        () => itemTransactionsData ?? [],
-        [itemTransactionsData],
-    );
+    const itemTransactions = itemTransactionsData ?? [];
 
     const categories = item?.category ? [item.category] : [];
 
     const { totalStock, checkedOut, damaged, remaining } = getItemStock(item);
 
-    const stockHistory = useMemo(
-        () => buildStockHistory(itemTransactions, item?.amount ?? 0),
-        [itemTransactions, item?.amount],
-    );
+    const stockHistory = buildStockHistory(itemTransactions, item?.amount ?? 0);
 
     function handleUpdate(data: ItemFormData) {
         if (!itemId) return;

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, MutationCache, useQueryClient } from '@tanstack/react-query';
 import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
@@ -454,7 +454,7 @@ export default function App() {
 
 function ThemedApp() {
   const themeMode = useUIStore((s) => s.themeMode);
-  const theme = useMemo(() => buildTheme(themeMode), [themeMode]);
+  const theme = buildTheme(themeMode);
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

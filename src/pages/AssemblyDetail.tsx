@@ -1,7 +1,7 @@
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { apiFileUrl } from '../services/apiClient';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -191,7 +191,7 @@ export function AssemblyDetail() {
     }
 
     // Calculate available stock for each item
-    const stockInfo = useMemo(() => {
+    const stockInfo = (() => {
         if (!items) return new Map<string, number>();
         const map = new Map<string, number>();
         for (const item of items) {
@@ -199,7 +199,7 @@ export function AssemblyDetail() {
             map.set(item.id, remaining);
         }
         return map;
-    }, [items]);
+    })();
 
     if (isLoading) {
         return (

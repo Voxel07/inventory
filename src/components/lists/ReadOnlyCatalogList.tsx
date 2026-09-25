@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Box, Button, Chip, DialogContent, DialogTitle, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
 import { ListPagination } from '../shared/ListPagination';
+import { useClientPagination } from '../../hooks/useClientPagination';
 import { useLocalizedText } from '../../utils/naming';
 
 export interface CatalogEntry {
@@ -26,8 +27,6 @@ interface Props {
 export function ReadOnlyCatalogList({ title, entries, isLoading, isError, loadingMore, onRetry }: Props) {
   const t = useLocalizedText();
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState<CatalogEntry | null>(null);
 
   const term = search.trim().toLocaleLowerCase();
@@ -35,9 +34,7 @@ export function ReadOnlyCatalogList({ title, entries, isLoading, isError, loadin
     ? entries.filter((entry) => `${entry.name} ${entry.subtitle ?? ''} ${entry.description ?? ''}`.toLocaleLowerCase().includes(term))
     : entries;
 
-  const size = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / size)));
-  const pageEntries = filtered.slice((currentPage - 1) * size, currentPage * size);
+  const { pageItems: pageEntries, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(filtered);
 
   return (
     <Box>
@@ -87,7 +84,7 @@ export function ReadOnlyCatalogList({ title, entries, isLoading, isError, loadin
         page={currentPage}
         onChange={setPage}
         pageSize={pageSize}
-        onPageSizeChange={(newSize) => { setPageSize(newSize); setPage(1); }}
+        onPageSizeChange={onPageSizeChange}
         loadingMore={loadingMore}
         loadError={isError}
         onRetry={onRetry}

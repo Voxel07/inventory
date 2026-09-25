@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     Alert, Box, Button, Chip, DialogContent, DialogTitle, Divider, Paper, Skeleton,
@@ -45,7 +45,7 @@ export function AssetDetail() {
     const showSnackbar = useUIStore((state) => state.showSnackbar);
     const asset = assets?.find((candidate) => candidate.id === assetId);
 
-    const activity = useMemo(() => {
+    const activity = (() => {
         const transactionEvents = (transactions ?? [])
             .filter((transaction) => transaction.assetInstanceId === assetId)
             .map((transaction) => ({
@@ -71,7 +71,7 @@ export function AssetDetail() {
                 color: 'error.main',
             }));
         return [...transactionEvents, ...damageEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    }, [assetId, reports, t, transactions]);
+    })();
 
     function closeDamageDialog() {
         setDamageOpen(false);

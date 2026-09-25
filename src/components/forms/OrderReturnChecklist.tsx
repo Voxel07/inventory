@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { Alert, Box, Button, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import type { AssetInstance, FactionOrder, Item } from '../../types';
 import type { AssetReturnOutcome } from '../../services/factionOrderService';
@@ -14,20 +14,20 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;
 }) {
   const t = useLocalizedText();
-  const outstanding = useMemo<Record<string, number>>(() => Object.fromEntries(items.map((item) => {
+  const outstanding: Record<string, number> = Object.fromEntries(items.map((item) => {
     const handedOver = order.handedOverQuantities?.[item.id] ?? 0;
     const reconciled = (order.returnedQuantities?.[item.id] ?? 0)
       + (order.consumedQuantities?.[item.id] ?? 0)
       + (order.damagedQuantities?.[item.id] ?? 0)
       + (order.writtenOffQuantities?.[item.id] ?? 0);
     return [item.id, Math.max(0, handedOver - reconciled)];
-  }).filter(([, quantity]) => Number(quantity) > 0)), [items, order]);
-  const outstandingAssets = useMemo<Record<string, AssetInstance[]>>(() => Object.fromEntries(
+  }).filter(([, quantity]) => Number(quantity) > 0));
+  const outstandingAssets: Record<string, AssetInstance[]> = Object.fromEntries(
     Object.entries(order.assetAssignments ?? {}).map(([itemId, assets]) => [
       itemId,
       assets.filter((asset) => ['in_field', 'in_custody', 'lost'].includes(asset.availabilityStatus)),
     ]).filter(([, assets]) => (assets as AssetInstance[]).length > 0),
-  ) as Record<string, AssetInstance[]>, [order.assetAssignments]);
+  ) as Record<string, AssetInstance[]>;
   const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>(() => Object.fromEntries(
     Object.values(outstandingAssets).flatMap((assets) => assets
       .filter((asset) => asset.availabilityStatus !== 'lost')
@@ -57,7 +57,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
   function setValue(itemId: string, field: keyof Outcome, raw: string) {
     setLines((current) => ({ ...current, [itemId]: { ...current[itemId], [field]: field === 'notes' ? raw : raw === '' ? undefined : Number(raw) } }));
   }
-  const summarizeAssets = useCallback((itemId: string, next: Record<string, AssetReturnOutcome>) => {
+  const summarizeAssets = (itemId: string, next: Record<string, AssetReturnOutcome>) => {
     const assets = outstandingAssets[itemId] ?? [];
     return {
       returned: assets.filter((asset) => next[asset.id]?.outcome === 'returned_good').length,
@@ -66,8 +66,8 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       missing: assets.filter((asset) => next[asset.id]?.outcome === 'missing'
         || (asset.availabilityStatus === 'lost' && !next[asset.id])).length,
     };
-  }, [outstandingAssets]);
-  const setAssetOutcome = useCallback((itemId: string, assetId: string, outcome: string) => {
+  };
+  const setAssetOutcome = (itemId: string, assetId: string, outcome: string) => {
     setAssetOutcomes((current) => {
       const next = { ...current };
       if (outcome === 'unchanged_missing') delete next[assetId];
@@ -75,7 +75,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       setLines((currentLines) => ({ ...currentLines, [itemId]: { ...currentLines[itemId], ...summarizeAssets(itemId, next) } }));
       return next;
     });
-  }, [summarizeAssets]);
+  };
   const invalid = Object.entries(lines).some(([itemId, value]) =>
     value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0
     || value.returned + value.consumed + value.missing + value.damaged > Number(outstanding[itemId]));
@@ -134,9 +134,10 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
     }));
   }
 
-  // Consumer for ash-barcode-scanned during return reconciliation
-  useEffect(() => {
-    function onBarcodeScanned(e: Event) {
+  // Consumer for ash-barcode-scanned during return reconciliation.
+  // Effect event: the listener is registered once and always sees the latest
+  // `items`, `outstanding`, `outstandingAssets` and outcome setter.
+  const onBarcodeScanned = useEffectEvent((e: Event) => {
       const detail = (e as CustomEvent<{ code: string }>).detail;
       if (!detail?.code) return;
       let code = detail.code.trim();
@@ -175,10 +176,12 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
           return prev;
         });
       }
-    }
+  });
+
+  useEffect(() => {
     window.addEventListener('ash-barcode-scanned', onBarcodeScanned);
     return () => window.removeEventListener('ash-barcode-scanned', onBarcodeScanned);
-  }, [items, outstanding, outstandingAssets, setAssetOutcome]);
+  }, []);
 
   return (
     <>

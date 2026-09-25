@@ -1,5 +1,5 @@
 import { Dialog } from '../shared/ClosableDialog';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
     Box,
     Paper,
@@ -39,6 +39,7 @@ import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, Ass
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useLocalizedText } from '../../utils/naming';
+import { useClientPagination } from '../../hooks/useClientPagination';
 import { QRCodeGenerator } from '../qr/QRCodeGenerator';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
@@ -73,10 +74,33 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     const deleteAsset = useDeleteItemAsset(item.id);
 
     const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
     const [statusFilter, setStatusFilter] = useState<string>('');
+
+    const filteredAssets = (() => {
+        if (!assets) return [];
+        return assets.filter((asset) => {
+            const matchesSearch = !search.trim()
+                || asset.assetCode.toLowerCase().includes(search.toLowerCase())
+                || (asset.serialNumber && asset.serialNumber.toLowerCase().includes(search.toLowerCase()))
+                || (asset.notes && asset.notes.toLowerCase().includes(search.toLowerCase()))
+                || (asset.currentCustodianName && asset.currentCustodianName.toLowerCase().includes(search.toLowerCase()));
+            const matchesStatus = !statusFilter || asset.availabilityStatus === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    })();
+    const { pageItems: pageAssets, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(filteredAssets);
+
+    // Metrics
+    const metrics = (() => {
+        if (!assets) return { total: 0, available: 0, inCustody: 0, maintenance: 0, damaged: 0 };
+        return {
+            total: assets.length,
+            available: assets.filter((a) => a.availabilityStatus === 'available').length,
+            inCustody: assets.filter((a) => a.availabilityStatus === 'in_custody' || a.availabilityStatus === 'in_field').length,
+            maintenance: assets.filter((a) => a.availabilityStatus === 'in_maintenance' || a.availabilityStatus === 'in_repair').length,
+            damaged: assets.filter((a) => a.availabilityStatus === 'damaged' || a.conditionStatus === 'damaged' || a.conditionStatus === 'unsafe').length,
+        };
+    })();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialogs
@@ -121,33 +145,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         setSingleInput((prev: AssetInstanceInput) => ({ ...prev, ...patch }));
     const updateEdit = (patch: Partial<AssetInstanceInput>) =>
         setEditInput((prev: AssetInstanceInput) => ({ ...prev, ...patch }));
-
-    const filteredAssets = useMemo(() => {
-        if (!assets) return [];
-        return assets.filter((asset) => {
-            const matchesSearch = !search.trim()
-                || asset.assetCode.toLowerCase().includes(search.toLowerCase())
-                || (asset.serialNumber && asset.serialNumber.toLowerCase().includes(search.toLowerCase()))
-                || (asset.notes && asset.notes.toLowerCase().includes(search.toLowerCase()))
-                || (asset.currentCustodianName && asset.currentCustodianName.toLowerCase().includes(search.toLowerCase()));
-            const matchesStatus = !statusFilter || asset.availabilityStatus === statusFilter;
-            return matchesSearch && matchesStatus;
-        });
-    }, [assets, search, statusFilter]);
-    const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredAssets.length / effectivePageSize)));
-    const pageAssets = filteredAssets.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
-
-    // Metrics
-    const metrics = useMemo(() => {
-        if (!assets) return { total: 0, available: 0, inCustody: 0, maintenance: 0, damaged: 0 };
-        return {
-            total: assets.length,
-            available: assets.filter((a) => a.availabilityStatus === 'available').length,
-            inCustody: assets.filter((a) => a.availabilityStatus === 'in_custody' || a.availabilityStatus === 'in_field').length,
-            maintenance: assets.filter((a) => a.availabilityStatus === 'in_maintenance' || a.availabilityStatus === 'in_repair').length,
-            damaged: assets.filter((a) => a.availabilityStatus === 'damaged' || a.conditionStatus === 'damaged' || a.conditionStatus === 'unsafe').length,
-        };
-    }, [assets]);
 
     function handleOpenAddSingle() {
         const nextNum = (assets?.length ?? 0) + 1;
@@ -453,7 +450,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </TableContainer>
             )}
 
-            <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAssets.length} page={currentPage} onChange={setPage}
+            <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={filteredAssets.length} page={currentPage} onChange={setPage}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
 
             {/* Dialog: Add Single Asset */}

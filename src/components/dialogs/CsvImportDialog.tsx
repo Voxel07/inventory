@@ -1,5 +1,5 @@
 import { Dialog } from '../shared/ClosableDialog';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useRef } from 'react';
 import {
   DialogTitle,
   DialogContent,
@@ -167,18 +167,18 @@ export function CsvImportDialog({
   } | null>(null);
 
   // Parse CSV
-  const { rows } = useMemo(() => {
+  const { rows } = (() => {
     if (!csvContent.trim()) return { rows: [] };
     return parseCsv(csvContent);
-  }, [csvContent]);
+  })();
 
   // Parsed Items and Assemblies
-  const parsedItems: ParsedItemRow[] = useMemo(() => {
+  const parsedItems: ParsedItemRow[] = (() => {
     if (tabType === 'assemblies' || rows.length === 0) return [];
     return parseItemsFromCsv(rows, storageLocations, items);
-  }, [rows, tabType, storageLocations, items]);
+  })();
 
-  const effectiveItemsForAssemblies = useMemo(() => {
+  const effectiveItemsForAssemblies = (() => {
     if (tabType !== 'combined') return items;
     const map = new Map<string, Item>();
     for (const it of items) {
@@ -200,34 +200,34 @@ export function CsvImportDialog({
       }
     }
     return Array.from(map.values());
-  }, [items, parsedItems, tabType]);
+  })();
 
-  const parsedAssemblies: ParsedAssemblyRow[] = useMemo(() => {
+  const parsedAssemblies: ParsedAssemblyRow[] = (() => {
     if (tabType === 'items' || rows.length === 0) return [];
     return parseAssembliesFromCsv(rows, effectiveItemsForAssemblies, assemblies);
-  }, [rows, tabType, effectiveItemsForAssemblies, assemblies]);
+  })();
 
-  const parsedEvents: ParsedEventReportRow[] = useMemo(() => {
+  const parsedEvents: ParsedEventReportRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseEventReportsFromCsv(rows, effectiveItemsForAssemblies);
-  }, [rows, tabType, effectiveItemsForAssemblies]);
+  })();
 
-  const parsedOrders: ParsedFactionOrderRow[] = useMemo(() => {
+  const parsedOrders: ParsedFactionOrderRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies);
-  }, [rows, tabType, effectiveItemsForAssemblies]);
+  })();
 
-  const parsedGeneralOrders: ParsedGeneralOrderRow[] = useMemo(() => {
+  const parsedGeneralOrders: ParsedGeneralOrderRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseGeneralOrdersFromCsv(rows, effectiveItemsForAssemblies);
-  }, [rows, tabType, effectiveItemsForAssemblies]);
+  })();
 
-  const parsedReturns: ParsedReturnRow[] = useMemo(() => {
+  const parsedReturns: ParsedReturnRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
     return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations);
-  }, [rows, tabType, effectiveItemsForAssemblies, storageLocations]);
-  const parsedCheckouts = useMemo(() => tabType === 'combined'
-    ? parseCheckoutsFromCsv(rows, effectiveItemsForAssemblies) : [], [rows, tabType, effectiveItemsForAssemblies]);
+  })();
+  const parsedCheckouts = tabType === 'combined'
+    ? parseCheckoutsFromCsv(rows, effectiveItemsForAssemblies) : [];
 
   // Statistics
   const validItemsCount = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems)).length;

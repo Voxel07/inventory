@@ -24,6 +24,19 @@ export default defineConfig([
     },
     rules: {
       'react-compiler/react-compiler': 'error',
+      // Tracked suppression, not a silent one. Derived-state conversions are complete
+      // everywhere except the sites listed below; they each need behavioural
+      // verification before this rule can be turned back on (see
+      // REQUIREMENTS_ARCHITECTURE.md, "Derived state conversion backlog").
+      //   components/common/ImageAttachments.tsx:22
+      //   components/forms/FactionOrderForm.tsx:158,162
+      //   components/orders/detail/OrderPickupMapDialog.tsx:62
+      //   components/procurement/ProcurementOrders.tsx:44
+      //   pages/EventDetail.tsx:71
+      //   pages/Events.tsx:92,97
+      //   pages/FactionOrderDetail.tsx:78
+      //   pages/FactionOrders.tsx:110
+      //   pages/ItemDetail.tsx:134
       'react-hooks/set-state-in-effect': 'off',
     },
   },

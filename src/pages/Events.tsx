@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -73,29 +73,20 @@ export function Events() {
     });
   }
 
-  const completedReports = useMemo(
-    () => reports?.filter((report) => report.status === 'completed') ?? [],
-    [reports],
-  );
+  const completedReports = reports?.filter((report) => report.status === 'completed') ?? [];
   const lastCompleted = completedReports[0];
   const selectedEvent = reports?.find((report) => report.id === selectedEventId) ?? reports?.find((report) => report.status === 'planned') ?? reports?.[0];
   const currentEvent = selectedEvent;
-  const eventItems = useMemo(
-    () => items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [],
-    [eventType, items],
-  );
-  const usageReports = useMemo(
-    () => [...completedReports].sort((left, right) => left.eventDate.localeCompare(right.eventDate)),
-    [completedReports],
-  );
-  const usageItemIds = useMemo(() => {
+  const eventItems = items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [];
+  const usageReports = [...completedReports].sort((left, right) => left.eventDate.localeCompare(right.eventDate));
+  const usageItemIds = (() => {
     const ids = new Set<string>();
     usageReports.forEach((report) => Object.entries(report.usedQuantities ?? {})
       .filter(([, quantity]) => quantity > 0)
       .forEach(([itemId]) => ids.add(itemId)));
     const names = new Map(items?.map((item) => [item.id, item.name]) ?? []);
     return [...ids].sort((left, right) => (names.get(left) ?? left).localeCompare(names.get(right) ?? right));
-  }, [items, usageReports]);
+  })();
 
   useEffect(() => {
     setPlanned(toQuantityInputs(selectedEvent?.plannedQuantities ?? lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));

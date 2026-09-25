@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 export const LIST_PAGE_SIZE = 100;
@@ -25,7 +25,7 @@ export function useProgressiveList<T>(
       void fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
-  const data = useMemo(() => query.data?.pages.flat(), [query.data]);
+  const data = query.data?.pages.flat();
 
   return {
     ...query,

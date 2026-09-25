@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   Box,
   Button,
@@ -30,6 +30,7 @@ import { Link } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 import { ListPagination } from '../shared/ListPagination';
+import { useClientPagination } from '../../hooks/useClientPagination';
 
 export interface CheckedOutRow {
   key: string;
@@ -89,17 +90,10 @@ export function CheckedOutList({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / effectivePageSize)));
-  const pageRows = useMemo(
-    () => rows.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize),
-    [rows, currentPage, effectivePageSize],
-  );
+  const { pageItems: pageRows, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(rows);
 
   // Build assembly groups: group rows that share a factionOrderId and belong to an assembly
-  const { groups, ungroupedRows } = useMemo(() => {
+  const { groups, ungroupedRows } = (() => {
     if (!assemblies?.length) return { groups: [], ungroupedRows: pageRows };
     // For each factionOrderId, figure out which assemblies are represented
     const byOrder = new Map<string, CheckedOutRow[]>();
@@ -132,7 +126,7 @@ export function CheckedOutList({
 
     const ungrouped = pageRows.filter((r) => !groupedRowKeys.has(r.key));
     return { groups: groupList, ungroupedRows: ungrouped };
-  }, [assemblies, pageRows]);
+  })();
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -193,7 +187,7 @@ export function CheckedOutList({
         })}
         {ungroupedRows.map((row) => renderMobileRow(row))}
       </Stack>
-      <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={rows.length} page={currentPage} onChange={setPage} />
+      <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={rows.length} page={currentPage} onChange={setPage} />
       </>
     );
   }
@@ -264,7 +258,7 @@ export function CheckedOutList({
         </TableBody>
       </Table>
     </TableContainer>
-    <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={rows.length} page={currentPage} onChange={setPage} />
+    <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={rows.length} page={currentPage} onChange={setPage} />
     </>
   );
 

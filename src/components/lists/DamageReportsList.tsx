@@ -8,6 +8,7 @@ import { useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
+import { useClientPagination } from '../../hooks/useClientPagination';
 import { nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 import { ListPagination } from '../shared/ListPagination';
@@ -35,14 +36,10 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
-    const visibleReports = reports?.filter((report) => view === 'history'
+    const visibleReports = (reports ?? []).filter((report) => view === 'history'
         ? true
         : report.status === 'reported' || report.status === 'in_review');
-    const currentPage = Math.min(page, Math.max(1, Math.ceil((visibleReports?.length ?? 0) / effectivePageSize)));
-    const pageReports = visibleReports?.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize) ?? [];
+    const { pageItems: pageReports, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(visibleReports);
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -52,7 +49,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const [editSeverity, setEditSeverity] = useState<DamageSeverity>('medium');
 
     if (isLoading) return <Paper sx={{ p: 2 }}>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={48} />)}</Paper>;
-    if (!visibleReports?.length) return (
+    if (!visibleReports.length) return (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography color="text.secondary">
                 {loadingMore
@@ -206,7 +203,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </Paper>
             ))}
         </Stack>
-        <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>
@@ -242,7 +239,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 ))}</TableBody>
             </Table>
         </TableContainer>
-        <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
         {resolutionDialog}
         {editDialog}
         </>

@@ -1,5 +1,5 @@
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -35,6 +35,7 @@ import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../uti
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
+import { useClientPagination } from '../hooks/useClientPagination';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 
@@ -67,16 +68,10 @@ export function FactionOrders() {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogReady, setDialogReady] = useState(false);
-  const [activePage, setActivePage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [activePageSize, setActivePageSize] = useState(20);
-  const [historyPageSize, setHistoryPageSize] = useState(20);
-  const activeSize = activePageSize === -1 ? Number.MAX_SAFE_INTEGER : activePageSize;
-  const historySize = historyPageSize === -1 ? Number.MAX_SAFE_INTEGER : historyPageSize;
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
-  const allowedKeys = useMemo(() => allowedFactionKeys(currentUser), [currentUser]);
+  const allowedKeys = allowedFactionKeys(currentUser);
   const selectableEvents = EVENT_TYPES.filter((type) => FACTIONS_BY_EVENT[type]
     .some((faction) => canAccessFaction(currentUser, type, faction)));
   const visibleFactions = FACTIONS_BY_EVENT[eventType]
@@ -87,14 +82,11 @@ export function FactionOrders() {
   const { data: storageLocations = [] } = useStorageLocations();
   const { data: allOrders = [], isLoading, isError, isComplete, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
-  const orders = useMemo(
-    () => allOrders.filter((order) => order.eventType === eventType
-      && (!selectedEventId || order.eventOccurrenceId === selectedEventId)
-      && canAccessFaction(currentUser, order.eventType, order.faction)),
-    [allOrders, currentUser, eventType, selectedEventId],
-  );
+  const orders = allOrders.filter((order) => order.eventType === eventType
+    && (!selectedEventId || order.eventOccurrenceId === selectedEventId)
+    && canAccessFaction(currentUser, order.eventType, order.faction));
 
-  const activeOrders = useMemo(() => orders.filter((order) => !isHistoricalOrder(order)), [orders]);
+  const activeOrders = orders.filter((order) => !isHistoricalOrder(order));
   const factionOverview = visibleFactions.map((faction) => {
     const factionOrders = orders.filter((order) => order.faction === faction && order.status !== 'cancelled');
     const state = factionOrders.some((order) => order.status !== 'draft')
@@ -102,18 +94,16 @@ export function FactionOrders() {
       : factionOrders.length ? 'draft' : 'none';
     return { faction, state };
   });
-  const currentActivePage = Math.min(activePage, Math.max(1, Math.ceil(activeOrders.length / activeSize)));
-  const pageActiveOrders = activeOrders.slice((currentActivePage - 1) * activeSize, currentActivePage * activeSize);
-  const activeOrderGroups = useMemo(() => [...new Set(pageActiveOrders
+  const { pageItems: pageActiveOrders, page: currentActivePage, setPage: setActivePage, pageSize: activePageSize, onPageSizeChange: onActivePageSizeChange } = useClientPagination(activeOrders);
+  const activeOrderGroups = [...new Set(pageActiveOrders
     .map((order) => order.faction))]
     .map((faction) => ({
       faction,
       orders: pageActiveOrders.filter((order) => order.faction === faction),
-    })), [pageActiveOrders]);
+    }));
   const activeOrderCount = activeOrders.length;
-  const historyOrders = useMemo(() => orders.filter(isHistoricalOrder), [orders]);
-  const currentHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(historyOrders.length / historySize)));
-  const pageHistoryOrders = historyOrders.slice((currentHistoryPage - 1) * historySize, currentHistoryPage * historySize);
+  const historyOrders = orders.filter(isHistoricalOrder);
+  const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
 
   useEffect(() => {
     if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
@@ -268,7 +258,7 @@ export function FactionOrders() {
         page={currentActivePage}
         pageSize={activePageSize}
         onPageChange={setActivePage}
-        onPageSizeChange={(size) => { setActivePageSize(size); setActivePage(1); }}
+        onPageSizeChange={onActivePageSizeChange}
         loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
         loadError={isError}
         onRetry={() => { void refetch(); }}
@@ -282,7 +272,7 @@ export function FactionOrders() {
         page={currentHistoryPage}
         pageSize={historyPageSize}
         onPageChange={setHistoryPage}
-        onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
+        onPageSizeChange={onHistoryPageSizeChange}
       />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg"

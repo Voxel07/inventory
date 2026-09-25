@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Autocomplete, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import { useUpdateUserPermissions, useUsers } from '../hooks/useUsers';
@@ -6,6 +6,7 @@ import { EVENT_TYPES, FACTIONS_BY_EVENT, type AccessRole, type User } from '../t
 import { useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { ListPagination } from '../components/shared/ListPagination';
+import { useClientPagination } from '../hooks/useClientPagination';
 
 const factionOptions = [...new Set(EVENT_TYPES.flatMap((eventType) => FACTIONS_BY_EVENT[eventType]))].sort();
 
@@ -15,11 +16,6 @@ function UserPermissionsEditor({ user }: { user: User }) {
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const [role, setRole] = useState<AccessRole>(user.role);
   const [factions, setFactions] = useState<string[]>(user.faction ?? []);
-
-  useEffect(() => {
-    setRole(user.role);
-    setFactions(user.faction ?? []);
-  }, [user]);
 
   function savePermissions() {
     save.mutate({ userId: user.id, data: { role, faction: role === 'faction_leader' ? factions : [] } }, {
@@ -99,12 +95,8 @@ function UserPermissionsEditor({ user }: { user: User }) {
 
 export function UserManagement() {
   const t = useLocalizedText();
-  const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const effectivePageSize = pageSize === -1 ? Number.MAX_SAFE_INTEGER : pageSize;
   const { data: users = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useUsers();
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(users.length / effectivePageSize)));
-  const pageUsers = users.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+  const { pageItems: pageUsers, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(users);
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('Benutzerverwaltung', 'User management')}</Typography>
@@ -113,9 +105,9 @@ export function UserManagement() {
       </Typography>
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Benutzer konnten nicht geladen werden. Prüfen Sie OIDC und die API-Berechtigungen.', 'Users could not be loaded. Check OIDC and API permissions.')}</Alert>}
       <Stack spacing={{ xs: 0.75, sm: 1.5 }}>
-        {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : pageUsers.map((user) => <UserPermissionsEditor key={user.id} user={user} />)}
+        {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : pageUsers.map((user) => <UserPermissionsEditor key={`${user.id}:${user.role}:${(user.faction ?? []).join(',')}`} user={user} />)}
       </Stack>
-      <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={users.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+      <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={users.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
     </Box>
   );
 }

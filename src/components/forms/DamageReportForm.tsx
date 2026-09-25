@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Autocomplete, Box, Button, Chip, createFilterOptions, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import type { Assembly, AssetInstance, DamageReportFormData, DamageSeverity, Item } from '../../types';
 import { useItemAssets } from '../../hooks/useItems';
@@ -47,10 +47,10 @@ export function DamageReportForm({
         severity: 'medium',
     });
     const [amountInput, setAmountInput] = useState('1');
-    const targets = useMemo<DamageTarget[]>(() => [
+    const targets: DamageTarget[] = [
         ...items.map((item) => ({ key: `item:${item.id}`, type: 'item' as const, item })),
         ...assemblies.map((assembly) => ({ key: `assembly:${assembly.id}`, type: 'assembly' as const, assembly })),
-    ], [items, assemblies]);
+    ];
     const selectedTarget = targets.find((target) => target.key === targetKey) ?? null;
     const selectedItem = selectedTarget?.type === 'item'
         ? selectedTarget.item

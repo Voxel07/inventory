@@ -1,5 +1,5 @@
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
     Box,
     TextField,
@@ -43,7 +43,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
     const [search, setSearch] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
 
-    const filteredItems = useMemo(() => {
+    const filteredItems = (() => {
         if (!search.trim()) return items;
         const lower = search.toLowerCase();
         return items.filter(
@@ -52,7 +52,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                 (item.category && item.category.toLowerCase().includes(lower)) ||
                 (item.storageLocation && item.storageLocation.toLowerCase().includes(lower)),
         );
-    }, [items, search]);
+    })();
 
     function handleToggle(itemId: string) {
         setFormData((prev) => {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   Autocomplete,
   Box,
@@ -168,7 +168,7 @@ export function OrderPickListTable({
   }).filter(({ item, required, persisted }) => required > 0 || persisted.length > 0
     || (assetAssignments[item.id]?.length ?? 0) > 0);
 
-  const visibleOrderItems = useMemo(() => {
+  const visibleOrderItems = (() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     const filtered = orderItems.filter((item) => {
       if (itemCategory && item.category !== itemCategory) return false;
@@ -183,14 +183,14 @@ export function OrderPickListTable({
       });
     }
     return filtered;
-  }, [itemCategory, itemSearch, orderItems, sortByLocation]);
+  })();
 
-  const visibleOrderAssemblies = useMemo(() => {
+  const visibleOrderAssemblies = (() => {
     const term = itemSearch.trim().toLocaleLowerCase();
     return orderAssemblies.filter((assembly) =>
       !term || `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term),
     );
-  }, [itemSearch, orderAssemblies]);
+  })();
 
   function stepPreparedItem(itemId: string, delta: number, max: number) {
     onSetPrepared((current) => {
