@@ -15,6 +15,6 @@ export function useUpdateUserPermissions() {
   });
 }
 
-export function useAssignableUsers() {
-  return useProgressiveList<User>(['users', 'assignable'], (page, size) => getAssignableUsers({ page, size }));
+export function useAssignableUsers(enabled = true) {
+  return useProgressiveList<User>(['users', 'assignable'], (page, size) => getAssignableUsers({ page, size }), { enabled });
 }

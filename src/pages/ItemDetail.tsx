@@ -51,6 +51,8 @@ import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
 import { useLocalizedText } from '../utils/naming';
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog, canManageInventory } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
@@ -95,6 +97,9 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 }
 
 export function ItemDetail() {
+    const { user } = useAuth();
+    const canEdit = canEditCatalog(user);
+    const canTransact = canManageInventory(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -108,7 +113,7 @@ export function ItemDetail() {
     const { data: factionOrders = [] } = useFactionOrders();
     const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers();
+    const { data: assignableUsers } = useAssignableUsers(canEdit);
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
@@ -126,11 +131,11 @@ export function ItemDetail() {
 
     useEffect(() => {
         if (searchParams.get('transaction') !== '1') return;
-        setCheckoutOpen(true);
+        if (canTransact) setCheckoutOpen(true);
         const next = new URLSearchParams(searchParams);
         next.delete('transaction');
         setSearchParams(next, { replace: true });
-    }, [searchParams, setSearchParams]);
+    }, [searchParams, setSearchParams, canTransact]);
 
     const itemTransactions = useMemo(
         () => itemTransactionsData ?? [],
@@ -248,12 +253,12 @@ export function ItemDetail() {
                     icon={<QrCode2Icon />}
                     onClick={() => setQrOpen(true)}
                 />
-                <TooltipButton
+                {canEdit && <TooltipButton
                     variant="icon"
                     tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')}
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
-                />
+                />}
             </Box>
 
             {!!item.images?.length && (
@@ -486,7 +491,7 @@ export function ItemDetail() {
                 {/* Serialized Item Drill-down & Asset Management */}
                 {item.trackingMode === 'serialized' && (
                     <Grid size={12}>
-                        <AssetInstancesList item={item} />
+                        <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canTransact} />
                     </Grid>
                 )}
 

@@ -95,6 +95,17 @@ class InventoryApiTest {
                 .body("status", equalTo("partially_returned"));
         request().get("/api/events/" + eventId).then().statusCode(200)
                 .body("usedQuantities.'" + usedItemId + "'", equalTo(4));
+        request().delete("/api/events/" + eventId).then().statusCode(409);
+        request().get("/api/events/" + eventId).then().statusCode(200);
+    }
+
+    @Test
+    void unlinkedEventCanBeDeleted() {
+        String eventId = request().body(Map.of("eventType", "ASD", "name", "Temporary event",
+                        "startDate", "2039-03-01", "endDate", "2039-03-02", "status", "planned"))
+                .post("/api/events").then().statusCode(200).extract().path("id");
+        request().delete("/api/events/" + eventId).then().statusCode(204);
+        request().get("/api/events/" + eventId).then().statusCode(404);
     }
 
     @Test

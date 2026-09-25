@@ -48,9 +48,9 @@ interface Props {
     loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
-    onEdit: (item: Item) => void;
-    onDelete: (id: string) => void;
-    onDeleteMany: (ids: string[]) => void;
+    onEdit?: (item: Item) => void;
+    onDelete?: (id: string) => void;
+    onDeleteMany?: (ids: string[]) => void;
 }
 
 type SortField = 'value' | 'stock' | null;
@@ -64,6 +64,7 @@ function stockColor(remaining: number, minStock: number) {
 }
 
 export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
+    const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
     const t = useLocalizedText();
     const theme = useTheme();
@@ -195,7 +196,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                     <ToggleButton value="tiles" aria-label={t('Kachelansicht', 'Tile view')}><GridViewIcon /></ToggleButton>
                 </ToggleButtonGroup>
             </Box>
-            {selectedIds.size > 0 && (
+            {canManage && selectedIds.size > 0 && (
                 <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 700 }}>
                         {t(`${selectedIds.size} Artikel ausgewählt`, `${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'} selected`)}
@@ -204,7 +205,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                         color="error"
                         size="small"
                         startIcon={<DeleteIcon />}
-                        onClick={() => onDeleteMany([...selectedIds])}
+                        onClick={() => onDeleteMany?.([...selectedIds])}
                     >
                         {t('Auswahl löschen', 'Delete selected')}
                     </Button>
@@ -219,14 +220,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                             <Grid key={item.id} size={{ xs: 6, sm: 3, md: 2 }}>
                                 <Card onClick={() => navigate(`/items/${item.id}`)} sx={{ height: '100%', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
                                     <Box sx={{ position: 'relative' }}>
-                                        <Checkbox
+                                        {canManage && <Checkbox
                                             size="small"
                                             checked={selectedIds.has(item.id)}
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={() => toggleSelection(item.id)}
                                             slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
                                             sx={{ position: 'absolute', zIndex: 1, top: 2, left: 2, bgcolor: 'rgba(255,255,255,0.82)', borderRadius: 1, p: 0.5 }}
-                                        />
+                                        />}
                                         {image ? (
                                             <MediaImage src={image} alt={item.name} sx={{ width: '100%', display: 'block', height: { xs: 72, sm: 84 }, objectFit: 'contain', bgcolor: 'grey.100' }} />
                                         ) : (
@@ -246,14 +247,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                                                     )}
                                                 </Stack>
                                             </Box>
-                                            <IconButton
+                                            {canManage && <IconButton
                                                 size="small"
                                                 aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
                                                 onClick={(event) => openActionMenu(event, item)}
                                                 sx={{ mt: -0.5, mr: -0.5 }}
                                             >
                                                 <MoreVertIcon fontSize="small" />
-                                            </IconButton>
+                                            </IconButton>}
                                         </Stack>
                                         <Typography sx={{ mt: 0.5, fontWeight: 800, fontSize: { xs: '1.1rem', sm: '1.2rem' }, lineHeight: 1, color }}>
                                             {remaining}/{totalStock}
@@ -278,28 +279,28 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                         return (
                             <Paper key={item.id} onClick={() => navigate(`/items/${item.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
                                 <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                                    <Checkbox
+                                    {canManage && <Checkbox
                                         size="small"
                                         checked={selectedIds.has(item.id)}
                                         onClick={(event) => event.stopPropagation()}
                                         onChange={() => toggleSelection(item.id)}
                                         slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
                                         sx={{ p: 0.5 }}
-                                    />
+                                    />}
                                     <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
                                         {item.name}
                                     </Typography>
                                     <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
                                         {remaining}/{totalStock}
                                     </Typography>
-                                    <IconButton
+                                    {canManage && <IconButton
                                         size="small"
                                         aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
                                         onClick={(event) => openActionMenu(event, item)}
                                         sx={{ p: 0.5 }}
                                     >
                                         <MoreVertIcon fontSize="small" />
-                                    </IconButton>
+                                    </IconButton>}
                                 </Box>
                             </Paper>
                         );
@@ -310,7 +311,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 <Table size="small" sx={{ '& .MuiTableCell-root': { py: 0.5 }, '& .MuiTableCell-head': { py: 0.75 } }}>
                     <TableHead>
                         <TableRow>
-                            <TableCell padding="checkbox">
+                            {canManage && <TableCell padding="checkbox">
                                 <Checkbox
                                     size="small"
                                     checked={pageItems.length > 0 && pageItems.every(({ item }) => selectedIds.has(item.id))}
@@ -329,7 +330,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                                     }}
                                     slotProps={{ input: { 'aria-label': t('Alle sichtbaren Artikel auswählen', 'Select all visible items') } }}
                                 />
-                            </TableCell>
+                            </TableCell>}
                             <TableCell>{t('Name', 'Name')}</TableCell>
                             <TableCell>{t('Kategorie', 'Category')}</TableCell>
                             <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>
@@ -352,7 +353,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                             </TableCell>
                             <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
                             <TableCell>{t('Events', 'Events')}</TableCell>
-                            <TableCell padding="checkbox" />
+                            {canManage && <TableCell padding="checkbox" />}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -366,14 +367,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                                     onClick={() => navigate(`/items/${item.id}`)}
                                     sx={{ cursor: 'pointer' }}
                                 >
-                                    <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                                    {canManage && <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                                         <Checkbox
                                             size="small"
                                             checked={selectedIds.has(item.id)}
                                             onChange={() => toggleSelection(item.id)}
                                             slotProps={{ input: { 'aria-label': t(`${item.name} auswählen`, `Select ${item.name}`) } }}
                                         />
-                                    </TableCell>
+                                    </TableCell>}
                                     <TableCell>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                             <Typography component="span" variant="body2" sx={{ fontWeight: 500 }}>{item.name}</Typography>
@@ -411,7 +412,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                         {item.eventTypes?.join(', ') || '—'}
                                     </TableCell>
-                                    <TableCell align="right" padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                                    {canManage && <TableCell align="right" padding="checkbox" onClick={(event) => event.stopPropagation()}>
                                         <IconButton
                                             size="small"
                                             aria-label={t('Artikelaktionen öffnen', 'Open item actions')}
@@ -419,37 +420,37 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                                         >
                                             <MoreVertIcon fontSize="small" />
                                         </IconButton>
-                                    </TableCell>
+                                    </TableCell>}
                                 </TableRow>
                             );
                         })}
                         {filteredAndSorted.length === 0 && (
-                            <TableRow><TableCell colSpan={8}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canManage ? 8 : 6}>{t('Keine Artikel entsprechen den Filtern.', 'No items match the filters.')}</TableCell></TableRow>
                         )}
                     </TableBody>
                 </Table>
             </TableContainer>}
             <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAndSorted.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
-            <Menu
+            {canManage && <Menu
                 anchorEl={actionMenu?.anchorEl}
                 open={Boolean(actionMenu)}
                 onClose={() => setActionMenu(null)}
             >
                 <MenuItem onClick={() => {
-                    if (actionMenu) onEdit(actionMenu.item);
+                    if (actionMenu) onEdit?.(actionMenu.item);
                     setActionMenu(null);
                 }}>
                     <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
                     {t('Bearbeiten', 'Edit')}
                 </MenuItem>
                 <MenuItem sx={{ color: 'error.main' }} onClick={() => {
-                    if (actionMenu) onDelete(actionMenu.item.id);
+                    if (actionMenu) onDelete?.(actionMenu.item.id);
                     setActionMenu(null);
                 }}>
                     <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
                     {t('Löschen', 'Delete')}
                 </MenuItem>
-            </Menu>
+            </Menu>}
         </Box>
     );
 }

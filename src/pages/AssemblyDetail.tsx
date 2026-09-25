@@ -50,6 +50,8 @@ import type { AssemblyFormData, DamageReportFormData, EventType, Item } from '..
 import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog, canManageInventory } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -60,6 +62,9 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
 };
 
 export function AssemblyDetail() {
+    const { user } = useAuth();
+    const canEdit = canEditCatalog(user);
+    const canTransact = canManageInventory(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -272,28 +277,28 @@ export function AssemblyDetail() {
                 <Typography variant="h4" sx={{ flexGrow: 1 }}>
                     {assembly.name}
                 </Typography>
-                <TooltipButton
+                {canEdit && <TooltipButton
                     variant="icon"
                     tooltipText={t('Baugruppendetails bearbeiten', 'Edit assembly details')}
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
-                />
-                <TooltipButton
+                />}
+                {canTransact && <TooltipButton
                     tooltipText={t('Schaden an dieser Baugruppe melden', 'Report damage to this assembly')}
                     icon={<ReportProblemOutlinedIcon />}
                     label={t('Schaden melden', 'Report damage')}
                     variant="outlined"
                     color="error"
                     onClick={() => setDamageOpen(true)}
-                />
-                <TooltipButton
+                />}
+                {canTransact && <TooltipButton
                     tooltipText={t('Alle Artikel dieser Baugruppe ausleihen', 'Check out all items in this assembly')}
                     icon={<ShoppingCartCheckoutIcon />}
                     label={t('Ausleihen', 'Check out')}
                     variant="contained"
                     onClick={() => setCheckoutOpen(true)}
                     disabled={!canCheckout}
-                />
+                />}
 
             </Box>
 
@@ -379,7 +384,7 @@ export function AssemblyDetail() {
                 <Typography variant="h6">
                     Komponenten in dieser Baugruppe
                 </Typography>
-                <Autocomplete
+                {canEdit && <Autocomplete
                     options={availableItemsToAdd}
                     getOptionLabel={(option) => option.name}
                     onChange={(_e, newItem) => {
@@ -390,7 +395,7 @@ export function AssemblyDetail() {
                     )}
                     sx={{ minWidth: 250, maxWidth: 350 }}
                     value={null}
-                />
+                />}
             </Box>
 
             {assemblyItems.length === 0 ? (
@@ -432,7 +437,7 @@ export function AssemblyDetail() {
                                                 color={statusColors[item.status] ?? 'default'}
                                                 size="small"
                                             />
-                                            <TooltipButton
+                                            {canEdit && <TooltipButton
                                                 variant="icon"
                                                 tooltipText={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')}
                                                 icon={<DeleteIcon />}
@@ -442,7 +447,7 @@ export function AssemblyDetail() {
                                                     e.stopPropagation();
                                                     handleRemoveItem(item.id);
                                                 }}
-                                            />
+                                            />}
                                         </Box>
                                     </Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
@@ -479,7 +484,7 @@ export function AssemblyDetail() {
                                 <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
                                 <TableCell align="right">{t('Wert', 'Value')}</TableCell>
                                 <TableCell>{t('Status', 'Status')}</TableCell>
-                                <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
+                                {canEdit && <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>}
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -531,7 +536,7 @@ export function AssemblyDetail() {
                                                 size="small"
                                             />
                                         </TableCell>
-                                        <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                                        {canEdit && <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                                             <TooltipButton
                                                 variant="icon"
                                                 tooltipText={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')}
@@ -540,7 +545,7 @@ export function AssemblyDetail() {
                                                 color="error"
                                                 onClick={() => handleRemoveItem(item.id)}
                                             />
-                                        </TableCell>
+                                        </TableCell>}
                                     </TableRow>
                                 );
                             })}

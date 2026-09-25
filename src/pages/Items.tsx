@@ -18,8 +18,6 @@ import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
-import { ReadOnlyCatalogList } from '../components/lists/ReadOnlyCatalogList';
-import { getItemStock } from '../utils/stock';
 
 export function Items() {
     const { user } = useAuth();
@@ -29,12 +27,10 @@ export function Items() {
 function ReadOnlyItems() {
     const t = useLocalizedText();
     const { data: items = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useItems();
-    return <ReadOnlyCatalogList title={t('Artikel', 'Items')} entries={items.map((item) => {
-        const stock = getItemStock(item);
-        return { id: item.id, name: item.name, subtitle: [item.category, item.subcategory, item.sku].filter(Boolean).join(' · '),
-            description: item.description, available: stock.remaining, total: stock.totalStock,
-            details: [item.hint, item.expand?.storageLocation?.name].filter((value): value is string => Boolean(value)) };
-    })} isLoading={isLoading} isError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />;
+    return <Box>
+        <Typography variant="h4" sx={{ mb: 3 }}>{t('Artikel', 'Items')}</Typography>
+        <ItemsList items={items} isLoading={isLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
+    </Box>;
 }
 
 function ManagedItems() {

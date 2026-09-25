@@ -76,6 +76,13 @@ export async function getOfflineActions(): Promise<OfflineAction[]> {
   });
 }
 
+export async function discardOfflineAction(idempotencyKey: string): Promise<void> {
+  if (flushInFlight) throw new Error('SYNC_IN_PROGRESS');
+  const db = await openDatabase();
+  await transactionPromise(db, STORE, 'readwrite', (store) => store.delete(idempotencyKey));
+  await notifyQueueChanged();
+}
+
 export async function getOfflineQueueCount(): Promise<number> {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
@@ -132,19 +139,28 @@ function scheduleFlush(delayMs: number): void {
 
 export async function flushOfflineQueue(): Promise<void> {
   if (!navigator.onLine || flushInFlight) return;
-  const actions = await getOfflineActions();
+  flushInFlight = true;
+  let actions: OfflineAction[];
+  try {
+    actions = await getOfflineActions();
+  } catch {
+    flushInFlight = false;
+    scheduleFlush(10_000);
+    return;
+  }
   if (!actions.length) {
     flushAttempt = 0;
+    flushInFlight = false;
     return;
   }
   let authorizationHeaders: Record<string, string>;
   try {
     authorizationHeaders = await getAuthorizationHeaders();
   } catch {
+    flushInFlight = false;
     scheduleFlush(10_000);
     return;
   }
-  flushInFlight = true;
   let retryDelay: number | null = null;
   try {
     const headers: Record<string, string> = {

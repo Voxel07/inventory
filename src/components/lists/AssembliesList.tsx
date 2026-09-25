@@ -44,12 +44,13 @@ interface Props {
     loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
-    onEdit: (assembly: Assembly) => void;
-    onDelete: (id: string) => void;
-    onDeleteMany: (ids: string[]) => void;
+    onEdit?: (assembly: Assembly) => void;
+    onDelete?: (id: string) => void;
+    onDeleteMany?: (ids: string[]) => void;
 }
 
 export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
+    const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const t = useLocalizedText();
     const navigate = useNavigate();
     const theme = useTheme();
@@ -107,14 +108,14 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
 
     const handleEdit = () => {
         if (selectedAssembly) {
-            onEdit(selectedAssembly);
+            onEdit?.(selectedAssembly);
         }
         handleCloseMenu();
     };
 
     const handleDelete = () => {
         if (selectedAssembly) {
-            onDelete(selectedAssembly.id);
+            onDelete?.(selectedAssembly.id);
         }
         handleCloseMenu();
     };
@@ -170,12 +171,12 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 fullWidth
                 sx={{ mb: 2 }}
             />
-            {selectedIds.size > 0 && (
+            {canManage && selectedIds.size > 0 && (
                 <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 700 }}>
                         {t(`${selectedIds.size} ${selectedIds.size === 1 ? 'Baugruppe' : 'Baugruppen'} ausgewählt`, `${selectedIds.size} assembl${selectedIds.size === 1 ? 'y' : 'ies'} selected`)}
                     </Typography>
-                    <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany([...selectedIds])}>
+                    <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
                         {t('Auswahl löschen', 'Delete selected')}
                     </Button>
                 </Paper>
@@ -188,28 +189,28 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                         return (
                             <Paper key={assembly.id} onClick={() => navigate(`/assemblies/${assembly.id}`)} sx={{ px: 0.5, py: 0.25, cursor: 'pointer' }}>
                                 <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                                    <Checkbox
+                                    {canManage && <Checkbox
                                         size="small"
                                         checked={selectedIds.has(assembly.id)}
                                         onClick={(event) => event.stopPropagation()}
                                         onChange={() => toggleSelection(assembly.id)}
                                         slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
                                         sx={{ p: 0.5 }}
-                                    />
+                                    />}
                                     <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700, fontSize: '0.95rem' }}>
                                         {assembly.name}
                                     </Typography>
                                     <Typography sx={{ flexShrink: 0, color, fontWeight: 800, lineHeight: 1.2 }}>
                                         {remaining}/{totalStock}
                                     </Typography>
-                                    <IconButton
+                                    {canManage && <IconButton
                                         size="small"
                                         aria-label={t('Baugruppenaktionen öffnen', 'Open assembly actions')}
                                         onClick={(event) => handleOpenMenu(event, assembly)}
                                         sx={{ p: 0.5 }}
                                     >
                                         <MoreVertIcon fontSize="small" />
-                                    </IconButton>
+                                    </IconButton>}
                                 </Box>
                             </Paper>
                         );
@@ -225,7 +226,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell padding="checkbox">
+                        {canManage && <TableCell padding="checkbox">
                             <Checkbox
                                 size="small"
                                 checked={pageAssemblies.length > 0 && pageAssemblies.every((assembly) => selectedIds.has(assembly.id))}
@@ -244,7 +245,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                                 }}
                                 slotProps={{ input: { 'aria-label': t('Alle Baugruppen auswählen', 'Select all assemblies') } }}
                             />
-                        </TableCell>
+                        </TableCell>}
                         <TableCell>{t('Name', 'Name')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('Beschreibung', 'Description')}</TableCell>
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{t('Komponenten', 'Components')}</TableCell>
@@ -264,14 +265,14 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                                 onClick={() => navigate(`/assemblies/${assembly.id}`)}
                                 sx={{ cursor: 'pointer' }}
                             >
-                                <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                                {canManage && <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                                     <Checkbox
                                         size="small"
                                         checked={selectedIds.has(assembly.id)}
                                         onChange={() => toggleSelection(assembly.id)}
                                         slotProps={{ input: { 'aria-label': t(`${assembly.name} auswählen`, `Select ${assembly.name}`) } }}
                                     />
-                                </TableCell>
+                                </TableCell>}
                                 <TableCell>
                                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                         {assembly.image && <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 64, height: 48, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} />}
@@ -318,22 +319,22 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                                             color="info"
                                             onClick={() => navigate(`/assemblies/${assembly.id}`)}
                                         />
-                                        <TooltipButton
+                                        {canManage && <TooltipButton
                                             variant="icon"
                                             tooltipText={t('Baugruppe bearbeiten', 'Edit assembly')}
                                             icon={<EditIcon />}
                                             size="small"
                                             color="warning"
-                                            onClick={() => onEdit(assembly)}
-                                        />
-                                        <TooltipButton
+                                            onClick={() => onEdit?.(assembly)}
+                                        />}
+                                        {canManage && <TooltipButton
                                             variant="icon"
                                             tooltipText={t('Baugruppe löschen', 'Delete assembly')}
                                             icon={<DeleteIcon />}
                                             size="small"
                                             color="error"
-                                            onClick={() => onDelete(assembly.id)}
-                                        />
+                                            onClick={() => onDelete?.(assembly.id)}
+                                        />}
                                     </Box>
                                 </TableCell>
                             </TableRow>
@@ -341,7 +342,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                     })}
                     {filteredAssemblies.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={7}>{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</TableCell>
+                            <TableCell colSpan={canManage ? 7 : 6}>{t('Keine Baugruppen entsprechen der Suche.', 'No assemblies match the search.')}</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -349,7 +350,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             </TableContainer>
             )}
             <ListPagination pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} count={filteredAssemblies.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
-            <Menu
+            {canManage && <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
                 onClose={handleCloseMenu}
@@ -373,7 +374,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                     </ListItemIcon>
                     <ListItemText>{t('Löschen', 'Delete')}</ListItemText>
                 </MenuItem>
-            </Menu>
+            </Menu>}
         </Box>
     );
 }

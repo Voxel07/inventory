@@ -376,6 +376,22 @@ public class CatalogService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "events-cache")
+    public void deleteEvent(UUID id) {
+        var event = locked(EventOccurrence.class, id, "Event occurrence");
+        if (!entityManager.createQuery("select o.id from FactionOrder o where o.eventOccurrence.id = :id", UUID.class)
+                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()
+                || !entityManager.createQuery("select o.id from GeneralOrder o where o.eventOccurrence.id = :id", UUID.class)
+                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()
+                || !entityManager.createQuery("select o.id from PurchaseOrder o where o.eventOccurrence.id = :id", UUID.class)
+                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()) {
+            throw ApiException.conflict("Event cannot be deleted while it has linked orders");
+        }
+        orm.remove(event);
+        catalogChanged("events", id);
+    }
+
+    @Transactional
     @CacheInvalidateAll(cacheName = "factions-cache")
     public Faction createFaction(ApiModels.FactionInput input) {
         var faction = new Faction();

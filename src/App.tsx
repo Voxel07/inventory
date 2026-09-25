@@ -399,10 +399,10 @@ function AppContent() {
               <Route path="/" element={<HomeRoute />} />
               <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
               <Route path="/items" element={<CatalogAccessGuard><Items /></CatalogAccessGuard>} />
-              <Route path="/items/:itemId" element={<InventoryManagerGuard><ItemDetail /></InventoryManagerGuard>} />
-              <Route path="/items/:itemId/assets/:assetId" element={<InventoryManagerGuard><AssetDetail /></InventoryManagerGuard>} />
+              <Route path="/items/:itemId" element={<CatalogAccessGuard><ItemDetail /></CatalogAccessGuard>} />
+              <Route path="/items/:itemId/assets/:assetId" element={<CatalogAccessGuard><AssetDetail /></CatalogAccessGuard>} />
               <Route path="/assemblies" element={<CatalogAccessGuard><Assemblies /></CatalogAccessGuard>} />
-              <Route path="/assemblies/:assemblyId" element={<InventoryManagerGuard><AssemblyDetail /></InventoryManagerGuard>} />
+              <Route path="/assemblies/:assemblyId" element={<CatalogAccessGuard><AssemblyDetail /></CatalogAccessGuard>} />
               <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
               <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
               <Route path="/orders" element={<Orders />} />

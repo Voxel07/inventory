@@ -1,5 +1,5 @@
 import type { EventReport, EventReportFormData, EventType } from '../types';
-import { createMutableResourceApi } from './resourceFactory';
+import { createCrudResourceApi } from './resourceFactory';
 
 function formatEventPayload(data: Partial<EventReportFormData>) {
   const startDate = (data.startDate ?? data.eventDate)?.slice(0, 10);
@@ -15,7 +15,7 @@ function formatEventPayload(data: Partial<EventReportFormData>) {
   };
 }
 
-export const eventApi = createMutableResourceApi<EventReport, EventReportFormData>('/api/events', 'events', {
+export const eventApi = createCrudResourceApi<EventReport, EventReportFormData>('/api/events', 'events', {
   transformPayload: (data) => formatEventPayload(data),
 });
 
@@ -23,3 +23,4 @@ export const getEventReports = (eventType?: EventType) => eventApi.getAll(eventT
 export const getEventReport = eventApi.getById;
 export const createEventReport = eventApi.create;
 export const updateEventReport = eventApi.update;
+export const deleteEventReport = eventApi.delete;

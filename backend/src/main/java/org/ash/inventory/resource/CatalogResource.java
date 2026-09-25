@@ -126,6 +126,7 @@ public class CatalogResource {
     public ApiResponses.EventResponse event(@PathParam("id") UUID id) { return queries.event(id); }
     @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.createEvent(input)); }
     @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.updateEvent(id, input)); }
+    @DELETE @Path("/events/{id}") @Transactional public Response deleteEvent(@PathParam("id") UUID id) { actor.requirePlanner(); service.deleteEvent(id); return Response.noContent().build(); }
 
     @GET @Path("/factions")
     public Response factions(@QueryParam("eventType") String eventType) {

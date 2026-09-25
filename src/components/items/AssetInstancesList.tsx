@@ -45,6 +45,8 @@ import { ListPagination } from '../shared/ListPagination';
 
 interface Props {
     item: Item;
+    canEdit?: boolean;
+    canReportDamage?: boolean;
 }
 
 const statusColorMap: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
@@ -57,7 +59,7 @@ const statusColorMap: Record<string, 'success' | 'warning' | 'error' | 'info' | 
     written_off: 'default',
 };
 
-export function AssetInstancesList({ item }: Props) {
+export function AssetInstancesList({ item, canEdit = true, canReportDamage = true }: Props) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -244,7 +246,7 @@ export function AssetInstancesList({ item }: Props) {
                         {t('Physisch identifizierte Einzelstücke mit individuellem Status, QR-Code und Wartungshistorie.', 'Individually identified physical units with distinct statuses, QR codes, and maintenance history.')}
                     </Typography>
                 </Box>
-                <Stack direction="row" spacing={1}>
+                {canEdit && <Stack direction="row" spacing={1}>
                     <Button
                         variant="outlined"
                         size="small"
@@ -261,7 +263,7 @@ export function AssetInstancesList({ item }: Props) {
                     >
                         {t('Asset hinzufügen', 'Add asset')}
                     </Button>
-                </Stack>
+                </Stack>}
             </Box>
 
             {/* Metrics Chips */}
@@ -314,14 +316,14 @@ export function AssetInstancesList({ item }: Props) {
                     <Typography color="text.secondary">
                         {t('Keine Einzelgeräte für diesen Artikel vorhanden.', 'No asset instances recorded for this item.')}
                     </Typography>
-                    <Button
+                    {canEdit && <Button
                         size="small"
                         sx={{ mt: 1 }}
                         startIcon={<AddIcon />}
                         onClick={handleOpenAddSingle}
                     >
                         {t('Erstes Asset registrieren', 'Register first asset')}
-                    </Button>
+                    </Button>}
                 </Box>
             ) : isMobile ? (
                 <Stack spacing={1.5}>
@@ -359,18 +361,18 @@ export function AssetInstancesList({ item }: Props) {
                                     <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={t('Infoseite', 'Info page')}>
                                         <InfoOutlinedIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={t('Schaden melden', 'Report damage')}>
+                                    {canReportDamage && <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={t('Schaden melden', 'Report damage')}>
                                         <ReportProblemOutlinedIcon fontSize="small" />
-                                    </IconButton>
+                                    </IconButton>}
                                     <IconButton size="small" onClick={() => setQrAsset(asset)} title={t('QR-Code', 'QR Code')}>
                                         <QrCode2Icon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={t('Bearbeiten', 'Edit')}>
+                                    {canEdit && <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={t('Bearbeiten', 'Edit')}>
                                         <EditIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
+                                    </IconButton>}
+                                    {canEdit && <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
                                         <DeleteIcon fontSize="small" />
-                                    </IconButton>
+                                    </IconButton>}
                                 </Stack>
                             </CardContent>
                         </Card>
@@ -381,7 +383,7 @@ export function AssetInstancesList({ item }: Props) {
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={{ width: 40 }}></TableCell>
+                                {canEdit && <TableCell sx={{ width: 40 }} />}
                                 <TableCell><strong>{t('Asset-Code / ID', 'Asset Code / ID')}</strong></TableCell>
                                 <TableCell><strong>{t('Seriennummer', 'Serial Number')}</strong></TableCell>
                                 <TableCell><strong>{t('Status', 'Status')}</strong></TableCell>
@@ -395,13 +397,13 @@ export function AssetInstancesList({ item }: Props) {
                         <TableBody>
                             {pageAssets.map((asset) => (
                                 <TableRow key={asset.id} hover selected={selectedIds.has(asset.id)}>
-                                    <TableCell padding="checkbox">
+                                    {canEdit && <TableCell padding="checkbox">
                                         <Checkbox
                                             size="small"
                                             checked={selectedIds.has(asset.id)}
                                             onChange={() => toggleSelect(asset.id)}
                                         />
-                                    </TableCell>
+                                    </TableCell>}
                                     <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
                                         {asset.assetCode}
                                     </TableCell>
@@ -423,26 +425,26 @@ export function AssetInstancesList({ item }: Props) {
                                                 <InfoOutlinedIcon fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={t('Schaden an diesem Asset melden', 'Report damage to this asset')}>
+                                        {canReportDamage && <Tooltip title={t('Schaden an diesem Asset melden', 'Report damage to this asset')}>
                                             <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)}>
                                                 <ReportProblemOutlinedIcon fontSize="small" />
                                             </IconButton>
-                                        </Tooltip>
+                                        </Tooltip>}
                                         <Tooltip title={t('QR-Code anzeigen', 'Show QR code')}>
                                             <IconButton size="small" onClick={() => setQrAsset(asset)}>
                                                 <QrCode2Icon fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={t('Bearbeiten', 'Edit')}>
+                                        {canEdit && <Tooltip title={t('Bearbeiten', 'Edit')}>
                                             <IconButton size="small" onClick={() => handleOpenEdit(asset)}>
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
+                                        </Tooltip>}
+                                        {canEdit && <Tooltip title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
                                             <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)}>
                                                 <DeleteIcon fontSize="small" />
                                             </IconButton>
-                                        </Tooltip>
+                                        </Tooltip>}
                                     </TableCell>
                                 </TableRow>
                             ))}

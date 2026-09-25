@@ -19,6 +19,8 @@ import type { DamageReportFormData } from '../types';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
+import { useAuth } from '../hooks/useAuth';
+import { canManageInventory } from '../utils/access';
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
     available: 'success', in_custody: 'warning', in_field: 'warning', damaged: 'error',
@@ -26,13 +28,15 @@ const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'de
 };
 
 export function AssetDetail() {
+    const { user } = useAuth();
+    const canReportDamage = canManageInventory(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const navigate = useNavigate();
     const { itemId, assetId } = useParams<{ itemId: string; assetId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [damageOpen, setDamageOpen] = useState(searchParams.get('reportDamage') === '1');
+    const [damageOpen, setDamageOpen] = useState(canReportDamage && searchParams.get('reportDamage') === '1');
     const { data: item, isLoading: itemLoading } = useItem(itemId ?? '');
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
     const { data: transactions, isLoading: transactionsLoading } = useTransactions({ assetInstanceId: assetId, size: 200 });
@@ -107,9 +111,9 @@ export function AssetDetail() {
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
-                    <Button variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
+                    {canReportDamage && <Button variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
                         {t('Schaden melden', 'Report damage')}
-                    </Button>
+                    </Button>}
                 </Stack>
             </Box>
 

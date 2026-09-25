@@ -26,8 +26,11 @@ import {
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SaveIcon from '@mui/icons-material/Save';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useItems } from '../hooks/useItems';
-import { useCreateEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
+import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
@@ -46,6 +49,7 @@ export function Events() {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
   const [newEndDate, setNewEndDate] = useState(new Date().toISOString().slice(0, 10));
@@ -55,6 +59,19 @@ export function Events() {
   const { data: reports, isLoading: reportsLoading } = useEventReports(eventType);
   const createReport = useCreateEventReport();
   const updateReport = useUpdateEventReport();
+  const deleteReport = useDeleteEventReport();
+
+  function deleteEvent() {
+    if (!deletingEventId) return;
+    deleteReport.mutate(deletingEventId, {
+      onSuccess: () => {
+        if (selectedEventId === deletingEventId) setSelectedEventId('');
+        setDeletingEventId(null);
+        showSnackbar(t('Event gelöscht', 'Event deleted'), 'success');
+      },
+      onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Event konnte nicht gelöscht werden', 'Could not delete event'), 'error'),
+    });
+  }
 
   const completedReports = useMemo(
     () => reports?.filter((report) => report.status === 'completed') ?? [],
@@ -373,6 +390,12 @@ export function Events() {
                   <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
                     {t('Öffnen', 'Open')}
                   </Button>
+                  <Button size="small" startIcon={<EditIcon />} onClick={() => navigate(`/events/${report.id}?edit=1`)}>
+                    {t('Bearbeiten', 'Edit')}
+                  </Button>
+                  <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setDeletingEventId(report.id)}>
+                    {t('Löschen', 'Delete')}
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -382,6 +405,16 @@ export function Events() {
           </TableBody>
         </Table>
       </TableContainer>
+      <ConfirmDialog
+        open={Boolean(deletingEventId)}
+        title={t('Event löschen', 'Delete event')}
+        message={t('Dieses Event dauerhaft löschen? Events mit verknüpften Bestellungen können nicht gelöscht werden.', 'Permanently delete this event? Events with linked orders cannot be deleted.')}
+        actionLabel={t('Löschen', 'Delete')}
+        actionColor="error"
+        pending={deleteReport.isPending}
+        onClose={() => setDeletingEventId(null)}
+        onConfirm={deleteEvent}
+      />
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>{t('Event erstellen', 'Create event')}</DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>

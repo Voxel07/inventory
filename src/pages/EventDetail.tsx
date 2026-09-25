@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -32,13 +32,14 @@ import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '
 export function EventDetail() {
   const { reportId = '' } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const t = useLocalizedText();
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
   const { data: items = [] } = useItems();
   const updateReport = useUpdateEventReport();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
   const [eventType, setEventType] = useState<EventType>('DE');
   const [eventDate, setEventDate] = useState('');
   const [endDate, setEndDate] = useState('');

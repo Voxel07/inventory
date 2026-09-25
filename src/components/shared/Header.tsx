@@ -39,7 +39,8 @@ import { useNavigate } from 'react-router-dom';
 import { getNotifications, markNotificationRead, type AppNotification } from '../../services/notificationService';
 import { subscribeToApiChanges } from '../../services/apiClient';
 import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
-import { discardSyncFailure, getSyncFailures, type SyncFailure } from '../../services/offlineQueue';
+import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
+import { discardOfflineAction, discardSyncFailure, getOfflineActions, getSyncFailures, type OfflineAction, type SyncFailure } from '../../services/offlineQueue';
 import { resolveScannedCode } from '../../utils/codeResolver';
 
 function payloadText(notification: AppNotification, key: string): string | undefined {
@@ -56,6 +57,9 @@ export function Header() {
     const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
     const [syncIssuesOpen, setSyncIssuesOpen] = useState(false);
     const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
+    const [queuedActionsOpen, setQueuedActionsOpen] = useState(false);
+    const [queuedActions, setQueuedActions] = useState<OfflineAction[]>([]);
+    const [discardingAction, setDiscardingAction] = useState(false);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { online, queued, syncIssues } = useOfflineStatus();
@@ -111,6 +115,34 @@ export function Header() {
             setSyncFailures((current) => current.filter((failure) => failure.idempotencyKey !== idempotencyKey));
         });
     }
+
+    function openQueuedActions() {
+        setQueuedActionsOpen(true);
+        void getOfflineActions().then(setQueuedActions);
+    }
+
+    async function discardAction(idempotencyKey: string): Promise<boolean> {
+        setDiscardingAction(true);
+        try {
+            await discardOfflineAction(idempotencyKey);
+            setQueuedActions(await getOfflineActions());
+            showSnackbar(t('header.queuedActionRemoved'), 'success');
+            return true;
+        } catch (error) {
+            showSnackbar(error instanceof Error && error.message === 'SYNC_IN_PROGRESS'
+                ? t('header.queuedActionSyncing') : t('header.queuedActionRemoveFailed'), 'error');
+            return false;
+        } finally {
+            setDiscardingAction(false);
+        }
+    }
+
+    useEffect(() => {
+        if (!queuedActionsOpen) return;
+        const refresh = () => { void getOfflineActions().then(setQueuedActions); };
+        window.addEventListener('ash-offline-queue', refresh);
+        return () => window.removeEventListener('ash-offline-queue', refresh);
+    }, [queuedActionsOpen]);
 
     async function handleQuickScanSubmit(e?: React.FormEvent) {
         if (e) e.preventDefault();
@@ -279,6 +311,8 @@ export function Header() {
                             <IconButton
                                 size="small"
                                 color={online ? 'warning' : 'error'}
+                                onClick={openQueuedActions}
+                                aria-label={t('header.viewQueuedActions')}
                                 sx={{ ml: 0.5 }}
                             >
                                 <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? 'warning' : 'error'}>
@@ -293,6 +327,7 @@ export function Header() {
                             label={online
                                 ? t('header.queuedActions', { count: queued })
                                 : t('header.offlineQueued', { count: queued })}
+                            onClick={openQueuedActions}
                             sx={{ color: 'white', fontWeight: 700 }}
                         />
                     )
@@ -335,6 +370,13 @@ export function Header() {
             failures={syncFailures}
             onClose={() => setSyncIssuesOpen(false)}
             onDiscard={discardFailure}
+        />
+        <QueuedActionsDialog
+            open={queuedActionsOpen}
+            actions={queuedActions}
+            onClose={() => setQueuedActionsOpen(false)}
+            onDiscard={discardAction}
+            discarding={discardingAction}
         />
         </>
     );
