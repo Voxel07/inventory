@@ -90,6 +90,19 @@ public class ActorService {
                 DomainEnums.UserRole.warehouse_crew);
     }
 
+    public boolean canViewItem(org.ash.inventory.model.Item item, UserAccount actor) {
+        if (actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew
+                || item.visibilityScope == null || item.visibilityScope == DomainEnums.ItemVisibilityScope.global
+                || item.visibilityScope == DomainEnums.ItemVisibilityScope.event) return true;
+        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person)
+            return item.assignedUser != null && item.assignedUser.id.equals(actor.id);
+        return item.assignedGroup != null && actor.factions.contains(item.assignedGroup);
+    }
+
+    public void requireItemAccess(org.ash.inventory.model.Item item) {
+        if (item == null || !item.active || !canViewItem(item, current())) throw ApiException.notFound("Item not found");
+    }
+
     public void requireAdmin() {
         requireAny("Administrator access required", DomainEnums.UserRole.hq_admin);
     }

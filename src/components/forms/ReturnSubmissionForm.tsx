@@ -10,6 +10,7 @@ type Props = {
   assetInstanceId?: string;
   returnedForUserId?: string;
   factionOrderId?: string;
+  eventOccurrenceId?: string;
   onSubmit: (data: ReturnSubmissionFormData) => void;
   isLoading?: boolean;
 };
@@ -20,6 +21,7 @@ export function ReturnSubmissionForm({
   assetInstanceId,
   returnedForUserId,
   factionOrderId,
+  eventOccurrenceId,
   onSubmit,
   isLoading,
 }: Props) {
@@ -41,6 +43,7 @@ export function ReturnSubmissionForm({
       assetInstanceId,
       returnedForUserId,
       factionOrderId,
+      eventOccurrenceId,
       placementImageFile: image,
       notes: notes.trim() || undefined,
     });

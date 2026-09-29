@@ -1,4 +1,8 @@
 export interface StorageLocation {
+  warehouseId?: string;
+  warehouseName?: string;
+  parentLocationId?: string;
+  active: boolean;
   id: string;
   name: string;
   description?: string;
@@ -18,6 +22,11 @@ export interface StorageLocation {
 export type MapBounds = [[number, number], [number, number]];
 
 export interface StorageLocationFormData {
+  mapOverlay?: string | null;
+  warehouseId?: string | null;
+  parentLocationId?: string | null;
+  locationType?: StorageLocation['locationType'];
+  active?: boolean;
   name: string;
   description?: string;
   area?: string;
@@ -152,6 +161,7 @@ export interface ReturnSubmission {
 }
 
 export interface ReturnSubmissionFormData {
+  eventOccurrenceId?: string;
   itemId: string;
   quantity: number;
   assetInstanceId?: string;

@@ -1,3 +1,5 @@
+import { useAuth } from '../hooks/useAuth';
+import { canPerformCustody } from '../utils/access';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import { Box, Typography, DialogTitle, DialogContent, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
@@ -16,6 +18,7 @@ import { isOfflineQueuedError } from '../utils/offline';
 
 export function DamageReportsPage() {
     const t = useLocalizedText();
+    const { user } = useAuth();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: reports, isLoading, isFetchingNextPage, hasNextPage, isError, refetch } = useDamageReports();
@@ -76,7 +79,7 @@ export function DamageReportsPage() {
                     label={t('Schaden melden', 'Report damage')}
                     variant="contained"
                     color="error"
-                    onClick={() => setFormOpen(true)}
+                    disabled={!canPerformCustody(user)} onClick={() => setFormOpen(true)}
                 />
             </Box>
 

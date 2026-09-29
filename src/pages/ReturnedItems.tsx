@@ -1,3 +1,6 @@
+import { OperationForm } from '../components/operations/OperationForm';
+import { useAuth } from '../hooks/useAuth';
+import { canOperateWarehouse } from '../utils/access';
 import { useState } from 'react';
 import {
   Alert,
@@ -23,7 +26,6 @@ import {
 } from '../hooks/useReturnSubmissions';
 import type { ReturnSubmissionStatus } from '../types';
 import { useLocalizedText } from '../utils/naming';
-import { useUIStore } from '../store/uiStore';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -33,25 +35,12 @@ const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'erro
 
 export function ReturnedItemsPage() {
   const t = useLocalizedText();
-  const showSnackbar = useUIStore((state) => state.showSnackbar);
+  const { user } = useAuth();
+  const [decision, setDecision] = useState<{ id: string; accept: boolean } | null>(null);
   const [status, setStatus] = useState<ReturnSubmissionStatus | ''>('pending');
   const { data = [], isLoading, error } = useReturnSubmissions(status || undefined);
   const acknowledge = useAcknowledgeReturnSubmission();
   const reject = useRejectReturnSubmission();
-
-  function accept(id: string) {
-    acknowledge.mutate({ id }, {
-      onSuccess: () => showSnackbar(t('Rückgabe wurde in den Bestand übernommen', 'Return was accepted into stock'), 'success'),
-      onError: () => showSnackbar(t('Rückgabe konnte nicht bestätigt werden', 'Could not acknowledge return'), 'error'),
-    });
-  }
-
-  function decline(id: string) {
-    reject.mutate({ id }, {
-      onSuccess: () => showSnackbar(t('Rückgabe wurde abgelehnt', 'Return was rejected'), 'success'),
-      onError: () => showSnackbar(t('Rückgabe konnte nicht abgelehnt werden', 'Could not reject return'), 'error'),
-    });
-  }
 
   return (
     <Box>
@@ -112,14 +101,15 @@ export function ReturnedItemsPage() {
                     {new Date(entry.created).toLocaleString()} · {entry.submittedByName}
                   </Typography>
                   {entry.notes && <Typography sx={{ mt: 1 }}>{entry.notes}</Typography>}
-                  {entry.status === 'pending' && (
+                  {entry.acknowledgementNotes && <Typography sx={{ mt: 1 }}>{t('Prüfnotiz', 'Inspection notes')}: {entry.acknowledgementNotes}</Typography>}
+                  {entry.status === 'pending' && canOperateWarehouse(user) && (
                     <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
                       <Button
                         variant="contained"
                         color="success"
                         startIcon={<CheckCircleIcon />}
                         disabled={acknowledge.isPending || reject.isPending}
-                        onClick={() => accept(entry.id)}
+                        onClick={() => setDecision({ id: entry.id, accept: true })}
                       >
                         {t('Bestätigen & einlagern', 'Acknowledge & return to stock')}
                       </Button>
@@ -128,7 +118,7 @@ export function ReturnedItemsPage() {
                         color="error"
                         startIcon={<CancelIcon />}
                         disabled={acknowledge.isPending || reject.isPending}
-                        onClick={() => decline(entry.id)}
+                        onClick={() => setDecision({ id: entry.id, accept: false })}
                       >
                         {t('Ablehnen', 'Reject')}
                       </Button>
@@ -140,6 +130,7 @@ export function ReturnedItemsPage() {
           ))}
         </Grid>
       )}
+      {decision && <OperationForm title={decision.accept ? t('Rückgabe bestätigen', 'Acknowledge return') : t('Rückgabe ablehnen', 'Reject return')} fields={[{ key: 'notes', label: t('Prüfnotiz / Begründung', 'Inspection notes / reason'), required: !decision.accept, multiline: true }]} onClose={() => setDecision(null)} onSave={(values) => (decision.accept ? acknowledge : reject).mutateAsync({ id: decision.id, notes: String(values.notes || '') })} />}
     </Box>
   );
 }

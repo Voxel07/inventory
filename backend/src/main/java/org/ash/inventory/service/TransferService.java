@@ -21,6 +21,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class TransferService {
+    @jakarta.inject.Inject PositionService positions;
+    @jakarta.inject.Inject InventoryOperationsService inventory;
     private final TransferOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -105,6 +107,7 @@ public class TransferService {
         var lines = orm.lockedLines(transfer);
         for (var line : lines) {
             if (line.assetInstance != null) {
+                requiredLocked(Item.class, line.item.id, "Item");
                 var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
                 if (asset.availabilityStatus != DomainEnums.AssetState.available
                         || asset.currentLocation == null || !asset.currentLocation.id.equals(transfer.sourceLocation.id)) {
@@ -113,6 +116,10 @@ public class TransferService {
                 asset.availabilityStatus = DomainEnums.AssetState.in_transit;
                 asset.currentLocation = null;
             } else {
+                var lockedItem = requiredLocked(Item.class, line.item.id, "Item");
+                positions.ensureLegacy(lockedItem);
+                if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
+                if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null, null))) throw ApiException.conflict("Stock is reserved or unavailable");
                 var position = orm.lockedPosition(line.item, transfer.sourceLocation, line.lot);
                 if (position == null || position.availableQuantity() < line.requestedQuantity) {
                     throw ApiException.conflict("Insufficient source stock for " + line.item.name);
@@ -190,6 +197,7 @@ public class TransferService {
 
     private void receiveLine(InventoryTransfer transfer, InventoryTransferLine line,
             TransferDtos.ReceiveLineInput input, UserAccount actor, UUID commandId) {
+        requiredLocked(Item.class, line.item.id, "Item");
         if (line.assetInstance != null) {
             var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
             if (asset.availabilityStatus != DomainEnums.AssetState.in_transit) {

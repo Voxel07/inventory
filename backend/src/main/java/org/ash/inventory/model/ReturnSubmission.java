@@ -15,6 +15,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "return_submissions")
 public class ReturnSubmission extends BaseEntity {
+    @Column(name = "member_command_id", unique = true) public java.util.UUID memberCommandId;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "item_id")
     public Item item;
@@ -30,6 +31,13 @@ public class ReturnSubmission extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "faction_order_id")
     public FactionOrder factionOrder;
+
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "general_order_id")
+    public GeneralOrder generalOrder;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_occurrence_id")
+    public EventOccurrence eventOccurrence;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "returned_for_user_id")

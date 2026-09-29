@@ -26,5 +26,6 @@ public class RepairCase extends BaseEntity {
     @Column(name = "completed_at") public Instant completedAt;
     @Column(name = "verification_result") public String verificationResult;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "approved_by") public UserAccount approvedBy;
+    @Column(name = "repaired_pending_quantity", nullable = false) public int repairedPendingQuantity;
     public String notes;
 }

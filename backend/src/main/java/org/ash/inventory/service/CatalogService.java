@@ -26,6 +26,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
+    @Inject LocationHierarchyService hierarchy;
+    @jakarta.inject.Inject PositionService positions;
     @Inject EntityManager entityManager;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
@@ -54,6 +56,10 @@ public class CatalogService {
 
     public List<StorageLocation> getLocations() {
         return orm.locations();
+    }
+
+    public List<StorageLocation> getAllLocations() {
+        return entityManager.createQuery("from StorageLocation order by name, id", StorageLocation.class).getResultList();
     }
 
     public List<Assembly> getAssemblies() {
@@ -102,9 +108,11 @@ public class CatalogService {
             tx.notes = "Initial stock on item creation";
             tx.idempotencyKey = UUID.randomUUID();
             tx.occurredAt = Instant.now();
+            tx.destinationLocation = item.storageLocation;
             tx.availabilityBefore = 0;
             tx.availabilityAfter = item.baseAmount;
             orm.persist(tx);
+            positions.ensureLegacy(item);
         }
         catalogChanged("items", item.id);
         return item;
@@ -215,13 +223,7 @@ public class CatalogService {
     }
 
     private boolean canView(Item item, UserAccount actor) {
-        if (canManageInventory(actor) || item.visibilityScope == null
-                || item.visibilityScope == DomainEnums.ItemVisibilityScope.global
-                || item.visibilityScope == DomainEnums.ItemVisibilityScope.event) return true;
-        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person) {
-            return item.assignedUser != null && item.assignedUser.id.equals(actor.id);
-        }
-        return item.assignedGroup != null && actor.factions.contains(item.assignedGroup);
+        return actorService.canViewItem(item, actor);
     }
 
     private String blankToNull(String value) {
@@ -232,6 +234,7 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "locations-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
+        hierarchy.lockHierarchy();
         var location = new StorageLocation();
         apply(location, input);
         orm.persist(location);
@@ -243,6 +246,7 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "locations-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
+        hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
         apply(location, input);
         catalogChanged("storage-locations", location.id);
@@ -253,10 +257,10 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "locations-cache")
     @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteLocation(UUID id) {
+        hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
         if (!location.active) throw ApiException.notFound("Storage location not found");
-        orm.clearActiveLocationAssignments(location);
-        location.active = false;
+        hierarchy.deactivate(location);
         catalogChanged("storage-locations", location.id);
     }
 
@@ -272,7 +276,7 @@ public class CatalogService {
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
         target.mapOverlayUrl = input.mapOverlay();
         target.overlayBounds = input.overlayBounds();
-        target.warehouse = input.warehouseId() == null ? null : required(Warehouse.class, input.warehouseId(), "Warehouse");
+        hierarchy.apply(target, input);
     }
 
     @Transactional

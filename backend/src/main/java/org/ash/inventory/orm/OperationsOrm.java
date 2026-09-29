@@ -112,6 +112,7 @@ public class OperationsOrm {
                 Object[].class).setParameter("item", item).getResultList()) {
             totals.put((DomainEnums.TransactionType) row[0], (Long) row[1]);
         }
+        normalizeCustodyWriteOff(totals, entityManager.createQuery("select coalesce(sum(tx.quantity), 0) from StockTransaction tx where tx.item = :item and tx.custodyWriteOff = true", Long.class).setParameter("item", item).getSingleResult());
         return totals;
     }
 
@@ -128,7 +129,17 @@ public class OperationsOrm {
             totals.computeIfAbsent(itemId, ignored -> new EnumMap<>(DomainEnums.TransactionType.class))
                     .put((DomainEnums.TransactionType) row[1], (Long) row[2]);
         }
+        for (var row : entityManager.createQuery("select tx.item.id, sum(tx.quantity) from StockTransaction tx where tx.item.id in :ids and tx.custodyWriteOff = true group by tx.item.id", Object[].class).setParameter("ids", itemIds).getResultList())
+            normalizeCustodyWriteOff(totals.get((UUID) row[0]), (Long) row[1]);
         return totals;
+    }
+
+    private void normalizeCustodyWriteOff(Map<DomainEnums.TransactionType, Long> totals, long quantity) {
+        // A custody loss reduces checked-out stock, never the physical warehouse balance.
+        // The ledger retains written_off; only this internal stock arithmetic groups its effect with consumption.
+        if (quantity == 0) return;
+        totals.merge(DomainEnums.TransactionType.written_off, -quantity, Long::sum);
+        totals.merge(DomainEnums.TransactionType.consumed, quantity, Long::sum);
     }
 
     public List<DamageReport> unresolvedDamage(Item item) {
@@ -192,7 +203,14 @@ public class OperationsOrm {
                 .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
                         DomainEnums.ReservationStatus.partially_released))
                 .getSingleResult();
-        return Math.toIntExact(quantity);
+        return Math.toIntExact(quantity + generalReservations().getOrDefault(item.id, 0L));
+    }
+
+    public Map<UUID, Long> generalReservations() {
+        var result = new LinkedHashMap<UUID, Long>();
+        for (var order : entityManager.createQuery("from GeneralOrder o where o.status in ('preparing', 'ready')", org.ash.inventory.model.GeneralOrder.class).getResultList())
+            order.preparedQuantities.forEach((id, quantity) -> result.merge(UUID.fromString(id), quantity.longValue(), Long::sum));
+        return result;
     }
 
     public Map<UUID, Long> activeReservationQuantities(Collection<UUID> itemIds) {
@@ -211,6 +229,7 @@ public class OperationsOrm {
                 .getResultList()) {
             quantities.put((UUID) row[0], (Long) row[1]);
         }
+        generalReservations().forEach((id, quantity) -> { if (itemIds.contains(id)) quantities.merge(id, quantity, Long::sum); });
         return quantities;
     }
 

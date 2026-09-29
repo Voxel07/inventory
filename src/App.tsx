@@ -5,7 +5,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
-import { CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
+import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { canManageInventory } from './utils/access';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
@@ -36,6 +36,10 @@ const TransactionHistoryPage = lazy(() => import('./pages/TransactionHistory').t
 const Procurement = lazy(() => import('./pages/Procurement').then((m) => ({ default: m.Procurement })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ default: m.Maintenance })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
+const Contributor = lazy(() => import('./pages/Contributor').then(m => ({ default: m.Contributor })));
+const ActionInbox = lazy(() => import('./pages/ActionInbox').then(m => ({ default: m.ActionInbox })));
+const LocationScan = lazy(() => import('./pages/LocationScan').then(m => ({ default: m.LocationScan })));
+const Operations = lazy(() => import('./pages/Operations').then((m) => ({ default: m.Operations })));
 
 function RouteLoadingFallback() {
   return (
@@ -416,9 +420,13 @@ function AppContent() {
               <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
               <Route path="/procurement" element={<ProcurementGuard><Procurement /></ProcurementGuard>} />
               <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
+              <Route path="/contributor" element={<Contributor />} />
+              <Route path="/actions" element={<ActionInbox />} />
+              <Route path="/locations/:locationId" element={<LocationScan />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
-              <Route path="/users" element={<InventoryManagerGuard><UserManagement /></InventoryManagerGuard>} />
+              <Route path="/operations" element={<InventoryManagerGuard><Operations /></InventoryManagerGuard>} />
+              <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
@@ -441,7 +449,7 @@ function AppContent() {
 
 function HomeRoute() {
   const { user } = useAuth();
-  return canManageInventory(user) ? <UserDashboard /> : <Navigate to="/orders?tab=faction" replace />;
+  return canManageInventory(user) ? <UserDashboard /> : <Contributor />;
 }
 
 export default function App() {

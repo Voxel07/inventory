@@ -70,8 +70,9 @@ export function useBarcodeScanner(enabled = true) {
           navigate(result.path);
           return;
         }
-      } catch {
-        // Ignore resolution errors
+      } catch (error) {
+        showSnackbar(error instanceof Error ? error.message : translate('Code konnte nicht geprüft werden.', 'Could not verify code.'), 'warning');
+        return;
       }
 
       showSnackbar(translate(`Scancode gelesen: ${code}`, `Scan code read: ${code}`), 'info');

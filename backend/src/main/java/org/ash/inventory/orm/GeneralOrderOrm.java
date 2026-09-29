@@ -19,6 +19,13 @@ public class GeneralOrderOrm {
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
+    public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, int offset, int limit) {
+        boolean scoped = actor.role == org.ash.inventory.model.DomainEnums.UserRole.faction_leader;
+        var query = entityManager.createQuery("from GeneralOrder o" + (scoped ? " where o.createdBy = :actor" : "") + " order by o.createdAt desc", GeneralOrder.class);
+        if (scoped) query.setParameter("actor", actor);
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
     public void persist(GeneralOrder order) { entityManager.persist(order); }
     public GeneralOrder locked(UUID id) { return entityManager.find(GeneralOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
 }

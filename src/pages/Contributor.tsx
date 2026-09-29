@@ -1,0 +1,61 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, Button, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
+import { Link } from 'react-router-dom';
+import { apiRequest } from '../services/apiClient';
+import { useAuth } from '../hooks/useAuth';
+import type { CheckedOutRow } from '../components/lists/CheckedOutList';
+import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
+import { useAssignableUsers } from '../hooks/useUsers';
+import { canOperateWarehouse } from '../utils/access';
+import { useLocalizedText } from '../utils/naming';
+import { OperationForm } from '../components/operations/OperationForm';
+
+interface Stored { itemId: string; name: string; locationId?: string; location?: string; assetId?: string; assetCode?: string; quantity: number }
+interface Request { id: string; itemId: string; item: string; requester: string; kind: string; quantity: number; notes: string; status: string; response?: string; createdAt: string; revision: number; assetId?: string; locationId?: string }
+interface Assignment { id: string; name: string; userId?: string }
+export function Contributor() {
+  const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = user?.role !== 'read_only';
+  const custody = useQuery({ queryKey: ['member-custody', user?.id], queryFn: () => apiRequest<CheckedOutRow[]>('/api/member/custody') }); const returns = useReturnSubmissions();
+  const stored = useQuery({ queryKey: ['member-storage', user?.id], queryFn: () => apiRequest<Stored[]>('/api/member/storage') });
+  const requests = useQuery({ queryKey: ['member-requests', user?.id], queryFn: () => apiRequest<Request[]>('/api/member/requests') });
+  const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
+  const [returning, setReturning] = useState<NonNullable<typeof custody.data>[number] | null>(null);
+  const [returnCommand, setReturnCommand] = useState('');
+  const [reply, setReply] = useState<Request | null>(null);
+  const error = custody.error || stored.error || requests.error || returns.error;
+  const report = (item: Stored, kind: string) => setRequest({ item, kind, commandId: crypto.randomUUID() });
+  return <Stack spacing={2}>
+    <Typography variant="h4">{t('Meine Ausrüstung & Abholungen', 'My equipment & pickups')}</Typography>
+    <Button component={Link} to="/actions">{t('Aufgaben & Erinnerungen', 'Actions & reminders')}</Button>
+    {(custody.isLoading || stored.isLoading || requests.isLoading) && <LinearProgress />}
+    {error && <Alert severity="error" action={<Button onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>{error.message}</Alert>}
+    <Typography variant="h6">{t('In meiner Obhut', 'In my custody')}</Typography>
+    {custody.data?.map(row => <Card key={row.key}><CardContent><Stack spacing={1}>
+      <Typography>{row.name} · {row.checkedOut} · {row.event}</Typography><Typography>{t('Bestätigung ausstehend', 'Awaiting acknowledgement')}: {row.pendingQuantity}</Typography>
+      <Typography>{t('Rückgabeort', 'Return location')}: {row.storageLocation}</Typography>
+      {writable && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button disabled={row.checkedOut <= (row.pendingQuantity ?? 0)} onClick={() => { setReturnCommand(crypto.randomUUID()); setReturning(row); }}>{t('Rückgabe melden', 'Submit return')}</Button><Button onClick={() => report({ itemId: row.itemId, name: row.name, assetId: row.assetInstanceId, quantity: row.checkedOut }, 'damage')}>{t('Schaden melden', 'Report damage')}</Button><Button onClick={() => report({ itemId: row.itemId, name: row.name, assetId: row.assetInstanceId, quantity: row.checkedOut }, 'pickup')}>{t('Abholung koordinieren', 'Coordinate pickup')}</Button></Stack>}
+    </Stack></CardContent></Card>)}
+    {!custody.isLoading && !custody.data?.length && <Typography>{t('Keine offenen Ausleihen.', 'No outstanding custody.')}</Typography>}
+    <Typography variant="h6">{t('Bei mir gelagert', 'Stored with me')}</Typography>
+    {stored.data?.map((s, index) => <Card key={`${s.itemId}:${s.locationId}:${s.assetId}:${index}`}><CardContent><Stack spacing={1}><Typography>{s.name} · {s.quantity} · {s.assetCode} · {s.location}</Typography>{writable && <Stack direction="row" spacing={1}><Button onClick={() => report(s, 'damage')}>{t('Schaden melden', 'Report damage')}</Button><Button onClick={() => report(s, 'pickup')}>{t('Abholung koordinieren', 'Coordinate pickup')}</Button></Stack>}</Stack></CardContent></Card>)}
+    {!stored.isLoading && !stored.data?.length && <Typography>{t('Keine zugewiesenen Lagerbestände.', 'No assigned stored equipment.')}</Typography>}
+    <Typography variant="h6">{t('Meldungen & Absprachen', 'Reports & coordination')}</Typography>
+    <Alert severity="info">{t('Schadensmeldungen sperren den Artikel bis zur Klärung. Das Lager prüft den Schaden und dokumentiert die Bestandsaktion vor dem Abschluss. Abholanfragen bewegen keinen Bestand.', 'Damage reports block the item until reviewed. Warehouse staff inspect the damage and document the stock action before closing the report. Pickup requests do not move stock.')}</Alert>
+    {requests.data?.map(r => <Card key={r.id}><CardContent><Stack spacing={1}><Typography variant="h6">{r.item} · {r.quantity} · {r.kind === 'damage' ? t('Schaden', 'Damage') : t('Abholung', 'Pickup')}</Typography><Typography>{r.requester} · {r.status} · {new Date(r.createdAt).toLocaleString()}</Typography><Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.notes}</Typography>{r.response && <Alert severity="info">{r.response}</Alert>}{warehouse && r.status !== 'resolved' && <Stack direction="row"><Button onClick={() => setReply(r)}>{t('Antworten / abschließen', 'Respond / resolve')}</Button><Button component={Link} to={`/items/${r.itemId}`}>{t('Artikel prüfen', 'Inspect item')}</Button></Stack>}</Stack></CardContent></Card>)}
+    <Typography variant="h6">{t('Rückgabestatus', 'Return status')}</Typography>
+    {returns.data?.filter(r => r.returnedForUserId === user?.id).map(r => <Card key={r.id}><CardContent><Typography>{r.itemName} · {r.quantity} · {r.status}</Typography><Typography>{r.acknowledgementNotes}</Typography></CardContent></Card>)}
+    {warehouse && <StorageAssignments />}
+    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => apiRequest('/api/member/requests', { method: 'POST', body: { ...v, ...request.item, kind: request.kind, commandId: request.commandId, quantity: v.quantity } })} />}
+    {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => apiRequest('/api/member/returns', { method: 'POST', body: { ...v, assetId: v.assetId || null, custodyKey: returning.key, commandId: returnCommand } })} />}
+    {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => apiRequest(`/api/member/requests/${reply.id}`, { method: 'POST', body: { ...v, revision: reply.revision } })} />}
+  </Stack>;
+}
+function StorageAssignments() {
+  const t = useLocalizedText(); const users = useAssignableUsers();
+  const assignments = useQuery({ queryKey: ['member-assignments'], queryFn: () => apiRequest<Assignment[]>('/api/member/assignments') });
+  const [editing, setEditing] = useState<Assignment | null>(null);
+  return <Stack spacing={1}><Typography variant="h6">{t('Lager-Verantwortung zuweisen', 'Assign storage responsibility')}</Typography>{assignments.error && <Alert severity="error">{assignments.error.message}</Alert>}{assignments.data?.map(a => <Button key={a.id} onClick={() => setEditing(a)}>{a.name} · {users.data?.find(u => u.id === a.userId)?.name ?? t('Nicht zugewiesen', 'Unassigned')}</Button>)}
+    {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }} fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter(u => u.role !== 'read_only').map(u => ({ value: u.id, label: u.name })) }]} onSave={v => apiRequest(`/api/member/assignments/${editing.id}`, { method: 'PUT', body: { userId: v.userId || null } })} />}
+  </Stack>;
+}

@@ -48,6 +48,7 @@ export interface FactionOrderHistoryEntry {
 }
 
 export interface FactionOrder {
+  sourceLocations?: Record<string, string>;
   id: string;
   orderCode: string;
   factionKey: string;

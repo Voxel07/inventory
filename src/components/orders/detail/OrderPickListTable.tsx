@@ -28,6 +28,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import SearchIcon from '@mui/icons-material/Search';
 import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
 import { useItemAssets } from '../../../hooks/useItems';
+import { useEquipmentAvailability } from '../../../hooks/useEquipment';
 import { useLocalizedText } from '../../../utils/naming';
 
 export interface OrderPickListTableProps {
@@ -57,6 +58,7 @@ function assetLabel(asset: AssetInstance) {
 }
 
 function SerializedAssetPicker({
+  eventId,
   item,
   required,
   selectedIds,
@@ -64,6 +66,7 @@ function SerializedAssetPicker({
   editable,
   onChange,
 }: {
+  eventId: string;
   item: Item;
   required: number;
   selectedIds: string[];
@@ -74,9 +77,12 @@ function SerializedAssetPicker({
   const t = useLocalizedText();
   const { data: assets = [], isLoading } = useItemAssets(editable ? item.id : undefined);
   const knownAssets = editable ? assets : persistedAssets;
+  const equipment = useEquipmentAvailability(eventId);
+  const commitment = equipment.data?.[item.id];
   const eligible = knownAssets.filter((asset) => asset.active && (
     selectedIds.includes(asset.id)
     || (asset.availabilityStatus === 'available'
+      && (!commitment || commitment.assetIds.includes(asset.id))
       && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
       && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified'))
   ));
@@ -337,6 +343,7 @@ export function OrderPickListTable({
           <Stack spacing={1}>
             {serializedItems.map(({ item, required, persisted }) => (
               <SerializedAssetPicker
+                eventId={order.eventOccurrenceId}
                 key={item.id}
                 item={item}
                 required={required}

@@ -1,3 +1,5 @@
+import { useAuth } from '../../hooks/useAuth';
+import { canPerformMaintenance, canManageUsers } from '../../utils/access';
 import { Dialog } from '../shared/ClosableDialog';
 import {
     Box, Button, Chip, DialogActions, DialogContent, DialogTitle, Paper, Skeleton, Stack,
@@ -34,6 +36,8 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
 
 export function DamageReportsList({ reports, items, assemblies, users, isLoading, loadingMore, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
     const t = useLocalizedText();
+    const { user } = useAuth();
+    const canMaintain = canPerformMaintenance(user);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const visibleReports = (reports ?? []).filter((report) => view === 'history'
@@ -92,11 +96,11 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
         setResolutionNotes('');
         setItemHint('');
     };
-    const statusControl = (report: DamageReport) => onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
+    const statusControl = (report: DamageReport) => canMaintain && onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             {report.status === 'reported' && <Button size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('Prüfung starten', 'Start review')}</Button>}
             <Button size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('Teil reparieren', 'Repair units')}</Button>
-            <Button size="small" variant="contained" color="error" disabled={isUpdating} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
+            <Button size="small" variant="contained" color="error" disabled={isUpdating || !canManageUsers(user)} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
         </Stack>
     ) : <Chip label={formatStatus(report.status)} size="small" />;
     const openEdit = (report: DamageReport) => {
@@ -198,7 +202,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                         {statusControl(report)}
-                        {onEdit && <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
+                        {canMaintain && onEdit && <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
                     </Stack>
                 </Paper>
             ))}
@@ -232,7 +236,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                         <TableCell>
                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                 {statusControl(report)}
-                                {onEdit && <Tooltip title={t('Schadensbericht bearbeiten', 'Edit damage report')}><IconButton size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
+                                {canMaintain && onEdit && <Tooltip title={t('Schadensbericht bearbeiten', 'Edit damage report')}><IconButton size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
                             </Stack>
                         </TableCell>
                     </TableRow>

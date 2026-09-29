@@ -1,3 +1,6 @@
+import { CodeManagement } from '../components/qr/CodeManagement';
+import { StockPositions } from '../components/operations/StockOperations';
+import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
@@ -52,7 +55,7 @@ import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canManageInventory } from '../utils/access';
+import { canEditCatalog, canOperateWarehouse, canPerformCustody } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
@@ -99,7 +102,8 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 export function ItemDetail() {
     const { user } = useAuth();
     const canEdit = canEditCatalog(user);
-    const canTransact = canManageInventory(user);
+    const canTransact = canOperateWarehouse(user);
+    const canReportDamage = canPerformCustody(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -162,7 +166,7 @@ export function ItemDetail() {
     function handleTransaction(data: TransactionFormData) {
         if (data.transactionType === 'checkin' && data.factionOrderId) {
             createReturn.mutate(
-                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, factionOrderId: data.factionOrderId, notes: data.notes },
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, factionOrderId: data.factionOrderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);
@@ -178,7 +182,7 @@ export function ItemDetail() {
         }
         if (data.transactionType === 'checkin') {
             createReturn.mutate(
-                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, notes: data.notes },
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);
@@ -284,7 +288,7 @@ export function ItemDetail() {
                             </Box>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">Gesamtbestand</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('Organisationseigentum', 'Organization owned')}</Typography>
                             <Typography variant="h6">{totalStock}</Typography>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>
@@ -485,7 +489,7 @@ export function ItemDetail() {
                 {/* Serialized Item Drill-down & Asset Management */}
                 {item.trackingMode === 'serialized' && (
                     <Grid size={12}>
-                        <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canTransact} />
+                        <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
                     </Grid>
                 )}
 
@@ -650,6 +654,9 @@ export function ItemDetail() {
                 </DialogContent>
             </Dialog>
 
+            <EquipmentOwnership item={item} canEdit={canEdit} />
+            {canEdit && <CodeManagement targetId={item.id} targetType="product" />}
+            {canTransact && <Paper sx={{ p: 2, my: 2 }}><StockPositions itemId={item.id} /></Paper>}
             {/* Checkout Dialog */}
             <Dialog
                 open={checkoutOpen}

@@ -1,3 +1,5 @@
+import { useAuth } from '../../../hooks/useAuth';
+import { canOperateWarehouse, canPerformCustody, canAccessProcurement } from '../../../utils/access';
 import {
   Alert,
   Box,
@@ -85,7 +87,6 @@ export function OrderDetailHeader({
   pickupLocationLabel,
   canEditOrder,
   canEditOrderContents,
-  isManager,
   onBack,
   onEdit,
   onOpenQr,
@@ -104,6 +105,10 @@ export function OrderDetailHeader({
   isStartingPreparation,
   isReopeningPreparation,
 }: OrderDetailHeaderProps) {
+  const { user } = useAuth();
+  const warehouse = canOperateWarehouse(user);
+  const custody = canPerformCustody(user);
+  const planner = canAccessProcurement(user);
   const t = useLocalizedText();
   const language = useAppLanguage();
 
@@ -164,7 +169,7 @@ export function OrderDetailHeader({
               {t('Bedarf vollständig', 'Request complete')}
             </Button>
           )}
-          {isManager && order.status === 'submitted' && (
+          {warehouse && order.status === 'submitted' && (
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
@@ -174,7 +179,7 @@ export function OrderDetailHeader({
               {t('Vorbereitung starten', 'Start preparation')}
             </Button>
           )}
-          {isManager && order.status === 'preparing' && (
+          {warehouse && order.status === 'preparing' && (
             <>
               <Button variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
                 {t('Verfügbare Mengen füllen', 'Fill available amounts')}
@@ -193,27 +198,27 @@ export function OrderDetailHeader({
               </Button>
             </>
           )}
-          {isManager && order.status === 'ready' && (
+          {(warehouse || custody) && order.status === 'ready' && (
             <>
               <Button
                 variant="outlined"
                 startIcon={<ReplayIcon />}
                 onClick={onReopenPreparation}
-                disabled={isReopeningPreparation}
+                disabled={isReopeningPreparation || !warehouse}
               >
                 {t('Zurück in Vorbereitung', 'Back to preparation')}
               </Button>
-              <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={onPickUp}>
+              <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
                 {t('Komplette Liste abholen', 'Pick up complete list')}
               </Button>
             </>
           )}
-          {isManager && ['picked_up', 'partially_returned'].includes(order.status) && (
+          {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
             <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
               {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
             </Button>
           )}
-          {isManager && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+          {planner && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
             <Button color="error" startIcon={<CancelIcon />} onClick={onCancel} sx={{ ml: { sm: 'auto' } }}>
               {t('Stornieren', 'Cancel')}
             </Button>

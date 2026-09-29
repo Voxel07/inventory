@@ -1,6 +1,14 @@
+import { getWarehouses, WarehousesPanel } from '../components/operations/WarehousesPanel';
+import { locationPath, isDescendant } from '../utils/locationHierarchy';
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog } from '../utils/access';
+import { StockPositions } from '../components/operations/StockOperations';
+import { useOperationList } from '../hooks/useOperations';
+import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, useEffect } from 'react';
 import {
+    Accordion, AccordionSummary, AccordionDetails, Alert, MenuItem, Checkbox, FormControlLabel,
     Box,
     Typography,
     Paper,
@@ -41,7 +49,6 @@ import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
-import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
@@ -53,12 +60,14 @@ import { useClientPagination } from '../hooks/useClientPagination';
 
 export function StorageLocations() {
     const t = useLocalizedText();
+    const { user } = useAuth();
+    const canEdit = canEditCatalog(user);
     const navigate = useNavigate();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const { data: locations, isLoading: locationsLoading } = useStorageLocations();
+    const { data: locations, isLoading: locationsLoading } = useStorageLocations({ includeInactive: true });
     const { data: items, isLoading: itemsLoading } = useItems();
 
     const createMutation = useCreateStorageLocation();
@@ -70,6 +79,12 @@ export function StorageLocations() {
     const [editingLoc, setEditingLoc] = useState<StorageLocation | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [warehouseFilter, setWarehouseFilter] = useState('');
+    const [parentFilter, setParentFilter] = useState('');
+    const [showInactive, setShowInactive] = useState(false);
+    const [warehousesOpen, setWarehousesOpen] = useState(false);
+    const warehouses = useOperationList('warehouses', getWarehouses);
+
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -97,32 +112,39 @@ export function StorageLocations() {
 
     const filteredLocations = (() => {
         if (!locations) return [];
-        if (!searchQuery.trim()) return locations;
+
         const lower = searchQuery.toLowerCase();
         return locations.filter(
             (l) =>
-                l.name.toLowerCase().includes(lower) ||
-                (l.area && l.area.toLowerCase().includes(lower))
+                (showInactive || l.active) && (!warehouseFilter || l.warehouseId === warehouseFilter)
+                && (!parentFilter || isDescendant(l, parentFilter, locations))
+                && (locationPath(l, locations).toLowerCase().includes(lower) || (l.area ?? '').toLowerCase().includes(lower))
         );
     })();
     const { pageItems: pageLocations, page: currentLocationPage, setPage: setLocationPage, pageSize: locationPageSize, onPageSizeChange: onLocationPageSizeChange } = useClientPagination(filteredLocations);
 
+    const positions = useOperationList(`storage-positions:${selectedLocId}`, operationsApi.positions({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
+
+    const locatedAssets = useOperationList(`storage-assets:${selectedLocId}`, operationsApi.assets({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
+
     // Items stored in the selected location
     const storedItems = (() => {
         if (!items || !selectedLocId) return [];
-        return items.filter((item) => item.storageLocation === selectedLocId);
+        return items.filter((item) => item.trackingMode === 'serialized' ? locatedAssets.data?.some((asset) => asset.itemId === item.id) : positions.data?.some((position) => position.itemId === item.id && position.quantityOnHand > 0));
     })();
 
     // Enriched items with checkouts and damage calculations
     const enrichedStoredItems = storedItems.map((item) => {
-        const { totalStock, remaining, checkedOut } = getItemStock(item);
+        const rows = positions.data?.filter((position) => position.itemId === item.id) ?? [];
+        const assets = locatedAssets.data?.filter((asset) => asset.itemId === item.id && !['in_field', 'in_custody', 'lost', 'written_off', 'in_transit'].includes(asset.availabilityStatus)) ?? [];
+        const { totalStock, remaining, checkedOut } = item.trackingMode === 'serialized' ? { totalStock: assets.length, remaining: assets.filter((asset) => asset.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)).length, checkedOut: 0 } : { totalStock: rows.reduce((sum, row) => sum + row.quantityOnHand, 0), remaining: rows.reduce((sum, row) => sum + row.availableQuantity, 0), checkedOut: 0 };
         return { item, totalStock, remaining, checkedOut };
     });
     const { pageItems: pageStoredItems, page: currentItemPage, setPage: setItemPage, pageSize: itemPageSize, onPageSizeChange: onItemPageSizeChange } = useClientPagination(enrichedStoredItems);
 
     function handleOpenCreate() {
         setEditingLoc(null);
-        setFormData({ name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
+        setFormData({ warehouseId: null, parentLocationId: null, locationType: 'bin', active: true, name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
         setDialogOpen(true);
     }
 
@@ -130,7 +152,9 @@ export function StorageLocations() {
         e.stopPropagation();
         setEditingLoc(loc);
         setFormData({
+            warehouseId: loc.warehouseId ?? null, parentLocationId: loc.parentLocationId ?? null, locationType: loc.locationType, active: loc.active,
             name: loc.name,
+            mapOverlay: loc.mapOverlay ?? null,
             area: loc.area || '',
             description: loc.description || '',
             location: loc.location || '',
@@ -161,7 +185,7 @@ export function StorageLocations() {
                         setDialogOpen(false);
                         showSnackbar(t('Lagerort erfolgreich aktualisiert', 'Storage location updated successfully'), 'success');
                     },
-                    onError: () => showSnackbar(t('Fehler beim Aktualisieren des Lagerorts', 'Could not update storage location'), 'error'),
+                    onError: (error) => showSnackbar(error.message, 'error'),
                 }
             );
         } else {
@@ -171,7 +195,7 @@ export function StorageLocations() {
                     setSelectedLocId(newLoc.id);
                     showSnackbar(t('Lagerort erfolgreich erstellt', 'Storage location created successfully'), 'success');
                 },
-                onError: () => showSnackbar(t('Fehler beim Erstellen des Lagerorts', 'Could not create storage location'), 'error'),
+                onError: (error) => showSnackbar(error.message, 'error'),
             });
         }
     }
@@ -182,14 +206,16 @@ export function StorageLocations() {
             onSuccess: () => {
                 setDeleteConfirmOpen(false);
                 setSelectedLocId(null);
-                showSnackbar(t('Lagerort gelöscht', 'Storage location deleted'), 'success');
+                showSnackbar(t('Lagerort deaktiviert', 'Storage location deactivated'), 'success');
             },
-            onError: () => showSnackbar(t('Fehler beim Löschen des Lagerorts', 'Could not delete storage location'), 'error'),
+            onError: (error) => showSnackbar(error.message, 'error'),
         });
     }
 
     return (
         <Box>
+            <Button disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
+            <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
             {(!isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -198,7 +224,7 @@ export function StorageLocations() {
                     <Button
                         variant="contained"
                         startIcon={<AddIcon />}
-                        onClick={handleOpenCreate}
+                        disabled={!canEdit} onClick={handleOpenCreate}
                     >
                         {t('Lagerort hinzufügen', 'Add storage location')}
                     </Button>
@@ -229,6 +255,11 @@ export function StorageLocations() {
                                 sx={{ mb: 2 }}
                             />
 
+                            <Stack spacing={1} sx={{ mb: 2 }}>
+                              <TextField select size="small" label={t('Standort', 'Warehouse')} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setParentFilter(''); setLocationPage(1); }}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
+                              <TextField select size="small" label={t('Teilbaum', 'Location subtree')} value={parentFilter} onChange={(e) => { setParentFilter(e.target.value); setLocationPage(1); }}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{locations?.filter((l) => !warehouseFilter || l.warehouseId === warehouseFilter).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
+                              <FormControlLabel label={t('Inaktive anzeigen', 'Show inactive')} control={<Checkbox checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); setLocationPage(1); }} />} />
+                            </Stack>
                             {locationsLoading ? (
                                 <Typography sx={{ p: 2 }}>{t('Lagerorte werden geladen...', 'Loading storage locations...')}</Typography>
                             ) : filteredLocations.length === 0 ? (
@@ -238,7 +269,6 @@ export function StorageLocations() {
                             ) : (
                                 <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
                                     {pageLocations.map((loc) => {
-                                        const count = items?.filter((i) => i.storageLocation === loc.id).length ?? 0;
                                         return (
                                             <ListItemButton
                                                 key={loc.id}
@@ -269,23 +299,23 @@ export function StorageLocations() {
                                                     }
                                                     secondary={
                                                         <Typography variant="body2" color="text.secondary" noWrap>
-                                                            {loc.area || t('Kein Bereich angegeben', 'No area specified')}
+                                                            {locationPath(loc, locations ?? [])}
                                                         </Typography>
                                                     }
                                                 />
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                                                     <Chip
-                                                        label={count === 1 ? t('1 Artikel', '1 item') : t(`${count} Artikel`, `${count} items`)}
+                                                        label={loc.active ? loc.locationType : t('Inaktiv', 'Inactive')}
                                                         size="small"
                                                         variant="outlined"
                                                     />
                                                     <Tooltip title={t('Bearbeiten', 'Edit')} arrow>
-                                                        <IconButton size="small" onClick={(e) => handleOpenEdit(loc, e)}>
+                                                        <IconButton size="small" disabled={!canEdit} onClick={(e) => handleOpenEdit(loc, e)}>
                                                             <EditIcon fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
-                                                    <Tooltip title={t('Löschen', 'Delete')} arrow>
-                                                        <IconButton size="small" color="error" onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                    <Tooltip title={t('Deaktivieren', 'Deactivate')} arrow>
+                                                        <IconButton size="small" color="error" disabled={!canEdit} onClick={(e) => handleOpenDelete(loc.id, e)}>
                                                             <DeleteIcon fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
@@ -310,7 +340,7 @@ export function StorageLocations() {
                                         <RoomIcon color="primary" sx={{ fontSize: 32 }} />
                                         <Box>
                                             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                                                {activeLocation.name}
+                                                {locationPath(activeLocation, locations ?? [])}
                                             </Typography>
                                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
                                                 {activeLocation.area && (
@@ -335,12 +365,13 @@ export function StorageLocations() {
                                         size="small"
                                         variant="outlined"
                                         startIcon={<EditIcon />}
-                                        onClick={(e) => handleOpenEdit(activeLocation, e)}
+                                        disabled={!canEdit} onClick={(e) => handleOpenEdit(activeLocation, e)}
                                     >
                                         {t('Bearbeiten', 'Edit')}
                                     </Button>
                                 </Box>
 
+                                <Accordion key={activeLocation.id}><AccordionSummary>{t('Chargen, Geräte und Bestandszustände', 'Lots, assets and stock conditions')}</AccordionSummary><AccordionDetails><Button onClick={() => navigate(`/locations/${activeLocation.id}`)}>{t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}</Button><StockPositions locationId={activeLocation.id} /></AccordionDetails></Accordion>
                                 {activeLocation.description && (
                                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2, pl: { xs: 0, md: 6 } }}>
                                         {activeLocation.description}
@@ -482,6 +513,11 @@ export function StorageLocations() {
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
+                            <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>
+                            <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => setFormData({ ...formData, parentLocationId: e.target.value || null })}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
+                            <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{type.replaceAll('_', ' ')}</MenuItem>)}</TextField>
+                            <FormControlLabel label={t('Aktiv', 'Active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
+                            <Alert severity="info">{t('Inaktive Lagerorte bleiben für Bestand und Historie sichtbar. Unterorte müssen zuerst deaktiviert werden.', 'Inactive locations remain visible for stock and history. Deactivate child locations first.')}</Alert>
                             <TextField
                                 label={t('Name des Lagerorts', 'Storage location name')}
                                 value={formData.name}
@@ -580,16 +616,16 @@ export function StorageLocations() {
             {/* Delete Confirmation */}
             <ConfirmDialog
                 open={deleteConfirmOpen}
-                title={t('Lagerort löschen', 'Delete storage location')}
+                title={t('Lagerort deaktivieren', 'Deactivate storage location')}
                 onClose={() => setDeleteConfirmOpen(false)}
                 onConfirm={handleDeleteConfirm}
                 pending={deleteMutation.isPending}
-                actionLabel={t('Löschen', 'Delete')}
-                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionLabel={t('Deaktivieren', 'Deactivate')}
+                actionTooltip={t('Deaktivieren', 'Deactivate')}
                 actionColor="error"
                 message={t(
-                    'Sind Sie sicher, dass Sie diesen Lagerort löschen möchten? Verknüpfte Artikel verlieren ihren Lagerortbezug. Dies kann nicht rückgängig gemacht werden.',
-                    'Are you sure you want to delete this storage location? Linked items will lose their location reference. This cannot be undone.',
+                    'Lagerort deaktivieren? Bestand und historische Verknüpfungen bleiben erhalten.',
+                    'Deactivate this location? Stock and historical links are retained.',
                 )}
             />
         </Box>

@@ -27,8 +27,8 @@ export function useTransactions(filters?: { itemId?: string; assetInstanceId?: s
 export function useAssemblyCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ itemQuantities, assemblyName, reason, notes, eventType, faction }: { itemQuantities: Record<string, number>; assemblyName: string; reason: string; notes: string; eventType: TransactionFormData['eventType']; faction: string }) =>
-      assemblyCheckout(itemQuantities, assemblyName, reason, notes, eventType, faction),
+    mutationFn: ({ itemQuantities, assemblyName, reason, notes, eventType, faction, eventOccurrenceId }: { itemQuantities: Record<string, number>; assemblyName: string; reason: string; notes: string; eventType: TransactionFormData['eventType']; faction: string; eventOccurrenceId: string }) =>
+      assemblyCheckout(itemQuantities, assemblyName, reason, notes, eventType, faction, eventOccurrenceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });

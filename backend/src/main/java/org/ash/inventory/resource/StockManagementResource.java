@@ -19,6 +19,8 @@ import java.util.UUID;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class StockManagementResource {
+    @jakarta.inject.Inject org.ash.inventory.service.PositionService positions;
+    @jakarta.inject.Inject ApiMapper mapper;
     private final StockManagementService service;
 
     public StockManagementResource(StockManagementService service) { this.service = service; }
@@ -52,7 +54,7 @@ public class StockManagementResource {
     @GET @Path("/inventory-codes/resolve/{code:.+}")
     public StockDtos.CodeResolutionResponse resolveCode(@PathParam("code") String value) {
         var code = service.resolveCode(value);
-        return new StockDtos.CodeResolutionResponse(code.code, code.targetType.name(), code.targetId);
+        return new StockDtos.CodeResolutionResponse(code.code, code.targetType.name(), code.targetId, service.codeItem(code) == null ? null : service.codeItem(code).id);
     }
 
     @POST @Path("/inventory-codes")
@@ -65,6 +67,9 @@ public class StockManagementResource {
     public StockDtos.InventoryCodeResponse updateCode(@PathParam("id") UUID id, @Valid StockDtos.InventoryCodeInput input) {
         return code(service.updateCode(id, input));
     }
+
+    @POST @Path("/inventory-codes/{id}/replace")
+    public StockDtos.InventoryCodeResponse replaceCode(@PathParam("id") UUID id, @Valid StockDtos.InventoryCodeInput input) { return code(service.replaceCode(id, input)); }
 
     @DELETE @Path("/inventory-codes/{id}")
     public Response retireCode(@PathParam("id") UUID id) { service.retireCode(id); return Response.noContent().build(); }
@@ -84,6 +89,12 @@ public class StockManagementResource {
     @PUT @Path("/inventory-lots/{id}")
     public StockDtos.LotResponse updateLot(@PathParam("id") UUID id, @Valid StockDtos.LotInput input) {
         return lot(service.updateLot(id, input));
+    }
+
+    @GET @Path("/inventory-assets")
+    public List<org.ash.inventory.resource.dto.ApiResponses.AssetInstanceResponse> assets(@QueryParam("itemId") UUID itemId,
+            @QueryParam("locationId") UUID locationId, @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return service.assets(itemId, locationId, page, size).stream().map(mapper::asset).toList();
     }
 
     @GET @Path("/inventory-positions")
@@ -110,9 +121,10 @@ public class StockManagementResource {
     }
 
     private StockDtos.PositionResponse position(InventoryPosition value) {
+        int reserved = positions.reservedAt(value);
         return new StockDtos.PositionResponse(value.id, value.item.id, value.location.id,
-                value.lot == null ? null : value.lot.id, value.quantityOnHand, value.quantityReserved,
+                value.lot == null ? null : value.lot.id, value.quantityOnHand, reserved,
                 value.quantityDamaged, value.quantityQuarantined, value.quantityInTransit,
-                value.availableQuantity(), value.lastCountedAt, value.version);
+                org.ash.inventory.service.EquipmentService.freelyAvailable(value.item) ? Math.max(0, value.availableQuantity() - reserved) : 0, value.lastCountedAt, value.version);
     }
 }

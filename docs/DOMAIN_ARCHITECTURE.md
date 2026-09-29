@@ -1,6 +1,12 @@
 # Event-driven domain architecture
 
-This document completes the target architecture in `REQUIREMENTS_ARCHITECTURE.md` with the operational gaps from `next_steps.md`. It is the implementation contract for the Quarkus backend. The system is a modular monolith: commands and strongly consistent invariants remain inside one PostgreSQL transaction, while committed domain events drive projections, notifications, SSE invalidation, integrations, and reporting.
+This document completes the target architecture in `REQUIREMENTS_ARCHITECTURE.md` with the operational gaps tracked in [FEATURE_GAP_ANALYSIS.md](FEATURE_GAP_ANALYSIS.md). It is the implementation contract for the Quarkus backend. The system is a modular monolith: commands and strongly consistent invariants remain inside one PostgreSQL transaction, while committed domain events drive projections, notifications, SSE invalidation, integrations, and reporting.
+
+## Delivery status — 28 September 2026
+
+The operational implementation batch covers **F01–F09, F10–F14 and F18**. See [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) for the delivered UI workflows, calculation rules, migration and verification limits. Sections below describe the domain contract; they must not be read as an assertion that every target projection or offline recovery flow has shipped.
+
+The final changes have not been compiled or tested following the user's request to stop those checks. PostgreSQL migration execution and full desktop/mobile verification remain pending.
 
 ## System shape
 
@@ -218,4 +224,8 @@ Schema changes are additive first, application-compatible second, and destructiv
 
 The current code contains first-class JPA models and explicit application boundaries for assets, positions, reservations, assignments, custody, reconciliation, purchasing/receiving, vendor documents, transfers, counts, repairs, maintenance schedules, lots, codes, sync audit, and the domain-event outbox. Workflow commands own their stock transactions: public transaction input cannot fabricate receipt, reservation, transfer, damage, repair, or write-off events. Serialized commands name the exact physical asset, and custody handovers and return reconciliations are queryable as immutable evidence.
 
-Remaining product work is primarily frontend breadth for the newer warehouse workflows, additive backfills for pre-Flyway installations, and rebuildable reporting projections. Those projections must remain query-only; command validation continues to use normalized transactional state.
+Frontend workflows now expose receiving, transfers, counts, lots, repair cases, maintenance schedules, supplier documents and operational recovery. General-order reservation/reconciliation and authoritative custody queries complement the existing faction-order flow. Event metrics and procurement use transactional data. The F17 follow-up adds disposable, manually rebuildable report snapshots, with event/source watermarks and time-based freshness warnings.
+
+F15 now exposes warehouse/site management and parent-location hierarchy with cycle/same-warehouse/active-parent validation. F16 adds guided correction with immutable original command evidence, new IDs, account-scoped local history/cache and personal server audit. F17 adds eight report snapshots with definitions, filters, freshness, CSV and per-item monthly totals. Runtime acceptance and migration verification remain pending. Additional ownership/keeper commitments, member self-service, reminders, camera scanning and borrowing/rental arrangements remain F19–F23. Projections must remain query-only; command validation continues to use normalized transactional state.
+
+The new `V1.1.2__operational_workflows.sql` migration includes legacy bulk-position backfill without guessing event or lot identity. Deployment, upgrade/backfill verification and acceptance testing have not been completed for the final working tree.

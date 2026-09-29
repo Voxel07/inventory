@@ -31,6 +31,19 @@ public class OperationsResource {
     private final ActorService actor;
     private final ApiQueryService queries;
     private final DomainEventService domainEvents;
+    @jakarta.inject.Inject org.ash.inventory.service.PlanningService planning;
+    @jakarta.inject.Inject org.ash.inventory.service.CustodyBalanceService custody;
+
+    @GET @Path("/custody-balances")
+    public List<org.ash.inventory.service.CustodyBalanceService.Balance> custodyBalances(@QueryParam("mine") boolean mine) {
+        return custody.list(mine);
+    }
+
+    @POST @Path("/procurement/overrides")
+    public jakarta.ws.rs.core.Response planningOverride(org.ash.inventory.service.PlanningService.OverrideInput input) {
+        planning.override(input);
+        return jakarta.ws.rs.core.Response.noContent().build();
+    }
 
     public OperationsResource(InventoryOperationsService service, ApiMapper mapper, ActorService actor,
             ApiQueryService queries, DomainEventService domainEvents) {
@@ -50,6 +63,13 @@ public class OperationsResource {
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.transactions(itemId, assetInstanceId, userId, type, start, end, page, size);
+    }
+
+    @POST @Path("/transactions/batch") @Transactional
+    public List<ApiResponses.TransactionResponse> transactionBatch(List<ApiModels.@Valid TransactionInput> inputs) {
+        actor.requireWarehouse();
+        if (inputs == null || inputs.isEmpty() || inputs.size() > 200) throw ApiException.badRequest("Provide 1 to 200 transactions");
+        return inputs.stream().sorted(java.util.Comparator.comparing(ApiModels.TransactionInput::itemId)).map(service::transact).map(mapper::transaction).toList();
     }
 
     @POST

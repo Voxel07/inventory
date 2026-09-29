@@ -16,6 +16,10 @@ import java.util.UUID;
 @Entity
 @Table(name = "stock_transactions")
 public class StockTransaction extends BaseEntity {
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "lot_id") public InventoryLot lot;
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "position_quantities", columnDefinition = "jsonb")
+    public java.util.Map<String, Integer> positionQuantities = new java.util.LinkedHashMap<>();
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "user_id") public UserAccount user;
@@ -23,7 +27,9 @@ public class StockTransaction extends BaseEntity {
     @Column(nullable = false) public int quantity;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "faction_order_id") public FactionOrder factionOrder;
     @Column(name = "event_type") public String eventType;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "event_occurrence_id") public EventOccurrence eventOccurrence;
     @Column(name = "faction") public String faction;
+    @Column(name = "custody_write_off", nullable = false) public boolean custodyWriteOff;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "damage_report_id") public DamageReport damageReport;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_location_id") public StorageLocation sourceLocation;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "destination_location_id") public StorageLocation destinationLocation;

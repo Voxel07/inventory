@@ -52,7 +52,13 @@ public final class ApiResponses {
             Map<String, Integer> consumedQuantities,
             Map<String, List<String>> assetAssignments,
             Map<String, String> itemNames,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+            Map<String, Integer> preparedQuantities,
+            Map<String, Integer> damagedQuantities,
+            Map<String, Integer> missingQuantities,
+            Map<String, Integer> writtenOffQuantities,
+            Map<String, List<String>> reconciledAssets,
+            List<Map<String, Object>> history,
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
     ) {}
 
     public record DevLoginResponse(
@@ -79,6 +85,7 @@ public final class ApiResponses {
             List<List<Double>> overlayBounds,
             String warehouseId,
             String warehouseName,
+            String parentLocationId,
             boolean active
     ) {}
 
@@ -177,7 +184,8 @@ public final class ApiResponses {
             List<String> itemIds,
             Map<String, Integer> plannedQuantities,
             Map<String, Integer> usedQuantities,
-            Map<String, String> itemNames
+            Map<String, String> itemNames,
+            Map<String, Map<String, Integer>> quantities
     ) {}
 
     public record FactionResponse(
@@ -284,6 +292,7 @@ public final class ApiResponses {
             List<OrderLineResponse> lines,
             List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+            , Map<String, String> sourceLocations
     ) {}
 
     /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */
@@ -429,7 +438,13 @@ public final class ApiResponses {
             int projectedStock,
             int netDeficit,
             int orderedStock,
-            String recommendedAction
+            String recommendedAction,
+            LocalDate requiredDate,
+            int lateOrderedStock,
+            int safetyStock,
+            String overrideReason,
+            String overrideActor,
+            int committedStock
     ) {}
 
     public record SyncActionResponse(
@@ -444,6 +459,8 @@ public final class ApiResponses {
     public record SyncAuditResponse(
             UUID id,
             UUID commandId,
+            UUID supersedes,
+            String resolutionNote,
             UUID userId,
             String deviceId,
             String operationType,

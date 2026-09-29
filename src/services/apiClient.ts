@@ -112,6 +112,7 @@ async function responseError(response: Response): Promise<ApiError> {
 }
 
 async function apiRequestAttempt<T>(path: string, options: RequestOptions, retried: boolean): Promise<T> {
+  const requestActorId = getAuthSnapshot().user?.id;
   const url = new URL(`${API_URL}${path}`);
   const method = options.method || 'GET';
   for (const [key, value] of Object.entries(options.query || {})) {
@@ -120,7 +121,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous) Object.assign(headers, await getAuthorizationHeaders());
-  const cacheKey = url.toString();
+  const cacheKey = `${url.toString()}#actor=${encodeURIComponent(requestActorId ?? 'anonymous')}`;
   const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
   if (cached) headers['If-None-Match'] = cached.etag;
 
@@ -140,6 +141,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
   } finally {
     clearTimeout(timeout);
   }
+  if (!options.anonymous && getAuthSnapshot().user?.id !== requestActorId) throw new ApiError(409, 'Account changed during the request. Please try again.');
   if (response.status === 401 && !options.anonymous && !retried && canRefreshAuth()) {
     await getValidAccessToken(true);
     return apiRequestAttempt<T>(path, options, true);
@@ -184,13 +186,16 @@ function invalidateConditionalCacheFor(path: string): void {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const requestActorId = getAuthSnapshot().user?.id;
   const offlineAction = options.offline
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
+  if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error('This action requires an online connection. It has not been queued.');
   if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction);
   try {
     return await apiRequestAttempt<T>(path, options, false);
   } catch (error) {
+    if (getAuthSnapshot().user?.id !== requestActorId) throw error;
     if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction);
     throw error;
   }

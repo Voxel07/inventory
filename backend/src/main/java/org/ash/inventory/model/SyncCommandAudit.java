@@ -18,6 +18,9 @@ import java.util.UUID;
 @Table(name = "sync_command_audit")
 public class SyncCommandAudit extends BaseEntity {
     @Column(name = "command_id", nullable = false, unique = true) public UUID commandId;
+    public UUID supersedes;
+    @Column(name = "resolution_root") public UUID resolutionRoot;
+    @Column(name = "resolution_note", length = 2000) public String resolutionNote;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "user_id") public UserAccount user;
     @Column(name = "device_id") public String deviceId;
     @Column(name = "operation_type", nullable = false) public String operationType;

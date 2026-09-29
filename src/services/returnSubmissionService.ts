@@ -16,6 +16,7 @@ export async function createReturnSubmission(data: ReturnSubmissionFormData): Pr
       assetInstanceId: data.assetInstanceId,
       returnedForUserId: data.returnedForUserId,
       factionOrderId: data.factionOrderId,
+      eventOccurrenceId: data.eventOccurrenceId,
       placementImage,
       notes: data.notes,
     },

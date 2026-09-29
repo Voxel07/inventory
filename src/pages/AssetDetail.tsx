@@ -1,3 +1,5 @@
+import { CodeManagement } from '../components/qr/CodeManagement';
+import { canOperateWarehouse } from '../utils/access';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -20,7 +22,8 @@ import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { useAuth } from '../hooks/useAuth';
-import { canManageInventory } from '../utils/access';
+import { canPerformCustody } from '../utils/access';
+import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
     available: 'success', in_custody: 'warning', in_field: 'warning', damaged: 'error',
@@ -29,7 +32,7 @@ const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'de
 
 export function AssetDetail() {
     const { user } = useAuth();
-    const canReportDamage = canManageInventory(user);
+    const canReportDamage = canPerformCustody(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -125,7 +128,7 @@ export function AssetDetail() {
                         <InfoRow label={t('Hersteller / Modell', 'Manufacturer / model')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
                         <InfoRow label={t('Betriebsstunden', 'Operating hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
                         <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('Aktueller Ort', 'Current location')} value={asset.currentLocationName || '—'} />
-                        <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('Aktueller Besitzer', 'Current custodian')} value={asset.currentCustodianName || '—'} />
+                        <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('Aktueller Entleiher', 'Current custodian')} value={asset.currentCustodianName || '—'} />
                         <InfoRow label={t('Notizen', 'Notes')} value={asset.notes || '—'} />
                         <InfoRow label={t('Registriert', 'Registered')} value={new Date(asset.createdAt).toLocaleString()} />
                     </Stack>
@@ -152,6 +155,8 @@ export function AssetDetail() {
                 </Paper>
             </Box>
 
+            <EquipmentOwnership item={item} canEdit={false} />
+            {canOperateWarehouse(user) && <CodeManagement targetId={asset.id} targetType="asset" />}
             <Dialog open={damageOpen} onClose={closeDamageDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}</DialogTitle>
                 <DialogContent sx={{ pt: '24px !important' }}>

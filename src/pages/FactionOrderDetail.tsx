@@ -1,3 +1,7 @@
+import { CustodyEvidence } from '../components/orders/CustodyEvidence';
+import { useEquipmentAvailability } from '../hooks/useEquipment';
+import { Fields } from '../components/operations/OperationForm';
+import { useStockLookups } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -49,6 +53,7 @@ export function FactionOrderDetail() {
   const { user } = useAuth();
 
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
+  const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
   const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
@@ -64,6 +69,8 @@ export function FactionOrderDetail() {
   const returnOrderItems = useReturnFactionOrderItems();
   const cancelOrder = useCancelFactionOrder();
 
+  const lookup = useStockLookups();
+  const [sources, setSources] = useState<Record<string, string>>({});
   const [prepared, setPrepared] = useState<Record<string, string>>({});
   const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
   const [assetAssignments, setAssetAssignments] = useState<Record<string, string[]>>({});
@@ -112,7 +119,7 @@ export function FactionOrderDetail() {
     // Add this order's reservation back so its own prepared units remain usable
     // while editing, without downloading the global transaction/damage ledgers.
     const ownReservation = order?.reservedQuantities?.[itemId] ?? 0;
-    return Math.max(0, getItemStock(item).remaining + ownReservation);
+    return Math.max(0, (equipment.data?.[itemId]?.available ?? getItemStock(item).remaining) + ownReservation);
   }
 
   function availableFor(item: Item) {
@@ -151,7 +158,7 @@ export function FactionOrderDetail() {
       }
     }
     savePreparation.mutate(
-      { id: order.id, values, assemblyValues, assetAssignments },
+      { id: order.id, values, assemblyValues, assetAssignments, sourceLocations: Object.fromEntries(Object.entries({ ...order.sourceLocations, ...sources }).filter(([, value]) => value)) },
       {
         onSuccess: () => showSnackbar(t('Vorbereitung gespeichert', 'Preparation saved'), 'success'),
         onError: handleError,
@@ -247,7 +254,7 @@ export function FactionOrderDetail() {
     : pickupPoint ?? t('Nicht angegeben', 'Not specified');
 
   const isManager = canManageInventory(currentUser);
-  const canEditOrder = isManager || canAccessFaction(currentUser, order.eventType, order.faction);
+  const canEditOrder = currentUser?.role !== 'read_only' && canAccessFaction(currentUser, order.eventType, order.faction);
   const canEditOrderContents = canEditOrder && ['draft', 'submitted'].includes(order.status);
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
     + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
@@ -318,6 +325,7 @@ export function FactionOrderDetail() {
         isReopeningPreparation={reopenPreparation.isPending}
       />
 
+      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.filter((item) => item.trackingMode !== 'serialized').map((item) => ({ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options: lookup.locationOptions, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }))} values={{ ...order.sourceLocations, ...sources }} onChange={(values) => setSources(Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
       <OrderPickListTable
         order={order}
         orderItems={orderItems}
@@ -335,6 +343,7 @@ export function FactionOrderDetail() {
         availableForItemId={availableForItemId}
       />
 
+      <CustodyEvidence orderId={order.id} />
       <OrderTraceability
         order={order}
         allOrders={allOrders}

@@ -25,4 +25,9 @@ public class InventoryLot extends BaseEntity {
     @Column(name = "storage_requirements") public String storageRequirements;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.LotStatus status = DomainEnums.LotStatus.available;
     public String notes;
+    public boolean usableOn(LocalDate date) {
+        return status == DomainEnums.LotStatus.available
+                && (expiryDate == null || !expiryDate.isBefore(date))
+                && (bestBeforeDate == null || !bestBeforeDate.isBefore(date));
+    }
 }

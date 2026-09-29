@@ -1,3 +1,4 @@
+import { useEventReports } from '../hooks/useEvents';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { apiFileUrl } from '../services/apiClient';
@@ -51,7 +52,7 @@ import { getItemStock } from '../utils/stock';
 import { formatStatus } from '../utils/formatters';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canManageInventory } from '../utils/access';
+import { canEditCatalog, canOperateWarehouse } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -64,7 +65,8 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
 export function AssemblyDetail() {
     const { user } = useAuth();
     const canEdit = canEditCatalog(user);
-    const canTransact = canManageInventory(user);
+    const canTransact = canOperateWarehouse(user);
+
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -82,6 +84,8 @@ export function AssemblyDetail() {
     const [checkoutReason, setCheckoutReason] = useState('');
     const [checkoutNotes, setCheckoutNotes] = useState('');
     const [checkoutAmount, setCheckoutAmount] = useState(1);
+    const { data: checkoutEvents = [] } = useEventReports();
+    const [checkoutEventId, setCheckoutEventId] = useState('');
     const [checkoutEventType, setCheckoutEventType] = useState<EventType | ''>('');
     const [checkoutFaction, setCheckoutFaction] = useState('');
 
@@ -101,7 +105,7 @@ export function AssemblyDetail() {
 
     function handleCheckout() {
         const eventType = checkoutEventType;
-        if (!assembly || !eventType || !checkoutFaction) return;
+        if (!assembly || !eventType || !checkoutFaction || !checkoutEventId) return;
         const quantities = assembly.itemQuantities ?? {};
         // Build full quantities map including items with default qty 1, multiplied by checkoutAmount
         const fullQuantities: Record<string, number> = {};
@@ -116,6 +120,7 @@ export function AssemblyDetail() {
                 notes: checkoutNotes,
                 eventType,
                 faction: checkoutFaction,
+                eventOccurrenceId: checkoutEventId,
             },
             {
                 onSuccess: () => {
@@ -561,12 +566,15 @@ export function AssemblyDetail() {
                     <DialogContentText sx={{ mb: 2 }}>
                         {t(`Dies leiht alle Artikel in „${assembly.name}“ mit den angegebenen Mengen aus.`, `This checks out every item in “${assembly.name}” in the specified quantities.`)}
                     </DialogContentText>
+                    <TextField select fullWidth required label={t('Eventtermin', 'Event occurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
+                        {checkoutEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}</MenuItem>)}
+                    </TextField>
                     <TextField
                         select
                         label={t('Event', 'Event')}
                         value={checkoutEventType}
                         onChange={(e) => {
-                            setCheckoutEventType(e.target.value as EventType);
+                            setCheckoutEventType(e.target.value as EventType); setCheckoutEventId('');
                             setCheckoutFaction('');
                         }}
                         required
@@ -627,7 +635,7 @@ export function AssemblyDetail() {
                         <Button
                             variant="contained"
                             onClick={handleCheckout}
-                            disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction}
+                            disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction || !checkoutEventId}
                         >
                             {t('Alle Artikel ausleihen', 'Check out all items')}
                         </Button>

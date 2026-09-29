@@ -7,6 +7,7 @@ export interface InventoryCodeResolution {
   code: string;
   targetType: 'product' | 'asset' | 'location' | 'assembly' | string;
   targetId: string;
+  itemId?: string;
 }
 
 async function uploadItemImages(files: File[] = []): Promise<string[]> {

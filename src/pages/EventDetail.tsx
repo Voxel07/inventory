@@ -1,3 +1,6 @@
+import { useAuth } from '../hooks/useAuth';
+import { canAccessProcurement } from '../utils/access';
+import { EventQuantities } from '../components/events/EventQuantities';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -34,12 +37,14 @@ export function EventDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const t = useLocalizedText();
+  const { user } = useAuth();
+  const canEdit = canAccessProcurement(user);
   const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
   const { data: items = [] } = useItems();
   const updateReport = useUpdateEventReport();
-  const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
+  const [editing, setEditing] = useState(() => canEdit && searchParams.get('edit') === '1');
   const [eventType, setEventType] = useState<EventType>('DE');
   const [eventDate, setEventDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -77,14 +82,14 @@ export function EventDetail() {
     ...Object.keys(used),
   ]);
   const missingItemIds = [...recordedIds].filter((id) => !itemMap.has(id) && (
-      Number(used[id]) > 0 || ((editing || report?.status !== 'completed') && Number(planned[id]) > 0)
+      Number(used[id]) > 0 || Number(planned[id]) > 0
     ));
   const visibleItems = (() => {
     const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
         const isRecorded = Number(used[item.id]) > 0
-          || ((editing || report?.status !== 'completed') && Number(planned[item.id]) > 0);
+          || Number(planned[item.id]) > 0;
         if (isRecorded) return true;
         if (!editing) return false;
         if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
@@ -166,7 +171,7 @@ export function EventDetail() {
           <Typography color="text.secondary">{new Date(report.eventDate).toLocaleDateString(locale)}{report.endDate !== report.startDate ? ` – ${new Date(report.endDate).toLocaleDateString(locale)}` : ''}</Typography>
         </Box>
         {!editing ? (
-          <Button variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
+          <Button disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
             {t('Event korrigieren', 'Correct event')}
           </Button>
         ) : (
@@ -220,7 +225,8 @@ export function EventDetail() {
         </Paper>
       )}
 
-      <TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
+      {!editing && <EventQuantities event={report} />}
+      {editing && (<TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -260,7 +266,7 @@ export function EventDetail() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>)}
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>{t('Anmerkungen', 'Notes')}</Typography>

@@ -1,3 +1,4 @@
+import { useCustodyBalances } from '../hooks/useCustodyBalances';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -35,6 +36,7 @@ import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 
 export function UserDashboard() {
     const t = useLocalizedText();
+    const custody = useCustodyBalances(true);
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -51,7 +53,7 @@ export function UserDashboard() {
     const createReturn = useCreateReturnSubmission();
     const createDamageReport = useCreateDamageReport();
 
-    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number; factionOrderId?: string; assetInstanceId?: string } | null>(null);
+    const [returnItem, setReturnItem] = useState<{ item: Item; quantity: number; factionOrderId?: string; assetInstanceId?: string; eventOccurrenceId?: string } | null>(null);
     const [damageItem, setDamageItem] = useState<{ item: Item; quantity: number } | null>(null);
 
     // 1. Transactions belonging to this user
@@ -61,40 +63,7 @@ export function UserDashboard() {
     })();
 
     // 2. Build CheckedOutRow format for the shared component and metrics
-    const checkedOutRows: CheckedOutRow[] = (() => {
-        if (!items || !allTransactions || !currentUser) return [];
-        const itemMap = new Map(items.map((item) => [item.id, item]));
-        const rows = new Map<string, CheckedOutRow>();
-        const chronological = [...allTransactions]
-            .filter((tx) => tx.userId === currentUser.id)
-            .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-        for (const tx of chronological) {
-            if (tx.transactionType !== 'checkout' && tx.transactionType !== 'checkin') continue;
-            const item = itemMap.get(tx.itemId);
-            if (!item) continue;
-            const order = tx.expand?.factionOrderId;
-            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.eventType && tx.faction ? `${tx.eventType}:${tx.faction}` : t('Ohne Event', 'No event');
-            const key = `${tx.itemId}:${tx.factionOrderId ?? 'manual'}`;
-            const existing = rows.get(key);
-            const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
-            const loc = item.expand?.storageLocation;
-            rows.set(key, {
-                key,
-                itemId: item.id,
-                name: item.name,
-                category: item.category,
-                storageLocation: loc ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
-                checkedOut: Math.max(0, (existing?.checkedOut ?? 0) + amount),
-                personId: currentUser.id,
-                person: currentUser.name || currentUser.email || currentUser.id,
-                eventKey: existing?.eventKey ?? eventKey,
-                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
-                factionOrderId: tx.factionOrderId,
-                assetInstanceId: tx.assetInstanceId,
-            });
-        }
-        return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
-    })();
+    const checkedOutRows: CheckedOutRow[] = custody.data ?? [];
 
     const totalUniqueCheckedOut = checkedOutRows.length;
     const totalUnitsCheckedOut = checkedOutRows.reduce((sum, r) => sum + r.checkedOut, 0);
@@ -134,11 +103,11 @@ export function UserDashboard() {
         });
     }
 
-    if (itemsError || txError) return <Paper sx={{ p: 3 }}>
+    if (itemsError || txError || custody.isError) return <Paper sx={{ p: 3 }}>
         <Typography>{t('Die vollständige Übersicht konnte nicht geladen werden.', 'Could not load the complete overview.')}</Typography>
-        <Button onClick={() => { void refetchItems(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+        <Button onClick={() => { void refetchItems(); void custody.refetch(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
     </Paper>;
-    if (itemsLoading || txLoading) return <Paper sx={{ p: 3 }}><Typography>{t('Übersicht wird geladen…', 'Loading overview…')}</Typography></Paper>;
+    if (itemsLoading || txLoading || custody.isLoading) return <Paper sx={{ p: 3 }}><Typography>{t('Übersicht wird geladen…', 'Loading overview…')}</Typography></Paper>;
 
     return (
         <Box>
@@ -193,8 +162,10 @@ export function UserDashboard() {
                     showPerson={false}
                     linkToItem
                     onQuickReturn={(row) => {
+                        if (row.generalOrderId) { navigate('/orders?tab=general'); return; }
+                        if (row.factionOrderId) { navigate(`/orders/faction/${row.factionOrderId}`); return; }
                         const item = items?.find((i) => i.id === row.itemId);
-                        if (item) setReturnItem({ item, quantity: row.checkedOut, factionOrderId: row.factionOrderId, assetInstanceId: row.assetInstanceId });
+                        if (item) setReturnItem({ item, quantity: row.checkedOut - (row.pendingQuantity ?? 0), eventOccurrenceId: row.eventOccurrenceId, factionOrderId: row.factionOrderId, assetInstanceId: row.assetInstanceId });
                     }}
                     onDamageReport={(row) => {
                         const item = items?.find((i) => i.id === row.itemId);
@@ -232,6 +203,7 @@ export function UserDashboard() {
                         <ReturnSubmissionForm
                             item={returnItem.item}
                             maxQuantity={returnItem.quantity}
+                            eventOccurrenceId={returnItem.eventOccurrenceId}
                             assetInstanceId={returnItem.assetInstanceId}
                             returnedForUserId={currentUser?.id}
                             factionOrderId={returnItem.factionOrderId}

@@ -1,3 +1,4 @@
+import { OfflineStatusPanel } from '../operations/OfflineStatusPanel';
 import { useState } from 'react';
 import { Box, Button, DialogActions, DialogContent, DialogTitle, Divider, List, ListItem, ListItemText, Typography } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
@@ -28,14 +29,15 @@ export function QueuedActionsDialog({ open, actions, onClose, onDiscard, discard
   return <>
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{t('Wartende Aktionen', 'Queued actions')}</DialogTitle>
-      <DialogContent dividers sx={{ p: 0 }}>
+      <DialogContent dividers sx={{ p: 2 }}>
+        <OfflineStatusPanel />
         {actions.length === 0 ? <Typography color="text.secondary" sx={{ p: 2 }}>{t('Keine Aktionen in der Warteschlange.', 'No queued actions.')}</Typography> :
           <List dense sx={{ py: 0 }}>{actions.map((action, index) => <Box key={action.idempotencyKey}>
             {index > 0 && <Divider />}
             <ListItem sx={{ alignItems: 'flex-start', gap: 1 }}>
               <ListItemText
                 disableTypography
-                primary={actionName(action)}
+                primary={`${actionName(action)} · ${t('Wartet auf Serverbestätigung', 'Awaiting server confirmation')}`}
                 secondary={<>
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>{new Date(action.localTimestamp).toLocaleString()}</Typography>
                   <Box component="pre" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.75rem', m: 0, mt: 0.5 }}>{JSON.stringify(action.payload, null, 2)}</Box>

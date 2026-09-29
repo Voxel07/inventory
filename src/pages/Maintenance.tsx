@@ -1,3 +1,6 @@
+import { useAuth } from '../hooks/useAuth';
+import { canEditCatalog, canPerformMaintenance } from '../utils/access';
+import { Link } from 'react-router-dom';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,7 +23,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HistoryIcon from '@mui/icons-material/History';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { useItems } from '../hooks/useItems';
+import { useItems, useItemAssets } from '../hooks/useItems';
 import { createMaintenanceRecord, getMaintenanceRecords } from '../services/maintenanceService';
 import { getCategoryMaintenancePolicies, saveCategoryMaintenancePolicy } from '../services/categoryMaintenanceService';
 import { useUIStore } from '../store/uiStore';
@@ -45,6 +48,7 @@ function addYears(years: number): string {
 
 export function Maintenance() {
   const t = useLocalizedText();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const formRef = useRef<HTMLDivElement | null>(null);
@@ -57,6 +61,9 @@ export function Maintenance() {
   });
 
   const [itemId, setItemId] = useState('');
+  const [assetId, setAssetId] = useState('');
+  const { data: assets = [] } = useItemAssets(itemId || undefined);
+  const serialized = items.find((item) => item.id === itemId)?.trackingMode === 'serialized';
   const [policyCategory, setPolicyCategory] = useState('');
   const [policyInterval, setPolicyInterval] = useState('');
   const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort();
@@ -82,6 +89,7 @@ export function Maintenance() {
     mutationFn: () =>
       createMaintenanceRecord({
         itemId,
+        assetInstanceId: serialized ? assetId : undefined,
         type,
         result,
         performedAt: new Date().toISOString(),
@@ -155,7 +163,7 @@ export function Maintenance() {
             value={policyInterval} onChange={(event) => setPolicyInterval(event.target.value)}
             helperText={t('0 = keine regelmäßige Wartung', '0 = no scheduled maintenance')}
             slotProps={{ htmlInput: { min: 0, step: 1 } }} />
-          <Button variant="contained" disabled={!policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
+          <Button variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
             onClick={() => policyMutation.mutate()}>{t('Speichern', 'Save')}</Button>
         </Stack>
       </Paper>
@@ -234,6 +242,7 @@ export function Maintenance() {
             value={maintenanceItems.find((item) => item.id === itemId) || null}
             onChange={(_, item) => {
               setItemId(item?.id || '');
+              setAssetId('');
               if (item?.maintenanceIntervalDays) {
                 const due = new Date();
                 due.setDate(due.getDate() + item.maintenanceIntervalDays);
@@ -242,6 +251,10 @@ export function Maintenance() {
             }}
             renderInput={(params) => <TextField {...params} label={t('Artikel auswählen', 'Select item')} required />}
           />
+          {serialized && <TextField select label={t('Gerät', 'Asset')} value={assetId} onChange={(event) => setAssetId(event.target.value)} required>
+            {assets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
+          </TextField>}
+          {canPerformMaintenance(user) && <Button component={Link} to="/operations?tab=schedules">{t('Wartungspläne und Checklisten öffnen', 'Open schedules and checklists')}</Button>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               select
@@ -325,7 +338,7 @@ export function Maintenance() {
             variant="contained"
             size="large"
             color={result === 'failed' ? 'error' : result === 'advisory' ? 'warning' : 'primary'}
-            disabled={!itemId || mutation.isPending}
+            disabled={!canPerformMaintenance(user) || !itemId || (serialized && !assets.some((asset) => asset.id === assetId)) || mutation.isPending}
             onClick={() => mutation.mutate()}
             sx={{ minHeight: 44 }}
           >

@@ -30,14 +30,20 @@ public final class ApiModels {
 
     public record ReturnSubmissionInput(
             @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
-            UUID returnedForUserId, UUID factionOrderId, String placementImage, String notes) {}
+            UUID returnedForUserId, UUID factionOrderId, String placementImage, String notes, UUID eventOccurrenceId) {
+        public ReturnSubmissionInput(UUID itemId, int quantity, UUID assetInstanceId, UUID returnedForUserId,
+                UUID factionOrderId, String placementImage, String notes) {
+            this(itemId, quantity, assetInstanceId, returnedForUserId, factionOrderId, placementImage, notes, null);
+        }
+    }
 
     public record ReturnDecisionInput(String notes) {}
 
     public record StorageLocationInput(
             @NotBlank String name, String description, String area, String location, String position,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
-            DomainEnums.LocationType locationType, UUID warehouseId) {}
+            DomainEnums.LocationType locationType, UUID warehouseId, UUID parentLocationId, Boolean active) {}
+
 
     public record AssemblyInput(
             @NotBlank String name, String description, String hint, List<String> eventTypes,
@@ -46,7 +52,20 @@ public final class ApiModels {
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
             @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
-            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey) {}
+            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId) {
+        public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
+                String reason, String notes, String eventType, String faction, UUID assetInstanceId,
+                UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId) {
+            this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
+                    assetInstanceId, userId, factionOrderId, idempotencyKey, eventOccurrenceId, null, null);
+        }
+        public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
+                String reason, String notes, String eventType, String faction, UUID assetInstanceId,
+                UUID userId, UUID factionOrderId, UUID idempotencyKey) {
+            this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
+                    assetInstanceId, userId, factionOrderId, idempotencyKey, null, null, null);
+        }
+    }
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,
@@ -64,11 +83,25 @@ public final class ApiModels {
     public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose,
             UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities) {}
     public record GeneralOrderReturnInput(Map<UUID, Integer> returnedQuantities,
-            Map<UUID, Integer> consumedQuantities) {}
-    public record GeneralOrderPickupInput(Map<UUID, List<UUID>> assetAssignments) {}
+            Map<UUID, Integer> consumedQuantities, Map<UUID, Integer> damagedQuantities,
+            Map<UUID, Integer> missingQuantities, Map<UUID, Integer> writtenOffQuantities,
+            Map<UUID, List<UUID>> returnedAssets, Map<UUID, List<UUID>> damagedAssets,
+            Map<UUID, List<UUID>> writtenOffAssets, UUID idempotencyKey, String notes, Map<UUID, List<UUID>> missingAssets) {
+        public GeneralOrderReturnInput(Map<UUID, Integer> returned, Map<UUID, Integer> consumed) {
+            this(returned, consumed, null, null, null, null, null, null, null, null, null);
+        }
+    }
+    public record GeneralOrderPickupInput(Map<UUID, List<UUID>> assetAssignments,
+            Map<UUID, Integer> preparedQuantities, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {
+        public GeneralOrderPickupInput(Map<UUID, List<UUID>> assets) { this(assets, null, null, null, null); }
+    }
 
     public record PreparationInput(Map<UUID, Integer> preparedQuantities, Map<UUID, List<UUID>> assetAssignments,
-            boolean acknowledgeShortages, UUID idempotencyKey, String notes) {}
+            boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {
+        public PreparationInput(Map<UUID, Integer> quantities, Map<UUID, List<UUID>> assets, boolean acknowledge, UUID key, String notes) {
+            this(quantities, assets, acknowledge, key, notes, null);
+        }
+    }
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
             BigDecimal operatingHours, String notes) {}
@@ -77,8 +110,8 @@ public final class ApiModels {
             BigDecimal operatingHours,
             String notes) {}
     public record ReturnInput(
-            @NotEmpty Map<UUID, ReturnLine> lines,
-            Map<UUID, AssetReturnLine> assets,
+            @NotEmpty Map<UUID, @jakarta.validation.Valid ReturnLine> lines,
+            Map<UUID, @jakarta.validation.Valid AssetReturnLine> assets,
             UUID idempotencyKey,
             String notes) {}
     public record TransitionInput(
@@ -102,8 +135,9 @@ public final class ApiModels {
     public record UserPermissionsInput(@NotNull DomainEnums.UserRole role, List<String> faction) {}
     public record DevLoginInput(@NotBlank String email, String password) {}
     public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type,
-            @NotNull Map<String, Object> payload, Instant localTimestamp, String deviceId, Integer retryCount) {}
-    public record SyncBatch(@NotEmpty List<SyncAction> actions) {}
+            @NotNull Map<String, Object> payload, Instant localTimestamp, String deviceId, Integer retryCount,
+            UUID supersedes, @jakarta.validation.constraints.Size(max = 2000) String resolutionNote) {}
+    public record SyncBatch(@NotEmpty @jakarta.validation.constraints.Size(max = 100) List<@jakarta.validation.Valid SyncAction> actions) {}
 
     public record AssetInstanceInput(
             String assetCode, String serialNumber, String manufacturer, String model,

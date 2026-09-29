@@ -19,6 +19,16 @@ import java.util.List;
 @Entity
 @Table(name = "items")
 public class Item extends BaseEntity {
+    public enum Ownership { organization, private_owner, external }
+    public enum AvailabilityPolicy { available, commitment_required, unavailable }
+    @Enumerated(EnumType.STRING) @Column(name = "ownership_type", nullable = false)
+    public Ownership ownershipType = Ownership.organization;
+    @Column(name = "owner_name") public String ownerName;
+    @Column(name = "keeper_name") public String keeperName;
+    @Column(name = "keeper_contact") public String keeperContact;
+    @Enumerated(EnumType.STRING) @Column(name = "availability_policy", nullable = false)
+    public AvailabilityPolicy availabilityPolicy = AvailabilityPolicy.available;
+    @Column(name = "equipment_revision", nullable = false) public long equipmentRevision;
     @Column(nullable = false, unique = true)
     public String sku;
     @Column(nullable = false)

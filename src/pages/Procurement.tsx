@@ -1,3 +1,4 @@
+import { SupplierDraft } from '../components/procurement/SupplierDraft';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -35,6 +36,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
 import { getProcurementDeficits, type ProcurementDeficit } from '../services/procurementService';
 import { ProcurementOrders } from '../components/procurement/ProcurementOrders';
+import { PlanningDetails } from '../components/procurement/PlanningDetails';
 import { useEventReports } from '../hooks/useEvents';
 import { EVENT_TYPES } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
@@ -178,7 +180,7 @@ export function Procurement() {
         doc.setFont('helvetica', 'bold');
         doc.text(String(toOrder(row)), 168, y + 2);
         doc.setFont('helvetica', 'normal');
-        doc.text(row.recommendedAction === 'purchase' ? t('Kaufen', 'Buy') : t('Mieten', 'Rent'), 184, y + 2);
+        doc.text(row.recommendedAction === 'obtain_commitment' ? t('Zusage einholen', 'Obtain commitment') : row.recommendedAction === 'purchase' ? t('Kaufen', 'Buy') : t('Mieten', 'Rent'), 184, y + 2);
         y += 6;
       }
       y += 4;
@@ -298,6 +300,7 @@ export function Procurement() {
       <Stack spacing={2}>
         {groups.map(([supplier, rows]) => (
           <Paper key={supplier}>
+            <SupplierDraft rows={rows} eventId={eventId} />
             <Stack
               direction="row"
               spacing={1}
@@ -337,13 +340,15 @@ export function Procurement() {
                           <Chip
                             size="small"
                             variant="outlined"
-                            label={row.recommendedAction === 'purchase' ? t('Kaufen', 'Purchase') : t('Mieten', 'Rent')}
+                            label={row.recommendedAction === 'obtain_commitment' ? t('Zusage einholen', 'Obtain commitment') : row.recommendedAction === 'purchase' ? t('Kaufen', 'Purchase') : t('Mieten', 'Rent')}
                           />
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
                         <Chip size="small" color="info" variant="outlined" label={`${row.orderedStock ?? 0} ${t('unterwegs', 'in transit')}`} />
-                        <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellung erfassen', 'Record order')}</Button>
+                        {row.recommendedAction === 'obtain_commitment'
+                          ? <Button size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
+                          : <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellung erfassen', 'Record order')}</Button>}
                       </Stack>
                       <Box
                         sx={{
@@ -432,7 +437,9 @@ export function Procurement() {
                         </TableCell>
                         <TableCell align="right">{row.orderedStock ?? 0}</TableCell>
                         <TableCell>
-                          <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellen', 'Order')}</Button>
+                          {row.recommendedAction === 'obtain_commitment'
+                            ? <Button size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
+                            : <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellen', 'Order')}</Button>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -443,6 +450,7 @@ export function Procurement() {
           </Paper>
         ))}
       </Stack>
+      <PlanningDetails rows={deficits} eventId={eventId} />
       <ProcurementOrders selected={orderItem} eventId={eventId} onClose={() => setOrderItem(null)} />
     </Box>
   );

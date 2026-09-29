@@ -135,14 +135,13 @@ public class LifecycleService {
             int amount = input.amount() == null && repair.assetInstance != null ? 1
                     : input.amount() == null ? 0 : input.amount();
             if (amount < 1) throw ApiException.badRequest("amount is required for a bulk repair resolution");
-            inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
-                    input.status() == DomainEnums.RepairStatus.repaired ? DomainEnums.DamageStatus.repaired
-                            : DomainEnums.DamageStatus.written_off,
-                    amount, input.notes(), input.idempotencyKey(), null, null, null));
-            if (input.status() == DomainEnums.RepairStatus.repaired && repair.assetInstance != null) {
-                // Completion of the workshop step is not approval to return the asset to stock.
-                repair.assetInstance.availabilityStatus = DomainEnums.AssetState.in_repair;
-                repair.assetInstance.conditionStatus = DomainEnums.ConditionStatus.fair;
+            if (input.status() == DomainEnums.RepairStatus.repaired) {
+                int unresolved = repair.damageReport.quantity - repair.damageReport.repairedQuantity - repair.damageReport.writtenOffQuantity;
+                if (amount > unresolved) throw ApiException.badRequest("Repair quantity exceeds unresolved damage");
+                repair.repairedPendingQuantity = amount;
+            } else {
+                inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
+                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, null));
             }
             repair.completedAt = Instant.now();
         }
@@ -152,6 +151,11 @@ public class LifecycleService {
             }
             repair.verificationResult = input.verificationResult();
             repair.approvedBy = actors.current();
+        }
+        if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.repairedPendingQuantity > 0) {
+            inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
+                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, null));
+            repair.repairedPendingQuantity = 0;
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {
             repair.assetInstance.active = true;

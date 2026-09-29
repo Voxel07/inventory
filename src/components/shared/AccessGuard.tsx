@@ -3,7 +3,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { canAccessProcurement, canManageInventory, canViewCatalog } from '../../utils/access';
+import { canAccessProcurement, canManageInventory, canManageUsers, canViewCatalog } from '../../utils/access';
 import { useLocalizedText } from '../../utils/naming';
 
 export function InventoryManagerGuard({ children }: { children: ReactNode }) {
@@ -22,6 +22,11 @@ export function CatalogAccessGuard({ children }: { children: ReactNode }) {
     return <Navigate to="/orders?tab=faction" replace state={{ accessDenied: t('Zugriff verweigert', 'Access denied') }} />;
   }
   return children;
+}
+
+export function AdminGuard({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return canManageUsers(user) ? children : <Navigate to="/" replace />;
 }
 
 export function ProcurementGuard({ children }: { children: ReactNode }) {

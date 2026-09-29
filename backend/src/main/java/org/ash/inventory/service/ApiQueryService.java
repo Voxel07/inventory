@@ -43,6 +43,7 @@ public class ApiQueryService {
     private final NotificationOrm notifications;
     private final UserOrm users;
     private final ApiMapper mapper;
+    @jakarta.inject.Inject PlanningService planning;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -173,14 +174,14 @@ public class ApiQueryService {
     @Transactional
     public List<ApiResponses.DeficitResponse> deficits(UUID eventOccurrenceId) {
         actors.requirePlanner();
-        return inventory.deficits(eventOccurrenceId).stream().map(mapper::deficit).toList();
+        return planning.deficits(eventOccurrenceId);
     }
 
     @Transactional
     public List<ApiResponses.GeneralOrderResponse> generalOrders(int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
-        return generalOrders.orders(bounds.offset(), bounds.limit()).stream().map(mapper::generalOrder).toList();
+        return generalOrders.orders(actors.current(), bounds.offset(), bounds.limit()).stream().map(mapper::generalOrder).toList();
     }
 
     @Transactional
@@ -211,7 +212,7 @@ public class ApiQueryService {
 
     @Transactional
     public List<ApiResponses.UserResponse> assignableUsers(int page, int size) {
-        actors.requireManager();
+        if (actors.current().role != DomainEnums.UserRole.maintenance_crew) actors.requireManager();
         var bounds = bounds(page, size);
         return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }

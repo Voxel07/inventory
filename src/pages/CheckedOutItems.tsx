@@ -1,3 +1,4 @@
+import { useCustodyBalances } from '../hooks/useCustodyBalances';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -13,7 +14,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useItems } from '../hooks/useItems';
-import { useTransactions } from '../hooks/useTransactions';
+import { useNavigate } from 'react-router-dom';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
 import { useLocalizedText } from '../utils/naming';
@@ -24,8 +25,9 @@ import type { ReturnSubmissionFormData } from '../types';
 
 export function CheckedOutItemsPage() {
     const t = useLocalizedText();
+    const custody = useCustodyBalances();
     const { data: items, isLoading: itemsPending, isComplete: itemsComplete, isError: itemsError, refetch: refetchItems } = useItems();
-    const { data: transactions, isLoading: txPending, isComplete: txComplete, isError: txError, refetch: refetchTransactions } = useTransactions();
+    const navigate = useNavigate();
     const { data: assemblies } = useAssemblies();
     const createReturn = useCreateReturnSubmission();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -34,39 +36,7 @@ export function CheckedOutItemsPage() {
     const [eventFilter, setEventFilter] = useState('');
     const [returnRow, setReturnRow] = useState<CheckedOutRow>();
 
-    const checkedOutRows: CheckedOutRow[] = (() => {
-        if (!items?.length) return [];
-
-        const itemMap = new Map(items.map((item) => [item.id, item]));
-        const rows = new Map<string, CheckedOutRow>();
-        const chronological = [...(transactions ?? [])].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-        for (const tx of chronological) {
-            if (tx.transactionType !== 'checkout' && tx.transactionType !== 'checkin') continue;
-            const item = itemMap.get(tx.itemId);
-            if (!item) continue;
-            const order = tx.expand?.factionOrderId;
-            const eventKey = order ? `${order.eventType}:${order.faction}` : tx.eventType && tx.faction ? `${tx.eventType}:${tx.faction}` : t('Ohne Event', 'No event');
-            const key = `${tx.itemId}:${tx.assetInstanceId ?? 'bulk'}:${tx.userId}:${tx.factionOrderId ?? 'manual'}`;
-            const existing = rows.get(key);
-            const amount = tx.transactionType === 'checkout' ? tx.quantityChanged : -tx.quantityChanged;
-            const loc = item.expand?.storageLocation;
-            rows.set(key, {
-                key,
-                itemId: item.id,
-                name: item.name,
-                category: item.category,
-                storageLocation: loc ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
-                checkedOut: Math.max(0, (existing?.checkedOut ?? 0) + amount),
-                personId: tx.userId,
-                person: tx.expand?.userId?.name || tx.expand?.userId?.email || tx.userId,
-                eventKey: existing?.eventKey ?? eventKey,
-                event: existing?.event ?? (order ? `${order.eventType} · ${order.faction}${order.orderCode ? ` · ${order.orderCode}` : ''}` : tx.eventType && tx.faction ? `${tx.eventType} · ${tx.faction}` : t('Ohne Event', 'No event')),
-                factionOrderId: tx.factionOrderId,
-                assetInstanceId: tx.assetInstanceId,
-            });
-        }
-        return [...rows.values()].filter((row) => row.checkedOut > 0).sort((a, b) => b.checkedOut - a.checkedOut);
-    })();
+    const checkedOutRows: CheckedOutRow[] = custody.data ?? [];
 
     const people = [...new Map(checkedOutRows.map((row) => [row.personId, row.person])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
     const events = [...new Map(checkedOutRows.map((row) => [row.eventKey, row.event])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -78,6 +48,8 @@ export function CheckedOutItemsPage() {
     });
 
     function handleQuickReturn(row: CheckedOutRow) {
+        if (row.generalOrderId) { navigate('/orders?tab=general'); return; }
+        if (row.factionOrderId) { navigate(`/orders/faction/${row.factionOrderId}`); return; }
         setReturnRow(row);
     }
 
@@ -91,14 +63,14 @@ export function CheckedOutItemsPage() {
         });
     }
 
-    if (itemsError || txError) {
+    if (itemsError || custody.isError) {
         return <Paper sx={{ p: 3 }}>
             <Typography>{t('Die vollständige Ausleihliste konnte nicht geladen werden.', 'Could not load the complete checkout list.')}</Typography>
-            <Button onClick={() => { void refetchItems(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+            <Button onClick={() => { void refetchItems(); void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
         </Paper>;
     }
 
-    if (itemsPending || txPending || !itemsComplete || !txComplete) {
+    if (itemsPending || !itemsComplete || custody.isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -143,7 +115,8 @@ export function CheckedOutItemsPage() {
                     {returnRow && items?.find((item) => item.id === returnRow.itemId) && (
                         <ReturnSubmissionForm
                             item={items.find((item) => item.id === returnRow.itemId)!}
-                            maxQuantity={returnRow.checkedOut}
+                            maxQuantity={returnRow.checkedOut - (returnRow.pendingQuantity ?? 0)}
+                            eventOccurrenceId={returnRow.eventOccurrenceId}
                             assetInstanceId={returnRow.assetInstanceId}
                             returnedForUserId={returnRow.personId}
                             factionOrderId={returnRow.factionOrderId}

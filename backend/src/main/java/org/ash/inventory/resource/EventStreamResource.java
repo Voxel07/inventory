@@ -32,6 +32,17 @@ public class EventStreamResource {
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<Map<String, Object>> stream() {
         actors.current();
-        return broadcaster.stream();
+        return broadcaster.stream().map(event -> {
+            String type = String.valueOf(event.get("type"));
+            // Shared SSE is an invalidation channel, not access to private agreement/request evidence.
+            if (type.startsWith("member_request.") || type.startsWith("loan.") || type.startsWith("equipment.")
+                    || type.equals("location.keeper_assigned")) {
+                var signal = new java.util.LinkedHashMap<String, Object>();
+                for (String key : java.util.List.of("type", "eventId", "timestamp", "occurredAt"))
+                    if (event.containsKey(key)) signal.put(key, event.get(key));
+                return signal;
+            }
+            return event;
+        });
     }
 }

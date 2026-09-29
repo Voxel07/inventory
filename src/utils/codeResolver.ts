@@ -1,6 +1,7 @@
 import { getFactionOrders, getFactionOrder } from '../services/factionOrderService';
 import { getAssetByCode, getItems, getItem, resolveInventoryCode } from '../services/inventoryService';
 import { getAssembly } from '../services/assemblyService';
+import { ApiError } from '../services/apiClient';
 
 export interface CodeResolutionResult {
   found: boolean;
@@ -19,6 +20,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export async function resolveScannedCode(rawCode: string): Promise<CodeResolutionResult> {
   const code = rawCode.trim();
   if (!code) return { found: false, code };
+
+  const locationMatch = code.match(/\/locations\/([a-zA-Z0-9_-]+)/);
+  if (locationMatch?.[1]) return { found: true, type: 'location', path: `/locations/${locationMatch[1]}`, code };
 
   // 1. Direct URL patterns (instant client-side resolution)
   const orderUrlMatch = code.match(/\/orders\/faction\/([a-zA-Z0-9_-]+)/);
@@ -72,26 +76,13 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
         return { found: true, type: 'assembly', path: `/assemblies/${res.targetId}`, code };
       }
       if (res.targetType === 'location') {
-        return { found: true, type: 'location', path: '/storage-locations', code };
+        return { found: true, type: 'location', path: `/locations/${res.targetId}`, code };
       }
-      if (res.targetType === 'asset') {
-        try {
-          const asset = await getAssetByCode(code);
-          if (asset?.itemId) {
-            return {
-              found: true,
-              type: 'item',
-              path: `/items/${asset.itemId}/assets/${asset.id}`,
-              name: asset.assetCode,
-              code,
-            };
-          }
-        } catch {
-          // Fall through
-        }
-      }
+      if (res.targetType === 'asset' && res.itemId) return { found: true, type: 'item', path: `/items/${res.itemId}/assets/${res.targetId}`, code };
+      if (res.targetType === 'lot' && res.itemId) return { found: true, type: 'item', path: `/items/${res.itemId}`, code };
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError && error.status !== 404) throw error;
     // Inventory code not found via resolver endpoint; proceed to other targeted checks
   }
 

@@ -65,7 +65,6 @@ public class CatalogResponseCache {
         return json(mapper.assemblies(catalog.getAssemblies()));
     }
 
-    @CacheResult(cacheName = "events-cache")
     @Transactional
     public String events(String eventType) {
         return json(catalog.getEvents(eventType).stream().map(mapper::event).toList());

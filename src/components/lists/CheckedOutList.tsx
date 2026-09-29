@@ -43,6 +43,9 @@ export interface CheckedOutRow {
   person: string;
   eventKey: string;
   event: string;
+  generalOrderId?: string;
+  eventOccurrenceId?: string;
+  pendingQuantity?: number;
   factionOrderId?: string;
   assetInstanceId?: string;
   /** Resolved assembly this item belongs to (if from a faction order) */
@@ -276,12 +279,13 @@ export function CheckedOutList({
           </Box>
           <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
             <Typography variant="h5" color="warning.main">{row.checkedOut}</Typography>
+            {!!row.pendingQuantity && <Chip color="info" size="small" label={`${t('Wartet auf Prüfung', 'Pending inspection')}: ${row.pendingQuantity}`} />}
             <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
           </Box>
         </Box>
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
           {onQuickReturn && (
-            <Button fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending} sx={{ minHeight: 44 }}>
+            <Button fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut} sx={{ minHeight: 44 }}>
               {t('Zurückgeben', 'Return')}
             </Button>
           )}
@@ -311,14 +315,14 @@ export function CheckedOutList({
             ? <Chip component={Link} to={`/orders/faction/${row.factionOrderId}`} clickable size="small" variant="outlined" color="primary" label={row.event} />
             : row.event}
         </TableCell>
-        <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{row.checkedOut}</TableCell>
+        <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{row.checkedOut}{!!row.pendingQuantity && <Typography variant="caption" sx={{ display: 'block' }}>{t('Wartet auf Prüfung', 'Pending inspection')}: {row.pendingQuantity}</Typography>}</TableCell>
         {(onQuickReturn || onDamageReport) && (
           <TableCell align="right">
             <Stack direction="row" spacing={0.75} sx={{ justifyContent: 'flex-end' }}>
               {onQuickReturn && (
                 <Tooltip title={t('1 Einheit zurückgeben', 'Return 1 unit')} arrow>
                   <span>
-                    <Button size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending}>
+                    <Button size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut}>
                       {t('Schnellrückgabe', 'Quick return')}
                     </Button>
                   </span>

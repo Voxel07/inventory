@@ -2,6 +2,14 @@
 
 Responsive inventory and custody management for event logistics. The repository contains the React PWA and its transactional Quarkus/PostgreSQL backend.
 
+## Implementation progress — 28 September 2026
+
+The requested P0 workflows (F01–F09) and P1 features with existing backend support (F10–F14 and F18) are implemented in the working tree. This includes event quantities, procurement and receiving, location stock and transfers, general orders and custody, role-specific actions, counts, lots, repairs, maintenance schedules, supplier documents and operational recovery.
+
+**Build and backend regression checks pass.** The F19 follow-up passed the frontend production build and all 68 backend tests. PostgreSQL migration execution and complete desktop/mobile workflow checks remain outstanding. This is not a deployment or acceptance sign-off.
+
+See [implementation progress](docs/IMPLEMENTATION_PROGRESS.md) for delivered features, navigation, migration details and remaining work, and [the feature backlog](docs/FEATURE_GAP_ANALYSIS.md) for status by feature ID. F15–F17 are now implemented: warehouse/location hierarchy, guided offline recovery and rebuildable operational reports. F19 is also implemented: explicit ownership, keeper/contact and event/date availability commitments, enforced during planning, preparation and checkout. F20–F23 remain outside this implementation scope. Migration and interactive acceptance checks remain pending.
+
 ## Development
 
 Frontend (Bun):

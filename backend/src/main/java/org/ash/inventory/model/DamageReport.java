@@ -12,6 +12,9 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "damage_reports")
 public class DamageReport extends BaseEntity {
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "position_quantities", columnDefinition = "jsonb")
+    public java.util.Map<String, Integer> positionQuantities = new java.util.LinkedHashMap<>();
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "item_id") public Item item;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "assembly_id") public Assembly assembly;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;

@@ -40,6 +40,7 @@ export async function saveFactionOrderPreparation(
   preparedQuantities: Record<string, number>,
   preparedAssemblyQuantities: Record<string, number>,
   assetAssignments: Record<string, string[]>,
+  sourceLocations?: Record<string, string>,
 ): Promise<FactionOrder> {
   const order = await getFactionOrder(id);
   const flattened = { ...preparedQuantities };
@@ -49,7 +50,7 @@ export async function saveFactionOrderPreparation(
       flattened[itemId] = (flattened[itemId] || 0) + componentQuantity * assemblyCount;
     }
   }
-  const input = { preparedQuantities: flattened, assetAssignments, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
+  const input = { preparedQuantities: flattened, assetAssignments, sourceLocations, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
   return apiRequest(`/api/orders/${id}/prepare`, {
     method: 'POST', body: input,
     offline: { type: 'order.prepare', payload: { orderId: id, input } },

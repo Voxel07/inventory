@@ -1,0 +1,77 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, Button, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
+import type { Item } from '../../types';
+import { equipmentApi, type EquipmentCommitment, type EquipmentProfile } from '../../services/equipmentService';
+import { useItemAssets } from '../../hooks/useItems';
+import { useEventReports } from '../../hooks/useEvents';
+import { useLocalizedText } from '../../utils/naming';
+import { OperationForm, type Field } from '../operations/OperationForm';
+
+export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boolean }) {
+  const t = useLocalizedText();
+  const profile = useQuery({ queryKey: ['items', item.id, 'equipment'], queryFn: () => equipmentApi.get(item.id) });
+  const { data: events = [] } = useEventReports();
+  const { data: assets = [], isLoading: assetsLoading, isError: assetsError } = useItemAssets(item.trackingMode === 'serialized' ? item.id : undefined);
+  const [editing, setEditing] = useState<EquipmentProfile | null>(null);
+  const [offering, setOffering] = useState<EquipmentProfile | null>(null);
+  const [cancelling, setCancelling] = useState<{ profile: EquipmentProfile; commitment: EquipmentCommitment } | null>(null);
+  const ownership = { organization: t('Organisation', 'Organization'), private_owner: t('Privat', 'Privately owned'), external: t('Extern', 'External provider') };
+  const policy = { available: t('Allgemein verfügbar', 'Generally available'), commitment_required: t('Zusage erforderlich', 'Commitment required'), unavailable: t('Nicht verfügbar', 'Unavailable') };
+  const statuses = { active: t('Aktiv', 'Active'), scheduled: t('Geplant', 'Scheduled'), expired: t('Abgelaufen', 'Expired'), cancelled: t('Storniert', 'Cancelled') };
+  const data = profile.data;
+  const readyAssets = assets.filter(a => a.active && a.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(a.conditionStatus));
+  return <Paper sx={{ p: { xs: 2, sm: 3 }, my: 2 }}>
+    <Stack spacing={2}>
+      <Typography variant="h6">{t('Eigentum, Verwahrung & Zusagen', 'Ownership, keeper & commitments')}</Typography>
+      <Typography variant="body2" color="text.secondary">{t('Eigentum und Verwahrung gelten für alle Einheiten dieses Artikels. Für unterschiedliche Eigentümer separate Artikel anlegen. Sichtbarkeit, Lagerort und aktuelle Ausleihe sind unabhängig davon.', 'Ownership and keeper apply to every unit of this item. Use separate items for different owners. Catalog visibility, physical location and current custody are independent.')}</Typography>
+      {profile.isLoading && <Typography>{t('Wird geladen …', 'Loading…')}</Typography>}
+      {profile.error && <Alert severity="error" action={<Button onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
+      {data && <>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip label={ownership[data.ownershipType]} /><Chip label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
+        <Typography>{t('Eigentümer / Anbieter', 'Owner / provider')}: {data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography>
+        <Typography>{t('Verwahrer / Kontakt', 'Keeper / contact')}: {[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography>
+        <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0)} · {t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
+        {data.availabilityPolicy !== 'available' && <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>}
+        {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <Button onClick={() => setEditing(data)}>{t('Eigentum / Verwahrung bearbeiten', 'Edit ownership / keeper')}</Button>
+          <Button variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('Zusage erfassen', 'Record commitment')}</Button>
+        </Stack>}
+        {data.commitments.length === 0 && <Typography color="text.secondary">{t('Keine Zusagen erfasst.', 'No commitments recorded.')}</Typography>}
+        {data.commitments.map(c => <Card key={c.id} variant="outlined"><CardContent><Stack spacing={1}>
+          <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('Datumsgebundene Zusage ohne Eventbindung', 'Date range without event restriction')} · {c.quantity} · {statuses[c.status]}</Typography>
+          <Typography>{c.availableFrom} – {c.availableUntil}</Typography>
+          <Typography variant="body2">{t('Abholung', 'Pickup')}: {c.pickupDetails}</Typography>
+          {c.returnDue && <Typography variant="body2">{t('Rückgabe fällig', 'Return due')}: {c.returnDue} · {c.returnDetails}</Typography>}
+          {c.assetIds.length > 0 && <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {c.assetIds.map(id => assets.find(a => a.id === id)?.assetCode ?? id).join(', ')}</Typography>}
+          <Typography variant="body2">{c.recordedBy}: {c.notes}</Typography>
+          {c.cancellationReason && <Typography variant="body2">{t('Stornogrund', 'Cancellation reason')}: {c.cancellationReason}</Typography>}
+          {canEdit && c.status !== 'cancelled' && <Button color="warning" onClick={() => setCancelling({ profile: data, commitment: c })}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
+        </Stack></CardContent></Card>)}
+      </>}
+    </Stack>
+    {editing && <OperationForm title={t('Eigentum / Verwahrung', 'Ownership / keeper')} onClose={() => setEditing(null)} initial={{ ownershipType: editing.ownershipType, ownerName: editing.ownerName ?? '', keeperName: editing.keeperName ?? '', keeperContact: editing.keeperContact ?? '', availabilityPolicy: editing.availabilityPolicy }} fields={values => [
+      { key: 'ownershipType', label: t('Eigentum', 'Ownership'), required: true, options: Object.entries(ownership).map(([value, label]) => ({ value, label })) },
+      { key: 'ownerName', label: t('Eigentümer / Anbieter', 'Owner / provider'), required: values.ownershipType !== 'organization' },
+      { key: 'keeperName', label: t('Verwahrer', 'Keeper') }, { key: 'keeperContact', label: t('Kontakt zur Abholung', 'Pickup contact') },
+      { key: 'availabilityPolicy', label: t('Verfügbarkeit', 'Availability'), required: true, options: Object.entries(policy).filter(([key]) => values.ownershipType === 'organization' || key !== 'available').map(([value, label]) => ({ value, label })) },
+      { key: 'reason', label: t('Begründung', 'Reason'), required: true },
+    ]} onSave={values => equipmentApi.update(item.id, { ...values, revision: editing.revision })}>
+      <Alert severity="info">{t('Änderungen an Eigentum und Verfügbarkeit erfordern freigegebene Reservierungen, geklärte Ausleihen und stornierte laufende Zusagen. Kontaktänderungen bleiben möglich.', 'Ownership and availability changes require released reservations, reconciled custody and cancelled current commitments. Contact details can still be updated.')}</Alert>
+    </OperationForm>}
+    {offering && <OperationForm title={t('Zusage erfassen', 'Record commitment')} onClose={() => setOffering(null)} initial={{ quantity: 1 }} fields={[
+      { key: 'eventId', label: t('Event (optional)', 'Event (optional)'), options: events.map(e => ({ value: e.id, label: `${e.name} · ${e.startDate} – ${e.endDate}` })) },
+      { key: 'quantity', label: t('Zugesagte Menge', 'Committed quantity'), type: 'number', min: 1, required: true },
+      ...readyAssets.map((a): Field => ({ key: `asset:${a.id}`, label: a.assetCode, type: 'checkbox' })),
+      { key: 'availableFrom', label: t('Abholung möglich ab', 'Pickup available from'), type: 'date', required: true },
+      { key: 'availableUntil', label: t('Verfügbar bis einschließlich', 'Available through'), type: 'date', required: true },
+      { key: 'pickupDetails', label: t('Abholvereinbarung / Ort', 'Pickup instructions / place'), required: true },
+      { key: 'returnDue', label: t('Rückgabe fällig am', 'Return due'), type: 'date', required: !item.isConsumable },
+      { key: 'returnDetails', label: t('Rückgabeverpflichtung / Ort', 'Return obligation / place'), required: !item.isConsumable },
+      { key: 'notes', label: t('Nachweis der Zusage / Notizen', 'Agreement evidence / notes'), required: true },
+    ]} onSave={values => equipmentApi.commit(item.id, { ...values, eventId: values.eventId || null, returnDue: values.returnDue || null, assetIds: readyAssets.filter(a => values[`asset:${a.id}`]).map(a => a.id), revision: offering.revision })}>
+      <Alert severity="info">{t('Der Zeitraum muss das gesamte Event abdecken. Pro Artikel ist nur eine überlappende Zusage inklusive Rückgabefrist zulässig. Zusagen erzeugen keinen Bestand.', 'The dates must cover the entire event. A stock pool can have only one overlapping commitment, including its return window. Commitments do not create stock.')}</Alert>
+    </OperationForm>}
+    {cancelling && <OperationForm title={t('Zusage stornieren', 'Cancel commitment')} onClose={() => setCancelling(null)} fields={[{ key: 'reason', label: t('Begründung', 'Reason'), required: true }]} onSave={values => equipmentApi.cancel(item.id, cancelling.commitment.id, { ...values, revision: cancelling.profile.revision })} />}
+  </Paper>;
+}

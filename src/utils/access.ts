@@ -22,6 +22,17 @@ export function canManageUsers(user: User | null | undefined): boolean {
   return effectiveAccess(user) === 'hq_admin';
 }
 
+export const canOperateWarehouse = canEditCatalog;
+export function canPerformMaintenance(user: User | null | undefined): boolean {
+  return ['hq_admin', 'maintenance_crew'].includes(effectiveAccess(user));
+}
+export function canPerformCustody(user: User | null | undefined): boolean {
+  return ['hq_admin', 'warehouse_crew', 'marshal'].includes(effectiveAccess(user));
+}
+export function canManagePurchasing(user: User | null | undefined): boolean {
+  return ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user));
+}
+
 export function canAccessProcurement(user: User | null | undefined): boolean {
   return ['hq_admin', 'event_planner'].includes(effectiveAccess(user));
 }

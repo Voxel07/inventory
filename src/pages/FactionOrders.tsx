@@ -198,7 +198,7 @@ export function FactionOrders() {
             )}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length} sx={{ alignSelf: { sm: 'flex-start' } }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length || currentUser?.role === 'read_only'} sx={{ alignSelf: { sm: 'flex-start' } }}>
           {t('Neue Liste', 'New list')}
         </Button>
       </Stack>

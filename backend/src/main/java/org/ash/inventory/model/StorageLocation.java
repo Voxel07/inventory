@@ -16,7 +16,9 @@ import java.util.List;
 @Entity
 @Table(name = "storage_locations")
 public class StorageLocation extends BaseEntity {
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "keeper_user_id") public UserAccount keeperUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "warehouse_id") public Warehouse warehouse;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "parent_location_id") public StorageLocation parent;
     @Enumerated(EnumType.STRING) @Column(name = "location_type", nullable = false)
     public DomainEnums.LocationType locationType = DomainEnums.LocationType.bin;
     @Column(nullable = false)

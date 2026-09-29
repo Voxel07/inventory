@@ -27,12 +27,18 @@ public class SyncAuditService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public SyncCommandAudit existing(UUID commandId) { return orm.find(commandId); }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional
     public void record(ApiModels.SyncAction action, UUID actorId, String status, Object result, String error) {
         var audit = orm.findLocked(action.idempotencyKey());
         if (audit == null) {
             audit = new SyncCommandAudit();
             audit.commandId = action.idempotencyKey();
+            audit.supersedes = action.supersedes();
+            if (action.supersedes() != null) {
+                var original = orm.find(action.supersedes());
+                audit.resolutionRoot = original.resolutionRoot == null ? original.commandId : original.resolutionRoot;
+            }
+            audit.resolutionNote = action.resolutionNote();
             audit.user = orm.user(actorId);
             if (audit.user == null) throw ApiException.notFound("Sync actor not found");
             audit.operationType = action.type();
@@ -47,11 +53,7 @@ public class SyncAuditService {
             orm.persist(audit);
             return;
         }
-        audit.retryCount = Math.max(audit.retryCount + 1, action.retryCount() == null ? 1 : action.retryCount());
-        audit.syncStatus = status;
-        audit.serverResult = result == null ? null
-                : objectMapper.convertValue(result, new TypeReference<Map<String, Object>>() {});
-        audit.conflictMessage = error;
+        // Terminal results and original evidence are immutable. Corrections have new command IDs.
     }
 
     @Transactional

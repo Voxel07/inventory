@@ -31,7 +31,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
 import { LanguageSelector } from './LanguageSelector';
-import { useT } from '../../utils/naming';
+import { useT, useLocalizedText } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
 import GroupsIcon from '@mui/icons-material/Groups';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
@@ -40,12 +40,13 @@ import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import BuildIcon from '@mui/icons-material/Build';
 import { EVENT_TYPES, type EventType } from '../../types';
-import { canAccessProcurement, canManageInventory, canViewCatalog } from '../../utils/access';
+import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog } from '../../utils/access';
 
 const DRAWER_WIDTH = 260;
 
 export function Navigation() {
     const t = useT();
+    const text = useLocalizedText();
     const navigate = useNavigate();
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -57,7 +58,12 @@ export function Navigation() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout, user } = useAuth();
     const isManager = canManageInventory(user);
+    const sharedNavItems = [
+        { label: text('Meine Ausrüstung', 'My equipment'), path: '/contributor', icon: <InventoryIcon /> },
+        { label: text('Aufgaben & Erinnerungen', 'Actions & reminders'), path: '/actions', icon: <AssignmentReturnIcon /> },
+    ];
     const managerNavItems = [
+        ...sharedNavItems,
         { label: t('nav.globalDashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
         { label: t('nav.myDashboard'), path: '/', icon: <DashboardIcon /> },
         { label: t('nav.items'), path: '/items', icon: <InventoryIcon /> },
@@ -74,11 +80,13 @@ export function Navigation() {
             ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartIcon /> }]
             : []),
         { label: t('nav.maintenance'), path: '/maintenance', icon: <BuildIcon /> },
-        { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsIcon /> },
+        ...((canOperateWarehouse(user) || canManagePurchasing(user) || canPerformMaintenance(user)) ? [{ label: text('Betrieb', 'Operations'), path: '/operations', icon: <BuildIcon /> }] : []),
+        ...(canManageUsers(user) ? [{ label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsIcon /> }] : []),
     ];
     const navItems = isManager
         ? managerNavItems
         : [
+            ...sharedNavItems,
             ...(canViewCatalog(user) ? [
                 { label: t('nav.items'), path: '/items', icon: <InventoryIcon /> },
                 { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryIcon /> },

@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient';
+import { apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 
 export type ResourceQuery = Record<string, string | number | boolean | undefined>;
@@ -50,7 +50,7 @@ function operations<T extends { id: string }, TForm>(
         if (scopedCacheKey) void setOfflineCatalog(scopedCacheKey, data);
         return data;
       } catch (error) {
-        if (scopedCacheKey) {
+        if (scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
           const cached = await getOfflineCatalog<T[]>(scopedCacheKey);
           if (cached) return cached;
         }
@@ -62,7 +62,7 @@ function operations<T extends { id: string }, TForm>(
       try {
         return await apiRequest<T>(`${basePath}/${id}`);
       } catch (error) {
-        if (cacheKey) {
+        if (cacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
           const cached = await getOfflineCatalog<T[]>(cacheKey);
           const found = cached?.find((item) => item.id === id);
           if (found) return found;

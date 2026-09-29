@@ -16,7 +16,7 @@ public class SyncAuditOrm {
     public SyncAuditOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
     public SyncCommandAudit find(UUID commandId) {
-        return entityManager.createQuery("from SyncCommandAudit audit where audit.commandId = :commandId", SyncCommandAudit.class)
+        return entityManager.createQuery("from SyncCommandAudit audit join fetch audit.user where audit.commandId = :commandId", SyncCommandAudit.class)
                 .setParameter("commandId", commandId).getResultStream().findFirst().orElse(null);
     }
 

@@ -96,12 +96,14 @@ export function useSaveFactionOrderPreparation() {
     values,
     assemblyValues,
     assetAssignments,
+    sourceLocations,
   }: {
     id: string;
     values: Record<string, number>;
     assemblyValues: Record<string, number>;
     assetAssignments: Record<string, string[]>;
-  }) => saveFactionOrderPreparation(id, values, assemblyValues, assetAssignments));
+    sourceLocations?: Record<string, string>;
+  }) => saveFactionOrderPreparation(id, values, assemblyValues, assetAssignments, sourceLocations));
 }
 
 export function useMarkFactionOrderReady() {

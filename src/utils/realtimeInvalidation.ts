@@ -2,6 +2,11 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { ApiChangeDetail } from '../services/apiClient';
 
 const ALL_PREFIXES: string[][] = [
+  ['custody-balances'],
+  ['member-custody'], ['member-requests'], ['member-storage'], ['member-assignments'], ['action-inbox'], ['loans'],
+  ['operations'],
+  ['purchase-orders'],
+  ['vendors'],
   ['items'],
   ['category-maintenance'],
   ['assemblies'],
@@ -25,7 +30,7 @@ const ALL_PREFIXES: string[][] = [
  * keeps correctness while realtime events from the backend stay targeted.
  */
 export function invalidateForApiChange(queryClient: QueryClient, detail?: ApiChangeDetail): void {
-  const prefixes: string[][] = [];
+  const prefixes: string[][] = [['reports'], ['operations'], ['custody-balances'], ['member-custody'], ['member-storage'], ['action-inbox']];
 
   if (!detail?.type) {
     prefixes.push(...ALL_PREFIXES.map((prefix) => [...prefix]));

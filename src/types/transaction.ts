@@ -37,6 +37,9 @@ export interface StockTransaction {
 export type TransactionType = 'checkout' | 'checkin' | 'added' | 'repaired' | 'written_off' | 'consumed';
 
 export interface TransactionFormData {
+  locationId?: string;
+  lotId?: string;
+  eventOccurrenceId?: string;
   itemId: string;
   transactionType: TransactionType;
   quantityChanged: number;

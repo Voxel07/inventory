@@ -28,6 +28,7 @@ public class InventoryPosition extends BaseEntity {
     @Version public long version;
 
     public int availableQuantity() {
+        if ((lot != null && !lot.usableOn(java.time.LocalDate.now())) || (item != null && item.trackingMode == DomainEnums.TrackingMode.lot_tracked && lot == null)) return 0;
         return Math.max(0, quantityOnHand - quantityReserved - quantityQuarantined - quantityDamaged);
     }
 }

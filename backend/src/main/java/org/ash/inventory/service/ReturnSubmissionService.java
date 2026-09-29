@@ -21,6 +21,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class ReturnSubmissionService {
+    @jakarta.inject.Inject CustodyBalanceService custody;
+    @jakarta.inject.Inject GeneralOrderService generalOrders;
     private final ReturnSubmissionOrm orm;
     private final ActorService actors;
     private final InventoryOperationsService inventory;
@@ -42,6 +44,7 @@ public class ReturnSubmissionService {
     @Transactional
     public ReturnSubmission create(ApiModels.ReturnSubmissionInput input) {
         var actor = actors.current();
+        if (actor.role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
         var item = requiredLocked(Item.class, input.itemId(), "Item");
         var returnedFor = input.returnedForUserId() == null ? actor
                 : required(UserAccount.class, input.returnedForUserId(), "Return user");
@@ -49,9 +52,13 @@ public class ReturnSubmissionService {
             throw ApiException.forbidden("Only warehouse workers can register a return for another person");
         }
 
-        long outstanding = orm.checkedOutQuantity(item, returnedFor);
-        long alreadyPending = orm.pendingQuantity(item, returnedFor);
-        if (input.quantity() + alreadyPending > outstanding) {
+        var balance = custody.list(false).stream().filter(row -> row.itemId().equals(item.id)
+                && row.personId().equals(returnedFor.id) && row.generalOrderId() == null
+                && java.util.Objects.equals(row.factionOrderId(), input.factionOrderId())
+                && (input.factionOrderId() != null || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
+                && (input.factionOrderId() != null || java.util.Objects.equals(row.eventOccurrenceId(), input.eventOccurrenceId())))
+                .findFirst().orElseThrow(() -> ApiException.conflict("No matching outstanding custody; return order items through their order"));
+        if (input.quantity() + balance.pendingQuantity() > balance.checkedOut()) {
             throw ApiException.conflict("Return quantity exceeds the user's outstanding quantity");
         }
 
@@ -63,6 +70,9 @@ public class ReturnSubmissionService {
             }
             asset = requiredLocked(AssetInstance.class, input.assetInstanceId(), "Asset instance");
             if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to this item");
+            if (input.factionOrderId() != null && !orm.assignedToOrder(asset.id, input.factionOrderId())) {
+                throw ApiException.conflict("Asset is not assigned to this order");
+            }
             if (asset.availabilityStatus != DomainEnums.AssetState.in_field
                     && asset.availabilityStatus != DomainEnums.AssetState.in_custody) {
                 throw ApiException.conflict("Asset is not currently checked out");
@@ -79,6 +89,8 @@ public class ReturnSubmissionService {
         value.previousAssetState = valueAssetStateHolder;
         value.factionOrder = input.factionOrderId() == null ? null
                 : required(FactionOrder.class, input.factionOrderId(), "Faction order");
+        value.eventOccurrence = balance.eventOccurrenceId() == null ? null
+                : required(org.ash.inventory.model.EventOccurrence.class, balance.eventOccurrenceId(), "Event");
         value.returnedFor = returnedFor;
         value.submittedBy = actor;
         value.expectedReturnLocation = item.returnLocation == null ? item.storageLocation : item.returnLocation;
@@ -99,7 +111,12 @@ public class ReturnSubmissionService {
         actors.requireWarehouse();
         var value = pending(id);
         var worker = actors.current();
-        if (value.factionOrder != null) {
+        if (value.generalOrder != null) {
+            generalOrders.returnItems(value.generalOrder.id, new ApiModels.GeneralOrderReturnInput(
+                    Map.of(value.item.id, value.quantity), null, null, null, null,
+                    value.assetInstance == null ? null : Map.of(value.item.id, List.of(value.assetInstance.id)),
+                    null, null, value.id, value.notes, null));
+        } else if (value.factionOrder != null) {
             var line = new ApiModels.ReturnLine(value.quantity, 0, 0, 0, null, value.notes);
             Map<UUID, ApiModels.AssetReturnLine> assets = value.assetInstance == null ? Map.of()
                     : Map.of(value.assetInstance.id, new ApiModels.AssetReturnLine(
@@ -111,7 +128,8 @@ public class ReturnSubmissionService {
                     value.item.id, DomainEnums.TransactionType.checkin, value.quantity,
                     "Return accepted by warehouse", value.notes, null, null,
                     value.assetInstance == null ? null : value.assetInstance.id,
-                    value.returnedFor.id, null, value.id));
+                    value.returnedFor.id, null, value.id,
+                    value.eventOccurrence == null ? null : value.eventOccurrence.id));
         }
         value.status = DomainEnums.ReturnSubmissionStatus.accepted;
         value.acknowledgedBy = worker;
@@ -127,7 +145,7 @@ public class ReturnSubmissionService {
         actors.requireWarehouse();
         var value = pending(id);
         var worker = actors.current();
-        if (value.assetInstance != null) value.assetInstance.availabilityStatus = value.previousAssetState == null
+        if (value.assetInstance != null && value.generalOrder == null) value.assetInstance.availabilityStatus = value.previousAssetState == null
                 ? DomainEnums.AssetState.in_field : value.previousAssetState;
         value.status = DomainEnums.ReturnSubmissionStatus.rejected;
         value.acknowledgedBy = worker;

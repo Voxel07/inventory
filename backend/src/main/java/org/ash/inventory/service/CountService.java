@@ -150,6 +150,9 @@ public class CountService {
             line.approvedQuantity = line.recountedQuantity == null ? line.countedQuantity : line.recountedQuantity;
             if (line.approvedQuantity == null) throw ApiException.conflict("Count line has no submitted quantity");
             line.varianceQuantity = line.approvedQuantity - line.expectedQuantity;
+            if (line.varianceQuantity != 0 && line.countedBy != null && line.countedBy.id.equals(actor.id)) {
+                throw ApiException.forbidden("A different administrator must approve a count variance");
+            }
         }
         session.status = DomainEnums.CountStatus.approved;
         session.approvedBy = actor;

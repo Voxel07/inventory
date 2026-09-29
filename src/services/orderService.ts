@@ -12,3 +12,5 @@ export function transitionOrder(id: string, action: 'submit' | 'ready' | 'pickup
 export function returnOrder(id: string, returnedQuantities: Record<string, number>, consumedQuantities: Record<string, number>) {
   return apiRequest<GeneralOrder>(`/api/general-orders/${id}/return`, { method: 'POST', body: { returnedQuantities, consumedQuantities } });
 }
+
+export const generalOrderCommand = (id: string, action: string, data: object) => apiRequest<GeneralOrder>(`/api/general-orders/${id}/${action}`, { method: 'POST', body: data });

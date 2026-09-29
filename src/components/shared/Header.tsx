@@ -1,3 +1,5 @@
+import { CameraScanner } from './CameraScanner';
+import { useActionInbox } from '../../hooks/useActionInbox';
 import { Dialog } from './ClosableDialog';
 import {
     AppBar,
@@ -49,6 +51,8 @@ function payloadText(notification: AppNotification, key: string): string | undef
 }
 
 export function Header() {
+    const inbox = useActionInbox();
+    const actionCount = (inbox.data ?? []).filter(a => !a.remindAt || Date.parse(a.remindAt) <= inbox.dataUpdatedAt).length;
     const toggleSidebar = useUIStore((s) => s.toggleSidebar);
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const t = useT();
@@ -62,7 +66,7 @@ export function Header() {
     const [discardingAction, setDiscardingAction] = useState(false);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const { online, queued, syncIssues } = useOfflineStatus();
+    const { online, queued, syncIssues, cachedAt } = useOfflineStatus();
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
     const [quickScanOpen, setQuickScanOpen] = useState(false);
@@ -144,9 +148,9 @@ export function Header() {
         return () => window.removeEventListener('ash-offline-queue', refresh);
     }, [queuedActionsOpen]);
 
-    async function handleQuickScanSubmit(e?: React.FormEvent) {
+    async function handleQuickScanSubmit(e?: React.FormEvent, scannedCode?: string) {
         if (e) e.preventDefault();
-        const code = quickScanInput.trim();
+        const code = (scannedCode ?? quickScanInput).trim();
         if (!code) return;
         setQuickScanOpen(false);
         setQuickScanInput('');
@@ -161,8 +165,9 @@ export function Header() {
                 showSnackbar(t('header.codeResolved', { name: result.name || result.code }), 'success');
                 return;
             }
-        } catch {
-            // Ignore resolution errors
+        } catch (error) {
+            showSnackbar(error instanceof Error ? error.message : t('header.codeNotFound', { code }), 'warning');
+            return;
         }
 
         showSnackbar(t('header.codeNotFound', { code }), 'warning');
@@ -172,6 +177,7 @@ export function Header() {
         <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
+                <IconButton color="inherit" aria-label="Actions / Aufgaben" onClick={() => navigate('/actions')}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
                 <IconButton
                     color="inherit"
                     edge="start"
@@ -303,19 +309,19 @@ export function Header() {
                         />
                     )
                 )}
-                {(!online || queued > 0) && (
+                {(
                     isMobile ? (
-                        <Tooltip title={online
-                            ? t('header.queuedActions', { count: queued })
+                        <Tooltip title={cachedAt ? `${t('header.cachedData', 'Cached data')} · ${new Date(cachedAt).toLocaleString()}` : online
+                            ? (queued ? t('header.queuedActions', { count: queued }) : t('header.syncStatus', 'Sync / Offline'))
                             : t('header.offlineQueued', { count: queued })}>
                             <IconButton
                                 size="small"
-                                color={online ? 'warning' : 'error'}
+                                color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
                                 onClick={openQueuedActions}
                                 aria-label={t('header.viewQueuedActions')}
                                 sx={{ ml: 0.5 }}
                             >
-                                <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? 'warning' : 'error'}>
+                                <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}>
                                     {online ? <CloudUploadIcon /> : <CloudOffIcon />}
                                 </Badge>
                             </IconButton>
@@ -323,9 +329,9 @@ export function Header() {
                     ) : (
                         <Chip
                             size="small"
-                            color={online ? 'warning' : 'error'}
-                            label={online
-                                ? t('header.queuedActions', { count: queued })
+                            color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
+                            label={cachedAt ? t('header.cachedData', 'Cached data') : online
+                                ? (queued ? t('header.queuedActions', { count: queued }) : t('header.syncStatus', 'Sync / Offline'))
                                 : t('header.offlineQueued', { count: queued })}
                             onClick={openQueuedActions}
                             sx={{ color: 'white', fontWeight: 700 }}
@@ -342,6 +348,7 @@ export function Header() {
         >
             <DialogTitle sx={{ fontWeight: 700 }}>{t('header.quickScanTitle', 'QR- / Barcode-Suche')}</DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
+                <CameraScanner onScan={code => void handleQuickScanSubmit(undefined, code)} />
                 <Box component="form" onSubmit={handleQuickScanSubmit}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                         {t('header.quickScanHint', 'Gescannte Barcodes werden automatisch geöffnet, oder tippen/fügen Sie hier einen Code ein:')}

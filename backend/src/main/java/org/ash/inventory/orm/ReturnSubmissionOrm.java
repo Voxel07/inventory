@@ -23,6 +23,11 @@ public class ReturnSubmissionOrm {
         entityManager.persist(value);
     }
 
+    public boolean assignedToOrder(UUID assetId, UUID orderId) {
+        return entityManager.createQuery("select count(a) from OrderLineAssetAssignment a where a.assetInstance.id = :asset and a.orderLine.order.id = :order", Long.class)
+                .setParameter("asset", assetId).setParameter("order", orderId).getSingleResult() > 0;
+    }
+
     public <T> T find(Class<T> type, UUID id) {
         return entityManager.find(type, id);
     }

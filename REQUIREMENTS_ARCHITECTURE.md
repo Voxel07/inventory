@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** Implemented architecture baseline
+> **Status:** Architecture baseline plus operational workflow implementation; final verification pending (28 September 2026)
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -38,6 +38,25 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 
 ## 3. Functional requirements and implementation status
 
+### Current delivery status — 28 September 2026
+
+The implementation batch covers all P0 feature gaps **F01–F09** and the P1 features with existing backend support **F10–F14 and F18**. The detailed record is [IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md); the [feature backlog](docs/FEATURE_GAP_ANALYSIS.md) distinguishes the original findings from current progress.
+
+| Area | Current progress |
+|---|---|
+| Event reporting and procurement | Separate lifecycle quantities, occurrence attribution, dated demand/supply explanations, audited overrides and multi-line purchase drafts implemented |
+| Warehouse workflows | Receiving, actual location stock, source selection, transfers, counts and lots exposed in Operations and connected to stock movements |
+| Orders and custody | General-order preparation/reservations, exact asset returns, missing outcomes, audit history and server-derived return worklists implemented |
+| Lifecycle and administration | Repair verification/release, maintenance schedules/checklists, supplier documents and outbox/sync recovery interfaces implemented |
+| Authorization | Action-specific UI capabilities, matching command restrictions, private item access on order creation and administrative write-offs updated |
+| Remaining P1 follow-up | F15 hierarchy/site management, F16 guided offline correction/audit/cache freshness and F17 rebuildable report snapshots are implemented; user verification remains pending |
+| Additional product scope | F19–F23 remain open |
+| Verification | Final working tree, PostgreSQL migration and complete desktop/mobile workflows still need verification; further builds/tests were stopped at the user's request |
+
+The table below maps requirements to source implementations. **“Implemented” does not mean release-verified or that every broader domain workflow is complete.** The 29 September follow-up implements LOC-01 hierarchy and the offline/reporting gaps; their user acceptance and migration verification remain tracked in the implementation progress document.
+
+### Requirement traceability
+
 | ID | Requirement | Status | Primary implementation |
 |---|---|---:|---|
 | CAT-01 | Maintain items, images, categories, event tags, hints, value, and storage location | Implemented | `CatalogResource`, `CatalogService`, `Item`, Items UI |
@@ -74,7 +93,7 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
 
-Counts, transfers, purchasing, custody, and stock management are first-class backend modules. The procurement page now records and displays external purchase orders; goods receipt remains a warehouse workflow.
+Counts, transfers, purchasing, custody, and stock management have backend modules and frontend operational workflows. Procurement supports editable purchase drafts and ordering; warehouse users receive deliveries from purchase details. Operations provides role-specific access to warehouse, purchasing, lifecycle and recovery tasks. Migration `V1.1.2__operational_workflows.sql` accompanies these changes; its PostgreSQL execution is not yet verified.
 
 ## 4. Architectural boundaries
 

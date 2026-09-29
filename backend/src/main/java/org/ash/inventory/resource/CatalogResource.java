@@ -102,7 +102,11 @@ public class CatalogResource {
     }
 
     @GET @Path("/storage-locations")
-    public Response locations() { actor.current(); return catalogResponse(responses.locations()); }
+    public Response locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive) {
+        actor.current();
+        if (includeInactive) return Response.ok(service.getAllLocations().stream().map(mapper::location).toList()).build();
+        return catalogResponse(responses.locations());
+    }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }
     @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.createLocation(input)); }

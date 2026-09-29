@@ -36,7 +36,7 @@ public class PurchasingService {
 
     @Transactional
     public List<PurchasingDtos.VendorResponse> vendors(int page, int size) {
-        actors.requireProcurement();
+        if (actors.current().role != DomainEnums.UserRole.maintenance_crew) actors.requireProcurement();
         return orm.vendors(offset(page, size), size).stream().map(this::vendor).toList();
     }
 
@@ -369,6 +369,10 @@ public class PurchasingService {
         damage.severity = DomainEnums.DamageSeverity.medium;
         damage.idempotencyKey = derivedKey(receipt.idempotencyKey,
                 line.purchaseOrderLine.id + ":damage:" + index);
+        if (asset == null) {
+            var position = orm.lockedPosition(line.item, receipt.receivingLocation, line.lot);
+            if (position != null) damage.positionQuantities = Map.of(position.id.toString(), damage.quantity);
+        }
         orm.persist(damage);
         appendTransaction(receipt, line, asset, receipt.receivingLocation, DomainEnums.TransactionType.damaged,
                 damage.quantity, derivedKey(receipt.idempotencyKey,

@@ -3,6 +3,9 @@ import { apiRequest } from './apiClient';
 export type MaintenanceRecord = {
   id: string;
   itemId: string;
+  assetInstanceId?: string;
+  scheduleId?: string;
+  certificateObjectKey?: string;
   type: 'dguv_v3' | 'generator_service' | 'battery_test' | 'chrono_fps';
   inspectorUserId: string;
   performedAt: string;

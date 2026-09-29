@@ -28,17 +28,13 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       assets.filter((asset) => ['in_field', 'in_custody', 'lost'].includes(asset.availabilityStatus)),
     ]).filter(([, assets]) => (assets as AssetInstance[]).length > 0),
   ) as Record<string, AssetInstance[]>;
-  const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>(() => Object.fromEntries(
-    Object.values(outstandingAssets).flatMap((assets) => assets
-      .filter((asset) => asset.availabilityStatus !== 'lost')
-      .map((asset) => [asset.id, { outcome: 'returned_good' as const }])),
-  ));
+  const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>({});
   const [lines, setLines] = useState<Record<string, Outcome>>(() => Object.fromEntries(
     Object.entries(outstanding).map(([itemId, quantity]) => {
       const assets = outstandingAssets[itemId] ?? [];
       if (assets.length) {
         return [itemId, {
-          returned: assets.filter((asset) => asset.availabilityStatus !== 'lost').length,
+          returned: 0,
           consumed: 0,
           missing: assets.filter((asset) => asset.availabilityStatus === 'lost').length,
           damaged: 0,
@@ -46,7 +42,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       }
       const existingMissing = Math.min(Number(quantity), order.missingQuantities?.[itemId] ?? 0);
       return [itemId, {
-        returned: Number(quantity) - existingMissing,
+        returned: 0,
         consumed: 0,
         missing: existingMissing,
         damaged: 0,
@@ -260,7 +256,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                           onChange={(event) => setAssetOutcome(itemId, asset.id, event.target.value)}
                           sx={{ minWidth: 210 }}
                         >
-                          {asset.availabilityStatus === 'lost' && <MenuItem value="unchanged_missing">{t('Weiterhin fehlend', 'Still missing')}</MenuItem>}
+                          <MenuItem value="unchanged_missing">{asset.availabilityStatus === 'lost' ? t('Weiterhin fehlend', 'Still missing') : t('Noch nicht geprüft', 'Not inspected yet')}</MenuItem>
                           <MenuItem value="returned_good">{t('Intakt zurück', 'Returned good')}</MenuItem>
                           <MenuItem value="returned_damaged">{t('Beschädigt zurück', 'Returned damaged')}</MenuItem>
                           {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('Fehlend', 'Missing')}</MenuItem>}
