@@ -177,7 +177,6 @@ export function Header() {
         <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
-                <IconButton color="inherit" aria-label="Actions / Aufgaben" onClick={() => navigate('/actions')}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
                 <IconButton
                     color="inherit"
                     edge="start"
@@ -192,6 +191,7 @@ export function Header() {
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
+                <IconButton color="inherit" aria-label="Actions / Aufgaben" onClick={() => navigate('/actions')} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
                 <Tooltip title={t('header.quickScan', 'QR / Barcode Scan')}>
                     <IconButton
                         color="inherit"

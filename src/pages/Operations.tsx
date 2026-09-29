@@ -36,7 +36,10 @@ export function Operations() {
   ];
   const active = tabs.find((tab) => tab.key === params.get('tab')) ?? tabs[0];
   if (!active) return <Alert severity="info">{t('Für diese Aufgaben ist eine Lager-, Einkaufs- oder Wartungsberechtigung erforderlich.', 'These tasks require warehouse, purchasing or maintenance permission.')}</Alert>;
-  return <Stack spacing={3}><Typography variant="h4">{t('Betrieb', 'Operations')}</Typography>
+  return <Stack spacing={2} sx={{
+    '& .MuiCardContent-root': { p: 1, '&:last-child': { pb: 1 } },
+    '& a:not(.MuiButton-root)': { color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
+  }}><Typography variant="h4">{t('Betrieb', 'Operations')}</Typography>
     <Tabs value={active.key} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile onChange={(_, value: string) => setParams({ tab: value })} aria-label={t('Betriebsaufgaben', 'Operational tasks')}>
       {tabs.map((tab) => <Tab key={tab.key} value={tab.key} label={tab.label} />)}
     </Tabs>{active.component}

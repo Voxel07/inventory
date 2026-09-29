@@ -36,6 +36,7 @@ import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
 import { useClientPagination } from '../hooks/useClientPagination';
+import { useOrderEventSelection } from '../hooks/useOrderEventSelection';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 
@@ -65,7 +66,6 @@ export function FactionOrders() {
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
-  const [selectedEventId, setSelectedEventId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogReady, setDialogReady] = useState(false);
   const { user } = useAuth();
@@ -79,6 +79,7 @@ export function FactionOrders() {
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: events = [] } = useEventReports();
+  const { selectedEventId, setSelectedEventId, eventOptions } = useOrderEventSelection(events);
   const { data: storageLocations = [] } = useStorageLocations();
   const { data: allOrders = [], isLoading, isError, isComplete, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
@@ -120,7 +121,6 @@ export function FactionOrders() {
     setActivePage(1);
     setHistoryPage(1);
     setEventType(value);
-    setSelectedEventId('');
     const firstFaction = FACTIONS_BY_EVENT[value]
       .find((candidate) => canAccessFaction(currentUser, value, candidate));
     if (firstFaction) setSelectedFaction(firstFaction);
@@ -217,7 +217,7 @@ export function FactionOrders() {
           <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
           <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }}>
             <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
-            {events.filter((entry) => entry.eventType === eventType).map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
+            {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
           </Select>
         </FormControl>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>

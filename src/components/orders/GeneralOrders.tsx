@@ -18,6 +18,7 @@ import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityInput } from './QuantityInput';
 import { useClientPagination } from '../../hooks/useClientPagination';
+import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 
 const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
   preparing: ['In Vorbereitung', 'Preparing'], draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -31,6 +32,7 @@ export function GeneralOrders() {
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
+  const { currentEvent, selectedEventId, setSelectedEventId } = useOrderEventSelection(events);
   const { data: items = [] } = useItems();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -53,7 +55,8 @@ export function GeneralOrders() {
   const activeEvents = events;
   const visibleOrders = (() => {
     const term = search.trim().toLocaleLowerCase();
-    return !term ? orders : orders.filter((order) => `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
+    return orders.filter((order) => (!selectedEventId || order.eventOccurrenceId === selectedEventId)
+      && (!term || `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term)));
   })();
   const activeOrders = visibleOrders.filter((order) => !['returned', 'closed', 'cancelled'].includes(order.status));
   const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
@@ -78,7 +81,7 @@ export function GeneralOrders() {
     setEditing(order ?? 'new');
     setName(order?.name ?? '');
     setPurpose(order?.purpose ?? '');
-    setEventId(order?.eventOccurrenceId ?? activeEvents[0]?.id ?? '');
+    setEventId(order ? order.eventOccurrenceId ?? '' : selectedEventId || currentEvent?.id || '');
     setQuantities(Object.fromEntries(Object.entries(order?.requestedQuantities ?? {}).map(([id, quantity]) => [id, String(quantity)])));
     setItemSearch('');
     setItemPage(1);
@@ -149,9 +152,16 @@ export function GeneralOrders() {
         <Typography color="text.secondary">{t('Artikel für Catering, Sponsorenzelte, Bühnen und andere Zwecke.', 'Items for catering, sponsor tents, stages, and other purposes.')}</Typography></Box>
       <Button disabled={effectiveAccess(user) === 'read_only'} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
-    <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
-      onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoryPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
-      sx={{ mb: 2, maxWidth: 520 }} />
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+      <TextField select size="small" label={t('Event auswählen', 'Select event')} value={selectedEventId}
+        onChange={(event) => { setSelectedEventId(event.target.value); setPage(1); setHistoryPage(1); }} sx={{ minWidth: { sm: 280 } }}>
+        <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
+        {events.map((event) => <MenuItem key={event.id} value={event.id}>{eventName(event.id)}</MenuItem>)}
+      </TextField>
+      <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
+        onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoryPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
+        sx={{ maxWidth: 520 }} />
+    </Stack>
     {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
     <OrderListSection
       title={t('Aktive Bestellungen', 'Active orders')}

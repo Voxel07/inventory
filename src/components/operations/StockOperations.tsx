@@ -1,8 +1,8 @@
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, Chip, LinearProgress, Stack, Typography } from '@mui/material';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Alert, Button, Card, CardContent, LinearProgress, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi, type Count, type Lot, type Transfer } from '../../services/operationsService';
@@ -20,7 +20,7 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
   const positions = useOperationList(`positions:${selectedItem}:${selectedLocation}`, operationsApi.positions({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const assets = useOperationList(`assets:${selectedItem}:${selectedLocation}`, operationsApi.assets({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const lots = useOperationList('stock-lot-labels', operationsApi.lots());
-  return <Stack spacing={2}>
+  return <Stack spacing={1}>
     <Typography variant="h6">{t('Bestand nach Lagerort', 'Stock by location')}</Typography>
     <Fields values={filters} onChange={setFilters} fields={[
       ...(!itemId ? [{ key: 'itemId', label: t('Artikel / Geräte anzeigen', 'Item / show individual assets'), options: lookup.itemOptions }] : []),
@@ -29,19 +29,25 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
     {(positions.isLoading || assets.isLoading) && <LinearProgress />}
     {(positions.error || assets.error || lookup.error) && <Alert severity="error">{(positions.error || assets.error || lookup.error)?.message}</Alert>}
     {!positions.isLoading && !positions.data?.length && !assets.data?.length && <Alert severity="info">{t('Kein lokalisierter Bestand für diese Auswahl.', 'No located stock for this selection.')}</Alert>}
-    {positions.data?.map((position) => <Card key={position.id}><CardContent><Stack spacing={1}>
-      <Typography component={Link} to={`/items/${position.itemId}`} variant="h6">{lookup.items.find((item) => item.id === position.itemId)?.name ?? position.itemId}</Typography>
-      <Typography>{lookup.locations.find((location) => location.id === position.locationId)?.name ?? t('Ohne Lagerort', 'Unassigned location')}{position.lotId ? ` · ${t('Charge', 'Lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}</Typography>
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-        <Chip color="success" label={`${t('Verfügbar', 'Available')}: ${position.availableQuantity}`} />
-        <Chip label={`${t('Vor Ort', 'On hand')}: ${position.quantityOnHand}`} /><Chip label={`${t('Reserviert', 'Reserved')}: ${position.quantityReserved}`} />
-        <Chip label={`${t('Beschädigt', 'Damaged')}: ${position.quantityDamaged}`} /><Chip label={`${t('Quarantäne', 'Quarantine')}: ${position.quantityQuarantined}`} /><Chip label={`${t('Unterwegs', 'In transit')}: ${position.quantityInTransit}`} />
-      </Stack>
-    </Stack></CardContent></Card>)}
-    {assets.data?.filter((asset) => !selectedLocation || asset.currentLocationId === selectedLocation).map((asset) => <Card key={asset.id}><CardContent>
-      <Typography component={Link} to={`/items/${asset.itemId}/assets/${asset.id}`}>{asset.assetCode}</Typography>
-      <Typography>{asset.currentLocationName ?? t('Ohne Lagerort', 'Unassigned location')} · {asset.availabilityStatus} · {asset.conditionStatus}</Typography>
-      {asset.currentCustodianName && <Typography>{t('Bei', 'Held by')}: {asset.currentCustodianName}</Typography>}
+    {!!positions.data?.length && <TableContainer component={Paper} variant="outlined">
+      <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')} sx={{ '& td, & th': { px: 1, py: 0.75 }, '& tr:last-child td, & tr:last-child th': { borderBottom: 0 } }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ minWidth: 200 }}>{t('Artikel / Lagerort', 'Item / location')}</TableCell>
+          {[t('Verfügbar', 'Available'), t('Vor Ort', 'On hand'), t('Reserviert', 'Reserved'), t('Beschädigt', 'Damaged'), t('Quarantäne', 'Quarantine'), t('Unterwegs', 'In transit')].map((label) => <TableCell key={label} align="right">{label}</TableCell>)}
+        </TableRow></TableHead>
+        <TableBody>{positions.data.map((position) => <TableRow key={position.id} hover>
+          <TableCell component="th" scope="row">
+            <Link component={RouterLink} to={`/items/${position.itemId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.items.find((item) => item.id === position.itemId)?.name ?? position.itemId}</Link>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{lookup.locations.find((location) => location.id === position.locationId)?.name ?? t('Ohne Lagerort', 'Unassigned location')}{position.lotId ? ` · ${t('Charge', 'Lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}</Typography>
+          </TableCell>
+          <TableCell align="right" sx={{ color: position.availableQuantity > 0 ? 'success.main' : 'text.secondary', fontWeight: 700 }}>{position.availableQuantity}</TableCell>
+          {[position.quantityOnHand, position.quantityReserved, position.quantityDamaged, position.quantityQuarantined, position.quantityInTransit].map((quantity, index) => <TableCell key={index} align="right">{quantity}</TableCell>)}
+        </TableRow>)}</TableBody>
+      </Table>
+    </TableContainer>}
+    {assets.data?.filter((asset) => !selectedLocation || asset.currentLocationId === selectedLocation).map((asset) => <Card key={asset.id}><CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+      <Link component={RouterLink} to={`/items/${asset.itemId}/assets/${asset.id}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{asset.assetCode}</Link>
+      <Typography variant="body2" color="text.secondary">{asset.currentLocationName ?? t('Ohne Lagerort', 'Unassigned location')} · {asset.availabilityStatus} · {asset.conditionStatus}{asset.currentCustodianName && ` · ${t('Bei', 'Held by')}: ${asset.currentCustodianName}`}</Typography>
     </CardContent></Card>)}
   </Stack>;
 }

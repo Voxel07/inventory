@@ -1,4 +1,4 @@
-import { Button, MenuItem, Pagination, Stack, TextField, Typography } from '@mui/material';
+import { Button, Stack, TablePagination, Typography } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
@@ -10,21 +10,25 @@ interface Props {
   loadingMore?: boolean;
   loadError?: boolean;
   onRetry?: () => void;
-  pageSizeAtEnd?: boolean;
 }
 
-export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, loadingMore, loadError, onRetry, pageSizeAtEnd = false }: Props) {
+export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, loadingMore, loadError, onRetry }: Props) {
   const t = useLocalizedText();
-  const pages = pageSize === -1 ? 1 : Math.ceil(count / pageSize);
+  const pages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(count / pageSize));
   return (
-    <Stack spacing={1} sx={{ mt: 2, alignItems: 'center' }}>
-      <TextField select size="small" label={t('Einträge pro Seite', 'Items per page')} value={pageSize}
-        onChange={(event) => onPageSizeChange(Number(event.target.value))} sx={{ minWidth: 170, alignSelf: pageSizeAtEnd ? 'flex-end' : undefined }}>
-        <MenuItem value={20}>20</MenuItem>
-        <MenuItem value={100}>100</MenuItem>
-        <MenuItem value={-1}>{t('Alle', 'All')}</MenuItem>
-      </TextField>
-      {pages > 1 && <Pagination count={pages} page={Math.min(page, pages)} onChange={(_, value) => onChange(value)} />}
+    <Stack spacing={1}>
+      <TablePagination component="div" count={count} page={Math.max(0, Math.min(page, pages) - 1)}
+        rowsPerPage={pageSize} rowsPerPageOptions={[20, 50, 100]}
+        onPageChange={(_, value) => onChange(value + 1)}
+        onRowsPerPageChange={(event) => onPageSizeChange(Number(event.target.value))}
+        labelRowsPerPage={t('Zeilen pro Seite:', 'Rows per page:')}
+        labelDisplayedRows={({ from, to, count: total }) => `${from}–${to} ${t('von', 'of')} ${total}`}
+        getItemAriaLabel={(type) => ({
+          first: t('Erste Seite', 'First page'), last: t('Letzte Seite', 'Last page'),
+          next: t('Nächste Seite', 'Next page'), previous: t('Vorherige Seite', 'Previous page'),
+        })[type]}
+        sx={{ '& .MuiTablePagination-toolbar': { px: 1, minHeight: 52, flexWrap: 'wrap' },
+          '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { my: 1 } }} />
       {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
       {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
     </Stack>
