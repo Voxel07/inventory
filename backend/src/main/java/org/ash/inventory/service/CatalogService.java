@@ -61,8 +61,33 @@ public class CatalogService {
         return orm.allLocations();
     }
 
-    public List<Assembly> getAssemblies() {
-        return orm.assemblies();
+    public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
+
+    public VisibleAssemblies getVisibleAssemblies() {
+        var values = orm.assemblies();
+        var components = orm.assemblyItems(values);
+        var visible = values.stream().filter(value -> canViewAssemblyComponents(
+                components.getOrDefault(value.id, List.of()))).toList();
+        var visibleComponents = new LinkedHashMap<UUID, List<AssemblyItem>>();
+        visible.forEach(value -> visibleComponents.put(value.id, components.getOrDefault(value.id, List.of())));
+        return new VisibleAssemblies(visible, visibleComponents);
+    }
+
+    public boolean canViewItem(Item item) { return item.active && canView(item, actorService.current()); }
+
+    public boolean canViewAssemblyComponents(List<AssemblyItem> components) {
+        var actor = actorService.current();
+        return components.stream().allMatch(component -> component.item.active && canView(component.item, actor));
+    }
+
+    public List<AssemblyItem> getVisibleAssemblyComponents(Assembly assembly) {
+        var components = orm.assemblyItems(assembly);
+        if (!canViewAssemblyComponents(components)) throw ApiException.notFound("Assembly not found");
+        return components;
+    }
+
+    public boolean canViewAssembly(Assembly assembly) {
+        return canViewAssemblyComponents(orm.assemblyItems(assembly));
     }
 
     public List<EventOccurrence> getEvents(String eventType) {
@@ -78,7 +103,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item createItem(ApiModels.ItemInput input) {
         var item = new Item();
         apply(item, input);
@@ -118,7 +142,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
         if (input.amount() != null && input.amount() != item.baseAmount) {
@@ -147,7 +170,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
         item.active = false;
@@ -230,7 +252,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
         hierarchy.lockHierarchy();
         var location = new StorageLocation();
@@ -242,7 +263,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
@@ -253,7 +273,6 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteLocation(UUID id) {
         hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
@@ -278,7 +297,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
         var assembly = new Assembly();
         apply(assembly, input);
@@ -290,7 +308,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         var assembly = locked(Assembly.class, id, "Assembly");
         apply(assembly, input);
@@ -302,7 +319,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "assemblies-cache")
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
         if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);

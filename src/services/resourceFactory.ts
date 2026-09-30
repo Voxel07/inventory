@@ -1,12 +1,13 @@
 import { apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
 
 export type ResourceQuery = Record<string, string | number | boolean | undefined>;
 
 export interface ResourceOptions<TForm, T = unknown> {
   transformPayload?: (data: Partial<TForm>, isUpdate?: boolean) => Promise<Record<string, unknown>> | Record<string, unknown>;
-  customCreate?: (data: TForm, basePath: string) => Promise<T>;
-  customUpdate?: (id: string, data: Partial<TForm>, basePath: string) => Promise<T>;
+  customCreate?: (data: TForm, basePath: string, session: AuthSessionContext) => Promise<T>;
+  customUpdate?: (id: string, data: Partial<TForm>, basePath: string, session: AuthSessionContext) => Promise<T>;
 }
 
 export interface CollectionResourceApi<T> {
@@ -44,14 +45,19 @@ function operations<T extends { id: string }, TForm>(
 ) {
   return {
     async getAll(query?: ResourceQuery) {
+      const context = captureAuthSession();
       const scopedCacheKey = cacheKey ? queryCacheKey(cacheKey, query) : undefined;
       try {
-        const data = await apiRequest<T[]>(basePath, { query });
-        if (scopedCacheKey) void setOfflineCatalog(scopedCacheKey, data);
+        const data = await apiRequest<T[]>(basePath, { query, session: context });
+        assertAuthSession(context);
+        if (scopedCacheKey) await setOfflineCatalog(scopedCacheKey, data, context);
+        assertAuthSession(context);
         return data;
       } catch (error) {
+        assertAuthSession(context);
         if (scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
-          const cached = await getOfflineCatalog<T[]>(scopedCacheKey);
+          const cached = await getOfflineCatalog<T[]>(scopedCacheKey, context);
+          assertAuthSession(context);
           if (cached) return cached;
         }
         throw error;
@@ -59,11 +65,16 @@ function operations<T extends { id: string }, TForm>(
     },
 
     async getById(id: string) {
+      const context = captureAuthSession();
       try {
-        return await apiRequest<T>(`${basePath}/${id}`);
+        const data = await apiRequest<T>(`${basePath}/${id}`, { session: context });
+        assertAuthSession(context);
+        return data;
       } catch (error) {
+        assertAuthSession(context);
         if (cacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
-          const cached = await getOfflineCatalog<T[]>(cacheKey);
+          const cached = await getOfflineCatalog<T[]>(cacheKey, context);
+          assertAuthSession(context);
           const found = cached?.find((item) => item.id === id);
           if (found) return found;
         }
@@ -72,15 +83,27 @@ function operations<T extends { id: string }, TForm>(
     },
 
     async create(data: TForm) {
-      if (options?.customCreate) return options.customCreate(data, basePath);
+      const context = captureAuthSession();
+      if (options?.customCreate) {
+        const result = await options.customCreate(data, basePath, context);
+        assertAuthSession(context);
+        return result;
+      }
       const body = options?.transformPayload ? await options.transformPayload(data, false) : data;
-      return apiRequest<T>(basePath, { method: 'POST', body });
+      assertAuthSession(context);
+      return apiRequest<T>(basePath, { method: 'POST', body, session: context });
     },
 
     async update(id: string, data: Partial<TForm>) {
-      if (options?.customUpdate) return options.customUpdate(id, data, basePath);
+      const context = captureAuthSession();
+      if (options?.customUpdate) {
+        const result = await options.customUpdate(id, data, basePath, context);
+        assertAuthSession(context);
+        return result;
+      }
       const body = options?.transformPayload ? await options.transformPayload(data, true) : data;
-      return apiRequest<T>(`${basePath}/${id}`, { method: 'PATCH', body });
+      assertAuthSession(context);
+      return apiRequest<T>(`${basePath}/${id}`, { method: 'PATCH', body, session: context });
     },
 
     async delete(id: string) {

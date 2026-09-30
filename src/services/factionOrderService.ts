@@ -1,5 +1,6 @@
 import type { FactionOrder, FactionOrderFormData } from '../types';
 import { apiRequest } from './apiClient';
+import { assertAuthSession, captureAuthSession } from './authManager';
 
 type FactionOrderSummaryResponse = Omit<FactionOrder, 'history'>;
 
@@ -42,7 +43,9 @@ export async function saveFactionOrderPreparation(
   assetAssignments: Record<string, string[]>,
   sourceLocations?: Record<string, string>,
 ): Promise<FactionOrder> {
+  const context = captureAuthSession();
   const order = await getFactionOrder(id);
+  assertAuthSession(context);
   const flattened = { ...preparedQuantities };
   for (const assembly of order.expand?.assemblyIds || []) {
     const assemblyCount = preparedAssemblyQuantities[assembly.id] || 0;
@@ -52,6 +55,7 @@ export async function saveFactionOrderPreparation(
   }
   const input = { preparedQuantities: flattened, assetAssignments, sourceLocations, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
   return apiRequest(`/api/orders/${id}/prepare`, {
+    session: context,
     method: 'POST', body: input,
     offline: { type: 'order.prepare', payload: { orderId: id, input } },
   });

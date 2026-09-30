@@ -151,7 +151,7 @@ export function ItemDetail() {
 
     const categories = item?.category ? [item.category] : [];
 
-    const { totalStock, checkedOut, damaged, remaining } = getItemStock(item);
+    const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
     const stockHistory = buildStockHistory(itemTransactions, item?.amount ?? 0);
 
@@ -302,6 +302,10 @@ export function ItemDetail() {
                             <Typography variant="h6" color="warning.main">{checkedOut}</Typography>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">{t('Im Transfer', 'In transit')}</Typography>
+                            <Typography variant="h6" color="info.main">{inTransit}</Typography>
+                        </Paper>
+                        <Paper sx={{ p: 1.5 }}>
                             <Typography variant="caption" color="text.secondary">Defekt</Typography>
                             <Typography variant="h6" color="error.main">{damaged}</Typography>
                         </Paper>
@@ -314,7 +318,7 @@ export function ItemDetail() {
                             <Typography variant="h6">{item.minStock ?? 5}</Typography>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Bestellt / unterwegs', 'Ordered / in transit')}</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('Bestellt', 'Ordered')}</Typography>
                             <Typography variant="h6" color="info.main">{item.stock?.ordered ?? 0}</Typography>
                         </Paper>
                         <Paper sx={{ p: 1.5 }}>

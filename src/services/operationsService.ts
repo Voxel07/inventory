@@ -1,5 +1,6 @@
 import type { AssetInstance } from '../types';
 import { apiRequest, apiFileUrl, fetchMedia, uploadMedia } from './apiClient';
+import { assertAuthSession, captureAuthSession } from './authManager';
 
 import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, OutboxEvent, SyncAudit, LotInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
 
@@ -27,11 +28,14 @@ export const operationsApi = {
   receive: (data: ReceiptInput) => save<Receipt>('goods-receipts', data),
   documents: (purchaseOrderId?: string) => list<VendorDocument>('vendor-documents', { purchaseOrderId }),
   async attachDocument(file: File, data: VendorDocumentInput) {
-    const stagedObjectKey = await uploadMedia(file);
-    return save<VendorDocument>('vendor-documents', { ...data, originalFilename: file.name, stagedObjectKey });
+    const context = captureAuthSession();
+    const stagedObjectKey = await uploadMedia(file, context);
+    return apiRequest<VendorDocument>('/api/vendor-documents', { method: 'POST', body: { ...data, originalFilename: file.name, stagedObjectKey }, session: context });
   },
   async downloadDocument(document: VendorDocument) {
+    const context = captureAuthSession();
     const blob = await fetchMedia(apiFileUrl(document.objectStorageKey)!);
+    assertAuthSession(context);
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');
     link.href = url; link.download = document.originalFilename; link.click();

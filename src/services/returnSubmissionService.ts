@@ -1,14 +1,17 @@
 import type { ReturnSubmission, ReturnSubmissionFormData, ReturnSubmissionStatus } from '../types';
 import { apiRequest } from './apiClient';
 import { stageImage } from './stagedImageService';
+import { captureAuthSession } from './authManager';
 
 export function getReturnSubmissions(status?: ReturnSubmissionStatus): Promise<ReturnSubmission[]> {
   return apiRequest('/api/returns', { query: { status } });
 }
 
 export async function createReturnSubmission(data: ReturnSubmissionFormData): Promise<ReturnSubmission> {
-  const placementImage = data.placementImageFile ? await stageImage(data.placementImageFile) : undefined;
+  const context = captureAuthSession();
+  const placementImage = data.placementImageFile ? await stageImage(data.placementImageFile, context) : undefined;
   return apiRequest('/api/returns', {
+    session: context,
     method: 'POST',
     body: {
       itemId: data.itemId,

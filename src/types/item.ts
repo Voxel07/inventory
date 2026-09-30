@@ -44,6 +44,7 @@ export interface ItemStock {
   totalOwned: number;
   onHand: number;
   checkedOut: number;
+  inTransit: number;
   damaged: number;
   reserved: number;
   available: number;

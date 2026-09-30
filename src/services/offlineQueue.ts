@@ -1,5 +1,5 @@
 import { API_URL } from '../config/runtimeConfig';
-import { getAuthSnapshot, getAuthorizationHeaders } from './authManager';
+import { assertAuthSession, captureAuthSession, getAuthSnapshot, getAuthorizationHeaders, type AuthSessionContext } from './authManager';
 
 export type OfflineAction = {
   idempotencyKey: string;
@@ -17,10 +17,8 @@ const STORE = 'sync-queue';
 const CATALOG_STORE = 'catalog-cache';
 const FAILURES_STORE = 'sync-failures';
 const HISTORY_STORE = 'sync-history';
-const ownerId = () => getAuthSnapshot().user?.id;
-const scopedKey = (key: string) => `${ownerId() ?? 'signed-out'}:${key}`;
 const catalogFallbacks = new Map<string, string>();
-export const getCatalogFallbacks = () => [...catalogFallbacks.entries()].filter(([key]) => key.startsWith(`${ownerId()}:`)).map(([key, cachedAt]) => ({ key, cachedAt }));
+export const getCatalogFallbacks = () => [...catalogFallbacks.entries()].filter(([key]) => key.startsWith(`${captureAuthSession().catalogScope}:`)).map(([key, cachedAt]) => ({ key, cachedAt }));
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -44,57 +42,84 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function setOfflineCatalog<T>(key: string, data: T): Promise<void> {
-  const catalogKey = scopedKey(key);
+export async function setOfflineCatalog<T>(key: string, data: T, context = captureAuthSession()): Promise<void> {
+  assertAuthSession(context);
+  if (!context.accountId) return;
+  const catalogKey = `${context.catalogScope}:${key}`;
   try {
     const db = await openDatabase();
+    assertAuthSession(context);
     await transactionPromise(db, CATALOG_STORE, 'readwrite', (store) => store.put({ key: catalogKey, data, cachedAt: new Date().toISOString() }));
+    assertAuthSession(context);
     if (catalogFallbacks.delete(catalogKey)) window.dispatchEvent(new Event('ash-offline-cache'));
   } catch (err) {
+    assertAuthSession(context);
     console.warn('Failed to cache catalog offline', key, err);
   }
 }
 
-export async function getOfflineCatalog<T>(key: string): Promise<T | null> {
-  const catalogKey = scopedKey(key);
+export async function getOfflineCatalog<T>(key: string, context = captureAuthSession()): Promise<T | null> {
+  assertAuthSession(context);
+  if (!context.accountId) return null;
+  const catalogKey = `${context.catalogScope}:${key}`;
   try {
     const db = await openDatabase();
-    return new Promise((resolve) => {
+    assertAuthSession(context);
+    return await new Promise<T | null>((resolve, reject) => {
       const request = db.transaction(CATALOG_STORE, 'readonly').objectStore(CATALOG_STORE).get(catalogKey);
       request.onsuccess = () => {
+        try { assertAuthSession(context); } catch (error) { reject(error); return; }
         if (request.result) { catalogFallbacks.set(catalogKey, request.result.cachedAt); window.dispatchEvent(new Event('ash-offline-cache')); }
         resolve(request.result ? (request.result.data as T) : null);
       };
       request.onerror = () => resolve(null);
     });
   } catch {
+    assertAuthSession(context);
     return null;
   }
 }
 
-export async function enqueueOfflineAction(action: OfflineAction): Promise<void> {
-  const actionOwner = ownerId();
+export async function enqueueOfflineAction(action: OfflineAction, context: AuthSessionContext = captureAuthSession()): Promise<void> {
+  assertAuthSession(context);
+  const actionOwner = context.accountId;
   const db = await openDatabase();
-  if (!actionOwner || ownerId() !== actionOwner) throw new Error('Sign in with the same account before saving an offline action');
+  assertAuthSession(context);
+  if (!actionOwner) throw new Error('Sign in before saving an offline action');
   await transactionPromise(db, STORE, 'readwrite', (store) => store.put({ ...action, ownerId: actionOwner }));
+  assertAuthSession(context);
   await notifyQueueChanged();
 }
 
-export async function getOfflineActions(): Promise<OfflineAction[]> {
+async function readStore<T>(store: string, context: AuthSessionContext): Promise<T[]> {
   const db = await openDatabase();
+  assertAuthSession(context);
   return new Promise((resolve, reject) => {
-    const request = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-    request.onsuccess = () => resolve((request.result as OfflineAction[]).filter((action) => Boolean(ownerId()) && action.ownerId === ownerId()).sort((a, b) => a.localTimestamp.localeCompare(b.localTimestamp)));
+    const request = db.transaction(store, 'readonly').objectStore(store).getAll();
+    request.onsuccess = () => {
+      try { assertAuthSession(context); resolve(request.result as T[]); } catch (error) { reject(error); }
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
+export async function getOfflineActions(): Promise<OfflineAction[]> {
+  const context = captureAuthSession();
+  const rows = await readStore<OfflineAction>(STORE, context);
+  assertAuthSession(context);
+  return rows.filter((action) => Boolean(context.accountId) && action.ownerId === context.accountId)
+    .sort((a, b) => a.localTimestamp.localeCompare(b.localTimestamp));
+}
+
 export async function discardOfflineAction(idempotencyKey: string): Promise<void> {
+  const context = captureAuthSession();
   if (flushInFlight) throw new Error('SYNC_IN_PROGRESS');
   const db = await openDatabase();
   const action = (await getOfflineActions()).find((entry) => entry.idempotencyKey === idempotencyKey);
+  assertAuthSession(context);
   if (!action) throw new Error('Queued action not found');
   await archiveAndDelete(db, STORE, action, 'discarded');
+  assertAuthSession(context);
   await notifyQueueChanged();
 }
 
@@ -114,12 +139,10 @@ export type SyncFailure = {
 };
 
 export async function getSyncFailures(): Promise<SyncFailure[]> {
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(FAILURES_STORE, 'readonly').objectStore(FAILURES_STORE).getAll();
-    request.onsuccess = () => resolve((request.result as SyncFailure[]).filter((failure) => Boolean(ownerId()) && failure.ownerId === ownerId()));
-    request.onerror = () => reject(request.error);
-  });
+  const context = captureAuthSession();
+  const rows = await readStore<SyncFailure>(FAILURES_STORE, context);
+  assertAuthSession(context);
+  return rows.filter((failure) => Boolean(context.accountId) && failure.ownerId === context.accountId);
 }
 
 export async function getSyncFailureCount(): Promise<number> {
@@ -127,10 +150,13 @@ export async function getSyncFailureCount(): Promise<number> {
 }
 
 export async function discardSyncFailure(idempotencyKey: string): Promise<void> {
+  const context = captureAuthSession();
   const db = await openDatabase();
   const failure = (await getSyncFailures()).find((entry) => entry.idempotencyKey === idempotencyKey);
+  assertAuthSession(context);
   if (!failure) throw new Error('Sync failure not found');
   await archiveAndDelete(db, FAILURES_STORE, failure, 'archived');
+  assertAuthSession(context);
   await notifyQueueChanged();
 }
 
@@ -148,6 +174,7 @@ function scheduleFlush(delayMs: number): void {
 
 export async function flushOfflineQueue(): Promise<void> {
   if (!navigator.onLine || flushInFlight) return;
+  const context = captureAuthSession();
   flushInFlight = true;
   let actions: OfflineAction[];
   try {
@@ -164,9 +191,9 @@ export async function flushOfflineQueue(): Promise<void> {
   }
   let authorizationHeaders: Record<string, string>;
   try {
-    const actor = ownerId();
     authorizationHeaders = await getAuthorizationHeaders();
-    if (!actor || ownerId() !== actor || actions.some((action) => action.ownerId !== actor)) throw new Error('Account changed during sync');
+    assertAuthSession(context);
+    if (!context.accountId || actions.some((action) => action.ownerId !== context.accountId)) throw new Error('Account changed during sync');
   } catch {
     flushInFlight = false;
     scheduleFlush(10_000);
@@ -219,8 +246,10 @@ export async function flushOfflineQueue(): Promise<void> {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      await notifyQueueChanged();
-      window.dispatchEvent(new CustomEvent('ash-api-change'));
+      if (context.generation === getAuthSnapshot().generation) {
+        await notifyQueueChanged();
+        window.dispatchEvent(new CustomEvent('ash-api-change'));
+      }
     }
   } catch {
     flushAttempt += 1;
@@ -233,7 +262,9 @@ export async function flushOfflineQueue(): Promise<void> {
 }
 
 async function notifyQueueChanged() {
+  const context = captureAuthSession();
   const [queued, failures] = await Promise.all([getOfflineQueueCount(), getSyncFailureCount()]);
+  assertAuthSession(context);
   window.dispatchEvent(new CustomEvent('ash-offline-queue', { detail: { queued, failures } }));
 }
 
@@ -249,21 +280,21 @@ function transactionPromise(db: IDBDatabase, storeName: string, mode: IDBTransac
 
 export type OfflineHistory = Omit<SyncFailure, 'status'> & { status: string; supersedes?: string; resolutionNote?: string };
 export async function getOfflineHistory(): Promise<OfflineHistory[]> {
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(HISTORY_STORE).objectStore(HISTORY_STORE).getAll();
-    request.onsuccess = () => resolve((request.result as OfflineHistory[]).filter((entry) => Boolean(ownerId()) && entry.ownerId === ownerId()).sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
-    request.onerror = () => reject(request.error);
-  });
+  const context = captureAuthSession();
+  const rows = await readStore<OfflineHistory>(HISTORY_STORE, context);
+  assertAuthSession(context);
+  return rows.filter((entry) => Boolean(context.accountId) && entry.ownerId === context.accountId)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 export async function getCacheFreshness(): Promise<{ key: string; cachedAt: string }[]> {
-  const db = await openDatabase(); const prefix = `${ownerId() ?? 'signed-out'}:`;
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(CATALOG_STORE).objectStore(CATALOG_STORE).getAll();
-    request.onsuccess = () => resolve((request.result as { key: string; cachedAt: string }[]).filter((entry) => entry.key.startsWith(prefix)).map((entry) => ({ key: entry.key.slice(prefix.length), cachedAt: entry.cachedAt })));
-    request.onerror = () => reject(request.error);
-  });
+  const context = captureAuthSession();
+  const prefix = `${context.catalogScope}:`;
+  const rows = await readStore<{ key: string; cachedAt: string }>(CATALOG_STORE, context);
+  assertAuthSession(context);
+  return rows.filter((entry) => entry.key.startsWith(prefix))
+    .map((entry) => ({ key: entry.key.slice(prefix.length), cachedAt: entry.cachedAt }));
 }
+
 async function archiveAndDelete(db: IDBDatabase, source: string, entry: OfflineAction | SyncFailure, status: string) {
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([source, HISTORY_STORE], 'readwrite');
@@ -273,18 +304,23 @@ async function archiveAndDelete(db: IDBDatabase, source: string, entry: OfflineA
   });
 }
 export async function correctSyncFailure(failure: SyncFailure, payload: Record<string, unknown>, resolutionNote: string): Promise<void> {
+  const context = captureAuthSession();
+  if (!context.accountId || failure.ownerId !== context.accountId) throw new Error('Failure belongs to another account');
   if (!navigator.onLine) throw new Error('Reconnect and review current server state before correcting');
   if (!resolutionNote.trim()) throw new Error('Explain the correction');
   if (flushInFlight) throw new Error('Wait for synchronization to finish');
   const stored = (await getSyncFailures()).find((entry) => entry.idempotencyKey === failure.idempotencyKey);
+  assertAuthSession(context);
   if (!stored) throw new Error('Failure has already been resolved');
   const db = await openDatabase();
+  assertAuthSession(context);
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([STORE, FAILURES_STORE, HISTORY_STORE], 'readwrite');
-    tx.objectStore(STORE).put({ idempotencyKey: crypto.randomUUID(), ownerId: ownerId(), type: failure.type, payload, localTimestamp: new Date().toISOString(), supersedes: failure.idempotencyKey, resolutionNote });
+    tx.objectStore(STORE).put({ idempotencyKey: crypto.randomUUID(), ownerId: context.accountId, type: failure.type, payload, localTimestamp: new Date().toISOString(), supersedes: failure.idempotencyKey, resolutionNote });
     tx.objectStore(HISTORY_STORE).put({ ...failure, status: 'superseded', resolutionNote, timestamp: new Date().toISOString() });
     tx.objectStore(FAILURES_STORE).delete(failure.idempotencyKey);
     tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
+  assertAuthSession(context);
   await notifyQueueChanged(); void flushOfflineQueue();
 }

@@ -16,6 +16,7 @@ public class EquipmentService {
     @Inject ActorService actors;
     @Inject DomainEventService events;
     @Inject InventoryOperationsService inventory;
+    @Inject MaintenanceEvaluationService maintenance;
 
     public record ProfileInput(@NotNull Item.Ownership ownershipType, @Size(max=255) String ownerName,
             @Size(max=255) String keeperName, @Size(max=255) String keeperContact,
@@ -138,6 +139,9 @@ public class EquipmentService {
     public int available(Item item, EventOccurrence event, InventoryOperationsService.StockState state, int ownReservation) {
         return available(item, event, state, ownReservation, new AvailabilityData() {
             public boolean hasMemberDamage() { return EquipmentService.this.hasMemberDamage(item); }
+            public boolean itemUsable() {
+                return maintenance.itemUsable(item, java.time.Instant.now());
+            }
             public List<EquipmentCommitment> commitments() { return EquipmentService.this.commitments(item); }
             public LoanArrangement loan(EquipmentCommitment commitment) { return EquipmentService.this.loan(commitment); }
             public List<AssetInstance> assets() { return EquipmentService.this.assets(item); }
@@ -153,6 +157,7 @@ public class EquipmentService {
     /** Both live workflows and planning snapshots use the same availability rules. */
     public interface AvailabilityData {
         boolean hasMemberDamage();
+        boolean itemUsable();
         List<EquipmentCommitment> commitments();
         LoanArrangement loan(EquipmentCommitment commitment);
         List<AssetInstance> assets();
@@ -163,8 +168,14 @@ public class EquipmentService {
 
     public int available(Item item, EventOccurrence event, InventoryOperationsService.StockState state,
             int ownReservation, AvailabilityData data) {
-        if (data.hasMemberDamage()) return 0;
-        if (freelyAvailable(item)) return state.available() + ownReservation;
+        if (data.hasMemberDamage() || !data.itemUsable()) return 0;
+        if (freelyAvailable(item)) {
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized) return state.available() + ownReservation;
+            var eligible = data.assets().stream().filter(data::usable).toList();
+            int free = eligible.stream().mapToInt(a -> StockPolicy.classify(a).available()).sum();
+            int reserved = eligible.stream().mapToInt(a -> StockPolicy.classify(a).reserved()).sum();
+            return free + Math.min(ownReservation, reserved);
+        }
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) return 0;
         var c = matching(item, event, data.commitments());
         if (c == null) return 0;
@@ -173,8 +184,8 @@ public class EquipmentService {
             var eligibleIds = agreement == null ? c.assetIds : agreement.collectedAssets.stream()
                     .filter(id -> !agreement.returnedAssets.contains(id)).toList();
             var eligible = data.assets().stream().filter(a -> eligibleIds.contains(a.id.toString()) && data.usable(a) && (agreement == null || a.currentLocation == null || !a.currentLocation.id.equals(agreement.providerLocation.id))).toList();
-            int free = (int) eligible.stream().filter(a -> a.availabilityStatus == DomainEnums.AssetState.available).count();
-            int reserved = (int) eligible.stream().filter(a -> a.availabilityStatus == DomainEnums.AssetState.reserved || a.availabilityStatus == DomainEnums.AssetState.staged).count();
+            int free = eligible.stream().mapToInt(a -> StockPolicy.classify(a).available()).sum();
+            int reserved = eligible.stream().mapToInt(a -> StockPolicy.classify(a).reserved()).sum();
             return free + Math.min(ownReservation, reserved);
         }
         int consumed = item.consumable ? data.consumedDuring(c) : 0;

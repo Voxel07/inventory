@@ -35,6 +35,7 @@ import java.util.UUID;
 public class InventoryOperationsService {
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
+    @jakarta.inject.Inject MaintenanceEvaluationService maintenance;
     private static final List<DomainEnums.TransactionType> DIRECT_TRANSACTION_TYPES = List.of(
             DomainEnums.TransactionType.checkout,
             DomainEnums.TransactionType.checkin,
@@ -52,9 +53,9 @@ public class InventoryOperationsService {
         this.events = events;
     }
 
-    public record StockState(int onHand, int checkedOut, int damaged, int reserved, int available) {
+    public record StockState(int onHand, int checkedOut, int inTransit, int damaged, int reserved, int available) {
         public int totalOwned() {
-            return onHand + checkedOut;
+            return onHand + checkedOut + inTransit;
         }
     }
 
@@ -226,19 +227,17 @@ public class InventoryOperationsService {
     }
 
     private StockState withPolicy(Item item, StockState state) {
-        return new StockState(state.onHand(), state.checkedOut(), state.damaged(), state.reserved(),
+        return new StockState(state.onHand(), state.checkedOut(), state.inTransit(), state.damaged(), state.reserved(),
                 equipment.available(item, null, state, 0));
     }
 
     public StockState physicalStock(Item item) {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             var assets = orm.assetsForItem(item);
-            if (!assets.isEmpty()) {
-                return calculateAssetStock(assets);
-            }
+            return calculateAssetStock(assets);
         }
         return stock(item, orm.transactionTotals(item), orm.unresolvedDamageQuantity(item),
-                orm.activeReservationQuantity(item));
+                orm.activeReservationQuantity(item), positions.blocked(item), positions.inTransit(item));
     }
 
     public Map<UUID, StockState> stock(List<Item> items) {
@@ -246,6 +245,7 @@ public class InventoryOperationsService {
         var transactionTotals = orm.transactionTotals(itemIds);
         var damageQuantities = orm.unresolvedDamageQuantities(itemIds);
         var reservationQuantities = orm.activeReservationQuantities(itemIds);
+        var transitQuantities = orm.inTransitQuantities(itemIds);
         var serializedAssets = orm.assetsForItems(items.stream()
                 .filter(i -> i.trackingMode == DomainEnums.TrackingMode.serialized)
                 .map(i -> i.id).toList());
@@ -256,14 +256,15 @@ public class InventoryOperationsService {
 
         var result = new LinkedHashMap<UUID, StockState>();
         for (var item : items) {
-            if (item.trackingMode == DomainEnums.TrackingMode.serialized && assetsByItem.containsKey(item.id)) {
-                result.put(item.id, calculateAssetStock(assetsByItem.get(item.id)));
+            if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+                result.put(item.id, calculateAssetStock(assetsByItem.getOrDefault(item.id, List.of())));
             } else {
                 result.put(item.id, stock(
                         item,
                         transactionTotals.getOrDefault(item.id, Map.of()),
                         Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
-                        Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L))
+                        Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L)),
+                        positions.blocked(item), Math.toIntExact(transitQuantities.getOrDefault(item.id, 0L))
                 ));
             }
         }
@@ -272,11 +273,11 @@ public class InventoryOperationsService {
     }
 
     StockState physicalStock(Item item, Map<DomainEnums.TransactionType, Long> totals,
-            int damaged, int reserved, int blocked, List<AssetInstance> assets) {
-        if (item.trackingMode == DomainEnums.TrackingMode.serialized && !assets.isEmpty()) {
+            int damaged, int reserved, int blocked, int inTransit, List<AssetInstance> assets) {
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             return calculateAssetStock(assets);
         }
-        return stock(item, totals, damaged, reserved, blocked);
+        return stock(item, totals, damaged, reserved, blocked, inTransit);
     }
 
     private StockState calculateAssetStock(List<org.ash.inventory.model.AssetInstance> assets) {
@@ -285,43 +286,16 @@ public class InventoryOperationsService {
         int damaged = 0;
         int reserved = 0;
         int available = 0;
+        int inTransit = 0;
         for (var asset : assets) {
-            boolean isDamaged = asset.availabilityStatus == DomainEnums.AssetState.damaged
-                    || asset.availabilityStatus == DomainEnums.AssetState.in_repair
-                    || asset.conditionStatus == DomainEnums.ConditionStatus.damaged
-                    || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe;
-            boolean isCheckedOut = asset.availabilityStatus == DomainEnums.AssetState.in_custody
-                    || asset.availabilityStatus == DomainEnums.AssetState.in_field
-                    || asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check;
-            boolean isReserved = asset.availabilityStatus == DomainEnums.AssetState.reserved
-                    || asset.availabilityStatus == DomainEnums.AssetState.staged;
-            boolean isLostOrWrittenOff = asset.availabilityStatus == DomainEnums.AssetState.lost
-                    || asset.availabilityStatus == DomainEnums.AssetState.written_off
-                    || asset.conditionStatus == DomainEnums.ConditionStatus.lost;
-
-            if (isLostOrWrittenOff) continue;
-
-            if (isCheckedOut) {
-                checkedOut++;
-            } else {
-                onHand++;
-                if (isDamaged) {
-                    damaged++;
-                } else if (isReserved) {
-                    reserved++;
-                } else if (asset.availabilityStatus == DomainEnums.AssetState.available) {
-                    available++;
-                }
-            }
+            var state = StockPolicy.classify(asset);
+            onHand += state.onHand(); checkedOut += state.checkedOut(); inTransit += state.inTransit();
+            damaged += state.damaged(); reserved += state.reserved(); available += state.available();
         }
-        return new StockState(onHand, checkedOut, damaged, reserved, available);
+        return new StockState(onHand, checkedOut, inTransit, damaged, reserved, available);
     }
 
-    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved) {
-        return stock(item, totals, damaged, reserved, positions.blocked(item));
-    }
-
-    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked) {
+    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked, int inTransit) {
         int onHand = quantity(totals, DomainEnums.TransactionType.added)
                 + quantity(totals, DomainEnums.TransactionType.received)
                 + quantity(totals, DomainEnums.TransactionType.adjusted)
@@ -335,7 +309,7 @@ public class InventoryOperationsService {
                 - quantity(totals, DomainEnums.TransactionType.checkin)
                 - quantity(totals, DomainEnums.TransactionType.consumed)
                 - quantity(totals, DomainEnums.TransactionType.missing);
-        return new StockState(Math.max(0, onHand), Math.max(0, checkedOut), damaged, reserved,
+        return new StockState(Math.max(0, onHand), Math.max(0, checkedOut), inTransit, damaged, reserved,
                 Math.max(0, onHand - damaged - reserved - blocked));
     }
 
@@ -346,8 +320,7 @@ public class InventoryOperationsService {
     public void assertCheckoutAllowed(Item item) {
         if (equipment.hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
         refreshMaintenanceStatus(item);
-        if (item.maintenanceStatus == DomainEnums.MaintenanceStatus.overdue
-                || item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service) {
+        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, LocalDate.now())) {
             throw ApiException.conflict("Item " + item.name + " is blocked from checkout because maintenance status is "
                     + item.maintenanceStatus);
         }
@@ -602,12 +575,7 @@ public class InventoryOperationsService {
     private void assertNoBlockingScheduleIsDue(Item item, AssetInstance asset) {
         var now = Instant.now();
         for (var schedule : orm.blockingSchedules(item, asset)) {
-            var meter = switch (schedule.intervalType) {
-                case date -> (BigDecimal) null;
-                case operating_hours -> asset == null ? item.currentOperatingHours : asset.operatingHours;
-                case usage_count -> BigDecimal.valueOf(orm.checkoutCount(item, asset));
-            };
-            var status = MaintenancePolicy.status(schedule, now, meter);
+            var status = maintenance.status(schedule, now);
             if (MaintenancePolicy.blocksCheckout(status)) {
                 throw ApiException.conflict("Checkout is blocked by " + status + " " + schedule.maintenanceType
                         + " maintenance");

@@ -2,6 +2,7 @@ import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../t
 import { apiRequest } from './apiClient';
 import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
+import { assertAuthSession, type AuthSessionContext } from './authManager';
 
 export interface InventoryCodeResolution {
   code: string;
@@ -10,8 +11,9 @@ export interface InventoryCodeResolution {
   itemId?: string;
 }
 
-async function uploadItemImages(files: File[] = []): Promise<string[]> {
-  return Promise.all(files.map(stageImage));
+async function uploadItemImages(files: File[] = [], context: AuthSessionContext): Promise<string[]> {
+  assertAuthSession(context);
+  return Promise.all(files.map((file) => stageImage(file, context)));
 }
 
 function payload(data: Partial<ItemFormData>) {
@@ -27,22 +29,22 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
   'items',
   {
     transformPayload: payload,
-    customCreate: async (data: ItemFormData, basePath: string) => {
-      const images = await uploadItemImages(data.imageFiles);
-      return apiRequest<Item>(basePath, { method: 'POST', body: { ...payload(data), images } });
+    customCreate: async (data: ItemFormData, basePath: string, context) => {
+      const images = await uploadItemImages(data.imageFiles, context);
+      return apiRequest<Item>(basePath, { method: 'POST', body: { ...payload(data), images }, session: context });
     },
-    customUpdate: async (id: string, data: Partial<ItemFormData>, basePath: string) => {
+    customUpdate: async (id: string, data: Partial<ItemFormData>, basePath: string, context) => {
       const current = await itemApi.getById(id);
-      const uploaded = await uploadItemImages(data.imageFiles);
+      const uploaded = await uploadItemImages(data.imageFiles, context);
       const removed = new Set(data.removeImages || []);
       const images: string[] = [];
       for (const image of current.images || []) {
         if (removed.has(image)) continue;
         const replacement = data.imageReplacements?.[image];
-        images.push(replacement ? await stageImage(replacement) : image);
+        images.push(replacement ? await stageImage(replacement, context) : image);
       }
       images.push(...uploaded);
-      return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), images } });
+      return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), images }, session: context });
     },
   },
 );

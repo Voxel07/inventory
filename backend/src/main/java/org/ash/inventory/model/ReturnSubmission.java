@@ -28,6 +28,9 @@ public class ReturnSubmission extends BaseEntity {
     @Column(name = "previous_asset_state")
     public DomainEnums.AssetState previousAssetState;
 
+    @Column(name = "pending_asset_version")
+    public Long pendingAssetVersion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "faction_order_id")
     public FactionOrder factionOrder;

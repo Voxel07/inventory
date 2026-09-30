@@ -1,5 +1,7 @@
 # Repository review and refactoring plan
 
+A01–A06 implementation: [progress](REFACTOR_PROGRESS.md).
+
 Reviewed **30 September 2026** against source at `af49b5a6f7d29e9d7607d6e64fbe0d42a18c9986` (clean working tree at review start). This is a source-based assessment and a plan, not an implementation or release approval. The documentation changes accompanying this report do not fix the findings below.
 
 This report replaces the four earlier architecture, feature-gap, implementation-progress and procurement-loading reports. [Requirements](../REQUIREMENTS_ARCHITECTURE.md) remain normative; [domain boundaries](DOMAIN_ARCHITECTURE.md), [offline operation](OFFLINE_MODE.md), and deployment guides remain maintained supporting contracts. Findings refer to this revision; line references must be refreshed after implementation.

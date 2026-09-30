@@ -79,6 +79,7 @@ public class ReturnSubmissionService {
             }
             valueAssetStateHolder = asset.availabilityStatus;
             asset.availabilityStatus = DomainEnums.AssetState.returned_pending_check;
+            orm.flush();
         } else if (input.assetInstanceId() != null) {
             throw ApiException.badRequest("Asset instance is only valid for serialized items");
         }
@@ -87,6 +88,7 @@ public class ReturnSubmissionService {
         value.item = item;
         value.assetInstance = asset;
         value.previousAssetState = valueAssetStateHolder;
+        value.pendingAssetVersion = asset == null ? null : asset.version;
         value.factionOrder = input.factionOrderId() == null ? null
                 : required(FactionOrder.class, input.factionOrderId(), "Faction order");
         value.eventOccurrence = balance.eventOccurrenceId() == null ? null
@@ -109,7 +111,7 @@ public class ReturnSubmissionService {
     @Transactional
     public ReturnSubmission acknowledge(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
-        var value = pending(id);
+        var value = pendingForDecision(id);
         var worker = actors.current();
         if (value.generalOrder != null) {
             generalOrders.returnItems(value.generalOrder.id, new ApiModels.GeneralOrderReturnInput(
@@ -143,10 +145,19 @@ public class ReturnSubmissionService {
     @Transactional
     public ReturnSubmission reject(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
-        var value = pending(id);
+        var value = pendingForDecision(id);
         var worker = actors.current();
-        if (value.assetInstance != null && value.generalOrder == null) value.assetInstance.availabilityStatus = value.previousAssetState == null
-                ? DomainEnums.AssetState.in_field : value.previousAssetState;
+        if (value.assetInstance != null && value.generalOrder == null) {
+            var asset = requiredLocked(AssetInstance.class, value.assetInstance.id, "Asset instance");
+            if (asset.active && asset.item.id.equals(value.item.id)
+                    && asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check
+                    && value.pendingAssetVersion != null && asset.version == value.pendingAssetVersion
+                    && (value.previousAssetState == DomainEnums.AssetState.in_field
+                        || value.previousAssetState == DomainEnums.AssetState.in_custody)
+                    && custody.hasOutstandingAsset(asset.id)) {
+                asset.availabilityStatus = value.previousAssetState;
+            }
+        }
         value.status = DomainEnums.ReturnSubmissionStatus.rejected;
         value.acknowledgedBy = worker;
         value.acknowledgedAt = Instant.now();
@@ -162,7 +173,16 @@ public class ReturnSubmissionService {
         return orm.list(status, actor, canManageReturns(actor));
     }
 
-    private ReturnSubmission pending(UUID id) {
+    private ReturnSubmission pendingForDecision(UUID id) {
+        var submitted = required(ReturnSubmission.class, id, "Return submission");
+        // Match order commands: order -> item -> asset. Serialize decisions last.
+        if (submitted.generalOrder != null)
+            requiredLocked(org.ash.inventory.model.GeneralOrder.class, submitted.generalOrder.id, "General order");
+        else if (submitted.factionOrder != null)
+            requiredLocked(FactionOrder.class, submitted.factionOrder.id, "Faction order");
+        requiredLocked(Item.class, submitted.item.id, "Item");
+        if (submitted.assetInstance != null)
+            requiredLocked(AssetInstance.class, submitted.assetInstance.id, "Asset instance");
         var value = orm.findLocked(id);
         if (value == null) throw ApiException.notFound("Return submission not found");
         if (value.status != DomainEnums.ReturnSubmissionStatus.pending) {

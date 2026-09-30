@@ -37,6 +37,10 @@ public class PositionService {
                 ? p.quantityQuarantined : Math.max(0, p.quantityOnHand - p.quantityDamaged)).sum();
     }
 
+    public int inTransit(Item item) {
+        return orm.positions(item).stream().mapToInt(p -> p.quantityInTransit).sum();
+    }
+
     public int availableAt(Item item, StorageLocation source, UUID exceptFaction, UUID exceptGeneral) {
         if (source == null) return Integer.MAX_VALUE;
         return Math.max(0, orm.positions(item).stream().filter(p -> p.location.id.equals(source.id))

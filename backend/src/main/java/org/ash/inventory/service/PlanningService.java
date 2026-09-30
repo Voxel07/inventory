@@ -100,7 +100,7 @@ public class PlanningService {
             }
             if (grossAtPeak == 0) continue;
             var override = selected == null ? null : overrides.get(selected.id + ":" + item.id);
-            result.add(new ApiResponses.DeficitResponse(item.id, item.sku, item.name, item.category, item.supplier == null ? "Unassigned" : item.supplier, item.consumable ? "consumable" : "asset", demandAtPeak, stock.onHand(), item.ownershipType == Item.Ownership.organization ? stock.totalOwned() : 0, stock.available(), stock.reserved(), usable + committedAtPeak - demandAtPeak, grossAtPeak, receiptAtPeak, conditional ? "obtain_commitment" : item.consumable ? "purchase" : "rent_or_purchase", requiredDate, Math.max(0, allIncoming - receiptAtPeak), item.minStock, override == null ? null : override.reason, override == null ? null : override.actor.name, committedAtPeak));
+            result.add(new ApiResponses.DeficitResponse(item.id, item.sku, item.name, item.category, item.supplier == null ? "Unassigned" : item.supplier, item.consumable ? "consumable" : "asset", demandAtPeak, stock.onHand(), stock.inTransit(), item.ownershipType == Item.Ownership.organization ? stock.totalOwned() : 0, stock.available(), stock.reserved(), usable + committedAtPeak - demandAtPeak, grossAtPeak, receiptAtPeak, conditional ? "obtain_commitment" : item.consumable ? "purchase" : "rent_or_purchase", requiredDate, Math.max(0, allIncoming - receiptAtPeak), item.minStock, override == null ? null : override.reason, override == null ? null : override.actor.name, committedAtPeak));
         }
         result.sort(Comparator.comparingInt((ApiResponses.DeficitResponse row) -> row.netDeficit() - row.orderedStock()).reversed());
         return result;

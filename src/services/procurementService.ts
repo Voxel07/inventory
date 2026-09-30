@@ -15,6 +15,7 @@ export type ProcurementDeficit = {
   classification: 'consumable' | 'asset';
   demand: number;
   onHandStock: number;
+  inTransitStock: number;
   totalOwnedStock: number;
   availableStock: number;
   reservedStock: number;

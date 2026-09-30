@@ -276,7 +276,7 @@ class InventoryApiTest {
                         "transactionType", "checkout", "quantityChanged", 1,
                         "eventType", "DE", "faction", "KGG"))
                 .post("/api/transactions").then().statusCode(409)
-                .body("error", org.hamcrest.Matchers.containsString("overdue generator_service"));
+                .body("error", org.hamcrest.Matchers.containsString("due generator_service"));
 
         request().body(Map.of(
                         "itemId", itemId,

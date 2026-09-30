@@ -1,3 +1,4 @@
+import { assertAuthSession, captureAuthSession } from './authManager';
 import { loadAllPages } from './apiPagination';
 import { withApiRequestBatch } from './apiClient';
 import type { CsvImportCounts } from '../types/csvImport';
@@ -53,6 +54,7 @@ export function runCsvImport(plan: ImportPlan): Promise<CsvImportResult> {
 }
 
 async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts }: ImportPlan): Promise<CsvImportResult> {
+  const context = captureAuthSession();
   const errors: string[] = [
     ...parsedItems.filter((row) => row.status === 'error').map((row) => `Artikel Zeile ${row.index}: ${row.statusMessage}`),
     ...parsedAssemblies.filter((row) => row.status === 'error').map((row) => `Baugruppe Zeile ${row.index}: ${row.statusMessage}`),
@@ -80,6 +82,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     + validReturnsCount + validCheckoutsCount + validOperationsCount;
   let currentStep = 0;
   function reportCompletedRow() {
+    assertAuthSession(context);
     currentStep++;
     setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
     setImportedCounts({
@@ -110,6 +113,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const newLoc = await createStorageLocation({ name: locName });
           locCache.set(locName.toLowerCase().trim(), newLoc.id);
         } catch (err: unknown) {
+          assertAuthSession(context);
           errors.push(`Fehler beim Erstellen von Lagerort "${locName}": ${(err as Error).message || err}`);
         }
       }
@@ -158,6 +162,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
                     currentLocationId: locationId || undefined,
                   });
                 } catch (assetErr: unknown) {
+                  assertAuthSession(context);
                   errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
                 }
               }
@@ -175,12 +180,14 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
                     currentLocationId: locationId || undefined,
                   });
                 } catch (assetErr: unknown) {
+                  assertAuthSession(context);
                   errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
                 }
               }
             }
           }
         } catch (err: unknown) {
+          assertAuthSession(context);
           errors.push(`Fehler bei Artikel "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
         } finally {
           reportCompletedRow();
@@ -223,6 +230,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             });
             successAssemblies++;
           } catch (err: unknown) {
+            assertAuthSession(context);
             errors.push(`Fehler bei Baugruppe "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
           }
         }
@@ -270,6 +278,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         if (!existing) existingEvents.push(saved);
         successEvents++;
       } catch (err: unknown) {
+        assertAuthSession(context);
         errors.push(`Event ${row.data.eventType} ${row.data.eventDate}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
@@ -354,6 +363,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         else existingOrders.push(finalOrder);
         successOrders++;
       } catch (err: unknown) {
+        assertAuthSession(context);
         errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
@@ -414,6 +424,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         if (row.targetStatus === 'closed') await transitionOrder(order.id, 'close');
         successGeneralOrders++;
       } catch (err: unknown) {
+        assertAuthSession(context);
         errors.push(`Allgemeine Bestellung ${row.data.name}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
@@ -481,6 +492,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         }
         successReturns++;
       } catch (err: unknown) {
+        assertAuthSession(context);
         errors.push(`Rückgabe ${ret.itemName}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
@@ -519,6 +531,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         }
         successCheckouts++;
       } catch (err: unknown) {
+        assertAuthSession(context);
         errors.push(`Ausleihe ${row.itemName}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
@@ -533,12 +546,14 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         await importOperation(row);
         successOperations++;
       } catch (error) {
+        assertAuthSession(context);
         errors.push(`Aktion ${row.name}: ${error instanceof Error ? error.message : String(error)}`);
       } finally {
         reportCompletedRow();
       }
     }
   } catch (error) {
+    assertAuthSession(context);
     errors.push(t('Import abgebrochen: ', 'Import stopped: ') + (error instanceof Error ? error.message : String(error)));
   }
 

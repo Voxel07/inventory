@@ -4,6 +4,7 @@ import { getAuthSnapshot, login, logout, refreshCurrentUser, subscribeAuth } fro
 export function useAuth() {
   const auth = useSyncExternalStore(subscribeAuth, getAuthSnapshot, getAuthSnapshot);
   return {
+    generation: auth.generation,
     token: auth.token,
     user: auth.user,
     error: auth.error,

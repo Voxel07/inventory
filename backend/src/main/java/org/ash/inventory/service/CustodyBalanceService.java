@@ -17,6 +17,8 @@ public class CustodyBalanceService {
     private final ActorService actors;
     public CustodyBalanceService(CustodyOrm orm, ActorService actors) { this.orm = orm; this.actors = actors; }
 
+    public boolean hasOutstandingAsset(UUID assetId) { return orm.hasOutstandingAsset(assetId); }
+
     @Transactional
     public List<Balance> list(boolean mine) {
         var actor = actors.current();
