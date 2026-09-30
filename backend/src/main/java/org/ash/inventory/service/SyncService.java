@@ -125,7 +125,7 @@ public class SyncService {
                 var value = validated(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
                         value.reason(), value.notes(), value.eventType(), value.faction(), value.assetInstanceId(), value.userId(),
-                        value.factionOrderId(), action.idempotencyKey(), value.eventOccurrenceId(), value.locationId(), value.lotId());
+                        value.factionOrderId(), action.idempotencyKey(), value.eventOccurrenceId(), value.locationId(), value.lotId(), value.occurredAt());
                 yield mapper.transaction(inventory.transact(input));
             }
             case "order.prepare" -> {
@@ -178,7 +178,7 @@ public class SyncService {
                 var value = validated(action.payload(), ApiModels.DamageInput.class);
                 yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(
                         value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(),
-                        action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact(), value.assemblyId())));
+                        action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact(), value.assemblyId(), value.occurredAt())));
             }
             default -> throw ApiException.badRequest("Unsupported offline action type: " + action.type());
         };

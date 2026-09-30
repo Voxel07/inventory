@@ -63,6 +63,7 @@ public class InventoryOperationsService {
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
         var actor = actors.current();
+        var occurredAt = historicalTimestamp(input.occurredAt());
         if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
             throw ApiException.badRequest("Transaction type " + input.transactionType()
                     + " must be created by its owning inventory workflow");
@@ -77,7 +78,7 @@ public class InventoryOperationsService {
         }
         var item = lockedItem(input.itemId());
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            return transactSerialized(input, item, actor);
+            return transactSerialized(input, item, actor, occurredAt);
         }
         if (input.assetInstanceId() != null)
             throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
@@ -97,6 +98,7 @@ public class InventoryOperationsService {
             throw ApiException.conflict("Only " + state.checkedOut() + " units are checked out");
         }
         var transaction = new StockTransaction();
+        transaction.occurredAt = occurredAt;
         transaction.item = item;
         transaction.user = input.userId() == null ? actor : required(UserAccount.class, input.userId(), "User");
         transaction.type = input.transactionType();
@@ -127,7 +129,7 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor) {
+    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt) {
         if (input.transactionType() != DomainEnums.TransactionType.checkout
                 && input.transactionType() != DomainEnums.TransactionType.checkin) {
             throw ApiException.conflict("Serialized stock changes must be made through individual asset records");
@@ -143,6 +145,7 @@ public class InventoryOperationsService {
 
         var before = stock(item).available();
         var transaction = new StockTransaction();
+        transaction.occurredAt = occurredAt;
         transaction.item = item;
         transaction.assetInstance = asset;
         transaction.user = input.userId() == null ? actor : required(UserAccount.class, input.userId(), "User");
@@ -346,6 +349,7 @@ public class InventoryOperationsService {
 
     @Transactional
     public DamageReport createDamage(ApiModels.DamageInput input) {
+        var occurredAt = historicalTimestamp(input.occurredAt());
         if (input.idempotencyKey() != null) {
             var existing = orm.damageByIdempotencyKey(input.idempotencyKey());
             if (existing != null)
@@ -355,6 +359,7 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Exactly one of itemId or assemblyId is required");
         }
         var report = new DamageReport();
+        report.createdAt = occurredAt;
         if (input.itemId() != null) report.item = lockedItem(input.itemId());
         else report.assembly = required(Assembly.class, input.assemblyId(), "Assembly");
         report.reporter = actors.current();
@@ -395,6 +400,7 @@ public class InventoryOperationsService {
 
     @Transactional
     public DamageReport resolveDamage(UUID id, ApiModels.DamageResolutionInput input) {
+        var occurredAt = historicalTimestamp(input.occurredAt());
         if (input.idempotencyKey() != null) {
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
             if (existing != null && existing.damageReport != null && existing.damageReport.id.equals(id))
@@ -406,6 +412,7 @@ public class InventoryOperationsService {
         var report = orm.findLockedDamage(id);
         if (report == null)
             throw ApiException.notFound("Damage report not found");
+        if (occurredAt.isBefore(report.createdAt)) throw ApiException.badRequest("Resolution date precedes damage report");
         if (input.description() != null) {
             if (input.description().isBlank()) throw ApiException.badRequest("Damage description must not be blank");
             report.description = input.description().trim();
@@ -465,6 +472,7 @@ public class InventoryOperationsService {
 
         int availabilityBefore = stock(report.item).available();
         var transaction = new StockTransaction();
+        transaction.occurredAt = occurredAt;
         transaction.item = report.item;
         transaction.assetInstance = report.assetInstance;
         transaction.user = report.handler;
@@ -497,6 +505,15 @@ public class InventoryOperationsService {
         events.record("damage.resolved", "damage_report", report.id, report.handler.id, input.idempotencyKey(),
                 Map.of("itemId", report.item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return report;
+    }
+
+    /** Explicit historical dates are administrator-controlled imports; audit updates remain at server time. */
+    public Instant historicalTimestamp(Instant value) {
+        var now = Instant.now();
+        if (value == null) return now;
+        actors.requireAdmin();
+        if (value.isAfter(now)) throw ApiException.badRequest("Historical date must not be in the future");
+        return value;
     }
 
     @Transactional

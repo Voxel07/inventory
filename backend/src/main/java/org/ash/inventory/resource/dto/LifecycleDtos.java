@@ -24,9 +24,10 @@ public final class LifecycleDtos {
             boolean checkoutBlocking, boolean active) {}
 
     public record RepairInput(@NotNull UUID damageReportId, UUID repairOwnerId, UUID vendorId,
-            String partsAndCostNotes, String notes) {}
+            String partsAndCostNotes, String notes, @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     public record RepairTransitionInput(@NotNull DomainEnums.RepairStatus status, @Min(1) Integer amount,
-            UUID repairOwnerId, UUID vendorId, String verificationResult, String notes, UUID idempotencyKey) {}
+            UUID repairOwnerId, UUID vendorId, String verificationResult, String notes, UUID idempotencyKey,
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     public record RepairResponse(UUID id, UUID damageReportId, UUID assetInstanceId, UUID handoverId,
             String status, UUID repairOwnerId, UUID vendorId, boolean safetyImpact,
             String partsAndCostNotes, Instant startedAt, Instant completedAt,

@@ -39,6 +39,7 @@ export type DamageSeverity = 'low' | 'medium' | 'high' | 'critical' | 'total_los
 export type DamageStatus = 'reported' | 'in_review' | 'repaired' | 'written_off' | 'resolved';
 
 export interface DamageReportFormData {
+  occurredAt?: string;
   itemId?: string;
   assemblyId?: string;
   assetInstanceId?: string;

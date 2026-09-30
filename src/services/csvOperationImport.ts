@@ -1,8 +1,9 @@
 import { assertAuthSession, captureAuthSession } from './authManager';
+import { apiRequest } from './apiClient';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
 import { equipmentProfileInput, equipmentCommitmentInput } from './equipmentInputs';
-import { lotInput, scheduleInput, receiptInput, transferInput, countInput } from './operationsInputs';
+import { lotInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
 import { loanApi } from './loanService';
 import { memberApi } from './memberService';
 import { inputChoice, inputText } from '../utils/inputValues';
@@ -10,7 +11,7 @@ import { operationsApi } from './operationsService';
 import type { Transfer } from '../types/operations';
 import { equipmentApi } from './equipmentService';
 import { createPurchaseOrder, createVendor, getPurchaseOrders, getVendors, transitionPurchaseOrder } from './procurementService';
-import type { EventReport, Item } from '../types';
+import type { DamageReport, EventReport, Item, StockTransaction } from '../types';
 import type { ParsedOperationRow } from '../utils/csvOperations';
 
 
@@ -56,6 +57,41 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     const itemId = String(data.itemId ?? '');
     let result: { id: string };
     switch (row.operation) {
+      case 'stock': {
+        result = await apiRequest<StockTransaction>('/api/transactions', { method: 'POST', body: {
+          itemId, transactionType: inputChoice(data.transactionType, ['adjusted', 'checkout', 'checkin']),
+          quantityChanged: inputNumber(data.quantityChanged), reason: inputText(data.reason), notes: optionalText(data.notes),
+          assetInstanceId: optionalText(data.assetInstanceId), locationId: optionalText(data.locationId), lotId: optionalText(data.lotId),
+          eventType: optionalText(data.eventType), eventOccurrenceId: optionalText(data.eventOccurrenceId), faction: optionalText(data.faction),
+          occurredAt: optionalText(data.occurredAt), idempotencyKey: key,
+        } });
+        break;
+      }
+      case 'damage': {
+        result = await apiRequest<DamageReport>('/api/damage-reports', { method: 'POST', body: {
+          itemId, amount: inputNumber(data.amount), description: inputText(data.description),
+          severity: inputChoice(data.severity, ['low', 'medium', 'high', 'critical', 'total_loss']),
+          assetInstanceId: optionalText(data.assetInstanceId), safetyImpact: data.safetyImpact === true,
+          occurredAt: optionalText(data.occurredAt), idempotencyKey: key,
+        } });
+        break;
+      }
+      case 'repair': {
+        result = await operationsApi.createRepair(repairInput(data));
+        break;
+      }
+      case 'repair_transition': {
+        const repair = (await loadAllPages(operationsApi.repairs)).find((entry) => entry.id === data.repairId);
+        if (!repair) throw new Error('Reparaturfall nicht gefunden');
+        // Re-imports resume the workflow without replaying completed transitions.
+        const stages = ['reported', 'triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service'];
+        const target = String(data.status);
+        const completed = repair.status === target
+          || (stages.includes(target) && stages.indexOf(repair.status) > stages.indexOf(target))
+          || (repair.status === 'written_off' && ['triaged', 'awaiting_repair', 'in_repair'].includes(target));
+        result = completed ? repair : await operationsApi.repairCommand(repair.id, repairTransitionInput({ ...data, idempotencyKey: key }));
+        break;
+      }
       case 'lot': {
         const existing = (await loadAllPages(operationsApi.lots({ itemId }))).find((lot) => lot.lotNumber === data.lotNumber);
         result = existing ?? await operationsApi.saveLot(lotInput(data));

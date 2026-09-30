@@ -54,7 +54,31 @@ Import [`sample_inventory_lightsim.csv`](sample_imports/sample_inventory_lightsi
 
 Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). General-order rows use `Typ=Allgemeine Bestellung`, `Zweck`, `Bestellte Artikel`, `Bestellstatus`, and optionally `Rückgabeartikel` / `Verbrauchte Artikel`. Preparation runs before marking orders ready, including exact serialized asset assignments.
 
-Operational rows use `Typ=Aktion`, a unique `Name`, an `Aktion` command, and a JSON object in `Daten`. Supported commands are `lot`, `maintenance`, `purchase`, `receipt`, `equipment`, `commitment`, `loan`, `loan_collect`, `transfer`, `count`, `member_request`, and `member_return`. Import runs them in file order after items, assets, events, orders, and checkouts. References such as `@item:Demo-Klapptisch`, `@location:Palettenlager`, `@event:LS:2027-06-12`, and `@row:Demo Zusage Leihzelt` resolve to the imported records; row references must point to an earlier action. `@date:+14` and `@datetime:-7` resolve relative to the local import date, keeping lot and maintenance warnings reproducible. Member requests and return submissions belong to the importing user; reminders can then be scheduled from the action inbox.
+Operational rows use `Typ=Aktion`, a unique `Name`, an `Aktion` command, and a JSON object in `Daten`. Supported commands are `stock`, `damage`, `repair`, `repair_transition`, `lot`, `maintenance`, `purchase`, `receipt`, `equipment`, `commitment`, `loan`, `loan_collect`, `transfer`, `count`, `member_request`, and `member_return`. Import runs them in file order after items, assets, events, orders, and checkouts. References such as `@item:Demo-Klapptisch`, `@location:Palettenlager`, `@event:LS:2027-06-12`, and `@row:Demo Zusage Leihzelt` resolve to the imported records; row references must point to an earlier action. `@date:+14` and `@datetime:-7` resolve relative to the local import date, keeping lot and maintenance warnings reproducible. Member requests and return submissions belong to the importing user; reminders can then be scheduled from the action inbox.
+
+[`sample_stock.csv`](sample_imports/sample_stock.csv) is a standalone stock-history fixture based on the 334 original LightSim catalog items. Import it into an empty database through **Items → CSV import → Combined**, with automatic location creation enabled and an administrator account. It includes six completed LightSim events and 190 operations dated from January 2021 through September 2026. GPS trackers, radios, RGB floodlights, field PCs, network cables, and small Hesco barriers have opening balances, annual stock increases, checkouts and returns, six completed repairs, six write-offs, and three outstanding damage reports (one unassigned, one in repair, one awaiting repair). The six history items start at zero in the catalog rows; dated opening operations recreate their baseline quantities. The remaining items retain their original quantities and metadata. Use this fixture independently of the larger inventory demo to keep opening balances reproducible.
+
+Stock-history commands use these JSON fields in `Daten`:
+
+| Command | Required fields | Behavior |
+| --- | --- | --- |
+| `stock` | `itemId`, `transactionType`, `quantityChanged`, `reason` | `adjusted` adds stock; `checkout` and `checkin` record custody movements. Checkout also requires `eventType` and `faction`. |
+| `damage` | `itemId`, `amount`, `description`, `severity` | Records damaged stock; serialized items require `assetInstanceId`. |
+| `repair` | `damageReportId` | Creates or reuses the repair for a damage report, usually referenced by `@row:<damage action name>`. |
+| `repair_transition` | `repairId`, `status` | Moves through `triaged → awaiting_repair → in_repair → repaired → verified → returned_to_service`, or to `written_off` before verification. `repaired` and `written_off` require `amount`; `verified` requires `verificationResult`. |
+
+Each of these commands accepts optional `occurredAt`, an ISO timestamp with a timezone such as `2023-06-10T10:00:00Z`. Historical dates require administrator permissions, cannot be in the future, and repair dates cannot precede the related damage or recorded repair activity. The date is stored on stock transactions, damage/repair creation, and repair start/completion; repaired and written-off ledger entries use the transition date. Server audit updates retain the import time. Omitting the field records the current time. Stock/damage commands have stable idempotency keys, repair creation reuses the damage's case, and repeated imports skip repair stages already completed. Quantities must be positive integers; write-offs always use the repair workflow.
+
+On a fresh import, the six history items finish with these balances (all historical checkouts are returned):
+
+| Item | Owned | Damaged | Available |
+| --- | ---: | ---: | ---: |
+| GPS-Feldtracker | 54 | 2 | 52 |
+| Handfunkgerät | 47 | 1 | 46 |
+| LED-Flutlicht RGB 20W | 29 | 1 | 28 |
+| Feld-PC Intel | 9 | 0 | 9 |
+| Patchkabel Cat.6 RJ45 20m | 35 | 0 | 35 |
+| Hesco-Barriere klein (1x1m) | 75 | 0 | 75 |
 
 On **Maintenance**, set a category's interval in days to schedule its items. An interval of `0` disables scheduled maintenance for that category. Existing items inherit the setting immediately, and newly created items inherit it when saved.
 

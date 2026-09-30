@@ -10,7 +10,6 @@ import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.resource.dto.LifecycleDtos;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -102,10 +101,13 @@ public class LifecycleService {
     @Transactional
     public RepairCase createRepair(LifecycleDtos.RepairInput input) {
         actors.requireMaintenance();
+        var occurredAt = inventory.historicalTimestamp(input.occurredAt());
         var damage = required(DamageReport.class, input.damageReportId(), "Damage report");
         var existing = orm.repairForDamage(damage.id);
         if (existing != null) return existing;
+        if (occurredAt.isBefore(damage.createdAt)) throw ApiException.badRequest("Repair date precedes damage report");
         var repair = new RepairCase();
+        repair.createdAt = occurredAt;
         repair.damageReport = damage;
         repair.assetInstance = damage.assetInstance;
         repair.handover = damage.handover;
@@ -123,14 +125,20 @@ public class LifecycleService {
     @Transactional
     public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
         actors.requireMaintenance();
+        var occurredAt = inventory.historicalTimestamp(input.occurredAt());
         var repair = requiredLocked(RepairCase.class, id, "Repair case");
+        if (occurredAt.isBefore(repair.createdAt)
+                || (repair.startedAt != null && occurredAt.isBefore(repair.startedAt))
+                || (repair.completedAt != null && occurredAt.isBefore(repair.completedAt))) {
+            throw ApiException.badRequest("Repair transition date precedes prior repair activity");
+        }
         if (!TRANSITIONS.getOrDefault(repair.status, Set.of()).contains(input.status())) {
             throw ApiException.conflict("Invalid repair transition: " + repair.status + " -> " + input.status());
         }
         if (input.status() == DomainEnums.RepairStatus.written_off) actors.requireAdmin();
         if (input.repairOwnerId() != null) repair.repairOwner = required(UserAccount.class, input.repairOwnerId(), "User");
         if (input.vendorId() != null) repair.repairVendor = required(Vendor.class, input.vendorId(), "Vendor");
-        if (input.status() == DomainEnums.RepairStatus.in_repair && repair.startedAt == null) repair.startedAt = Instant.now();
+        if (input.status() == DomainEnums.RepairStatus.in_repair && repair.startedAt == null) repair.startedAt = occurredAt;
         if (input.status() == DomainEnums.RepairStatus.repaired || input.status() == DomainEnums.RepairStatus.written_off) {
             int amount = input.amount() == null && repair.assetInstance != null ? 1
                     : input.amount() == null ? 0 : input.amount();
@@ -141,9 +149,9 @@ public class LifecycleService {
                 repair.repairedPendingQuantity = amount;
             } else {
                 inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
-                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, null));
+                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
             }
-            repair.completedAt = Instant.now();
+            repair.completedAt = occurredAt;
         }
         if (input.status() == DomainEnums.RepairStatus.verified) {
             if (input.verificationResult() == null || input.verificationResult().isBlank()) {
@@ -154,7 +162,7 @@ public class LifecycleService {
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.repairedPendingQuantity > 0) {
             inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
-                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, null));
+                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
             repair.repairedPendingQuantity = 0;
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {

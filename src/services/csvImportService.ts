@@ -539,7 +539,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     }
 
     // Operations follow stock, assets, events and custody creation. Later rows can reference earlier operations.
-    const importOperation = createCsvOperationImporter([...items, ...createdItemsMap.values()], locCache, existingEvents);
+    const importOperation = createCsvOperationImporter([...createdItemsMap.values()], locCache, existingEvents);
     for (const row of parsedOperations.filter((entry) => entry.status === 'valid')) {
       setImportStatusText(t(`Importiere Aktion ${row.name}...`, `Importing action ${row.name}...`));
       try {

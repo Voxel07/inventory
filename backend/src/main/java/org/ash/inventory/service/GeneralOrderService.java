@@ -198,7 +198,7 @@ public class GeneralOrderService {
     }
 
     private void damage(GeneralOrder order, Item item, int amount, UUID asset, String notes) {
-        inventory.createDamage(new ApiModels.DamageInput(item.id, amount, notes == null || notes.isBlank() ? "Return damage: " + order.name : notes, DomainEnums.DamageSeverity.medium, null, null, asset, null, false, null));
+        inventory.createDamage(new ApiModels.DamageInput(item.id, amount, notes == null || notes.isBlank() ? "Return damage: " + order.name : notes, DomainEnums.DamageSeverity.medium, null, null, asset, null, false, null, null));
     }
     private int outstanding(GeneralOrder order, String id) {
         return CustodyQuantities.outstanding(order, id);
@@ -210,7 +210,7 @@ public class GeneralOrderService {
         events.record("stock.changed", "item", item.id, actors.current().id, null, Map.of("type", type.name(), "quantity", amount));
     }
     private void transact(GeneralOrder order, String id, DomainEnums.TransactionType type, int quantity, List<String> assets) {
-        if (assets == null) link(order, inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, quantity, order.name, order.purpose, order.eventOccurrence.eventType, "General order", null, order.createdBy.id, null, null, order.eventOccurrence.id, type == DomainEnums.TransactionType.checkout && order.sourceLocations.containsKey(id) ? UUID.fromString(order.sourceLocations.get(id)) : null, null)));
+        if (assets == null) link(order, inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, quantity, order.name, order.purpose, order.eventOccurrence.eventType, "General order", null, order.createdBy.id, null, null, order.eventOccurrence.id, type == DomainEnums.TransactionType.checkout && order.sourceLocations.containsKey(id) ? UUID.fromString(order.sourceLocations.get(id)) : null, null, null)));
         else for (var asset : assets) link(order, inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, 1, order.name, order.purpose, order.eventOccurrence.eventType, "General order", UUID.fromString(asset), order.createdBy.id, null, null, order.eventOccurrence.id)));
     }
     private void link(GeneralOrder order, StockTransaction tx) { tx.relatedEntityType = "general_order"; tx.relatedEntityId = order.id; }

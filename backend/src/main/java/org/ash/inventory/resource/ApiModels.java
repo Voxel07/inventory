@@ -52,18 +52,19 @@ public final class ApiModels {
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
             @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
-            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId) {
+            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId,
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {
         public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
                 String reason, String notes, String eventType, String faction, UUID assetInstanceId,
                 UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId) {
             this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
-                    assetInstanceId, userId, factionOrderId, idempotencyKey, eventOccurrenceId, null, null);
+                    assetInstanceId, userId, factionOrderId, idempotencyKey, eventOccurrenceId, null, null, null);
         }
         public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
                 String reason, String notes, String eventType, String faction, UUID assetInstanceId,
                 UUID userId, UUID factionOrderId, UUID idempotencyKey) {
             this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
-                    assetInstanceId, userId, factionOrderId, idempotencyKey, null, null, null);
+                    assetInstanceId, userId, factionOrderId, idempotencyKey, null, null, null, null);
         }
     }
 
@@ -121,10 +122,12 @@ public final class ApiModels {
     public record DamageInput(
             UUID itemId, @Min(1) int amount, @NotBlank String description,
             @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey,
-            UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId) {}
+            UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId,
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     public record DamageResolutionInput(
             DomainEnums.DamageStatus status, @Min(1) Integer amount, String notes, UUID idempotencyKey,
-            String description, DomainEnums.DamageSeverity severity, String itemHint) {}
+            String description, DomainEnums.DamageSeverity severity, String itemHint,
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
 
     public record MaintenanceInput(
             @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, Instant performedAt,
