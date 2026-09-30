@@ -1,7 +1,7 @@
 
 import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
-import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow, type FactionOrderImportStatus } from '../../types/csvImport';
+import { type CsvImportCounts, type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow, type FactionOrderImportStatus } from '../../types/csvImport';
 import { CSV_OPERATIONS } from '../../utils/csvOperations';
 import type { ParsedCheckoutRow } from '../../types/csvImport';
 import type { ParsedOperationRow } from '../../utils/csvOperations';
@@ -9,6 +9,7 @@ import type { ParsedOperationRow } from '../../utils/csvOperations';
 interface Props {
   tabType: CsvImportType;
   updateExistingItems: boolean;
+  importedCounts: CsvImportCounts;
   parsedItems: ParsedItemRow[];
   parsedAssemblies: ParsedAssemblyRow[];
   parsedEvents: ParsedEventReportRow[];
@@ -42,14 +43,14 @@ function getOrderStatusChip(status: FactionOrderImportStatus, t: (de: string, en
   }
 }
 
-export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations }: Props) {
+export function CsvImportPreview({ tabType, updateExistingItems, importedCounts, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations }: Props) {
   const t = useLocalizedText();
   return <>
             {/* Preview Tables */}
             {tabType !== 'assemblies' && parsedItems.length > 0 && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Artikel-Vorschau', 'Items Preview')} ({parsedItems.length})
+                  {t('Artikel-Vorschau', 'Items Preview')} ({parsedItems.length} / {importedCounts.items})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -131,7 +132,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType !== 'items' && parsedAssemblies.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Baugruppen-Vorschau', 'Assemblies Preview')} ({parsedAssemblies.length})
+                  {t('Baugruppen-Vorschau', 'Assemblies Preview')} ({parsedAssemblies.length} / {importedCounts.assemblies})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -187,7 +188,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType === 'combined' && parsedEvents.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Eventverlauf-Vorschau', 'Event History Preview')} ({parsedEvents.length})
+                  {t('Eventverlauf-Vorschau', 'Event History Preview')} ({parsedEvents.length} / {importedCounts.events})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -229,7 +230,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType === 'combined' && parsedOrders.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Bestellungs-Vorschau', 'Orders Preview')} ({parsedOrders.length})
+                  {t('Bestellungs-Vorschau', 'Orders Preview')} ({parsedOrders.length} / {importedCounts.orders})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -271,7 +272,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType === 'combined' && parsedGeneralOrders.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Allgemeine Bestellungen', 'General orders')} ({parsedGeneralOrders.length})
+                  {t('Allgemeine Bestellungen', 'General orders')} ({parsedGeneralOrders.length} / {importedCounts.generalOrders})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -291,7 +292,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             )}
 
             {tabType === 'combined' && parsedOperations.length > 0 && <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktionen-Vorschau', 'Actions preview')} ({parsedOperations.length})</Typography>
+              <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktionen-Vorschau', 'Actions preview')} ({parsedOperations.length} / {importedCounts.operations})</Typography>
               <TableContainer component={Paper} variant="outlined"><Table size="small">
                 <TableHead><TableRow><TableCell>{t('Name', 'Name')}</TableCell><TableCell>{t('Aktion', 'Action')}</TableCell><TableCell>{t('Beschreibung', 'Description')}</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
                 <TableBody>{parsedOperations.map((row) => <TableRow key={row.index} id={`csv-import-operations-row-${row.index}`}>
@@ -304,7 +305,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType === 'combined' && parsedReturns.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Rückgaben-Vorschau', 'Returns Preview')} ({parsedReturns.length})
+                  {t('Rückgaben-Vorschau', 'Returns Preview')} ({parsedReturns.length} / {importedCounts.returns})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -358,7 +359,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, parsedItems, pa
             {tabType === 'combined' && parsedCheckouts.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('Ausleihen-Vorschau', 'Checkouts preview')} ({parsedCheckouts.length})
+                  {t('Ausleihen-Vorschau', 'Checkouts preview')} ({parsedCheckouts.length} / {importedCounts.checkouts})
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>

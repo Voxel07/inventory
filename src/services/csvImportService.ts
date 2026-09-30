@@ -1,4 +1,6 @@
 import { loadAllPages } from './apiPagination';
+import { withApiRequestBatch } from './apiClient';
+import type { CsvImportCounts } from '../types/csvImport';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../types/csvImport';
 import type { Item, StorageLocation } from '../types';
 import { createItem, updateItem, createItemAssets, getItemAssets, getItem } from './inventoryService';
@@ -38,26 +40,56 @@ interface ImportPlan {
   t: (de: string, en: string) => string;
   setImportProgress: (value: number) => void;
   setImportStatusText: (value: string) => void;
+  setImportedCounts: (value: CsvImportCounts) => void;
 }
 
-export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText }: ImportPlan): Promise<CsvImportResult> {
-    const errors: string[] = [
-      ...parsedItems.filter((row) => row.status === 'error').map((row) => `Artikel Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedAssemblies.filter((row) => row.status === 'error').map((row) => `Baugruppe Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedEvents.filter((row) => row.status === 'error').map((row) => `Event Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedOrders.filter((row) => row.status === 'error').map((row) => `Bestellung Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedGeneralOrders.filter((row) => row.status === 'error').map((row) => `Allgemeine Bestellung Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedReturns.filter((row) => row.status === 'error').map((row) => `Rückgabe Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedCheckouts.filter((row) => row.status === 'error').map((row) => `Ausleihe Zeile ${row.index}: ${row.statusMessage}`),
-      ...parsedOperations.filter((row) => row.status === 'error').map((row) => `Aktion Zeile ${row.index}: ${row.statusMessage}`),
-    ];
-    let successItems = 0;
-    let updatedItems = 0;
-    let successAssemblies = 0;
-    let successEvents = 0;
-    let successOrders = 0;
-    let successGeneralOrders = 0;
+export function runCsvImport(plan: ImportPlan): Promise<CsvImportResult> {
+  return withApiRequestBatch(() => runCsvImportBatch(plan), (seconds) => {
+    plan.setImportStatusText(plan.t(
+      `API-Anfragelimit erreicht. Import wird in ${seconds}s fortgesetzt...`,
+      `API rate limit reached. Import resumes in ${seconds}s...`,
+    ));
+  });
+}
 
+async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts }: ImportPlan): Promise<CsvImportResult> {
+  const errors: string[] = [
+    ...parsedItems.filter((row) => row.status === 'error').map((row) => `Artikel Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedAssemblies.filter((row) => row.status === 'error').map((row) => `Baugruppe Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedEvents.filter((row) => row.status === 'error').map((row) => `Event Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedOrders.filter((row) => row.status === 'error').map((row) => `Bestellung Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedGeneralOrders.filter((row) => row.status === 'error').map((row) => `Allgemeine Bestellung Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedReturns.filter((row) => row.status === 'error').map((row) => `Rückgabe Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedCheckouts.filter((row) => row.status === 'error').map((row) => `Ausleihe Zeile ${row.index}: ${row.statusMessage}`),
+    ...parsedOperations.filter((row) => row.status === 'error').map((row) => `Aktion Zeile ${row.index}: ${row.statusMessage}`),
+  ];
+  let successItems = 0;
+  let updatedItems = 0;
+  let successAssemblies = 0;
+  let successEvents = 0;
+  let successOrders = 0;
+  let successGeneralOrders = 0;
+  let successReturns = 0;
+  let successCheckouts = 0;
+  let successOperations = 0;
+
+  const itemsToProcess = tabType === 'assemblies' ? [] : parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems));
+  const totalSteps = itemsToProcess.length
+    + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length)
+    + validEventsCount + validOrdersCount + validGeneralOrdersCount
+    + validReturnsCount + validCheckoutsCount + validOperationsCount;
+  let currentStep = 0;
+  function reportCompletedRow() {
+    currentStep++;
+    setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+    setImportedCounts({
+      items: successItems + updatedItems, assemblies: successAssemblies, events: successEvents,
+      orders: successOrders, generalOrders: successGeneralOrders, returns: successReturns,
+      checkouts: successCheckouts, operations: successOperations,
+    });
+  }
+
+  try {
     const locCache = new Map<string, string>();
     for (const loc of storageLocations) {
       locCache.set(loc.name.toLowerCase().trim(), loc.id);
@@ -89,20 +121,11 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
       createdItemsMap.set(item.name.toLowerCase().trim(), item);
     }
 
-    const itemsToProcess = parsedItems.filter((i) => i.status === 'valid' || i.status === 'warning' || (i.status === 'duplicate' && updateExistingItems));
-    const totalSteps = itemsToProcess.length
-      + (tabType === 'items' ? 0 : parsedAssemblies.filter((a) => a.status === 'valid').length)
-      + validEventsCount
-      + validOrdersCount
-      + validGeneralOrdersCount
-      + validReturnsCount + validCheckoutsCount + validOperationsCount;
-    let currentStep = 0;
-
     if (tabType !== 'assemblies') {
+      let itemIndex = 0;
       for (const row of itemsToProcess) {
-        currentStep++;
-        setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
-        setImportStatusText(t(`Importiere Artikel ${currentStep}/${itemsToProcess.length}: ${row.data.name}`, `Importing item ${currentStep}/${itemsToProcess.length}: ${row.data.name}`));
+        itemIndex++;
+        setImportStatusText(t(`Importiere Artikel ${itemIndex}/${itemsToProcess.length}: ${row.data.name}`, `Importing item ${itemIndex}/${itemsToProcess.length}: ${row.data.name}`));
 
         // Resolve location ID if created on the fly
         let locationId = row.data.storageLocation;
@@ -126,14 +149,16 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
             createdItemsMap.set(updated.name.toLowerCase().trim(), updated);
 
             if (hasCustomAssets && row.assetCodes) {
+              const existingAssets = await loadAllPages((page, size) => getItemAssets(row.existingId!, { page, size }));
               for (const code of row.assetCodes) {
+                if (existingAssets.some((asset) => asset.assetCode.toLowerCase() === code.toLowerCase())) continue;
                 try {
                   await createItemAssets(row.existingId, {
                     assetCode: code,
                     currentLocationId: locationId || undefined,
                   });
-                } catch {
-                  // Asset code might already exist, ignore conflict
+                } catch (assetErr: unknown) {
+                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
                 }
               }
             }
@@ -150,13 +175,15 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
                     currentLocationId: locationId || undefined,
                   });
                 } catch (assetErr: unknown) {
-                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}": ${(assetErr as Error).message || assetErr}`);
+                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
                 }
               }
             }
           }
         } catch (err: unknown) {
-          errors.push(`Fehler bei Artikel "${row.data.name}": ${(err as Error).message || err}`);
+          errors.push(`Fehler bei Artikel "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
+        } finally {
+          reportCompletedRow();
         }
       }
     }
@@ -168,8 +195,6 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
 
       for (const row of assembliesToProcess) {
         assemIndex++;
-        currentStep++;
-        setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
         setImportStatusText(t(`Erstelle Baugruppe ${assemIndex}/${assembliesToProcess.length}: ${row.data.name}`, `Creating assembly ${assemIndex}/${assembliesToProcess.length}: ${row.data.name}`));
 
         // Re-resolve components in case some items were created in Step 2
@@ -185,8 +210,7 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
             finalQuantities[item.id] = (finalQuantities[item.id] ?? 0) + comp.quantity;
           } else {
             allMatched = false;
-            errors.push(`Baugruppe "${row.data.name}": Artikel "${comp.itemName}" konnte nicht gefunden werden`);
-            break;
+            errors.push(`Baugruppe "${row.data.name}" (Zeile ${row.index}): Artikel "${comp.itemName}" konnte nicht gefunden werden`);
           }
         }
 
@@ -199,9 +223,10 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
             });
             successAssemblies++;
           } catch (err: unknown) {
-            errors.push(`Fehler bei Baugruppe "${row.data.name}": ${(err as Error).message || err}`);
+            errors.push(`Fehler bei Baugruppe "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
           }
         }
+        reportCompletedRow();
       }
     }
 
@@ -209,8 +234,6 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
     // type/date records are updated so retrying a sample import is safe.
     const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 || parsedOperations.length > 0 ? await getEventReports() : [];
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(
         `Erstelle ${row.data.eventType}-Event vom ${row.data.eventDate}...`,
         `Creating ${row.data.eventType} event on ${row.data.eventDate}...`,
@@ -248,6 +271,8 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
         successEvents++;
       } catch (err: unknown) {
         errors.push(`Event ${row.data.eventType} ${row.data.eventDate}: ${(err as Error).message || err}`);
+      } finally {
+        reportCompletedRow();
       }
     }
 
@@ -255,8 +280,6 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
     const existingOrders = parsedOrders.length > 0
       ? await loadAllPages((page, size) => getFactionOrders({ page, size })) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(
         `Importiere Bestellung ${row.data.faction} für ${row.data.eventDate}...`,
         `Importing ${row.data.faction} order for ${row.data.eventDate}...`,
@@ -332,6 +355,8 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
         successOrders++;
       } catch (err: unknown) {
         errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
+      } finally {
+        reportCompletedRow();
       }
     }
 
@@ -339,8 +364,6 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
     const existingGeneralOrders = parsedGeneralOrders.length > 0
       ? await loadAllPages((page, size) => getOrders({ page, size })) : [];
     for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(`Importiere allgemeine Bestellung ${row.data.name}...`, `Importing general order ${row.data.name}...`));
       try {
         const resolve = (components: ParsedGeneralOrderRow['requestedItems']) => {
@@ -392,14 +415,13 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
         successGeneralOrders++;
       } catch (err: unknown) {
         errors.push(`Allgemeine Bestellung ${row.data.name}: ${(err as Error).message || err}`);
+      } finally {
+        reportCompletedRow();
       }
     }
 
     // Step 7: Import standalone returns if any
-    let successReturns = 0;
     for (const ret of parsedReturns.filter((r) => r.status === 'valid' && r.targetStatus === 'accepted')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(
         `Importiere Rückgabe für ${ret.itemName}...`,
         `Importing return for ${ret.itemName}...`,
@@ -460,14 +482,14 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
         successReturns++;
       } catch (err: unknown) {
         errors.push(`Rückgabe ${ret.itemName}: ${(err as Error).message || err}`);
+      } finally {
+        reportCompletedRow();
       }
     }
 
     // Step 8: Apply explicit checkout rows after item and asset creation.
-    let successCheckouts = 0;
     for (const row of parsedCheckouts.filter((entry) => entry.status === 'valid')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
+      setImportStatusText(t(`Importiere Ausleihe für ${row.itemName}...`, `Importing checkout for ${row.itemName}...`));
       try {
         const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
         if (!item) throw new Error(`Artikel "${row.itemName}" nicht gefunden`);
@@ -498,23 +520,27 @@ export async function runCsvImport({ parsedItems, parsedAssemblies, parsedEvents
         successCheckouts++;
       } catch (err: unknown) {
         errors.push(`Ausleihe ${row.itemName}: ${(err as Error).message || err}`);
+      } finally {
+        reportCompletedRow();
       }
     }
 
     // Operations follow stock, assets, events and custody creation. Later rows can reference earlier operations.
-    let successOperations = 0;
     const importOperation = createCsvOperationImporter([...items, ...createdItemsMap.values()], locCache, existingEvents);
     for (const row of parsedOperations.filter((entry) => entry.status === 'valid')) {
-      currentStep++;
-      setImportProgress(Math.round((currentStep / Math.max(1, totalSteps)) * 100));
       setImportStatusText(t(`Importiere Aktion ${row.name}...`, `Importing action ${row.name}...`));
       try {
         await importOperation(row);
         successOperations++;
       } catch (error) {
         errors.push(`Aktion ${row.name}: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        reportCompletedRow();
       }
     }
+  } catch (error) {
+    errors.push(t('Import abgebrochen: ', 'Import stopped: ') + (error instanceof Error ? error.message : String(error)));
+  }
 
   return { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors };
 }

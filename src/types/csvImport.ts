@@ -109,3 +109,19 @@ export interface ParsedCheckoutRow {
 }
 
 export type CsvImportType = 'items' | 'assemblies' | 'combined';
+
+export interface CsvImportCounts {
+  items: number;
+  assemblies: number;
+  events: number;
+  orders: number;
+  generalOrders: number;
+  returns: number;
+  checkouts: number;
+  operations: number;
+}
+
+export const EMPTY_CSV_IMPORT_COUNTS: CsvImportCounts = {
+  items: 0, assemblies: 0, events: 0, orders: 0, generalOrders: 0,
+  returns: 0, checkouts: 0, operations: 0,
+};

@@ -92,6 +92,7 @@ type RequestOptions = {
 export class ApiError extends Error {
   status: number;
   details?: unknown;
+  retryAfterSeconds?: number;
   constructor(status: number, message: string, details?: unknown) { super(message); this.status = status; this.details = details; }
 }
 
@@ -107,8 +108,43 @@ export class RequestTimeoutError extends Error {
 const REQUEST_TIMEOUT_MS = 20_000;
 
 async function responseError(response: Response): Promise<ApiError> {
-  const payload = await response.json().catch(() => ({})) as { error?: string; message?: string; details?: unknown };
-  return new ApiError(response.status, payload.error || payload.message || `API request failed (${response.status})`, payload.details);
+  const payload = await response.json().catch(() => ({})) as { error?: string; message?: string; details?: unknown; retryAfterSeconds?: number };
+  const error = new ApiError(response.status, payload.error || payload.message || `API request failed (${response.status})`, payload.details);
+  const retryAfter = response.headers.get('Retry-After');
+  const seconds = retryAfter === null ? payload.retryAfterSeconds
+    : /^\d+(\.\d+)?$/.test(retryAfter) ? Number(retryAfter)
+      : (Date.parse(retryAfter) - Date.now()) / 1000;
+  if (seconds !== undefined && Number.isFinite(seconds)) error.retryAfterSeconds = Math.max(1, Math.ceil(seconds));
+  return error;
+}
+
+let apiBatchDepth = 0;
+let apiBatchChanged = false;
+let apiBatchRateLimitListener: ((seconds: number) => void) | undefined;
+
+function publishApiChange(detail?: ApiChangeDetail): void {
+  if (apiBatchDepth > 0) {
+    apiBatchChanged = true;
+    return;
+  }
+  window.dispatchEvent(new CustomEvent('ash-api-change', { detail }));
+}
+
+/** Keep bulk writes from refetching every active query after every request. */
+export async function withApiRequestBatch<T>(operation: () => Promise<T>, onRateLimit: (seconds: number) => void): Promise<T> {
+  const previousListener = apiBatchRateLimitListener;
+  apiBatchDepth++;
+  apiBatchRateLimitListener = onRateLimit;
+  try {
+    return await operation();
+  } finally {
+    apiBatchRateLimitListener = previousListener;
+    apiBatchDepth--;
+    if (apiBatchDepth === 0 && apiBatchChanged) {
+      apiBatchChanged = false;
+      publishApiChange();
+    }
+  }
 }
 
 async function apiRequestAttempt<T>(path: string, options: RequestOptions, retried: boolean): Promise<T> {
@@ -150,9 +186,8 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
   if (!response.ok) {
     const error = await responseError(response);
     if (response.status === 401 && !options.anonymous) clearAuth('Your session has expired. Please sign in again.');
-    if (response.status === 429) {
-      const retryAfterSeconds = Number(response.headers.get('Retry-After') ?? '') || undefined;
-      window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds } }));
+    if (response.status === 429 && apiBatchDepth === 0) {
+      window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds: error.retryAfterSeconds } }));
     }
     throw error;
   }
@@ -162,7 +197,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
   } else {
     invalidateConditionalCacheFor(path);
-    window.dispatchEvent(new CustomEvent('ash-api-change'));
+    publishApiChange();
   }
   return result;
 }
@@ -187,13 +222,26 @@ function invalidateConditionalCacheFor(path: string): void {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const requestActorId = getAuthSnapshot().user?.id;
+  const rateLimitListener = apiBatchRateLimitListener;
   const offlineAction = options.offline
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
   if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error('This action requires an online connection. It has not been queued.');
   if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction);
   try {
-    return await apiRequestAttempt<T>(path, options, false);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await apiRequestAttempt<T>(path, options, false);
+      } catch (error) {
+        // A 429 is rejected before executing the command, so retrying writes is safe.
+        // Network failures remain errors: their writes may already have committed.
+        if (!rateLimitListener || !(error instanceof ApiError) || error.status !== 429 || attempt >= 5) throw error;
+        const seconds = error.retryAfterSeconds ?? 60;
+        rateLimitListener(seconds);
+        await new Promise<void>((resolve) => setTimeout(resolve, seconds * 1000));
+        if (getAuthSnapshot().user?.id !== requestActorId) throw new ApiError(409, 'Account changed during the request. Please try again.');
+      }
+    }
   } catch (error) {
     if (getAuthSnapshot().user?.id !== requestActorId) throw error;
     if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction);
@@ -325,7 +373,7 @@ function handleSseBlock(block: string): void {
     ? detail as ApiChangeDetail
     : { type: String(detail) };
   window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
-  window.dispatchEvent(new CustomEvent('ash-api-change', { detail: changeDetail }));
+  publishApiChange(changeDetail);
 }
 
 export async function startRealtimeEvents(): Promise<void> {

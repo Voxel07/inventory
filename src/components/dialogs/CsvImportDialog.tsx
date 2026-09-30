@@ -1,10 +1,9 @@
-import { invalidateForApiChange } from '../../utils/realtimeInvalidation';
 import { buildCsvImportPlan } from '../../utils/csv/importPlan';
 import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
 import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
 import { Dialog } from '../shared/ClosableDialog';
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { DialogTitle, DialogContent, Button, Box, Typography, Tabs, Tab, Stack, Paper, Chip, FormControlLabel, Checkbox, LinearProgress, Alert, TextField, Collapse, useMediaQuery, useTheme } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -20,11 +19,9 @@ import { useUIStore } from '../../store/uiStore';
 import { parseCsv, detectCsvType } from '../../utils/csv/core';
 
 import { generateSampleItemsCsv, generateSampleAssembliesCsv, generateSampleCombinedCsv } from '../../utils/csv/templates';
-import { type CsvImportType } from '../../types/csvImport';
+import { EMPTY_CSV_IMPORT_COUNTS, type CsvImportCounts, type CsvImportType } from '../../types/csvImport';
 
 import type { Item, Assembly, StorageLocation } from '../../types';
-
-import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   open: boolean;
@@ -46,7 +43,6 @@ export function CsvImportDialog({
   const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const queryClient = useQueryClient();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,8 +61,14 @@ export function CsvImportDialog({
   const [importProgress, setImportProgress] = useState(0);
   const [importStatusText, setImportStatusText] = useState('');
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
+  const [importedCounts, setImportedCounts] = useState<CsvImportCounts>(EMPTY_CSV_IMPORT_COUNTS);
+  const [importTotal, setImportTotal] = useState(0);
+  const totalImported = Object.values(importedCounts).reduce((sum, count) => sum + count, 0);
 
-  const { rows, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems });
+  const { rows, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
+    () => buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems }),
+    [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems],
+  );
 
   function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns' | 'checkouts' | 'operations', rows: { index: number; status: string }[]) {
     const row = rows.find((candidate) => candidate.status === 'error');
@@ -95,6 +97,7 @@ export function CsvImportDialog({
   function handleFileSelected(file: File) {
     setFileName(file.name);
     setImportResult(null);
+    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = (e.target?.result as string) || '';
@@ -141,6 +144,7 @@ export function CsvImportDialog({
     setImportResult(null);
     setImportProgress(0);
     setImportStatusText('');
+    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
   }
 
   async function executeImport() {
@@ -148,10 +152,10 @@ export function CsvImportDialog({
     setIsImporting(true);
     setImportProgress(0);
     setImportResult(null);
+    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
+    setImportTotal(totalToImport);
 
-    const { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors } = await runCsvImport({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText });
-
-    invalidateForApiChange(queryClient);
+    const { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors } = await runCsvImport({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts });
 
     setIsImporting(false);
     setImportProgress(100);
@@ -229,27 +233,33 @@ export function CsvImportDialog({
               {importResult.successOperations > 0 && `${importResult.successOperations} ${t('Aktionen importiert', 'actions imported')}. `}
             </Typography>
             {importResult.errors.length > 0 && (
-              <Box sx={{ mt: 1, maxHeight: 300, overflowY: 'auto' }}>
+              <Box sx={{ mt: 1 }}>
                 <Typography variant="caption" color="error" sx={{ display: 'block', fontWeight: 600 }}>
-                  {t('Hinweise / Fehler:', 'Warnings / Errors:')}
+                  {t('Hinweise / Fehler', 'Warnings / Errors')} ({importResult.errors.length}):
                 </Typography>
-                {importResult.errors.map((err, idx) => (
-                  <Typography key={idx} variant="caption" color="error" sx={{ display: 'block' }}>
-                    • {err}
-                  </Typography>
-                ))}
+                <Box component="ul" sx={{ m: 0, pl: 2, overflowWrap: 'anywhere' }}>
+                  {importResult.errors.map((err, idx) => (
+                    <Typography component="li" key={idx} variant="caption" color="error">
+                      {err}
+                    </Typography>
+                  ))}
+                </Box>
               </Box>
             )}
           </Alert>
         )}
         <Tabs
           value={tabType}
-          onChange={(_e, v) => setTabType(v)}
+          onChange={(_e, v) => {
+            setTabType(v);
+            setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
+            setImportResult(null);
+          }}
           sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab value="items" label={t('Artikel', 'Items')} />
-          <Tab value="assemblies" label={t('Baugruppen', 'Assemblies')} />
-          <Tab value="combined" label={t('Kombiniert / Alle', 'Combined / All')} />
+          <Tab value="items" label={t('Artikel', 'Items')} disabled={isImporting} />
+          <Tab value="assemblies" label={t('Baugruppen', 'Assemblies')} disabled={isImporting} />
+          <Tab value="combined" label={t('Kombiniert / Alle', 'Combined / All')} disabled={isImporting} />
         </Tabs>
 
         {/* Upload Zone */}
@@ -389,7 +399,9 @@ export function CsvImportDialog({
                 icon={<CheckCircleIcon />}
                 color="success"
                 variant="outlined"
-                label={t(`${totalToImport} Bereit zum Import`, `${totalToImport} ready to import`)}
+                label={isImporting || importResult
+                  ? t(`${importTotal} / ${totalImported} Gesamt / importiert`, `${importTotal} / ${totalImported} total / imported`)
+                  : t(`${totalToImport} Bereit zum Import`, `${totalToImport} ready to import`)}
               />
               {totalDuplicatesCount > 0 && (
                 <Chip
@@ -424,7 +436,10 @@ export function CsvImportDialog({
               </Box>
             )}
 
-            <CsvImportPreview tabType={tabType} updateExistingItems={updateExistingItems} parsedItems={parsedItems} parsedAssemblies={parsedAssemblies} parsedEvents={parsedEvents} parsedOrders={parsedOrders} parsedGeneralOrders={parsedGeneralOrders} parsedReturns={parsedReturns} parsedCheckouts={parsedCheckouts} parsedOperations={parsedOperations} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {t('Vorschau-Zähler: Gesamt / importiert', 'Preview counts: total / imported')}
+            </Typography>
+            <CsvImportPreview tabType={tabType} updateExistingItems={updateExistingItems} importedCounts={importedCounts} parsedItems={parsedItems} parsedAssemblies={parsedAssemblies} parsedEvents={parsedEvents} parsedOrders={parsedOrders} parsedGeneralOrders={parsedGeneralOrders} parsedReturns={parsedReturns} parsedCheckouts={parsedCheckouts} parsedOperations={parsedOperations} />
           </Box>
         )}
       </DialogContent>
