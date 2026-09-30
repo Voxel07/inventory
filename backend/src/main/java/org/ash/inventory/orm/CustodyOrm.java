@@ -24,6 +24,34 @@ public class CustodyOrm {
         return em.createQuery("from ReturnSubmission r where r.status = :status", ReturnSubmission.class).setParameter("status", DomainEnums.ReturnSubmissionStatus.pending).getResultList();
     }
     public Item item(String id) { return em.find(Item.class, java.util.UUID.fromString(id)); }
+    public boolean hasOutstandingAsset(UUID assetId) {
+        long direct = em.createQuery("""
+                select coalesce(sum(case when t.type = :checkout then t.quantity
+                    when t.type = :checkin or t.type = :consumed or (t.type = :writtenOff and t.custodyWriteOff = true)
+                    then -t.quantity else 0 end), 0)
+                from StockTransaction t where t.assetInstance.id = :asset
+                    and t.factionOrder is null and t.relatedEntityType is null
+                """, Long.class).setParameter("asset", assetId)
+                .setParameter("checkout", DomainEnums.TransactionType.checkout)
+                .setParameter("checkin", DomainEnums.TransactionType.checkin)
+                .setParameter("consumed", DomainEnums.TransactionType.consumed)
+                .setParameter("writtenOff", DomainEnums.TransactionType.written_off).getSingleResult();
+        if (direct > 0) return true;
+        long faction = em.createQuery("""
+                select count(l) from CustodyHandoverLine l
+                where l.assetInstance.id = :asset and l.handover.type = :checkout
+                    and not exists (select r.id from ReturnReconciliation r
+                        where r.assetInstance.id = :asset and r.order = l.handover.order
+                            and r.outcome <> :missing)
+                """, Long.class).setParameter("asset", assetId)
+                .setParameter("checkout", DomainEnums.HandoverType.checkout)
+                .setParameter("missing", DomainEnums.ReconciliationOutcome.missing).getSingleResult();
+        if (faction > 0) return true;
+        String id = assetId.toString();
+        return generalOrders().stream().anyMatch(order -> order.assetAssignments.entrySet().stream()
+                .anyMatch(entry -> entry.getValue().contains(id)
+                        && !order.reconciledAssets.getOrDefault(entry.getKey(), List.of()).contains(id)));
+    }
     public List<CustodyHandover> handovers(UUID orderId, int offset, int limit) {
         return em.createQuery("""
                 select handover from CustodyHandover handover

@@ -1,8 +1,8 @@
 import { AppSnackbar } from './components/shared/AppSnackbar';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, MutationCache, useQueryClient } from '@tanstack/react-query';
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
@@ -11,7 +11,8 @@ import { canManageInventory } from './utils/access';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useAppLanguage, translate } from './utils/naming';
-import { OfflineQueuedError, subscribeToApiChanges } from './services/apiClient';
+import { subscribeToApiChanges } from './services/apiClient';
+import { getSessionQueryClient, subscribeSessionQueryClient } from './services/sessionQueryClient';
 import { invalidateForApiChange } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { LoginPage } from './pages/LoginPage';
@@ -49,25 +50,6 @@ function RouteLoadingFallback() {
     </Box>
   );
 }
-
-const queryClient = new QueryClient({
-  mutationCache: new MutationCache({
-    onError: (error) => {
-      if (error instanceof OfflineQueuedError) {
-        useUIStore.getState().showSnackbar(
-          translate('Offline gespeichert — wird bei Verbindung synchronisiert', 'Saved offline — will sync when connected'),
-          'info',
-        );
-      }
-    },
-  }),
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      retry: 2,
-    },
-  },
-});
 
 function buildTheme(mode: 'light' | 'dark') {
   const dark = mode === 'dark';
@@ -437,8 +419,10 @@ function HomeRoute() {
 }
 
 export default function App() {
+  const queryClient = useSyncExternalStore(subscribeSessionQueryClient, getSessionQueryClient, getSessionQueryClient);
+  const { generation } = useAuth();
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider key={generation} client={queryClient}>
       <ThemedApp />
     </QueryClientProvider>
   );

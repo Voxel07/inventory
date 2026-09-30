@@ -8,6 +8,7 @@ import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
+import org.ash.inventory.model.InventoryPosition;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.StockTransaction;
@@ -210,6 +211,14 @@ public class OperationsOrm {
         var result = new LinkedHashMap<UUID, Long>();
         for (var order : entityManager.createQuery("from GeneralOrder o where o.status in ('preparing', 'ready')", org.ash.inventory.model.GeneralOrder.class).getResultList())
             order.preparedQuantities.forEach((id, quantity) -> result.merge(UUID.fromString(id), quantity.longValue(), Long::sum));
+        return result;
+    }
+
+    public Map<UUID, Long> inTransitQuantities(Collection<UUID> itemIds) {
+        var result = new LinkedHashMap<UUID, Long>();
+        if (itemIds.isEmpty()) return result;
+        for (var row : entityManager.createQuery("select p.item.id, sum(p.quantityInTransit) from InventoryPosition p where p.item.id in :ids group by p.item.id", Object[].class)
+                .setParameter("ids", itemIds).getResultList()) result.put((UUID) row[0], (Long) row[1]);
         return result;
     }
 

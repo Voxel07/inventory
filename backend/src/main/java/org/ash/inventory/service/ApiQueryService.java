@@ -98,6 +98,13 @@ public class ApiQueryService {
     }
 
     @Transactional
+    public List<ApiResponses.AssemblyResponse> assemblies() {
+        actors.current();
+        var visible = catalog.getVisibleAssemblies();
+        return mapper.assemblies(visible.assemblies(), visible.components());
+    }
+
+    @Transactional
     public ApiResponses.AssemblyResponse assembly(UUID id) {
         actors.current();
         return mapper.assembly(required(Assembly.class, id, "Assembly"));

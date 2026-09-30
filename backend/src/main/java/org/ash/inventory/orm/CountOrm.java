@@ -17,7 +17,11 @@ public class CountOrm {
     public CountOrm(EntityManager entityManager) { this.entityManager = entityManager; }
     public void persist(Object value) { entityManager.persist(value); }
     public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T locked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T locked(Class<T> type, UUID id) {
+        var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
+        if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
+        return value;
+    }
 
     public List<InventoryCountSession> sessions(String status, int offset, int limit) {
         var jpql = status == null || status.isBlank()
@@ -33,7 +37,7 @@ public class CountOrm {
                 .setParameter("sessions", sessions).getResultList();
     }
     public List<InventoryCountLine> lockedLines(InventoryCountSession session) {
-        return entityManager.createQuery("select line from InventoryCountLine line join fetch line.item join fetch line.location left join fetch line.assetInstance left join fetch line.lot left join fetch line.countedBy where line.session = :session order by line.item.name, line.createdAt", InventoryCountLine.class)
+        return entityManager.createQuery("select line from InventoryCountLine line where line.session = :session order by line.item.id, line.id", InventoryCountLine.class)
                 .setParameter("session", session).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     }
     public List<InventoryPosition> scopedPositions(Warehouse warehouse, StorageLocation location, Item item, String category) {
@@ -74,5 +78,10 @@ public class CountOrm {
     public boolean numberExists(String number) {
         return entityManager.createQuery("select count(session) from InventoryCountSession session where lower(session.sessionNumber) = :number", Long.class)
                 .setParameter("number", number.toLowerCase(Locale.ROOT)).getSingleResult() > 0;
+    }
+
+    public boolean hasAssetReservation(AssetInstance asset) {
+        return entityManager.createQuery("select count(r) from StockReservation r where r.assetInstance = :asset and r.status = :status and r.reservedQuantity > r.releasedQuantity", Long.class)
+                .setParameter("asset", asset).setParameter("status", DomainEnums.ReservationStatus.active).getSingleResult() > 0;
     }
 }

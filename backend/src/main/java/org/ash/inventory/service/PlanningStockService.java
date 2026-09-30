@@ -50,7 +50,7 @@ public class PlanningStockService {
         for (var snapshot : snapshots.values()) {
             snapshot.finish(inventory);
             var physical = snapshot.physical();
-            snapshot.stock = new InventoryOperationsService.StockState(physical.onHand(), physical.checkedOut(),
+            snapshot.stock = new InventoryOperationsService.StockState(physical.onHand(), physical.checkedOut(), physical.inTransit(),
                     physical.damaged(), physical.reserved(), equipment.available(snapshot.item, null, physical, 0, snapshot));
         }
         return snapshots;
@@ -64,7 +64,6 @@ public class PlanningStockService {
 
     private record EventAvailabilityKey(UUID eventId, int ownReservation) {}
     private record Position(UUID locationId, int blocked, int available) {}
-    private record Schedule(UUID assetId, DomainEnums.MaintenanceIntervalType type, Instant dueAt, BigDecimal dueValue) {}
 
     public static final class ItemStock implements EquipmentService.AvailabilityData {
         private final Item item;
@@ -74,13 +73,15 @@ public class PlanningStockService {
         private final List<EquipmentCommitment> commitments = new ArrayList<>();
         private final Map<UUID, LoanArrangement> loans = new HashMap<>();
         private final List<Position> positions = new ArrayList<>();
-        private final List<Schedule> schedules = new ArrayList<>();
+        private final List<MaintenancePolicy.Facts> schedules = new ArrayList<>();
         private final Map<UUID, Long> checkoutCounts = new HashMap<>();
         private final NavigableMap<LocalDate, Integer> consumed = new TreeMap<>();
         private final Map<EventAvailabilityKey, Integer> eventAvailability = new HashMap<>();
         private InventoryOperationsService.StockState physical;
         private InventoryOperationsService.StockState stock;
         private long custodyWriteOff, damage, reservations;
+        private long itemCheckoutCount;
+        private int inTransit;
         private boolean memberDamage;
 
         private ItemStock(Item item, Instant now) { this.item = item; this.now = now; }
@@ -97,6 +98,7 @@ public class PlanningStockService {
                 case "reservation" -> reservations += number(row[7]);
                 case "member_damage" -> memberDamage = true;
                 case "position" -> {
+                    inTransit += Math.toIntExact(number(row[11]));
                     boolean usable = (boolean) row[19]
                             && (item.trackingMode != DomainEnums.TrackingMode.lot_tracked || (boolean) row[18]);
                     int onHand = Math.toIntExact(number(row[7])), damaged = Math.toIntExact(number(row[8]));
@@ -113,9 +115,13 @@ public class PlanningStockService {
                     asset.serviceStatus = DomainEnums.MaintenanceStatus.valueOf((String) row[6]);
                     asset.operatingHours = (BigDecimal) row[11]; assets.add(asset);
                 }
-                case "checkout_count" -> checkoutCounts.put((UUID) row[2], number(row[7]));
-                case "schedule" -> schedules.add(new Schedule((UUID) row[2],
-                        DomainEnums.MaintenanceIntervalType.valueOf((String) row[4]), instant(row[14]), (BigDecimal) row[11]));
+                case "checkout_count" -> {
+                    itemCheckoutCount += number(row[7]);
+                    if (row[2] != null) checkoutCounts.put((UUID) row[2], number(row[7]));
+                }
+                case "schedule" -> schedules.add(new MaintenancePolicy.Facts((UUID) row[2],
+                        DomainEnums.MaintenanceIntervalType.valueOf((String) row[4]), instant(row[14]), (BigDecimal) row[11],
+                        row[5] == null ? null : new BigDecimal((String) row[5])));
                 case "consumed" -> consumed.merge(instant(row[14]).atZone(ZoneId.systemDefault()).toLocalDate(),
                         Math.toIntExact(number(row[7])), Integer::sum);
                 case "commitment" -> {
@@ -147,10 +153,14 @@ public class PlanningStockService {
             commitments.sort(Comparator.comparing((EquipmentCommitment c) -> c.availableFrom)
                     .thenComparing(c -> c.createdAt).reversed());
             int blocked = item.trackingMode == DomainEnums.TrackingMode.serialized ? 0 : positions.stream().mapToInt(Position::blocked).sum();
-            physical = inventory.physicalStock(item, totals, Math.toIntExact(damage), Math.toIntExact(reservations), blocked, assets);
+            physical = inventory.physicalStock(item, totals, Math.toIntExact(damage), Math.toIntExact(reservations), blocked, inTransit, assets);
         }
 
         public boolean hasMemberDamage() { return memberDamage; }
+        public boolean itemUsable() {
+            return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, now.atZone(ZoneId.systemDefault()).toLocalDate())
+                    && schedules.stream().filter(s -> s.assetId() == null).noneMatch(s -> blocking(s, null));
+        }
         public List<EquipmentCommitment> commitments() { return commitments; }
         public LoanArrangement loan(EquipmentCommitment commitment) { return loans.get(commitment.id); }
         public List<AssetInstance> assets() { return assets; }
@@ -166,15 +176,15 @@ public class PlanningStockService {
                     || Set.of(DomainEnums.MaintenanceStatus.overdue, DomainEnums.MaintenanceStatus.in_service).contains(asset.serviceStatus)) return false;
             for (var schedule : schedules) {
                 if (schedule.assetId() != null && !schedule.assetId().equals(asset.id)) continue;
-                boolean due = switch (schedule.type()) {
-                    case date -> schedule.dueAt() != null && !schedule.dueAt().isAfter(now);
-                    case operating_hours -> schedule.dueValue() != null && asset.operatingHours.compareTo(schedule.dueValue()) >= 0;
-                    case usage_count -> schedule.dueValue() != null
-                            && BigDecimal.valueOf(checkoutCounts.getOrDefault(asset.id, 0L)).compareTo(schedule.dueValue()) >= 0;
-                };
-                if (due) return false;
+                if (blocking(schedule, asset)) return false;
             }
             return true;
+        }
+
+        private boolean blocking(MaintenancePolicy.Facts schedule, AssetInstance asset) {
+            return MaintenancePolicy.blocksCheckout(MaintenancePolicy.status(schedule, now,
+                    new MaintenancePolicy.Counters(item.currentOperatingHours, itemCheckoutCount,
+                            asset == null ? null : asset.operatingHours, asset == null ? 0 : checkoutCounts.getOrDefault(asset.id, 0L))));
         }
 
         private static long number(Object value) { return ((Number) value).longValue(); }

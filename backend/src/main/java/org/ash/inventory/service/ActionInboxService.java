@@ -15,7 +15,7 @@ public class ActionInboxService {
     @Inject org.ash.inventory.orm.ActionInboxOrm orm;
     @Inject ActorService actors;
     @Inject CustodyBalanceService custody;
-    @Inject org.ash.inventory.orm.OperationsOrm operations;
+    @Inject MaintenanceEvaluationService maintenancePolicy;
     public record Action(String key, String kind, String title, String detail, LocalDate due, String path, Instant remindAt) {}
     public record ReminderInput(@NotNull String key, Instant remindAt) {}
     @Transactional public List<Action> list() {
@@ -57,14 +57,8 @@ public class ActionInboxService {
         for (var s : orm.activeSchedules()) {
             if (!maintenance && (s.responsiblePerson == null || !s.responsiblePerson.id.equals(actor.id))) continue;
             LocalDate due = s.nextDueAt == null ? null : s.nextDueAt.atZone(ZoneId.systemDefault()).toLocalDate();
-            boolean needed = due != null && !due.isAfter(today.plusDays(s.warningWindow.longValue()));
-            if (s.intervalType != DomainEnums.MaintenanceIntervalType.date && s.nextDueValue != null) {
-                var meter = s.intervalType == DomainEnums.MaintenanceIntervalType.operating_hours
-                        ? (s.assetInstance == null ? s.item.currentOperatingHours : s.assetInstance.operatingHours)
-                        : java.math.BigDecimal.valueOf(operations.checkoutCount(s.item, s.assetInstance));
-                needed = meter.add(s.warningWindow).compareTo(s.nextDueValue) >= 0;
-            }
-            if (needed) add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules" : "/contributor");
+            if (maintenancePolicy.status(s, Instant.now()) != MaintenancePolicy.Status.healthy)
+                add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules" : "/contributor");
         }
         for (var r : orm.openMemberRequests())
             if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, "/contributor");

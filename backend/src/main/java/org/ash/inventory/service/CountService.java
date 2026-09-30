@@ -20,6 +20,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CountService {
+    @jakarta.inject.Inject CustodyBalanceService custody;
+    @jakarta.inject.Inject PositionService positions;
     private final CountOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -80,6 +82,8 @@ public class CountService {
             line.session = session;
             line.item = asset.item;
             line.assetInstance = asset;
+            line.expectedAssetVersion = asset.version;
+            line.expectedAssetState = asset.availabilityStatus;
             line.location = asset.currentLocation;
             line.expectedQuantity = 1;
             orm.persist(line);
@@ -171,10 +175,27 @@ public class CountService {
         if (session.status == DomainEnums.CountStatus.posted) return response(session, orm.lockedLines(session));
         if (session.status != DomainEnums.CountStatus.approved) throw ApiException.conflict("Inventory count is not approved");
         var lines = orm.lockedLines(session);
+        // All aggregate locks precede asset/position locks, in a stable order.
+        lines.stream().map(line -> line.item.id).distinct().sorted(java.util.Comparator.comparing(UUID::toString))
+                .forEach(itemId -> requiredLocked(Item.class, itemId, "Item"));
         for (var line : lines) {
             if (line.assetInstance != null) {
                 var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
+                if (!line.item.active || line.item.trackingMode != DomainEnums.TrackingMode.serialized
+                        || !asset.active || !asset.item.id.equals(line.item.id)
+                        || asset.currentLocation == null || !asset.currentLocation.id.equals(line.location.id)
+                        || line.expectedAssetVersion == null || asset.version != line.expectedAssetVersion
+                        || asset.availabilityStatus != line.expectedAssetState) {
+                    throw ApiException.conflict("Asset changed after the count snapshot; create a fresh count for " + line.item.name);
+                }
                 if (line.approvedQuantity == 0) {
+                    if (asset.currentCustodian != null || orm.hasAssetReservation(asset)
+                            || custody.hasOutstandingAsset(asset.id)
+                            || !List.of(DomainEnums.AssetState.available, DomainEnums.AssetState.damaged,
+                                    DomainEnums.AssetState.in_repair, DomainEnums.AssetState.in_maintenance)
+                                    .contains(asset.availabilityStatus)) {
+                        throw ApiException.conflict("Reserved or outstanding assets require reconciliation before count adjustment");
+                    }
                     asset.availabilityStatus = DomainEnums.AssetState.lost;
                     asset.conditionStatus = DomainEnums.ConditionStatus.lost;
                 }
@@ -182,6 +203,11 @@ public class CountService {
                 var position = orm.lockedPosition(line.item, line.location, line.lot);
                 if (position == null || position.quantityOnHand != line.expectedQuantity) {
                     throw ApiException.conflict("Inventory changed after the count snapshot for " + line.item.name);
+                }
+                if (!line.item.active || line.item.trackingMode == DomainEnums.TrackingMode.serialized
+                        || line.approvedQuantity < position.quantityReserved
+                        + positions.reservedAt(position) + position.quantityDamaged + position.quantityQuarantined) {
+                    throw ApiException.conflict("Count adjustment would remove reserved or held inventory for " + line.item.name);
                 }
                 position.quantityOnHand = line.approvedQuantity;
                 position.lastCountedAt = Instant.now();

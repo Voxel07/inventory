@@ -287,6 +287,8 @@ create table inventory_codes (
 );
 
 create table inventory_count_lines (
+    expected_asset_version bigint,
+    expected_asset_state varchar(255),
     approved_quantity integer,
     counted_quantity integer,
     expected_quantity integer not null,
@@ -582,6 +584,7 @@ create table return_reconciliations (
 );
 
 create table return_submissions (
+    pending_asset_version bigint,
     event_occurrence_id UUID,
     general_order_id uuid,
     member_command_id uuid unique,

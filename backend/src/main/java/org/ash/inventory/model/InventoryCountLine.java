@@ -2,6 +2,8 @@ package org.ash.inventory.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -16,6 +18,8 @@ public class InventoryCountLine extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "lot_id") public InventoryLot lot;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "location_id") public StorageLocation location;
     @Column(name = "expected_quantity", nullable = false) public int expectedQuantity;
+    @Column(name = "expected_asset_version") public Long expectedAssetVersion;
+    @Enumerated(EnumType.STRING) @Column(name = "expected_asset_state") public DomainEnums.AssetState expectedAssetState;
     @Column(name = "counted_quantity") public Integer countedQuantity;
     @Column(name = "recounted_quantity") public Integer recountedQuantity;
     @Column(name = "approved_quantity") public Integer approvedQuantity;

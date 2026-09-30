@@ -64,7 +64,7 @@ public class PlanningStockOrm {
                     "member_requests r join scope s on s.id = r.item_id where r.kind = 'damage' and r.status <> 'resolved' group by r.item_id"),
             rows("position", "p.item_id", null, "p.location_id", null, null, null,
                     "p.quantity_on_hand", "p.quantity_damaged", "p.quantity_reserved", "p.quantity_quarantined",
-                    null, null, null, null, null, null, null, "p.lot_id is not null",
+                    "p.quantity_in_transit", null, null, null, null, null, null, "p.lot_id is not null",
                     "l.id is null or (l.status = 'available' and (l.expiry_date is null or l.expiry_date >= :today) and (l.best_before_date is null or l.best_before_date >= :today))",
                     null, null, "inventory_positions p join scope s on s.id = p.item_id left join inventory_lots l on l.id = p.lot_id"),
             rows("asset", "a.item_id", "a.id", "a.current_location_id",
@@ -73,8 +73,8 @@ public class PlanningStockOrm {
                     "asset_instances a join scope s on s.id = a.item_id where a.active = true"),
             rows("checkout_count", "t.item_id", "t.asset_instance_id", null, null, null, null,
                     "count(*)", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    "ledger t where t.type = 'checkout' and t.asset_instance_id is not null group by t.item_id, t.asset_instance_id"),
-            rows("schedule", "m.item_id", "m.asset_instance_id", null, "m.interval_type", null, null,
+                    "ledger t where t.type = 'checkout' group by t.item_id, t.asset_instance_id"),
+            rows("schedule", "m.item_id", "m.asset_instance_id", null, "m.interval_type", "m.warning_window", null,
                     null, null, null, null, "m.next_due_value", null, null, "m.next_due_at",
                     null, null, null, null, null, null, null,
                     "maintenance_schedules m join scope s on s.id = m.item_id where m.active = true and m.checkout_blocking = true"),
@@ -89,9 +89,17 @@ public class PlanningStockOrm {
                     "l.provider_location_id", "l.id",
                     "equipment_commitments c join scope s on s.id = c.item_id left join loan_arrangements l on l.commitment_id = c.id where c.cancelled = false"));
 
+    @SuppressWarnings("unchecked")
     public List<Object[]> snapshot(List<UUID> itemIds, LocalDate today) {
         if (itemIds.isEmpty()) return List.of();
-        return em.createNativeQuery(SNAPSHOT_SQL, Object[].class)
-                .setParameter("itemIds", itemIds).setParameter("today", today).getResultList();
+        org.hibernate.query.NativeQuery<Object[]> query = em.createNativeQuery(SNAPSHOT_SQL, Object[].class)
+                .unwrap(org.hibernate.query.NativeQuery.class);
+        // Register in SELECT order; JDBC drivers otherwise infer UUIDs as binary values.
+        String[] columns = {"kind", "item_id", "entity_id", "reference_id", "text1", "text2", "text3", "quantity1", "quantity2", "quantity3", "quantity4", "decimal_value", "date1", "date2", "timestamp_value", "json1", "json2", "json3", "flag1", "flag2", "provider_id", "loan_id"};
+        Class<?>[] types = {String.class, UUID.class, UUID.class, UUID.class, String.class, String.class, String.class,
+                Long.class, Long.class, Long.class, Long.class, java.math.BigDecimal.class, LocalDate.class, LocalDate.class,
+                java.time.OffsetDateTime.class, String.class, String.class, String.class, Boolean.class, Boolean.class, UUID.class, UUID.class};
+        for (int i = 0; i < columns.length; i++) query.addScalar(columns[i], types[i]);
+        return query.setParameter("itemIds", itemIds).setParameter("today", today).getResultList();
     }
 }

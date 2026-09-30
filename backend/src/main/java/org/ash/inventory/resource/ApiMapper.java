@@ -38,6 +38,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class ApiMapper {
+    @jakarta.inject.Inject org.ash.inventory.service.CatalogService catalog;
     private final MediaService media;
     private final CatalogOrm catalogOrm;
     private final OrderOrm orderOrm;
@@ -161,6 +162,7 @@ public class ApiMapper {
                 value.ownershipType == Item.Ownership.organization ? state.totalOwned() : 0,
                 state.onHand(),
                 state.checkedOut(),
+                state.inTransit(),
                 state.damaged(),
                 state.reserved(),
                 state.available(),
@@ -238,7 +240,7 @@ public class ApiMapper {
     }
 
     public ApiResponses.AssemblyResponse assembly(Assembly value) {
-        var components = catalogOrm.assemblyItems(value);
+        var components = catalog.getVisibleAssemblyComponents(value);
         var quantities = new LinkedHashMap<String, Integer>();
         var items = new ArrayList<ApiResponses.ItemResponse>();
         for (var component : components) {
@@ -260,11 +262,11 @@ public class ApiMapper {
         );
     }
 
-    public List<ApiResponses.AssemblyResponse> assemblies(List<Assembly> values) {
+    public List<ApiResponses.AssemblyResponse> assemblies(List<Assembly> values,
+            Map<UUID, List<org.ash.inventory.model.AssemblyItem>> componentsByAssembly) {
         if (values == null || values.isEmpty()) {
             return List.of();
         }
-        var componentsByAssembly = catalogOrm.assemblyItems(values);
         var allComponentItems = componentsByAssembly.values().stream()
                 .flatMap(List::stream)
                 .map(ai -> ai.item)
@@ -278,7 +280,7 @@ public class ApiMapper {
             var items = new ArrayList<ApiResponses.ItemResponse>();
             for (var component : components) {
                 quantities.put(component.item.id.toString(), component.quantity);
-                items.add(item(component.item, null, imagesMap.get(component.item.id), 0));
+                items.add(item(component.item, null, imagesMap.getOrDefault(component.item.id, List.of()), 0));
             }
             return new ApiResponses.AssemblyResponse(
                     assembly.id,
@@ -405,9 +407,9 @@ public class ApiMapper {
                     line.writtenOffQuantity
             ));
 
-            if (itemViews.stream().noneMatch(existing -> line.item.id.equals(existing.id())))
+            if (catalog.canViewItem(line.item) && itemViews.stream().noneMatch(existing -> line.item.id.equals(existing.id())))
                 itemViews.add(item(line.item));
-            if (line.sourceAssembly != null && assemblyViews.stream()
+            if (line.sourceAssembly != null && catalog.canViewAssembly(line.sourceAssembly) && assemblyViews.stream()
                     .noneMatch(existing -> line.sourceAssembly.id.equals(existing.id()))) {
                 assemblyViews.add(assembly(line.sourceAssembly));
             }

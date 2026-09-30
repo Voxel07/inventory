@@ -59,12 +59,6 @@ public class CatalogResponseCache {
         return json(catalog.getLocations().stream().map(mapper::location).toList());
     }
 
-    @CacheResult(cacheName = "assemblies-cache")
-    @Transactional
-    public String assemblies() {
-        return json(mapper.assemblies(catalog.getAssemblies()));
-    }
-
     @Transactional
     public String events(String eventType) {
         return json(catalog.getEvents(eventType).stream().map(mapper::event).toList());
@@ -87,13 +81,11 @@ public class CatalogResponseCache {
     private void invalidateFor(String resource) {
         Set<String> cacheNames = new LinkedHashSet<>();
         switch (resource) {
-            case "items" -> cacheNames.add("assemblies-cache");
-            case "category-maintenance" -> cacheNames.add("assemblies-cache");
-            case "storage-locations" -> cacheNames.addAll(Set.of("locations-cache", "assemblies-cache"));
-            case "assemblies" -> cacheNames.add("assemblies-cache");
+            case "items", "category-maintenance", "assemblies" -> {}
+            case "storage-locations" -> cacheNames.add("locations-cache");
             case "events" -> cacheNames.add("events-cache");
             case "factions" -> cacheNames.add("factions-cache");
-            default -> cacheNames.addAll(Set.of("locations-cache", "assemblies-cache", "events-cache", "factions-cache"));
+            default -> cacheNames.addAll(Set.of("locations-cache", "events-cache", "factions-cache"));
         }
         for (String cacheName : cacheNames) {
             cacheManager.getCache(cacheName).ifPresent(cache ->

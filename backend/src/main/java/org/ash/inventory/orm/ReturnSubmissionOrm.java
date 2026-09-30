@@ -23,6 +23,8 @@ public class ReturnSubmissionOrm {
         entityManager.persist(value);
     }
 
+    public void flush() { entityManager.flush(); }
+
     public boolean assignedToOrder(UUID assetId, UUID orderId) {
         return entityManager.createQuery("select count(a) from OrderLineAssetAssignment a where a.assetInstance.id = :asset and a.orderLine.order.id = :order", Long.class)
                 .setParameter("asset", assetId).setParameter("order", orderId).getSingleResult() > 0;
@@ -33,11 +35,13 @@ public class ReturnSubmissionOrm {
     }
 
     public <T> T findLocked(Class<T> type, UUID id) {
-        return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
+        var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
+        if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
+        return value;
     }
 
     public ReturnSubmission findLocked(UUID id) {
-        return entityManager.find(ReturnSubmission.class, id, LockModeType.PESSIMISTIC_WRITE);
+        return findLocked(ReturnSubmission.class, id);
     }
 
     public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, UserAccount actor, boolean manager) {

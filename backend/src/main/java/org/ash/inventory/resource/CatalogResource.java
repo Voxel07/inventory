@@ -114,7 +114,7 @@ public class CatalogResource {
     @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { actor.requireManager(); service.deleteLocation(id); return Response.noContent().build(); }
 
     @GET @Path("/assemblies")
-    public Response assemblies() { actor.current(); return catalogResponse(responses.assemblies()); }
+    public List<ApiResponses.AssemblyResponse> assemblies() { return queries.assemblies(); }
     @GET @Path("/assemblies/{id}")
     public ApiResponses.AssemblyResponse assembly(@PathParam("id") UUID id) { return queries.assembly(id); }
     @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.createAssembly(input)); }

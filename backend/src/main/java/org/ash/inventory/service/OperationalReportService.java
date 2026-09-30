@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
-import org.ash.inventory.orm.OperationsOrm;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiMapper;
 import java.math.BigDecimal;
@@ -14,12 +13,12 @@ import java.util.*;
 
 @ApplicationScoped
 public class OperationalReportService {
+    @jakarta.inject.Inject MaintenanceEvaluationService maintenancePolicy;
     @Inject org.ash.inventory.orm.OperationalReportOrm orm;
     @Inject ActorService actors;
     @Inject ApiMapper mapper;
     @Inject PositionService positions;
     @Inject CustodyBalanceService custody;
-    @Inject OperationsOrm operations;
     @Inject InventoryOperationsService inventory;
     public static final Map<String, String> DEFINITIONS = new LinkedHashMap<>();
     static {
@@ -143,15 +142,12 @@ public class OperationalReportService {
             item(row, item); location(row, null); rows.add(row);
         }
         for (var a : all(AssetInstance.class)) {
-            boolean custody = Set.of(DomainEnums.AssetState.in_custody, DomainEnums.AssetState.in_field, DomainEnums.AssetState.lost, DomainEnums.AssetState.returned_pending_check).contains(a.availabilityStatus);
-            boolean transit = a.availabilityStatus == DomainEnums.AssetState.in_transit;
-            boolean damaged = Set.of(DomainEnums.ConditionStatus.damaged, DomainEnums.ConditionStatus.unsafe, DomainEnums.ConditionStatus.lost).contains(a.conditionStatus);
-            boolean available = EquipmentService.freelyAvailable(a.item) && a.active && a.item.active && !damaged && a.currentLocation != null && a.availabilityStatus == DomainEnums.AssetState.available && !maintenanceBlocked(a.item, a);
+            var stock = StockPolicy.classify(a);
+            boolean available = stock.available() > 0 && a.currentLocation != null && EquipmentService.freelyAvailable(a.item) && !maintenanceBlocked(a.item, a);
             var row = row("id", a.id, "date", LocalDate.now(ZoneOffset.UTC), "tracking", "serialized", "asset", a.assetCode, "status", a.availabilityStatus,
                     "ownership", a.item.ownershipType, "owner", a.item.ownerName,
-                    "onHand", a.active && !custody && !transit && a.availabilityStatus != DomainEnums.AssetState.written_off ? 1 : 0,
-                    "available", available ? 1 : 0, "reserved", Set.of(DomainEnums.AssetState.reserved, DomainEnums.AssetState.staged).contains(a.availabilityStatus) ? 1 : 0,
-                    "damaged", damaged ? 1 : 0, "inTransit", transit ? 1 : 0, "outstanding", custody ? 1 : 0);
+                    "onHand", stock.onHand(), "available", available ? 1 : 0, "reserved", stock.reserved(),
+                    "damaged", stock.damaged(), "inTransit", stock.inTransit(), "outstanding", stock.checkedOut());
             item(row, a.item); location(row, a.currentLocation); rows.add(row);
         }
         return rows;
@@ -189,18 +185,16 @@ public class OperationalReportService {
         return rows;
     }
     private BigDecimal meter(MaintenanceSchedule s) {
-        if (s.intervalType == DomainEnums.MaintenanceIntervalType.usage_count) return BigDecimal.valueOf(operations.checkoutCount(s.item, s.assetInstance));
-        return s.assetInstance == null ? s.item.currentOperatingHours : s.assetInstance.operatingHours;
+        return maintenancePolicy.meter(s);
     }
     private String scheduleStatus(MaintenanceSchedule s) {
-        return MaintenancePolicy.status(s, Instant.now(), s.intervalType == DomainEnums.MaintenanceIntervalType.date ? null : meter(s)).name();
+        return maintenancePolicy.status(s, Instant.now()).name();
     }
     private boolean maintenanceBlocked(Item item, AssetInstance asset) {
-        if (!item.active || item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service
-                || (item.nextMaintenanceDue != null && item.nextMaintenanceDue.isBefore(LocalDate.now()))) return true;
+        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, LocalDate.now())) return true;
         if (asset != null && (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service)) return true;
         return orm.blockingSchedules(item).stream().filter(s -> s.assetInstance == null || (asset != null && s.assetInstance.id.equals(asset.id)))
-                .anyMatch(s -> scheduleStatus(s).equals("due") || scheduleStatus(s).equals("unknown"));
+                .anyMatch(s -> MaintenancePolicy.blocksCheckout(maintenancePolicy.status(s, Instant.now())));
     }
     private List<Map<String, Object>> maintenance() {
         var rows = new ArrayList<Map<String, Object>>();

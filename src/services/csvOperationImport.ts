@@ -1,3 +1,4 @@
+import { assertAuthSession, captureAuthSession } from './authManager';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
 import { equipmentProfileInput, equipmentCommitmentInput } from './equipmentInputs';
@@ -23,6 +24,7 @@ async function commandId(name: string): Promise<string> {
 
 
 export function createCsvOperationImporter(items: Item[], locations: Map<string, string>, events: EventReport[]) {
+  const context = captureAuthSession();
   const outputs = new Map<string, string>();
   const today = new Date();
   const date = (offset: number, timestamp: boolean) => {
@@ -47,8 +49,10 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
   }
 
   return async (row: ParsedOperationRow): Promise<void> => {
+    assertAuthSession(context);
     const data = resolve(row.data) as Record<string, unknown>;
     const key = await commandId(row.name);
+    assertAuthSession(context);
     const itemId = String(data.itemId ?? '');
     let result: { id: string };
     switch (row.operation) {

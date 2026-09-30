@@ -3,6 +3,9 @@ import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl } from './oidcClient';
 import {
+  assertAuthSession,
+  captureAuthSession,
+  type AuthSessionContext,
   canRefreshAuth,
   clearAuth,
   getAuthorizationHeaders,
@@ -20,22 +23,28 @@ import {
 export { getAuthSnapshot, subscribeAuth };
 
 export async function initializeAuth(): Promise<void> {
+  let context = captureAuthSession();
   try {
     const callbackTokens = await completeOidcLogin();
+    assertAuthSession(context);
     if (callbackTokens) setOidcSession(callbackTokens);
+    context = captureAuthSession();
     if (!getAuthSnapshot().token) await restorePersistedSession();
+    context = captureAuthSession();
     if (getAuthSnapshot().token) {
       await refreshCurrentUser();
       void startRealtimeEvents();
       void precacheCatalogForOfflineUse();
     }
   } catch (error) {
+    if (context.generation !== getAuthSnapshot().generation) return;
     console.error('OIDC login failed', error);
     clearAuth(error instanceof Error ? error.message : 'OIDC sign-in failed');
   }
 }
 
 export async function login(): Promise<void> {
+  const context = captureAuthSession();
   setAuthError(null);
   if (OIDC_CONFIG) {
     await beginOidcLogin();
@@ -44,12 +53,14 @@ export async function login(): Promise<void> {
   const response = await apiRequest<{ token: string; user: User }>('/api/auth/dev-login', {
     method: 'POST', body: { email: 'admin@localhost', password: '' }, anonymous: true,
   });
+  assertAuthSession(context);
   setDevelopmentSession(response.token, response.user);
   void startRealtimeEvents();
   void precacheCatalogForOfflineUse();
 }
 
 export async function logout(): Promise<boolean> {
+  const context = captureAuthSession();
   stopRealtimeEvents();
   if (!OIDC_CONFIG) {
     await clearAuth();
@@ -60,10 +71,12 @@ export async function logout(): Promise<boolean> {
   try {
     providerLogoutUrl = await oidcLogoutUrl(getOidcIdToken());
   } catch (error) {
+    assertAuthSession(context);
     await clearAuth();
     throw error;
   }
 
+  assertAuthSession(context);
   await clearAuth();
   window.location.assign(providerLogoutUrl);
   return true;
@@ -71,17 +84,20 @@ export async function logout(): Promise<boolean> {
 
 export async function refreshCurrentUser(): Promise<User | null> {
   if (!getAuthSnapshot().token) return null;
+  const context = captureAuthSession();
   try {
-    const user = await apiRequest<User>('/api/auth/me');
+    const user = await apiRequest<User>('/api/auth/me', { session: context });
+    assertAuthSession(context);
     updateAuthUser(user);
     return user;
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) clearAuth('Your session has expired. Please sign in again.');
+    if (context.generation === getAuthSnapshot().generation && error instanceof ApiError && error.status === 401) clearAuth('Your session has expired. Please sign in again.');
     return null;
   }
 }
 
 type RequestOptions = {
+  session?: AuthSessionContext;
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
@@ -132,74 +148,89 @@ function publishApiChange(detail?: ApiChangeDetail): void {
 
 /** Keep bulk writes from refetching every active query after every request. */
 export async function withApiRequestBatch<T>(operation: () => Promise<T>, onRateLimit: (seconds: number) => void): Promise<T> {
+  const context = captureAuthSession();
   const previousListener = apiBatchRateLimitListener;
   apiBatchDepth++;
-  apiBatchRateLimitListener = onRateLimit;
+  apiBatchRateLimitListener = (seconds) => { assertAuthSession(context); onRateLimit(seconds); };
   try {
-    return await operation();
+    const result = await operation();
+    assertAuthSession(context);
+    return result;
   } finally {
     apiBatchRateLimitListener = previousListener;
     apiBatchDepth--;
     if (apiBatchDepth === 0 && apiBatchChanged) {
       apiBatchChanged = false;
-      publishApiChange();
+      if (context.generation === getAuthSnapshot().generation) publishApiChange();
     }
   }
 }
 
-async function apiRequestAttempt<T>(path: string, options: RequestOptions, retried: boolean): Promise<T> {
-  const requestActorId = getAuthSnapshot().user?.id;
-  const url = new URL(`${API_URL}${path}`);
-  const method = options.method || 'GET';
-  for (const [key, value] of Object.entries(options.query || {})) {
-    if (value !== undefined) url.searchParams.set(key, String(value));
-  }
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-  if (!options.anonymous) Object.assign(headers, await getAuthorizationHeaders());
-  const cacheKey = `${url.toString()}#actor=${encodeURIComponent(requestActorId ?? 'anonymous')}`;
-  const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
-  if (cached) headers['If-None-Match'] = cached.etag;
+const activeRequests = new Set<AbortController>();
 
+async function withSessionRequest<T>(context: AuthSessionContext, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  assertAuthSession(context);
   const controller = new AbortController();
+  activeRequests.add(controller);
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetch(url, {
-      method,
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: controller.signal,
-    });
+    const result = await operation(controller.signal);
+    assertAuthSession(context);
+    return result;
   } catch (error) {
+    assertAuthSession(context);
     if (error instanceof DOMException && error.name === 'AbortError') throw new RequestTimeoutError();
     throw error;
   } finally {
     clearTimeout(timeout);
+    activeRequests.delete(controller);
   }
-  if (!options.anonymous && getAuthSnapshot().user?.id !== requestActorId) throw new ApiError(409, 'Account changed during the request. Please try again.');
-  if (response.status === 401 && !options.anonymous && !retried && canRefreshAuth()) {
-    await getValidAccessToken(true);
-    return apiRequestAttempt<T>(path, options, true);
-  }
-  if (response.status === 304 && cached) return cached.value as T;
-  if (!response.ok) {
-    const error = await responseError(response);
-    if (response.status === 401 && !options.anonymous) clearAuth('Your session has expired. Please sign in again.');
-    if (response.status === 429 && apiBatchDepth === 0) {
-      window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds: error.retryAfterSeconds } }));
+}
+
+async function apiRequestAttempt<T>(path: string, options: RequestOptions, retried: boolean, context: AuthSessionContext): Promise<T> {
+  return withSessionRequest(context, async (signal) => {
+    const url = new URL(`${API_URL}${path}`);
+    const method = options.method || 'GET';
+    for (const [key, value] of Object.entries(options.query || {})) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
     }
-    throw error;
-  }
-  const result = response.status === 204 ? undefined as T : await response.json() as T;
-  if (method === 'GET') {
-    const etag = response.headers.get('ETag');
-    if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
-  } else {
-    invalidateConditionalCacheFor(path);
-    publishApiChange();
-  }
-  return result;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (!options.anonymous) Object.assign(headers, await getAuthorizationHeaders());
+    assertAuthSession(context);
+    const cacheKey = `${url.toString()}#session=${context.generation}#actor=${encodeURIComponent(context.accountId ?? 'anonymous')}`;
+    const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
+    if (cached) headers['If-None-Match'] = cached.etag;
+    const response = await fetch(url, {
+      method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), signal,
+    });
+    assertAuthSession(context);
+    if (response.status === 401 && !options.anonymous && !retried && canRefreshAuth()) {
+      await getValidAccessToken(true);
+      assertAuthSession(context);
+      return apiRequestAttempt<T>(path, options, true, context);
+    }
+    if (response.status === 304 && cached) return cached.value as T;
+    if (!response.ok) {
+      const error = await responseError(response);
+      assertAuthSession(context);
+      if (response.status === 401 && !options.anonymous) void clearAuth('Your session has expired. Please sign in again.');
+      if (response.status === 429 && apiBatchDepth === 0) {
+        window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds: error.retryAfterSeconds } }));
+      }
+      throw error;
+    }
+    const result = response.status === 204 ? undefined as T : await response.json() as T;
+    assertAuthSession(context);
+    if (method === 'GET') {
+      const etag = response.headers.get('ETag');
+      if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
+    } else {
+      invalidateConditionalCacheFor(path);
+      publishApiChange();
+    }
+    return result;
+  });
 }
 
 function resourcePrefix(path: string): string {
@@ -221,17 +252,18 @@ function invalidateConditionalCacheFor(path: string): void {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const requestActorId = getAuthSnapshot().user?.id;
+  const context = options.session ?? captureAuthSession();
+  assertAuthSession(context);
   const rateLimitListener = apiBatchRateLimitListener;
   const offlineAction = options.offline
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
   if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error('This action requires an online connection. It has not been queued.');
-  if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction);
+  if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction, context);
   try {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await apiRequestAttempt<T>(path, options, false);
+        return await apiRequestAttempt<T>(path, options, false, context);
       } catch (error) {
         // A 429 is rejected before executing the command, so retrying writes is safe.
         // Network failures remain errors: their writes may already have committed.
@@ -239,12 +271,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         const seconds = error.retryAfterSeconds ?? 60;
         rateLimitListener(seconds);
         await new Promise<void>((resolve) => setTimeout(resolve, seconds * 1000));
-        if (getAuthSnapshot().user?.id !== requestActorId) throw new ApiError(409, 'Account changed during the request. Please try again.');
+        assertAuthSession(context);
       }
     }
   } catch (error) {
-    if (getAuthSnapshot().user?.id !== requestActorId) throw error;
-    if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction);
+    assertAuthSession(context);
+    if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction, context);
     throw error;
   }
 }
@@ -255,9 +287,10 @@ function bodyIdempotencyKey(body: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-async function queueOffline<T>(action: { type: string; payload: Record<string, unknown>; idempotencyKey?: string }): Promise<T> {
+async function queueOffline<T>(action: { type: string; payload: Record<string, unknown>; idempotencyKey?: string }, context: AuthSessionContext): Promise<T> {
   const idempotencyKey = action.idempotencyKey ?? crypto.randomUUID();
-  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: action.payload, localTimestamp: new Date().toISOString() });
+  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: action.payload, localTimestamp: new Date().toISOString() }, context);
+  assertAuthSession(context);
   throw new OfflineQueuedError(idempotencyKey);
 }
 
@@ -274,54 +307,66 @@ export function isApiMediaUrl(value: string): boolean {
   return url.origin === base.origin && url.pathname.startsWith(base.pathname);
 }
 
-export async function fetchMedia(url: string, signal?: AbortSignal, retried = false): Promise<Blob> {
+export async function fetchMedia(url: string, signal?: AbortSignal, retried = false, context = captureAuthSession()): Promise<Blob> {
   if (!isApiMediaUrl(url)) throw new Error('Invalid media URL');
-  const response = await fetch(url, { headers: await getAuthorizationHeaders(), signal });
-  if (response.status === 401 && !retried && canRefreshAuth()) {
-    await getValidAccessToken(true);
-    return fetchMedia(url, signal, true);
-  }
-  if (!response.ok) throw await responseError(response);
-  return response.blob();
-}
-
-async function uploadMediaAttempt(file: File, retried: boolean): Promise<string> {
-  const body = new FormData();
-  body.append('file', file);
-  const response = await fetch(`${API_URL}/api/media`, {
-    method: 'POST',
-    headers: await getAuthorizationHeaders(),
-    body,
+  return withSessionRequest(context, async (sessionSignal) => {
+    const headers = await getAuthorizationHeaders();
+    assertAuthSession(context);
+    const response = await fetch(url, { headers, signal: signal ? AbortSignal.any([signal, sessionSignal]) : sessionSignal });
+    assertAuthSession(context);
+    if (response.status === 401 && !retried && canRefreshAuth()) {
+      await getValidAccessToken(true);
+      assertAuthSession(context);
+      return fetchMedia(url, signal, true, context);
+    }
+    if (!response.ok) throw await responseError(response);
+    return response.blob();
   });
-  if (response.status === 401 && !retried && canRefreshAuth()) {
-    await getValidAccessToken(true);
-    return uploadMediaAttempt(file, true);
-  }
-  if (!response.ok) throw await responseError(response);
-  const stored = await response.json() as { key: string; url?: string };
-  return stored.key;
 }
 
-export function uploadMedia(file: File): Promise<string> {
-  return uploadMediaAttempt(file, false);
+async function uploadMediaAttempt(file: File, retried: boolean, context: AuthSessionContext): Promise<string> {
+  return withSessionRequest(context, async (signal) => {
+    const body = new FormData();
+    body.append('file', file);
+    const headers = await getAuthorizationHeaders();
+    assertAuthSession(context);
+    const response = await fetch(`${API_URL}/api/media`, { method: 'POST', headers, body, signal });
+    assertAuthSession(context);
+    if (response.status === 401 && !retried && canRefreshAuth()) {
+      await getValidAccessToken(true);
+      assertAuthSession(context);
+      return uploadMediaAttempt(file, true, context);
+    }
+    if (!response.ok) throw await responseError(response);
+    const stored = await response.json() as { key: string; url?: string };
+    assertAuthSession(context);
+    return stored.key;
+  });
 }
 
-async function deleteMediaAttempt(key: string, retried: boolean): Promise<void> {
+export function uploadMedia(file: File, context = captureAuthSession()): Promise<string> {
+  return uploadMediaAttempt(file, false, context);
+}
+
+async function deleteMediaAttempt(key: string, retried: boolean, context: AuthSessionContext): Promise<void> {
   const url = apiFileUrl(key);
   if (!url || !isApiMediaUrl(url)) throw new Error('Invalid media key');
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers: await getAuthorizationHeaders(),
+  return withSessionRequest(context, async (signal) => {
+    const headers = await getAuthorizationHeaders();
+    assertAuthSession(context);
+    const response = await fetch(url, { method: 'DELETE', headers, signal });
+    assertAuthSession(context);
+    if (response.status === 401 && !retried && canRefreshAuth()) {
+      await getValidAccessToken(true);
+      assertAuthSession(context);
+      return deleteMediaAttempt(key, true, context);
+    }
+    if (!response.ok) throw await responseError(response);
   });
-  if (response.status === 401 && !retried && canRefreshAuth()) {
-    await getValidAccessToken(true);
-    return deleteMediaAttempt(key, true);
-  }
-  if (!response.ok) throw await responseError(response);
 }
 
-export function deleteMedia(key: string): Promise<void> {
-  return deleteMediaAttempt(key, false);
+export function deleteMedia(key: string, context = captureAuthSession()): Promise<void> {
+  return deleteMediaAttempt(key, false, context);
 }
 
 export type ApiChangeDetail = {
@@ -380,20 +425,25 @@ export async function startRealtimeEvents(): Promise<void> {
   stopRealtimeEvents();
   if (!navigator.onLine || !getAuthSnapshot().token) return;
 
+  const context = captureAuthSession();
   const controller = new AbortController();
   sseAbortController = controller;
   try {
     const headers = await getAuthorizationHeaders();
+    assertAuthSession(context);
+    if (controller.signal.aborted) return;
     const response = await fetch(`${API_URL}/api/events/stream`, {
       headers: { ...headers, Accept: 'text/event-stream' },
       signal: controller.signal,
     });
+    assertAuthSession(context);
     if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     while (true) {
       const { done, value } = await reader.read();
+      assertAuthSession(context);
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       buffer = buffer.replaceAll('\r\n', '\n');
@@ -423,6 +473,8 @@ export function stopRealtimeEvents(): void {
 }
 
 async function precacheCatalogForOfflineUse(): Promise<void> {
+  const context = captureAuthSession();
+  if (!navigator.onLine || !context.accountId) return;
   const catalogs = [
     { key: 'items', path: '/api/items' },
     { key: 'assemblies', path: '/api/assemblies' },
@@ -430,8 +482,9 @@ async function precacheCatalogForOfflineUse(): Promise<void> {
     { key: 'events', path: '/api/events' },
   ];
   await Promise.allSettled(catalogs.map(async ({ key, path }) => {
-    const data = await apiRequest<unknown[]>(path);
-    await setOfflineCatalog(key, data);
+    const data = await apiRequest<unknown[]>(path, { session: context });
+    assertAuthSession(context);
+    await setOfflineCatalog(key, data, context);
   }));
 }
 
@@ -441,3 +494,17 @@ window.addEventListener('online', () => {
   void precacheCatalogForOfflineUse();
 });
 window.addEventListener('offline', stopRealtimeEvents);
+
+let requestGeneration = getAuthSnapshot().generation;
+subscribeAuth(() => {
+  if (requestGeneration === getAuthSnapshot().generation) return;
+  requestGeneration = getAuthSnapshot().generation;
+  activeRequests.forEach((controller) => controller.abort());
+  conditionalGetCache.clear();
+  stopRealtimeEvents();
+  if (getAuthSnapshot().token && getAuthSnapshot().user) {
+    void startRealtimeEvents();
+    void precacheCatalogForOfflineUse();
+    void flushOfflineQueue();
+  }
+});
