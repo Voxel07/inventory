@@ -1,7 +1,6 @@
 package org.ash.inventory.resource;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItemId;
@@ -44,16 +43,19 @@ public class ApiMapper {
     private final OrderOrm orderOrm;
     private final PurchasingOrm purchasingOrm;
     private final InventoryOperationsService operations;
-    private final EntityManager entityManager;
+    private final org.ash.inventory.orm.GeneralOrderOrm generalOrderOrm;
+    private final org.ash.inventory.service.EventMetricsService eventMetrics;
 
     public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm, PurchasingOrm purchasingOrm,
-            InventoryOperationsService operations, EntityManager entityManager) {
+            InventoryOperationsService operations, org.ash.inventory.orm.GeneralOrderOrm generalOrderOrm,
+            org.ash.inventory.service.EventMetricsService eventMetrics) {
         this.media = media;
         this.catalogOrm = catalogOrm;
         this.orderOrm = orderOrm;
         this.purchasingOrm = purchasingOrm;
         this.operations = operations;
-        this.entityManager = entityManager;
+        this.generalOrderOrm = generalOrderOrm;
+        this.eventMetrics = eventMetrics;
     }
 
     public ApiResponses.UserResponse user(UserAccount value) {
@@ -72,7 +74,7 @@ public class ApiMapper {
     public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value) {
         var itemNames = new LinkedHashMap<String, String>();
         for (var itemId : value.requestedQuantities.keySet()) {
-            var item = entityManager.find(Item.class, UUID.fromString(itemId));
+            var item = catalogOrm.find(Item.class, UUID.fromString(itemId));
             if (item != null) itemNames.put(itemId, item.name);
         }
         return new ApiResponses.GeneralOrderResponse(
@@ -95,8 +97,7 @@ public class ApiMapper {
                 value.missingQuantities,
                 value.writtenOffQuantities,
                 value.reconciledAssets,
-                entityManager.createQuery("from GeneralOrderHistory h where h.order = :order order by h.occurredAt", org.ash.inventory.model.GeneralOrderHistory.class)
-                        .setParameter("order", value).getResultList().stream().map(h -> {
+                generalOrderOrm.history(value).stream().map(h -> {
                             var row = new LinkedHashMap<String, Object>();
                             row.put("id", h.id); row.put("actorName", h.actor.name); row.put("actorId", h.actor.id);
                             row.put("timestamp", h.occurredAt); row.put("action", h.action); row.put("notes", h.notes); row.put("delta", h.delta);
@@ -296,62 +297,7 @@ public class ApiMapper {
     }
 
     public ApiResponses.EventResponse event(EventOccurrence value) {
-        var planned = value.plannedQuantities == null ? Map.<String, Integer>of() : value.plannedQuantities;
-        var used = new LinkedHashMap<String, Integer>();
-        var quantities = new LinkedHashMap<String, Map<String, Integer>>();
-        for (var metric : List.of("requested", "prepared", "handedOver", "returned", "consumed", "damaged", "missing", "writtenOff", "outstanding"))
-            quantities.put(metric, new LinkedHashMap<>());
-        var factionLines = entityManager.createQuery(
-                "from FactionOrderLine line where line.order.eventOccurrence = :event and line.order.status <> :cancelled",
-                FactionOrderLine.class)
-                .setParameter("event", value)
-                .setParameter("cancelled", DomainEnums.OrderStatus.cancelled)
-                .getResultList();
-        for (var line : factionLines) {
-            String id = line.item.id.toString();
-            quantities.get("requested").merge(id, line.requestedQuantity, Integer::sum);
-            quantities.get("prepared").merge(id, line.preparedQuantity, Integer::sum);
-            quantities.get("handedOver").merge(id, line.handedOverQuantity, Integer::sum);
-            quantities.get("returned").merge(id, line.returnedQuantity, Integer::sum);
-            quantities.get("consumed").merge(id, line.consumedQuantity, Integer::sum);
-            quantities.get("damaged").merge(id, line.damagedQuantity, Integer::sum);
-            quantities.get("missing").merge(id, line.missingQuantity, Integer::sum);
-            quantities.get("writtenOff").merge(id, line.writtenOffQuantity, Integer::sum);
-        }
-        var generalOrders = entityManager.createQuery(
-                "from GeneralOrder orderEntry where orderEntry.eventOccurrence = :event and orderEntry.status <> 'cancelled'",
-                GeneralOrder.class).setParameter("event", value).getResultList();
-        for (var order : generalOrders) {
-            order.requestedQuantities.forEach((id, qty) -> quantities.get("requested").merge(id, qty, Integer::sum));
-            order.handedOverQuantities.forEach((id, qty) -> quantities.get("handedOver").merge(id, qty, Integer::sum));
-            order.returnedQuantities.forEach((id, qty) -> quantities.get("returned").merge(id, qty, Integer::sum));
-            order.consumedQuantities.forEach((id, qty) -> quantities.get("consumed").merge(id, qty, Integer::sum));
-            order.preparedQuantities.forEach((id, qty) -> quantities.get("prepared").merge(id, qty, Integer::sum));
-            order.damagedQuantities.forEach((id, qty) -> quantities.get("damaged").merge(id, qty, Integer::sum));
-            order.missingQuantities.forEach((id, qty) -> quantities.get("missing").merge(id, qty, Integer::sum));
-            order.writtenOffQuantities.forEach((id, qty) -> quantities.get("writtenOff").merge(id, qty, Integer::sum));
-        }
-        var direct = entityManager.createQuery("from StockTransaction tx where tx.eventOccurrence = :event and tx.factionOrder is null and tx.relatedEntityType is null", StockTransaction.class)
-                .setParameter("event", value).getResultList();
-        for (var tx : direct) {
-            String metric = switch (tx.type) { case checkout -> "handedOver"; case checkin -> "returned"; case consumed -> "consumed"; case written_off -> tx.custodyWriteOff ? "writtenOff" : null; default -> null; };
-            if (metric != null) quantities.get(metric).merge(tx.item.id.toString(), tx.quantity, Integer::sum);
-        }
-        used.putAll(quantities.get("handedOver"));
-        used.forEach((id, handedOver) -> quantities.get("outstanding").put(id, Math.max(0, handedOver
-                - quantities.get("returned").getOrDefault(id, 0) - quantities.get("consumed").getOrDefault(id, 0)
-                - quantities.get("damaged").getOrDefault(id, 0) - quantities.get("writtenOff").getOrDefault(id, 0))));
-        var itemNames = new LinkedHashMap<String, String>();
-        var itemIds = new java.util.HashSet<String>();
-        itemIds.addAll(planned.keySet());
-        itemIds.addAll(used.keySet());
-        itemIds.addAll(quantities.get("requested").keySet());
-        for (var itemId : itemIds) {
-            try {
-                var item = entityManager.find(Item.class, UUID.fromString(itemId));
-                if (item != null) itemNames.put(itemId, item.name);
-            } catch (IllegalArgumentException ignored) { }
-        }
+        var metrics = eventMetrics.summarize(value);
         return new ApiResponses.EventResponse(
                 value.id,
                 value.createdAt,
@@ -363,11 +309,11 @@ public class ApiMapper {
                 value.endDate,
                 value.status,
                 value.notes,
-                itemIds.stream().sorted().toList(),
-                planned,
-                used,
-                itemNames,
-                quantities
+                metrics.itemIds(),
+                metrics.planned(),
+                metrics.used(),
+                metrics.itemNames(),
+                metrics.quantities()
         );
     }
 

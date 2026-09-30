@@ -1,15 +1,18 @@
+import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
+import { QueryFeedback } from '../common/QueryFeedback';
 import { useAssignableUsers } from '../../hooks/useUsers';
 import { getVendors } from '../../services/procurementService';
 import { createMaintenanceRecord } from '../../services/maintenanceService';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
+import { Alert, Button, Card, CardContent, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useDamageReports } from '../../hooks/useDamageReports';
 import { useOperationList } from '../../hooks/useOperations';
-import { operationsApi, type Repair, type Schedule } from '../../services/operationsService';
+import { operationsApi } from '../../services/operationsService';
+import type { Repair, Schedule } from '../../types/operations';
 import { OperationForm, type Values } from './OperationForm';
 import { useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
@@ -27,8 +30,7 @@ export function SchedulesPanel() {
   const [retire, setRetire] = useState<Schedule | null>(null);
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setChooseItem(true)}>{t('Wartungsplan anlegen', 'New maintenance schedule')}</Button>
-    {schedules.isLoading && <LinearProgress />}{schedules.error && <Alert severity="error">{schedules.error.message}</Alert>}
-    {!schedules.isLoading && !schedules.data?.length && <Alert severity="info">{t('Noch keine Wartungspläne.', 'No maintenance schedules yet.')}</Alert>}
+    <QueryFeedback isLoading={schedules.isLoading} error={schedules.error} isEmpty={!schedules.data?.length} emptyMessage={t('Noch keine Wartungspläne.', 'No maintenance schedules yet.')} />
     {schedules.data?.map((schedule) => <Card key={schedule.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{lookup.items.find((item) => item.id === schedule.itemId)?.name} · {schedule.maintenanceType}</Typography>
       <Typography>{schedule.intervalType} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? new Date(schedule.nextDueAt).toLocaleDateString() : schedule.nextDueValue}</Typography>
@@ -52,7 +54,7 @@ export function SchedulesPanel() {
       { key: 'warningWindow', label: t('Vorwarnung (Intervall-Einheiten)', 'Warning window (interval units)'), type: 'number', min: 0, step: 0.01 },
       { key: 'requiredChecklist', label: t('Pflichtprüfliste', 'Required checklist'), multiline: true },
       { key: 'checkoutBlocking', label: t('Ausgabe bei Fälligkeit sperren', 'Block checkout when due'), type: 'checkbox' }, { key: 'active', label: t('Aktiv', 'Active'), type: 'checkbox' },
-    ]} onSave={(values) => operationsApi.saveSchedule({ ...optionalValues(values), itemId: edit.itemId, nextDueAt: values.intervalType === 'date' ? new Date(String(values.nextDueAt)).toISOString() : null, nextDueValue: values.intervalType === 'date' ? null : values.nextDueValue }, edit.schedule?.id)} />}
+    ]} onSave={(values) => operationsApi.saveSchedule(scheduleInput({ ...optionalValues(values), itemId: edit.itemId, nextDueAt: values.intervalType === 'date' ? new Date(String(values.nextDueAt)).toISOString() : null, nextDueValue: values.intervalType === 'date' ? null : values.nextDueValue }), edit.schedule?.id)} />}
     {complete && <OperationForm title={t('Wartung dokumentieren', 'Record maintenance')} initial={{ result: 'passed', performedAt }} onClose={() => setComplete(null)} fields={[
       { key: 'performedAt', label: t('Durchgeführt am', 'Performed at'), type: 'datetime-local', required: true },
       { key: 'result', label: t('Ergebnis', 'Result'), required: true, options: [{ value: 'passed', label: t('Bestanden', 'Passed') }, { value: 'failed', label: t('Nicht bestanden', 'Failed') }, { value: 'advisory', label: t('Mit Hinweis', 'Advisory') }] },
@@ -75,8 +77,7 @@ export function RepairsPanel() {
   const labels: Record<string, string> = { triaged: t('Sichten', 'Triage'), awaiting_repair: t('Zur Reparatur', 'Queue repair'), in_repair: t('Reparatur starten', 'Start repair'), repaired: t('Reparatur abschließen', 'Complete repair'), verified: t('Prüfung bestätigen', 'Verify'), returned_to_service: t('Freigeben', 'Return to service'), written_off: t('Abschreiben', 'Write off') };
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setCreate(true)}>{t('Reparatur anlegen', 'New repair case')}</Button>
-    {repairs.isLoading && <LinearProgress />}{(repairs.error || damage.error) && <Alert severity="error">{(repairs.error || damage.error)?.message}</Alert>}
-    {!repairs.isLoading && !repairs.data?.length && <Alert severity="info">{t('Noch keine Reparaturen.', 'No repair cases yet.')}</Alert>}
+    <QueryFeedback isLoading={repairs.isLoading || damage.isLoading} error={repairs.error || damage.error} isEmpty={!repairs.data?.length} emptyMessage={t('Noch keine Reparaturen.', 'No repair cases yet.')} />
     {repairs.data?.map((repair) => {
       const report = damage.data?.find((value) => value.id === repair.damageReportId);
       return <Card key={repair.id}><CardContent><Stack spacing={1}>
@@ -95,14 +96,14 @@ export function RepairsPanel() {
       { key: 'repairOwnerId', label: t('Verantwortlich', 'Repair owner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
       { key: 'vendorId', label: t('Reparaturfirma', 'Repair vendor'), options: (vendors.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
       { key: 'partsAndCostNotes', label: t('Teile und Kosten', 'Parts and cost notes'), multiline: true }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-    ]} onSave={(values) => operationsApi.createRepair(optionalValues(values))} onClose={() => setCreate(false)} />}
+    ]} onSave={(values) => operationsApi.createRepair(repairInput(optionalValues(values)))} onClose={() => setCreate(false)} />}
     {action && <OperationForm title={labels[action.status]} onClose={() => setAction(null)} initial={action.repair.assetInstanceId ? { amount: 1 } : {}} fields={[
       ...(['repaired', 'written_off'].includes(action.status) ? [{ key: 'amount', label: t('Menge', 'Quantity'), type: 'number' as const, min: 1, max: action.repair.assetInstanceId ? 1 : undefined, required: true }] : []),
       ...(action.status === 'verified' ? [{ key: 'verificationResult', label: t('Prüfergebnis', 'Verification result'), required: true, multiline: true }] : []),
       { key: 'repairOwnerId', label: t('Verantwortlich', 'Repair owner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
       { key: 'vendorId', label: t('Reparaturfirma', 'Repair vendor'), options: (vendors.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
       { key: 'notes', label: t('Durchgeführte Arbeit / Begründung', 'Work performed / reason'), required: true, multiline: true },
-    ]} onSave={(values) => operationsApi.repairCommand(action.repair.id, { ...optionalValues(values), status: action.status, idempotencyKey: action.key })} />}
+    ]} onSave={(values) => operationsApi.repairCommand(action.repair.id,repairTransitionInput({ ...optionalValues(values), status: action.status, idempotencyKey: action.key }))} />}
   </Stack>;
 }
 

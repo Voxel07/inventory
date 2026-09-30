@@ -43,6 +43,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
+    @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
     private final OrderOrm orm;
@@ -180,8 +181,7 @@ public class OrderService {
                         + " can be reserved");
             }
             var source = input.sourceLocations() == null || input.sourceLocations().get(lockedItem.id) == null ? lockedItem.storageLocation : positions.location(input.sourceLocations().get(lockedItem.id));
-            if (prepared > 0 && lockedItem.trackingMode != DomainEnums.TrackingMode.serialized) equipment.assertSource(lockedItem, source);
-            if (lockedItem.trackingMode != DomainEnums.TrackingMode.serialized) availableIncludingThisOrder = Math.min(availableIncludingThisOrder, positions.availableAt(lockedItem, source, order.id, null));
+            availableIncludingThisOrder = Math.min(availableIncludingThisOrder, allocation.sourceCapacity(lockedItem, source, order.id, null, prepared));
             if (prepared > availableIncludingThisOrder && !input.acknowledgeShortages()) throw ApiException.conflict("Insufficient stock at source for " + lockedItem.name);
             int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
             distributePrepared(lines, lockedItem, actualPrepared);
@@ -452,9 +452,7 @@ public class OrderService {
                 throw ApiException.notFound("Asset instance not found for " + item.name);
             if (asset.availabilityStatus != DomainEnums.AssetState.available)
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not available");
-            assertAssetCanBePacked(asset);
-            inventory.assertAssetCheckoutAllowed(asset);
-            equipment.assertAsset(asset, order.eventOccurrence);
+            allocation.assertAssetEligible(asset, order.eventOccurrence);
 
             while (lineIndex < preparedLines.size()
                     && assignedToLine >= preparedLines.get(lineIndex).preparedQuantity) {
@@ -475,20 +473,6 @@ public class OrderService {
         }
     }
 
-    private void assertAssetCanBePacked(AssetInstance asset) {
-        if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged
-                || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
-                || asset.conditionStatus == DomainEnums.ConditionStatus.lost) {
-            throw ApiException.conflict("Asset " + asset.assetCode + " cannot be packed because its condition is "
-                    + asset.conditionStatus);
-        }
-        if (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue
-                || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
-            throw ApiException.conflict("Asset " + asset.assetCode + " cannot be packed because its service status is "
-                    + asset.serviceStatus);
-        }
-    }
-
     private void pickupAssignedAssets(FactionOrder order, Item item, UserAccount actor, UUID idempotencyKey,
             int preparedQuantity) {
         var assignments = orm.assetAssignments(order, item);
@@ -498,9 +482,7 @@ public class OrderService {
             var asset = orm.findLocked(AssetInstance.class, assignment.assetInstance.id);
             if (asset.availabilityStatus != DomainEnums.AssetState.staged)
                 throw ApiException.conflict("Asset " + asset.assetCode + " is no longer staged for this order");
-            assertAssetCanBePacked(asset);
-            inventory.assertAssetCheckoutAllowed(asset);
-            equipment.assertAsset(asset, order.eventOccurrence);
+            allocation.assertAssetEligible(asset, order.eventOccurrence);
             int before = inventory.stock(item).available();
             var transaction = new StockTransaction();
             transaction.item = item;
@@ -948,8 +930,7 @@ public class OrderService {
     }
 
     private int outstandingQuantity(FactionOrderLine line) {
-        return Math.max(0, line.handedOverQuantity - line.returnedQuantity - line.consumedQuantity
-                - line.damagedQuantity - line.writtenOffQuantity);
+        return Math.max(0, CustodyQuantities.outstanding(line));
     }
 
     private Map<String, Object> lineSnapshot(FactionOrder order) {

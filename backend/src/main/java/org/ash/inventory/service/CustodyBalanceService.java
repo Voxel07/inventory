@@ -26,7 +26,7 @@ public class CustodyBalanceService {
         for (var line : orm.factionLines()) {
             var order = line.order;
             if (!all && !order.createdBy.id.equals(actor.id)) continue;
-            int outstanding = line.handedOverQuantity - line.returnedQuantity - line.consumedQuantity - line.damagedQuantity - line.writtenOffQuantity;
+            int outstanding = CustodyQuantities.outstanding(line);
             if (outstanding > 0) {
                 var row = balance(line.item, order.createdBy, order.eventOccurrence, order.id, null, null, outstanding,
                         order.collectorName == null ? order.faction.name : order.collectorName);
@@ -38,9 +38,7 @@ public class CustodyBalanceService {
             if (!all && !order.createdBy.id.equals(actor.id)) continue;
             for (var entry : order.handedOverQuantities.entrySet()) {
                 var id = entry.getKey(); var item = orm.item(id);
-                int outstanding = entry.getValue() - order.returnedQuantities.getOrDefault(id, 0)
-                        - order.consumedQuantities.getOrDefault(id, 0) - order.damagedQuantities.getOrDefault(id, 0)
-                        - order.writtenOffQuantities.getOrDefault(id, 0);
+                int outstanding = CustodyQuantities.outstanding(order, id);
                 if (outstanding <= 0) continue;
                 if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                     for (var asset : order.assetAssignments.getOrDefault(id, List.of())) {

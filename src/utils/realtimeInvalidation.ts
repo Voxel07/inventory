@@ -1,39 +1,21 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { ApiChangeDetail } from '../services/apiClient';
 
-const ALL_PREFIXES: string[][] = [
-  ['custody-balances'],
-  ['member-custody'], ['member-requests'], ['member-storage'], ['member-assignments'], ['action-inbox'], ['loans'],
-  ['operations'],
-  ['purchase-orders'],
-  ['vendors'],
-  ['items'],
-  ['category-maintenance'],
-  ['assemblies'],
-  ['storageLocations'],
-  ['event-reports'],
-  ['faction-orders'],
-  ['transactions'],
-  ['damageReports'],
-  ['procurement-deficits'],
-  ['users'],
-  ['general-orders'],
-  ['notifications'],
-  ['return-submissions'],
-];
+import { stockQueryPrefixes } from './queryKeys';
 
 /**
  * Maps a server-sent change event (or a local write, signalled by an empty
- * detail) to the smallest set of query keys that must be refetched.
+ * detail) to affected operational query domains.
  *
  * Local writes and unknown events fall back to invalidating everything, which
  * keeps correctness while realtime events from the backend stay targeted.
  */
 export function invalidateForApiChange(queryClient: QueryClient, detail?: ApiChangeDetail): void {
-  const prefixes: string[][] = [['reports'], ['operations'], ['custody-balances'], ['member-custody'], ['member-storage'], ['action-inbox']];
+  const prefixes: string[][] = stockQueryPrefixes.map((key) => [key]);
 
   if (!detail?.type) {
-    prefixes.push(...ALL_PREFIXES.map((prefix) => [...prefix]));
+    void queryClient.invalidateQueries();
+    return;
   } else if (detail.type === 'catalog.changed') {
     switch (detail.resource) {
       case 'items':
@@ -63,8 +45,9 @@ export function invalidateForApiChange(queryClient: QueryClient, detail?: ApiCha
   } else if (detail.type === 'order.changed' || detail.type === 'order.transition') {
     prefixes.push(['faction-orders'], ['transactions'], ['items'], ['damageReports'], ['procurement-deficits']);
   } else {
-    prefixes.push(...ALL_PREFIXES.map((prefix) => [...prefix]));
+    void queryClient.invalidateQueries();
+    return;
   }
 
-  for (const prefix of prefixes) queryClient.invalidateQueries({ queryKey: prefix });
+  for (const prefix of new Set(prefixes.map(([key]) => key))) void queryClient.invalidateQueries({ queryKey: [prefix] });
 }

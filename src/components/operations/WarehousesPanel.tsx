@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { Alert, Button, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from '@mui/material';
-import { apiRequest } from '../../services/apiClient';
+import { getWarehouses, saveWarehouse, type Warehouse } from '../../services/warehouseService';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
 import { useLocalizedText } from '../../utils/naming';
-export interface Warehouse { id: string; code: string; name: string; description?: string; active: boolean }
-export const getWarehouses = (page: number, size: number) => apiRequest<Warehouse[]>('/api/warehouses', { query: { page, size } });
 
 export function WarehousesPanel() {
   const t = useLocalizedText(); const list = useOperationList('warehouses', getWarehouses); const command = useOperationCommand();
@@ -14,7 +12,7 @@ export function WarehousesPanel() {
     {(list.error || command.error) && <Alert severity="error">{(list.error || command.error)?.message}</Alert>}
     <Typography variant="h6">{t('Lager / Standorte', 'Warehouses / sites')}</Typography>
     {list.data?.map((w) => <Card key={w.id}><CardContent><Typography>{w.code} · {w.name} · {w.active ? t('Aktiv', 'Active') : t('Inaktiv', 'Inactive')}</Typography><Typography>{w.description}</Typography><Button onClick={() => { setEditing(w); setForm({ code: w.code, name: w.name, description: w.description ?? '', active: w.active }); }}>{t('Bearbeiten', 'Edit')}</Button></CardContent></Card>)}
-    <Stack component="form" spacing={2} onSubmit={(event) => { event.preventDefault(); command.mutate(() => apiRequest(`/api/warehouses${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PUT' : 'POST', body: form }), { onSuccess: () => { setEditing(null); setForm({ code: '', name: '', description: '', active: true }); } }); }}>
+    <Stack component="form" spacing={2} onSubmit={(event) => { event.preventDefault(); command.mutate(() => saveWarehouse(form, editing?.id), { onSuccess: () => { setEditing(null); setForm({ code: '', name: '', description: '', active: true }); } }); }}>
       <Typography>{editing ? t('Standort bearbeiten', 'Edit site') : t('Standort hinzufügen', 'Add site')}</Typography>
       <TextField required label={t('Code', 'Code')} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
       <TextField required label={t('Name', 'Name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />

@@ -1,6 +1,6 @@
-import { Dialog } from '../components/shared/ClosableDialog';
+import { CatalogFormDialog } from '../components/shared/CatalogFormDialog';
 import { useState } from 'react';
-import { Box, Typography, DialogTitle, DialogContent, useTheme, useMediaQuery } from '@mui/material';
+import { Box, Typography, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
@@ -86,28 +86,16 @@ function ManagedAssemblies() {
                 onDeleteMany={crud.openDeleteMany}
             />
 
-            {/* Create Dialog */}
-            <Dialog open={crud.formOpen && !crud.editingEntity} fullScreen={isMobile} onClose={crud.closeForm} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Neue Baugruppe erstellen', 'Create new assembly')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <AssemblyForm items={items ?? []} onSubmit={crud.handleSave} isLoading={createAssembly.isPending} />
-                </DialogContent>
-            </Dialog>
-
-            {/* Edit Dialog */}
-            <Dialog open={Boolean(crud.editingEntity)} fullScreen={isMobile} onClose={crud.closeForm} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Baugruppe bearbeiten', 'Edit assembly')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    {crud.editingEntity && (
-                        <AssemblyForm
-                            initialData={crud.editingEntity}
-                            items={items ?? []}
-                            onSubmit={crud.handleSave}
-                            isLoading={updateAssembly.isPending}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            <CatalogFormDialog open={crud.formOpen} onClose={crud.closeForm} fullScreen={isMobile}
+                title={crud.editingEntity ? t('Baugruppe bearbeiten', 'Edit assembly') : t('Neue Baugruppe erstellen', 'Create new assembly')}>
+                <AssemblyForm
+                    key={crud.editingEntity?.id ?? 'create'}
+                    initialData={crud.editingEntity}
+                    items={items ?? []}
+                    onSubmit={crud.handleSave}
+                    isLoading={createAssembly.isPending || updateAssembly.isPending}
+                />
+            </CatalogFormDialog>
 
             {/* Delete Confirmation */}
             <ConfirmDialog

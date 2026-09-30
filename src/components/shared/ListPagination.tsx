@@ -16,7 +16,7 @@ export function ListPagination({ count, page, onChange, pageSize, onPageSizeChan
   const t = useLocalizedText();
   const pages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(count / pageSize));
   return (
-    <Stack spacing={1}>
+    <Stack spacing={1} sx={{ width: '100%', minWidth: 0 }}>
       <TablePagination component="div" count={count} page={Math.max(0, Math.min(page, pages) - 1)}
         rowsPerPage={pageSize} rowsPerPageOptions={[20, 50, 100]}
         onPageChange={(_, value) => onChange(value + 1)}
@@ -27,7 +27,8 @@ export function ListPagination({ count, page, onChange, pageSize, onPageSizeChan
           first: t('Erste Seite', 'First page'), last: t('Letzte Seite', 'Last page'),
           next: t('Nächste Seite', 'Next page'), previous: t('Vorherige Seite', 'Previous page'),
         })[type]}
-        sx={{ '& .MuiTablePagination-toolbar': { px: 1, minHeight: 52, flexWrap: 'wrap' },
+        sx={{ '& .MuiTablePagination-toolbar': { px: 1, minHeight: 52, flexWrap: 'wrap', justifyContent: 'flex-end' },
+          '& .MuiTablePagination-spacer': { display: 'none' },
           '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { my: 1 } }} />
       {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
       {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}

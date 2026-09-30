@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Stack, Typography } from '@mui/material';
 import type { GeneralOrder, Item } from '../../types';
+import type { GeneralOrderReturnInput } from '../../types/order';
+import { optionalText } from '../../utils/inputValues';
 import { getItemAssets } from '../../services/inventoryService';
 import { generalOrderCommand } from '../../services/orderService';
 import { OperationForm, type Field, type Values } from '../operations/OperationForm';
@@ -48,11 +50,11 @@ export function GeneralOrderWorkflow({ order, action, items, onClose }: { order:
     if (action === 'prepare') {
       const preparedQuantities = Object.fromEntries(ids.map((id) => [id, Number(values[`prepare:${id}`] || 0)]));
       const assetAssignments = Object.fromEntries(ids.map((id) => [id, (assets.data?.[id] ?? []).filter((asset) => values[`asset:${asset.id}`]).map((asset) => asset.id)]));
-      return generalOrderCommand(order.id, action, { preparedQuantities, assetAssignments, sourceLocations: Object.fromEntries(ids.filter((id) => values[`source:${id}`]).map((id) => [id, values[`source:${id}`]])), notes: values.notes, idempotencyKey: key });
+      return generalOrderCommand(order.id, action, { preparedQuantities, assetAssignments, sourceLocations: Object.fromEntries(ids.filter((id) => values[`source:${id}`]).map((id) => [id, String(values[`source:${id}`])])), notes: optionalText(values.notes), idempotencyKey: key });
     }
     if (action === 'return') {
-      const data: Record<string, unknown> = { idempotencyKey: key, notes: values.notes };
-      for (const outcome of ['returned', 'consumed', 'damaged', 'missing', 'writtenOff']) {
+      const data: GeneralOrderReturnInput = { idempotencyKey: key, notes: optionalText(values.notes) };
+      for (const outcome of ['returned', 'consumed', 'damaged', 'missing', 'writtenOff'] as const) {
         const quantities: Record<string, number> = {}; const selections: Record<string, string[]> = {};
         for (const id of ids) {
           if (items.find((item) => item.id === id)?.trackingMode === 'serialized') {
@@ -60,11 +62,12 @@ export function GeneralOrderWorkflow({ order, action, items, onClose }: { order:
             if (selected.length) { quantities[id] = selected.length; selections[id] = selected; }
           } else if (values[`${outcome}:${id}`] !== undefined && values[`${outcome}:${id}`] !== '') quantities[id] = Number(values[`${outcome}:${id}`]);
         }
-        data[`${outcome}Quantities`] = quantities; data[`${outcome}Assets`] = selections;
+        data[`${outcome}Quantities`] = quantities;
+        if (outcome !== 'consumed') data[`${outcome}Assets`] = selections;
       }
       return generalOrderCommand(order.id, 'return', data);
     }
-    return generalOrderCommand(order.id, action, { notes: values.notes, idempotencyKey: key });
+    return generalOrderCommand(order.id, action, { notes: optionalText(values.notes), idempotencyKey: key });
   }}>
     {assets.error && <Alert severity="error">{assets.error.message}</Alert>}
     {action === 'pickup' && <Alert severity="info">{t('Reservierte Artikel werden jetzt übergeben.', 'The reserved items will now be handed over.')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}

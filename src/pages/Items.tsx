@@ -1,3 +1,4 @@
+import { CatalogFormDialog } from '../components/shared/CatalogFormDialog';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import { Box, Typography, DialogTitle, DialogContent, useMediaQuery, useTheme } from '@mui/material';
@@ -91,38 +92,19 @@ function ManagedItems() {
                 onDeleteMany={crud.openDeleteMany}
             />
 
-            {/* Create Dialog */}
-            <Dialog open={crud.isCreateOpen} onClose={crud.closeCreate} maxWidth="sm" fullWidth fullScreen={isMobile}>
-                <DialogTitle>{t('Neuen Artikel erstellen', 'Create new item')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <ItemForm
-                        onSubmit={crud.handleCreate}
-                        isLoading={createItem.isPending}
-                        storageLocations={storageLocations ?? []}
-                        categories={categories}
-                        existingNames={allNames}
-                        assignableUsers={assignableUsers ?? []}
-                    />
-                </DialogContent>
-            </Dialog>
-
-            {/* Edit Dialog */}
-            <Dialog open={crud.isEditOpen} onClose={crud.closeEdit} maxWidth="sm" fullWidth fullScreen={isMobile}>
-                <DialogTitle>{t('Artikel bearbeiten', 'Edit item')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    {crud.editingEntity && (
-                        <ItemForm
-                            initialData={crud.editingEntity}
-                            onSubmit={crud.handleUpdate}
-                            isLoading={updateItem.isPending}
-                            storageLocations={storageLocations ?? []}
-                            categories={categories}
-                            existingNames={allNames.filter((n) => n !== crud.editingEntity?.name)}
-                            assignableUsers={assignableUsers ?? []}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            <CatalogFormDialog open={crud.formOpen} onClose={crud.closeForm} fullScreen={isMobile}
+                title={crud.editingEntity ? t('Artikel bearbeiten', 'Edit item') : t('Neuen Artikel erstellen', 'Create new item')}>
+                <ItemForm
+                    key={crud.editingEntity?.id ?? 'create'}
+                    initialData={crud.editingEntity}
+                    onSubmit={crud.handleSave}
+                    isLoading={createItem.isPending || updateItem.isPending}
+                    storageLocations={storageLocations ?? []}
+                    categories={categories}
+                    existingNames={allNames.filter((name) => name !== crud.editingEntity?.name)}
+                    assignableUsers={assignableUsers ?? []}
+                />
+            </CatalogFormDialog>
 
             {/* QR Code Dialog */}
             <Dialog open={!!qrItem} onClose={() => setQrItem(undefined)} maxWidth="xs" fullWidth>

@@ -1,22 +1,23 @@
+import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { apiRequest } from '../../services/apiClient';
-import { equipmentApi } from '../../services/equipmentService';
+import { loanApi } from '../../services/loanService';
+import { useLoans } from '../../hooks/useLoans';
+import type { Loan } from '../../types/loan';
+import { inputChoice, inputText } from '../../utils/inputValues';
 import { operationsApi } from '../../services/operationsService';
 import { useOperationList } from '../../hooks/useOperations';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useLocalizedText } from '../../utils/naming';
 import { Fields, OperationForm } from './OperationForm';
 
-interface Loan { id: string; itemId: string; item: string; providerLocationId: string; provider: string; contact: string; terms: string; kind: string; quantity: number; collected: number; returned: number; assetCodes: string[]; collectionDate: string; availableUntil: string; returnDue: string; status: string; revision: number; history: { action: string; at: string; actor: string; notes: string }[] }
 export function LoansPanel() {
   const t = useLocalizedText(); const lookup = useStockLookups();
-  const loans = useQuery({ queryKey: ['loans'], queryFn: () => apiRequest<Loan[]>('/api/loans') });
+  const loans = useLoans();
   const transfers = useOperationList('transfers', operationsApi.transfers);
   const [itemId, setItemId] = useState(''); const [create, setCreate] = useState(false);
-  const profile = useQuery({ queryKey: ['items', itemId, 'equipment'], queryFn: () => equipmentApi.get(itemId), enabled: Boolean(itemId) });
+  const profile = useEquipmentProfile(itemId);
   const [action, setAction] = useState<{ loan: Loan; type: 'collect' | 'return' | 'extend' } | null>(null);
   return <Stack spacing={2}>
     <Typography variant="h6">{t('Leih- & Mietvereinbarungen', 'Borrowing & rental arrangements')}</Typography>
@@ -43,12 +44,12 @@ export function LoansPanel() {
       { key: 'provider', label: t('Anbieter', 'Provider'), required: true }, { key: 'contact', label: t('Kontakt', 'Contact'), required: true },
       { key: 'providerLocationId', label: t('Lagerort beim Anbieter', 'Provider location'), required: true, options: lookup.locationOptions },
       { key: 'terms', label: t('Vereinbarung / Kosten / Nachweis', 'Agreement / costs / evidence'), required: true, multiline: true },
-    ]} onSave={v => apiRequest('/api/loans', { method: 'POST', body: v })} />}
+    ]} onSave={v => loanApi.create({ commitmentId: inputText(v.commitmentId), providerLocationId: inputText(v.providerLocationId), kind: inputChoice(v.kind, ['borrow', 'rental']), provider: inputText(v.provider), contact: inputText(v.contact), terms: inputText(v.terms) })} />}
     {action && <OperationForm title={t('Vereinbarung aktualisieren', 'Update arrangement')} onClose={() => setAction(null)} initial={{ availableUntil: action.loan.availableUntil, returnDue: action.loan.returnDue }} fields={action.type === 'extend' ? [
       { key: 'availableUntil', label: t('Verfügbar bis', 'Available through'), type: 'date', required: true }, { key: 'returnDue', label: t('Rückgabe fällig', 'Return due'), type: 'date', required: true }, { key: 'reason', label: t('Zustimmung des Anbieters / Grund', 'Provider agreement / reason'), required: true },
     ] : [
       { key: 'transferId', label: t('Vollständig empfangene Umlagerung', 'Fully received transfer'), required: true, options: (transfers.data ?? []).filter(tr => tr.status === 'received' && (action.type === 'collect' ? tr.sourceLocationId : tr.destinationLocationId) === action.loan.providerLocationId && tr.lines.every(line => line.itemId === action.loan.itemId)).map(tr => ({ value: tr.id, label: tr.transferNumber })) },
       { key: 'notes', label: t('Übergabe- / Empfangsnachweis', 'Handover / receipt evidence'), required: true },
-    ]} onSave={v => apiRequest(`/api/loans/${action.loan.id}/${action.type}`, { method: 'POST', body: { ...v, revision: action.loan.revision } })} />}
+    ]} onSave={v => action.type === 'extend' ? loanApi.extend(action.loan.id, { availableUntil: inputText(v.availableUntil), returnDue: inputText(v.returnDue), reason: inputText(v.reason), revision: action.loan.revision }) : loanApi.move(action.loan.id, action.type, { transferId: inputText(v.transferId), notes: inputText(v.notes), revision: action.loan.revision })} />}
   </Stack>;
 }

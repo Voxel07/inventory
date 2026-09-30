@@ -1,40 +1,33 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Alert, Box, Button, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { apiRequest } from '../../services/apiClient';
+import { reportApi } from '../../services/reportService';
+import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
+import type { ReportFilters } from '../../types/report';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
 import { useItems } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useEventReports } from '../../hooks/useEvents';
-import { getWarehouses } from './WarehousesPanel';
+import { getWarehouses } from '../../services/warehouseService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { useLocalizedText } from '../../utils/naming';
 
-type Row = Record<string, string | number | boolean | null>;
-interface Report { name: string; definition: string; startedAt: string | null; generatedAt: string | null; stale: boolean; total: number; rows: Row[]; monthlyTotals: Row[] }
 const title = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const labels = { events: ['Eventbedarf und Nutzung', 'Event demand and use'], availability: ['Verfügbarkeit nach Lagerort', 'Availability by location'], returns: ['Offene Rückgaben', 'Unresolved returns'], repairs: ['Reparaturrückstand', 'Repair backlog'], maintenance: ['Wartungsbedarf', 'Maintenance due'], purchases: ['Einkaufshistorie', 'Purchase history'], counts: ['Inventurdifferenzen', 'Count variance'], movements: ['Verbrauch und Abschreibungen', 'Consumption and write-offs'] } as const;
-const getDefinitions = () => apiRequest<Record<string, string>>('/api/reports');
 
 export function ReportsPanel() {
   const t = useLocalizedText(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
-  const [filters, setFilters] = useState<Record<string, string>>({}); const command = useOperationCommand();
-  const definitions = useQuery({ queryKey: ['reports', 'definitions'], queryFn: getDefinitions });
+  const [filters, setFilters] = useState<ReportFilters>({}); const command = useOperationCommand();
+  const definitions = useReportDefinitions();
   const items = useItems(); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useOperationList('warehouses', getWarehouses);
-  const report = useQuery({ queryKey: ['reports', name, filters, page], queryFn: () => apiRequest<Report>(`/api/reports/${name}`, { query: { ...filters, page, size: 50 } }), refetchInterval: 60000 });
+  const report = useOperationalReport(name, filters, page);
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));
   const [exporting, setExporting] = useState(false); const [exportError, setExportError] = useState('');
   async function download() {
     setExporting(true); setExportError('');
     try {
-      const rows: Row[] = []; let generation: string | null | undefined;
-      for (let index = 0; ; index++) {
-        const data = await apiRequest<Report>(`/api/reports/${name}`, { query: { ...filters, page: index, size: 200 } });
-        if (generation !== undefined && generation !== data.generatedAt) throw new Error(t('Bericht wurde während des Exports neu erstellt. Bitte wiederholen.', 'Report rebuilt during export. Please retry.'));
-        generation = data.generatedAt; rows.push(...data.rows); if (rows.length >= data.total || !data.rows.length) break;
-      }
+      const { rows, generation } = await reportApi.exportRows(name, filters, t('Bericht wurde während des Exports neu erstellt. Bitte wiederholen.', 'Report rebuilt during export. Please retry.'));
       const keys = [...new Set(rows.flatMap(Object.keys))];
       const cell = (value: unknown) => { let s = String(value ?? ''); if (/^[=+@\-\t\r]/.test(s)) s = `'${s}`; return `"${s.replaceAll('"', '""')}"`; };
       const csv = [keys.map(cell).join(','), ...rows.map((row) => keys.map((key) => cell(row[key])).join(','))].join('\r\n');
@@ -47,7 +40,7 @@ export function ReportsPanel() {
     <TextField select label={t('Bericht', 'Report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label[0], label[1])}</MenuItem>)}</TextField>
     <Typography variant="body2">{report.data?.definition ?? definitions.data?.[name]}</Typography>
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('Erstellt', 'Generated')}: {new Date(report.data.generatedAt).toLocaleString()} · {report.data.stale ? t('Quelldaten oder Zeitbezug haben sich geändert. Neu berechnen.', 'Sources or time reference changed. Rebuild required.') : t('Stand der letzten Berechnung', 'As of the last rebuild')}</> : t('Noch kein Bericht erstellt. Jetzt aus den Quelldaten neu berechnen.', 'No report built yet. Rebuild from source records now.')}</Alert>
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => apiRequest(`/api/reports/${name}/rebuild`, { method: 'POST' }))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button disabled={exporting || !report.data?.generatedAt} onClick={() => { void download(); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button disabled={exporting || !report.data?.generatedAt} onClick={() => { void download(); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
       <TextField select fullWidth label={t('Artikel', 'Item')} value={filters.itemId ?? ''} onChange={(e) => change('itemId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{items.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('Veranstaltung', 'Event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}

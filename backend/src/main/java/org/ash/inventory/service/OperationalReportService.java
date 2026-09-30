@@ -2,7 +2,6 @@ package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
@@ -15,7 +14,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class OperationalReportService {
-    @Inject EntityManager em;
+    @Inject org.ash.inventory.orm.OperationalReportOrm orm;
     @Inject ActorService actors;
     @Inject ApiMapper mapper;
     @Inject PositionService positions;
@@ -41,7 +40,7 @@ public class OperationalReportService {
         actors.requireWarehouse(); validate(name);
         if (page < 0 || page > 100000 || size < 1 || size > 200) throw ApiException.badRequest("Invalid report page bounds");
         validateDates(filters);
-        var report = em.find(OperationalReport.class, name);
+        var report = orm.find(OperationalReport.class, name);
         if (report == null) return new View(name, DEFINITIONS.get(name), null, null, true, 0, List.of(), List.of());
         var rows = report.rows.stream().filter(row -> matches(row, filters)).toList();
         return new View(name, DEFINITIONS.get(name), report.startedAt, report.generatedAt,
@@ -72,8 +71,8 @@ public class OperationalReportService {
         };
         // Never publish a projection assembled while committed source records changed.
         if (!before.equals(sourceToken())) throw ApiException.conflict("Source records changed during rebuild. Retry to obtain a stable report.");
-        var report = em.find(OperationalReport.class, name);
-        if (report == null) { report = new OperationalReport(); report.name = name; em.persist(report); }
+        var report = orm.find(OperationalReport.class, name);
+        if (report == null) { report = new OperationalReport(); report.name = name; orm.persist(report); }
         report.rows = rows; report.startedAt = start; report.generatedAt = Instant.now(); report.sourceToken = before;
     }
 
@@ -85,13 +84,13 @@ public class OperationalReportService {
                 "UserAccount", "Vendor", "StockReservation", "InventoryPosition", "InventoryLot", "AssetInstance", "ReturnSubmission", "DamageReport", "RepairCase", "MaintenanceSchedule", "MaintenanceRecord",
                 "PurchaseOrder", "PurchaseOrderLine", "InventoryCountSession", "InventoryCountLine", "StockTransaction", "EquipmentCommitment", "LoanArrangement", "MemberRequest")) {
             String timestamp = type.equals("MaintenanceRecord") ? "createdAt" : "updatedAt";
-            Object[] values = em.createQuery("select count(e), max(e." + timestamp + ") from " + type + " e", Object[].class).getSingleResult();
+            Object[] values = orm.watermark(type, timestamp);
             token.append('|').append(type).append(':').append(values[0]).append(':').append(values[1]);
         }
-        Object[] events = em.createQuery("select count(e), max(e.occurredAt) from DomainEvent e", Object[].class).getSingleResult();
+        Object[] events = orm.eventWatermark();
         return token.append('|').append(events[0]).append(':').append(events[1]).toString();
     }
-    private <T> List<T> all(Class<T> type) { return em.createQuery("from " + type.getSimpleName() + " order by id", type).getResultList(); }
+    private <T> List<T> all(Class<T> type) { return orm.all(type); }
     private Map<String, Object> row(Object... pairs) {
         var result = new LinkedHashMap<String, Object>();
         for (int i = 0; i < pairs.length; i += 2) {
@@ -115,7 +114,7 @@ public class OperationalReportService {
             var view = mapper.event(event);
             for (String id : view.itemIds()) {
                 var row = row("id", event.id + ":" + id, "eventId", event.id, "event", event.name, "date", event.startDate, "status", event.status, "planned", view.plannedQuantities().getOrDefault(id, 0));
-                item(row, em.find(Item.class, UUID.fromString(id)));
+                item(row, orm.find(Item.class, UUID.fromString(id)));
                 view.quantities().forEach((metric, values) -> row.put(metric, values.getOrDefault(id, 0)));
                 rows.add(row);
             }
@@ -160,11 +159,11 @@ public class OperationalReportService {
     private List<Map<String, Object>> returns() {
         var rows = new ArrayList<Map<String, Object>>();
         for (var balance : custody.list(false)) {
-            var event = balance.eventOccurrenceId() == null ? null : em.find(EventOccurrence.class, balance.eventOccurrenceId());
+            var event = balance.eventOccurrenceId() == null ? null : orm.find(EventOccurrence.class, balance.eventOccurrenceId());
             var row = row("id", balance.key(), "person", balance.person(), "eventId", balance.eventOccurrenceId(), "event", balance.event(),
                     "date", event == null ? null : event.endDate, "outstanding", balance.checkedOut(), "pendingAcknowledgement", balance.pendingQuantity(),
                     "factionOrderId", balance.factionOrderId(), "generalOrderId", balance.generalOrderId(), "assetId", balance.assetInstanceId(), "expectedReturnLocation", balance.storageLocation());
-            item(row, em.find(Item.class, balance.itemId())); rows.add(row);
+            item(row, orm.find(Item.class, balance.itemId())); rows.add(row);
         }
         return rows;
     }
@@ -194,21 +193,13 @@ public class OperationalReportService {
         return s.assetInstance == null ? s.item.currentOperatingHours : s.assetInstance.operatingHours;
     }
     private String scheduleStatus(MaintenanceSchedule s) {
-        if (s.intervalType == DomainEnums.MaintenanceIntervalType.date) {
-            if (s.nextDueAt == null) return "unknown";
-            double days = Duration.between(Instant.now(), s.nextDueAt).toSeconds() / 86400.0;
-            return days <= 0 ? "due" : days <= s.warningWindow.doubleValue() ? "warning" : "healthy";
-        }
-        BigDecimal current = meter(s);
-        if (current == null || s.nextDueValue == null) return "unknown";
-        return current.compareTo(s.nextDueValue) >= 0 ? "due" : current.add(s.warningWindow).compareTo(s.nextDueValue) >= 0 ? "warning" : "healthy";
+        return MaintenancePolicy.status(s, Instant.now(), s.intervalType == DomainEnums.MaintenanceIntervalType.date ? null : meter(s)).name();
     }
     private boolean maintenanceBlocked(Item item, AssetInstance asset) {
         if (!item.active || item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service
                 || (item.nextMaintenanceDue != null && item.nextMaintenanceDue.isBefore(LocalDate.now()))) return true;
         if (asset != null && (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service)) return true;
-        return em.createQuery("from MaintenanceSchedule s where s.item = :item and s.active = true and s.checkoutBlocking = true", MaintenanceSchedule.class)
-                .setParameter("item", item).getResultList().stream().filter(s -> s.assetInstance == null || (asset != null && s.assetInstance.id.equals(asset.id)))
+        return orm.blockingSchedules(item).stream().filter(s -> s.assetInstance == null || (asset != null && s.assetInstance.id.equals(asset.id)))
                 .anyMatch(s -> scheduleStatus(s).equals("due") || scheduleStatus(s).equals("unknown"));
     }
     private List<Map<String, Object>> maintenance() {
@@ -258,8 +249,7 @@ public class OperationalReportService {
     }
     private List<Map<String, Object>> movements() {
         var rows = new ArrayList<Map<String, Object>>();
-        for (var tx : em.createQuery("from StockTransaction t where t.type in :types order by t.occurredAt, t.id", StockTransaction.class)
-                .setParameter("types", List.of(DomainEnums.TransactionType.consumed, DomainEnums.TransactionType.written_off)).getResultList()) {
+        for (var tx : orm.outcomeMovements()) {
             var row = row("id", tx.id, "date", tx.occurredAt.atOffset(ZoneOffset.UTC).toLocalDate(), "month", tx.occurredAt.toString().substring(0, 7),
                     "status", tx.type, "quantity", tx.quantity, "eventId", tx.eventOccurrence == null ? null : tx.eventOccurrence.id,
                     "event", tx.eventOccurrence == null ? "Unassigned historical movement" : tx.eventOccurrence.name, "reason", tx.reason, "actor", tx.user.name);

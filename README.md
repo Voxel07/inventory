@@ -2,13 +2,11 @@
 
 Responsive inventory and custody management for event logistics. The repository contains the React PWA and its transactional Quarkus/PostgreSQL backend.
 
-## Implementation progress — 28 September 2026
+## Current state — 30 September 2026
 
-The requested P0 workflows (F01–F09) and P1 features with existing backend support (F10–F14 and F18) are implemented in the working tree. This includes event quantities, procurement and receiving, location stock and transfers, general orders and custody, role-specific actions, counts, lots, repairs, maintenance schedules, supplier documents and operational recovery.
+F01–F23 are present: catalog, event planning/results, purchasing/receiving, stock movement/counting, orders/custody, maintenance, offline recovery, reports, ownership/commitments, member self-service, reminders, scanning and borrowing/rental. Runtime and desktop/mobile acceptance remain pending. Earlier F19 build/test results apply to that revision only.
 
-**Build and backend regression checks pass.** The F19 follow-up passed the frontend production build and all 68 backend tests. PostgreSQL migration execution and complete desktop/mobile workflow checks remain outstanding. This is not a deployment or acceptance sign-off.
-
-See [implementation progress](docs/IMPLEMENTATION_PROGRESS.md) for delivered features, navigation, migration details and remaining work, and [the feature backlog](docs/FEATURE_GAP_ANALYSIS.md) for status by feature ID. F15–F17 are now implemented: warehouse/location hierarchy, guided offline recovery and rebuildable operational reports. F19 is also implemented: explicit ownership, keeper/contact and event/date availability commitments, enforced during planning, preparation and checkout. F20–F23 remain outside this implementation scope. Migration and interactive acceptance checks remain pending.
+See [feature coverage](docs/FEATURE_GAP_ANALYSIS.md), [implementation progress](docs/IMPLEMENTATION_PROGRESS.md), and the [current architecture review](docs/ARCHITECTURE_REVIEW.md) for remaining consolidation and verification work.
 
 ## Development
 
@@ -27,9 +25,7 @@ cd backend
 mvn -Ddev quarkus:dev
 ```
 
-Development mode uses an in-memory H2 database and does not require Docker,
-PostgreSQL, Grafana, or an OpenTelemetry collector. Production uses PostgreSQL;
-the current schema-management limitations are documented in
+Development currently uses PostgreSQL and Hibernate schema update. H2 is configured for tests. Production uses the single Flyway baseline with Hibernate validation; schema ownership is documented in
 [`REQUIREMENTS_ARCHITECTURE.md`](REQUIREMENTS_ARCHITECTURE.md#9-persistence-and-schema-state).
 
 Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
@@ -54,7 +50,7 @@ The Authentik group is authoritative at sign-in; the corresponding internal role
 
 ## Sample inventory import
 
-Import [`sample_inventory_lightsim.csv`](sample_imports/sample_inventory_lightsim.csv) through **Items → CSV import**, using an administrator account for the complete fixture. The file contains 340 items, historical LightSim records, a planned LightSim 2027 event, five general-order scenarios, three standalone checkouts, and 18 operational actions. It provides ready pickups, overdue custody, a pending return acknowledgement, a partially received purchase, an expiring lot, maintenance warnings, private/external commitments, borrowing and rental arrangements, provider collection/return tasks, transfers, a blind count, and member requests. The six `Demo-` items keep these operational scenarios separate from the original inventory.
+Import [`sample_inventory_lightsim.csv`](sample_imports/sample_inventory_lightsim.csv) through **Items → CSV import**, using an administrator account for the complete fixture. The file contains 340 items, historical LightSim records, sample DE and TNO event reports, a planned LightSim 2027 event, five general-order scenarios, three standalone checkouts, and 19 operational actions. A received Patchkabel transfer demonstrates one item stocked at multiple locations. It provides ready pickups, overdue custody, a pending return acknowledgement, a partially received purchase, an expiring lot, maintenance warnings, private/external commitments, borrowing and rental arrangements, provider collection/return tasks, transfers, a blind count, and member requests. The six `Demo-` items keep these operational scenarios separate from the original inventory.
 
 Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). General-order rows use `Typ=Allgemeine Bestellung`, `Zweck`, `Bestellte Artikel`, `Bestellstatus`, and optionally `Rückgabeartikel` / `Verbrauchte Artikel`. Preparation runs before marking orders ready, including exact serialized asset assignments.
 
@@ -64,7 +60,7 @@ On **Maintenance**, set a category's interval in days to schedule its items. An 
 
 ## PostgreSQL schema and API
 
-OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Flyway owns production schema changes and Hibernate validates the migrated schema. Before the first deployment over an existing pre-Flyway database, follow the baseline procedure in [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md#first-flyway-deployment).
+OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Production initializes an empty database from the single `V1.0.0__init.sql` baseline and Hibernate validates it. Data is disposable: edit the baseline/entities directly and recreate databases after schema changes. Incremental migrations and legacy baselining procedures are removed.
 
 Roles are enforced by the backend using the seven canonical values listed above. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
 
@@ -83,7 +79,7 @@ The backend exposes explicit workflow APIs rather than generic entity CRUD:
 
 ## Offline field operation
 
-The production build installs as a PWA. Reads are cached by the service worker and operational writes use an IndexedDB append-only queue with UUID idempotency keys. The queue replays through `/api/sync` after connectivity returns and its status is shown in the header.
+The production build installs as a PWA. The service worker caches the shell; IndexedDB stores account-scoped catalog reads and supported stock/faction-order/damage commands with UUID idempotency keys. The queue replays through `/api/sync` after connectivity returns and its status is shown in the header. Other mutations require connectivity.
 
 The exact online/offline boundary, queue semantics, and conflict handling are documented in [`docs/OFFLINE_MODE.md`](docs/OFFLINE_MODE.md).
 
@@ -104,79 +100,3 @@ draft → submitted → preparing → ready → picked up → partially returned
 ```
 
 Prepared quantities reserve available stock from other open lists. Assembly quantities are normalized into component lines. Pickup and return run atomically under row locks, incomplete components retain customer custody, and the append-only order ledger records server time, actor, status, and line deltas.
-
-## Vite template notes
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```

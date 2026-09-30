@@ -1,3 +1,4 @@
+import type { CheckedOutRow } from '../../types/custody';
 import { Fragment, useState } from 'react';
 import {
   Box,
@@ -32,25 +33,6 @@ import { useLocalizedText } from '../../utils/naming';
 import { ListPagination } from '../shared/ListPagination';
 import { useClientPagination } from '../../hooks/useClientPagination';
 
-export interface CheckedOutRow {
-  key: string;
-  itemId: string;
-  name: string;
-  category: string;
-  storageLocation: string;
-  checkedOut: number;
-  personId: string;
-  person: string;
-  eventKey: string;
-  event: string;
-  generalOrderId?: string;
-  eventOccurrenceId?: string;
-  pendingQuantity?: number;
-  factionOrderId?: string;
-  assetInstanceId?: string;
-  /** Resolved assembly this item belongs to (if from a faction order) */
-  assemblyId?: string;
-}
 
 interface Props {
   rows: CheckedOutRow[];

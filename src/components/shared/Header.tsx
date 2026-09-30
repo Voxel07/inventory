@@ -238,8 +238,8 @@ export function Header() {
                             open={Boolean(notificationAnchor)}
                             onClose={() => setNotificationAnchor(null)}
                             slotProps={{
-                                list: { 'aria-labelledby': 'pickup-notices-button' },
-                                paper: { sx: { minWidth: 280, maxWidth: 380 } },
+                                list: { dense: true, 'aria-labelledby': 'pickup-notices-button', sx: { py: 0.5 } },
+                                paper: { sx: { width: 300, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(400px, calc(100dvh - 96px))' } },
                             }}
                         >
                             {unreadNotifications.map((notification) => {
@@ -248,20 +248,24 @@ export function Header() {
                                 const pickupLocation = payloadText(notification, 'pickupLocation');
                                 const details = [faction, pickupLocation].filter(Boolean).join(' · ');
                                 return (
-                                    <MenuItem key={notification.id} onClick={() => openNotification(notification)}>
+                                    <MenuItem key={notification.id} onClick={() => openNotification(notification)} sx={{ px: 1.5, py: 0.75, minHeight: { xs: 44, sm: 'auto' } }}>
                                         <ListItemText
                                             primary={orderCode
                                                 ? t('header.orderReady', { orderCode })
                                                 : t('header.orderReadyGeneric')}
                                             secondary={details || t('header.openOrder')}
-                                            sx={{ whiteSpace: 'normal' }}
+                                            slotProps={{
+                                                primary: { variant: 'body2', sx: { lineHeight: 1.35 } },
+                                                secondary: { variant: 'caption', sx: { lineHeight: 1.35 } },
+                                            }}
+                                            sx={{ my: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
                                         />
                                     </MenuItem>
                                 );
                             })}
                             <Divider />
-                            <MenuItem onClick={dismissAllNotifications} disabled={markRead.isPending}>
-                                <DoneAllIcon fontSize="small" sx={{ mr: 1.5 }} />
+                            <MenuItem onClick={dismissAllNotifications} disabled={markRead.isPending} sx={{ px: 1.5, py: 0.75, fontSize: '0.8125rem', minHeight: { xs: 44, sm: 'auto' } }}>
+                                <DoneAllIcon fontSize="small" sx={{ mr: 1 }} />
                                 {t('header.markAllRead')}
                             </MenuItem>
                         </Menu>

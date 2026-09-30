@@ -1,3 +1,4 @@
+import { useObjectUrl } from '../../hooks/useObjectUrl';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
@@ -16,13 +17,8 @@ export interface ImageAttachmentState {
 }
 
 function FilePreview({ file, alt }: { file: File; alt: string }) {
-  const [preview, setPreview] = useState<{ file: File; url: string }>();
-  useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setPreview({ file, url });
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-  return <MediaImage src={preview?.file === file ? preview.url : undefined} alt={alt} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />;
+  const preview = useObjectUrl(file);
+  return <MediaImage src={preview} alt={alt} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />;
 }
 
 export function ImageAttachments({ existing = [], value, onChange, maxImages = 8, disabled = false }: {

@@ -68,10 +68,7 @@ export function createResourceHooks<T extends { id: string }, TForm = Partial<T>
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: (id: string) => api.delete(id),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKey] });
-        relatedKeys?.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
-      },
+      onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
     });
   }
 
@@ -79,10 +76,7 @@ export function createResourceHooks<T extends { id: string }, TForm = Partial<T>
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: (ids: string[]) => api.deleteMany(ids),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKey] });
-        relatedKeys?.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
-      },
+      onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
     });
   }
 

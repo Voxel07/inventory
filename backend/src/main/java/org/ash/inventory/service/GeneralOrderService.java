@@ -1,8 +1,6 @@
 package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
@@ -13,17 +11,16 @@ import java.util.*;
 
 @ApplicationScoped
 public class GeneralOrderService {
-    @jakarta.inject.Inject EquipmentService equipment;
+    @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject PositionService positions;
     private final ActorService actors;
     private final GeneralOrderOrm orm;
-    private final EntityManager em;
     private final InventoryOperationsService inventory;
     private final DomainEventService events;
 
-    public GeneralOrderService(ActorService actors, GeneralOrderOrm orm, EntityManager em,
+    public GeneralOrderService(ActorService actors, GeneralOrderOrm orm,
             InventoryOperationsService inventory, DomainEventService events) {
-        this.actors = actors; this.orm = orm; this.em = em; this.inventory = inventory; this.events = events;
+        this.actors = actors; this.orm = orm; this.inventory = inventory; this.events = events;
     }
 
     @Transactional
@@ -91,18 +88,17 @@ public class GeneralOrderService {
             if (quantity > order.requestedQuantities.getOrDefault(id, 0)) throw ApiException.badRequest("Preparation exceeds requested quantity");
             inventory.assertCheckoutAllowed(item);
             var source = input.sourceLocations() == null || input.sourceLocations().get(item.id) == null ? item.storageLocation : positions.location(input.sourceLocations().get(item.id));
-            if (item.trackingMode != DomainEnums.TrackingMode.serialized) equipment.assertSource(item, source);
+            int sourceCapacity = allocation.sourceCapacity(item, source, null, order.id, quantity);
             if (source != null) sources.put(id, source.id.toString());
-            if (item.trackingMode != DomainEnums.TrackingMode.serialized && quantity > positions.availableAt(item, source, null, order.id)) throw ApiException.conflict("Insufficient stock at source for " + item.name);
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized && quantity > sourceCapacity) throw ApiException.conflict("Insufficient stock at source for " + item.name);
             if (quantity > inventory.availableFor(item, order.eventOccurrence, 0)) throw ApiException.conflict("Insufficient committed/available stock for " + item.name);
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 var selected = input.assetAssignments() == null ? List.<UUID>of() : input.assetAssignments().getOrDefault(item.id, List.of());
                 if (selected.size() != quantity || new HashSet<>(selected).size() != quantity) throw ApiException.badRequest("Select exactly " + quantity + " assets for " + item.name);
                 for (var assetId : selected) {
-                    var asset = em.find(AssetInstance.class, assetId, LockModeType.PESSIMISTIC_WRITE);
+                    var asset = orm.findLocked(AssetInstance.class, assetId);
                     if (asset == null || !asset.item.id.equals(item.id) || !asset.active || asset.availabilityStatus != DomainEnums.AssetState.available) throw ApiException.conflict("Asset is unavailable");
-                    inventory.assertAssetCheckoutAllowed(asset);
-                    equipment.assertAsset(asset, order.eventOccurrence);
+                    allocation.assertAssetEligible(asset, order.eventOccurrence);
                     asset.availabilityStatus = DomainEnums.AssetState.reserved;
                 }
                 assignments.put(id, selected.stream().map(UUID::toString).toList());
@@ -115,10 +111,10 @@ public class GeneralOrderService {
         // Lock in a stable order, shared with the preparation path and direct checkout.
         for (var id : new TreeSet<>(order.preparedQuantities.keySet())) lockedItem(id);
         for (var selected : order.assetAssignments.values()) for (var id : selected) {
-            var asset = em.find(AssetInstance.class, UUID.fromString(id), LockModeType.PESSIMISTIC_WRITE);
+            var asset = orm.findLocked(AssetInstance.class, UUID.fromString(id));
             if (asset != null && asset.availabilityStatus == DomainEnums.AssetState.reserved) asset.availabilityStatus = DomainEnums.AssetState.available;
         }
-        order.preparedQuantities = new LinkedHashMap<>(); em.flush();
+        order.preparedQuantities = new LinkedHashMap<>(); orm.flush();
     }
 
     @Transactional
@@ -157,7 +153,7 @@ public class GeneralOrderService {
             if (lost > 0) {
                 if (lostAssets == null) ledger(order, item, DomainEnums.TransactionType.written_off, lost, null, input.notes());
                 else for (var assetId : lostAssets) {
-                    var asset = em.find(AssetInstance.class, UUID.fromString(assetId), LockModeType.PESSIMISTIC_WRITE);
+                    var asset = orm.findLocked(AssetInstance.class, UUID.fromString(assetId));
                     asset.availabilityStatus = DomainEnums.AssetState.written_off; asset.active = false;
                     ledger(order, item, DomainEnums.TransactionType.written_off, 1, asset, input.notes());
                 }
@@ -169,12 +165,12 @@ public class GeneralOrderService {
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 for (var assetId : input.missingAssets() == null ? List.<UUID>of() : input.missingAssets().getOrDefault(item.id, List.of())) {
                     if (!order.assetAssignments.getOrDefault(idString, List.of()).contains(assetId.toString()) || completed.contains(assetId.toString())) throw ApiException.conflict("Missing asset is not outstanding on this order");
-                    var asset = em.find(AssetInstance.class, assetId, LockModeType.PESSIMISTIC_WRITE);
+                    var asset = orm.findLocked(AssetInstance.class, assetId);
                     if (!List.of(DomainEnums.AssetState.in_field, DomainEnums.AssetState.in_custody, DomainEnums.AssetState.lost).contains(asset.availabilityStatus)) throw ApiException.conflict("Asset cannot be marked missing in its current state");
                     asset.availabilityStatus = DomainEnums.AssetState.lost; asset.conditionStatus = DomainEnums.ConditionStatus.lost;
                 }
                 missingNow = (int) order.assetAssignments.getOrDefault(idString, List.of()).stream().filter(assetId -> !completed.contains(assetId))
-                        .map(assetId -> em.find(AssetInstance.class, UUID.fromString(assetId))).filter(asset -> asset.availabilityStatus == DomainEnums.AssetState.lost).count();
+                        .map(assetId -> orm.find(AssetInstance.class, UUID.fromString(assetId))).filter(asset -> asset.availabilityStatus == DomainEnums.AssetState.lost).count();
             }
             nextMissing.put(idString, missingNow); reconciled.put(idString, completed);
         }
@@ -191,7 +187,7 @@ public class GeneralOrderService {
         for (var asset : selected) {
             String id = asset.toString();
             if (!order.assetAssignments.getOrDefault(item.id.toString(), List.of()).contains(id) || completed.contains(id)) throw ApiException.conflict("Asset was not assigned or has already been reconciled");
-            var instance = em.find(AssetInstance.class, asset, LockModeType.PESSIMISTIC_WRITE);
+            var instance = orm.findLocked(AssetInstance.class, asset);
             if (instance.availabilityStatus == DomainEnums.AssetState.lost) {
                 instance.availabilityStatus = DomainEnums.AssetState.in_field;
                 instance.conditionStatus = DomainEnums.ConditionStatus.good;
@@ -205,12 +201,12 @@ public class GeneralOrderService {
         inventory.createDamage(new ApiModels.DamageInput(item.id, amount, notes == null || notes.isBlank() ? "Return damage: " + order.name : notes, DomainEnums.DamageSeverity.medium, null, null, asset, null, false, null));
     }
     private int outstanding(GeneralOrder order, String id) {
-        return order.handedOverQuantities.getOrDefault(id, 0) - order.returnedQuantities.getOrDefault(id, 0) - order.consumedQuantities.getOrDefault(id, 0) - order.damagedQuantities.getOrDefault(id, 0) - order.writtenOffQuantities.getOrDefault(id, 0);
+        return CustodyQuantities.outstanding(order, id);
     }
     private void ledger(GeneralOrder order, Item item, DomainEnums.TransactionType type, int amount, AssetInstance asset, String notes) {
         var tx = new StockTransaction(); tx.item = item; tx.assetInstance = asset; tx.user = order.createdBy; tx.type = type; tx.quantity = amount;
         tx.eventOccurrence = order.eventOccurrence; tx.eventType = order.eventOccurrence.eventType; tx.faction = "General order"; tx.relatedEntityType = "general_order"; tx.relatedEntityId = order.id;
-        tx.custodyWriteOff = type == DomainEnums.TransactionType.written_off; tx.notes = notes; tx.reason = order.name; em.persist(tx);
+        tx.custodyWriteOff = type == DomainEnums.TransactionType.written_off; tx.notes = notes; tx.reason = order.name; orm.persist(tx);
         events.record("stock.changed", "item", item.id, actors.current().id, null, Map.of("type", type.name(), "quantity", amount));
     }
     private void transact(GeneralOrder order, String id, DomainEnums.TransactionType type, int quantity, List<String> assets) {
@@ -219,16 +215,16 @@ public class GeneralOrderService {
     }
     private void link(GeneralOrder order, StockTransaction tx) { tx.relatedEntityType = "general_order"; tx.relatedEntityId = order.id; }
     private void assign(GeneralOrder order, ApiModels.GeneralOrderInput input) {
-        order.name = input.name().trim(); order.purpose = input.purpose().trim(); order.eventOccurrence = input.eventOccurrenceId() == null ? null : em.find(EventOccurrence.class, input.eventOccurrenceId());
+        order.name = input.name().trim(); order.purpose = input.purpose().trim(); order.eventOccurrence = input.eventOccurrenceId() == null ? null : orm.find(EventOccurrence.class, input.eventOccurrenceId());
         if (input.eventOccurrenceId() != null && order.eventOccurrence == null) throw ApiException.notFound("Event not found");
         order.requestedQuantities = quantities(input.requestedQuantities());
-        for (var id : order.requestedQuantities.keySet()) actors.requireItemAccess(em.find(Item.class, UUID.fromString(id)));
+        for (var id : order.requestedQuantities.keySet()) actors.requireItemAccess(orm.find(Item.class, UUID.fromString(id)));
     }
     private GeneralOrder locked(UUID id) { actors.current(); var order = orm.locked(id); if (order == null) throw ApiException.notFound("Order not found"); return order; }
-    private Item lockedItem(String id) { var item = em.find(Item.class, UUID.fromString(id), LockModeType.PESSIMISTIC_WRITE); if (item == null || !item.active) throw ApiException.notFound("Item not found"); return item; }
+    private Item lockedItem(String id) { var item = orm.findLocked(Item.class, UUID.fromString(id)); if (item == null || !item.active) throw ApiException.notFound("Item not found"); return item; }
     private Map<String, Integer> quantities(Map<UUID, Integer> input) {
         var result = new LinkedHashMap<String, Integer>(); if (input == null) return result;
-        input.forEach((id, quantity) -> { if (id == null || quantity == null || quantity < 0) throw ApiException.badRequest("Quantities must be non-negative"); if (quantity > 0) { if (em.find(Item.class, id) == null) throw ApiException.notFound("Item not found"); result.put(id.toString(), quantity); } }); return result;
+        input.forEach((id, quantity) -> { if (id == null || quantity == null || quantity < 0) throw ApiException.badRequest("Quantities must be non-negative"); if (quantity > 0) { if (orm.find(Item.class, id) == null) throw ApiException.notFound("Item not found"); result.put(id.toString(), quantity); } }); return result;
     }
     private void requireStatus(GeneralOrder order, String status) { if (!order.status.equals(status)) throw ApiException.conflict("Order must be " + status); }
     private void requireOwnerOrPlanner(GeneralOrder order) {
@@ -237,12 +233,12 @@ public class GeneralOrderService {
     }
     private boolean replayed(GeneralOrder order, UUID key) {
         if (key == null) return false;
-        var history = em.createQuery("from GeneralOrderHistory h where h.commandId = :key", GeneralOrderHistory.class).setParameter("key", key).getResultStream().findFirst().orElse(null);
+        var history = orm.commandHistory(key);
         if (history != null && !history.order.id.equals(order.id)) throw ApiException.conflict("Command belongs to another order"); return history != null;
     }
     private void audit(GeneralOrder order, String action, UUID key, String notes) {
         var history = new GeneralOrderHistory(); history.order = order; history.actor = actors.current(); history.action = action; history.commandId = key; history.notes = notes;
         history.delta = Map.of("status", order.status, "requested", new LinkedHashMap<>(order.requestedQuantities), "prepared", new LinkedHashMap<>(order.preparedQuantities), "handedOver", new LinkedHashMap<>(order.handedOverQuantities), "returned", new LinkedHashMap<>(order.returnedQuantities), "consumed", new LinkedHashMap<>(order.consumedQuantities), "damaged", new LinkedHashMap<>(order.damagedQuantities), "missing", new LinkedHashMap<>(order.missingQuantities), "writtenOff", new LinkedHashMap<>(order.writtenOffQuantities));
-        em.persist(history); events.record("general_order." + action, "general_order", order.id, actors.current().id, key, Map.of("status", order.status));
+        orm.persist(history); events.record("general_order." + action, "general_order", order.id, actors.current().id, key, Map.of("status", order.status));
     }
 }

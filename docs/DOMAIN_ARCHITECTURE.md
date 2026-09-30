@@ -2,11 +2,9 @@
 
 This document completes the target architecture in `REQUIREMENTS_ARCHITECTURE.md` with the operational gaps tracked in [FEATURE_GAP_ANALYSIS.md](FEATURE_GAP_ANALYSIS.md). It is the implementation contract for the Quarkus backend. The system is a modular monolith: commands and strongly consistent invariants remain inside one PostgreSQL transaction, while committed domain events drive projections, notifications, SSE invalidation, integrations, and reporting.
 
-## Delivery status — 28 September 2026
+## Delivery status — 30 September 2026
 
-The operational implementation batch covers **F01–F09, F10–F14 and F18**. See [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) for the delivered UI workflows, calculation rules, migration and verification limits. Sections below describe the domain contract; they must not be read as an assertion that every target projection or offline recovery flow has shipped.
-
-The final changes have not been compiled or tested following the user's request to stop those checks. PostgreSQL migration execution and full desktop/mobile verification remain pending.
+F01–F23 have source implementations, including contributor work, reminders, scanning and loans. [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) records behavior and verification limits. This document defines domain boundaries and invariants; it does not certify that every implementation follows them. [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) records C01–C08 source consolidation and the pending runtime release gate. Runtime, fresh PostgreSQL and full desktop/mobile acceptance remain pending.
 
 ## System shape
 
@@ -179,9 +177,9 @@ Maintenance schedules express date, operating-hour, or usage-count intervals and
 
 ## Offline protocol
 
-The PWA queues every mutation with command UUID, user, device, operation type, payload, local time, retry count and sync state. Server-side command handling stores a readable `sync_command_audit` result and uses the same UUID for idempotency and event correlation.
+The PWA queues supported stock/faction-order/damage commands with a UUID, account, operation type, payload and local time. General orders, media and the other operational mutations require connectivity. Server-side handling stores readable `sync_command_audit` results and uses command IDs for idempotency and event correlation. [OFFLINE_MODE.md](OFFLINE_MODE.md) defines the current boundary.
 
-For bulk quantities, conflicts return the new available balance and version. For serialized assets, a version/state mismatch identifies the competing command and asset; the command remains unresolved for an HQ operator. Media uploads are staged before their metadata command and are attached only after a successful commit.
+Conflicts and rejections retain their original evidence. Users review current server context and submit a correction with a fresh ID and resolution note; only one correction chain may apply. Media is online-only: uploads are staged before their metadata command and promoted after successful persistence.
 
 ## Authorization policy
 
@@ -218,7 +216,7 @@ The planner records manual overrides with actor and reason and can generate a dr
 
 The initial deployment remains one application VPS plus the storage/backup node. Redis is optional for cross-node event fan-out; the PostgreSQL outbox works in both modes. Scale-out adds stateless API nodes but does not split the modular monolith until measured load or team ownership justifies it.
 
-Schema changes are additive first, application-compatible second, and destructive only after backfill and verification. Flyway owns production schema evolution and Hibernate validates the migrated schema. Existing pre-Flyway installations require the explicit, one-time baseline procedure in `DEPLOYMENT_STEP2.md`; the application does not silently baseline an existing schema.
+Current data is disposable. Edit the single `V1.0.0__init.sql` creation baseline and entity definitions directly; recreate an empty database after schema changes. Production runs that baseline through Flyway and Hibernate validates it. No incremental migration, legacy backfill, baseline-on-existing-schema or checksum-repair procedure is supported.
 
 ## Implementation map
 
@@ -226,6 +224,6 @@ The current code contains first-class JPA models and explicit application bounda
 
 Frontend workflows now expose receiving, transfers, counts, lots, repair cases, maintenance schedules, supplier documents and operational recovery. General-order reservation/reconciliation and authoritative custody queries complement the existing faction-order flow. Event metrics and procurement use transactional data. The F17 follow-up adds disposable, manually rebuildable report snapshots, with event/source watermarks and time-based freshness warnings.
 
-F15 now exposes warehouse/site management and parent-location hierarchy with cycle/same-warehouse/active-parent validation. F16 adds guided correction with immutable original command evidence, new IDs, account-scoped local history/cache and personal server audit. F17 adds eight report snapshots with definitions, filters, freshness, CSV and per-item monthly totals. Runtime acceptance and migration verification remain pending. Additional ownership/keeper commitments, member self-service, reminders, camera scanning and borrowing/rental arrangements remain F19–F23. Projections must remain query-only; command validation continues to use normalized transactional state.
+F15 now exposes warehouse/site management and parent-location hierarchy with cycle/same-warehouse/active-parent validation. F16 adds guided correction with immutable original command evidence, new IDs, account-scoped local history/cache and personal server audit. F17 adds eight report snapshots with definitions, filters, freshness, CSV and per-item monthly totals. Runtime acceptance and fresh PostgreSQL validation remain pending. F19–F23 also implement ownership/keeper commitments, member self-service, reminders, camera scanning and borrowing/rental arrangements. Projections must remain query-only; command validation continues to use normalized transactional state.
 
-The new `V1.1.2__operational_workflows.sql` migration includes legacy bulk-position backfill without guessing event or lot identity. Deployment, upgrade/backfill verification and acceptance testing have not been completed for the final working tree.
+All persisted concepts are now defined in one disposable baseline; legacy bulk-position backfills and incremental scripts have been removed. No database was initialized or changed during consolidation.

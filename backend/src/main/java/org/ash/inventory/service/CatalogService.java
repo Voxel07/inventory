@@ -4,7 +4,6 @@ import io.quarkus.cache.CacheInvalidateAll;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.CatalogOrm;
@@ -28,7 +27,7 @@ import java.util.UUID;
 public class CatalogService {
     @Inject LocationHierarchyService hierarchy;
     @jakarta.inject.Inject PositionService positions;
-    @Inject EntityManager entityManager;
+    @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -59,7 +58,7 @@ public class CatalogService {
     }
 
     public List<StorageLocation> getAllLocations() {
-        return entityManager.createQuery("from StorageLocation order by name, id", StorageLocation.class).getResultList();
+        return orm.allLocations();
     }
 
     public List<Assembly> getAssemblies() {
@@ -111,8 +110,8 @@ public class CatalogService {
             tx.destinationLocation = item.storageLocation;
             tx.availabilityBefore = 0;
             tx.availabilityAfter = item.baseAmount;
+            positions.apply(tx);
             orm.persist(tx);
-            positions.ensureLegacy(item);
         }
         catalogChanged("items", item.id);
         return item;
@@ -205,10 +204,9 @@ public class CatalogService {
         item.containerRemainingPercent = input.containerRemainingPercent();
         item.maintenanceIntervalDays = input.maintenanceIntervalDays();
         item.nextMaintenanceDue = input.nextMaintenanceDue();
-        var categoryPolicy = entityManager.createQuery("select p from CategoryMaintenancePolicy p where lower(p.category) = lower(:category)", CategoryMaintenancePolicy.class)
-                .setParameter("category", item.category).getResultList();
-        if (!categoryPolicy.isEmpty()) {
-            item.maintenanceIntervalDays = categoryPolicy.getFirst().intervalDays;
+        var categoryPolicy = categoryMaintenance.find(item.category);
+        if (categoryPolicy != null) {
+            item.maintenanceIntervalDays = categoryPolicy.intervalDays;
             if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = LocalDate.now().plusDays(item.maintenanceIntervalDays);
         }
         if (input.currentOperatingHours() != null) item.currentOperatingHours = input.currentOperatingHours();
@@ -383,12 +381,7 @@ public class CatalogService {
     @CacheInvalidateAll(cacheName = "events-cache")
     public void deleteEvent(UUID id) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
-        if (!entityManager.createQuery("select o.id from FactionOrder o where o.eventOccurrence.id = :id", UUID.class)
-                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()
-                || !entityManager.createQuery("select o.id from GeneralOrder o where o.eventOccurrence.id = :id", UUID.class)
-                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()
-                || !entityManager.createQuery("select o.id from PurchaseOrder o where o.eventOccurrence.id = :id", UUID.class)
-                .setParameter("id", id).setMaxResults(1).getResultList().isEmpty()) {
+        if (orm.hasLinkedOrders(id)) {
             throw ApiException.conflict("Event cannot be deleted while it has linked orders");
         }
         orm.remove(event);

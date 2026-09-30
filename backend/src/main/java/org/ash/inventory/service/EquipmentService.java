@@ -2,8 +2,6 @@ package org.ash.inventory.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.*;
 import org.ash.inventory.helper.security.ActorService;
@@ -14,7 +12,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class EquipmentService {
-    @Inject EntityManager em;
+    @Inject org.ash.inventory.orm.EquipmentOrm orm;
     @Inject ActorService actors;
     @Inject DomainEventService events;
     @Inject InventoryOperationsService inventory;
@@ -43,10 +41,10 @@ public class EquipmentService {
     @Transactional
     public Map<UUID, Availability> availability(UUID eventId) {
         var actor = actors.current();
-        var event = eventId == null ? null : em.find(EventOccurrence.class, eventId);
+        var event = eventId == null ? null : orm.find(EventOccurrence.class, eventId);
         if (eventId != null && event == null) throw ApiException.notFound("Event not found");
         var result = new LinkedHashMap<UUID, Availability>();
-        for (var item : em.createQuery("from Item i where i.active = true", Item.class).getResultList()) {
+        for (var item : orm.activeItems()) {
             if (!actors.canViewItem(item, actor) || freelyAvailable(item)) continue;
             var c = matching(item, event);
             boolean pickupAllowed = c != null && !LocalDate.now().isBefore(c.availableFrom) && !LocalDate.now().isAfter(c.availableUntil);
@@ -85,7 +83,7 @@ public class EquipmentService {
             throw ApiException.conflict("Select commitment required before recording an offer");
         if (input.availableUntil().isBefore(input.availableFrom()) || input.availableUntil().isBefore(LocalDate.now()))
             throw ApiException.badRequest("Commitment needs an ordered, current or future date range");
-        var event = input.eventId() == null ? null : em.find(EventOccurrence.class, input.eventId());
+        var event = input.eventId() == null ? null : orm.find(EventOccurrence.class, input.eventId());
         if (input.eventId() != null && event == null) throw ApiException.notFound("Event not found");
         if (event != null && (input.availableFrom().isAfter(event.startDate) || input.availableUntil().isBefore(event.endDate)))
             throw ApiException.badRequest("Commitment must cover the entire event");
@@ -104,7 +102,7 @@ public class EquipmentService {
             if (ids.size() != input.quantity() || new HashSet<>(ids).size() != ids.size())
                 throw ApiException.badRequest("Select the exact committed assets, once each");
             for (var id : ids) {
-                var asset = id == null ? null : em.find(AssetInstance.class, id);
+                var asset = id == null ? null : orm.find(AssetInstance.class, id);
                 if (asset == null || !asset.item.id.equals(item.id) || !asset.active || asset.availabilityStatus != DomainEnums.AssetState.available)
                     throw ApiException.conflict("Committed asset is not available for this item");
                 inventory.assertAssetCheckoutAllowed(asset);
@@ -113,7 +111,7 @@ public class EquipmentService {
         var c = new EquipmentCommitment(); c.item = item; c.event = event; c.quantity = input.quantity();
         c.assetIds = ids.stream().map(UUID::toString).toList(); c.availableFrom = input.availableFrom(); c.availableUntil = input.availableUntil();
         c.pickupDetails = input.pickupDetails().trim(); c.returnDue = input.returnDue(); c.returnDetails = clean(input.returnDetails());
-        c.notes = input.notes().trim(); c.recordedBy = actors.current(); em.persist(c); item.equipmentRevision++;
+        c.notes = input.notes().trim(); c.recordedBy = actors.current(); orm.persist(c); item.equipmentRevision++;
         audit(item, "committed", Map.of("commitment", commitmentView(c)));
         return view(item);
     }
@@ -121,7 +119,7 @@ public class EquipmentService {
     @Transactional
     public Profile cancel(UUID itemId, UUID id, CancelInput input) {
         actors.requireWarehouse(); var item = item(itemId, true); revision(item, input.revision());
-        var c = em.find(EquipmentCommitment.class, id);
+        var c = orm.find(EquipmentCommitment.class, id);
         if (c == null || !c.item.id.equals(item.id)) throw ApiException.notFound("Commitment not found");
         if (c.cancelled) return view(item);
         requireIdle(item);
@@ -138,32 +136,60 @@ public class EquipmentService {
 
     /** Event-less catalog totals deliberately exclude event-bound offers. */
     public int available(Item item, EventOccurrence event, InventoryOperationsService.StockState state, int ownReservation) {
-        if (hasMemberDamage(item)) return 0;
+        return available(item, event, state, ownReservation, new AvailabilityData() {
+            public boolean hasMemberDamage() { return EquipmentService.this.hasMemberDamage(item); }
+            public List<EquipmentCommitment> commitments() { return EquipmentService.this.commitments(item); }
+            public LoanArrangement loan(EquipmentCommitment commitment) { return EquipmentService.this.loan(commitment); }
+            public List<AssetInstance> assets() { return EquipmentService.this.assets(item); }
+            public boolean usable(AssetInstance asset) { return EquipmentService.this.usable(asset); }
+            public int consumedDuring(EquipmentCommitment commitment) { return EquipmentService.this.consumedDuring(item, commitment); }
+            public int internalQuantity(UUID providerId) {
+                return orm.internalPositions(item, providerId)
+                        .mapToInt(InventoryPosition::availableQuantity).sum();
+            }
+        });
+    }
+
+    /** Both live workflows and planning snapshots use the same availability rules. */
+    public interface AvailabilityData {
+        boolean hasMemberDamage();
+        List<EquipmentCommitment> commitments();
+        LoanArrangement loan(EquipmentCommitment commitment);
+        List<AssetInstance> assets();
+        boolean usable(AssetInstance asset);
+        int consumedDuring(EquipmentCommitment commitment);
+        int internalQuantity(UUID providerId);
+    }
+
+    public int available(Item item, EventOccurrence event, InventoryOperationsService.StockState state,
+            int ownReservation, AvailabilityData data) {
+        if (data.hasMemberDamage()) return 0;
         if (freelyAvailable(item)) return state.available() + ownReservation;
-        var c = matching(item, event);
+        if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) return 0;
+        var c = matching(item, event, data.commitments());
         if (c == null) return 0;
+        var agreement = data.loan(c);
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            var eligibleIds = eligibleAssets(c);
-            var agreement = loan(c);
-            var eligible = assets(item).stream().filter(a -> eligibleIds.contains(a.id.toString()) && usable(a) && (agreement == null || a.currentLocation == null || !a.currentLocation.id.equals(agreement.providerLocation.id))).toList();
+            var eligibleIds = agreement == null ? c.assetIds : agreement.collectedAssets.stream()
+                    .filter(id -> !agreement.returnedAssets.contains(id)).toList();
+            var eligible = data.assets().stream().filter(a -> eligibleIds.contains(a.id.toString()) && data.usable(a) && (agreement == null || a.currentLocation == null || !a.currentLocation.id.equals(agreement.providerLocation.id))).toList();
             int free = (int) eligible.stream().filter(a -> a.availabilityStatus == DomainEnums.AssetState.available).count();
             int reserved = (int) eligible.stream().filter(a -> a.availabilityStatus == DomainEnums.AssetState.reserved || a.availabilityStatus == DomainEnums.AssetState.staged).count();
             return free + Math.min(ownReservation, reserved);
         }
-        int consumed = item.consumable ? consumedDuring(item, c) : 0;
-        var agreement = loan(c);
+        int consumed = item.consumable ? data.consumedDuring(c) : 0;
         int physical = state.available() + ownReservation;
         if (agreement != null) {
-            int internal = em.createQuery("from InventoryPosition p where p.item = :item and p.location <> :provider", InventoryPosition.class)
-                    .setParameter("item", item).setParameter("provider", agreement.providerLocation).getResultStream().mapToInt(InventoryPosition::availableQuantity).sum();
+            int internal = data.internalQuantity(agreement.providerLocation.id);
             physical = Math.min(physical, Math.max(0, internal - Math.max(0, state.reserved() - ownReservation)));
         }
         return Math.min(physical,
-                Math.max(0, eligibleQuantity(c) - state.checkedOut() - consumed - Math.max(0, state.reserved() - ownReservation)));
+                Math.max(0, (agreement == null ? c.quantity : agreement.collected - agreement.returned)
+                        - state.checkedOut() - consumed - Math.max(0, state.reserved() - ownReservation)));
     }
 
     public boolean hasMemberDamage(Item item) {
-        return em.createQuery("select count(r) from MemberRequest r where r.item = :item and r.kind = 'damage' and r.status <> 'resolved'", Long.class).setParameter("item", item).getSingleResult() > 0;
+        return orm.openMemberDamage(item) > 0;
     }
     public void assertPickup(Item item, EventOccurrence event) {
         if (hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
@@ -183,27 +209,30 @@ public class EquipmentService {
     }
 
     public void assertSource(Item item, StorageLocation source) {
-        var loans = em.createQuery("from LoanArrangement l where l.commitment.item = :item and l.commitment.cancelled = false and l.returned < l.commitment.quantity", LoanArrangement.class).setParameter("item", item).getResultList();
+        var loans = orm.openLoans(item);
         if (!loans.isEmpty() && (source == null || loans.stream().anyMatch(l -> l.providerLocation.id.equals(source.id))))
             throw ApiException.conflict("Choose an internal location; collect provider-held equipment before issuing it");
     }
     private LoanArrangement loan(EquipmentCommitment c) {
-        return em.createQuery("from LoanArrangement l where l.commitment = :c", LoanArrangement.class).setParameter("c", c).getResultStream().findFirst().orElse(null);
+        return orm.commitmentLoans(c).findFirst().orElse(null);
     }
     private int eligibleQuantity(EquipmentCommitment c) { var l = loan(c); return l == null ? c.quantity : l.collected - l.returned; }
     private List<String> eligibleAssets(EquipmentCommitment c) { var l = loan(c); return l == null ? c.assetIds : l.collectedAssets.stream().filter(id -> !l.returnedAssets.contains(id)).toList(); }
 
     private EquipmentCommitment matching(Item item, EventOccurrence event) {
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) return null;
+        return matching(item, event, commitments(item));
+    }
+
+    private EquipmentCommitment matching(Item item, EventOccurrence event, List<EquipmentCommitment> commitments) {
         LocalDate from = event == null ? LocalDate.now() : event.startDate;
         LocalDate until = event == null ? from : event.endDate;
-        return commitments(item).stream().filter(c -> !c.cancelled && (c.event == null || (event != null && c.event.id.equals(event.id)))
+        return commitments.stream().filter(c -> !c.cancelled && (c.event == null || (event != null && c.event.id.equals(event.id)))
                 && !c.availableFrom.isAfter(from) && !c.availableUntil.isBefore(until)).findFirst().orElse(null);
     }
 
     private int consumedDuring(Item item, EquipmentCommitment c) {
-        return em.createQuery("from StockTransaction t where t.item = :item and t.type = :type", StockTransaction.class)
-                .setParameter("item", item).setParameter("type", DomainEnums.TransactionType.consumed).getResultStream()
+        return orm.consumption(item)
                 .filter(t -> !t.createdAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate().isBefore(c.availableFrom))
                 .mapToInt(t -> t.quantity).sum();
     }
@@ -215,19 +244,19 @@ public class EquipmentService {
         if (state.reserved() > 0 || state.checkedOut() > 0 || assetBusy)
             throw ApiException.conflict("Release reservations and reconcile custody/transfers before changing this agreement");
         // Missing and in-transit bulk equipment must not become a new owner's stock by metadata change.
-        long missing = em.createQuery("select count(l) from FactionOrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult();
-        boolean generalMissing = em.createQuery("from GeneralOrder", GeneralOrder.class).getResultStream().anyMatch(o -> o.missingQuantities.getOrDefault(item.id.toString(), 0) > 0);
-        long transit = em.createQuery("select count(p) from InventoryPosition p where p.item = :item and p.quantityInTransit > 0", Long.class).setParameter("item", item).getSingleResult();
+        long missing = orm.missingFactionLines(item);
+        boolean generalMissing = orm.generalOrders().anyMatch(o -> o.missingQuantities.getOrDefault(item.id.toString(), 0) > 0);
+        long transit = orm.inTransitPositions(item);
         if (missing > 0 || generalMissing || transit > 0) throw ApiException.conflict("Resolve missing or in-transit equipment first");
     }
 
     private boolean usable(AssetInstance a) {
         try { inventory.assertAssetCheckoutAllowed(a); return a.active; } catch (ApiException ex) { return false; }
     }
-    private List<AssetInstance> assets(Item item) { return em.createQuery("from AssetInstance a where a.item = :item and a.active = true", AssetInstance.class).setParameter("item", item).getResultList(); }
-    private List<EquipmentCommitment> commitments(Item item) { return em.createQuery("from EquipmentCommitment c where c.item = :item order by c.availableFrom desc, c.createdAt desc", EquipmentCommitment.class).setParameter("item", item).getResultList(); }
+    private List<AssetInstance> assets(Item item) { return orm.activeAssets(item); }
+    private List<EquipmentCommitment> commitments(Item item) { return orm.commitments(item); }
     private Item item(UUID id, boolean lock) {
-        var item = lock ? em.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE) : em.find(Item.class, id);
+        var item = lock ? orm.findLocked(Item.class, id) : orm.find(Item.class, id);
         if (item == null || !item.active) throw ApiException.notFound("Item not found");
         actors.requireItemAccess(item); return item;
     }

@@ -27,6 +27,19 @@ public class SyncAuditOrm {
     }
 
     public UserAccount user(UUID id) { return entityManager.find(UserAccount.class, id); }
+    public void lockActor(UUID id) { entityManager.find(UserAccount.class, id, LockModeType.PESSIMISTIC_WRITE); }
+    public SyncCommandAudit requiredLocked(UUID id) {
+        return entityManager.createQuery("from SyncCommandAudit where commandId = :id", SyncCommandAudit.class)
+                .setParameter("id", id).setLockMode(LockModeType.PESSIMISTIC_WRITE).getSingleResult();
+    }
+    public boolean hasAppliedCorrection(UUID root) {
+        return entityManager.createQuery("select count(a) from SyncCommandAudit a where a.resolutionRoot = :id and a.syncStatus = 'applied'", Long.class)
+                .setParameter("id", root).getSingleResult() > 0;
+    }
+    public List<SyncCommandAudit> forActor(UUID user, int offset, int limit) {
+        return entityManager.createQuery("from SyncCommandAudit a where a.user.id = :user order by a.createdAt desc, a.id", SyncCommandAudit.class)
+                .setParameter("user", user).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
     public void persist(SyncCommandAudit value) { entityManager.persist(value); }
 
     public List<SyncCommandAudit> list(String status, int offset, int limit) {

@@ -133,9 +133,15 @@ export function ItemDetail() {
         enabled: Boolean(itemId && isGenerator),
     });
 
+    const checkoutRequest = `${itemId}:${searchParams.get('transaction')}:${canTransact}`;
+    const [handledCheckoutRequest, setHandledCheckoutRequest] = useState('');
+    if (handledCheckoutRequest !== checkoutRequest) {
+        setHandledCheckoutRequest(checkoutRequest);
+        if (canTransact && searchParams.get('transaction') === '1') setCheckoutOpen(true);
+    }
+
     useEffect(() => {
         if (searchParams.get('transaction') !== '1') return;
-        if (canTransact) setCheckoutOpen(true);
         const next = new URLSearchParams(searchParams);
         next.delete('transaction');
         setSearchParams(next, { replace: true });

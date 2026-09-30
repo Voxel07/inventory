@@ -1,6 +1,7 @@
+import { AppSnackbar } from './components/shared/AppSnackbar';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, MutationCache, useQueryClient } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, Snackbar, Alert, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
 import { lazy, Suspense, useEffect } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
@@ -204,6 +205,13 @@ function buildTheme(mode: 'light' | 'dark') {
         },
       },
     },
+    MuiTablePagination: {
+      styleOverrides: {
+        root: { width: '100%', minWidth: 0 },
+        toolbar: { justifyContent: 'flex-end', flexWrap: 'wrap' },
+        spacer: { display: 'none' },
+      },
+    },
     MuiTableRow: {
       styleOverrides: {
         root: {
@@ -333,8 +341,6 @@ function AppContent() {
   useBarcodeScanner(isAuthenticated);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
-  const snackbar = useUIStore((s) => s.snackbar);
-  const hideSnackbar = useUIStore((s) => s.hideSnackbar);
   const theme = useTheme();
   const queryClient = useQueryClient();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -362,17 +368,7 @@ function AppContent() {
     return (
       <>
         <LoginPage />
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={4000}
-          onClose={hideSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          sx={{ bottom: { xs: 80, md: 24 } }}
-        >
-          <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled">
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+        <AppSnackbar />
       </>
     );
   }
@@ -411,8 +407,6 @@ function AppContent() {
               <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
-              <Route path="/events/orders" element={<Navigate to="/orders?tab=faction" replace />} />
-              <Route path="/events/orders/:orderId" element={<FactionOrderDetail />} />
               <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
               <Route path="/returns" element={<InventoryManagerGuard><ReturnedItemsPage /></InventoryManagerGuard>} />
               <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
@@ -432,17 +426,7 @@ function AppContent() {
           </Suspense>
         </ErrorBoundary>
       </Box>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={hideSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        sx={{ bottom: { xs: 80, md: 24 } }}
-      >
-        <Alert onClose={hideSnackbar} severity={snackbar.severity} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+      <AppSnackbar />
     </Box>
   );
 }

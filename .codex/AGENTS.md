@@ -4,6 +4,15 @@
 - **Backend:** Quarkus (Java / Maven)
 - **Frontend:** React + Vite, managed and bundled with **Bun** (`bun.lock`)
 
+## Scope of the APP
+
+- Event driven Inventory management System
+- Airsoft evetns
+- Different / Multible storage location fo itmes
+- Company owned items and privatly owned items
+- Assemblies from Items
+- Serialized Items for expensive items like Generators
+
 This project is in active **new development**. Follow these mandatory rules:
 
 ## 1. No Builds or Tests

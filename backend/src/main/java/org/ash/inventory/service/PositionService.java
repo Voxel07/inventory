@@ -3,7 +3,6 @@ package org.ash.inventory.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.PositionOrm;
-import org.ash.inventory.orm.OperationsOrm;
 import org.ash.inventory.resource.ApiException;
 import java.time.LocalDate;
 import java.util.*;
@@ -13,8 +12,7 @@ import java.util.*;
 public class PositionService {
     @jakarta.inject.Inject EquipmentService equipment;
     private final PositionOrm orm;
-    private final OperationsOrm operations;
-    public PositionService(PositionOrm orm, OperationsOrm operations) { this.orm = orm; this.operations = operations; }
+    public PositionService(PositionOrm orm) { this.orm = orm; }
 
     public StorageLocation location(UUID id) {
         if (id == null) return null;
@@ -32,21 +30,6 @@ public class PositionService {
         return lot == null || lot.usableOn(LocalDate.now());
     }
 
-    /** Backfill legacy quantities once a location workflow touches an item. Never infer a lot. */
-    public void ensureLegacy(Item item) {
-        if (item.trackingMode == DomainEnums.TrackingMode.serialized || item.storageLocation == null) return;
-        orm.lock(item);
-        var totals = operations.transactionTotals(item);
-        int onHand = totals.containsKey(DomainEnums.TransactionType.added) ? 0 : item.baseAmount;
-        for (var entry : totals.entrySet()) onHand += switch (entry.getKey()) {
-            case added, received, adjusted, checkin, transfer_in -> Math.toIntExact(entry.getValue());
-            case checkout, written_off, transfer_out -> -Math.toIntExact(entry.getValue());
-            default -> 0;
-        };
-        int located = orm.positions(item).stream().mapToInt(p -> p.quantityOnHand).sum();
-        if (onHand > located) orm.position(item, item.storageLocation, null).quantityOnHand += onHand - located;
-    }
-
     public int blocked(Item item) {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) return 0;
         return orm.positions(item).stream().mapToInt(p -> usable(p.lot)
@@ -55,7 +38,6 @@ public class PositionService {
     }
 
     public int availableAt(Item item, StorageLocation source, UUID exceptFaction, UUID exceptGeneral) {
-        ensureLegacy(item);
         if (source == null) return Integer.MAX_VALUE;
         return Math.max(0, orm.positions(item).stream().filter(p -> p.location.id.equals(source.id))
                 .mapToInt(InventoryPosition::availableQuantity).sum() - orm.reserved(item, source, exceptFaction, exceptGeneral));
@@ -74,7 +56,6 @@ public class PositionService {
 
     public void reportDamage(DamageReport report) {
         if (report.item == null || report.item.trackingMode == DomainEnums.TrackingMode.serialized) return;
-        ensureLegacy(report.item);
         int left = report.quantity;
         var held = new LinkedHashMap<String, Integer>();
         for (var p : orm.positions(report.item)) {
@@ -118,10 +99,9 @@ public class PositionService {
             default -> 0;
         };
         if (direction == 0) return;
-        ensureLegacy(tx.item);
         if (direction > 0) {
             var destination = tx.destinationLocation == null ? tx.item.storageLocation : tx.destinationLocation;
-            if (destination == null) return; // Unlocated legacy stock remains visible in the item total.
+            if (destination == null) return; // Unlocated stock remains visible in the item total.
             tx.destinationLocation = destination;
             var p = orm.position(tx.item, destination, tx.lot);
             p.quantityOnHand += tx.quantity;

@@ -132,7 +132,7 @@ export function Navigation() {
                         const isActive = item.path === '/'
                             ? location.pathname === '/'
                             : item.path === '/events'
-                                ? location.pathname.startsWith('/events') && !location.pathname.startsWith('/events/orders')
+                                ? location.pathname.startsWith('/events')
                             : location.pathname.startsWith(item.path);
                         return (
                             <ListItemButton

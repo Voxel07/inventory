@@ -117,7 +117,6 @@ public class TransferService {
                 asset.currentLocation = null;
             } else {
                 var lockedItem = requiredLocked(Item.class, line.item.id, "Item");
-                positions.ensureLegacy(lockedItem);
                 if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
                 if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null, null))) throw ApiException.conflict("Stock is reserved or unavailable");
                 var position = orm.lockedPosition(line.item, transfer.sourceLocation, line.lot);

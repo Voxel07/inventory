@@ -65,7 +65,7 @@ export function FactionOrders() {
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
-  const [selectedFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
+  const [chosenFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogReady, setDialogReady] = useState(false);
   const { user } = useAuth();
@@ -76,6 +76,7 @@ export function FactionOrders() {
     .some((faction) => canAccessFaction(currentUser, type, faction)));
   const visibleFactions = FACTIONS_BY_EVENT[eventType]
     .filter((faction) => canAccessFaction(currentUser, eventType, faction));
+  const selectedFaction = visibleFactions.includes(chosenFaction) ? chosenFaction : visibleFactions[0] ?? '';
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: events = [] } = useEventReports();
@@ -106,11 +107,6 @@ export function FactionOrders() {
   const historyOrders = orders.filter(isHistoricalOrder);
   const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
 
-  useEffect(() => {
-    if (!visibleFactions.includes(selectedFaction) && visibleFactions[0]) {
-      setSelectedFaction(visibleFactions[0]);
-    }
-  }, [selectedFaction, visibleFactions]);
 
   useEffect(() => {
     if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);

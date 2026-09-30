@@ -13,11 +13,11 @@ import java.util.*;
 @ApplicationScoped
 public class PlanningService {
     private final PlanningOrm orm;
-    private final InventoryOperationsService inventory;
+    private final PlanningStockService stockSnapshots;
     private final ActorService actors;
     private final DomainEventService events;
-    public PlanningService(PlanningOrm orm, InventoryOperationsService inventory, ActorService actors, DomainEventService events) {
-        this.orm = orm; this.inventory = inventory; this.actors = actors; this.events = events;
+    public PlanningService(PlanningOrm orm, PlanningStockService stockSnapshots, ActorService actors, DomainEventService events) {
+        this.orm = orm; this.stockSnapshots = stockSnapshots; this.actors = actors; this.events = events;
     }
     public record OverrideInput(UUID eventId, UUID itemId, int quantity, String reason) {}
     @Transactional
@@ -58,19 +58,23 @@ public class PlanningService {
         }
         var overrides = new HashMap<String, PlanningOverride>();
         orm.overrides().forEach(o -> overrides.put(o.event.id + ":" + o.item.id, o));
-        var incoming = orm.incoming(); var items = orm.items(); var stocks = inventory.stock(items);
+        var incoming = orm.incoming(); var items = orm.items(); var stocks = stockSnapshots.load(items);
+        var incomingByItem = new HashMap<UUID, List<PurchaseOrderLine>>();
+        incoming.forEach(line -> incomingByItem.computeIfAbsent(line.item.id, ignored -> new ArrayList<>()).add(line));
         var dates = new TreeSet<LocalDate>(); scope.forEach(e -> { if (selected == null || !e.startDate.isBefore(selected.startDate)) dates.add(e.startDate); });
         if (selected != null) dates.add(selected.startDate);
         if (dates.isEmpty()) dates.add(LocalDate.now());
         var result = new ArrayList<ApiResponses.DeficitResponse>();
         for (var item : items) {
-            var stock = stocks.get(item.id);
+            var snapshot = stocks.get(item.id);
+            var stock = snapshot.stock();
             boolean conditional = !EquipmentService.freelyAvailable(item);
-            var physical = inventory.physicalStock(item);
+            var physical = snapshot.physical();
             int creditedReservations = Math.min(stock.reserved(), reservations.getOrDefault(item.id, 0));
             int usable = conditional ? 0 : stock.available() + creditedReservations;
             int maxNeed = -1, demandAtPeak = 0, receiptAtPeak = 0, grossAtPeak = 0, committedAtPeak = 0; LocalDate requiredDate = dates.first();
-            int allIncoming = incoming.stream().filter(line -> line.item.id.equals(item.id)).mapToInt(PurchaseOrderLine::remainingQuantity).sum();
+            var itemIncoming = incomingByItem.getOrDefault(item.id, List.of());
+            int allIncoming = itemIncoming.stream().mapToInt(PurchaseOrderLine::remainingQuantity).sum();
             for (var date : dates) {
                 int needed = 0, committed = 0;
                 int capacity = physical.available() + creditedReservations;
@@ -83,11 +87,11 @@ public class PlanningService {
                     int eventNeed = Math.max(forecast, demand.getOrDefault(event.id, Map.of()).getOrDefault(item.id, 0));
                     needed += eventNeed;
                     if (conditional) {
-                        int supply = Math.min(eventNeed, Math.min(capacity, inventory.availableFor(item, event, creditedReservations)));
+                        int supply = Math.min(eventNeed, Math.min(capacity, stockSnapshots.availableFor(snapshot, event, creditedReservations)));
                         committed += supply; capacity -= supply;
                     }
                 }
-                int due = incoming.stream().filter(line -> line.item.id.equals(item.id) && line.purchaseOrder.expectedDeliveryDate != null && !line.purchaseOrder.expectedDeliveryDate.isAfter(date)).mapToInt(PurchaseOrderLine::remainingQuantity).sum();
+                int due = itemIncoming.stream().filter(line -> line.purchaseOrder.expectedDeliveryDate != null && !line.purchaseOrder.expectedDeliveryDate.isAfter(date)).mapToInt(PurchaseOrderLine::remainingQuantity).sum();
                 // Purchasing alone cannot create an owner's consent for restricted stock.
                 if (conditional) due = 0;
                 int gross = Math.max(0, needed + item.minStock - usable - committed);

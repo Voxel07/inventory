@@ -52,7 +52,7 @@ export function Procurement() {
   const [eventId, setEventId] = useState('');
   const [orderItem, setOrderItem] = useState<ProcurementDeficit | null>(null);
   const { data: events = [] } = useEventReports();
-  const { data: deficits = [], isLoading, error } = useQuery({
+  const { data: deficits = [], isPending, isFetching, fetchStatus, error } = useQuery({
     queryKey: ['procurement-deficits', eventId],
     queryFn: () => getProcurementDeficits(eventId || undefined),
   });
@@ -60,7 +60,10 @@ export function Procurement() {
   const groups = (() => {
     const result = new Map<string, typeof deficits>();
     for (const row of deficits) {
-      result.set(row.supplier || 'Unassigned', [...(result.get(row.supplier || 'Unassigned') || []), row]);
+      const supplier = row.supplier || 'Unassigned';
+      const rows = result.get(supplier);
+      if (rows) rows.push(row);
+      else result.set(supplier, [row]);
     }
     return [...result.entries()].sort(([a], [b]) => a.localeCompare(b));
   })();
@@ -71,7 +74,7 @@ export function Procurement() {
   const assetDeficitUnits = deficits.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
 
   function renderKpiValue(value: number, color?: string) {
-    if (isLoading) {
+    if (isPending) {
       return <Skeleton variant="text" width={60} height={32} />;
     }
     if (error) {
@@ -190,7 +193,7 @@ export function Procurement() {
   }
 
   return (
-    <Box>
+    <Box aria-busy={isPending || isFetching}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
@@ -293,11 +296,35 @@ export function Procurement() {
           {error instanceof Error ? error.message : t('Fehlmengen konnten nicht geladen werden.', 'Could not load deficits.')}
         </Alert>
       )}
-      {!isLoading && !deficits.length && (
+      {!isPending && !error && !deficits.length && (
         <Alert severity="success">{t('Keine Fehlmengen im gewählten Umfang.', 'No shortages in the selected scope.')}</Alert>
       )}
 
       <Stack spacing={2}>
+        {isPending && <>
+          <Typography role="status" variant="body2" color="text.secondary">
+            {fetchStatus === 'paused'
+              ? t('Warte auf eine Netzwerkverbindung…', 'Waiting for a network connection…')
+              : t('Bestände, Bedarf und Lieferungen werden geladen…', 'Loading stock, demand and deliveries…')}
+          </Typography>
+          {[0, 1].map((group) => <Paper key={group} aria-hidden="true" sx={{ p: 2 }}>
+            <Skeleton variant="text" width="40%" height={36} sx={{ mb: 2 }} />
+            <Stack spacing={1}>
+              {[0, 1, 2].map((row) => isMobile
+                ? <Card key={row} variant="outlined" sx={{ p: 1.5 }}>
+                  <Skeleton variant="text" width="70%" />
+                  <Skeleton variant="text" width="40%" />
+                  <Skeleton variant="rounded" height={28} sx={{ mt: 1 }} />
+                </Card>
+                : <Box key={row} sx={{ display: 'grid', gridTemplateColumns: '1fr 3fr repeat(4, 1fr)', gap: 2 }}>
+                  {[0, 1, 2, 3, 4, 5].map((cell) => <Skeleton key={cell} variant="text" height={32} />)}
+                </Box>)}
+            </Stack>
+          </Paper>)}
+        </>}
+        {isFetching && !isPending && <Typography role="status" variant="body2" color="text.secondary">
+          {t('Fehlmengen werden aktualisiert…', 'Updating shortages…')}
+        </Typography>}
         {groups.map(([supplier, rows]) => (
           <Paper key={supplier}>
             <SupplierDraft rows={rows} eventId={eventId} />
@@ -450,7 +477,7 @@ export function Procurement() {
           </Paper>
         ))}
       </Stack>
-      <PlanningDetails rows={deficits} eventId={eventId} />
+      {!isPending && <PlanningDetails rows={deficits} eventId={eventId} />}
       <ProcurementOrders selected={orderItem} eventId={eventId} onClose={() => setOrderItem(null)} />
     </Box>
   );

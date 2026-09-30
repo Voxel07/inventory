@@ -1,6 +1,7 @@
 import type { GeneralOrder, GeneralOrderFormData } from '../types';
 import { createMutableResourceApi } from './resourceFactory';
 import { apiRequest } from './apiClient';
+import type { GeneralOrderCommands } from '../types/order';
 
 export const generalOrderApi = createMutableResourceApi<GeneralOrder, GeneralOrderFormData>('/api/general-orders');
 export const getOrders = generalOrderApi.getAll;
@@ -13,4 +14,4 @@ export function returnOrder(id: string, returnedQuantities: Record<string, numbe
   return apiRequest<GeneralOrder>(`/api/general-orders/${id}/return`, { method: 'POST', body: { returnedQuantities, consumedQuantities } });
 }
 
-export const generalOrderCommand = (id: string, action: string, data: object) => apiRequest<GeneralOrder>(`/api/general-orders/${id}/${action}`, { method: 'POST', body: data });
+export const generalOrderCommand = <A extends keyof GeneralOrderCommands>(id: string, action: A, data: GeneralOrderCommands[A]) => apiRequest<GeneralOrder>(`/api/general-orders/${id}/${action}`, { method: 'POST', body: data });

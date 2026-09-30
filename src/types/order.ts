@@ -1,5 +1,20 @@
 import type { User } from './user';
 
+export interface GeneralOrderPickupInput {
+  preparedQuantities?: Record<string, number>;
+  assetAssignments?: Record<string, string[]>;
+  sourceLocations?: Record<string, string>;
+  idempotencyKey?: string;
+  notes?: string | null;
+}
+export type GeneralOrderReturnOutcome = 'returned' | 'consumed' | 'damaged' | 'missing' | 'writtenOff';
+export type GeneralOrderReturnInput = {
+  [K in GeneralOrderReturnOutcome as `${K}Quantities`]?: Record<string, number>;
+} & {
+  [K in Exclude<GeneralOrderReturnOutcome, 'consumed'> as `${K}Assets`]?: Record<string, string[]>;
+} & { idempotencyKey?: string; notes?: string | null };
+export type GeneralOrderCommands = { prepare: GeneralOrderPickupInput; pickup: GeneralOrderPickupInput; return: GeneralOrderReturnInput };
+
 export interface GeneralOrder {
   sourceLocations?: Record<string, string>;
   id: string;

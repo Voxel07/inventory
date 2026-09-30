@@ -2,7 +2,7 @@ import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -93,15 +93,21 @@ export function Events() {
     return [...ids].sort((left, right) => (names.get(left) ?? left).localeCompare(names.get(right) ?? right));
   })();
 
-  useEffect(() => {
+  const planningKey = JSON.stringify([eventType, selectedEvent?.id, selectedEvent?.notes, selectedEvent?.plannedQuantities, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
+  const [planningSource, setPlanningSource] = useState<string | undefined>(undefined);
+  if (planningSource !== planningKey) {
+    setPlanningSource(planningKey);
     setPlanned(toQuantityInputs(selectedEvent?.plannedQuantities ?? lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
     setNotes(selectedEvent?.notes ?? '');
-  }, [selectedEvent?.notes, eventType, selectedEvent?.id, selectedEvent?.plannedQuantities, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
+  }
 
-  useEffect(() => {
+  const datesKey = JSON.stringify([eventType, currentEvent?.id, currentEvent?.eventDate, currentEvent?.endDate]);
+  const [datesSource, setDatesSource] = useState<string | undefined>(undefined);
+  if (datesSource !== datesKey) {
+    setDatesSource(datesKey);
     setEventDate(currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
     setEventEndDate(currentEvent?.endDate?.slice(0, 10) ?? currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-  }, [eventType, currentEvent?.id, currentEvent?.eventDate, currentEvent?.endDate]);
+  }
 
   function createEvent() {
     if (!newName.trim() || !newDate || !newEndDate || newEndDate < newDate) return;

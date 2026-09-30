@@ -1,5 +1,5 @@
 import { Dialog } from '../../shared/ClosableDialog';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -58,12 +58,15 @@ export function OrderPickupMapDialog({
   const [longitude, setLongitude] = useState<number | undefined>(initialLongitude);
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
+  const pickupKey = JSON.stringify([open, initialLocationId, initialLatitude, initialLongitude]);
+  const [pickupSource, setPickupSource] = useState<string | undefined>(undefined);
+  if (pickupSource !== pickupKey) {
+    setPickupSource(pickupKey);
     setLocationId(initialLocationId);
     setLatitude(initialLatitude);
     setLongitude(initialLongitude);
     setNotes('');
-  }, [initialLocationId, initialLatitude, initialLongitude, open]);
+  }
 
   const selectedLocation = storageLocations.find((loc) => loc.id === locationId);
 

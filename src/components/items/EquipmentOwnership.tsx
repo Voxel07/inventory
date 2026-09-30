@@ -1,8 +1,10 @@
+import { useEquipmentProfile } from '../../hooks/useEquipment';
+import { equipmentProfileInput, equipmentCommitmentInput } from '../../services/equipmentInputs';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
 import type { Item } from '../../types';
-import { equipmentApi, type EquipmentCommitment, type EquipmentProfile } from '../../services/equipmentService';
+import { equipmentApi } from '../../services/equipmentService';
+import type { EquipmentCommitment, EquipmentProfile } from '../../types/equipment';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { useLocalizedText } from '../../utils/naming';
@@ -10,7 +12,7 @@ import { OperationForm, type Field } from '../operations/OperationForm';
 
 export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boolean }) {
   const t = useLocalizedText();
-  const profile = useQuery({ queryKey: ['items', item.id, 'equipment'], queryFn: () => equipmentApi.get(item.id) });
+  const profile = useEquipmentProfile(item.id);
   const { data: events = [] } = useEventReports();
   const { data: assets = [], isLoading: assetsLoading, isError: assetsError } = useItemAssets(item.trackingMode === 'serialized' ? item.id : undefined);
   const [editing, setEditing] = useState<EquipmentProfile | null>(null);
@@ -56,7 +58,7 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
       { key: 'keeperName', label: t('Verwahrer', 'Keeper') }, { key: 'keeperContact', label: t('Kontakt zur Abholung', 'Pickup contact') },
       { key: 'availabilityPolicy', label: t('Verfügbarkeit', 'Availability'), required: true, options: Object.entries(policy).filter(([key]) => values.ownershipType === 'organization' || key !== 'available').map(([value, label]) => ({ value, label })) },
       { key: 'reason', label: t('Begründung', 'Reason'), required: true },
-    ]} onSave={values => equipmentApi.update(item.id, { ...values, revision: editing.revision })}>
+    ]} onSave={values => equipmentApi.update(item.id,equipmentProfileInput({ ...values, revision: editing.revision }))}>
       <Alert severity="info">{t('Änderungen an Eigentum und Verfügbarkeit erfordern freigegebene Reservierungen, geklärte Ausleihen und stornierte laufende Zusagen. Kontaktänderungen bleiben möglich.', 'Ownership and availability changes require released reservations, reconciled custody and cancelled current commitments. Contact details can still be updated.')}</Alert>
     </OperationForm>}
     {offering && <OperationForm title={t('Zusage erfassen', 'Record commitment')} onClose={() => setOffering(null)} initial={{ quantity: 1 }} fields={[
@@ -69,9 +71,9 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
       { key: 'returnDue', label: t('Rückgabe fällig am', 'Return due'), type: 'date', required: !item.isConsumable },
       { key: 'returnDetails', label: t('Rückgabeverpflichtung / Ort', 'Return obligation / place'), required: !item.isConsumable },
       { key: 'notes', label: t('Nachweis der Zusage / Notizen', 'Agreement evidence / notes'), required: true },
-    ]} onSave={values => equipmentApi.commit(item.id, { ...values, eventId: values.eventId || null, returnDue: values.returnDue || null, assetIds: readyAssets.filter(a => values[`asset:${a.id}`]).map(a => a.id), revision: offering.revision })}>
+    ]} onSave={values => equipmentApi.commit(item.id,equipmentCommitmentInput({ ...values, eventId: values.eventId || null, returnDue: values.returnDue || null, assetIds: readyAssets.filter(a => values[`asset:${a.id}`]).map(a => a.id), revision: offering.revision }))}>
       <Alert severity="info">{t('Der Zeitraum muss das gesamte Event abdecken. Pro Artikel ist nur eine überlappende Zusage inklusive Rückgabefrist zulässig. Zusagen erzeugen keinen Bestand.', 'The dates must cover the entire event. A stock pool can have only one overlapping commitment, including its return window. Commitments do not create stock.')}</Alert>
     </OperationForm>}
-    {cancelling && <OperationForm title={t('Zusage stornieren', 'Cancel commitment')} onClose={() => setCancelling(null)} fields={[{ key: 'reason', label: t('Begründung', 'Reason'), required: true }]} onSave={values => equipmentApi.cancel(item.id, cancelling.commitment.id, { ...values, revision: cancelling.profile.revision })} />}
+    {cancelling && <OperationForm title={t('Zusage stornieren', 'Cancel commitment')} onClose={() => setCancelling(null)} fields={[{ key: 'reason', label: t('Begründung', 'Reason'), required: true }]} onSave={values => equipmentApi.cancel(item.id, cancelling.commitment.id, { reason: String(values.reason), revision: cancelling.profile.revision })} />}
   </Paper>;
 }

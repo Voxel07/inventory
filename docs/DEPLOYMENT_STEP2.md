@@ -1,4 +1,4 @@
-# Step 2 — Multi-node HA (as per `REQUIREMENTS_ARCHITECTURE.md` §5)
+# Step 2 — Multi-node deployment topology
 
 Build on **Step 1** once the single-node limit is reached. Step 2 adds a second
 application node, health-checked routing, and off-box redundancy for the API,
@@ -100,19 +100,12 @@ export default {
 
 ## Backup & disaster recovery
 
-### First Flyway deployment
+### Schema initialization
 
-A fresh, empty production database applies `V1.0.0__init.sql` automatically. For an
-existing installation that predates Flyway:
-
-1. Take and verify a restorable database backup.
-2. Compare the live schema with `backend/src/main/resources/db/migration/V1.0.0__init.sql`.
-3. Set `FLYWAY_BASELINE_ON_MIGRATE=true` for the first deployment only. This records
-   the inspected schema as version `1.0.0` instead of replaying the creation script.
-4. Remove the setting after that deployment; subsequent migrations are applied and
-   Hibernate validates the resulting schema.
-
-Do not enable the baseline switch for a partially initialized or unknown schema.
+Current databases are disposable. An empty production database runs the single
+`V1.0.0__init.sql` baseline and Hibernate validates it. Recreate disposable
+databases after baseline changes; the old pre-Flyway baselining and incremental
+upgrade procedure is removed. No database reset is performed by this guide.
 
 1. **Streaming replication** — PostgreSQL primary on VPS 1 streams to the replica
    on VPS 3 (`wal_level=logical` is already set in the compose files).
@@ -122,15 +115,12 @@ Do not enable the baseline switch for a partially initialized or unknown schema.
 4. **Garage S3 sync** — nightly sync of the media bucket to the Storage Box.
 
 **Recovery (RTO < 30 min):** bring up a fresh node from the checked-in compose
-files, run Flyway migrations, restore the latest dump/WAL, re-point the Worker.
+files, initialize the canonical schema, restore the latest dump/WAL, re-point the Worker.
 
-## Honest capacity notes
+## Validation limits
 
-- The API is designed to be stateless and horizontally scalable; two nodes cover
-  the read-heavy QR-scanning workload of an event easily.
-- The figures in `REQUIREMENTS_ARCHITECTURE.md` §5.5 ("10,000 req/s, 5,000
-  concurrent users") describe a **design ceiling** for this topology, not a
-  guarantee. Measure with the OpenTelemetry/OpenObserver stack before relying on
-  them.
-- Kubernetes (k3s) is **not required** for this scale — see §5.5.2 of the
-  architecture document for the triggers that would justify it.
+This is a proposed topology, not a verified multi-host deployment. The checked-in
+cluster compose describes services on one Docker network; separate hosts require
+explicit reachable database, Valkey, media and proxy endpoints. Load capacity,
+cross-host routing, fresh PostgreSQL initialization and restore procedures have
+not been verified against the current source.

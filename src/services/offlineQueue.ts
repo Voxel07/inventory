@@ -288,14 +288,3 @@ export async function correctSyncFailure(failure: SyncFailure, payload: Record<s
   });
   await notifyQueueChanged(); void flushOfflineQueue();
 }
-
-/** Unowned pre-v4 commands are retained for manual reconciliation, never replayed as a different user. */
-export async function getLegacyOfflineEvidence(): Promise<unknown[]> {
-  const db = await openDatabase();
-  const read = (store: string) => new Promise<Record<string, unknown>[]>((resolve, reject) => {
-    const request = db.transaction(store).objectStore(store).getAll();
-    request.onsuccess = () => resolve(request.result.filter((entry: Record<string, unknown>) => !entry.ownerId).map((entry: Record<string, unknown>) => ({ ...entry, source: store })));
-    request.onerror = () => reject(request.error);
-  });
-  return (await Promise.all([read(STORE), read(FAILURES_STORE)])).flat();
-}

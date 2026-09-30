@@ -3,6 +3,7 @@ package org.ash.inventory.orm;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import org.ash.inventory.model.GeneralOrder;
+import org.ash.inventory.model.GeneralOrderHistory;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +27,19 @@ public class GeneralOrderOrm {
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    public void persist(GeneralOrder order) { entityManager.persist(order); }
+    public GeneralOrderHistory commandHistory(UUID key) {
+        return entityManager.createQuery("from GeneralOrderHistory h where h.commandId = :key", GeneralOrderHistory.class)
+                .setParameter("key", key).getResultStream().findFirst().orElse(null);
+    }
+
+    public List<GeneralOrderHistory> history(GeneralOrder order) {
+        return entityManager.createQuery("from GeneralOrderHistory h where h.order = :order order by h.occurredAt", GeneralOrderHistory.class)
+                .setParameter("order", order).getResultList();
+    }
+
+    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
+    public <T> T findLocked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public void flush() { entityManager.flush(); }
+    public void persist(Object value) { entityManager.persist(value); }
     public GeneralOrder locked(UUID id) { return entityManager.find(GeneralOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
 }

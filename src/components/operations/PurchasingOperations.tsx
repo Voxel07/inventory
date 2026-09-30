@@ -1,7 +1,9 @@
+import { receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
+import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useEventReports } from '../../hooks/useEvents';
@@ -21,8 +23,7 @@ export function PurchasingPanel({ eventId = '', selected = null, onClose = () =>
   const [history, setHistory] = useState<string | null>(null);
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setEdit('new')}>{t('Einkaufsentwurf anlegen', 'New purchase draft')}</Button>
-    {orders.isLoading && <LinearProgress />}{orders.error && <Alert severity="error">{orders.error.message}</Alert>}
-    {!orders.isLoading && !orders.data?.length && <Alert severity="info">{t('Noch keine Einkaufsbestellungen.', 'No purchase orders yet.')}</Alert>}
+    <QueryFeedback isLoading={orders.isLoading} error={orders.error} isEmpty={!orders.data?.length} emptyMessage={t('Noch keine Einkaufsbestellungen.', 'No purchase orders yet.')} />
     {orders.data?.filter((order) => !eventId || order.eventOccurrenceId === eventId).map((order) => <Card key={order.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{order.orderNumber} · {order.vendorName}</Typography><Typography>{order.status} · {t('Bestelldatum', 'Order date')}: {order.orderDate} · {t('Erwartet', 'Expected')}: {order.expectedDeliveryDate ?? '—'}</Typography>
       <Typography>{t('Erstellt von', 'Created by')}: {order.createdByName}</Typography>
@@ -84,14 +85,14 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
         { key: `notes:${line.id}`, label: t('Prüfnotiz', 'Inspection notes') },
       ];
     }), { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-  ]} onSave={(values) => operationsApi.receive({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber || null, notes: values.notes || null, idempotencyKey: key, lines: order.lines.filter((line) => line.remainingQuantity > 0).map((line) => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`] || 0), damagedQuantity: Number(values[`damaged:${line.id}`] || 0), rejectedQuantity: Number(values[`rejected:${line.id}`] || 0), lotId: values[`lot:${line.id}`] || null, assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map((code) => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null })).filter((line) => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) })}>
+  ]} onSave={(values) => operationsApi.receive(receiptInput({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber || null, notes: values.notes || null, idempotencyKey: key, lines: order.lines.filter((line) => line.remainingQuantity > 0).map((line) => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`] || 0), damagedQuantity: Number(values[`damaged:${line.id}`] || 0), rejectedQuantity: Number(values[`rejected:${line.id}`] || 0), lotId: values[`lot:${line.id}`] || null, assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map((code) => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null })).filter((line) => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) }))}>
     <Alert severity="info">{t('Nur tatsächlich geprüfte Mengen erfassen. Chargen bei Bedarf zuerst im Bereich Chargen anlegen.', 'Enter only inspected quantities. Create any new batch in Lots first.')}</Alert>
   </OperationForm>;
 }
 
 export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string }) {
   const t = useLocalizedText(); const receipts = useOperationList(`receipts:${purchaseOrderId ?? ''}`, operationsApi.receipts(purchaseOrderId));
-  return <Stack spacing={1}><Typography variant="h6">{t('Wareneingänge', 'Receipt history')}</Typography>{receipts.isLoading && <LinearProgress />}{receipts.error && <Alert severity="error">{receipts.error.message}</Alert>}{receipts.data?.map((receipt) => <Card key={receipt.id}><CardContent><Typography>{receipt.receiptNumber} · {new Date(receipt.receivedAt).toLocaleString()} · {receipt.status}</Typography>{receipt.lines.map((line) => <Typography key={line.id}>{line.itemName} · {t('Angenommen / beschädigt / abgelehnt', 'Accepted / damaged / rejected')}: {line.acceptedQuantity} / {line.damagedQuantity} / {line.rejectedQuantity} {line.receivingNotes}</Typography>)}</CardContent></Card>)}</Stack>;
+  return <Stack spacing={1}><Typography variant="h6">{t('Wareneingänge', 'Receipt history')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <Card key={receipt.id}><CardContent><Typography>{receipt.receiptNumber} · {new Date(receipt.receivedAt).toLocaleString()} · {receipt.status}</Typography>{receipt.lines.map((line) => <Typography key={line.id}>{line.itemName} · {t('Angenommen / beschädigt / abgelehnt', 'Accepted / damaged / rejected')}: {line.acceptedQuantity} / {line.damagedQuantity} / {line.rejectedQuantity} {line.receivingNotes}</Typography>)}</CardContent></Card>)}</Stack>;
 }
 
 export function VendorsPanel() {
@@ -117,7 +118,7 @@ export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
       { key: 'documentType', label: t('Belegart', 'Document type'), required: true, options: ['invoice', 'delivery_note', 'quote', 'warranty', 'certificate', 'other'].map((value) => ({ value, label: value })) }, { key: 'documentDate', label: t('Datum', 'Date'), type: 'date' }, { key: 'referenceNumber', label: t('Referenz', 'Reference') }, { key: 'amount', label: t('Gesamtbetrag', 'Total amount'), type: 'number', min: 0, step: 0.01 }, { key: 'currency', label: t('Währung', 'Currency') }, { key: 'retentionUntil', label: t('Aufbewahren bis', 'Retain until'), type: 'date' }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
     ]} onSave={(values) => {
       if (!file) return Promise.reject(new Error(t('Datei auswählen.', 'Select a file.')));
-      return operationsApi.attachDocument(file, { ...optionalValues(values), vendorId: order.vendorId, purchaseOrderId: order.id, totalAmountCents: values.amount === undefined || values.amount === '' ? null : Math.round(Number(values.amount) * 100) });
+      return operationsApi.attachDocument(file,vendorDocumentInput({ ...optionalValues(values), vendorId: order.vendorId, purchaseOrderId: order.id, totalAmountCents: values.amount === undefined || values.amount === '' ? null : Math.round(Number(values.amount) * 100) }));
     }}><TextField type="file" required slotProps={{ htmlInput: { accept: '.pdf,.png,.jpg,.jpeg,.webp' } }} onChange={(event) => setFile((event.target as HTMLInputElement).files?.[0] ?? null)} /></OperationForm>}
   </Stack>;
 }

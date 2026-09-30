@@ -1,3 +1,6 @@
+import { QuantityControl } from '../QuantityControl';
+import { CatalogSearchField } from '../CatalogSearchField';
+import { filterCatalogItems, filterCatalogAssemblies } from '../../../utils/orderCatalog';
 import { useState } from 'react';
 import {
   Autocomplete,
@@ -18,14 +21,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import CategoryIcon from '@mui/icons-material/Category';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import RemoveIcon from '@mui/icons-material/Remove';
-import SearchIcon from '@mui/icons-material/Search';
 import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
 import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
@@ -174,48 +174,11 @@ export function OrderPickListTable({
   }).filter(({ item, required, persisted }) => required > 0 || persisted.length > 0
     || (assetAssignments[item.id]?.length ?? 0) > 0);
 
-  const visibleOrderItems = (() => {
-    const term = itemSearch.trim().toLocaleLowerCase();
-    const filtered = orderItems.filter((item) => {
-      if (itemCategory && item.category !== itemCategory) return false;
-      return !term || `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`.toLocaleLowerCase().includes(term);
-    });
-    if (sortByLocation) {
-      return [...filtered].sort((a, b) => {
-        const locA = a.expand?.storageLocation?.name || a.storageLocation || '';
-        const locB = b.expand?.storageLocation?.name || b.storageLocation || '';
-        const cmp = locA.localeCompare(locB);
-        return cmp !== 0 ? cmp : a.name.localeCompare(b.name);
-      });
-    }
-    return filtered;
-  })();
-
-  const visibleOrderAssemblies = (() => {
-    const term = itemSearch.trim().toLocaleLowerCase();
-    return orderAssemblies.filter((assembly) =>
-      !term || `${assembly.name} ${assembly.description ?? ''}`.toLocaleLowerCase().includes(term),
-    );
-  })();
-
-  function stepPreparedItem(itemId: string, delta: number, max: number) {
-    onSetPrepared((current) => {
-      const currentVal = Number(current[itemId]) || 0;
-      const nextVal = Math.max(0, Math.min(max, currentVal + delta));
-      return { ...current, [itemId]: String(nextVal) };
-    });
-  }
+  const visibleOrderItems = filterCatalogItems(orderItems, itemSearch, itemCategory, undefined, sortByLocation);
+  const visibleOrderAssemblies = filterCatalogAssemblies(orderAssemblies, itemSearch);
 
   function setPreparedItemMax(itemId: string, max: number) {
     onSetPrepared((current) => ({ ...current, [itemId]: String(max) }));
-  }
-
-  function stepPreparedAssembly(assemblyId: string, delta: number, max: number) {
-    onSetPreparedAssemblies((current) => {
-      const currentVal = Number(current[assemblyId]) || 0;
-      const nextVal = Math.max(0, Math.min(max, currentVal + delta));
-      return { ...current, [assemblyId]: String(nextVal) };
-    });
   }
 
   function setPreparedAssemblyMax(assemblyId: string, max: number) {
@@ -280,13 +243,10 @@ export function OrderPickListTable({
               },
             }}
           >
-            <TextField
-              fullWidth
-              size="small"
+            <CatalogSearchField
               label={t('Artikel oder Baugruppen suchen', 'Search items or assemblies')}
               value={itemSearch}
-              onChange={(event) => setItemSearch(event.target.value)}
-              slotProps={{ input: { startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> } }}
+              onChange={setItemSearch}
               sx={{
                 '@container order-filters (min-width: 520px)': {
                   gridColumn: hasOrderItems ? '1 / -1' : 'auto',
@@ -403,19 +363,8 @@ export function OrderPickListTable({
                         </Stack>
                         {order.status === 'preparing' && (
                           <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
-                            <IconButton size="small" onClick={() => stepPreparedAssembly(assembly.id, -1, requested)} disabled={prepAssemblyVal <= 0}>
-                              <RemoveIcon fontSize="small" />
-                            </IconButton>
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={preparedAssemblies[assembly.id] ?? ''}
-                              onChange={(event) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
-                              slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 44, padding: '4px 2px' } } }}
-                            />
-                            <IconButton size="small" color="primary" onClick={() => stepPreparedAssembly(assembly.id, 1, requested)} disabled={prepAssemblyVal >= requested}>
-                              <AddIcon fontSize="small" />
-                            </IconButton>
+                            <QuantityControl label={`${assembly.name} ${t('Bereit', 'Prepared')}`} value={preparedAssemblies[assembly.id] ?? ''} max={requested}
+                            onChange={(value) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: value }))} />
                             <Button
                               size="small"
                               variant={isPrepComplete ? 'contained' : 'outlined'}
@@ -436,19 +385,8 @@ export function OrderPickListTable({
                       </Stack>
                       {order.status === 'preparing' && (
                         <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
-                          <IconButton size="small" onClick={() => stepPreparedAssembly(assembly.id, -1, requested)} disabled={prepAssemblyVal <= 0}>
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={preparedAssemblies[assembly.id] ?? ''}
-                            onChange={(event) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: event.target.value }))}
-                            slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 56, padding: '6px 2px' } } }}
-                          />
-                          <IconButton size="small" color="primary" onClick={() => stepPreparedAssembly(assembly.id, 1, requested)} disabled={prepAssemblyVal >= requested}>
-                            <AddIcon fontSize="small" />
-                          </IconButton>
+                          <QuantityControl label={`${assembly.name} ${t('Bereit', 'Prepared')}`} value={preparedAssemblies[assembly.id] ?? ''} max={requested}
+                            onChange={(value) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: value }))} />
                           <Button
                             size="small"
                             variant={isPrepComplete ? 'contained' : 'outlined'}
@@ -543,19 +481,8 @@ export function OrderPickListTable({
                         </Stack>
                         {order.status === 'preparing' && (
                           <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
-                            <IconButton size="small" onClick={() => stepPreparedItem(item.id, -1, requested)} disabled={prepVal <= 0}>
-                              <RemoveIcon fontSize="small" />
-                            </IconButton>
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={prepared[item.id] ?? ''}
-                              onChange={(event) => onSetPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
-                              slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 44, padding: '4px 2px' } } }}
-                            />
-                            <IconButton size="small" color="primary" onClick={() => stepPreparedItem(item.id, 1, requested)} disabled={prepVal >= requested}>
-                              <AddIcon fontSize="small" />
-                            </IconButton>
+                            <QuantityControl label={`${item.name} ${t('Bereit', 'Prepared')}`} value={prepared[item.id] ?? ''} max={requested}
+                            onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))} />
                             <Button
                               size="small"
                               variant={isPrepComplete ? 'contained' : 'outlined'}
@@ -573,19 +500,8 @@ export function OrderPickListTable({
                       </Stack>
                       {order.status === 'preparing' && (
                         <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
-                          <IconButton size="small" onClick={() => stepPreparedItem(item.id, -1, requested)} disabled={prepVal <= 0}>
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={prepared[item.id] ?? ''}
-                            onChange={(event) => onSetPrepared((current) => ({ ...current, [item.id]: event.target.value }))}
-                            slotProps={{ htmlInput: { min: 0, max: requested, step: 1, inputMode: 'numeric', style: { textAlign: 'center', width: 56, padding: '6px 2px' } } }}
-                          />
-                          <IconButton size="small" color="primary" onClick={() => stepPreparedItem(item.id, 1, requested)} disabled={prepVal >= requested}>
-                            <AddIcon fontSize="small" />
-                          </IconButton>
+                          <QuantityControl label={`${item.name} ${t('Bereit', 'Prepared')}`} value={prepared[item.id] ?? ''} max={requested}
+                            onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))} />
                           <Button
                             size="small"
                             variant={isPrepComplete ? 'contained' : 'outlined'}

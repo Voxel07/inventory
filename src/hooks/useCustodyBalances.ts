@@ -1,7 +1,7 @@
 import { useAuth } from './useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../services/apiClient';
-import type { CheckedOutRow } from '../components/lists/CheckedOutList';
+import type { CheckedOutRow } from '../types/custody';
 
 export function useCustodyBalances(mine = false) {
   const { user } = useAuth();

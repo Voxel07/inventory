@@ -271,6 +271,14 @@ public class InventoryOperationsService {
         return result;
     }
 
+    StockState physicalStock(Item item, Map<DomainEnums.TransactionType, Long> totals,
+            int damaged, int reserved, int blocked, List<AssetInstance> assets) {
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized && !assets.isEmpty()) {
+            return calculateAssetStock(assets);
+        }
+        return stock(item, totals, damaged, reserved, blocked);
+    }
+
     private StockState calculateAssetStock(List<org.ash.inventory.model.AssetInstance> assets) {
         int onHand = 0;
         int checkedOut = 0;
@@ -310,6 +318,10 @@ public class InventoryOperationsService {
     }
 
     private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved) {
+        return stock(item, totals, damaged, reserved, positions.blocked(item));
+    }
+
+    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked) {
         int onHand = quantity(totals, DomainEnums.TransactionType.added)
                 + quantity(totals, DomainEnums.TransactionType.received)
                 + quantity(totals, DomainEnums.TransactionType.adjusted)
@@ -324,7 +336,7 @@ public class InventoryOperationsService {
                 - quantity(totals, DomainEnums.TransactionType.consumed)
                 - quantity(totals, DomainEnums.TransactionType.missing);
         return new StockState(Math.max(0, onHand), Math.max(0, checkedOut), damaged, reserved,
-                Math.max(0, onHand - damaged - reserved - positions.blocked(item)));
+                Math.max(0, onHand - damaged - reserved - blocked));
     }
 
     private int quantity(Map<DomainEnums.TransactionType, Long> totals, DomainEnums.TransactionType type) {
@@ -590,16 +602,14 @@ public class InventoryOperationsService {
     private void assertNoBlockingScheduleIsDue(Item item, AssetInstance asset) {
         var now = Instant.now();
         for (var schedule : orm.blockingSchedules(item, asset)) {
-            boolean due = switch (schedule.intervalType) {
-                case date -> schedule.nextDueAt != null && !schedule.nextDueAt.isAfter(now);
-                case operating_hours -> schedule.nextDueValue != null
-                        && (asset == null ? item.currentOperatingHours : asset.operatingHours)
-                                .compareTo(schedule.nextDueValue) >= 0;
-                case usage_count -> schedule.nextDueValue != null
-                        && BigDecimal.valueOf(orm.checkoutCount(item, asset)).compareTo(schedule.nextDueValue) >= 0;
+            var meter = switch (schedule.intervalType) {
+                case date -> (BigDecimal) null;
+                case operating_hours -> asset == null ? item.currentOperatingHours : asset.operatingHours;
+                case usage_count -> BigDecimal.valueOf(orm.checkoutCount(item, asset));
             };
-            if (due) {
-                throw ApiException.conflict("Checkout is blocked by overdue " + schedule.maintenanceType
+            var status = MaintenancePolicy.status(schedule, now, meter);
+            if (MaintenancePolicy.blocksCheckout(status)) {
+                throw ApiException.conflict("Checkout is blocked by " + status + " " + schedule.maintenanceType
                         + " maintenance");
             }
         }

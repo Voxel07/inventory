@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Alert, Button, Card, CardContent, Chip, FormControlLabel, LinearProgress, Stack, Switch, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { apiRequest } from '../services/apiClient';
-import { useActionInbox, type InboxAction } from '../hooks/useActionInbox';
+import { actionInboxApi } from '../services/actionInboxService';
+import type { InboxAction } from '../types/actionInbox';
+import { useActionInbox } from '../hooks/useActionInbox';
 import { useOperationCommand } from '../hooks/useOperations';
 import { useLocalizedText } from '../utils/naming';
 import { OperationForm } from '../components/operations/OperationForm';
@@ -23,8 +24,8 @@ export function ActionInbox() {
       <Typography variant="h6">{a.title}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{a.detail}</Typography>
       {a.due && <Typography>{t('Fällig', 'Due')}: {a.due}</Typography>}
       {a.remindAt && <Typography>{t('Erinnerung', 'Reminder')}: {new Date(a.remindAt).toLocaleString()}</Typography>}
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button component={Link} to={a.path}>{t('Aufgabe öffnen', 'Open task')}</Button><Button onClick={() => setReminder(a)}>{t('Später erinnern', 'Remind me later')}</Button>{a.remindAt && <Button disabled={command.isPending} onClick={() => command.mutate(() => apiRequest('/api/action-inbox/reminder', { method: 'PUT', body: { key: a.key, remindAt: null } }))}>{t('Jetzt anzeigen', 'Show now')}</Button>}</Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button component={Link} to={a.path}>{t('Aufgabe öffnen', 'Open task')}</Button><Button onClick={() => setReminder(a)}>{t('Später erinnern', 'Remind me later')}</Button>{a.remindAt && <Button disabled={command.isPending} onClick={() => command.mutate(() => actionInboxApi.remind({ key: a.key, remindAt: null }))}>{t('Jetzt anzeigen', 'Show now')}</Button>}</Stack>
     </Stack></CardContent></Card>)}
-    {reminder && <OperationForm title={t('Erinnerung planen', 'Schedule reminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('Zeitpunkt (innerhalb 30 Tagen)', 'Time (within 30 days)'), type: 'datetime-local', required: true }]} onSave={v => apiRequest('/api/action-inbox/reminder', { method: 'PUT', body: { key: reminder.key, remindAt: new Date(String(v.at)).toISOString() } })} />}
+    {reminder && <OperationForm title={t('Erinnerung planen', 'Schedule reminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('Zeitpunkt (innerhalb 30 Tagen)', 'Time (within 30 days)'), type: 'datetime-local', required: true }]} onSave={v => actionInboxApi.remind({ key: reminder.key, remindAt: new Date(String(v.at)).toISOString() })} />}
   </Stack>;
 }

@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** Architecture baseline plus operational workflow implementation; final verification pending (28 September 2026)
+> **Status:** F01–F23 present in source; consolidation reviewed 30 September 2026; runtime acceptance pending
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -38,22 +38,19 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 
 ## 3. Functional requirements and implementation status
 
-### Current delivery status — 28 September 2026
+### Current delivery status — 30 September 2026
 
-The implementation batch covers all P0 feature gaps **F01–F09** and the P1 features with existing backend support **F10–F14 and F18**. The detailed record is [IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md); the [feature backlog](docs/FEATURE_GAP_ANALYSIS.md) distinguishes the original findings from current progress.
+F01–F23 have frontend workflows and backend implementations in source. The [feature matrix](docs/FEATURE_GAP_ANALYSIS.md) records coverage; [implementation progress](docs/IMPLEMENTATION_PROGRESS.md) records behavior and verification limits. The [current architecture review](docs/ARCHITECTURE_REVIEW.md) records remaining duplication and boundary violations.
 
-| Area | Current progress |
+| Area | Current state |
 |---|---|
-| Event reporting and procurement | Separate lifecycle quantities, occurrence attribution, dated demand/supply explanations, audited overrides and multi-line purchase drafts implemented |
-| Warehouse workflows | Receiving, actual location stock, source selection, transfers, counts and lots exposed in Operations and connected to stock movements |
-| Orders and custody | General-order preparation/reservations, exact asset returns, missing outcomes, audit history and server-derived return worklists implemented |
-| Lifecycle and administration | Repair verification/release, maintenance schedules/checklists, supplier documents and outbox/sync recovery interfaces implemented |
-| Authorization | Action-specific UI capabilities, matching command restrictions, private item access on order creation and administrative write-offs updated |
-| Remaining P1 follow-up | F15 hierarchy/site management, F16 guided offline correction/audit/cache freshness and F17 rebuildable report snapshots are implemented; user verification remains pending |
-| Additional product scope | F19–F23 remain open |
-| Verification | Final working tree, PostgreSQL migration and complete desktop/mobile workflows still need verification; further builds/tests were stopped at the user's request |
+| F01–F18 | Event planning/results, purchasing/receiving, location stock, transfers/counts/lots, orders/custody, repairs/maintenance, hierarchy, offline correction, reporting and operator tools present |
+| F19–F23 | Ownership/commitments, member self-service, action inbox/reminders, camera/code management and borrowing/rental lifecycle present |
+| Consolidation | One disposable SQL baseline; shared query feedback, snackbar, catalog dialogs and warehouse service; unused catalog view and CRUD aliases removed; category/catalog/general-order persistence follows ORM boundaries |
+| Architectural gaps | Direct persistence remains in six services and two resource-layer classes; order pickers and transport contracts still overlap |
+| Verification | Current frontend non-emitting typecheck and targeted lint, Java syntax and schema structural inspection only; backend compilation, fresh PostgreSQL initialization and responsive/role acceptance pending |
 
-The table below maps requirements to source implementations. **“Implemented” does not mean release-verified or that every broader domain workflow is complete.** The 29 September follow-up implements LOC-01 hierarchy and the offline/reporting gaps; their user acceptance and migration verification remain tracked in the implementation progress document.
+“Implemented” below means source coverage, not release verification. Earlier build/test results do not validate subsequent changes.
 
 ### Requirement traceability
 
@@ -93,7 +90,7 @@ The table below maps requirements to source implementations. **“Implemented”
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
 
-Counts, transfers, purchasing, custody, and stock management have backend modules and frontend operational workflows. Procurement supports editable purchase drafts and ordering; warehouse users receive deliveries from purchase details. Operations provides role-specific access to warehouse, purchasing, lifecycle and recovery tasks. Migration `V1.1.2__operational_workflows.sql` accompanies these changes; its PostgreSQL execution is not yet verified.
+Counts, transfers, purchasing, custody, and stock management have backend modules and frontend operational workflows. Procurement supports editable purchase drafts and ordering; warehouse users receive deliveries from purchase details. Operations provides role-specific access to warehouse, purchasing, lifecycle and recovery tasks. All schema definitions are in the canonical disposable baseline; fresh PostgreSQL execution is not yet verified.
 
 ## 4. Architectural boundaries
 
@@ -179,7 +176,7 @@ The item collection is intentionally **not server-cached** because it carries dy
 1. **Tracking mode transition guard (immutability with stock):**
    - Changing `trackingMode` from `bulk` or `lot_tracked` to `serialized` (or vice-versa) on an item that has existing stock (`baseAmount > 0` or current stock ledger entries) is **strictly prohibited**.
    - Attempting to switch an existing item with stock to serialized mode must be blocked at both the API (`CatalogService`) and UI (`ItemForm`) layers. Mutating existing bulk stock to serialized without registered asset IDs produces orphaned stock and breaks the physical identity invariant.
-   - An item may only be configured as serialized at creation or when current and historical stock is zero, unless an explicit guided migration tool is used to register individual physical asset IDs for all existing units.
+   - An item may only be configured as serialized at creation or when current and historical stock is zero. Register the individual physical asset IDs before issuing serialized stock.
 
 2. **Parent catalog aggregation and minimum stock:**
    - To keep the catalog concise, serialized equipment (e.g., 5 power generators or 50 walkie-talkies) exists as a **single consolidated parent catalog item** rather than cluttering the catalog with separate rows per physical unit.
@@ -246,7 +243,7 @@ Production authentication uses Authentik OIDC bearer tokens. Development header 
 | `faction_leader` | `inventory_faction_leader` | assigned factions only |
 | `read_only` | `inventory_read_only` | read-only operational visibility |
 
-There are no aliases for earlier role names, unprefixed identity-provider groups, local-storage token formats, or URL-form media references. Unknown roles are least-privilege `faction_leader`; authorization is still enforced at every protected backend use case. Existing installations must transform invalid role data before deploying this version—runtime compatibility is intentionally absent.
+There are no aliases for earlier role names, unprefixed identity-provider groups, local-storage token formats, or URL-form media references. Unknown roles are least-privilege `faction_leader`; authorization is still enforced at every protected backend use case. Disposable databases must be recreated with canonical role data; runtime compatibility is intentionally absent.
 
 ## 7. Order lifecycle and traceability
 
@@ -275,11 +272,13 @@ The detail UI exposes the immutable history, lifecycle actors, timestamps, and t
 
 ## 9. Persistence and schema state
 
-The runtime uses plain Jakarta Persistence/Hibernate ORM with PostgreSQL. Panache is not part of the persistence model. Production schema ownership is explicit: `%prod` enables Flyway at startup and configures Hibernate with `strategy=validate`. Versioned migrations are committed under `backend/src/main/resources/db/migration`: `V1.0.0__init.sql`, `V1.0.1__category_maintenance.sql`, `V1.1.0__damage_report_targets.sql`, and `V1.1.1__general_order_flow.sql`. Baseline-on-migrate is opt-in for an explicitly reviewed existing database; an empty database runs the initial migration normally.
+The runtime uses Jakarta Persistence/Hibernate with PostgreSQL; Panache is not used. Production enables Flyway at startup and Hibernate `validate`. One canonical creation script, `backend/src/main/resources/db/migration/V1.0.0__init.sql`, defines all 49 tables, relationships, constraints and indexes. Edit that baseline and the entity definitions directly. Incremental migrations, legacy stock backfills, out-of-order application and baseline-on-existing-database switches have been removed.
 
-The unqualified local profile still uses Hibernate `strategy=update`, while development and test use disposable `drop-and-create` schemas with Flyway disabled. Shared staging, production-like, and multi-node deployments must use the production-equivalent Flyway/validate policy rather than the local default. Remaining hardening work is to retire `update` outside explicitly disposable/local use, keep all future changes forward-only, test upgrades from supported database versions, and validate backup/restore before release.
+All current data is disposable. Recreate an empty database when the baseline changes; an existing Flyway history will not accept its changed checksum. This repository provides no upgrade/repair procedure for old databases. No database was changed during consolidation.
 
-Core persisted concepts include users, storage locations, items and images, scoped item assignments, category-specific item data, assemblies and components, event occurrences and factions, faction orders and normalized lines, reservations, custody handovers, two-stage return submissions, reconciliations, stock transactions (including immutable event/faction checkout snapshots), damage reports, maintenance, and domain outbox events.
+The unqualified and development profiles currently use PostgreSQL with Hibernate `update` and Flyway disabled. H2/drop-and-create is configured for tests. Shared or production-like environments must use the production profile and the single baseline plus validation. Fresh PostgreSQL execution and full SQL/entity type validation remain pending; structural inspection alone is insufficient.
+
+Persisted domains include catalog/assets, warehouses/locations, orders/reservations, custody/returns, stock/positions/lots, purchases/receipts/documents, transfers/counts, damage/repairs/maintenance, ownership/commitments/loans, contributor requests, personal reminders, sync evidence, report snapshots and outbox events.
 
 ## 10. Media contract
 
@@ -287,96 +286,22 @@ Database records contain canonical relative object keys only, for example `items
 
 Authenticated users may stage a return-placement image. Once the return submission is persisted, the media service atomically promotes the staged object to a canonical `returns/...` key; warehouse acknowledgement does not depend on an external URL.
 
-## 11. Verification and finding traceability
+## 11. Verification policy and current evidence
 
-| Finding | Resolution | Regression evidence |
-|---|---|---|
-| P0 — frontend did not compile after the architecture refactor | Repaired malformed item-detail JSX, restored live order-detail dependencies, corrected form callback typing, and restored imports that are still used | `npm.cmd run build`, `npm.cmd run lint` |
-| P0 — item detail route read the wrong parameter | `ItemDetail` now reads the canonical `/items/:itemId` parameter and renders immutable item transactions and serialized-asset detail | TypeScript production build |
-| P0 — prepared-order availability double-counted reservations | UI consumes server-projected stock and adds back only the current order's own reservation while editing | TypeScript production build; order reservation API tests |
-| P0 — SKU/order scanning fell back to broad collection downloads | Item search matches name or SKU; order lookup accepts an exact normalized `orderCode`; code resolution goes through bounded service calls | `itemListsAreBoundedAndRejectInvalidPageSizes`, `concurrentOrdersReceiveUniqueCodesAndListAsCompactPages`, TypeScript production build |
-| P0 — procurement data and UI were accessible beyond planner/admin scope | Backend requires planner access; route guard and navigation share the same planner/admin policy | `procurementDeficitsRequirePlannerAccess`, TypeScript production build and lint |
-| Tracking mode was reset when omitted from an item update | Partial updates preserve the current mode; a real mode change still runs the stock/asset/history guard | `serializedItemCreationProvisionsAssetsAndBlocksTrackingModeChangeWithStock` |
-| P1 — mobile commissioning controls missing | Responsive quantity chips and prepare controls restored for items and assemblies | TypeScript production build |
-| P1 — duplicated client/server stock arithmetic and redundant global queries | Legacy client ledger arithmetic removed; screens consume `Item.stock`; item collection bypasses server response cache and its projection uses grouped queries | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout`, TypeScript production build |
-| P1 — total stock dropped checked-out units | DTO separates `totalOwned` and `onHand`; valuation/procurement use owned stock | same stock regression test |
-| P1 — order traceability removed | Actor cards, previous-order diff, and immutable history extracted to `OrderTraceability` | TypeScript production build |
-| P2 — offline cache ignored filters | Stable sorted query tuple is part of the IndexedDB cache key | TypeScript production build |
-| P2 — destructive dialog used for checkout | Action-neutral `ConfirmDialog` with explicit label, tooltip, and color | TypeScript production build |
-| P2 — generic API advertised unsupported CRUD | Capability-specific APIs and hooks introduced | TypeScript compiler |
-| Resource hook implementations were duplicated | Full CRUD hooks compose the create/mutable hook layers and add only delete capabilities | TypeScript production build and lint |
-| Quantity-map conversion was duplicated | Event and order forms share typed conversion helpers with explicit non-negative or positive-integer rules | TypeScript production build and lint |
-| P2 — Panache dependency without a Panache model | Panache dependency and entity inheritance removed | Maven clean test |
-| Legacy authentication/authorization | Old local storage reads, old enum values, role aliases, and old group mappings removed | `ActorServiceRoleTest`, API auth test |
-| Legacy order/media representations | old pickup quantity fallback and URL-to-key conversion removed | order/API tests and `MediaServiceTest` |
-| QR return lacked custody context | Scan opens the transaction dialog, shows checked-out quantity, filters eligible orders, and routes selected returns through order reconciliation | TypeScript production build and order API tests |
-| Checkout lacked event/faction traceability | UI requires both fields; API rejects context-free checkout; transaction response exposes the stored snapshot | `itemListReturnsLiveOwnedAndOnHandStockAfterCheckout` |
-| General orders tab remained inactive | Canonical `tab=general` URL state replaces the contradictory empty-query fallback | TypeScript production build |
-| Dense assembly media layout | Image, event tags, description, instruction, and metrics share one responsive summary panel | TypeScript production build |
-| Monolithic eager route loading | Authenticated route pages are lazy-loaded behind a common `Suspense` boundary; login remains an independent static fallback | Vite production chunk output |
-| Render-time clock access failed React purity checks | Dashboard time is held in state and advanced by an effect-driven interval | ESLint and TypeScript production build |
-| Item details could not capture operational category data | Added typed vehicle, generator, and food fields plus generator maintenance history to the existing item-detail route | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers`, TypeScript production build |
-| Person/group-local catalog entries leaked through unfiltered item reads | Catalog list and detail queries now apply the canonical visibility scope with an explicit inventory-manager operational override | `personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers` |
-| Returns immediately changed stock with no physical acknowledgement | Added pending return submissions, optional placement photos, and a worker-only acknowledgement view; only acceptance reaches canonical stock/reconciliation services | `submittedReturnDoesNotChangeStockUntilWarehouseAcknowledgement`, TypeScript production build |
-| Manual memoization duplicated what React Compiler already provides | Removed all 124 `useMemo`/`useCallback` wrappers; derivation is inline, and `useEffectEvent` replaced the three `useCallback`s that effects depended on | `npm.cmd run lint` (`react-compiler/react-compiler` at error level), TypeScript production build |
-| Client-side pagination was copied into 13 list surfaces | Extracted `useClientPagination`, which derives the clamped page during render and keeps the `-1` "all entries" sentinel; adopted in 13 surfaces across 10 components | TypeScript production build; `npm.cmd run lint` |
-| `jspdf` was pulled into every route bundle that could export a PDF | Replaced the three module-scope imports with `await import('jspdf')` inside the exporting handlers | Vite chunk output: `jspdf-vendor` and `html2canvas` are demand-loaded only |
+Repository instructions in `.codex/AGENTS.md` prohibit application builds, packaging and test suites unless the user explicitly requests them. Non-emitting frontend type checking, targeted lint and source/schema inspection are permitted. See [IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md) for evidence and remaining acceptance work. Historical F19 build/backend regression results apply to that earlier revision only.
 
-Required verification before merge:
+## 12. Current consolidation priorities
 
-```powershell
-npm.cmd run build
-npm.cmd run lint
-cd backend
-mvn.cmd clean test
-```
-
-## 12. Deliberate next priorities
-
-These are not compatibility work and are not represented as already implemented:
-
-1. Require every shared/staging PostgreSQL deployment to use Flyway plus Hibernate validation; retire the unqualified `update` strategy outside explicitly local use and add upgrade/backfill tests for each forward migration.
-2. Generate the TypeScript transport models from the OpenAPI document to reduce remaining manual DTO duplication.
-3. Add browser-level tests for mobile commissioning, scan resolution, order reservation editing, procurement access, offline filtered reads, and the traceability panel.
-4. Validate backup restore, outbox recovery, and offline-conflict workflows in a production-like environment.
-5. Add route prefetching and enforce bundle-size budgets. Route-level code splitting is active and `jspdf` is now demand-loaded, but `mui-grid-vendor` (~757 kB) and `recharts-vendor` (~347 kB) remain the largest chunks.
-6. Expand serialized-inventory browser coverage and UX for high-volume asset registration, scanner-assisted assignment, and faction batch reconciliation.
-7. Add browser-level coverage for scoped catalog visibility and the pending-return photo/acknowledgement workflow.
+The [architecture review](docs/ARCHITECTURE_REVIEW.md) is the canonical cleanup backlog. Priorities are focused ORM collaborators, shared catalog selection, one home for transport contracts, shared mutation feedback, and a clearer invalidation policy. Preserve stock locks, idempotency, role/scope checks and immutable history while extracting reusable mechanics.
 
 ## 13. Frontend consolidation state
 
-### 13.1 Decisions taken
+- Keep the current pages/components/hooks/services/types/utils layout and MUI components.
+- Capability-specific resource APIs/hooks, `useCrudManager`, `useClientPagination`, `useProgressiveList`, `OperationForm`, stock lookups, quantity conversion, media controls and order-detail sections are existing reuse boundaries.
+- `QueryFeedback` now shares list loading/error/empty presentation. Errors suppress empty-result messages. `AppSnackbar` shares authenticated/login notifications. Delete hooks use the same invalidation helper as create/update.
+- DataGrid virtualization and the `SHOW_ALL_PAGE_SIZE` sentinel remain supported. PDF generation is loaded on demand. React Compiler supplies memoization.
+- Catalog item selection remains duplicated across `FactionOrderForm`, `OrderPickListTable` and `GeneralOrders`. Share selection presentation and pure filtering while preserving preparation reservations, exact asset selection and order-specific permissions.
 
-- **Virtualization is retained, not replaced by removing the "all entries" option.** `SHOW_ALL_PAGE_SIZE` (`-1`) stays supported, and `@mui/x-data-grid` continues to virtualize the DataGrid-backed lists. `@tanstack/react-virtual` is deliberately *not* added to those lists, because double virtualization is a defect source.
-- **The hybrid layout is retained.** `pages/`, `components/`, `hooks/`, `services/`, `types/`, and `utils/` remain the organizing structure; §4.2 describes it. A wholesale move to `features/*` is not planned.
-- **Radix UI and Ark UI are not adopted.** MUI already supplies the dialog, menu, select, focus-trap, and ARIA behaviour; there is no hand-rolled focus trap or portal in the codebase. Swapping primitive libraries would re-author the Emotion styling layer and grow the codebase rather than shrink it.
+### Derived state synchronization
 
-### 13.2 Completed consolidations
-
-| Change | Effect |
-|---|---|
-| Removed every `useMemo` and `useCallback` wrapper (124 sites across 28 files); no `React.memo` existed | Derivation happens directly during render; React Compiler supplies referential stability |
-| Added `hooks/useClientPagination.ts` and adopted it in 13 list surfaces across 10 components | Replaced 13 copies of the `pageSize === -1` / `Math.min(page, …)` / `slice()` block with one derived hook |
-| Removed the `setPage(1)` effects in `PrintQRCodes` and `TransactionHistory` | Filter handlers reset pagination directly; the hook clamps the current page when loaded collections shrink |
-| Replaced three effect-dependency `useCallback`s in `EventDetail`, `OrderReturnChecklist`, and `FactionOrderForm` with `useEffectEvent` | Effects now depend only on real inputs; the barcode listener in `OrderReturnChecklist` is registered once instead of on every items/outstanding change |
-| Removed the `UserPermissionsEditor` prop-to-state sync effect | The editor is remounted from the persisted server snapshot via a composed `key`, per the derive-don't-sync rule |
-| Moved `jspdf` to `await import()` in all three consumers | ~628 kB (`jspdf` + `html2canvas` + `dompurify`) leaves the route bundle and loads only when a PDF is actually generated |
-
-### 13.3 Derived state conversion backlog
-
-`react-hooks/set-state-in-effect` remains off, with the offending sites enumerated in `eslint.config.js`. Each is a prop- or query-parameter-to-state synchronisation that still needs behavioural verification, which requires the browser test suite from §12.3:
-
-`components/common/ImageAttachments.tsx`, `components/forms/FactionOrderForm.tsx` (×2), `components/orders/detail/OrderPickupMapDialog.tsx`, `components/procurement/ProcurementOrders.tsx`, `pages/EventDetail.tsx`, `pages/Events.tsx` (×2), `pages/FactionOrderDetail.tsx`, `pages/FactionOrders.tsx`, `pages/ItemDetail.tsx`.
-
-Turn this rule back on once those are converted.
-
-### 13.4 Remaining consolidation not yet done
-
-These were analysed and quantified but not implemented, because each changes working behaviour and needs test coverage first:
-
-1. **Extract the catalog item/assembly picker.** The same search + category filter + paging + quantity-map + tile/list toggle interaction is implemented three times (`FactionOrderForm`, `OrderPickListTable`, `GeneralOrders`). This is the largest remaining duplication (roughly 600–900 lines).
-2. **Extract a shared mutation-feedback helper.** Around 50 call sites repeat an inline `onSuccess`/`onError` pair with `showSnackbar(t(…))`.
-3. **Move list filters and pagination into the URL.** `CheckedOutItems`, `StorageLocations`, `GeneralOrders`, `FactionOrders`, `PrintQRCodes`, `AssetInstancesList`, `UserManagement` and `ProcurementOrders` still hold filters in `useState`, so views are not shareable and are lost on navigation.
-4. **Compose `OrderDetailHeader` from slots.** It currently takes roughly fourteen `on*` callbacks, and `OrderPickListTable` drills three `React.Dispatch<SetStateAction<…>>` setters down.
-5. **Optimistic updates.** Only `Header.tsx` uses `onMutate`; order transitions, damage status changes, and return acknowledgement still wait for the server round trip.
-6. **Convert the remaining effect-based fetch loops** (`Events`, `FactionOrders`, `FactionOrderDetail`, `UserManagement`, `ProcurementOrders`, `OrderReturnChecklist`) to TanStack Query, and replace `GeneralOrders.openPickup`'s `Promise.all` with `useQueries`.
+`react-hooks/set-state-in-effect` is enabled as an error. Form drafts use guarded source changes, allowed selections derive from current options, and object URL previews use an external-resource subscription with cleanup. Full frontend lint passes. Reopen/refetch/permission and preview behavior still needs browser acceptance under C09 in [ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md). No new bundle-size measurement is claimed.

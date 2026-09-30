@@ -48,6 +48,18 @@ public class CatalogOrm {
         return entityManager.createQuery("from StorageLocation l where l.active = true order by l.createdAt desc", StorageLocation.class).getResultList();
     }
 
+    public List<StorageLocation> allLocations() {
+        return entityManager.createQuery("from StorageLocation order by name, id", StorageLocation.class).getResultList();
+    }
+
+    public boolean hasLinkedOrders(UUID eventId) {
+        for (String type : List.of("FactionOrder", "GeneralOrder", "PurchaseOrder")) {
+            if (!entityManager.createQuery("select o.id from " + type + " o where o.eventOccurrence.id = :id", UUID.class)
+                    .setParameter("id", eventId).setMaxResults(1).getResultList().isEmpty()) return true;
+        }
+        return false;
+    }
+
     public List<Assembly> assemblies() {
         return entityManager.createQuery("from Assembly a order by a.createdAt desc", Assembly.class).getResultList();
     }

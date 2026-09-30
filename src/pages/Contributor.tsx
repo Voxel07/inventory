@@ -1,24 +1,20 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { apiRequest } from '../services/apiClient';
+import { memberApi } from '../services/memberService';
+import { useMember, useMemberAssignments } from '../hooks/useMember';
+import type { MemberStored as Stored, MemberRequest as Request } from '../types/member';
+import { inputNumber, inputText, optionalText, inputBoolean } from '../utils/inputValues';
 import { useAuth } from '../hooks/useAuth';
-import type { CheckedOutRow } from '../components/lists/CheckedOutList';
 import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
 import { useAssignableUsers } from '../hooks/useUsers';
 import { canOperateWarehouse } from '../utils/access';
 import { useLocalizedText } from '../utils/naming';
 import { OperationForm } from '../components/operations/OperationForm';
 
-interface Stored { itemId: string; name: string; locationId?: string; location?: string; assetId?: string; assetCode?: string; quantity: number }
-interface Request { id: string; itemId: string; item: string; requester: string; kind: string; quantity: number; notes: string; status: string; response?: string; createdAt: string; revision: number; assetId?: string; locationId?: string }
-interface Assignment { id: string; name: string; userId?: string }
 export function Contributor() {
   const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = user?.role !== 'read_only';
-  const custody = useQuery({ queryKey: ['member-custody', user?.id], queryFn: () => apiRequest<CheckedOutRow[]>('/api/member/custody') }); const returns = useReturnSubmissions();
-  const stored = useQuery({ queryKey: ['member-storage', user?.id], queryFn: () => apiRequest<Stored[]>('/api/member/storage') });
-  const requests = useQuery({ queryKey: ['member-requests', user?.id], queryFn: () => apiRequest<Request[]>('/api/member/requests') });
+  const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
   const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
   const [returning, setReturning] = useState<NonNullable<typeof custody.data>[number] | null>(null);
   const [returnCommand, setReturnCommand] = useState('');
@@ -46,16 +42,16 @@ export function Contributor() {
     <Typography variant="h6">{t('Rückgabestatus', 'Return status')}</Typography>
     {returns.data?.filter(r => r.returnedForUserId === user?.id).map(r => <Card key={r.id}><CardContent><Typography>{r.itemName} · {r.quantity} · {r.status}</Typography><Typography>{r.acknowledgementNotes}</Typography></CardContent></Card>)}
     {warehouse && <StorageAssignments />}
-    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => apiRequest('/api/member/requests', { method: 'POST', body: { ...v, ...request.item, kind: request.kind, commandId: request.commandId, quantity: v.quantity } })} />}
-    {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => apiRequest('/api/member/returns', { method: 'POST', body: { ...v, assetId: v.assetId || null, custodyKey: returning.key, commandId: returnCommand } })} />}
-    {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => apiRequest(`/api/member/requests/${reply.id}`, { method: 'POST', body: { ...v, revision: reply.revision } })} />}
+    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes) })} />}
+    {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}
+    {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => memberApi.decide(reply.id, { response: inputText(v.response), resolved: inputBoolean(v.resolved), revision: reply.revision })} />}
   </Stack>;
 }
 function StorageAssignments() {
   const t = useLocalizedText(); const users = useAssignableUsers();
-  const assignments = useQuery({ queryKey: ['member-assignments'], queryFn: () => apiRequest<Assignment[]>('/api/member/assignments') });
-  const [editing, setEditing] = useState<Assignment | null>(null);
+  const assignments = useMemberAssignments();
+  const [editing, setEditing] = useState<import('../types/member').MemberAssignment | null>(null);
   return <Stack spacing={1}><Typography variant="h6">{t('Lager-Verantwortung zuweisen', 'Assign storage responsibility')}</Typography>{assignments.error && <Alert severity="error">{assignments.error.message}</Alert>}{assignments.data?.map(a => <Button key={a.id} onClick={() => setEditing(a)}>{a.name} · {users.data?.find(u => u.id === a.userId)?.name ?? t('Nicht zugewiesen', 'Unassigned')}</Button>)}
-    {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }} fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter(u => u.role !== 'read_only').map(u => ({ value: u.id, label: u.name })) }]} onSave={v => apiRequest(`/api/member/assignments/${editing.id}`, { method: 'PUT', body: { userId: v.userId || null } })} />}
+    {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }} fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter(u => u.role !== 'read_only').map(u => ({ value: u.id, label: u.name })) }]} onSave={v => memberApi.assign(editing.id, optionalText(v.userId))} />}
   </Stack>;
 }

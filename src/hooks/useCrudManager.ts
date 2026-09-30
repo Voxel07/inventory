@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useUIStore } from '../store/uiStore';
+import { useMutationFeedback } from './useMutationFeedback';
 import { useLocalizedText } from '../utils/naming';
 
 export interface MutationLike<TArgs> {
@@ -29,7 +29,7 @@ export function useCrudManager<T extends { id: string }, TForm>(
   options: CrudManagerOptions,
 ) {
   const t = useLocalizedText();
-  const showSnackbar = useUIStore((s) => s.showSnackbar);
+  const feedback = useMutationFeedback();
   const entityNameEnglish = options.entityNameEnglish ?? options.entityName;
   const entityNamePlural = options.entityNamePlural ?? options.entityName;
   const entityNamePluralEnglish = options.entityNamePluralEnglish ?? entityNameEnglish;
@@ -69,17 +69,11 @@ export function useCrudManager<T extends { id: string }, TForm>(
     mutations.create.mutate(data, {
       onSuccess: () => {
         closeForm();
-        showSnackbar(
-          options.createSuccessMessage ??
-            t(`${options.entityName} erfolgreich erstellt`, `${entityNameEnglish} created successfully`),
-          'success',
-        );
+        feedback.success(options.createSuccessMessage ??
+            t(`${options.entityName} erfolgreich erstellt`, `${entityNameEnglish} created successfully`));
       },
       onError: () =>
-        showSnackbar(
-          t(`Fehler beim Erstellen von ${options.entityName}`, `Could not create ${entityNameEnglish}`),
-          'error',
-        ),
+        feedback.failure(t(`Fehler beim Erstellen von ${options.entityName}`, `Could not create ${entityNameEnglish}`)),
     });
   };
 
@@ -90,17 +84,11 @@ export function useCrudManager<T extends { id: string }, TForm>(
       {
         onSuccess: () => {
           closeForm();
-          showSnackbar(
-            options.updateSuccessMessage ??
-              t(`${options.entityName} erfolgreich aktualisiert`, `${entityNameEnglish} updated successfully`),
-            'success',
-          );
+          feedback.success(options.updateSuccessMessage ??
+              t(`${options.entityName} erfolgreich aktualisiert`, `${entityNameEnglish} updated successfully`));
         },
         onError: () =>
-          showSnackbar(
-            t(`Fehler beim Aktualisieren von ${options.entityName}`, `Could not update ${entityNameEnglish}`),
-            'error',
-          ),
+          feedback.failure(t(`Fehler beim Aktualisieren von ${options.entityName}`, `Could not update ${entityNameEnglish}`)),
       },
     );
   };
@@ -119,33 +107,21 @@ export function useCrudManager<T extends { id: string }, TForm>(
       mutations.delete.mutate(deletingIds[0], {
         onSuccess: () => {
           setDeletingIds([]);
-          showSnackbar(
-            options.deleteSuccessMessage ??
-              t(`${options.entityName} gelöscht`, `${entityNameEnglish} deleted`),
-            'success',
-          );
+          feedback.success(options.deleteSuccessMessage ??
+              t(`${options.entityName} gelöscht`, `${entityNameEnglish} deleted`));
         },
         onError: () =>
-          showSnackbar(
-            t(`Fehler beim Löschen von ${options.entityName}`, `Could not delete ${entityNameEnglish}`),
-            'error',
-          ),
+          feedback.failure(t(`Fehler beim Löschen von ${options.entityName}`, `Could not delete ${entityNameEnglish}`)),
       });
     } else {
       mutations.deleteMany.mutate(deletingIds, {
         onSuccess: () => {
           const count = deletingIds.length;
           setDeletingIds([]);
-          showSnackbar(
-            t(`${count} ${entityNamePlural} gelöscht`, `${count} ${entityNamePluralEnglish} deleted`),
-            'success',
-          );
+          feedback.success(t(`${count} ${entityNamePlural} gelöscht`, `${count} ${entityNamePluralEnglish} deleted`));
         },
         onError: () =>
-          showSnackbar(
-            t(`Fehler beim Löschen der ${entityNamePlural}`, `Could not delete ${entityNamePluralEnglish}`),
-            'error',
-          ),
+          feedback.failure(t(`Fehler beim Löschen der ${entityNamePlural}`, `Could not delete ${entityNamePluralEnglish}`)),
       });
     }
   };
@@ -153,24 +129,15 @@ export function useCrudManager<T extends { id: string }, TForm>(
   return {
     formOpen,
     editingEntity,
-    deletingId: deletingIds[0],
     deletingIds,
-    isCreateOpen: formOpen && !editingEntity,
-    isEditOpen: formOpen && Boolean(editingEntity),
     isDeleteOpen: deletingIds.length > 0,
     openCreate,
     openEdit,
     closeForm,
-    closeCreate: closeForm,
-    closeEdit: closeForm,
     openDelete,
     openDeleteMany,
     closeDelete,
-    handleCreate,
-    handleUpdate,
     handleSave,
-    confirmDelete: handleDeleteConfirm,
     handleDeleteConfirm,
-    setDeletingId: (id: string | undefined) => setDeletingIds(id ? [id] : []),
   };
 }

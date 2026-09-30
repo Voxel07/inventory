@@ -1,19 +1,20 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useProgressiveList } from './useProgressiveList';
-import { useUIStore } from '../store/uiStore';
 import { translate } from '../utils/naming';
+import { useMutation } from '@tanstack/react-query';
+import { useProgressiveList } from './useProgressiveList';
+import { useMutationFeedback } from './useMutationFeedback';
+import { queryKeys } from '../utils/queryKeys';
 
 export function useOperationList<T>(key: string, getPage: (page: number, size: number) => Promise<T[]>, enabled = true) {
-  return useProgressiveList<T>(['operations', key], getPage, { enabled });
+  return useProgressiveList<T>(queryKeys.operations(key), getPage, { enabled });
 }
 
 export function useOperationCommand() {
-  const client = useQueryClient();
+  const feedback = useMutationFeedback();
   return useMutation({
     mutationFn: (command: () => Promise<unknown>) => command(),
     onSuccess: () => {
-      void client.invalidateQueries();
-      useUIStore.getState().showSnackbar(translate('Gespeichert', 'Saved'), 'success');
+      // apiRequest broadcasts each successful write to the app's shared invalidation policy.
+      feedback.success(translate('Gespeichert', 'Saved'));
     },
   });
 }

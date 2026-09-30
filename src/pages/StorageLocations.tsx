@@ -1,4 +1,6 @@
-import { getWarehouses, WarehousesPanel } from '../components/operations/WarehousesPanel';
+import { useObjectUrl } from '../hooks/useObjectUrl';
+import { WarehousesPanel } from '../components/operations/WarehousesPanel';
+import { getWarehouses } from '../services/warehouseService';
 import { locationPath, isDescendant } from '../utils/locationHierarchy';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
@@ -6,7 +8,7 @@ import { StockPositions } from '../components/operations/StockOperations';
 import { useOperationList } from '../hooks/useOperations';
 import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Accordion, AccordionSummary, AccordionDetails, Alert, MenuItem, Checkbox, FormControlLabel,
     Box,
@@ -96,17 +98,7 @@ export function StorageLocations() {
         longitude: 11.826278,
         mapZoom: 19,
     });
-    const [loadedOverlayPreview, setLoadedOverlayPreview] = useState<{ file: File; url: string }>();
-    useEffect(() => {
-        const file = formData.mapOverlayFile;
-        if (!dialogOpen || !file) return;
-        const url = URL.createObjectURL(file);
-        setLoadedOverlayPreview({ file, url });
-        return () => URL.revokeObjectURL(url);
-    }, [dialogOpen, formData.mapOverlayFile]);
-    const overlayPreview = dialogOpen && loadedOverlayPreview && loadedOverlayPreview.file === formData.mapOverlayFile
-        ? loadedOverlayPreview.url
-        : undefined;
+    const overlayPreview = useObjectUrl(dialogOpen ? formData.mapOverlayFile : undefined);
 
     const activeLocation = locations?.find((l) => l.id === selectedLocId) || null;
 

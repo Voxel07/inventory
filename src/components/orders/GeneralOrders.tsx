@@ -12,11 +12,14 @@ import { useEventReports } from '../../hooks/useEvents';
 import { useItems } from '../../hooks/useItems';
 import { EVENT_TYPES, type GeneralOrder, type Item } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
-import { useUIStore } from '../../store/uiStore';
+import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
-import { QuantityInput } from './QuantityInput';
+import { QuantityControl } from './QuantityControl';
+import { CatalogSearchField } from './CatalogSearchField';
+import { catalogPage, filterCatalogItems } from '../../utils/orderCatalog';
+import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 
@@ -29,7 +32,7 @@ const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
 export function GeneralOrders() {
   const t = useLocalizedText();
   const language = useAppLanguage();
-  const showSnackbar = useUIStore((state) => state.showSnackbar);
+  const feedback = useMutationFeedback();
   const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
   const { currentEvent, selectedEventId, setSelectedEventId } = useOrderEventSelection(events);
@@ -62,21 +65,16 @@ export function GeneralOrders() {
   const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
   const { pageItems: pageOrders, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(activeOrders);
   const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
-  const visibleItems = (() => {
-    const term = itemSearch.trim().toLocaleLowerCase();
-    return sortedItems.filter((item) => !term || `${item.name} ${item.sku ?? ''} ${item.category}`.toLocaleLowerCase().includes(term));
-  })();
   const selectedEvent = eventMap.get(eventId);
-  const catalogItems = visibleItems.filter((item) => itemSearch.trim() || !selectedEvent || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0);
-  const currentItemPage = Math.min(itemPage, Math.max(1, Math.ceil(catalogItems.length / ORDER_CATALOG_PAGE_SIZE)));
-  const pageItems = catalogItems.slice((currentItemPage - 1) * ORDER_CATALOG_PAGE_SIZE, currentItemPage * ORDER_CATALOG_PAGE_SIZE);
+  const catalogItems = filterCatalogItems(sortedItems, itemSearch, '', (item) => !selectedEvent
+    || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0);
+  const { page: currentItemPage, entries: pageItems } = catalogPage(catalogItems, itemPage, ORDER_CATALOG_PAGE_SIZE);
 
   function itemName(id: string) { return itemMap.get(id)?.name ?? id; }
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
     return event ? `${event.name || event.eventType} · ${new Date(event.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}` : t('Kein Event', 'No event');
   }
-  function errorMessage(error: unknown) { return error instanceof Error ? error.message : t('Aktion fehlgeschlagen', 'Action failed'); }
   function startEditing(order?: GeneralOrder) {
     setEditing(order ?? 'new');
     setName(order?.name ?? '');
@@ -89,21 +87,14 @@ export function GeneralOrders() {
   }
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const requestedQuantities = Object.fromEntries(Object.entries(quantities)
-      .map(([id, raw]) => [id, Math.max(0, Math.floor(Number(raw) || 0))] as const).filter(([, quantity]) => quantity > 0));
+    const requestedQuantities = toPositiveIntegerQuantities(quantities);
     const data = { name: name.trim(), purpose: purpose.trim(), eventOccurrenceId: eventId || undefined, requestedQuantities };
-    const callbacks = {
-      onSuccess: () => { setEditing(null); showSnackbar(t('Bestellung gespeichert', 'Order saved'), 'success'); },
-      onError: (error: unknown) => showSnackbar(errorMessage(error), 'error'),
-    };
+    const callbacks = feedback.callbacks(t('Bestellung gespeichert', 'Order saved'), () => setEditing(null));
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
   function advance(order: GeneralOrder, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel', assetAssignments?: Record<string, string[]>) {
-    transitionOrder.mutate({ id: order.id, action, assetAssignments }, {
-      onSuccess: () => { showSnackbar(t('Bestellung aktualisiert', 'Order updated'), 'success'); },
-      onError: (error) => showSnackbar(errorMessage(error), 'error'),
-    });
+    transitionOrder.mutate({ id: order.id, action, assetAssignments }, feedback.callbacks(t('Bestellung aktualisiert', 'Order updated')));
   }
   const editItem = (item: Item) => (
     <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>
@@ -112,7 +103,7 @@ export function GeneralOrders() {
           <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
           <Typography variant="caption" color="text.secondary">{item.category} · {t('Verfügbar', 'Available')}: {item.stock?.available ?? item.amount ?? 0}</Typography>
         </Box>
-        <QuantityInput label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+        <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
           onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
       </Stack>
     </Paper>
@@ -208,7 +199,7 @@ export function GeneralOrders() {
           {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
           <Divider />
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
-          <TextField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => { setItemSearch(event.target.value); setItemPage(1); }} />
+          <CatalogSearchField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(value) => { setItemSearch(value); setItemPage(1); }} />
           {catalogReady && <>
             <Box key={currentItemPage} sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{pageItems.map(editItem)}</Stack></Box>
             <OrderCatalogPager count={catalogItems.length} page={currentItemPage} onPageChange={setItemPage} />
@@ -220,7 +211,7 @@ export function GeneralOrders() {
               {items.filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
-                  <QuantityInput label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+                  <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
                     onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
                   <Button size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
                 </Stack>

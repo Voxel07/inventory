@@ -1,11 +1,15 @@
+import { optionalText, inputNumber } from '../../utils/inputValues';
+import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
+import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, LinearProgress, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Button, Card, CardContent, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useOperationList } from '../../hooks/useOperations';
-import { operationsApi, type Count, type Lot, type Transfer } from '../../services/operationsService';
+import { operationsApi } from '../../services/operationsService';
+import type { Count, Lot, Transfer } from '../../types/operations';
 import { Fields, OperationForm, type Field, type Values } from './OperationForm';
 import { useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
@@ -26,9 +30,7 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
       ...(!itemId ? [{ key: 'itemId', label: t('Artikel / Geräte anzeigen', 'Item / show individual assets'), options: lookup.itemOptions }] : []),
       ...(!locationId ? [{ key: 'locationId', label: t('Lagerort', 'Location'), options: lookup.locationOptions }] : []),
     ]} />
-    {(positions.isLoading || assets.isLoading) && <LinearProgress />}
-    {(positions.error || assets.error || lookup.error) && <Alert severity="error">{(positions.error || assets.error || lookup.error)?.message}</Alert>}
-    {!positions.isLoading && !positions.data?.length && !assets.data?.length && <Alert severity="info">{t('Kein lokalisierter Bestand für diese Auswahl.', 'No located stock for this selection.')}</Alert>}
+    <QueryFeedback isLoading={positions.isLoading || assets.isLoading} error={positions.error || assets.error || lookup.error} isEmpty={!positions.data?.length && !assets.data?.length} emptyMessage={t('Kein lokalisierter Bestand für diese Auswahl.', 'No located stock for this selection.')} />
     {!!positions.data?.length && <TableContainer component={Paper} variant="outlined">
       <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')} sx={{ '& td, & th': { px: 1, py: 0.75 }, '& tr:last-child td, & tr:last-child th': { borderBottom: 0 } }}>
         <TableHead><TableRow>
@@ -66,8 +68,7 @@ export function TransfersPanel() {
   const [createKey, setCreateKey] = useState('');
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setChooseItem(true)}>{t('Umlagerung anlegen', 'New transfer')}</Button>
-    {transfers.isLoading && <LinearProgress />}{transfers.error && <Alert severity="error">{transfers.error.message}</Alert>}
-    {!transfers.isLoading && !transfers.data?.length && <Alert severity="info">{t('Noch keine Umlagerungen.', 'No transfers yet.')}</Alert>}
+    <QueryFeedback isLoading={transfers.isLoading} error={transfers.error} isEmpty={!transfers.data?.length} emptyMessage={t('Noch keine Umlagerungen.', 'No transfers yet.')} />
     {transfers.data?.map((transfer) => <Card key={transfer.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{transfer.transferNumber} · {transfer.status}</Typography>
       <Typography>{lookup.locations.find((value) => value.id === transfer.sourceLocationId)?.name} → {lookup.locations.find((value) => value.id === transfer.destinationLocationId)?.name}</Typography>
@@ -87,7 +88,7 @@ export function TransfersPanel() {
       { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
     ]} onSave={(values) => {
       if (values.sourceLocationId === values.destinationLocationId) return Promise.reject(new Error(t('Quelle und Ziel müssen verschieden sein.', 'Source and destination must differ.')));
-      return operationsApi.createTransfer({ ...optionalValues(values), idempotencyKey: createKey, lines: [{ itemId, assetInstanceId: values.assetInstanceId || null, lotId: values.lotId || null, quantity: item.trackingMode === 'serialized' ? 1 : values.quantity }] });
+      return operationsApi.createTransfer(transferInput({ ...optionalValues(values), idempotencyKey: createKey, lines: [{ itemId, assetInstanceId: values.assetInstanceId || null, lotId: values.lotId || null, quantity: item.trackingMode === 'serialized' ? 1 : values.quantity }] }));
     }} />}
     {action && <OperationForm title={`${action.transfer.transferNumber} · ${action.type}`} onClose={() => setAction(null)} fields={[
       ...(action.type === 'receive' ? action.transfer.lines.flatMap((line): Field[] => {
@@ -95,7 +96,7 @@ export function TransfersPanel() {
         if (remaining <= 0) return [];
         return [{ key: `received:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${t('Erhalten', 'Received')}`, type: 'number', min: 0, max: remaining, help: `${t('Offen', 'Remaining')}: ${remaining}` }, { key: `discrepancy:${line.id}`, label: t('Fehlmenge', 'Discrepancy quantity'), type: 'number', min: 0, max: remaining }, { key: `reason:${line.id}`, label: t('Grund der Abweichung', 'Discrepancy reason') }];
       }) : []), { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-    ]} onSave={(values) => operationsApi.transferCommand(action.transfer.id, action.type, { idempotencyKey: action.key, notes: values.notes || null, ...(action.type === 'receive' ? { lines: action.transfer.lines.map((line) => ({ transferLineId: line.id, receivedQuantity: Number(values[`received:${line.id}`] || 0), discrepancyQuantity: Number(values[`discrepancy:${line.id}`] || 0), discrepancyNotes: values[`reason:${line.id}`] || null })).filter((line) => line.receivedQuantity + line.discrepancyQuantity > 0) } : {}) })} />}
+    ]} onSave={(values) => operationsApi.transferCommand(action.transfer.id, action.type, { idempotencyKey: action.key, notes: optionalText(values.notes), ...(action.type === 'receive' ? { lines: action.transfer.lines.map((line) => ({ transferLineId: line.id, receivedQuantity: Number(values[`received:${line.id}`] || 0), discrepancyQuantity: Number(values[`discrepancy:${line.id}`] || 0), discrepancyNotes: optionalText(values[`reason:${line.id}`]) })).filter((line) => line.receivedQuantity + line.discrepancyQuantity > 0) } : {}) })} />}
   </Stack>;
 }
 
@@ -106,8 +107,7 @@ export function CountsPanel() {
   const [action, setAction] = useState<{ count: Count; type: 'start' | 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
-    {counts.isLoading && <LinearProgress />}{counts.error && <Alert severity="error">{counts.error.message}</Alert>}
-    {!counts.isLoading && !counts.data?.length && <Alert severity="info">{t('Noch keine Inventuren.', 'No stock counts yet.')}</Alert>}
+    <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
     {counts.data?.map((count) => <Card key={count.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{count.sessionNumber} · {count.status}</Typography>
       <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t(' · Blindzählung', ' · Blind count') : ''}</Typography>
@@ -126,12 +126,12 @@ export function CountsPanel() {
       { key: 'itemId', label: t('Artikel (leer = alle)', 'Item (empty = all)'), options: lookup.itemOptions },
       { key: 'category', label: t('Kategorie (leer = alle)', 'Category (empty = all)'), options: [...new Set(lookup.items.map((item) => item.category))].map((value) => ({ value, label: value })) },
       { key: 'blindCount', label: t('Blindzählung', 'Blind count'), type: 'checkbox' }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-    ]} onSave={(values) => operationsApi.createCount(optionalValues(values))} onClose={() => setCreate(false)} />}
+    ]} onSave={(values) => operationsApi.createCount(countInput(optionalValues(values)))} onClose={() => setCreate(false)} />}
     {action && <OperationForm title={`${action.count.sessionNumber} · ${action.type}`} onClose={() => setAction(null)} fields={[
       ...(['submit', 'recount'].includes(action.type) ? action.count.lines.flatMap((line): Field[] => [
         { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''}`, type: 'number', min: 0, required: true }, { key: `note:${line.id}`, label: t('Zeilennotiz', 'Line notes') },
       ]) : []), { key: 'notes', label: t('Notiz / Freigabebegründung', 'Notes / approval reason'), multiline: true },
-    ]} onSave={(values) => operationsApi.countCommand(action.count.id, action.type, { notes: values.notes || null, ...(['submit', 'recount'].includes(action.type) ? { lines: action.count.lines.map((line) => ({ lineId: line.id, quantity: values[`quantity:${line.id}`], notes: values[`note:${line.id}`] || null })) } : {}) })} />}
+    ]} onSave={(values) => operationsApi.countCommand(action.count.id, action.type, { notes: optionalText(values.notes), ...(['submit', 'recount'].includes(action.type) ? { lines: action.count.lines.map((line) => ({ lineId: line.id, quantity: inputNumber(values[`quantity:${line.id}`]), notes: optionalText(values[`note:${line.id}`]) })) } : {}) })} />}
   </Stack>;
 }
 
@@ -140,8 +140,7 @@ export function LotsPanel() {
   const [edit, setEdit] = useState<Lot | 'new' | null>(null);
   return <Stack spacing={2}>
     <Button variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
-    {lots.isLoading && <LinearProgress />}{lots.error && <Alert severity="error">{lots.error.message}</Alert>}
-    {!lots.isLoading && !lots.data?.length && <Alert severity="info">{t('Noch keine Chargen.', 'No lots yet.')}</Alert>}
+    <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('Noch keine Chargen.', 'No lots yet.')} />
     {lots.data?.map((lot) => <Card key={lot.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</Typography>
       <Typography>{lot.status} · {t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
@@ -153,7 +152,7 @@ export function LotsPanel() {
       { key: 'manufactureDate', label: t('Herstellungsdatum', 'Manufactured'), type: 'date' }, { key: 'expiryDate', label: t('Ablaufdatum', 'Expiry date'), type: 'date' }, { key: 'bestBeforeDate', label: t('Mindesthaltbarkeit', 'Best before'), type: 'date' },
       { key: 'status', label: t('Status', 'Status'), required: true, options: ['available', 'hold', 'recalled', 'expired', 'depleted'].map((value) => ({ value, label: value })) },
       { key: 'storageRequirements', label: t('Lagerbedingungen', 'Storage requirements'), multiline: true }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-    ]} onSave={(values) => operationsApi.saveLot(optionalValues(values), edit === 'new' ? undefined : edit.id)} />}
+    ]} onSave={(values) => operationsApi.saveLot(lotInput(optionalValues(values)), edit === 'new' ? undefined : edit.id)} />}
   </Stack>;
 }
 

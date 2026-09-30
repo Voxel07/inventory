@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-export const LIST_PAGE_SIZE = 100;
+import { LIST_PAGE_SIZE } from '../services/apiPagination';
 
 /** Show the first API page immediately, then fill the same cache in the background. */
 export function useProgressiveList<T>(

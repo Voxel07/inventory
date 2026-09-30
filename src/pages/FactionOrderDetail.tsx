@@ -1,9 +1,10 @@
+import { useMutationFeedback } from '../hooks/useMutationFeedback';
 import { CustodyEvidence } from '../components/orders/CustodyEvidence';
 import { useEquipmentAvailability } from '../hooks/useEquipment';
 import { Fields } from '../components/operations/OperationForm';
 import { useStockLookups } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
@@ -31,10 +32,9 @@ import {
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useUIStore } from '../store/uiStore';
 import type { Assembly, Item } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
-import { isOfflineQueuedError } from '../utils/offline';
+
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
@@ -49,7 +49,7 @@ export function FactionOrderDetail() {
   const language = useAppLanguage();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const showSnackbar = useUIStore((state) => state.showSnackbar);
+  const { success, error: handleError } = useMutationFeedback();
   const { user } = useAuth();
 
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
@@ -81,7 +81,10 @@ export function FactionOrderDetail() {
   const [pickupMapOpen, setPickupMapOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
-  useEffect(() => {
+  const preparationKey = JSON.stringify([order?.id, order?.updated, order?.preparedQuantities, order?.preparedAssemblyQuantities, order?.assetAssignments]);
+  const [preparationSource, setPreparationSource] = useState<string | undefined>(undefined);
+  if (preparationSource !== preparationKey) {
+    setPreparationSource(preparationKey);
     setPrepared(
       Object.fromEntries(
         Object.entries(order?.preparedQuantities ?? {}).map(([id, value]) => [id, String(value)]),
@@ -95,7 +98,7 @@ export function FactionOrderDetail() {
     setAssetAssignments(Object.fromEntries(
       Object.entries(order?.assetAssignments ?? {}).map(([itemId, assets]) => [itemId, assets.map((asset) => asset.id)]),
     ));
-  }, [order?.assetAssignments, order?.id, order?.preparedAssemblyQuantities, order?.preparedQuantities, order?.updated]);
+  }
 
   const itemMap = new Map(items.map((item) => [item.id, item]));
   const assemblyMap = new Map(assemblies.map((assembly) => [assembly.id, assembly]));
@@ -130,10 +133,7 @@ export function FactionOrderDetail() {
     return assemblyAvailability(assembly, availableForItemId);
   }
 
-  function handleError(error: unknown) {
-    if (isOfflineQueuedError(error)) return;
-    showSnackbar(error instanceof Error ? error.message : t('Aktion fehlgeschlagen', 'Action failed'), 'error');
-  }
+
 
   function savePrepared() {
     if (!order) return;
@@ -150,17 +150,17 @@ export function FactionOrderDetail() {
       const required = flattened[item.id] ?? 0;
       const selected = assetAssignments[item.id]?.length ?? 0;
       if (selected !== required) {
-        showSnackbar(t(
+        handleError(new Error(t(
           `Für ${item.name} müssen genau ${required} Seriengeräte ausgewählt werden (aktuell ${selected}).`,
           `Select exactly ${required} serialized assets for ${item.name} (${selected} currently selected).`,
-        ), 'error');
+        )));
         return;
       }
     }
     savePreparation.mutate(
       { id: order.id, values, assemblyValues, assetAssignments, sourceLocations: Object.fromEntries(Object.entries({ ...order.sourceLocations, ...sources }).filter(([, value]) => value)) },
       {
-        onSuccess: () => showSnackbar(t('Vorbereitung gespeichert', 'Preparation saved'), 'success'),
+        onSuccess: () => success(t('Vorbereitung gespeichert', 'Preparation saved')),
         onError: handleError,
       },
     );
@@ -196,12 +196,12 @@ export function FactionOrderDetail() {
     setConfirmAction(null);
     if (action === 'pickup') {
       pickUp.mutate(order.id, {
-        onSuccess: () => showSnackbar(t('Liste ausgegeben und Bestand gebucht', 'List checked out and stock recorded'), 'success'),
+        onSuccess: () => success(t('Liste ausgegeben und Bestand gebucht', 'List checked out and stock recorded')),
         onError: handleError,
       });
     } else if (action === 'cancel') {
       cancelOrder.mutate(order.id, {
-        onSuccess: () => showSnackbar(t('Liste storniert', 'List cancelled'), 'success'),
+        onSuccess: () => success(t('Liste storniert', 'List cancelled')),
         onError: handleError,
       });
     }
@@ -220,7 +220,7 @@ export function FactionOrderDetail() {
       {
         onSuccess: () => {
           setPickupMapOpen(false);
-          showSnackbar(t('Liste ist abholbereit', 'List is ready for pickup'), 'success');
+          success(t('Liste ist abholbereit', 'List is ready for pickup'));
         },
         onError: handleError,
       },
@@ -294,13 +294,13 @@ export function FactionOrderDetail() {
         }
         onSubmit={() =>
           submitOrder.mutate(order.id, {
-            onSuccess: () => showSnackbar(t('Bedarf ist bereit zur Bearbeitung — Artikel werden reserviert', 'Request submitted — items will be reserved'), 'success'),
+            onSuccess: () => success(t('Bedarf ist bereit zur Bearbeitung — Artikel werden reserviert', 'Request submitted — items will be reserved')),
             onError: handleError,
           })
         }
         onStartPreparation={() =>
           startPreparation.mutate(order.id, {
-            onSuccess: () => showSnackbar(t('Vorbereitung gestartet', 'Preparation started'), 'success'),
+            onSuccess: () => success(t('Vorbereitung gestartet', 'Preparation started')),
             onError: handleError,
           })
         }
@@ -311,7 +311,7 @@ export function FactionOrderDetail() {
           reopenPreparation.mutate(
             { id: order.id },
             {
-              onSuccess: () => showSnackbar(t('Liste ist wieder in Vorbereitung', 'List moved back to preparation'), 'success'),
+              onSuccess: () => success(t('Liste ist wieder in Vorbereitung', 'List moved back to preparation')),
               onError: handleError,
             },
           )
@@ -370,7 +370,7 @@ export function FactionOrderDetail() {
                 {
                   onSuccess: () => {
                     setEditOpen(false);
-                    showSnackbar(t('Fraktionsliste aktualisiert', 'Faction order updated'), 'success');
+                    success(t('Fraktionsliste aktualisiert', 'Faction order updated'));
                   },
                   onError: handleError,
                 },
@@ -409,7 +409,7 @@ export function FactionOrderDetail() {
                 {
                   onSuccess: () => {
                     setReturnOpen(false);
-                    showSnackbar(t('Rückgabe erfolgreich verbucht', 'Return successfully recorded'), 'success');
+                    success(t('Rückgabe erfolgreich verbucht', 'Return successfully recorded'));
                   },
                   onError: handleError,
                 },

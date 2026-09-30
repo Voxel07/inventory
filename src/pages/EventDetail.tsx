@@ -1,7 +1,7 @@
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -68,13 +68,11 @@ export function EventDetail() {
     setSearch('');
   };
 
-  // Effect event: the effect below must re-run when the loaded report changes, but
-  // must not re-run merely because `resetForm` is a new function on each render.
-  const resetFormOnReportChange = useEffectEvent(resetForm);
-
-  useEffect(() => {
-    resetFormOnReportChange();
-  }, [report]);
+  const [formSource, setFormSource] = useState(report);
+  if (formSource !== report) {
+    setFormSource(report);
+    resetForm();
+  }
 
   const itemMap = new Map(items.map((item) => [item.id, item]));
   const recordedIds = new Set([
