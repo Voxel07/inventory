@@ -1,6 +1,7 @@
-import { Alert, Box, Button, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
+import { Button } from '../../shared/ActionButtons';
+import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
-import { useAppLanguage, useLocalizedText } from '../../../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../../../utils/naming';
 import { factionOrderAssemblyBaseline, factionOrderItemBaseline, findPreviousFactionOrder } from '../../../utils/factionOrderHistory';
 
 interface OrderTraceabilityProps {
@@ -128,7 +129,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
               {comparison.map((change) => <Chip key={change.key} color={change.after > change.before ? 'primary' : 'default'} label={`${change.name}: ${change.before} → ${change.after}`} />)}
             </Stack>
           ) : <Alert severity="success">{t('Keine Mengenänderungen.', 'No quantity changes.')}</Alert>}
-          <Button size="small" sx={{ mt: 1.5 }} onClick={() => onOpenOrder(previousOrder.id)}>{t('Vorherige Liste öffnen', 'Open previous list')}</Button>
+          <Button title={translate('Die vorherige Bestellliste öffnen', 'Open the previous order list')} size="small" sx={{ mt: 1.5 }} onClick={() => onOpenOrder(previousOrder.id)}>{t('Vorherige Liste öffnen', 'Open previous list')}</Button>
         </Paper>
       )}
 

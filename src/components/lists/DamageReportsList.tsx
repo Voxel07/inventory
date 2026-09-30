@@ -1,17 +1,35 @@
+import { Button, IconButton } from '../shared/ActionButtons';
 import { useAuth } from '../../hooks/useAuth';
 import { canPerformMaintenance, canManageUsers } from '../../utils/access';
 import { Dialog } from '../shared/ClosableDialog';
 import {
-    Box, Button, Chip, DialogActions, DialogContent, DialogTitle, Paper, Skeleton, Stack,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
-    IconButton, MenuItem, Tooltip, useMediaQuery, useTheme,
+    Box,
+    Chip,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Paper,
+    Skeleton,
+    Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    Typography,
+    MenuItem,
+
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import { useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { useClientPagination } from '../../hooks/useClientPagination';
-import { nameFor, useLocalizedText } from '../../utils/naming';
+import { translate, nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 import { ListPagination } from '../shared/ListPagination';
 
@@ -60,7 +78,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     ? t('Weitere Berichte werden geladen…', 'Loading more reports…')
                     : view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
             </Typography>
-            {loadError && <Button onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
+            {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
         </Paper>
     );
 
@@ -98,9 +116,9 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     };
     const statusControl = (report: DamageReport) => canMaintain && onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            {report.status === 'reported' && <Button size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('Prüfung starten', 'Start review')}</Button>}
-            <Button size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('Teil reparieren', 'Repair units')}</Button>
-            <Button size="small" variant="contained" color="error" disabled={isUpdating || !canManageUsers(user)} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
+            {report.status === 'reported' && <Button title={translate('Diesen Schadensbericht in Prüfung nehmen', 'Start reviewing this damage report')} size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('Prüfung starten', 'Start review')}</Button>}
+            <Button title={translate('Die Menge reparierter Einheiten erfassen', 'Enter the number of repaired units')} size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('Teil reparieren', 'Repair units')}</Button>
+            <Button title={translate('Die Menge abzuschreibender Einheiten erfassen', 'Enter the number of units to write off')} size="small" variant="contained" color="error" disabled={isUpdating || !canManageUsers(user)} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
         </Stack>
     ) : <Chip label={formatStatus(report.status)} size="small" />;
     const openEdit = (report: DamageReport) => {
@@ -141,8 +159,8 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 />}
             </DialogContent>
             <DialogActions>
-                <Button color="inherit" onClick={() => setResolution(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                <Button
+                <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} color="inherit" onClick={() => setResolution(null)}>{t('Abbrechen', 'Cancel')}</Button>
+                <Button title={translate('Die erfasste Reparatur oder Abschreibung buchen', 'Record the entered repair or write-off')}
                     variant="contained"
                     color={resolution?.status === 'written_off' ? 'error' : 'success'}
                     disabled={!resolution || !resolutionAmountValid || isUpdating}
@@ -171,8 +189,8 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </Stack>
             </DialogContent>
             <DialogActions>
-                <Button color="inherit" onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                <Button variant="contained" disabled={!editing || !editDescription.trim() || isUpdating} onClick={() => {
+                <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} color="inherit" onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
+                <Button title={translate('Die Änderungen am Schadensbericht speichern', 'Save changes to this damage report')} variant="contained" disabled={!editing || !editDescription.trim() || isUpdating} onClick={() => {
                     if (!editing || !editDescription.trim()) return;
                     onEdit?.(editing.id, { description: editDescription.trim(), severity: editSeverity });
                     setEditing(null);
@@ -202,7 +220,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                         {statusControl(report)}
-                        {canMaintain && onEdit && <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
+                        {canMaintain && onEdit && <Button title={translate('Beschreibung und Schweregrad des Schadens bearbeiten', 'Edit the damage description and severity')} size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
                     </Stack>
                 </Paper>
             ))}
@@ -236,7 +254,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                         <TableCell>
                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                 {statusControl(report)}
-                                {canMaintain && onEdit && <Tooltip title={t('Schadensbericht bearbeiten', 'Edit damage report')}><IconButton size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
+                                {canMaintain && onEdit && <IconButton title={t('Schadensbericht bearbeiten', 'Edit damage report')} size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton>}
                             </Stack>
                         </TableCell>
                     </TableRow>

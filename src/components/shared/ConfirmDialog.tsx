@@ -1,7 +1,8 @@
+import { Button } from './ActionButtons';
 import { Dialog } from './ClosableDialog';
 import type { ButtonProps } from '@mui/material';
-import { Button, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip } from '@mui/material';
-import { useLocalizedText } from '../../utils/naming';
+import { DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -34,12 +35,11 @@ export function ConfirmDialog({
         <DialogContentText>{message}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={pending}>{t('Abbrechen', 'Cancel')}</Button>
-        <Tooltip title={actionTooltip ?? actionLabel} arrow>
-          <Button onClick={onConfirm} color={actionColor} variant="contained" disabled={pending}>
-            {actionLabel}
-          </Button>
-        </Tooltip>
+        <Button title={translate('Abbrechen und zum vorherigen Bildschirm zurückkehren', 'Cancel and return to the previous screen')} onClick={onClose} disabled={pending}>{t('Abbrechen', 'Cancel')}</Button>
+
+        <Button title={actionTooltip ?? actionLabel} onClick={onConfirm} color={actionColor} variant="contained" disabled={pending}>
+          {actionLabel}
+        </Button>
       </DialogActions>
     </Dialog>
   );

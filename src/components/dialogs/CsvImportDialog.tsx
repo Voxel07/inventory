@@ -1,10 +1,11 @@
+import { Chip, Button, Tab } from '../shared/ActionButtons';
 import { buildCsvImportPlan } from '../../utils/csv/importPlan';
 import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
 import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState, useRef, useMemo } from 'react';
-import { DialogTitle, DialogContent, Button, Box, Typography, Tabs, Tab, Stack, Paper, Chip, FormControlLabel, Checkbox, LinearProgress, Alert, TextField, Collapse, useMediaQuery, useTheme } from '@mui/material';
+import { DialogTitle, DialogContent, Box, Typography, Tabs, Stack, Paper, FormControlLabel, Checkbox, LinearProgress, Alert, TextField, Collapse, useMediaQuery, useTheme } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -14,7 +15,7 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { parseCsv, detectCsvType } from '../../utils/csv/core';
 
@@ -198,7 +199,7 @@ export function CsvImportDialog({
           {t('CSV-Import (Artikel & Baugruppen)', 'CSV Import (Items & Assemblies)')}
         </Typography>
         <Stack direction="row" spacing={1}>
-          <Button
+          <Button title={translate('CSV-Vorlage für den gewählten Import herunterladen', 'Download a CSV template for this import')}
             size="small"
             variant="outlined"
             startIcon={<FileDownloadIcon />}
@@ -257,9 +258,9 @@ export function CsvImportDialog({
           }}
           sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab value="items" label={t('Artikel', 'Items')} disabled={isImporting} />
-          <Tab value="assemblies" label={t('Baugruppen', 'Assemblies')} disabled={isImporting} />
-          <Tab value="combined" label={t('Kombiniert / Alle', 'Combined / All')} disabled={isImporting} />
+          <Tab title={translate('Artikel aus CSV importieren', 'Import items from CSV')} value="items" label={t('Artikel', 'Items')} disabled={isImporting} />
+          <Tab title={translate('Baugruppen aus CSV importieren', 'Import assemblies from CSV')} value="assemblies" label={t('Baugruppen', 'Assemblies')} disabled={isImporting} />
+          <Tab title={translate('Artikel und Baugruppen gemeinsam importieren', 'Import items and assemblies together')} value="combined" label={t('Kombiniert / Alle', 'Combined / All')} disabled={isImporting} />
         </Tabs>
 
         {/* Upload Zone */}
@@ -310,7 +311,7 @@ export function CsvImportDialog({
             </Paper>
 
             <Box sx={{ textAlign: 'center' }}>
-              <Button
+              <Button title={translate('Eingabe für CSV-Text ein- oder ausblenden', 'Show or hide the CSV text input')}
                 variant="text"
                 size="small"
                 startIcon={<ContentPasteIcon />}
@@ -350,7 +351,7 @@ export function CsvImportDialog({
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 {fileName || t('Geladene CSV-Daten', 'Loaded CSV data')} ({rows.length} {t('Zeilen', 'rows')})
               </Typography>
-              <Button
+              <Button title={translate('Dateiauswahl und Importvorschau zurücksetzen', 'Reset the selected file and import preview')}
                 size="small"
                 color="secondary"
                 onClick={resetState}
@@ -414,7 +415,7 @@ export function CsvImportDialog({
                 />
               )}
               {totalErrorsCount > 0 && (
-                <Chip
+                <Chip title={translate('Zur ersten fehlerhaften Importzeile springen', 'Jump to the first import row with an error')}
                   icon={<ErrorIcon />}
                   color="error"
                   variant="outlined"
@@ -445,11 +446,11 @@ export function CsvImportDialog({
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} disabled={isImporting}>
+        <Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={onClose} disabled={isImporting}>
           {t('Schließen', 'Close')}
         </Button>
         {csvContent && (
-          <Button
+          <Button title={translate('Die Einträge aus der Vorschau importieren', 'Import the entries shown in the preview')}
             variant="contained"
             onClick={executeImport}
             disabled={isImporting || !catalogComplete || totalToImport === 0}

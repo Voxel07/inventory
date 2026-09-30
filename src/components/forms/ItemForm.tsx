@@ -1,13 +1,13 @@
+import { Button } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import {
     Box,
     TextField,
-    Button,
     Stack,
     Autocomplete,
-    Tooltip,
+
     DialogTitle,
     DialogContent,
     DialogActions,
@@ -19,7 +19,7 @@ import {
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 interface Props {
     initialData?: Item;
@@ -403,7 +403,7 @@ export function ItemForm({
                         )}
                         sx={{ flexGrow: 1 }}
                     />
-                    <Button
+                    <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
                         variant="outlined"
                         onClick={() => setAddLocationOpen(true)}
                         sx={{ height: 56, minWidth: 56, p: 0, fontSize: '1.5rem' }}
@@ -481,13 +481,9 @@ export function ItemForm({
                 />
                 <ImageAttachments existing={initialData?.images} value={images} onChange={setImages} disabled={isLoading} />
 
-                <Tooltip title={initialData ? t('Änderungen an diesem Artikel speichern', 'Save changes to this item') : t('Neuen Artikel im Inventar erstellen', 'Create a new inventory item')} arrow>
-                    <span>
-                        <Button type="submit" variant="contained" disabled={isDisabled}>
-                            {initialData ? t('Artikel aktualisieren', 'Update item') : t('Artikel erstellen', 'Create item')}
-                        </Button>
-                    </span>
-                </Tooltip>
+                <Button title={translate('Die Artikeldaten speichern', 'Save the item details')} type="submit" variant="contained" disabled={isDisabled}>
+                    {initialData ? t('Artikel aktualisieren', 'Update item') : t('Artikel erstellen', 'Create item')}
+                </Button>
             </Stack>
 
             {/* Quick Add Storage Location Dialog */}
@@ -534,8 +530,8 @@ export function ItemForm({
                     </Box>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setAddLocationOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button
+                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setAddLocationOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
+                    <Button title={translate('Den neuen Lagerort speichern', 'Save the new storage location')}
                         onClick={handleCreateLocSubmit}
                         variant="contained"
                         disabled={createLoc.isPending || !newLocData.name.trim()}

@@ -1,6 +1,7 @@
-import { Button, DialogActions, DialogContent, DialogTitle, List, ListItem, ListItemText, Typography } from '@mui/material';
+import { Button } from '../shared/ActionButtons';
+import { DialogActions, DialogContent, DialogTitle, List, ListItem, ListItemText, Typography } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export function CatalogInstructionsDialog({ open, title, hint, parts, onClose }: {
     open: boolean;
@@ -25,6 +26,6 @@ export function CatalogInstructionsDialog({ open, title, hint, parts, onClose }:
                     </ListItem>)}</List>}
             </>}
         </DialogContent>
-        <DialogActions><Button onClick={onClose}>{t('Schließen', 'Close')}</Button></DialogActions>
+        <DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={onClose}>{t('Schließen', 'Close')}</Button></DialogActions>
     </Dialog>;
 }

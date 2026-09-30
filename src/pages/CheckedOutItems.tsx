@@ -1,9 +1,9 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useCustodyBalances } from '../hooks/useCustodyBalances';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import {
     Box,
-    Button,
     DialogContent,
     DialogTitle,
     MenuItem,
@@ -17,7 +17,7 @@ import { useItems } from '../hooks/useItems';
 import { useNavigate } from 'react-router-dom';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { CheckedOutList } from '../components/lists/CheckedOutList';
 import type { CheckedOutRow } from '../types/custody';
 import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
@@ -67,7 +67,7 @@ export function CheckedOutItemsPage() {
     if (itemsError || custody.isError) {
         return <Paper sx={{ p: 3 }}>
             <Typography>{t('Die vollständige Ausleihliste konnte nicht geladen werden.', 'Could not load the complete checkout list.')}</Typography>
-            <Button onClick={() => { void refetchItems(); void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+            <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void refetchItems(); void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
         </Paper>;
     }
 

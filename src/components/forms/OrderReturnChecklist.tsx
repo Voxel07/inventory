@@ -1,8 +1,9 @@
+import { Button } from '../shared/ActionButtons';
 import { useEffect, useEffectEvent, useState } from 'react';
-import { Alert, Box, Button, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import type { AssetInstance, FactionOrder, Item } from '../../types';
 import type { AssetReturnOutcome } from '../../services/factionOrderService';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 type Outcome = { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
 
@@ -183,7 +184,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
     <>
       <Alert severity="info" sx={{ mb: 2 }}>{t('Jede Komponente einzeln prüfen. Fehlende Teile bleiben der Fraktion zugeordnet.', 'Inspect every component. Missing units remain assigned to the faction.')}</Alert>
       <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button
+        <Button title={translate('Alle offenen Mengen als intakt zurückgekommen markieren', 'Mark all outstanding units as returned intact')}
           variant="contained"
           color="success"
           size="small"
@@ -192,7 +193,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
           {t('Alles vollständig & intakt zurücknehmen', 'All returned complete & intact')}
         </Button>
         {items.some((i) => i.isConsumable && (outstanding[i.id] ?? 0) > 0) && (
-          <Button
+          <Button title={translate('Alle Verbrauchsmengen als verbraucht markieren', 'Mark all consumable quantities as consumed')}
             variant="outlined"
             color="warning"
             size="small"
@@ -213,7 +214,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                 <Stack direction="row" spacing={0.5}>
                   {item?.isConsumable ? (
                     <>
-                      <Button
+                      <Button title={translate('Alle offenen Einheiten dieses Artikels als intakt markieren', 'Mark all outstanding units of this item as returned intact')}
                         size="small"
                         variant="text"
                         color="success"
@@ -221,7 +222,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                       >
                         {t('Vollständig zurück', 'All returned')}
                       </Button>
-                      <Button
+                      <Button title={translate('Alle offenen Einheiten dieses Artikels als verbraucht markieren', 'Mark all outstanding units of this item as consumed')}
                         size="small"
                         variant="text"
                         color="warning"
@@ -231,7 +232,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                       </Button>
                     </>
                   ) : (
-                    <Button
+                    <Button title={translate('Alle offenen Einheiten dieses Artikels als intakt markieren', 'Mark all outstanding units of this item as returned intact')}
                       size="small"
                       variant="text"
                       color="success"
@@ -281,8 +282,8 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       </Stack>
       {invalid && <Alert severity="error" sx={{ mt: 2 }}>{t('Die Summe darf die offene Menge nicht überschreiten.', 'The outcome total cannot exceed the outstanding quantity.')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
-        <Button onClick={onCancel}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('Rückgabe buchen', 'Record return')}</Button>
+        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={onCancel}>{t('Abbrechen', 'Cancel')}</Button>
+        <Button title={translate('Die geprüften Rückgabemengen buchen', 'Record the reviewed return quantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('Rückgabe buchen', 'Record return')}</Button>
       </DialogActions>
     </>
   );

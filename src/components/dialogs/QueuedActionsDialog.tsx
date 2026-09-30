@@ -1,10 +1,11 @@
+import { Button } from '../shared/ActionButtons';
 import { OfflineStatusPanel } from '../operations/OfflineStatusPanel';
 import { useState } from 'react';
-import { Box, Button, DialogActions, DialogContent, DialogTitle, Divider, List, ListItem, ListItemText, Typography } from '@mui/material';
+import { Box, DialogActions, DialogContent, DialogTitle, Divider, List, ListItem, ListItemText, Typography } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import type { OfflineAction } from '../../services/offlineQueue';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export function QueuedActionsDialog({ open, actions, onClose, onDiscard, discarding }: {
   open: boolean;
@@ -44,13 +45,13 @@ export function QueuedActionsDialog({ open, actions, onClose, onDiscard, discard
                 </>}
                 sx={{ minWidth: 0, m: 0 }}
               />
-              <Button size="small" color="error" onClick={() => setSelected(action)} disabled={discarding}>
+              <Button title={translate('Diese vorgemerkte Aktion verwerfen', 'Discard this queued action')} size="small" color="error" onClick={() => setSelected(action)} disabled={discarding}>
                 {t('Entfernen', 'Remove')}
               </Button>
             </ListItem>
           </Box>)}</List>}
       </DialogContent>
-      <DialogActions><Button onClick={onClose}>{t('Schließen', 'Close')}</Button></DialogActions>
+      <DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={onClose}>{t('Schließen', 'Close')}</Button></DialogActions>
     </Dialog>
     <ConfirmDialog
       open={Boolean(selected)}

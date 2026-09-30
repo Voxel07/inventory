@@ -1,13 +1,14 @@
+import { Button } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { equipmentProfileInput, equipmentCommitmentInput } from '../../services/equipmentInputs';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
 import type { Item } from '../../types';
 import { equipmentApi } from '../../services/equipmentService';
 import type { EquipmentCommitment, EquipmentProfile } from '../../types/equipment';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm, type Field } from '../operations/OperationForm';
 
 export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boolean }) {
@@ -28,7 +29,7 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
       <Typography variant="h6">{t('Eigentum, Verwahrung & Zusagen', 'Ownership, keeper & commitments')}</Typography>
       <Typography variant="body2" color="text.secondary">{t('Eigentum und Verwahrung gelten für alle Einheiten dieses Artikels. Für unterschiedliche Eigentümer separate Artikel anlegen. Sichtbarkeit, Lagerort und aktuelle Ausleihe sind unabhängig davon.', 'Ownership and keeper apply to every unit of this item. Use separate items for different owners. Catalog visibility, physical location and current custody are independent.')}</Typography>
       {profile.isLoading && <Typography>{t('Wird geladen …', 'Loading…')}</Typography>}
-      {profile.error && <Alert severity="error" action={<Button onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
+      {profile.error && <Alert severity="error" action={<Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
       {data && <>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip label={ownership[data.ownershipType]} /><Chip label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
         <Typography>{t('Eigentümer / Anbieter', 'Owner / provider')}: {data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography>
@@ -36,8 +37,8 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
         <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
         {data.availabilityPolicy !== 'available' && <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>}
         {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Button onClick={() => setEditing(data)}>{t('Eigentum / Verwahrung bearbeiten', 'Edit ownership / keeper')}</Button>
-          <Button variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('Zusage erfassen', 'Record commitment')}</Button>
+          <Button title={translate('Eigentümer, Verwahrer und Verfügbarkeit bearbeiten', 'Edit the owner, keeper and availability')} onClick={() => setEditing(data)}>{t('Eigentum / Verwahrung bearbeiten', 'Edit ownership / keeper')}</Button>
+          <Button title={translate('Eine Verfügbarkeitszusage für ein Event erfassen', 'Record an availability commitment for an event')} variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('Zusage erfassen', 'Record commitment')}</Button>
         </Stack>}
         {data.commitments.length === 0 && <Typography color="text.secondary">{t('Keine Zusagen erfasst.', 'No commitments recorded.')}</Typography>}
         {data.commitments.map(c => <Card key={c.id} variant="outlined"><CardContent><Stack spacing={1}>
@@ -48,7 +49,7 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
           {c.assetIds.length > 0 && <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {c.assetIds.map(id => assets.find(a => a.id === id)?.assetCode ?? id).join(', ')}</Typography>}
           <Typography variant="body2">{c.recordedBy}: {c.notes}</Typography>
           {c.cancellationReason && <Typography variant="body2">{t('Stornogrund', 'Cancellation reason')}: {c.cancellationReason}</Typography>}
-          {canEdit && c.status !== 'cancelled' && <Button color="warning" onClick={() => setCancelling({ profile: data, commitment: c })}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
+          {canEdit && c.status !== 'cancelled' && <Button title={translate('Diese Verfügbarkeitszusage stornieren', 'Cancel this availability commitment')} color="warning" onClick={() => setCancelling({ profile: data, commitment: c })}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
         </Stack></CardContent></Card>)}
       </>}
     </Stack>

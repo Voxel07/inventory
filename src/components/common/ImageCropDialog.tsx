@@ -1,8 +1,9 @@
+import { Button } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
 import { calculateImageCrop, decodeImage, prepareItemImage } from '../../utils/prepareItemImage';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClose: () => void; onApply: (file: File) => void }) {
   const t = useLocalizedText();
@@ -101,9 +102,9 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(512); }}>{t('Zurücksetzen', 'Reset')}</Button>
-        <Button disabled={saving} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button disabled={saving || !bitmap} variant="contained" onClick={() => void apply()}>{saving ? t('Wird verarbeitet…', 'Processing…') : t('Anwenden', 'Apply')}</Button>
+        <Button title={translate('Zuschnitt, Zoom und Bildgröße zurücksetzen', 'Reset crop, zoom and image size')} disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(512); }}>{t('Zurücksetzen', 'Reset')}</Button>
+        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={saving} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button>
+        <Button title={translate('Den Bildzuschnitt anwenden', 'Apply the image crop')} disabled={saving || !bitmap} variant="contained" onClick={() => void apply()}>{saving ? t('Wird verarbeitet…', 'Processing…') : t('Anwenden', 'Apply')}</Button>
       </DialogActions>
     </Dialog>
   );

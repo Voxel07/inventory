@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
@@ -6,7 +7,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
-  Button,
   Chip,
   LinearProgress,
   MenuItem,
@@ -28,7 +28,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
 import { useItems } from '../hooks/useItems';
 import { EVENT_TYPES, type EventReportStatus, type EventType } from '../types';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 
@@ -142,7 +142,7 @@ export function EventDetail() {
   if (isLoading) return <LinearProgress />;
   if (isError || !report) {
     return (
-      <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/events')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
+      <Alert severity="error" action={<Button title={translate('Zur Eventübersicht zurückkehren', 'Return to the event overview')} color="inherit" onClick={() => navigate('/events')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Eventbericht nicht gefunden.', 'Event report not found.')}
       </Alert>
     );
@@ -152,7 +152,7 @@ export function EventDetail() {
 
   return (
     <Box>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')} sx={{ mb: 1 }}>
+      <Button title={translate('Zum Eventverlauf zurückkehren', 'Return to the event history')} startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')} sx={{ mb: 1 }}>
         {t('Zum Eventverlauf', 'Back to event history')}
       </Button>
 
@@ -169,13 +169,13 @@ export function EventDetail() {
           <Typography color="text.secondary">{new Date(report.eventDate).toLocaleDateString(locale)}{report.endDate !== report.startDate ? ` – ${new Date(report.endDate).toLocaleDateString(locale)}` : ''}</Typography>
         </Box>
         {!editing ? (
-          <Button disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
+          <Button title={translate('Die Daten dieses Events bearbeiten', 'Edit this event\'s details')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
             {t('Event korrigieren', 'Correct event')}
           </Button>
         ) : (
           <Stack direction="row" spacing={1}>
-            <Button startIcon={<CloseIcon />} onClick={cancelEditing}>{t('Abbrechen', 'Cancel')}</Button>
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
+            <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} startIcon={<CloseIcon />} onClick={cancelEditing}>{t('Abbrechen', 'Cancel')}</Button>
+            <Button title={translate('Die Änderungen an diesem Event speichern', 'Save changes to this event')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
               {t('Änderungen speichern', 'Save changes')}
             </Button>
           </Stack>

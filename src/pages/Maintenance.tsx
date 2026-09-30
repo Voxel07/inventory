@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
 import { Link } from 'react-router-dom';
@@ -7,7 +8,6 @@ import {
   Alert,
   Autocomplete,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -27,7 +27,7 @@ import { useItems, useItemAssets } from '../hooks/useItems';
 import { createMaintenanceRecord, getMaintenanceRecords } from '../services/maintenanceService';
 import { getCategoryMaintenancePolicies, saveCategoryMaintenancePolicy } from '../services/categoryMaintenanceService';
 import { useUIStore } from '../store/uiStore';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import type { Item } from '../types';
 
 function dateInputValue(date: Date): string {
@@ -158,7 +158,7 @@ export function Maintenance() {
             value={policyInterval} onChange={(event) => setPolicyInterval(event.target.value)}
             helperText={t('0 = keine regelmäßige Wartung', '0 = no scheduled maintenance')}
             slotProps={{ htmlInput: { min: 0, step: 1 } }} />
-          <Button variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
+          <Button title={translate('Das Prüfintervall für diese Kategorie speichern', 'Save this category\'s inspection interval')} variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
             onClick={() => policyMutation.mutate()}>{t('Speichern', 'Save')}</Button>
         </Stack>
       </Paper>
@@ -205,7 +205,7 @@ export function Maintenance() {
                         {item.nextMaintenanceDue ? ` · ${t('Fällig am', 'Due on')}: ${new Date(item.nextMaintenanceDue).toLocaleDateString()}` : ''}
                       </Typography>
                     </Box>
-                    <Button
+                    <Button title={translate('Das Prüfformular für diesen Artikel ausfüllen', 'Fill in the inspection form for this item')}
                       size="small"
                       variant="contained"
                       color="primary"
@@ -249,7 +249,7 @@ export function Maintenance() {
           {serialized && <TextField select label={t('Gerät', 'Asset')} value={assetId} onChange={(event) => setAssetId(event.target.value)} required>
             {assets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
           </TextField>}
-          {canPerformMaintenance(user) && <Button component={Link} to="/operations?tab=schedules">{t('Wartungspläne und Checklisten öffnen', 'Open schedules and checklists')}</Button>}
+          {canPerformMaintenance(user) && <Button title={translate('Wartungspläne und Checklisten anzeigen', 'Display maintenance schedules and checklists')} component={Link} to="/operations?tab=schedules">{t('Wartungspläne und Checklisten öffnen', 'Open schedules and checklists')}</Button>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               select
@@ -289,13 +289,13 @@ export function Maintenance() {
               <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', mr: 0.5 }}>
                 {t('Schnellauswahl', 'Presets')}:
               </Typography>
-              <Button size="small" variant="outlined" onClick={() => setNextDueAt(addYears(1))}>
+              <Button title={translate('Die nächste Prüfung auf ein Jahr ab heute setzen', 'Set the next inspection to one year from today')} size="small" variant="outlined" onClick={() => setNextDueAt(addYears(1))}>
                 +1 {t('Jahr (DGUV V3)', 'Year (DGUV V3)')}
               </Button>
-              <Button size="small" variant="outlined" onClick={() => setNextDueAt(addMonths(6))}>
+              <Button title={translate('Die nächste Prüfung auf sechs Monate ab heute setzen', 'Set the next inspection to six months from today')} size="small" variant="outlined" onClick={() => setNextDueAt(addMonths(6))}>
                 +6 {t('Monate', 'Months')}
               </Button>
-              <Button size="small" variant="outlined" onClick={() => setNextDueAt(addYears(2))}>
+              <Button title={translate('Die nächste Prüfung auf zwei Jahre ab heute setzen', 'Set the next inspection to two years from today')} size="small" variant="outlined" onClick={() => setNextDueAt(addYears(2))}>
                 +2 {t('Jahre', 'Years')}
               </Button>
             </Stack>
@@ -329,7 +329,7 @@ export function Maintenance() {
 
           {mutation.error && <Alert severity="error">{mutation.error.message}</Alert>}
 
-          <Button
+          <Button title={translate('Das Prüfergebnis speichern und den Artikelstatus aktualisieren', 'Save the inspection result and update the item status')}
             variant="contained"
             size="large"
             color={result === 'failed' ? 'error' : result === 'advisory' ? 'warning' : 'primary'}

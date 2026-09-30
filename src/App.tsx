@@ -16,6 +16,7 @@ import { getSessionQueryClient, subscribeSessionQueryClient } from './services/s
 import { invalidateForApiChange } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { LoginPage } from './pages/LoginPage';
+import { IconButton } from './components/shared/ActionButtons';
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Items = lazy(() => import('./pages/Items').then((m) => ({ default: m.Items })));
@@ -188,6 +189,18 @@ function buildTheme(mode: 'light' | 'dark') {
       },
     },
     MuiTablePagination: {
+      defaultProps: {
+        getItemAriaLabel: (type) => ({
+          first: translate('Die erste Seite anzeigen', 'Display the first page'),
+          last: translate('Die letzte Seite anzeigen', 'Display the last page'),
+          next: translate('Die nächste Seite anzeigen', 'Display the next page'),
+          previous: translate('Die vorherige Seite anzeigen', 'Display the previous page'),
+        })[type],
+        slots: { actions: {
+          firstButton: IconButton, lastButton: IconButton,
+          nextButton: IconButton, previousButton: IconButton,
+        } },
+      },
       styleOverrides: {
         root: { width: '100%', minWidth: 0 },
         toolbar: { justifyContent: 'flex-end', flexWrap: 'wrap' },
@@ -285,6 +298,12 @@ function buildTheme(mode: 'light' | 'dark') {
       },
     },
     MuiTabs: {
+      defaultProps: {
+        slotProps: { scrollButtons: {
+          title: translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
+          'aria-label': translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
+        } },
+      },
       styleOverrides: {
         indicator: { height: 3, backgroundColor: '#e30613' },
       },
@@ -299,6 +318,10 @@ function buildTheme(mode: 'light' | 'dark') {
       },
     },
     MuiAlert: {
+      defaultProps: {
+        closeText: translate('Diese Meldung schließen', 'Dismiss this message'),
+        slots: { closeButton: IconButton },
+      },
       styleOverrides: {
         root: { borderRadius: 2 },
       },
@@ -310,6 +333,13 @@ function buildTheme(mode: 'light' | 'dark') {
           backgroundColor: '#0e0e0f',
           fontSize: '0.75rem',
         },
+      },
+    },
+    MuiAutocomplete: {
+      defaultProps: {
+        clearText: translate('Auswahl löschen', 'Clear the selection'),
+        openText: translate('Auswahlmöglichkeiten anzeigen', 'Show available options'),
+        closeText: translate('Auswahlmöglichkeiten schließen', 'Hide available options'),
       },
     },
   },
@@ -429,6 +459,7 @@ export default function App() {
 }
 
 function ThemedApp() {
+  useAppLanguage();
   const themeMode = useUIStore((s) => s.themeMode);
   const theme = buildTheme(themeMode);
   return (

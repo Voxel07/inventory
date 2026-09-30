@@ -1,9 +1,10 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Autocomplete, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import { useUpdateUserPermissions, useUsers } from '../hooks/useUsers';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type AccessRole, type User } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { ListPagination } from '../components/shared/ListPagination';
 import { useClientPagination } from '../hooks/useClientPagination';
@@ -71,7 +72,7 @@ function UserPermissionsEditor({ user }: { user: User }) {
             display: { xs: role === 'faction_leader' ? 'block' : 'none', md: 'block' },
           }}
         />
-        <Button
+        <Button title={translate('Rolle, Fraktionen und Berechtigungen speichern', 'Save the role, factions and permissions')}
           variant="contained"
           startIcon={<SaveIcon />}
           size="small"

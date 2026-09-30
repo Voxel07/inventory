@@ -1,9 +1,10 @@
+import { Button } from '../shared/ActionButtons';
 import type { ReactNode } from 'react';
-import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { ListPagination } from '../shared/ListPagination';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export interface OrderListEntry {
   id: string;
@@ -47,7 +48,7 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
           <Chip size="small" variant="outlined" label={group.entries.length} />
         </Stack>}
         {group.entries.map((entry) => <Box key={entry.id} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
-          {entry.onOpen ? <Button color="inherit" onClick={entry.onOpen}
+          {entry.onOpen ? <Button title={translate('Die Details dieser Bestellliste öffnen', 'Open the details of this order list')} color="inherit" onClick={entry.onOpen}
             sx={{ width: '100%', p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
             <OrderRow entry={entry} />
           </Button> : <Box sx={{ p: 2 }}><OrderRow entry={entry} /></Box>}

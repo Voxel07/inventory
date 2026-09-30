@@ -1,7 +1,7 @@
+import { ListItemButton, BottomNavigationAction } from './ActionButtons';
 import {
     Drawer,
     List,
-    ListItemButton,
     ListItemIcon,
     ListItemText,
     Toolbar,
@@ -10,7 +10,6 @@ import {
     Divider,
     Box,
     BottomNavigation,
-    BottomNavigationAction,
     Paper,
     FormControl,
     InputLabel,
@@ -31,7 +30,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
 import { LanguageSelector } from './LanguageSelector';
-import { useT, useLocalizedText } from '../../utils/naming';
+import { translate, useT, useLocalizedText } from '../../utils/naming';
 import EventIcon from '@mui/icons-material/Event';
 import GroupsIcon from '@mui/icons-material/Groups';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
@@ -135,7 +134,7 @@ export function Navigation() {
                                 ? location.pathname.startsWith('/events')
                             : location.pathname.startsWith(item.path);
                         return (
-                            <ListItemButton
+                            <ListItemButton title={translate('Den gewählten Bereich öffnen', 'Open the selected section')}
                                 key={item.path}
                                 selected={isActive}
                                 onClick={() => {
@@ -166,7 +165,7 @@ export function Navigation() {
                 <Box sx={{ p: 1 }}>
                     <Divider sx={{ mb: 1 }} />
                     <Box sx={{ px: 1, pb: 1.5 }}><LanguageSelector /></Box>
-                    <ListItemButton
+                    <ListItemButton title={translate('Abmelden und die Sitzung beenden', 'Sign out and end the session')}
                         onClick={() => {
                             void logout()
                                 .then((redirectingToProvider) => {
@@ -249,13 +248,13 @@ export function Navigation() {
                         }}
                         sx={{ height: 64 }}
                     >
-                        {isManager && <BottomNavigationAction label={t('nav.home')} value="/" icon={<DashboardIcon />} />}
-                        {isManager && <BottomNavigationAction label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
-                        {isManager && <BottomNavigationAction label={t('nav.return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
-                        {!isManager && canViewCatalog(user) && <BottomNavigationAction label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
-                        {!isManager && canViewCatalog(user) && <BottomNavigationAction label={t('nav.assemblies')} value="/assemblies" icon={<CategoryIcon />} />}
-                        {!isManager && <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<GroupsIcon />} />}
-                        <BottomNavigationAction label={t('nav.more')} value="more" icon={<MoreHorizIcon />} />
+                        {isManager && <BottomNavigationAction title={translate('Die persönliche Übersicht öffnen', 'Open your dashboard')} label={t('nav.home')} value="/" icon={<DashboardIcon />} />}
+                        {isManager && <BottomNavigationAction title={translate('Den Artikelkatalog öffnen', 'Open the item catalog')} label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
+                        {isManager && <BottomNavigationAction title={translate('Ausgeliehene Artikel für die Rückgabe anzeigen', 'Display checked-out items for return')} label={t('nav.return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
+                        {!isManager && canViewCatalog(user) && <BottomNavigationAction title={translate('Den Artikelkatalog öffnen', 'Open the item catalog')} label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
+                        {!isManager && canViewCatalog(user) && <BottomNavigationAction title={translate('Den Baugruppenkatalog öffnen', 'Open the assembly catalog')} label={t('nav.assemblies')} value="/assemblies" icon={<CategoryIcon />} />}
+                        {!isManager && <BottomNavigationAction title={translate('Die Bestellübersicht öffnen', 'Open the order overview')} label={t('nav.orders')} value="/orders" icon={<GroupsIcon />} />}
+                        <BottomNavigationAction title={translate('Weitere Navigationsbereiche anzeigen', 'Display more navigation options')} label={t('nav.more')} value="more" icon={<MoreHorizIcon />} />
                     </BottomNavigation>
                 </Paper>
             </>

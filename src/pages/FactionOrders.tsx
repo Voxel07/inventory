@@ -1,10 +1,10 @@
+import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
   FormControl,
   InputLabel,
@@ -14,7 +14,6 @@ import {
   Select,
   Stack,
   Tooltip,
-  ToggleButton,
   ToggleButtonGroup,
   Typography,
   useMediaQuery,
@@ -29,7 +28,7 @@ import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
@@ -106,7 +105,6 @@ export function FactionOrders() {
   const activeOrderCount = activeOrders.length;
   const historyOrders = orders.filter(isHistoricalOrder);
   const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
-
 
   useEffect(() => {
     if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);
@@ -194,7 +192,7 @@ export function FactionOrders() {
             )}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length || currentUser?.role === 'read_only'} sx={{ alignSelf: { sm: 'flex-start' } }}>
+        <Button title={translate('Eine neue Fraktionsbestellliste anlegen', 'Create a new faction order list')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length || currentUser?.role === 'read_only'} sx={{ alignSelf: { sm: 'flex-start' } }}>
           {t('Neue Liste', 'New list')}
         </Button>
       </Stack>
@@ -205,7 +203,7 @@ export function FactionOrders() {
         onChange={(_event, value: EventType | null) => selectEvent(value)}
         sx={{ mb: 3, flexWrap: 'wrap' }}
       >
-        {selectableEvents.map((type) => <ToggleButton key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
+        {selectableEvents.map((type) => <ToggleButton title={translate('Bestelllisten nach diesem Eventtyp filtern', 'Filter order lists by this event type')} key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
       </ToggleButtonGroup>}
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>

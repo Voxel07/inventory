@@ -1,3 +1,4 @@
+import { ToggleButton, Button } from '../shared/ActionButtons';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useOperationList } from '../../hooks/useOperations';
@@ -7,11 +8,9 @@ import {
     Alert,
     Box,
     TextField,
-    Button,
     Stack,
     MenuItem,
-    Tooltip,
-    ToggleButton,
+
     ToggleButtonGroup,
     Typography,
 } from '@mui/material';
@@ -23,7 +22,7 @@ import type { EventType, FactionOrder, TransactionFormData, Item, TransactionTyp
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
-import { useNames, useLocalizedText } from '../../utils/naming';
+import { translate, useNames, useLocalizedText } from '../../utils/naming';
 
 interface Props {
     items: Item[];
@@ -167,11 +166,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         aria-label={t('Transaktionstyp', 'Transaction type')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
                     >
-                        <ToggleButton value="checkout"><LogoutIcon />{names.action.checkout}</ToggleButton>
-                        <ToggleButton value="checkin" disabled={selectedStock.checkedOut < 1}>
+                        <ToggleButton title={translate('Eine Ausleihe erfassen', 'Record a checkout')} value="checkout"><LogoutIcon />{names.action.checkout}</ToggleButton>
+                        <ToggleButton title={translate('Eine Rückgabe erfassen', 'Record a check-in')} value="checkin" disabled={selectedStock.checkedOut < 1}>
                             <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('draußen', 'out')})
                         </ToggleButton>
-                        <ToggleButton value="added" disabled={isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
+                        <ToggleButton title={translate('Eine Bestandszugabe erfassen', 'Record added stock')} value="added" disabled={isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
                     </ToggleButtonGroup>
                     {isSerialized && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
@@ -318,7 +317,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                 />
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-                    <Button
+                    <Button title={translate('Die Formularfelder auf ihre Ausgangswerte zurücksetzen', 'Reset the form fields to their initial values')}
                         variant="outlined"
                         color="inherit"
                         onClick={() => {
@@ -340,19 +339,16 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     >
                         {t('Felder zurücksetzen', 'Reset fields')}
                     </Button>
-                    <Tooltip title={t('Diese Transaktion buchen', 'Post this transaction')} arrow>
-                        <span>
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                disabled={isLoading || !formData.itemId || !formData.reason
-                                    || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing}
-                                sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
-                            >
-                                {t('Transaktion buchen', 'Post transaction')}
-                            </Button>
-                        </span>
-                    </Tooltip>
+
+                    <Button title={translate('Die eingegebene Bestandsbewegung buchen', 'Post the entered stock transaction')}
+                        type="submit"
+                        variant="contained"
+                        disabled={isLoading || !formData.itemId || !formData.reason
+                            || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing}
+                        sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
+                    >
+                        {t('Transaktion buchen', 'Post transaction')}
+                    </Button>
                 </Box>
             </Stack>
         </Box>

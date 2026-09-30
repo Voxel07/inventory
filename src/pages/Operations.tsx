@@ -1,11 +1,12 @@
+import { Tab, Button } from '../components/shared/ActionButtons';
 import { LoansPanel } from '../components/operations/LoansPanel';
 import { useQuery } from '@tanstack/react-query';
 import { ReportsPanel } from '../components/operations/ReportsPanel';
-import { Alert, Button, Card, CardContent, Chip, LinearProgress, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Chip, LinearProgress, Stack, Tabs, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { StockPositions, TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
 import { RepairsPanel, SchedulesPanel } from '../components/operations/LifecycleOperations';
 import { PurchasingPanel, ReceiptsPanel, VendorsPanel } from '../components/operations/PurchasingOperations';
@@ -41,7 +42,7 @@ export function Operations() {
     '& a:not(.MuiButton-root)': { color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
   }}><Typography variant="h4">{t('Betrieb', 'Operations')}</Typography>
     <Tabs value={active.key} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile onChange={(_, value: string) => setParams({ tab: value })} aria-label={t('Betriebsaufgaben', 'Operational tasks')}>
-      {tabs.map((tab) => <Tab key={tab.key} value={tab.key} label={tab.label} />)}
+      {tabs.map((tab) => <Tab title={translate('Den gewählten Betriebsbereich anzeigen', 'Display the selected operations section')} key={tab.key} value={tab.key} label={tab.label} />)}
     </Tabs>{active.component}
   </Stack>;
 }
@@ -55,8 +56,8 @@ function SystemPanel() {
     {(status.error || dead.error || sync.error || command.error) && <Alert severity="error">{(status.error || dead.error || sync.error || command.error)?.message}</Alert>}
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{Object.entries(status.data?.counts ?? {}).map(([key, value]) => <Chip key={key} label={`${key}: ${value}`} />)}</Stack>
     <Typography variant="body2">{t('Aktualisiert', 'Updated')}: {status.dataUpdatedAt ? new Date(status.dataUpdatedAt).toLocaleString() : '—'}</Typography>
-    <Button onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('Aktualisieren', 'Refresh')}</Button>
-    {dead.data?.map((event) => <Card key={event.id}><CardContent><Typography variant="h6">{event.eventType}</Typography><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography><Button disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button></CardContent></Card>)}
+    <Button title={translate('Systemstatus und fehlgeschlagene Zustellungen aktualisieren', 'Refresh system status and failed deliveries')} onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('Aktualisieren', 'Refresh')}</Button>
+    {dead.data?.map((event) => <Card key={event.id}><CardContent><Typography variant="h6">{event.eventType}</Typography><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography><Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button></CardContent></Card>)}
     {!dead.isLoading && !dead.data?.length && <Alert severity="success">{t('Keine dauerhaft fehlgeschlagenen Ereignisse.', 'No dead-letter events.')}</Alert>}
     <Typography variant="h6">{t('Synchronisationsprotokoll', 'Sync audit')}</Typography>
     {sync.data?.map((entry) => <Card key={entry.id}><CardContent><Typography>{entry.operationType} · {entry.syncStatus} · {new Date(entry.createdAt).toLocaleString()}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</CardContent></Card>)}

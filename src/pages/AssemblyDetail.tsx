@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useEventReports } from '../hooks/useEvents';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
@@ -8,7 +9,6 @@ import {
     Box,
     Typography,
     Paper,
-    Button,
     Table,
     TableBody,
     TableCell,
@@ -24,7 +24,7 @@ import {
     Alert,
     TextField,
     MenuItem,
-    Tooltip,
+
     Autocomplete,
     Stack,
     Card,
@@ -304,7 +304,6 @@ export function AssemblyDetail() {
                     onClick={() => setCheckoutOpen(true)}
                     disabled={!canCheckout}
                 />}
-
             </Box>
 
             <Paper sx={{ p: { xs: 1.5, md: 2 }, mb: 3, overflow: 'hidden' }}>
@@ -628,18 +627,16 @@ export function AssemblyDetail() {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Tooltip title={t('Ausleihvorgang abbrechen', 'Cancel checkout')} arrow>
-                        <Button onClick={() => setCheckoutOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    </Tooltip>
-                    <Tooltip title={t('Alle Artikel in dieser Baugruppe dauerhaft ausleihen', 'Check out all items in this assembly')} arrow>
-                        <Button
-                            variant="contained"
-                            onClick={handleCheckout}
-                            disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction || !checkoutEventId}
-                        >
-                            {t('Alle Artikel ausleihen', 'Check out all items')}
-                        </Button>
-                    </Tooltip>
+
+                    <Button title={t('Ausleihvorgang abbrechen', 'Cancel checkout')} onClick={() => setCheckoutOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
+
+                    <Button title={t('Alle Artikel in dieser Baugruppe dauerhaft ausleihen', 'Check out all items in this assembly')}
+                        variant="contained"
+                        onClick={handleCheckout}
+                        disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction || !checkoutEventId}
+                    >
+                        {t('Alle Artikel ausleihen', 'Check out all items')}
+                    </Button>
                 </DialogActions>
             </Dialog>
 

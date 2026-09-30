@@ -1,5 +1,6 @@
-import { Button, Stack, TablePagination, Typography } from '@mui/material';
-import { useLocalizedText } from '../../utils/naming';
+import { Button } from './ActionButtons';
+import { Stack, TablePagination, Typography } from '@mui/material';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 interface Props {
   count: number;
@@ -31,7 +32,7 @@ export function ListPagination({ count, page, onChange, pageSize, onPageSizeChan
           '& .MuiTablePagination-spacer': { display: 'none' },
           '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { my: 1 } }} />
       {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
-      {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+      {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
     </Stack>
   );
 }

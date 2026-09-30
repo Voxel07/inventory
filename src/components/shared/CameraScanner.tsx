@@ -1,5 +1,6 @@
+import { Button } from './ActionButtons';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Stack } from '@mui/material';
+import { Alert, Box, Stack } from '@mui/material';
 import { translate, useLocalizedText } from '../../utils/naming';
 
 type Detector = { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> };
@@ -49,6 +50,6 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
   return <Stack spacing={1} sx={{ mb: 2 }}>
     {error && <Alert severity="warning">{error}</Alert>}
     {running && <Box component="video" ref={video} muted playsInline aria-label={t('Kameravorschau', 'Camera preview')} sx={{ width: '100%', maxHeight: 300, bgcolor: 'black' }} />}
-    <Button type="button" variant="outlined" onClick={() => { setError(''); setRunning(!running); }}>{running ? t('Kamera stoppen', 'Stop camera') : t('Mit Kamera scannen', 'Scan with camera')}</Button>
+    <Button title={translate('Die Kamera zum Scannen starten oder stoppen', 'Start or stop the camera scanner')} type="button" variant="outlined" onClick={() => { setError(''); setRunning(!running); }}>{running ? t('Kamera stoppen', 'Stop camera') : t('Mit Kamera scannen', 'Scan with camera')}</Button>
   </Stack>;
 }

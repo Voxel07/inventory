@@ -1,7 +1,8 @@
+import { Button } from '../shared/ActionButtons';
 import { useState, type ReactNode } from 'react';
-import { Alert, Autocomplete, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, TextField } from '@mui/material';
+import { Alert, Autocomplete, Box, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, TextField } from '@mui/material';
 import { useOperationCommand } from '../../hooks/useOperations';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export type Values = Record<string, string | number | boolean>;
 export type Option = { value: string; label: string };
@@ -27,7 +28,7 @@ export function OperationForm({ title, fields, initial = {}, onSave, onClose, ch
         {command.error && <Alert severity="error">{command.error.message}</Alert>}
         {children}<Fields fields={typeof fields === 'function' ? fields(values) : fields} values={values} onChange={setValues} />
       </Stack></DialogContent>
-      <DialogActions><Button disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button type="submit" variant="contained" disabled={command.isPending}>{submitLabel ?? t('Speichern', 'Save')}</Button></DialogActions>
+      <DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Die eingegebenen Angaben senden', 'Submit the entered details')} type="submit" variant="contained" disabled={command.isPending}>{submitLabel ?? t('Speichern', 'Save')}</Button></DialogActions>
     </Box>
   </Dialog>;
 }

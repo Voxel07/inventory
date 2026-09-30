@@ -1,8 +1,9 @@
+import { Tab } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canPerformCustody } from '../utils/access';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Box, Typography, DialogTitle, DialogContent, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, DialogTitle, DialogContent, Tabs, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { DamageReportsList } from '../components/lists/DamageReportsList';
@@ -13,7 +14,7 @@ import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
 export function DamageReportsPage() {
@@ -84,8 +85,8 @@ export function DamageReportsPage() {
             </Box>
 
             <Tabs value={activeTab} onChange={(_, value: 'open' | 'history') => setActiveTab(value)} sx={{ mb: 2 }}>
-                <Tab value="open" label={t('Offen', 'Open')} />
-                <Tab value="history" label={t('Verlauf', 'History')} />
+                <Tab title={translate('Offene Schadensberichte anzeigen', 'Display open damage reports')} value="open" label={t('Offen', 'Open')} />
+                <Tab title={translate('Abgeschlossene Schadensberichte anzeigen', 'Display resolved damage reports')} value="history" label={t('Verlauf', 'History')} />
             </Tabs>
 
             <DamageReportsList

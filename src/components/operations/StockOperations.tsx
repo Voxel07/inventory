@@ -1,17 +1,18 @@
+import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
 import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Button, Card, CardContent, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Card, CardContent, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import type { Count, Lot, Transfer } from '../../types/operations';
 import { Fields, OperationForm, type Field, type Values } from './OperationForm';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
@@ -67,7 +68,7 @@ export function TransfersPanel() {
   const [action, setAction] = useState<{ transfer: Transfer; type: 'dispatch' | 'receive' | 'cancel'; key: string } | null>(null);
   const [createKey, setCreateKey] = useState('');
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setChooseItem(true)}>{t('Umlagerung anlegen', 'New transfer')}</Button>
+    <Button title={translate('Eine Umlagerung zwischen Lagerorten anlegen', 'Create a transfer between storage locations')} variant="contained" onClick={() => setChooseItem(true)}>{t('Umlagerung anlegen', 'New transfer')}</Button>
     <QueryFeedback isLoading={transfers.isLoading} error={transfers.error} isEmpty={!transfers.data?.length} emptyMessage={t('Noch keine Umlagerungen.', 'No transfers yet.')} />
     {transfers.data?.map((transfer) => <Card key={transfer.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{transfer.transferNumber} · {transfer.status}</Typography>
@@ -75,8 +76,8 @@ export function TransfersPanel() {
       {transfer.lines.map((line) => <Typography key={line.id}>{line.itemName} {line.assetCode} · {t('Angefordert', 'Requested')}: {line.requestedQuantity} · {t('Erhalten', 'Received')}: {line.receivedQuantity} · {t('Abweichung', 'Discrepancy')}: {line.discrepancyQuantity}{line.discrepancyNotes ? ` — ${line.discrepancyNotes}` : ''}</Typography>)}
       {transfer.notes && <Typography>{transfer.notes}</Typography>}
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-        {['requested', 'picking'].includes(transfer.status) && <><Button onClick={() => setAction({ transfer, type: 'dispatch', key: crypto.randomUUID() })}>{t('Versenden', 'Dispatch')}</Button><Button onClick={() => setAction({ transfer, type: 'cancel', key: crypto.randomUUID() })}>{t('Stornieren', 'Cancel transfer')}</Button></>}
-        {['in_transit', 'partially_received'].includes(transfer.status) && <Button onClick={() => setAction({ transfer, type: 'receive', key: crypto.randomUUID() })}>{t('Empfang erfassen', 'Receive transfer')}</Button>}
+        {['requested', 'picking'].includes(transfer.status) && <><Button title={translate('Die Umlagerung als versendet erfassen', 'Record dispatch of this transfer')} onClick={() => setAction({ transfer, type: 'dispatch', key: crypto.randomUUID() })}>{t('Versenden', 'Dispatch')}</Button><Button title={translate('Diese Umlagerung stornieren', 'Cancel this transfer')} onClick={() => setAction({ transfer, type: 'cancel', key: crypto.randomUUID() })}>{t('Stornieren', 'Cancel transfer')}</Button></>}
+        {['in_transit', 'partially_received'].includes(transfer.status) && <Button title={translate('Die empfangenen Mengen der Umlagerung erfassen', 'Record the quantities received in this transfer')} onClick={() => setAction({ transfer, type: 'receive', key: crypto.randomUUID() })}>{t('Empfang erfassen', 'Receive transfer')}</Button>}
       </Stack>
     </Stack></CardContent></Card>)}
     {chooseItem && <OperationForm title={t('Artikel umlagern', 'Transfer item')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => { setItemId(String(values.itemId)); setCreateKey(crypto.randomUUID()); }} />}
@@ -106,19 +107,19 @@ export function CountsPanel() {
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ count: Count; type: 'start' | 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
+    <Button title={translate('Eine neue Inventur anlegen', 'Create a new stock count')} variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
     <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
     {counts.data?.map((count) => <Card key={count.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{count.sessionNumber} · {count.status}</Typography>
       <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t(' · Blindzählung', ' · Blind count') : ''}</Typography>
       {count.lines.map((line) => <Typography key={line.id}>{line.itemName} {line.assetCode} · {t('Gezählt', 'Counted')}: {line.countedQuantity ?? '—'} · {t('Nachzählung', 'Recount')}: {line.recountedQuantity ?? '—'}{line.expectedQuantity != null ? ` · ${t('Erwartet', 'Expected')}: ${line.expectedQuantity}` : ''}{line.varianceQuantity != null ? ` · ${t('Abweichung', 'Variance')}: ${line.varianceQuantity}` : ''}</Typography>)}
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-        {count.status === 'draft' && <Button onClick={() => setAction({ count, type: 'start' })}>{t('Zählen', 'Start counting')}</Button>}
-        {count.status === 'counting' && <Button onClick={() => setAction({ count, type: 'submit' })}>{t('Zählung erfassen', 'Record count')}</Button>}
-        {count.status === 'awaiting_recount' && <Button onClick={() => setAction({ count, type: 'recount' })}>{t('Nachzählen', 'Recount')}</Button>}
-        {count.status === 'awaiting_approval' && canManageUsers(user) && <Button onClick={() => setAction({ count, type: 'approve' })}>{t('Freigeben', 'Approve')}</Button>}
-        {count.status === 'approved' && <Button onClick={() => setAction({ count, type: 'post' })}>{t('Bestand korrigieren', 'Post adjustment')}</Button>}
-        {!['posted', 'cancelled'].includes(count.status) && <Button onClick={() => setAction({ count, type: 'cancel' })}>{t('Abbrechen', 'Cancel count')}</Button>}
+        {count.status === 'draft' && <Button title={translate('Mit der Zählung dieser Inventur beginnen', 'Start counting this inventory')} onClick={() => setAction({ count, type: 'start' })}>{t('Zählen', 'Start counting')}</Button>}
+        {count.status === 'counting' && <Button title={translate('Die gezählten Mengen eingeben', 'Enter the counted quantities')} onClick={() => setAction({ count, type: 'submit' })}>{t('Zählung erfassen', 'Record count')}</Button>}
+        {count.status === 'awaiting_recount' && <Button title={translate('Eine Nachzählung der Inventur starten', 'Start a recount of this inventory')} onClick={() => setAction({ count, type: 'recount' })}>{t('Nachzählen', 'Recount')}</Button>}
+        {count.status === 'awaiting_approval' && canManageUsers(user) && <Button title={translate('Die erfassten Zählmengen freigeben', 'Approve the recorded count quantities')} onClick={() => setAction({ count, type: 'approve' })}>{t('Freigeben', 'Approve')}</Button>}
+        {count.status === 'approved' && <Button title={translate('Den Bestand anhand der freigegebenen Inventur korrigieren', 'Adjust stock using the approved count')} onClick={() => setAction({ count, type: 'post' })}>{t('Bestand korrigieren', 'Post adjustment')}</Button>}
+        {!['posted', 'cancelled'].includes(count.status) && <Button title={translate('Diese Inventur abbrechen', 'Cancel this stock count')} onClick={() => setAction({ count, type: 'cancel' })}>{t('Abbrechen', 'Cancel count')}</Button>}
       </Stack>
     </Stack></CardContent></Card>)}
     {create && <OperationForm title={t('Neue Inventur', 'New stock count')} initial={{ blindCount: true }} fields={[
@@ -139,12 +140,12 @@ export function LotsPanel() {
   const t = useLocalizedText(); const lookup = useStockLookups(); const lots = useOperationList('lots', operationsApi.lots());
   const [edit, setEdit] = useState<Lot | 'new' | null>(null);
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
+    <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
     <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('Noch keine Chargen.', 'No lots yet.')} />
     {lots.data?.map((lot) => <Card key={lot.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</Typography>
       <Typography>{lot.status} · {t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
-      <Typography>{lot.storageRequirements} {lot.notes}</Typography><Button onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>
+      <Typography>{lot.storageRequirements} {lot.notes}</Typography><Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>
     </Stack></CardContent></Card>)}
     {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[
       { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions.filter((option) => lookup.items.find((item) => item.id === option.value)?.trackingMode === 'lot_tracked'), required: true },

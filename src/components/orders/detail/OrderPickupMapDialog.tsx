@@ -1,8 +1,8 @@
+import { Button } from '../../shared/ActionButtons';
 import { Dialog } from '../../shared/ClosableDialog';
 import { useState } from 'react';
 import {
   Box,
-  Button,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -18,7 +18,7 @@ import {
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { StorageLocation } from '../../../types';
-import { useLocalizedText } from '../../../utils/naming';
+import { translate, useLocalizedText } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
 export interface OrderPickupMapDialogProps {
@@ -78,7 +78,6 @@ export function OrderPickupMapDialog({
       setLongitude(found.longitude);
     }
   };
-
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
@@ -143,9 +142,9 @@ export function OrderPickupMapDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t('Schließen', 'Close')}</Button>
+        <Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={onClose}>{t('Schließen', 'Close')}</Button>
         {isTransitionMode && onConfirm && (
-          <Button
+          <Button title={translate('Den gewählten Abholort speichern und Abholbereitschaft melden', 'Save the pickup location and mark this list ready')}
             variant="contained"
             color="success"
             disabled={isConfirming}

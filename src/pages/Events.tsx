@@ -1,3 +1,4 @@
+import { ToggleButton, Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
@@ -7,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
-  Button,
   Chip,
   DialogActions,
   DialogContent,
@@ -22,7 +22,6 @@ import {
   TableHead,
   TableRow,
   TextField,
-  ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
@@ -36,7 +35,7 @@ import { useItems } from '../hooks/useItems';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
 import { getItemStock } from '../utils/stock';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 
@@ -192,7 +191,7 @@ export function Events() {
         onChange={(_event, value: EventType | null) => value && setEventType(value)}
         sx={{ mb: 3, flexWrap: 'wrap' }}
       >
-        {EVENT_TYPES.map((type) => <ToggleButton key={type} value={type}>{type}</ToggleButton>)}
+        {EVENT_TYPES.map((type) => <ToggleButton title={translate('Events nach diesem Eventtyp filtern', 'Filter events by this event type')} key={type} value={type}>{type}</ToggleButton>)}
       </ToggleButtonGroup>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
@@ -202,13 +201,13 @@ export function Events() {
             {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {report.startDate}{report.endDate !== report.startDate ? ` – ${report.endDate}` : ''}
           </MenuItem>)}
         </TextField>
-        <Button variant="contained" disabled={!canEdit} onClick={() => {
+        <Button title={translate('Ein neues Event anlegen', 'Create a new event')} variant="contained" disabled={!canEdit} onClick={() => {
           setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
           setNewDate(new Date().toISOString().slice(0, 10));
           setNewEndDate(new Date().toISOString().slice(0, 10));
           setCreateOpen(true);
         }}>{t('Event erstellen', 'Create event')}</Button>
-        {canEdit && selectedEvent?.status === 'planned' && <Button variant="outlined" onClick={() => setPlanOpen(true)}>{t('Plan bearbeiten', 'Edit plan')}</Button>}
+        {canEdit && selectedEvent?.status === 'planned' && <Button title={translate('Die geplanten Artikelmengen bearbeiten', 'Edit the planned item quantities')} variant="outlined" onClick={() => setPlanOpen(true)}>{t('Plan bearbeiten', 'Edit plan')}</Button>}
       </Stack>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
@@ -223,7 +222,7 @@ export function Events() {
                 {t('Verwendete Artikel', 'Items used')}: {Object.values(lastCompleted.usedQuantities ?? {}).filter((value) => value > 0).length}
               </Typography>
               {lastCompleted.notes && <Typography sx={{ mt: 1 }}>{lastCompleted.notes}</Typography>}
-              <Button
+              <Button title={translate('Die Details des letzten abgeschlossenen Events öffnen', 'Open details of the last completed event')}
                 size="small"
                 endIcon={<ArrowForwardIcon />}
                 onClick={() => navigate(`/events/${lastCompleted.id}`)}
@@ -286,10 +285,10 @@ export function Events() {
             minRows={2}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button startIcon={<SaveIcon />} variant="outlined" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
+            <Button title={translate('Dieses Event und seine Mengen als Planung speichern', 'Save this event and its quantities as a plan')} startIcon={<SaveIcon />} variant="outlined" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
               {t('Als Planung speichern', 'Save as plan')}
             </Button>
-            <Button startIcon={<EventAvailableIcon />} variant="contained" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
+            <Button title={translate('Dieses Event als abgeschlossen speichern', 'Save this event as completed')} startIcon={<EventAvailableIcon />} variant="contained" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
               {t('Als abgeschlossen speichern', 'Save as completed')}
             </Button>
           </Stack>
@@ -356,13 +355,13 @@ export function Events() {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
+                  <Button title={translate('Die Details dieses Events öffnen', 'Open this event\'s details')} size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
                     {t('Öffnen', 'Open')}
                   </Button>
-                  <Button disabled={!canEdit} size="small" startIcon={<EditIcon />} onClick={() => navigate(`/events/${report.id}?edit=1`)}>
+                  <Button title={translate('Die Daten dieses Events bearbeiten', 'Edit this event\'s details')} disabled={!canEdit} size="small" startIcon={<EditIcon />} onClick={() => navigate(`/events/${report.id}?edit=1`)}>
                     {t('Bearbeiten', 'Edit')}
                   </Button>
-                  <Button disabled={!canEdit} size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setDeletingEventId(report.id)}>
+                  <Button title={translate('Das Löschen dieses Events bestätigen', 'Review deletion of this event')} disabled={!canEdit} size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setDeletingEventId(report.id)}>
                     {t('Löschen', 'Delete')}
                   </Button>
                 </TableCell>
@@ -393,7 +392,7 @@ export function Events() {
             <TextField required type="date" label={t('Enddatum', 'End date')} value={newEndDate} onChange={(event) => setNewEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: newDate } }} error={Boolean(newEndDate && newEndDate < newDate)} />
           </Stack>
         </DialogContent>
-        <DialogActions><Button onClick={() => setCreateOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={!newName.trim() || !newDate || !newEndDate || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('Erstellen', 'Create')}</Button></DialogActions>
+        <DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setCreateOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Das neue Event speichern', 'Save the new event')} variant="contained" disabled={!newName.trim() || !newDate || !newEndDate || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('Erstellen', 'Create')}</Button></DialogActions>
       </Dialog>
       <Dialog open={planOpen} onClose={() => setPlanOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('Event planen', 'Plan event')}: {selectedEvent?.name}</DialogTitle>
@@ -405,7 +404,7 @@ export function Events() {
               slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 100 }} />
           </Stack>)}
         </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setPlanOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" disabled={updateReport.isPending} onClick={() => save('planned')}>{t('Plan speichern', 'Save plan')}</Button></DialogActions>
+        <DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setPlanOpen(false)}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Die geplanten Artikelmengen speichern', 'Save the planned item quantities')} variant="contained" disabled={updateReport.isPending} onClick={() => save('planned')}>{t('Plan speichern', 'Save plan')}</Button></DialogActions>
       </Dialog>
     </Box>
   );

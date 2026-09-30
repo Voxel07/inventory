@@ -1,12 +1,13 @@
+import { Button } from '../shared/ActionButtons';
 import { useObjectUrl } from '../../hooks/useObjectUrl';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Stack, Typography } from '@mui/material';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CropIcon from '@mui/icons-material/Crop';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFileUrl, fetchMedia, isApiMediaUrl } from '../../services/apiClient';
 import { releaseStagedImage, stageImage } from '../../services/stagedImageService';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { ImageCropDialog } from './ImageCropDialog';
 import { MediaImage } from './MediaImage';
 
@@ -116,13 +117,12 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
     }
   }
 
-
   return (
     <Stack spacing={1}>
       <Typography variant="subtitle2">{maxImages === 1 ? t('Bild', 'Image') : t('Bilder', 'Images')}</Typography>
       {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
       <Box>
-        <Button component="label" disabled={busy || remaining <= 0} variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
+        <Button title={translate('Bilddateien auswählen und hinzufügen', 'Choose image files to attach')} component="label" disabled={busy || remaining <= 0} variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
           {maxImages === 1 ? t('Bild hinzufügen', 'Add image') : t('Bilder hinzufügen', 'Add images')}
           <input hidden type="file" accept="image/jpeg,image/png,image/webp" multiple={maxImages > 1} disabled={busy || remaining <= 0}
             onChange={(event) => {
@@ -172,8 +172,8 @@ function ImageControls({ label, disabled, onEdit, onRemove }: { label: string; d
   const t = useLocalizedText();
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-      <Button size="small" disabled={disabled} startIcon={<CropIcon />} aria-label={`${t('Bild anpassen', 'Adjust image')} ${label}`} onClick={onEdit}>{t('Anpassen', 'Adjust')}</Button>
-      <Button size="small" disabled={disabled} color="error" aria-label={`${t('Bild entfernen', 'Remove image')} ${label}`} onClick={onRemove}><DeleteIcon fontSize="small" /></Button>
+      <Button title={translate('Bild zuschneiden und Größe anpassen', 'Crop and resize this image')} size="small" disabled={disabled} startIcon={<CropIcon />} aria-label={`${t('Bild anpassen', 'Adjust image')} ${label}`} onClick={onEdit}>{t('Anpassen', 'Adjust')}</Button>
+      <Button title={translate('Dieses Bild entfernen', 'Remove this image')} size="small" disabled={disabled} color="error" aria-label={`${t('Bild entfernen', 'Remove image')} ${label}`} onClick={onRemove}><DeleteIcon fontSize="small" /></Button>
     </Stack>
   );
 }

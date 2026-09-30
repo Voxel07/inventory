@@ -1,8 +1,9 @@
+import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, Button, Checkbox, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
 import { useStockLookups } from '../../hooks/useStockLookups';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { apiRequest } from '../../services/apiClient';
 import { correctSyncFailure, type SyncFailure } from '../../services/offlineQueue';
 
@@ -10,7 +11,7 @@ import { correctSyncFailure, type SyncFailure } from '../../services/offlineQueu
 function CommandFields({ value, onChange, path = '', names = {}, assetOptions = [] }: { value: unknown; onChange: (value: unknown) => void; path?: string; names?: Record<string, string>; assetOptions?: [string, string][] }) {
   const t = useLocalizedText();
   if (value == null) return path.endsWith('operatingHours') ? <TextField label={t('Betriebsstunden', 'Operating hours')} type="number" value="" onChange={(e) => onChange(Number(e.target.value))} /> : null;
-  if (Array.isArray(value)) return <Stack spacing={1}>{value.map((entry, index) => <Stack key={index} spacing={1}><CommandFields names={names} assetOptions={assetOptions} value={entry} path={`${path}[${index}]`} onChange={(next) => onChange(value.map((v, i) => i === index ? next : v))} /><Button onClick={() => onChange(value.filter((_, i) => i !== index))}>{t('Zuordnung entfernen', 'Remove assignment')}</Button></Stack>)}<Button onClick={() => onChange([...value, ''])}>{t('Zuordnung hinzufügen', 'Add assignment')}</Button></Stack>;
+  if (Array.isArray(value)) return <Stack spacing={1}>{value.map((entry, index) => <Stack key={index} spacing={1}><CommandFields names={names} assetOptions={assetOptions} value={entry} path={`${path}[${index}]`} onChange={(next) => onChange(value.map((v, i) => i === index ? next : v))} /><Button title={translate('Diese Gerätezuordnung entfernen', 'Remove this asset assignment')} onClick={() => onChange(value.filter((_, i) => i !== index))}>{t('Zuordnung entfernen', 'Remove assignment')}</Button></Stack>)}<Button title={translate('Eine Gerätezuordnung hinzufügen', 'Add an asset assignment')} onClick={() => onChange([...value, ''])}>{t('Zuordnung hinzufügen', 'Add assignment')}</Button></Stack>;
   if (typeof value === 'object') return <Stack spacing={1}>{Object.entries(value).map(([key, entry]) => <Stack key={key} spacing={1}>
     {path === 'input.assets' && <TextField select={assetOptions.length > 0} label={t('Zurückgegebenes Exemplar', 'Returned asset')} value={key} onChange={(e) => { if (!e.target.value || (e.target.value !== key && e.target.value in value)) return; const next = { ...value } as Record<string, unknown>; delete next[key]; next[e.target.value] = entry; onChange(next); }}>{assetOptions.length > 0 ? [...assetOptions.filter(([id]) => id !== key), [key, names[key] ?? key]].map(([id, label]) => <MenuItem key={id} value={id}>{label}</MenuItem>) : undefined}</TextField>}
     <CommandFields names={names} assetOptions={assetOptions} path={path ? `${path}.${key}` : key} value={entry} onChange={(next) => onChange({ ...value, [key]: next })} />
@@ -63,23 +64,23 @@ export function SyncIssuesDialog({ open, failures, onClose, onDiscard, discardin
         <Alert severity="warning">{selected.type} · {selected.error}</Alert>
         {busy && <Typography>{t('Wird geladen / gespeichert…', 'Loading / saving…')}</Typography>}
         {context && <Box sx={{ overflow: 'auto', maxHeight: 400 }}><ServerState value={Object.fromEntries(Object.entries(context).filter(([key]) => key !== 'command'))} names={names} /></Box>}
-        <Button disabled={busy} onClick={() => { void inspect(selected); }}>{t('Serverstand erneut laden', 'Reload server state')}</Button>
+        <Button title={translate('Den aktuellen Serverstand erneut laden', 'Reload the current server state')} disabled={busy} onClick={() => { void inspect(selected); }}>{t('Serverstand erneut laden', 'Reload server state')}</Button>
         <Typography variant="h6">2. {t('Korrektur', 'Correction')}</Typography>
         <CommandFields names={names} assetOptions={[...assets.entries()]} value={payload} onChange={(value) => { setPayload(value as Record<string, unknown>); setReviewed(false); }} />
         <TextField required multiline label={t('Begründung', 'Resolution note')} value={note} slotProps={{ htmlInput: { maxLength: 2000 } }} onChange={(e) => setNote(e.target.value)} />
         <FormControlLabel label={t('Serverstand und Korrektur geprüft. Der Server validiert erneut.', 'I reviewed current state and the correction. The server will validate it again.')} control={<Checkbox checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />} />
-        <Button variant="contained" disabled={busy || !context || !reviewed || !note.trim()} onClick={() => { void submit(); }}>{t('Als neue Aktion senden', 'Submit as a new action')}</Button>
-        <Button disabled={busy} onClick={() => setSelected(null)}>{t('Zurück', 'Back')}</Button>
+        <Button title={translate('Die geprüfte Korrektur als neue Aktion senden', 'Submit the reviewed correction as a new action')} variant="contained" disabled={busy || !context || !reviewed || !note.trim()} onClick={() => { void submit(); }}>{t('Als neue Aktion senden', 'Submit as a new action')}</Button>
+        <Button title={translate('Zur Konfliktübersicht zurückkehren', 'Return to the conflict list')} disabled={busy} onClick={() => setSelected(null)}>{t('Zurück', 'Back')}</Button>
       </> : <>
         {failures.filter((f) => !resolved.includes(f.idempotencyKey)).map((failure) => <Stack key={failure.idempotencyKey} spacing={1}>
           <Typography>{failure.type} · {failure.status} · {new Date(failure.timestamp).toLocaleString()}</Typography>
           <Alert severity="warning">{failure.error}</Alert>
-          <Button onClick={() => { void inspect(failure); }}>{t('Prüfen und korrigieren', 'Inspect and correct')}</Button>
-          <Button disabled={discarding} onClick={() => onDiscard(failure.idempotencyKey)}>{t('Ohne Wiederholung archivieren', 'Archive without retry')}</Button>
+          <Button title={translate('Konflikt öffnen und Korrektur prüfen', 'Open the conflict to review a correction')} onClick={() => { void inspect(failure); }}>{t('Prüfen und korrigieren', 'Inspect and correct')}</Button>
+          <Button title={translate('Den Konflikt ohne erneutes Senden archivieren', 'Archive this conflict without resubmitting')} disabled={discarding} onClick={() => onDiscard(failure.idempotencyKey)}>{t('Ohne Wiederholung archivieren', 'Archive without retry')}</Button>
         </Stack>)}
         {!failures.filter((f) => !resolved.includes(f.idempotencyKey)).length && <Typography>{t('Keine offenen Fehler.', 'No unresolved failures.')}</Typography>}
       </>}
-    </Stack></DialogContent><DialogActions><Button onClick={() => { setSelected(null); onClose(); }}>{t('Schließen', 'Close')}</Button></DialogActions>
+    </Stack></DialogContent><DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => { setSelected(null); onClose(); }}>{t('Schließen', 'Close')}</Button></DialogActions>
   </Dialog>;
 }
 

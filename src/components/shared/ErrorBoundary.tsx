@@ -1,5 +1,6 @@
+import { Button } from './ActionButtons';
 import { Component, type ReactNode } from 'react';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { translate } from '../../utils/naming';
 
 interface Props {
@@ -28,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                         {this.state.error?.message}
                     </Typography>
-                    <Button variant="contained" onClick={() => this.setState({ hasError: false, error: null })}>
+                    <Button title={translate('Den fehlerhaften Bildschirm erneut laden', 'Retry loading the failed screen')} variant="contained" onClick={() => this.setState({ hasError: false, error: null })}>
                         {translate('Erneut versuchen', 'Try again')}
                     </Button>
                 </Box>

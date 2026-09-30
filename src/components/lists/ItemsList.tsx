@@ -1,5 +1,6 @@
+import { IconButton, Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Paper, Stack, TextField,  Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -8,7 +9,7 @@ import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock } from '../../utils/stock';
-import { useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import { CatalogInstructionsDialog } from './CatalogInstructionsDialog';
 
@@ -80,16 +81,16 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         { field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 },
         { field: 'events', headerName: t('Events', 'Events'), width: 145 },
         { field: 'info', headerName: t('Hinweis', 'Instructions'), width: 90, sortable: false, filterable: false,
-            renderCell: ({ row }) => <Tooltip title={t('Besondere Anweisungen anzeigen', 'Show special instructions')}>
-                <IconButton color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
-                    onClick={(event) => { event.stopPropagation(); setInfoItem(row.item); }}>
-                    <InfoOutlinedIcon fontSize="small" />
-                </IconButton>
-            </Tooltip> },
+            renderCell: ({ row }) =>
+              <IconButton title={t('Besondere Anweisungen anzeigen', 'Show special instructions')} color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
+                  onClick={(event) => { event.stopPropagation(); setInfoItem(row.item); }}>
+                  <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+             },
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
-                <Tooltip title={t('Bearbeiten', 'Edit')}><IconButton size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                <Tooltip title={t('Löschen', 'Delete')}><IconButton size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+              <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>
+              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
             </Stack> } satisfies GridColDef<ItemRow>] : []),
     ];
 
@@ -105,7 +106,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />
         {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
             <Typography sx={{ fontWeight: 700 }}>{t(`${selectedIds.size} Artikel ausgewählt`, `${selectedIds.size} items selected`)}</Typography>
-            <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
+            <Button title={translate('Das Löschen der ausgewählten Artikel bestätigen', 'Review deletion of the selected items')} color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
                 {t('Auswahl löschen', 'Delete selected')}
             </Button>
         </Paper>}
@@ -119,7 +120,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                     '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
         </Box>
         {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
-        {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+        {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
         <CatalogInstructionsDialog open={Boolean(infoItem)} title={infoItem?.name ?? ''} hint={infoItem?.hint}
             onClose={() => setInfoItem(null)} />
     </Box>;

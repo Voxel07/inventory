@@ -1,17 +1,31 @@
+import { Button } from '../shared/ActionButtons';
 import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, effectiveAccess } from '../../utils/access';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
-import { Alert, Box, Button, DialogActions, DialogContent, DialogTitle, Divider,
-  InputAdornment, ListSubheader, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  InputAdornment,
+  ListSubheader,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { useItems } from '../../hooks/useItems';
 import { EVENT_TYPES, type GeneralOrderSummary, type Item } from '../../types';
-import { useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
@@ -125,14 +139,14 @@ export function GeneralOrders() {
       status: t(...statusLabels[order.status ?? 'draft']),
       statusColor,
       actions: <>
-        <Button onClick={() => setWorkflow({ order, action: 'history' })}>{t('Verlauf', 'History')}</Button>
-        {order.status === 'draft' && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <><Button size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
-        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('Vorbereiten', 'Prepare')}</Button>}
-        {order.status === 'preparing' && canOperateWarehouse(user) && <Button onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
-        {order.status === 'ready' && canPerformCustody(user) && <Button size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('Ausgeben', 'Pick up')}</Button>}
-        {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('Rückgabe erfassen', 'Record return')}</Button>}
-        {order.status === 'returned' && canPerformCustody(user) && <Button size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
-        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <Button size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
+        <Button title={translate('Den Verlauf dieser Bestellung anzeigen', 'Display the history of this order')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('Verlauf', 'History')}</Button>
+        {order.status === 'draft' && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <><Button title={translate('Artikel und Mengen dieser Bestellung bearbeiten', 'Edit this order\'s items and quantities')} size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button title={translate('Diese Bestellung zur Bearbeitung einreichen', 'Submit this order for processing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
+        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('Vorbereitete Mengen und Gerätezuordnungen erfassen', 'Enter prepared quantities and asset assignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('Vorbereiten', 'Prepare')}</Button>}
+        {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('Diese Bestellung abholbereit melden', 'Mark this order ready for pickup')} onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
+        {order.status === 'ready' && canPerformCustody(user) && <Button title={translate('Abholung und Verantwortlichen erfassen', 'Record pickup and the responsible person')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('Ausgeben', 'Pick up')}</Button>}
+        {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('Rückgabemengen und Zustand erfassen', 'Enter return quantities and condition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('Rückgabe erfassen', 'Record return')}</Button>}
+        {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('Diese Bestellung abschließen', 'Close this order')} size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
+        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <Button title={translate('Diese Bestellung stornieren', 'Cancel this order')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
       </>,
     };
   }
@@ -141,7 +155,7 @@ export function GeneralOrders() {
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
       <Box><Typography variant="h4">{t('Allgemeine Bestellungen', 'General orders')}</Typography>
         <Typography color="text.secondary">{t('Artikel für Catering, Sponsorenzelte, Bühnen und andere Zwecke.', 'Items for catering, sponsor tents, stages, and other purposes.')}</Typography></Box>
-      <Button disabled={effectiveAccess(user) === 'read_only'} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
+      <Button title={translate('Eine neue allgemeine Bestellung anlegen', 'Create a new general order')} disabled={effectiveAccess(user) === 'read_only'} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
       <TextField select size="small" label={t('Event auswählen', 'Select event')} value={selectedEventId}
@@ -196,7 +210,7 @@ export function GeneralOrders() {
               ] : [];
             })}
           </TextField>
-          {!activeEvents.length && <Alert severity="info" action={<Button component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
+          {!activeEvents.length && <Alert severity="info" action={<Button title={translate('Die Eventübersicht öffnen', 'Open the event overview')} component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
           <Divider />
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
           <CatalogSearchField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(value) => { setItemSearch(value); setItemPage(1); }} />
@@ -213,13 +227,13 @@ export function GeneralOrders() {
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
                   <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
                     onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
-                  <Button size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
+                  <Button title={translate('Diesen Artikel aus der Bestellung entfernen', 'Remove this item from the order')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
                 </Stack>
               </Paper>)}
             </Stack>
           </Box>}
-        </Stack></DialogContent><DialogActions><Button onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
-          <Button type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>{t('Speichern', 'Save')}</Button></DialogActions>
+        </Stack></DialogContent><DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
+          <Button title={translate('Die Bestellung mit den eingegebenen Mengen speichern', 'Save this order with the entered quantities')} type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>{t('Speichern', 'Save')}</Button></DialogActions>
       </Box>
     </Dialog>
 
