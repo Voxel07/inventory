@@ -37,7 +37,7 @@ flowchart TD
 
     CW -- health-checked --> T1
     CW -- health-checked --> T2
-    DB1 -- streaming replication --> RP
+    DB1 -- logical replication --> RP
     BE1 --> G
     BE2 --> G
     BE1 --> DB1

@@ -1,10 +1,10 @@
 # Event-driven domain architecture
 
-This document completes the target architecture in `REQUIREMENTS_ARCHITECTURE.md` with the operational gaps tracked in [FEATURE_GAP_ANALYSIS.md](FEATURE_GAP_ANALYSIS.md). It is the implementation contract for the Quarkus backend. The system is a modular monolith: commands and strongly consistent invariants remain inside one PostgreSQL transaction, while committed domain events drive projections, notifications, SSE invalidation, integrations, and reporting.
+This document completes the target architecture in `REQUIREMENTS_ARCHITECTURE.md` with the operational capabilities and defects tracked in the [repository review](REPOSITORY_REVIEW.md). It is the implementation contract for the Quarkus backend. The system is a modular monolith: commands and strongly consistent invariants remain inside one PostgreSQL transaction, while committed domain events support notifications, SSE invalidation, integrations and report freshness. Current operational report snapshots are manually rebuilt, rather than maintained by an automatic projection worker.
 
 ## Delivery status — 30 September 2026
 
-F01–F23 have source implementations, including contributor work, reminders, scanning and loans. [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) records behavior and verification limits. This document defines domain boundaries and invariants; it does not certify that every implementation follows them. [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) records C01–C08 source consolidation and the pending runtime release gate. Runtime, fresh PostgreSQL and full desktop/mobile acceptance remain pending.
+F01–F23 have source implementations, including contributor work, reminders, scanning and loans. The [repository review](REPOSITORY_REVIEW.md) records behavior, ownership, defects, C01–C08 consolidation limits and the pending C09 gate. This document defines domain boundaries and invariants; it does not certify that every implementation follows them. Runtime, fresh PostgreSQL and full desktop/mobile acceptance remain pending.
 
 ## System shape
 
@@ -86,7 +86,8 @@ Each order line stores `requested`, `allocated`, `reserved`, `prepared`, `handed
 
 ```text
 requested >= allocated >= reserved >= prepared >= handed_over
-handed_over = returned + consumed + damaged + missing + written_off + outstanding
+handed_over = returned + consumed + damaged + written_off + outstanding
+missing <= outstanding
 ```
 
 `missing` is an observed unresolved state and therefore remains outstanding. Return commands submit the current unresolved missing total; only a positive increase appends another `missing` reconciliation, so repeating a check does not duplicate audit rows. A late return appends `returned_late` and clears the missing quantity. Damage can be reconciled at handover while its repair case continues after the order itself is eligible to close.
@@ -198,7 +199,7 @@ Canonical roles are `hq_admin`, `warehouse_crew`, `marshal`, `event_planner`, `m
 
 ## Reporting and projections
 
-Operational list APIs may query normalized tables directly. Expensive cross-context reports use rebuildable projections fed by domain events: availability by site, event demand, unresolved returns, missing assets, repair backlog, utilization, maintenance due, consumable usage, purchase history, document index, count accuracy, and write-offs. Projection lag is displayed for planning screens; command validation never relies on an asynchronous projection.
+Operational list APIs may query normalized tables directly. Current cross-context reports use manually rebuildable snapshots of transactional data: events, availability, returns, repairs, maintenance, purchases, counts and movements. Domain-event/table watermarks and time indicate freshness; no automatic report projection worker exists. Command validation never relies on a report snapshot. Additional projections require explicit implementation and acceptance.
 
 Net deficit is:
 

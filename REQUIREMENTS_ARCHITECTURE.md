@@ -40,14 +40,14 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 
 ### Current delivery status — 30 September 2026
 
-F01–F23 have frontend workflows and backend implementations in source. The [feature matrix](docs/FEATURE_GAP_ANALYSIS.md) records coverage; [implementation progress](docs/IMPLEMENTATION_PROGRESS.md) records behavior and verification limits. The [current architecture review](docs/ARCHITECTURE_REVIEW.md) records remaining duplication and boundary violations.
+F01–F23 have frontend workflows and backend implementations in source. The [repository review](docs/REPOSITORY_REVIEW.md) consolidates their ownership map, operational semantics, source-confirmed defects, C01–C09 status and verification limits. Source presence does not imply conformance with every requirement.
 
 | Area | Current state |
 |---|---|
 | F01–F18 | Event planning/results, purchasing/receiving, location stock, transfers/counts/lots, orders/custody, repairs/maintenance, hierarchy, offline correction, reporting and operator tools present |
 | F19–F23 | Ownership/commitments, member self-service, action inbox/reminders, camera/code management and borrowing/rental lifecycle present |
 | Consolidation | One disposable SQL baseline; shared query feedback, snackbar, catalog dialogs and warehouse service; unused catalog view and CRUD aliases removed; category/catalog/general-order persistence follows ORM boundaries |
-| Architectural gaps | Direct persistence remains in six services and two resource-layer classes; order pickers and transport contracts still overlap |
+| Architectural gaps | Direct persistence extraction and shared order/transport controls exist; response mapping still chooses database work, account isolation and draft resets are incomplete, and maintenance policy adoption has regressed. See the current review for exact findings. |
 | Verification | Current frontend non-emitting typecheck and targeted lint, Java syntax and schema structural inspection only; backend compilation, fresh PostgreSQL initialization and responsive/role acceptance pending |
 
 “Implemented” below means source coverage, not release verification. Earlier build/test results do not validate subsequent changes.
@@ -140,7 +140,7 @@ Additional frontend rules:
 - Pages and generic utilities do not call the HTTP client directly. Services own transport contracts, including item/SKU, asset-code, and exact order-code resolution.
 - The `stock` projection returned with an item is authoritative. The client must not download global transaction, damage, or order ledgers merely to recompute current stock.
 - Route access and navigation visibility share the same access helpers. Hiding a navigation entry is a UX measure only; the backend remains the authorization boundary.
-- Referential stability is provided by React Compiler, not by hand. `useMemo`, `useCallback`, and `React.memo` are used nowhere; values are computed directly during render, and multi-statement derivations use an inline immediately-invoked function. Do not reintroduce manual memoization — the compiler is configured through `reactCompilerPreset()` and enforced by the `react-compiler/react-compiler` lint rule at error level.
+- React Compiler supplies render memoization through `reactCompilerPreset()` and the `react-compiler/react-compiler` lint rule at error level. Compute values directly during render; do not introduce manual `useMemo`, `useCallback` or `React.memo` by default. Current source still uses `useMemo` in CSV planning and `useCallback` in the object URL subscription hook. These are existing exceptions to review, not evidence of universal removal; subscription identity and resource cleanup must remain correct when changing that hook.
 - When an effect must invoke a render-scoped function without making that function a reactive dependency, use `useEffectEvent`. It is the sanctioned replacement for the `useCallback` that the compiler no longer needs.
 - Client-side pagination of already-loaded collections goes through `useClientPagination`. `SHOW_ALL_PAGE_SIZE` (`-1`) is the canonical "all entries" sentinel and must keep working; the hook clamps the current page during render rather than syncing it in an effect.
 - Heavy dependencies that are needed only by an explicit user action are imported with `await import()` inside the handler that needs them, never at module scope. `jspdf` (with its `html2canvas` and `dompurify` transitives) is the current example.
@@ -288,11 +288,11 @@ Authenticated users may stage a return-placement image. Once the return submissi
 
 ## 11. Verification policy and current evidence
 
-Repository instructions in `.codex/AGENTS.md` prohibit application builds, packaging and test suites unless the user explicitly requests them. Non-emitting frontend type checking, targeted lint and source/schema inspection are permitted. See [IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md) for evidence and remaining acceptance work. Historical F19 build/backend regression results apply to that earlier revision only.
+Repository instructions in `.codex/AGENTS.md` prohibit application builds, packaging and test suites unless the user explicitly requests them. Non-emitting frontend type checking, targeted lint and source/schema inspection are permitted. See the [repository review](docs/REPOSITORY_REVIEW.md) for checks actually executed and the remaining C09 acceptance and performance measurements. Historical F19 build/backend regression results apply to that earlier revision only.
 
 ## 12. Current consolidation priorities
 
-The [architecture review](docs/ARCHITECTURE_REVIEW.md) is the canonical cleanup backlog. Priorities are focused ORM collaborators, shared catalog selection, one home for transport contracts, shared mutation feedback, and a clearer invalidation policy. Preserve stock locks, idempotency, role/scope checks and immutable history while extracting reusable mechanics.
+The [repository review](docs/REPOSITORY_REVIEW.md) is the canonical review and refactoring backlog. Priorities are visibility/account isolation, safe count/return transitions, consistent maintenance and stock projections, bounded query loading and simpler invalidation/draft ownership. Focused ORM collaborators, shared catalog controls, transport converters and mutation feedback already exist. Preserve stock locks, idempotency, role/scope checks and immutable history while completing their adoption.
 
 ## 13. Frontend consolidation state
 
@@ -300,8 +300,8 @@ The [architecture review](docs/ARCHITECTURE_REVIEW.md) is the canonical cleanup 
 - Capability-specific resource APIs/hooks, `useCrudManager`, `useClientPagination`, `useProgressiveList`, `OperationForm`, stock lookups, quantity conversion, media controls and order-detail sections are existing reuse boundaries.
 - `QueryFeedback` now shares list loading/error/empty presentation. Errors suppress empty-result messages. `AppSnackbar` shares authenticated/login notifications. Delete hooks use the same invalidation helper as create/update.
 - DataGrid virtualization and the `SHOW_ALL_PAGE_SIZE` sentinel remain supported. PDF generation is loaded on demand. React Compiler supplies memoization.
-- Catalog item selection remains duplicated across `FactionOrderForm`, `OrderPickListTable` and `GeneralOrders`. Share selection presentation and pure filtering while preserving preparation reservations, exact asset selection and order-specific permissions.
+- `FactionOrderForm`, `OrderPickListTable` and `GeneralOrders` use shared catalog filtering/search and quantity controls. Extend adoption where behavior matches while preserving preparation reservations, assembly checklists, exact asset selection and order-specific permissions.
 
 ### Derived state synchronization
 
-`react-hooks/set-state-in-effect` is enabled as an error. Form drafts use guarded source changes, allowed selections derive from current options, and object URL previews use an external-resource subscription with cleanup. Full frontend lint passes. Reopen/refetch/permission and preview behavior still needs browser acceptance under C09 in [ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md). No new bundle-size measurement is claimed.
+`react-hooks/set-state-in-effect` is enabled as an error. Form drafts use guarded source changes, allowed selections derive from current options, and object URL previews use an external-resource subscription with cleanup. Frontend lint passes, but faction preparation does not reset its source-location draft consistently. Reopen/refetch/permission and preview behavior still needs browser acceptance under C09 in the [repository review](docs/REPOSITORY_REVIEW.md). No new bundle-size measurement is claimed.

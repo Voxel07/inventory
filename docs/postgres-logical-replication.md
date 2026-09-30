@@ -38,9 +38,12 @@ named volumes and contain no upgrade compatibility paths.
 
 ## 3. Initialize the application schema
 
-Start `inventory-api` against the primary once so Hibernate creates the current
-schema. Logical replication does not copy schema definitions, so copy only the
-schema to the storage database before creating the subscription:
+Start `inventory-api` with the production profile against an empty disposable
+primary so Flyway runs the canonical `V1.0.0__init.sql` baseline and Hibernate
+validates it. The development profile uses Hibernate update and is not the
+production schema initialization procedure. Logical replication does not copy
+schema definitions, so copy only the matching schema to the storage database
+before creating the subscription:
 
 ```powershell
 pg_dump --schema-only --no-owner --no-privileges `
@@ -52,8 +55,11 @@ psql `
   --file=inventory-schema.sql
 ```
 
-Apply future schema changes to the storage database before applying them to the
-publisher. DDL and sequence values are not replicated.
+DDL and sequence values are not replicated. Current application data is
+disposable: after editing the baseline/entities, recreate empty primary and
+subscriber databases and repeat initialization and subscription setup. This
+repository does not provide incremental upgrades for existing data. These
+instructions are an operator procedure; no database was changed by the review.
 
 ## 4. Create the publication
 
