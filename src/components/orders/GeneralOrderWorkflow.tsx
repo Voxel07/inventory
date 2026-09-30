@@ -3,24 +3,25 @@ import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Stack, Typography } from '@mui/material';
-import type { GeneralOrder, Item } from '../../types';
+import type { GeneralOrderSummary, Item } from '../../types';
 import type { GeneralOrderReturnInput } from '../../types/order';
 import { optionalText } from '../../utils/inputValues';
 import { getItemAssets } from '../../services/inventoryService';
-import { generalOrderCommand } from '../../services/orderService';
+import { generalOrderCommand, generalOrderApi } from '../../services/orderService';
 import { OperationForm, type Field, type Values } from '../operations/OperationForm';
 import { useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
-export function GeneralOrderWorkflow({ order, action, items, onClose }: { order: GeneralOrder; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; onClose: () => void }) {
+export function GeneralOrderWorkflow({ order, action, items, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; onClose: () => void }) {
+  const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
   const lookup = useStockLookups();
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
   const t = useLocalizedText(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
     const ids = Object.keys(order.requestedQuantities).filter((id) => items.find((item) => item.id === id)?.trackingMode === 'serialized');
     return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getItemAssets(id)] as const)));
-  } });
+  }, enabled: action !== 'history' });
   const ids = Object.keys(action === 'return' ? order.handedOverQuantities : order.requestedQuantities);
   const outstanding = (id: string) => (order.handedOverQuantities[id] ?? 0) - (order.returnedQuantities[id] ?? 0) - (order.consumedQuantities[id] ?? 0) - (order.damagedQuantities?.[id] ?? 0) - (order.writtenOffQuantities?.[id] ?? 0);
   const fields: Field[] = ids.flatMap((id): Field[] => {
@@ -69,8 +70,10 @@ export function GeneralOrderWorkflow({ order, action, items, onClose }: { order:
     }
     return generalOrderCommand(order.id, action, { notes: optionalText(values.notes), idempotencyKey: key });
   }}>
+    {history.error && <Alert severity="error">{history.error.message}</Alert>}
+    {history.isLoading && <Typography>{t('Verlauf wird geladen…', 'Loading history…')}</Typography>}
     {assets.error && <Alert severity="error">{assets.error.message}</Alert>}
     {action === 'pickup' && <Alert severity="info">{t('Reservierte Artikel werden jetzt übergeben.', 'The reserved items will now be handed over.')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}
-    {action === 'history' && <Stack spacing={2}>{order.history?.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.actorName} · {new Date(entry.timestamp).toLocaleString()}</Typography><Typography>{entry.notes}</Typography></Stack>)}</Stack>}
+    {action === 'history' && <Stack spacing={2}>{history.data?.history.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.actorName} · {new Date(entry.timestamp).toLocaleString()}</Typography><Typography>{entry.notes}</Typography></Stack>)}</Stack>}
   </OperationForm>;
 }

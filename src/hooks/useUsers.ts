@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { getAssignableUsers, getUsers, updateUserPermissions } from '../services/userService';
 import type { User, UserPermissionsFormData } from '../types';
 import { useProgressiveList } from './useProgressiveList';
@@ -8,10 +8,8 @@ export function useUsers() {
 }
 
 export function useUpdateUserPermissions() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: UserPermissionsFormData }) => updateUserPermissions(userId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 }
 

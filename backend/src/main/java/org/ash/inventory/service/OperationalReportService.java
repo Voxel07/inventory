@@ -6,20 +6,24 @@ import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.*;
 import org.ash.inventory.resource.ApiException;
-import org.ash.inventory.resource.ApiMapper;
-import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 
 @ApplicationScoped
 public class OperationalReportService {
-    @jakarta.inject.Inject MaintenanceEvaluationService maintenancePolicy;
+    private static final int MAX_FILTER_VARIANTS = 64;
+    private static final int MAX_CACHED_ROWS = 100000;
+    private static final long FILTER_CACHE_SECONDS = 300;
     @Inject org.ash.inventory.orm.OperationalReportOrm orm;
     @Inject ActorService actors;
-    @Inject ApiMapper mapper;
     @Inject PositionService positions;
     @Inject CustodyBalanceService custody;
     @Inject InventoryOperationsService inventory;
+    @Inject ApiQueryService queries;
+    private record FilterKey(String name, long version, Instant generation, Map<String, String> filters) {}
+    private record Filtered(List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals, Instant cachedAt) {}
+    private final Map<FilterKey, Filtered> filteredCache = new LinkedHashMap<>(16, 0.75f, true);
+    private int cachedRows;
     public static final Map<String, String> DEFINITIONS = new LinkedHashMap<>();
     static {
         DEFINITIONS.put("events", "One row per event/item, including planned-only items. Planned is total forecast; requested is active order demand. Handed over is historical deployment and survives returns. Outstanding = handed over minus good/damaged returns, consumption and write-offs. Missing remains outstanding. Date filter uses event start date.");
@@ -36,15 +40,62 @@ public class OperationalReportService {
 
     @Transactional
     public View read(String name, Map<String, String> filters, int page, int size) {
-        actors.requireWarehouse(); validate(name);
         if (page < 0 || page > 100000 || size < 1 || size > 200) throw ApiException.badRequest("Invalid report page bounds");
+        return readGeneration(name, filters, (long) page * size, size, null);
+    }
+
+    @Transactional
+    public View export(String name, Map<String, String> filters, Instant generation) {
+        if (generation == null) throw ApiException.badRequest("Export requires a report generation");
+        return readGeneration(name, filters, 0, Integer.MAX_VALUE, generation);
+    }
+
+    private View readGeneration(String name, Map<String, String> filters, long offset, int limit, Instant generation) {
+        actors.requireWarehouse(); validate(name);
         validateDates(filters);
-        var report = orm.find(OperationalReport.class, name);
-        if (report == null) return new View(name, DEFINITIONS.get(name), null, null, true, 0, List.of(), List.of());
-        var rows = report.rows.stream().filter(row -> matches(row, filters)).toList();
-        return new View(name, DEFINITIONS.get(name), report.startedAt, report.generatedAt,
-                !Objects.equals(report.sourceToken, sourceToken()) || report.generatedAt.isBefore(Instant.now().minusSeconds(300)), rows.size(), rows.stream().skip((long) page * size).limit(size).toList(),
-                filters.containsKey("itemId") ? monthlyTotals(name, rows) : List.of());
+        var header = orm.header(name);
+        if (generation != null && (header == null || !generation.equals(header.generatedAt())))
+            throw ApiException.conflict("Report generation changed during export; restart the export");
+        if (header == null) return new View(name, DEFINITIONS.get(name), null, null, true, 0, List.of(), List.of());
+        var key = new FilterKey(name, header.version(), header.generatedAt(), Collections.unmodifiableMap(new TreeMap<>(filters)));
+        var filtered = cached(key);
+        if (filtered == null) {
+            var report = orm.find(OperationalReport.class, name);
+            if (report == null || report.version != header.version() || !Objects.equals(report.generatedAt, header.generatedAt()))
+                throw ApiException.conflict("Report generation changed while reading; reload the report");
+            var rows = report.rows.stream().filter(row -> matches(row, filters))
+                    .map(row -> Collections.unmodifiableMap(new LinkedHashMap<>(row))).toList();
+            filtered = new Filtered(rows, filters.containsKey("itemId") ? monthlyTotals(name, rows) : List.of(), Instant.now());
+            cache(key, filtered);
+        }
+        // Cache only immutable snapshot filtering. Freshness is checked against committed sources on every request.
+        int from = (int) Math.min(offset, filtered.rows().size());
+        int to = (int) Math.min((long) from + limit, filtered.rows().size());
+        return new View(name, DEFINITIONS.get(name), header.startedAt(), header.generatedAt(),
+                !Objects.equals(header.sourceToken(), sourceToken()) || header.generatedAt().isBefore(Instant.now().minusSeconds(300)),
+                filtered.rows().size(), filtered.rows().subList(from, to), filtered.monthlyTotals());
+    }
+
+    private synchronized Filtered cached(FilterKey key) {
+        var iterator = filteredCache.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            if (entry.getValue().cachedAt().isBefore(Instant.now().minusSeconds(FILTER_CACHE_SECONDS))) {
+                cachedRows -= entry.getValue().rows().size(); iterator.remove();
+            }
+        }
+        return filteredCache.get(key);
+    }
+
+    private synchronized void cache(FilterKey key, Filtered value) {
+        if (value.rows().size() > MAX_CACHED_ROWS) return;
+        var previous = filteredCache.put(key, value);
+        if (previous != null) cachedRows -= previous.rows().size();
+        cachedRows += value.rows().size();
+        var iterator = filteredCache.entrySet().iterator();
+        while (filteredCache.size() > MAX_FILTER_VARIANTS || cachedRows > MAX_CACHED_ROWS) {
+            cachedRows -= iterator.next().getValue().rows().size(); iterator.remove();
+        }
     }
 
     private List<Map<String, Object>> monthlyTotals(String name, List<Map<String, Object>> rows) {
@@ -56,7 +107,7 @@ public class OperationalReportService {
             for (String metric : name.equals("purchases") ? List.of("ordered", "received", "openDelivery", "valueCents") : List.of("quantity"))
                 total.put(metric, ((Number) total.getOrDefault(metric, 0L)).longValue() + ((Number) source.getOrDefault(metric, 0)).longValue());
         }
-        return new ArrayList<>(grouped.values());
+        return grouped.values().stream().map(Collections::unmodifiableMap).toList();
     }
 
     @Transactional
@@ -78,16 +129,13 @@ public class OperationalReportService {
     private void validate(String name) { if (!DEFINITIONS.containsKey(name)) throw ApiException.notFound("Unknown report"); }
     private String sourceToken() {
         var token = new StringBuilder(LocalDate.now(ZoneOffset.UTC).toString());
-        // Domain events drive invalidation; table watermarks also catch legacy commands without events.
-        for (String type : List.of("Item", "StorageLocation", "Warehouse", "EventOccurrence", "FactionOrder", "FactionOrderLine", "GeneralOrder",
-                "UserAccount", "Vendor", "StockReservation", "InventoryPosition", "InventoryLot", "AssetInstance", "ReturnSubmission", "DamageReport", "RepairCase", "MaintenanceSchedule", "MaintenanceRecord",
-                "PurchaseOrder", "PurchaseOrderLine", "InventoryCountSession", "InventoryCountLine", "StockTransaction", "EquipmentCommitment", "LoanArrangement", "MemberRequest")) {
-            String timestamp = type.equals("MaintenanceRecord") ? "createdAt" : "updatedAt";
-            Object[] values = orm.watermark(type, timestamp);
-            token.append('|').append(type).append(':').append(values[0]).append(':').append(values[1]);
+        // Sort explicitly: SQL UNION result order is not guaranteed.
+        var values = new ArrayList<>(orm.watermarks());
+        values.sort(Comparator.comparing(row -> (String) row[0]));
+        for (var row : values) {
+            token.append('|').append(row[0]).append(':').append(row[1]).append(':').append(row[2]);
         }
-        Object[] events = orm.eventWatermark();
-        return token.append('|').append(events[0]).append(':').append(events[1]).toString();
+        return token.toString();
     }
     private <T> List<T> all(Class<T> type) { return orm.all(type); }
     private Map<String, Object> row(Object... pairs) {
@@ -109,11 +157,15 @@ public class OperationalReportService {
     }
     private List<Map<String, Object>> events() {
         var rows = new ArrayList<Map<String, Object>>();
-        for (var event : all(EventOccurrence.class)) {
-            var view = mapper.event(event);
+        var events = all(EventOccurrence.class);
+        var views = queries.projectEvents(events);
+        var items = all(Item.class).stream().collect(java.util.stream.Collectors.toMap(i -> i.id, i -> i));
+        for (int index = 0; index < events.size(); index++) {
+            var event = events.get(index);
+            var view = views.get(index);
             for (String id : view.itemIds()) {
                 var row = row("id", event.id + ":" + id, "eventId", event.id, "event", event.name, "date", event.startDate, "status", event.status, "planned", view.plannedQuantities().getOrDefault(id, 0));
-                item(row, orm.find(Item.class, UUID.fromString(id)));
+                item(row, items.get(UUID.fromString(id)));
                 view.quantities().forEach((metric, values) -> row.put(metric, values.getOrDefault(id, 0)));
                 rows.add(row);
             }
@@ -122,44 +174,51 @@ public class OperationalReportService {
     }
     private List<Map<String, Object>> availability() {
         var rows = new ArrayList<Map<String, Object>>();
+        var items = all(Item.class);
+        var stock = inventory.readStock(items);
+        var orderedPositions = stock.values().stream().flatMap(s -> s.policy().positions().stream()).toList();
+        var reservations = positions.reservedAt(items, orderedPositions);
         var located = new HashMap<UUID, Integer>();
-        for (var p : all(InventoryPosition.class)) {
+        for (var p : orderedPositions) {
             if (p.item.trackingMode == DomainEnums.TrackingMode.serialized) continue;
             located.merge(p.item.id, p.quantityOnHand, Integer::sum);
-            int reserved = positions.reservedAt(p);
+            int reserved = reservations.getOrDefault(p.id, 0);
             var row = row("id", p.id, "date", LocalDate.now(ZoneOffset.UTC), "tracking", p.item.trackingMode, "lot", p.lot == null ? null : p.lot.lotNumber,
                     "onHand", p.quantityOnHand, "reserved", reserved, "damaged", p.quantityDamaged, "quarantined", p.quantityQuarantined,
                     "inTransit", p.quantityInTransit, "ownership", p.item.ownershipType, "owner", p.item.ownerName,
-                    "available", !EquipmentService.freelyAvailable(p.item) || maintenanceBlocked(p.item, null) ? 0 : Math.max(0, p.availableQuantity() - reserved));
+                    "available", !EquipmentService.freelyAvailable(p.item) || !stock.get(p.item.id).policy().itemUsable() ? 0 : Math.max(0, p.availableQuantity() - reserved));
             item(row, p.item); location(row, p.location); rows.add(row);
         }
-        for (var item : all(Item.class)) {
+        for (var item : items) {
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) continue;
-            int unlocated = Math.max(0, inventory.stock(item).onHand() - located.getOrDefault(item.id, 0));
+            int unlocated = Math.max(0, stock.get(item.id).physical().onHand() - located.getOrDefault(item.id, 0));
             if (unlocated == 0) continue;
             var row = row("id", item.id + ":unlocated", "date", LocalDate.now(ZoneOffset.UTC), "tracking", item.trackingMode,
                     "status", "location_reconciliation_required", "ownership", item.ownershipType, "owner", item.ownerName, "onHand", unlocated, "available", 0);
             item(row, item); location(row, null); rows.add(row);
         }
         for (var a : all(AssetInstance.class)) {
-            var stock = StockPolicy.classify(a);
-            boolean available = stock.available() > 0 && a.currentLocation != null && EquipmentService.freelyAvailable(a.item) && !maintenanceBlocked(a.item, a);
+            var state = StockPolicy.classify(a);
+            var policy = stock.get(a.item.id).policy();
+            boolean available = state.available() > 0 && a.currentLocation != null && EquipmentService.freelyAvailable(a.item) && policy.itemUsable() && policy.usable(a);
             var row = row("id", a.id, "date", LocalDate.now(ZoneOffset.UTC), "tracking", "serialized", "asset", a.assetCode, "status", a.availabilityStatus,
                     "ownership", a.item.ownershipType, "owner", a.item.ownerName,
-                    "onHand", stock.onHand(), "available", available ? 1 : 0, "reserved", stock.reserved(),
-                    "damaged", stock.damaged(), "inTransit", stock.inTransit(), "outstanding", stock.checkedOut());
+                    "onHand", state.onHand(), "available", available ? 1 : 0, "reserved", state.reserved(),
+                    "damaged", state.damaged(), "inTransit", state.inTransit(), "outstanding", state.checkedOut());
             item(row, a.item); location(row, a.currentLocation); rows.add(row);
         }
         return rows;
     }
     private List<Map<String, Object>> returns() {
         var rows = new ArrayList<Map<String, Object>>();
+        var events = all(EventOccurrence.class).stream().collect(java.util.stream.Collectors.toMap(e -> e.id, e -> e));
+        var items = all(Item.class).stream().collect(java.util.stream.Collectors.toMap(i -> i.id, i -> i));
         for (var balance : custody.list(false)) {
-            var event = balance.eventOccurrenceId() == null ? null : orm.find(EventOccurrence.class, balance.eventOccurrenceId());
+            var event = balance.eventOccurrenceId() == null ? null : events.get(balance.eventOccurrenceId());
             var row = row("id", balance.key(), "person", balance.person(), "eventId", balance.eventOccurrenceId(), "event", balance.event(),
                     "date", event == null ? null : event.endDate, "outstanding", balance.checkedOut(), "pendingAcknowledgement", balance.pendingQuantity(),
                     "factionOrderId", balance.factionOrderId(), "generalOrderId", balance.generalOrderId(), "assetId", balance.assetInstanceId(), "expectedReturnLocation", balance.storageLocation());
-            item(row, orm.find(Item.class, balance.itemId())); rows.add(row);
+            item(row, items.get(balance.itemId())); rows.add(row);
         }
         return rows;
     }
@@ -184,31 +243,22 @@ public class OperationalReportService {
         }
         return rows;
     }
-    private BigDecimal meter(MaintenanceSchedule s) {
-        return maintenancePolicy.meter(s);
-    }
-    private String scheduleStatus(MaintenanceSchedule s) {
-        return maintenancePolicy.status(s, Instant.now()).name();
-    }
-    private boolean maintenanceBlocked(Item item, AssetInstance asset) {
-        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, LocalDate.now())) return true;
-        if (asset != null && (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service)) return true;
-        return orm.blockingSchedules(item).stream().filter(s -> s.assetInstance == null || (asset != null && s.assetInstance.id.equals(asset.id)))
-                .anyMatch(s -> MaintenancePolicy.blocksCheckout(maintenancePolicy.status(s, Instant.now())));
-    }
     private List<Map<String, Object>> maintenance() {
         var rows = new ArrayList<Map<String, Object>>();
+        var items = all(Item.class);
+        var facts = inventory.readStock(items);
         var scheduledItems = new HashSet<UUID>();
         for (var s : all(MaintenanceSchedule.class)) {
             if (!s.active) continue;
             if (s.assetInstance == null) scheduledItems.add(s.item.id);
-            var row = row("id", s.id, "date", s.nextDueAt == null ? null : s.nextDueAt.atOffset(ZoneOffset.UTC).toLocalDate(), "status", scheduleStatus(s),
-                    "type", s.maintenanceType, "interval", s.intervalType, "nextDue", s.nextDueValue, "meter", s.intervalType == DomainEnums.MaintenanceIntervalType.date ? null : meter(s),
+            var policy = facts.get(s.item.id).policy();
+            var row = row("id", s.id, "date", s.nextDueAt == null ? null : s.nextDueAt.atOffset(ZoneOffset.UTC).toLocalDate(), "status", policy.status(s),
+                    "type", s.maintenanceType, "interval", s.intervalType, "nextDue", s.nextDueValue, "meter", s.intervalType == DomainEnums.MaintenanceIntervalType.date ? null : MaintenancePolicy.meter(MaintenancePolicy.facts(s), policy.counters(s)),
                     "warningWindow", s.warningWindow, "blocking", s.checkoutBlocking, "asset", s.assetInstance == null ? null : s.assetInstance.assetCode,
                     "responsible", s.responsiblePerson == null ? null : s.responsiblePerson.name);
             item(row, s.item); if (s.assetInstance != null) location(row, s.assetInstance.currentLocation); rows.add(row);
         }
-        for (var item : all(Item.class)) {
+        for (var item : items) {
             if (!item.active || scheduledItems.contains(item.id) || (item.nextMaintenanceDue == null && item.maintenanceStatus != DomainEnums.MaintenanceStatus.in_service)) continue;
             String status = item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service ? "in_service"
                     : item.nextMaintenanceDue.isBefore(LocalDate.now()) ? "due" : !item.nextMaintenanceDue.isAfter(LocalDate.now().plusDays(30)) ? "warning" : "healthy";

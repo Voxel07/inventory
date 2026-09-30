@@ -1,6 +1,6 @@
 # Repository review and refactoring plan
 
-A01–A06 implementation: [progress](REFACTOR_PROGRESS.md).
+A01–A06 and P01–P05 implementation: [progress](REFACTOR_PROGRESS.md). The findings below retain the reviewed revision's evidence; current implementation owners, interface changes and validation limits are recorded in the progress document. U01/U02 and C09 remain open.
 
 Reviewed **30 September 2026** against source at `af49b5a6f7d29e9d7607d6e64fbe0d42a18c9986` (clean working tree at review start). This is a source-based assessment and a plan, not an implementation or release approval. The documentation changes accompanying this report do not fix the findings below.
 
@@ -303,7 +303,7 @@ These distinctions are requirements/intent to preserve during fixes. Findings ab
 
 ## 9. Staged refactoring plan
 
-No stage has been implemented by this documentation task. No new service response cache, upgrade migration, compatibility alias, distributed service or generic mode-driven component is proposed.
+This table records the original staged plan. A01–A06 and P01–P05 have since been implemented; see [progress](REFACTOR_PROGRESS.md) for current evidence. U01/U02 and runtime/performance acceptance remain pending. Stock reads remain authoritative and request-local; the bounded P03 cache holds only filtered manual report generations. No upgrade migration, compatibility alias, distributed service or generic mode-driven component was introduced.
 
 | Stage / dependency | Work and accountable owners | Exit evidence |
 |---|---|---|

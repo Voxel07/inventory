@@ -32,9 +32,18 @@ public class PositionService {
 
     public int blocked(Item item) {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) return 0;
-        return orm.positions(item).stream().mapToInt(p -> usable(p.lot)
+        return blocked(item, orm.positions(item));
+    }
+
+    public static int blocked(Item item, List<InventoryPosition> positions) {
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized) return 0;
+        return positions.stream().mapToInt(p -> usable(p.lot)
                 && (item.trackingMode != DomainEnums.TrackingMode.lot_tracked || p.lot != null)
                 ? p.quantityQuarantined : Math.max(0, p.quantityOnHand - p.quantityDamaged)).sum();
+    }
+
+    public Map<UUID, List<InventoryPosition>> load(Collection<UUID> itemIds) {
+        return orm.positions(itemIds).stream().collect(java.util.stream.Collectors.groupingBy(p -> p.item.id));
     }
 
     public int inTransit(Item item) {
@@ -56,6 +65,31 @@ public class PositionService {
             left -= reserved;
         }
         return 0;
+    }
+
+    /** Same FEFO allocation as reservedAt(position), materialized once for a report batch. */
+    public Map<UUID, Integer> reservedAt(List<Item> items, List<InventoryPosition> orderedPositions) {
+        var itemById = items.stream().collect(java.util.stream.Collectors.toMap(i -> i.id, i -> i));
+        var remaining = new HashMap<String, Integer>();
+        for (var reservation : orm.reservations(itemById.keySet())) {
+            var source = reservation.location == null ? reservation.item.storageLocation : reservation.location;
+            if (source != null) remaining.merge(reservation.item.id + ":" + source.id, reservation.openQuantity(), Integer::sum);
+        }
+        for (var order : orm.reservedGeneralOrders()) order.preparedQuantities.forEach((id, quantity) -> {
+            var item = itemById.get(UUID.fromString(id));
+            if (item == null) return;
+            String source = order.sourceLocations.get(id);
+            if (source == null && item.storageLocation != null) source = item.storageLocation.id.toString();
+            if (source != null) remaining.merge(id + ":" + source, quantity, Integer::sum);
+        });
+        var result = new LinkedHashMap<UUID, Integer>();
+        for (var position : orderedPositions) {
+            String key = position.item.id + ":" + position.location.id;
+            int left = remaining.getOrDefault(key, 0);
+            int amount = Math.min(left, position.availableQuantity());
+            result.put(position.id, amount); remaining.put(key, left - amount);
+        }
+        return result;
     }
 
     public void reportDamage(DamageReport report) {

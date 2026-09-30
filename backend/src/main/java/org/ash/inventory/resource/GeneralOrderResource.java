@@ -26,36 +26,40 @@ import java.util.UUID;
 public class GeneralOrderResource {
     private final ActorService actors;
     private final GeneralOrderService service;
-    private final ApiMapper mapper;
     private final ApiQueryService queries;
 
-    public GeneralOrderResource(ActorService actors, GeneralOrderService service, ApiMapper mapper,
+    public GeneralOrderResource(ActorService actors, GeneralOrderService service,
             ApiQueryService queries) {
         this.actors = actors;
         this.service = service;
-        this.mapper = mapper;
         this.queries = queries;
     }
 
     @GET
-    public List<ApiResponses.GeneralOrderResponse> orders(
+    public List<ApiResponses.GeneralOrderSummaryResponse> orders(
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.generalOrders(page, size);
+    }
+
+    @GET
+    @Path("/{id}")
+    public ApiResponses.GeneralOrderResponse order(@PathParam("id") UUID id) {
+        return queries.generalOrder(id);
     }
 
     @POST
     @Transactional
     public ApiResponses.GeneralOrderResponse create(@Valid ApiModels.GeneralOrderInput input) {
         actors.current();
-        return mapper.generalOrder(service.create(input));
+        return queries.projectGeneralOrder(service.create(input));
     }
 
     @PATCH
     @Path("/{id}")
     @Transactional
     public ApiResponses.GeneralOrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.GeneralOrderInput input) {
-        return mapper.generalOrder(service.update(id, input));
+        return queries.projectGeneralOrder(service.update(id, input));
     }
 
     @POST
@@ -63,13 +67,13 @@ public class GeneralOrderResource {
     @Transactional
     public ApiResponses.GeneralOrderResponse transition(@PathParam("id") UUID id, @PathParam("action") String action,
             ApiModels.GeneralOrderPickupInput input) {
-        return mapper.generalOrder(service.transition(id, action, input));
+        return queries.projectGeneralOrder(service.transition(id, action, input));
     }
 
     @POST
     @Path("/{id}/return")
     @Transactional
     public ApiResponses.GeneralOrderResponse returnItems(@PathParam("id") UUID id, ApiModels.GeneralOrderReturnInput input) {
-        return mapper.generalOrder(service.returnItems(id, input));
+        return queries.projectGeneralOrder(service.returnItems(id, input));
     }
 }

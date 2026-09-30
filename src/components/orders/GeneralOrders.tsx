@@ -10,7 +10,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { useItems } from '../../hooks/useItems';
-import { EVENT_TYPES, type GeneralOrder, type Item } from '../../types';
+import { EVENT_TYPES, type GeneralOrderSummary, type Item } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
@@ -23,7 +23,7 @@ import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 
-const statusLabels: Record<GeneralOrder['status'], [string, string]> = {
+const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
   preparing: ['In Vorbereitung', 'Preparing'], draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
   picked_up: ['Abgeholt', 'Picked up'], partially_returned: ['Teilrückgabe', 'Partially returned'],
   returned: ['Zurückgegeben', 'Returned'], closed: ['Abgeschlossen', 'Closed'], cancelled: ['Storniert', 'Cancelled'],
@@ -41,8 +41,8 @@ export function GeneralOrders() {
   const updateOrder = useUpdateOrder();
   const transitionOrder = useTransitionOrder();
   const { user } = useAuth();
-  const [workflow, setWorkflow] = useState<{order: GeneralOrder; action: 'prepare' | 'pickup' | 'return' | 'history'} | null>(null);
-  const [editing, setEditing] = useState<GeneralOrder | null | 'new'>(null);
+  const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'} | null>(null);
+  const [editing, setEditing] = useState<GeneralOrderSummary | null | 'new'>(null);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [eventId, setEventId] = useState('');
@@ -75,7 +75,7 @@ export function GeneralOrders() {
     const event = id ? eventMap.get(id) : undefined;
     return event ? `${event.name || event.eventType} · ${new Date(event.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}` : t('Kein Event', 'No event');
   }
-  function startEditing(order?: GeneralOrder) {
+  function startEditing(order?: GeneralOrderSummary) {
     setEditing(order ?? 'new');
     setName(order?.name ?? '');
     setPurpose(order?.purpose ?? '');
@@ -93,7 +93,7 @@ export function GeneralOrders() {
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
-  function advance(order: GeneralOrder, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel', assetAssignments?: Record<string, string[]>) {
+  function advance(order: GeneralOrderSummary, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel', assetAssignments?: Record<string, string[]>) {
     transitionOrder.mutate({ id: order.id, action, assetAssignments }, feedback.callbacks(t('Bestellung aktualisiert', 'Order updated')));
   }
   const editItem = (item: Item) => (
@@ -109,7 +109,7 @@ export function GeneralOrders() {
     </Paper>
   );
 
-  function orderEntry(order: GeneralOrder): OrderListEntry {
+  function orderEntry(order: GeneralOrderSummary): OrderListEntry {
     const itemCount = Object.values(order.requestedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0);
     const statusColor: OrderListEntry['statusColor'] = order.status === 'ready' || order.status === 'closed'
       ? 'success' : order.status === 'submitted' ? 'info'

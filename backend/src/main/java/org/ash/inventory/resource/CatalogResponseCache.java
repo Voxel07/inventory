@@ -26,6 +26,7 @@ public class CatalogResponseCache {
     private static final Logger LOG = Logger.getLogger(CatalogResponseCache.class);
     private final CatalogService catalog;
     private final ApiMapper mapper;
+    @jakarta.inject.Inject org.ash.inventory.service.ApiQueryService queries;
     private final ObjectMapper objectMapper;
     private final CacheManager cacheManager;
     private final EventBroadcaster broadcaster;
@@ -61,7 +62,7 @@ public class CatalogResponseCache {
 
     @Transactional
     public String events(String eventType) {
-        return json(catalog.getEvents(eventType).stream().map(mapper::event).toList());
+        return json(queries.projectEvents(catalog.getEvents(eventType)));
     }
 
     @CacheResult(cacheName = "factions-cache")

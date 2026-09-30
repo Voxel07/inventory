@@ -64,10 +64,11 @@ public class CatalogService {
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
 
     public VisibleAssemblies getVisibleAssemblies() {
+        var actor = actorService.current();
         var values = orm.assemblies();
         var components = orm.assemblyItems(values);
         var visible = values.stream().filter(value -> canViewAssemblyComponents(
-                components.getOrDefault(value.id, List.of()))).toList();
+                components.getOrDefault(value.id, List.of()), actor)).toList();
         var visibleComponents = new LinkedHashMap<UUID, List<AssemblyItem>>();
         visible.forEach(value -> visibleComponents.put(value.id, components.getOrDefault(value.id, List.of())));
         return new VisibleAssemblies(visible, visibleComponents);
@@ -75,8 +76,13 @@ public class CatalogService {
 
     public boolean canViewItem(Item item) { return item.active && canView(item, actorService.current()); }
 
+    public boolean canViewItem(Item item, org.ash.inventory.model.UserAccount actor) { return item.active && canView(item, actor); }
+
     public boolean canViewAssemblyComponents(List<AssemblyItem> components) {
-        var actor = actorService.current();
+        return canViewAssemblyComponents(components, actorService.current());
+    }
+
+    public boolean canViewAssemblyComponents(List<AssemblyItem> components, org.ash.inventory.model.UserAccount actor) {
         return components.stream().allMatch(component -> component.item.active && canView(component.item, actor));
     }
 

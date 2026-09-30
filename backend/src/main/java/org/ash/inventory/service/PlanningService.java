@@ -33,23 +33,23 @@ public class PlanningService {
     @Transactional
     public List<ApiResponses.DeficitResponse> deficits(UUID eventId) {
         actors.requirePlanner();
-        var scope = orm.events();
         EventOccurrence selected = eventId == null ? null : orm.find(EventOccurrence.class, eventId);
         if (eventId != null && selected == null) throw ApiException.notFound("Event not found");
-        if (selected != null) scope = scope.stream().filter(e -> !e.startDate.isAfter(selected.endDate.plusDays(1))).toList();
+        // Keep earlier demand: reusable overlap and cumulative consumables need more than the selected event.
+        var scope = orm.events(selected == null ? null : selected.endDate.plusDays(1));
         var selectedIds = scope.stream().map(e -> e.id).collect(java.util.stream.Collectors.toSet());
+        var items = orm.items();
+        var itemIds = items.stream().map(i -> i.id).toList();
         var demand = new HashMap<UUID, Map<UUID, Integer>>();
         var handedOver = new HashMap<UUID, Map<UUID, Integer>>();
         var reservations = new HashMap<UUID, Integer>();
-        for (var line : orm.lines()) {
-            if (!selectedIds.contains(line.order.eventOccurrence.id)) continue;
+        for (var line : orm.lines(selectedIds)) {
             handedOver.computeIfAbsent(line.order.eventOccurrence.id, ignored -> new HashMap<>()).merge(line.item.id, line.handedOverQuantity, Integer::sum);
             if (List.of(DomainEnums.OrderStatus.draft, DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready).contains(line.order.status))
                 demand.computeIfAbsent(line.order.eventOccurrence.id, ignored -> new HashMap<>()).merge(line.item.id, line.requestedQuantity, Integer::sum);
             reservations.merge(line.item.id, line.reservedQuantity, Integer::sum);
         }
-        for (var order : orm.generalOrders()) {
-            if (order.eventOccurrence == null || !selectedIds.contains(order.eventOccurrence.id)) continue;
+        for (var order : orm.generalOrders(selectedIds)) {
             var map = demand.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
             var handed = handedOver.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
             order.handedOverQuantities.forEach((id, quantity) -> handed.merge(UUID.fromString(id), quantity, Integer::sum));
@@ -57,8 +57,10 @@ public class PlanningService {
             if (List.of("preparing", "ready").contains(order.status)) order.preparedQuantities.forEach((id, quantity) -> reservations.merge(UUID.fromString(id), quantity, Integer::sum));
         }
         var overrides = new HashMap<String, PlanningOverride>();
-        orm.overrides().forEach(o -> overrides.put(o.event.id + ":" + o.item.id, o));
-        var incoming = orm.incoming(); var items = orm.items(); var stocks = stockSnapshots.load(items);
+        var overrideEventIds = new HashSet<>(selectedIds);
+        if (selected != null) overrideEventIds.add(selected.id);
+        orm.overrides(overrideEventIds, itemIds).forEach(o -> overrides.put(o.event.id + ":" + o.item.id, o));
+        var incoming = orm.incoming(itemIds); var stocks = stockSnapshots.load(items);
         var incomingByItem = new HashMap<UUID, List<PurchaseOrderLine>>();
         incoming.forEach(line -> incomingByItem.computeIfAbsent(line.item.id, ignored -> new ArrayList<>()).add(line));
         var dates = new TreeSet<LocalDate>(); scope.forEach(e -> { if (selected == null || !e.startDate.isBefore(selected.startDate)) dates.add(e.startDate); });

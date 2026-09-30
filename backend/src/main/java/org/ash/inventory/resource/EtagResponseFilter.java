@@ -30,7 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class EtagResponseFilter implements ContainerRequestFilter, ContainerResponseFilter {
     private static final Set<String> CATALOG_LIST_PATHS = Set.of(
-            "api/storage-locations", "api/assemblies", "api/events", "api/factions");
+            "api/storage-locations", "api/assemblies", "api/factions");
+    // Event metrics change with stock/order commands; catalog-only invalidation cannot validate them.
     private static final int MAX_TRACKED_VARIANTS = 1_000;
 
     private final ObjectMapper objectMapper;
@@ -98,7 +99,8 @@ public class EtagResponseFilter implements ContainerRequestFilter, ContainerResp
     }
 
     private boolean isCatalogPath(String path) {
-        return CATALOG_LIST_PATHS.stream().anyMatch(candidate -> path.equals(candidate) || path.startsWith(candidate + "/"));
+        return path.equals("api/items") || path.startsWith("api/items/") || path.equals("api/category-maintenance")
+                || CATALOG_LIST_PATHS.stream().anyMatch(candidate -> path.equals(candidate) || path.startsWith(candidate + "/"));
     }
 
     private String normalizedPath(ContainerRequestContext request) {

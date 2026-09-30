@@ -51,8 +51,8 @@ public class CatalogResource {
 
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
-    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.createItem(input)); }
-    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return mapper.item(service.updateItem(id, input)); }
+    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { actor.requireManager(); return queries.projectItem(service.createItem(input)); }
+    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return queries.projectItem(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { actor.requireManager(); service.retireItem(id); return Response.noContent().build(); }
 
     @GET @Path("/items/{id}/assets")
@@ -117,8 +117,8 @@ public class CatalogResource {
     public List<ApiResponses.AssemblyResponse> assemblies() { return queries.assemblies(); }
     @GET @Path("/assemblies/{id}")
     public ApiResponses.AssemblyResponse assembly(@PathParam("id") UUID id) { return queries.assembly(id); }
-    @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.createAssembly(input)); }
-    @PATCH @Path("/assemblies/{id}") @Transactional public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { actor.requireManager(); return mapper.assembly(service.updateAssembly(id, input)); }
+    @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { actor.requireManager(); return queries.projectAssembly(service.createAssembly(input)); }
+    @PATCH @Path("/assemblies/{id}") @Transactional public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { actor.requireManager(); return queries.projectAssembly(service.updateAssembly(id, input)); }
     @DELETE @Path("/assemblies/{id}") @Transactional public Response deleteAssembly(@PathParam("id") UUID id) { actor.requireManager(); service.deleteAssembly(id); return Response.noContent().build(); }
 
     @GET @Path("/events")
@@ -128,8 +128,8 @@ public class CatalogResource {
     }
     @GET @Path("/events/{id}")
     public ApiResponses.EventResponse event(@PathParam("id") UUID id) { return queries.event(id); }
-    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.createEvent(input)); }
-    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requirePlanner(); return mapper.event(service.updateEvent(id, input)); }
+    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { actor.requirePlanner(); return queries.projectEvent(service.createEvent(input)); }
+    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requirePlanner(); return queries.projectEvent(service.updateEvent(id, input)); }
     @DELETE @Path("/events/{id}") @Transactional public Response deleteEvent(@PathParam("id") UUID id) { actor.requirePlanner(); service.deleteEvent(id); return Response.noContent().build(); }
 
     @GET @Path("/factions")

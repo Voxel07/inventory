@@ -66,10 +66,19 @@ class RemainingP1ApiTest {
         admin().post("/api/reports/events/rebuild").then().statusCode(204);
         String filter = "/api/reports/events?eventId=" + eventId + "&itemId=" + item;
         admin().get(filter).then().statusCode(200).body("total", equalTo(1)).body("rows[0].planned", equalTo(20)).body("rows[0].handedOver", equalTo(0)).body("stale", equalTo(false));
+        String generation = admin().get(filter).then().statusCode(200).extract().path("generatedAt");
+        admin().queryParam("generation", generation).queryParam("eventId", eventId).queryParam("itemId", item)
+                .get("/api/reports/events/export").then().statusCode(200)
+                .body("generatedAt", equalTo(generation)).body("total", equalTo(1)).body("rows[0].planned", equalTo(20));
+        admin().get("/api/reports/events/export").then().statusCode(400);
         event.put("plannedQuantities", Map.of(item, 25));
         admin().body(event).patch("/api/events/" + eventId).then().statusCode(200);
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(20)).body("stale", equalTo(true));
+        admin().queryParam("generation", generation).queryParam("eventId", eventId).queryParam("itemId", item)
+                .get("/api/reports/events/export").then().statusCode(200)
+                .body("rows[0].planned", equalTo(20)).body("stale", equalTo(true));
         admin().post("/api/reports/events/rebuild").then().statusCode(204);
+        admin().queryParam("generation", generation).get("/api/reports/events/export").then().statusCode(409);
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25));
         admin().get(filter + "&from=2040-01-01").then().statusCode(200).body("total", equalTo(0));
         admin().get(filter + "&from=bad-date").then().statusCode(400);
@@ -83,5 +92,22 @@ class RemainingP1ApiTest {
         admin().get("/api/transactions?itemId=" + item).then().statusCode(200).body("size()", equalTo(1));
         reader().get("/api/reports/events").then().statusCode(403);
         reader().post("/api/reports/events/rebuild").then().statusCode(403);
+    }
+
+    @Test void generalOrderSummariesOmitHistoryAndDetailsRetainActorScope() {
+        var owner = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-owner").header("X-Actor-Role", "faction_leader");
+        var other = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-other").header("X-Actor-Role", "faction_leader");
+        String id = owner.body(Map.of("name", "P02 summary", "purpose", "History on demand"))
+                .post("/api/general-orders").then().statusCode(200).extract().path("id");
+        owner.body(Map.of("name", "P02 summary updated", "purpose", "History on demand"))
+                .patch("/api/general-orders/" + id).then().statusCode(200);
+        Map<String, Object> summary = owner.get("/api/general-orders").then().statusCode(200)
+                .extract().path("find { it.id == '" + id + "' }");
+        org.junit.jupiter.api.Assertions.assertFalse(summary.containsKey("history"));
+        owner.get("/api/general-orders/" + id).then().statusCode(200)
+                .body("name", equalTo("P02 summary updated")).body("history.action", hasItems("created", "updated"));
+        other.get("/api/general-orders").then().statusCode(200).body("id", not(hasItem(id)));
+        other.get("/api/general-orders/" + id).then().statusCode(403);
+        admin().get("/api/general-orders/" + id).then().statusCode(200).body("history.size()", equalTo(2));
     }
 }

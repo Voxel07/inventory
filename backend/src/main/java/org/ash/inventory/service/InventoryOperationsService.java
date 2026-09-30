@@ -36,6 +36,7 @@ public class InventoryOperationsService {
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
     @jakarta.inject.Inject MaintenanceEvaluationService maintenance;
+    @jakarta.inject.Inject EquipmentReadService readPolicy;
     private static final List<DomainEnums.TransactionType> DIRECT_TRANSACTION_TYPES = List.of(
             DomainEnums.TransactionType.checkout,
             DomainEnums.TransactionType.checkin,
@@ -241,11 +242,24 @@ public class InventoryOperationsService {
     }
 
     public Map<UUID, StockState> stock(List<Item> items) {
+        var result = new LinkedHashMap<UUID, StockState>();
+        readStock(items).forEach((id, read) -> {
+            var state = read.physical();
+            result.put(id, new StockState(state.onHand(), state.checkedOut(), state.inTransit(), state.damaged(), state.reserved(),
+                    equipment.available(read.policy().item(), null, state, 0, read.policy())));
+        });
+        return result;
+    }
+
+    public record ReadStock(StockState physical, EquipmentReadService.Facts policy) {}
+
+    public Map<UUID, ReadStock> readStock(List<Item> items) {
+        if (items.isEmpty()) return Map.of();
         var itemIds = items.stream().map(item -> item.id).toList();
         var transactionTotals = orm.transactionTotals(itemIds);
         var damageQuantities = orm.unresolvedDamageQuantities(itemIds);
         var reservationQuantities = orm.activeReservationQuantities(itemIds);
-        var transitQuantities = orm.inTransitQuantities(itemIds);
+        var positionsByItem = positions.load(itemIds);
         var serializedAssets = orm.assetsForItems(items.stream()
                 .filter(i -> i.trackingMode == DomainEnums.TrackingMode.serialized)
                 .map(i -> i.id).toList());
@@ -253,6 +267,7 @@ public class InventoryOperationsService {
         for (var asset : serializedAssets) {
             assetsByItem.computeIfAbsent(asset.item.id, ignored -> new ArrayList<>()).add(asset);
         }
+        var policies = readPolicy.load(items, assetsByItem, positionsByItem);
 
         var result = new LinkedHashMap<UUID, StockState>();
         for (var item : items) {
@@ -264,12 +279,14 @@ public class InventoryOperationsService {
                         transactionTotals.getOrDefault(item.id, Map.of()),
                         Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
                         Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L)),
-                        positions.blocked(item), Math.toIntExact(transitQuantities.getOrDefault(item.id, 0L))
+                        PositionService.blocked(item, positionsByItem.getOrDefault(item.id, List.of())),
+                        positionsByItem.getOrDefault(item.id, List.of()).stream().mapToInt(p -> p.quantityInTransit).sum()
                 ));
             }
         }
-        for (var item : items) result.computeIfPresent(item.id, (id, state) -> withPolicy(item, state));
-        return result;
+        var reads = new LinkedHashMap<UUID, ReadStock>();
+        result.forEach((id, state) -> reads.put(id, new ReadStock(state, policies.get(id))));
+        return reads;
     }
 
     StockState physicalStock(Item item, Map<DomainEnums.TransactionType, Long> totals,

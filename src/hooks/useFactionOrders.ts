@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   cancelFactionOrder,
   createFactionOrder,
@@ -61,16 +61,8 @@ export function useFactionOrder(id: string) {
 }
 
 function useOrderMutation<TVariables, TResult>(mutationFn: (variables: TVariables) => Promise<TResult>) {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['event-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['procurement-deficits'] });
-    },
   });
 }
 

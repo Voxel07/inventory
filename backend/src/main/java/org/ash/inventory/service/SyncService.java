@@ -114,7 +114,7 @@ public class SyncService {
             case "order.create" -> {
                 actors.current();
                 var value = validated(action.payload(), ApiModels.OrderInput.class);
-                yield mapper.order(orders.create(new ApiModels.OrderInput(
+                yield queries.projectOrder(orders.create(new ApiModels.OrderInput(
                         value.eventType(), value.faction(), value.eventDate(), value.eventOccurrenceId(), value.factionId(),
                         value.requestedPickupDate(), value.pickupLocation(), value.pickupLatitude(), value.pickupLongitude(),
                         value.collectorName(), value.notes(), value.requestedQuantities(),
@@ -136,7 +136,7 @@ public class SyncService {
                     throw ApiException.badRequest("Missing required property 'input' in order.prepare payload");
                 }
                 var value = validated(inputObj, ApiModels.PreparationInput.class);
-                yield mapper.order(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
+                yield queries.projectOrder(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
                         value.assetAssignments(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes(), value.sourceLocations())));
             }
             case "order.transition" -> {
@@ -158,7 +158,7 @@ public class SyncService {
                     actors.requireWarehouse();
                 else actors.requirePlanner();
                 var value = validated(action.payload(), ApiModels.TransitionInput.class);
-                yield mapper.order(orders.transition(orderId, target, new ApiModels.TransitionInput(
+                yield queries.projectOrder(orders.transition(orderId, target, new ApiModels.TransitionInput(
                         action.idempotencyKey(), value.notes(), value.collectorName(), value.pickupLocation(),
                         value.pickupLatitude(), value.pickupLongitude())));
             }
@@ -170,7 +170,7 @@ public class SyncService {
                     throw ApiException.badRequest("Missing required property 'input' in order.return payload");
                 }
                 var value = validated(inputObj, ApiModels.ReturnInput.class);
-                yield mapper.order(orders.returnItems(orderId,
+                yield queries.projectOrder(orders.returnItems(orderId,
                         new ApiModels.ReturnInput(value.lines(), value.assets(), action.idempotencyKey(), value.notes())));
             }
             case "damage.create" -> {

@@ -22,9 +22,6 @@ import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.SyncCommandAudit;
 import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
-import org.ash.inventory.orm.CatalogOrm;
-import org.ash.inventory.orm.OrderOrm;
-import org.ash.inventory.orm.PurchasingOrm;
 import org.ash.inventory.resource.dto.ApiResponses;
 import org.ash.inventory.service.InventoryOperationsService;
 import org.ash.inventory.service.OrderQuantities;
@@ -38,26 +35,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class ApiMapper {
-    @jakarta.inject.Inject org.ash.inventory.service.CatalogService catalog;
     private final MediaService media;
-    private final CatalogOrm catalogOrm;
-    private final OrderOrm orderOrm;
-    private final PurchasingOrm purchasingOrm;
-    private final InventoryOperationsService operations;
-    private final org.ash.inventory.orm.GeneralOrderOrm generalOrderOrm;
-    private final org.ash.inventory.service.EventMetricsService eventMetrics;
-
-    public ApiMapper(MediaService media, CatalogOrm catalogOrm, OrderOrm orderOrm, PurchasingOrm purchasingOrm,
-            InventoryOperationsService operations, org.ash.inventory.orm.GeneralOrderOrm generalOrderOrm,
-            org.ash.inventory.service.EventMetricsService eventMetrics) {
-        this.media = media;
-        this.catalogOrm = catalogOrm;
-        this.orderOrm = orderOrm;
-        this.purchasingOrm = purchasingOrm;
-        this.operations = operations;
-        this.generalOrderOrm = generalOrderOrm;
-        this.eventMetrics = eventMetrics;
-    }
+    public ApiMapper(MediaService media) { this.media = media; }
 
     public ApiResponses.UserResponse user(UserAccount value) {
         return new ApiResponses.UserResponse(
@@ -72,12 +51,8 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value) {
-        var itemNames = new LinkedHashMap<String, String>();
-        for (var itemId : value.requestedQuantities.keySet()) {
-            var item = catalogOrm.find(Item.class, UUID.fromString(itemId));
-            if (item != null) itemNames.put(itemId, item.name);
-        }
+    public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value, Map<String, String> itemNames,
+            List<org.ash.inventory.model.GeneralOrderHistory> history) {
         return new ApiResponses.GeneralOrderResponse(
                 value.id,
                 value.createdAt,
@@ -98,12 +73,37 @@ public class ApiMapper {
                 value.missingQuantities,
                 value.writtenOffQuantities,
                 value.reconciledAssets,
-                generalOrderOrm.history(value).stream().map(h -> {
+                history.stream().map(h -> {
                             var row = new LinkedHashMap<String, Object>();
                             row.put("id", h.id); row.put("actorName", h.actor.name); row.put("actorId", h.actor.id);
                             row.put("timestamp", h.occurredAt); row.put("action", h.action); row.put("notes", h.notes); row.put("delta", h.delta);
                             return (Map<String, Object>) row;
                         }).toList(),
+                Map.of("createdBy", user(value.createdBy)), value.sourceLocations
+        );
+    }
+
+    public ApiResponses.GeneralOrderSummaryResponse generalOrderSummary(GeneralOrder value, Map<String, String> itemNames) {
+        return new ApiResponses.GeneralOrderSummaryResponse(
+                value.id,
+                value.createdAt,
+                value.updatedAt,
+                value.name,
+                value.purpose,
+                value.createdBy.id.toString(),
+                value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
+                value.status,
+                value.requestedQuantities,
+                value.handedOverQuantities,
+                value.returnedQuantities,
+                value.consumedQuantities,
+                value.assetAssignments,
+                itemNames,
+                value.preparedQuantities,
+                value.damagedQuantities,
+                value.missingQuantities,
+                value.writtenOffQuantities,
+                value.reconciledAssets,
                 Map.of("createdBy", user(value.createdBy)), value.sourceLocations
         );
     }
@@ -131,26 +131,9 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.ItemResponse item(Item value) {
-        return item(value, operations.stock(value), null,
-                purchasingOrm.outstandingQuantities(List.of(value.id)).getOrDefault(value.id, 0));
-    }
-
-    public List<ApiResponses.ItemResponse> items(List<Item> values) {
-        var stock = operations.stock(values);
-        var imagesMap = catalogOrm.itemImages(values);
-        var ordered = purchasingOrm.outstandingQuantities(values.stream().map(value -> value.id).toList());
-        return values.stream().map(value -> item(value, stock.get(value.id), imagesMap.get(value.id),
-                ordered.getOrDefault(value.id, 0))).toList();
-    }
-
-    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state) {
-        return item(value, state, null, 0);
-    }
-
-    private ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state, List<org.ash.inventory.model.ItemImage> preloadedImages, int ordered) {
-        var imageEntities = preloadedImages != null ? preloadedImages : catalogOrm.itemImages(value);
-        var images = imageEntities.stream()
+    public ApiResponses.ItemResponse item(Item value, InventoryOperationsService.StockState state,
+            List<org.ash.inventory.model.ItemImage> images, int ordered) {
+        var imageReferences = images.stream()
                 .map(image -> media.mediaReference(image.objectKey))
                 .toList();
         Map<String, Object> expand = new LinkedHashMap<>();
@@ -193,7 +176,7 @@ public class ApiMapper {
                 value.storageLocation == null ? null : value.storageLocation.id.toString(),
                 value.returnLocation == null ? null : value.returnLocation.id.toString(),
                 value.active ? "available" : "retired",
-                images,
+                imageReferences,
                 value.hint,
                 value.positionDetails,
                 value.containerSize,
@@ -239,13 +222,13 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.AssemblyResponse assembly(Assembly value) {
-        var components = catalog.getVisibleAssemblyComponents(value);
+    public ApiResponses.AssemblyResponse assembly(Assembly value, List<org.ash.inventory.model.AssemblyItem> components,
+            Map<UUID, ApiResponses.ItemResponse> componentViews) {
         var quantities = new LinkedHashMap<String, Integer>();
         var items = new ArrayList<ApiResponses.ItemResponse>();
         for (var component : components) {
             quantities.put(component.item.id.toString(), component.quantity);
-            items.add(item(component.item, null));
+            items.add(componentViews.get(component.item.id));
         }
         return new ApiResponses.AssemblyResponse(
                 value.id,
@@ -262,44 +245,7 @@ public class ApiMapper {
         );
     }
 
-    public List<ApiResponses.AssemblyResponse> assemblies(List<Assembly> values,
-            Map<UUID, List<org.ash.inventory.model.AssemblyItem>> componentsByAssembly) {
-        if (values == null || values.isEmpty()) {
-            return List.of();
-        }
-        var allComponentItems = componentsByAssembly.values().stream()
-                .flatMap(List::stream)
-                .map(ai -> ai.item)
-                .distinct()
-                .toList();
-        var imagesMap = catalogOrm.itemImages(allComponentItems);
-
-        return values.stream().map(assembly -> {
-            var components = componentsByAssembly.getOrDefault(assembly.id, List.of());
-            var quantities = new LinkedHashMap<String, Integer>();
-            var items = new ArrayList<ApiResponses.ItemResponse>();
-            for (var component : components) {
-                quantities.put(component.item.id.toString(), component.quantity);
-                items.add(item(component.item, null, imagesMap.getOrDefault(component.item.id, List.of()), 0));
-            }
-            return new ApiResponses.AssemblyResponse(
-                    assembly.id,
-                    assembly.createdAt,
-                    assembly.updatedAt,
-                    assembly.name,
-                    assembly.description,
-                    assembly.hint,
-                    media.mediaReference(assembly.imageObjectKey),
-                    assembly.eventTags == null ? List.of() : assembly.eventTags,
-                    quantities.keySet(),
-                    quantities,
-                    Map.of("itemIds", items)
-            );
-        }).toList();
-    }
-
-    public ApiResponses.EventResponse event(EventOccurrence value) {
-        var metrics = eventMetrics.summarize(value);
+    public ApiResponses.EventResponse event(EventOccurrence value, org.ash.inventory.service.EventMetricsService.Summary metrics) {
         return new ApiResponses.EventResponse(
                 value.id,
                 value.createdAt,
@@ -364,17 +310,11 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.OrderResponse order(FactionOrder value) {
-        var assemblyViews = new ArrayList<ApiResponses.AssemblyResponse>();
-        var itemViews = new ArrayList<ApiResponses.ItemResponse>();
+    public ApiResponses.OrderResponse order(FactionOrder value, List<FactionOrderLine> lines,
+            Map<AssemblyItemId, Integer> componentQuantities, List<ApiResponses.ItemResponse> itemViews,
+            List<ApiResponses.AssemblyResponse> assemblyViews, List<ApiResponses.OrderHistoryResponse> history,
+            Map<String, List<ApiResponses.AssetInstanceResponse>> assetAssignments, Map<String, String> sourceLocations) {
         var orderLines = new ArrayList<ApiResponses.OrderLineResponse>();
-        var assetAssignments = new LinkedHashMap<String, List<ApiResponses.AssetInstanceResponse>>();
-
-        var lines = orderOrm.lines(value);
-        var assemblyIds = lines.stream().filter(line -> line.sourceAssembly != null)
-                .map(line -> line.sourceAssembly.id).distinct().toList();
-        var componentQuantities = new LinkedHashMap<AssemblyItemId, Integer>();
-        for (var component : orderOrm.assemblyItems(assemblyIds)) componentQuantities.put(component.id, component.quantity);
         var quantities = OrderQuantities.from(lines, componentQuantities);
         var requested = quantities.requested();
         var prepared = quantities.prepared();
@@ -407,18 +347,6 @@ public class ApiMapper {
                     line.writtenOffQuantity
             ));
 
-            if (catalog.canViewItem(line.item) && itemViews.stream().noneMatch(existing -> line.item.id.equals(existing.id())))
-                itemViews.add(item(line.item));
-            if (line.sourceAssembly != null && catalog.canViewAssembly(line.sourceAssembly) && assemblyViews.stream()
-                    .noneMatch(existing -> line.sourceAssembly.id.equals(existing.id()))) {
-                assemblyViews.add(assembly(line.sourceAssembly));
-            }
-        }
-
-        var history = orderOrm.history(value).stream().map(this::history).toList();
-        for (var assignment : orderOrm.assetAssignments(value)) {
-            assetAssignments.computeIfAbsent(assignment.assetInstance.item.id.toString(), ignored -> new ArrayList<>())
-                    .add(asset(assignment.assetInstance));
         }
 
         var expand = new LinkedHashMap<String, Object>();
@@ -478,7 +406,7 @@ public class ApiMapper {
                 orderLines,
                 history,
                 expand,
-                orderOrm.reservations(value).stream().filter(r -> r.location != null).collect(java.util.stream.Collectors.toMap(r -> r.item.id.toString(), r -> r.location.id.toString(), (a, b) -> a))
+                sourceLocations
         );
     }
 

@@ -10,10 +10,3 @@ export const queryKeys = {
   reportDefinitions: () => ['reports', 'definitions'] as const,
   report: (name: string, filters: object, page: number) => ['reports', name, filters, page] as const,
 };
-
-/** Stock and custody commands also affect planning, notifications and report projections. */
-export const stockQueryPrefixes = [
-  'reports', 'operations', 'items', 'assemblies', 'storageLocations', 'transactions', 'damageReports', 'maintenance',
-  'custody-balances', 'member-custody', 'member-storage', 'member-requests', 'action-inbox', 'loans',
-  'faction-orders', 'general-orders', 'event-reports', 'procurement-deficits', 'purchase-orders', 'return-submissions', 'notifications',
-] as const;

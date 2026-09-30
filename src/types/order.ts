@@ -46,3 +46,5 @@ export interface GeneralOrderFormData {
   eventOccurrenceId?: string;
   requestedQuantities: Record<string, number>;
 }
+
+export type GeneralOrderSummary = Omit<GeneralOrder, 'history'>;

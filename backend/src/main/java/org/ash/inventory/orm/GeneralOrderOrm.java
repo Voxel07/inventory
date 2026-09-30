@@ -22,7 +22,7 @@ public class GeneralOrderOrm {
 
     public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, int offset, int limit) {
         boolean scoped = actor.role == org.ash.inventory.model.DomainEnums.UserRole.faction_leader;
-        var query = entityManager.createQuery("from GeneralOrder o" + (scoped ? " where o.createdBy = :actor" : "") + " order by o.createdAt desc", GeneralOrder.class);
+        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence" + (scoped ? " where o.createdBy = :actor" : "") + " order by o.createdAt desc", GeneralOrder.class);
         if (scoped) query.setParameter("actor", actor);
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
@@ -33,7 +33,7 @@ public class GeneralOrderOrm {
     }
 
     public List<GeneralOrderHistory> history(GeneralOrder order) {
-        return entityManager.createQuery("from GeneralOrderHistory h where h.order = :order order by h.occurredAt", GeneralOrderHistory.class)
+        return entityManager.createQuery("from GeneralOrderHistory h join fetch h.actor where h.order = :order order by h.occurredAt, h.id", GeneralOrderHistory.class)
                 .setParameter("order", order).getResultList();
     }
 

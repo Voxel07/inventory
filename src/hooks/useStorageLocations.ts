@@ -12,5 +12,4 @@ export const {
 } = createResourceHooks<StorageLocation, StorageLocationFormData>(
   storageLocationApi,
   'storageLocations',
-  ['items'],
 );

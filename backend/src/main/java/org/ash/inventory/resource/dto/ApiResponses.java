@@ -62,6 +62,29 @@ public final class ApiResponses {
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
     ) {}
 
+    public record GeneralOrderSummaryResponse(
+            UUID id,
+            Instant created,
+            Instant updated,
+            String name,
+            String purpose,
+            String createdBy,
+            String eventOccurrenceId,
+            String status,
+            Map<String, Integer> requestedQuantities,
+            Map<String, Integer> handedOverQuantities,
+            Map<String, Integer> returnedQuantities,
+            Map<String, Integer> consumedQuantities,
+            Map<String, List<String>> assetAssignments,
+            Map<String, String> itemNames,
+            Map<String, Integer> preparedQuantities,
+            Map<String, Integer> damagedQuantities,
+            Map<String, Integer> missingQuantities,
+            Map<String, Integer> writtenOffQuantities,
+            Map<String, List<String>> reconciledAssets,
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
+    ) {}
+
     public record DevLoginResponse(
             String token,
             UserResponse user

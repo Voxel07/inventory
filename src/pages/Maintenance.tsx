@@ -2,7 +2,7 @@ import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
 import { Link } from 'react-router-dom';
 import { useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Autocomplete,
@@ -49,7 +49,6 @@ function addYears(years: number): string {
 export function Maintenance() {
   const t = useLocalizedText();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const formRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,8 +71,6 @@ export function Maintenance() {
   const policyMutation = useMutation({
     mutationFn: () => saveCategoryMaintenancePolicy(policyCategory, Number(policyInterval) || 0),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['category-maintenance'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
       showSnackbar(t('Wartungsintervall gespeichert', 'Maintenance interval saved'), 'success');
     },
     onError: (err) => showSnackbar(err instanceof Error ? err.message : t('Fehler beim Speichern', 'Failed to save'), 'error'),
@@ -99,8 +96,6 @@ export function Maintenance() {
         notes: notes || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
       showSnackbar(t('Prüfung erfolgreich erfasst', 'Inspection recorded successfully'), 'success');
       setItemId('');
       setNotes('');

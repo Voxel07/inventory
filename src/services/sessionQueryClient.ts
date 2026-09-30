@@ -1,6 +1,7 @@
 import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { getAuthSnapshot, subscribeAuth } from './authManager';
-import { OfflineQueuedError } from './apiClient';
+import { ApiError, OfflineQueuedError } from './apiClient';
+import { SessionChangedError } from './authManager';
 import { useUIStore } from '../store/uiStore';
 import { translate } from '../utils/naming';
 
@@ -16,7 +17,9 @@ function createSessionClient(generation: number): QueryClient {
         }
       },
     }),
-    defaultOptions: { queries: { staleTime: 30_000, retry: 2 } },
+    defaultOptions: { queries: { staleTime: 30_000, retry: (failures, error) => failures < 2
+      && !(error instanceof SessionChangedError)
+      && (!(error instanceof ApiError) || error.status === 408 || error.status === 429 || error.status >= 500) } },
   });
 }
 

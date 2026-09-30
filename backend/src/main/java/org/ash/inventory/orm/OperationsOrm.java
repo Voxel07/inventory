@@ -82,6 +82,18 @@ public class OperationsOrm {
         return query.getResultList();
     }
 
+    public List<MaintenanceSchedule> schedules(Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return List.of();
+        return entityManager.createQuery("from MaintenanceSchedule s join fetch s.item left join fetch s.assetInstance where s.item.id in :ids and s.active = true", MaintenanceSchedule.class)
+                .setParameter("ids", itemIds).getResultList();
+    }
+
+    public List<Object[]> checkoutCounts(Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return List.of();
+        return entityManager.createQuery("select t.item.id, a.id, count(t) from StockTransaction t left join t.assetInstance a where t.item.id in :ids and t.type = :type group by t.item.id, a.id", Object[].class)
+                .setParameter("ids", itemIds).setParameter("type", DomainEnums.TransactionType.checkout).getResultList();
+    }
+
     public long checkoutCount(Item item, AssetInstance asset) {
         var jpql = asset == null
                 ? "select count(tx) from StockTransaction tx where tx.item = :item and tx.type = :type"
@@ -263,7 +275,7 @@ public class OperationsOrm {
 
     public List<AssetInstance> assetsForItems(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return entityManager.createQuery("from AssetInstance a where a.item.id in :itemIds and a.active = true", AssetInstance.class)
+        return entityManager.createQuery("from AssetInstance a join fetch a.item left join fetch a.currentLocation left join fetch a.currentCustodian where a.item.id in :itemIds and a.active = true", AssetInstance.class)
                 .setParameter("itemIds", itemIds).getResultList();
     }
 }

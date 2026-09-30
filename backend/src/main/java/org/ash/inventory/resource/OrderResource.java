@@ -27,13 +27,11 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 public class OrderResource {
     private final OrderService service;
-    private final ApiMapper mapper;
     private final ActorService actor;
     private final ApiQueryService queries;
 
-    public OrderResource(OrderService service, ApiMapper mapper, ActorService actor, ApiQueryService queries) {
+    public OrderResource(OrderService service, ActorService actor, ApiQueryService queries) {
         this.service = service;
-        this.mapper = mapper;
         this.actor = actor;
         this.queries = queries;
     }
@@ -57,7 +55,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse create(@Valid ApiModels.OrderInput input) {
         actor.current();
-        return mapper.order(service.create(input));
+        return queries.projectOrder(service.create(input));
     }
 
     @PATCH
@@ -65,7 +63,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.OrderInput input) {
         actor.current();
-        return mapper.order(service.update(id, input));
+        return queries.projectOrder(service.update(id, input));
     }
 
     @POST
@@ -73,7 +71,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
         actor.requireWarehouse();
-        return mapper.order(service.prepare(id, input));
+        return queries.projectOrder(service.prepare(id, input));
     }
 
     @POST
@@ -90,7 +88,7 @@ public class OrderResource {
         else
             actor.requirePlanner();
         var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
-        return mapper.order(service.transition(id, status, safeInput));
+        return queries.projectOrder(service.transition(id, status, safeInput));
     }
 
     @POST
@@ -98,7 +96,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
         actor.requireMarshal();
-        return mapper.order(service.returnItems(id, input));
+        return queries.projectOrder(service.returnItems(id, input));
     }
 
     @POST
@@ -106,6 +104,6 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
         actor.requireMarshal();
-        return mapper.order(service.returnAll(id, input == null ? null : input.idempotencyKey()));
+        return queries.projectOrder(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }
 }

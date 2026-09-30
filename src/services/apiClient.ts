@@ -2,6 +2,8 @@ import type { User } from '../types';
 import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl } from './oidcClient';
+import { localWriteChange, type ApiChangeDetail } from './apiChanges';
+export type { ApiChangeDetail } from './apiChanges';
 import {
   assertAuthSession,
   captureAuthSession,
@@ -134,13 +136,14 @@ async function responseError(response: Response): Promise<ApiError> {
   return error;
 }
 
-let apiBatchDepth = 0;
-let apiBatchChanged = false;
-let apiBatchRateLimitListener: ((seconds: number) => void) | undefined;
+type ApiBatchState = { depth: number; changes: Map<string, ApiChangeDetail>; rateLimitListener?: (seconds: number) => void };
+const apiBatches = new Map<number, ApiBatchState>();
 
-function publishApiChange(detail?: ApiChangeDetail): void {
-  if (apiBatchDepth > 0) {
-    apiBatchChanged = true;
+function publishApiChange(detail?: ApiChangeDetail, context = captureAuthSession()): void {
+  if (context.generation !== getAuthSnapshot().generation) return;
+  const batch = apiBatches.get(context.generation);
+  if (batch && batch.depth > 0) {
+    batch.changes.set(`${detail?.type}:${detail?.resource}`, detail ?? { type: 'unknown' });
     return;
   }
   window.dispatchEvent(new CustomEvent('ash-api-change', { detail }));
@@ -149,19 +152,22 @@ function publishApiChange(detail?: ApiChangeDetail): void {
 /** Keep bulk writes from refetching every active query after every request. */
 export async function withApiRequestBatch<T>(operation: () => Promise<T>, onRateLimit: (seconds: number) => void): Promise<T> {
   const context = captureAuthSession();
-  const previousListener = apiBatchRateLimitListener;
-  apiBatchDepth++;
-  apiBatchRateLimitListener = (seconds) => { assertAuthSession(context); onRateLimit(seconds); };
+  const batch: ApiBatchState = apiBatches.get(context.generation) ?? { depth: 0, changes: new Map() };
+  apiBatches.set(context.generation, batch);
+  const previousListener = batch.rateLimitListener;
+  batch.depth++;
+  batch.rateLimitListener = (seconds) => { assertAuthSession(context); onRateLimit(seconds); };
   try {
     const result = await operation();
     assertAuthSession(context);
     return result;
   } finally {
-    apiBatchRateLimitListener = previousListener;
-    apiBatchDepth--;
-    if (apiBatchDepth === 0 && apiBatchChanged) {
-      apiBatchChanged = false;
-      if (context.generation === getAuthSnapshot().generation) publishApiChange();
+    batch.rateLimitListener = previousListener;
+    batch.depth--;
+    if (batch.depth === 0) {
+      apiBatches.delete(context.generation);
+      const changes = [...batch.changes.values()];
+      if (changes.length) publishApiChange({ type: 'batch', changes }, context);
     }
   }
 }
@@ -215,7 +221,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
       const error = await responseError(response);
       assertAuthSession(context);
       if (response.status === 401 && !options.anonymous) void clearAuth('Your session has expired. Please sign in again.');
-      if (response.status === 429 && apiBatchDepth === 0) {
+      if (response.status === 429 && !apiBatches.get(context.generation)?.depth) {
         window.dispatchEvent(new CustomEvent('ash-api-rate-limited', { detail: { message: error.message, url: url.toString(), retryAfterSeconds: error.retryAfterSeconds } }));
       }
       throw error;
@@ -227,7 +233,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
       if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
     } else {
       invalidateConditionalCacheFor(path);
-      publishApiChange();
+      publishApiChange(localWriteChange(path), context);
     }
     return result;
   });
@@ -254,7 +260,7 @@ function invalidateConditionalCacheFor(path: string): void {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const context = options.session ?? captureAuthSession();
   assertAuthSession(context);
-  const rateLimitListener = apiBatchRateLimitListener;
+  const rateLimitListener = apiBatches.get(context.generation)?.rateLimitListener;
   const offlineAction = options.offline
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
@@ -369,16 +375,6 @@ export function deleteMedia(key: string, context = captureAuthSession()): Promis
   return deleteMediaAttempt(key, false, context);
 }
 
-export type ApiChangeDetail = {
-  type?: string;
-  resource?: string;
-  id?: string;
-  orderId?: string;
-  itemId?: string;
-  status?: string;
-  quantity?: unknown;
-};
-
 export function subscribeToApiChanges(callback: (detail?: ApiChangeDetail) => void) {
   const listener = (event: Event) => callback((event as CustomEvent<ApiChangeDetail | undefined>).detail);
   window.addEventListener('ash-api-change', listener);
@@ -392,6 +388,8 @@ export function subscribeToApiChanges(callback: (detail?: ApiChangeDetail) => vo
 const conditionalGetCache = new Map<string, { etag: string; value: unknown }>();
 let sseAbortController: AbortController | null = null;
 let sseRetryTimer: ReturnType<typeof setTimeout> | null = null;
+const seenEventIds = new Map<string, number>();
+let realtimeGeneration: number | undefined;
 
 function scheduleRealtimeReconnect(): void {
   if (sseRetryTimer || !navigator.onLine || !getAuthSnapshot().token) return;
@@ -417,6 +415,15 @@ function handleSseBlock(block: string): void {
   const changeDetail: ApiChangeDetail = typeof detail === 'object' && detail !== null
     ? detail as ApiChangeDetail
     : { type: String(detail) };
+  const now = Date.now();
+  for (const [id, timestamp] of seenEventIds) {
+    if (now - timestamp > 600_000) seenEventIds.delete(id);
+  }
+  if (changeDetail.eventId) {
+    if (seenEventIds.has(changeDetail.eventId)) return;
+    seenEventIds.set(changeDetail.eventId, now);
+    if (seenEventIds.size > 2048) seenEventIds.delete(seenEventIds.keys().next().value!);
+  }
   window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
   publishApiChange(changeDetail);
 }
@@ -438,6 +445,10 @@ export async function startRealtimeEvents(): Promise<void> {
     });
     assertAuthSession(context);
     if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
+    if (controller.signal.aborted) return;
+    // The stream has no replay cursor; reconnects must recover changes missed while disconnected.
+    if (realtimeGeneration === context.generation) publishApiChange({ type: 'realtime.reconnected' }, context);
+    realtimeGeneration = context.generation;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -501,6 +512,8 @@ subscribeAuth(() => {
   requestGeneration = getAuthSnapshot().generation;
   activeRequests.forEach((controller) => controller.abort());
   conditionalGetCache.clear();
+  seenEventIds.clear();
+  apiBatches.clear();
   stopRealtimeEvents();
   if (getAuthSnapshot().token && getAuthSnapshot().user) {
     void startRealtimeEvents();

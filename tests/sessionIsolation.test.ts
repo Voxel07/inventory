@@ -158,6 +158,20 @@ test('each login and permission change replaces the complete QueryClient', async
   expect(queries.getSessionQueryClient().getQueryData(['orders'])).toBeUndefined();
 });
 
+test('query retries stop on terminal HTTP errors and obsolete sessions', async () => {
+  signIn('A');
+  const client = queries.getSessionQueryClient();
+  const options = { retryDelay: 0 };
+  for (const error of [new api.ApiError(403, 'Forbidden'), new api.ApiError(409, 'Conflict'), new auth.SessionChangedError()]) {
+    let calls = 0;
+    await outcome(client.fetchQuery({ ...options, queryKey: ['retry', error.message], queryFn: async () => { calls++; throw error; } }));
+    expect(calls).toBe(1);
+  }
+  let calls = 0;
+  await outcome(client.fetchQuery({ ...options, queryKey: ['retry', 'transient'], queryFn: async () => { calls++; throw new api.ApiError(503, 'Unavailable'); } }));
+  expect(calls).toBe(3);
+});
+
 test('an account switch while headers refresh prevents the request being sent', async () => {
   const refreshed = deferred<OidcTokenSet>(), started = deferred<void>();
   refresh = () => { started.resolve(); return refreshed.promise; };

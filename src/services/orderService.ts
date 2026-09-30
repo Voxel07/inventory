@@ -1,9 +1,13 @@
-import type { GeneralOrder, GeneralOrderFormData } from '../types';
+import type { GeneralOrder, GeneralOrderSummary, GeneralOrderFormData } from '../types';
 import { createMutableResourceApi } from './resourceFactory';
 import { apiRequest } from './apiClient';
 import type { GeneralOrderCommands } from '../types/order';
 
-export const generalOrderApi = createMutableResourceApi<GeneralOrder, GeneralOrderFormData>('/api/general-orders');
+const mutations = createMutableResourceApi<GeneralOrder, GeneralOrderFormData>('/api/general-orders');
+export const generalOrderApi = {
+  ...mutations,
+  getAll: (query?: Record<string, string | number | boolean | undefined>) => apiRequest<GeneralOrderSummary[]>('/api/general-orders', { query }),
+};
 export const getOrders = generalOrderApi.getAll;
 export const createOrder = generalOrderApi.create;
 export const updateOrder = generalOrderApi.update;

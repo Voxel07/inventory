@@ -248,7 +248,7 @@ export async function flushOfflineQueue(): Promise<void> {
       });
       if (context.generation === getAuthSnapshot().generation) {
         await notifyQueueChanged();
-        window.dispatchEvent(new CustomEvent('ash-api-change'));
+        window.dispatchEvent(new CustomEvent('ash-api-change', { detail: { type: 'sync.completed' } }));
       }
     }
   } catch {

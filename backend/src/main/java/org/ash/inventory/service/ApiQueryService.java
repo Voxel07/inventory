@@ -44,6 +44,9 @@ public class ApiQueryService {
     private final UserOrm users;
     private final ApiMapper mapper;
     @jakarta.inject.Inject PlanningService planning;
+    @jakarta.inject.Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
+    @jakarta.inject.Inject org.ash.inventory.orm.PurchasingOrm purchasing;
+    @jakarta.inject.Inject EventMetricsService eventMetrics;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -64,12 +67,12 @@ public class ApiQueryService {
     public List<ApiResponses.ItemResponse> items(String search, int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
-        return mapper.items(catalog.getItems(search, bounds.offset(), bounds.limit()));
+        return projectItems(catalog.getItems(search, bounds.offset(), bounds.limit()));
     }
 
     @Transactional
     public ApiResponses.ItemResponse item(UUID id) {
-        return mapper.item(catalog.getVisibleItem(id));
+        return projectItem(catalog.getVisibleItem(id));
     }
 
     @Transactional
@@ -101,19 +104,19 @@ public class ApiQueryService {
     public List<ApiResponses.AssemblyResponse> assemblies() {
         actors.current();
         var visible = catalog.getVisibleAssemblies();
-        return mapper.assemblies(visible.assemblies(), visible.components());
+        return projectAssemblies(visible.assemblies(), visible.components());
     }
 
     @Transactional
     public ApiResponses.AssemblyResponse assembly(UUID id) {
         actors.current();
-        return mapper.assembly(required(Assembly.class, id, "Assembly"));
+        return projectAssembly(required(Assembly.class, id, "Assembly"));
     }
 
     @Transactional
     public ApiResponses.EventResponse event(UUID id) {
         actors.current();
-        return mapper.event(required(EventOccurrence.class, id, "Event occurrence"));
+        return projectEvent(required(EventOccurrence.class, id, "Event occurrence"));
     }
 
     @Transactional
@@ -151,7 +154,7 @@ public class ApiQueryService {
         var value = orders.findOrder(id);
         if (value == null) throw ApiException.notFound("Faction order not found");
         orderService.assertCanView(value);
-        return mapper.order(value);
+        return projectOrder(value);
     }
 
     @Transactional
@@ -185,10 +188,89 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.GeneralOrderResponse> generalOrders(int page, int size) {
-        actors.current();
+    public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(int page, int size) {
+        var actor = actors.current();
         var bounds = bounds(page, size);
-        return generalOrders.orders(actors.current(), bounds.offset(), bounds.limit()).stream().map(mapper::generalOrder).toList();
+        var values = generalOrders.orders(actor, bounds.offset(), bounds.limit());
+        var names = generalOrderNames(values);
+        return values.stream().map(o -> mapper.generalOrderSummary(o, namesFor(o, names))).toList();
+    }
+
+    @Transactional
+    public ApiResponses.GeneralOrderResponse generalOrder(UUID id) {
+        var order = generalOrders.find(org.ash.inventory.model.GeneralOrder.class, id);
+        if (order == null) throw ApiException.notFound("General order not found");
+        var actor = actors.current();
+        if (actor.role == DomainEnums.UserRole.faction_leader && !order.createdBy.id.equals(actor.id))
+            throw ApiException.forbidden("General order belongs to another user");
+        return projectGeneralOrder(order);
+    }
+
+    public List<ApiResponses.ItemResponse> projectItems(List<Item> values) {
+        var stock = inventory.stock(values);
+        var images = catalogOrm.itemImages(values);
+        var ordered = purchasing.outstandingQuantities(values.stream().map(i -> i.id).toList());
+        return values.stream().map(i -> mapper.item(i, stock.get(i.id), images.getOrDefault(i.id, List.of()),
+                ordered.getOrDefault(i.id, 0))).toList();
+    }
+
+    public ApiResponses.ItemResponse projectItem(Item value) {
+        return projectItems(List.of(value)).getFirst();
+    }
+
+    public List<ApiResponses.AssemblyResponse> projectAssemblies(List<Assembly> values,
+            Map<UUID, List<org.ash.inventory.model.AssemblyItem>> components) {
+        var items = components.values().stream().flatMap(List::stream).map(c -> c.item).distinct().toList();
+        var images = catalogOrm.itemImages(items);
+        var views = new LinkedHashMap<UUID, ApiResponses.ItemResponse>();
+        for (var item : items) views.put(item.id, mapper.item(item, null, images.getOrDefault(item.id, List.of()), 0));
+        return values.stream().map(a -> mapper.assembly(a, components.getOrDefault(a.id, List.of()), views)).toList();
+    }
+
+    public ApiResponses.AssemblyResponse projectAssembly(Assembly value) {
+        return projectAssemblies(List.of(value), Map.of(value.id, catalog.getVisibleAssemblyComponents(value))).getFirst();
+    }
+
+    public List<ApiResponses.EventResponse> projectEvents(List<EventOccurrence> values) {
+        var metrics = eventMetrics.summarize(values);
+        return values.stream().map(e -> mapper.event(e, metrics.get(e.id))).toList();
+    }
+
+    public ApiResponses.EventResponse projectEvent(EventOccurrence value) {
+        return projectEvents(List.of(value)).getFirst();
+    }
+
+    private Map<String, String> generalOrderNames(List<org.ash.inventory.model.GeneralOrder> values) {
+        return catalogOrm.itemNames(values.stream().flatMap(o -> o.requestedQuantities.keySet().stream()).map(UUID::fromString).distinct().toList());
+    }
+
+    private Map<String, String> namesFor(org.ash.inventory.model.GeneralOrder order, Map<String, String> names) {
+        var result = new LinkedHashMap<String, String>();
+        order.requestedQuantities.keySet().forEach(id -> { if (names.containsKey(id)) result.put(id, names.get(id)); });
+        return result;
+    }
+
+    public ApiResponses.GeneralOrderResponse projectGeneralOrder(org.ash.inventory.model.GeneralOrder value) {
+        return mapper.generalOrder(value, generalOrderNames(List.of(value)), generalOrders.history(value));
+    }
+
+    public ApiResponses.OrderResponse projectOrder(org.ash.inventory.model.FactionOrder value) {
+        var actor = actors.current();
+        var lines = orders.lines(List.of(value));
+        var assemblies = lines.stream().filter(l -> l.sourceAssembly != null).map(l -> l.sourceAssembly).distinct().toList();
+        var components = catalogOrm.assemblyItems(assemblies);
+        var quantities = new LinkedHashMap<AssemblyItemId, Integer>();
+        components.values().stream().flatMap(List::stream).forEach(c -> quantities.put(c.id, c.quantity));
+        var visibleAssemblies = assemblies.stream().filter(a -> catalog.canViewAssemblyComponents(components.getOrDefault(a.id, List.of()), actor)).toList();
+        var visibleComponents = new LinkedHashMap<UUID, List<org.ash.inventory.model.AssemblyItem>>();
+        visibleAssemblies.forEach(a -> visibleComponents.put(a.id, components.getOrDefault(a.id, List.of())));
+        var items = lines.stream().map(l -> l.item).distinct().filter(i -> catalog.canViewItem(i, actor)).toList();
+        var assignments = new LinkedHashMap<String, List<ApiResponses.AssetInstanceResponse>>();
+        orders.assetAssignments(value).forEach(a -> assignments.computeIfAbsent(a.assetInstance.item.id.toString(), ignored -> new ArrayList<>()).add(mapper.asset(a.assetInstance)));
+        var sources = new LinkedHashMap<String, String>();
+        orders.reservations(value).stream().filter(r -> r.location != null).forEach(r -> sources.putIfAbsent(r.item.id.toString(), r.location.id.toString()));
+        return mapper.order(value, lines, quantities, projectItems(items), projectAssemblies(visibleAssemblies, visibleComponents),
+                orders.history(value).stream().map(mapper::history).toList(), assignments, sources);
     }
 
     @Transactional

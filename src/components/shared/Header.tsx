@@ -39,7 +39,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNotifications, markNotificationRead, type AppNotification } from '../../services/notificationService';
-import { subscribeToApiChanges } from '../../services/apiClient';
 import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
 import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
 import { discardOfflineAction, discardSyncFailure, getOfflineActions, getSyncFailures, type OfflineAction, type SyncFailure } from '../../services/offlineQueue';
@@ -73,9 +72,6 @@ export function Header() {
     const [quickScanInput, setQuickScanInput] = useState('');
     const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: getNotifications, refetchInterval: 60_000 });
     const unreadNotifications = notifications.filter((notification) => !notification.readAt);
-    useEffect(() => subscribeToApiChanges(() => {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    }), [queryClient]);
     const markRead = useMutation({
         mutationFn: (ids: string[]) => Promise.all(ids.map(markNotificationRead)),
         onMutate: async (ids) => {
@@ -91,7 +87,7 @@ export function Header() {
             if (context?.previous) queryClient.setQueryData(['notifications'], context.previous);
             showSnackbar(t('header.dismissPickupNoticeFailed'), 'error');
         },
-        onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+        onSettled: (_data, error) => { if (error) void queryClient.invalidateQueries({ queryKey: ['notifications'] }); },
     });
 
     function openNotifications(event: MouseEvent<HTMLElement>) {

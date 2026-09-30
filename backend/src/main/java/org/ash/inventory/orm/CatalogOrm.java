@@ -32,7 +32,7 @@ public class CatalogOrm {
         String filtering = search == null || search.isBlank() ? ""
                 : " and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)";
         var query = entityManager.createQuery(
-                "select distinct i from Item i left join fetch i.storageLocation left join fetch i.returnLocation"
+                "select distinct i from Item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent"
                         + " left join fetch i.assignedUser where i.active = true" + visibility + filtering
                         + " order by i.createdAt desc, i.id desc", Item.class)
                 .setParameter("manager", manager)
@@ -97,7 +97,7 @@ public class CatalogOrm {
     }
 
     public List<AssemblyItem> assemblyItems(Assembly assembly) {
-        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation where ai.assembly = :assembly", AssemblyItem.class)
+        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser where ai.assembly = :assembly", AssemblyItem.class)
                 .setParameter("assembly", assembly).getResultList();
     }
 
@@ -106,7 +106,7 @@ public class CatalogOrm {
             return java.util.Map.of();
         }
         var items = entityManager.createQuery(
-                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation where ai.assembly in :assemblies", AssemblyItem.class)
+                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser where ai.assembly in :assemblies", AssemblyItem.class)
                 .setParameter("assemblies", assemblies)
                 .getResultList();
         return items.stream().collect(java.util.stream.Collectors.groupingBy(ai -> ai.assembly.id));
@@ -115,6 +115,14 @@ public class CatalogOrm {
     public List<ItemImage> itemImages(Item item) {
         return entityManager.createQuery("from ItemImage image where image.item = :item order by image.displayOrder", ItemImage.class)
                 .setParameter("item", item).getResultList();
+    }
+
+    public java.util.Map<String, String> itemNames(java.util.Collection<UUID> ids) {
+        var result = new java.util.LinkedHashMap<String, String>();
+        if (ids.isEmpty()) return result;
+        for (var row : entityManager.createQuery("select i.id, i.name from Item i where i.id in :ids", Object[].class)
+                .setParameter("ids", ids).getResultList()) result.put(row[0].toString(), (String) row[1]);
+        return result;
     }
 
     public java.util.Map<UUID, List<ItemImage>> itemImages(List<Item> items) {

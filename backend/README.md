@@ -48,7 +48,7 @@ resource -> service -> orm -> model
 
 The domain and event contract is documented in [`../docs/DOMAIN_ARCHITECTURE.md`](../docs/DOMAIN_ARCHITECTURE.md). Business services append events to `domain_event_outbox` in the same transaction as aggregate changes. The outbox dispatcher provides at-least-once SSE/Redis delivery, so consumers deduplicate on `eventId`.
 
-Focused ORM classes now own direct persistence, and `SyncService` owns replay orchestration. `ApiMapper` still invokes ORM readers and stock/event services, so response loading and mapping ownership remain incomplete; see the [repository review](../docs/REPOSITORY_REVIEW.md). Category maintenance follows all three layers. Source extraction does not establish runtime correctness.
+Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` receives those projections without invoking ORM readers or stock/event services. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/REFACTOR_PROGRESS.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
 
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
 

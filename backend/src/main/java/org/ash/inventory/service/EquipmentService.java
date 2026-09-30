@@ -45,11 +45,16 @@ public class EquipmentService {
         var event = eventId == null ? null : orm.find(EventOccurrence.class, eventId);
         if (eventId != null && event == null) throw ApiException.notFound("Event not found");
         var result = new LinkedHashMap<UUID, Availability>();
-        for (var item : orm.activeItems()) {
-            if (!actors.canViewItem(item, actor) || freelyAvailable(item)) continue;
-            var c = matching(item, event);
+        var items = orm.activeItems().stream().filter(i -> actors.canViewItem(i, actor) && !freelyAvailable(i)).toList();
+        var stock = inventory.readStock(items);
+        for (var item : items) {
+            var read = stock.get(item.id);
+            var c = matching(item, event, read.policy().commitments());
             boolean pickupAllowed = c != null && !LocalDate.now().isBefore(c.availableFrom) && !LocalDate.now().isAfter(c.availableUntil);
-            result.put(item.id, new Availability(inventory.availableFor(item, event, 0), c == null ? List.of() : eligibleAssets(c), pickupAllowed));
+            var loan = c == null ? null : read.policy().loan(c);
+            var eligible = c == null ? List.<String>of() : loan == null ? c.assetIds
+                    : loan.collectedAssets.stream().filter(id -> !loan.returnedAssets.contains(id)).toList();
+            result.put(item.id, new Availability(available(item, event, read.physical(), 0, read.policy()), eligible, pickupAllowed));
         }
         return result;
     }

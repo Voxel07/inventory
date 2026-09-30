@@ -1,5 +1,5 @@
 import { useAuth } from './useAuth';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReturnSubmissionFormData, ReturnSubmissionStatus } from '../types';
 import {
   acknowledgeReturnSubmission,
@@ -17,16 +17,8 @@ export function useReturnSubmissions(status?: ReturnSubmissionStatus) {
 }
 
 function useReturnMutation<T>(mutationFn: (input: T) => Promise<unknown>) {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custody-balances'] });
-      queryClient.invalidateQueries({ queryKey: ['return-submissions'] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['faction-orders'] });
-    },
   });
 }
 

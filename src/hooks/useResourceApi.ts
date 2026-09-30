@@ -1,88 +1,30 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import type { CreateResourceApi, CrudResourceApi, MutableResourceApi } from '../services/resourceFactory';
 
-export interface ResourceHooksOptions {
-  relatedKeys?: string[];
-}
-
-function relatedKeysFrom(options?: ResourceHooksOptions | string[]): string[] | undefined {
-  return Array.isArray(options) ? options : options?.relatedKeys;
-}
-
-function invalidateResources(queryClient: ReturnType<typeof useQueryClient>, queryKey: string, relatedKeys?: string[]) {
-  queryClient.invalidateQueries({ queryKey: [queryKey] });
-  relatedKeys?.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
-}
-
-export function createCreateResourceHooks<T extends { id: string }, TForm>(
-  api: CreateResourceApi<T, TForm>,
-  queryKey: string,
-  options?: ResourceHooksOptions | string[],
-) {
-  const relatedKeys = relatedKeysFrom(options);
+// Successful writes broadcast through apiClient; hooks do not invalidate a second time.
+export function createCreateResourceHooks<T extends { id: string }, TForm>(api: CreateResourceApi<T, TForm>, queryKey: string) {
   return {
     useList(query?: Record<string, string | number | boolean | undefined>) {
       return useQuery({ queryKey: [queryKey, query], queryFn: () => api.getAll(query) });
     },
-    useCreate() {
-      const queryClient = useQueryClient();
-      return useMutation({
-        mutationFn: (data: TForm) => api.create(data),
-        onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
-      });
-    },
+    useCreate() { return useMutation({ mutationFn: (data: TForm) => api.create(data) }); },
   };
 }
 
-export function createMutableResourceHooks<T extends { id: string }, TForm>(
-  api: MutableResourceApi<T, TForm>,
-  queryKey: string,
-  options?: ResourceHooksOptions | string[],
-) {
-  const createHooks = createCreateResourceHooks(api, queryKey, options);
-  const relatedKeys = relatedKeysFrom(options);
+export function createMutableResourceHooks<T extends { id: string }, TForm>(api: MutableResourceApi<T, TForm>, queryKey: string) {
   return {
-    ...createHooks,
+    ...createCreateResourceHooks(api, queryKey),
     useDetail(id?: string) {
       return useQuery({ queryKey: [queryKey, id], queryFn: () => api.getById(id!), enabled: Boolean(id) });
     },
-    useUpdate() {
-      const queryClient = useQueryClient();
-      return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<TForm> }) => api.update(id, data),
-        onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
-      });
-    },
+    useUpdate() { return useMutation({ mutationFn: ({ id, data }: { id: string; data: Partial<TForm> }) => api.update(id, data) }); },
   };
 }
 
-export function createResourceHooks<T extends { id: string }, TForm = Partial<T>>(
-  api: CrudResourceApi<T, TForm>,
-  queryKey: string,
-  options?: ResourceHooksOptions | string[],
-) {
-  const mutableHooks = createMutableResourceHooks(api, queryKey, options);
-  const relatedKeys = relatedKeysFrom(options);
-
-  function useDelete() {
-    const queryClient = useQueryClient();
-    return useMutation({
-      mutationFn: (id: string) => api.delete(id),
-      onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
-    });
-  }
-
-  function useDeleteMany() {
-    const queryClient = useQueryClient();
-    return useMutation({
-      mutationFn: (ids: string[]) => api.deleteMany(ids),
-      onSuccess: () => invalidateResources(queryClient, queryKey, relatedKeys),
-    });
-  }
-
+export function createResourceHooks<T extends { id: string }, TForm = Partial<T>>(api: CrudResourceApi<T, TForm>, queryKey: string) {
   return {
-    ...mutableHooks,
-    useDelete,
-    useDeleteMany,
+    ...createMutableResourceHooks(api, queryKey),
+    useDelete() { return useMutation({ mutationFn: (id: string) => api.delete(id) }); },
+    useDeleteMany() { return useMutation({ mutationFn: (ids: string[]) => api.deleteMany(ids) }); },
   };
 }
