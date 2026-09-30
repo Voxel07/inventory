@@ -21,8 +21,8 @@ public class PositionOrm {
     }
     public List<StockReservation> reservations(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return em.createQuery("from StockReservation r join fetch r.item i left join fetch i.storageLocation left join fetch r.location where r.item.id in :ids and r.status = :status", StockReservation.class)
-                .setParameter("ids", itemIds).setParameter("status", DomainEnums.ReservationStatus.active).getResultList();
+        return em.createQuery("from StockReservation r join fetch r.item i left join fetch i.storageLocation left join fetch r.location where r.item.id in :ids and r.status in :statuses", StockReservation.class)
+                .setParameter("ids", itemIds).setParameter("statuses", openReservationStatuses()).getResultList();
     }
     public List<GeneralOrder> reservedGeneralOrders() {
         return em.createQuery("from GeneralOrder o where o.status in ('preparing', 'ready')", GeneralOrder.class).getResultList();
@@ -37,8 +37,8 @@ public class PositionOrm {
     public void lock(Item item) { em.lock(item, LockModeType.PESSIMISTIC_WRITE); }
     public int reserved(Item item, StorageLocation location, UUID exceptFaction, UUID exceptGeneral) {
         int result = 0;
-        for (var r : em.createQuery("from StockReservation r where r.item = :item and r.status = :status", StockReservation.class)
-                .setParameter("item", item).setParameter("status", DomainEnums.ReservationStatus.active).getResultList()) {
+        for (var r : em.createQuery("from StockReservation r where r.item = :item and r.status in :statuses", StockReservation.class)
+                .setParameter("item", item).setParameter("statuses", openReservationStatuses()).getResultList()) {
             if (exceptFaction != null && r.order.id.equals(exceptFaction)) continue;
             var source = r.location == null ? item.storageLocation : r.location;
             if (source != null && source.id.equals(location.id)) result += r.openQuantity();
@@ -50,5 +50,8 @@ public class PositionOrm {
             if (location.id.toString().equals(source)) result += order.preparedQuantities.getOrDefault(item.id.toString(), 0);
         }
         return result;
+    }
+    private List<DomainEnums.ReservationStatus> openReservationStatuses() {
+        return List.of(DomainEnums.ReservationStatus.active, DomainEnums.ReservationStatus.partially_released);
     }
 }

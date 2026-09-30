@@ -42,8 +42,22 @@ public class CatalogService {
     }
 
     public List<Item> getItems(String search, int offset, int limit) {
+        return getItems(search, null, offset, limit);
+    }
+
+    public List<Item> getItems(String search, String category, int offset, int limit) {
         var actor = actorService.current();
-        return orm.items(search, actor.id, actor.factions, canManageInventory(actor), offset, limit);
+        return orm.items(search, category, actor.id, actor.factions, canManageInventory(actor), offset, limit);
+    }
+
+    public List<UUID> getVisibleItemIds() {
+        var actor = actorService.current();
+        return orm.visibleItemIds(actor.id, actor.factions, canManageInventory(actor));
+    }
+
+    public List<String> getVisibleCategories() {
+        var actor = actorService.current();
+        return orm.categories(actor.id, actor.factions, canManageInventory(actor));
     }
 
     public Item getVisibleItem(UUID id) {
@@ -471,6 +485,10 @@ public class CatalogService {
     public List<AssetInstance> getAssets(UUID itemId, int offset, int limit) {
         var item = getVisibleItem(itemId);
         return orm.assetInstances(item, offset, limit);
+    }
+
+    public List<AssetInstance> getAssets(UUID itemId, DomainEnums.AssetState status, int offset, int limit) {
+        return orm.assetInstances(getVisibleItem(itemId), status, offset, limit);
     }
 
     public AssetInstance getAssetByCode(String code) {

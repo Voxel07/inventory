@@ -4,14 +4,20 @@ import io.quarkiverse.mcp.server.Prompt;
 import io.quarkiverse.mcp.server.PromptArg;
 import io.quarkiverse.mcp.server.PromptMessage;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import org.ash.inventory.service.McpInventoryService;
 
 @ApplicationScoped
 public class InventoryMcpPrompts {
+    @Inject McpInventoryService service;
 
     @Prompt(name = "event_readiness_audit", description = "Generates a prompt for auditing gear and equipment readiness for an event")
+    @Transactional
     public PromptMessage eventReadinessAudit(
             @PromptArg(name = "eventName", description = "Name of the target event", required = true) String eventName,
             @PromptArg(name = "focusArea", description = "Specific gear category to prioritize (e.g., Comms, Generators, Safety, Weapons)", required = false) String focusArea) {
+        service.authenticate();
         String prompt = "Please audit the equipment readiness for event '" + eventName + "'."
                 + (focusArea != null && !focusArea.isBlank() ? " Focus especially on: " + focusArea + "." : "")
                 + "\nSteps:"
@@ -23,8 +29,10 @@ public class InventoryMcpPrompts {
     }
 
     @Prompt(name = "procurement_restock_plan", description = "Generates a prompt to review low stock items and formulate a purchasing plan")
+    @Transactional
     public PromptMessage procurementRestockPlan(
             @PromptArg(name = "supplierPreference", description = "Preferred supplier or note", required = false) String supplierPreference) {
+        service.authenticate();
         String prompt = "Review current inventory items below minStock threshold."
                 + (supplierPreference != null && !supplierPreference.isBlank() ? " Preferred supplier: " + supplierPreference + "." : "")
                 + "\nSteps:"

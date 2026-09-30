@@ -27,25 +27,53 @@ public class CatalogOrm {
     public CatalogOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
     public List<Item> items(String search, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
-        String visibility = " and (:manager = true or i.visibilityScope in (:publicScopes)"
-                + " or i.assignedUser.id = :actorId or i.assignedGroup in (:actorGroups))";
+        return items(search, null, actorId, actorGroups, manager, offset, limit);
+    }
+
+    public List<Item> items(String search, String category, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
         String filtering = search == null || search.isBlank() ? ""
                 : " and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)";
-        var query = entityManager.createQuery(
+        String categoryFilter = category == null || category.isBlank() ? "" : " and lower(i.category) = :category";
+        var query = visible(entityManager.createQuery(
                 "select distinct i from Item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent"
-                        + " left join fetch i.assignedUser where i.active = true" + visibility + filtering
-                        + " order by i.createdAt desc, i.id desc", Item.class)
-                .setParameter("manager", manager)
-                .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
-                .setParameter("actorId", actorId)
-                .setParameter("actorGroups", actorGroups == null || actorGroups.isEmpty() ? List.of("__none__") : actorGroups)
+                        + " left join fetch i.assignedUser where i.active = true" + visibility() + filtering + categoryFilter
+                        + " order by i.createdAt desc, i.id desc", Item.class), actorId, actorGroups, manager)
                 .setFirstResult(offset).setMaxResults(limit);
         if (!filtering.isEmpty()) query.setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%");
+        if (!categoryFilter.isEmpty()) query.setParameter("category", category.trim().toLowerCase(Locale.ROOT));
         return query.getResultList();
     }
 
+    private String visibility() {
+        return " and (:manager = true or i.visibilityScope is null or i.visibilityScope in (:publicScopes)"
+                + " or (i.visibilityScope = :personScope and i.assignedUser.id = :actorId)"
+                + " or (i.visibilityScope = :groupScope and :hasGroups = true and i.assignedGroup in (:actorGroups)))";
+    }
+
+    private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query,
+            UUID actorId, List<String> actorGroups, boolean manager) {
+        return query.setParameter("manager", manager)
+                .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
+                .setParameter("personScope", DomainEnums.ItemVisibilityScope.person)
+                .setParameter("groupScope", DomainEnums.ItemVisibilityScope.group)
+                .setParameter("hasGroups", actorGroups != null && !actorGroups.isEmpty())
+                .setParameter("actorId", actorId)
+                .setParameter("actorGroups", actorGroups == null || actorGroups.isEmpty() ? List.of("__none__") : actorGroups);
+    }
+
+    public List<UUID> visibleItemIds(UUID actorId, List<String> actorGroups, boolean manager) {
+        return visible(entityManager.createQuery("select i.id from Item i where i.active = true" + visibility(), UUID.class),
+                actorId, actorGroups, manager).getResultList();
+    }
+
+    public List<String> categories(UUID actorId, List<String> actorGroups, boolean manager) {
+        return visible(entityManager.createQuery("select distinct i.category from Item i where i.active = true"
+                + " and i.category is not null" + visibility() + " order by i.category", String.class),
+                actorId, actorGroups, manager).getResultList();
+    }
+
     public List<StorageLocation> locations() {
-        return entityManager.createQuery("from StorageLocation l where l.active = true order by l.createdAt desc", StorageLocation.class).getResultList();
+        return entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true order by l.createdAt desc", StorageLocation.class).getResultList();
     }
 
     public List<StorageLocation> allLocations() {
@@ -166,8 +194,15 @@ public class CatalogOrm {
     }
 
     public List<AssetInstance> assetInstances(Item item, int offset, int limit) {
-        return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true order by a.assetCode asc", AssetInstance.class)
-                .setParameter("item", item).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return assetInstances(item, null, offset, limit);
+    }
+
+    public List<AssetInstance> assetInstances(Item item, DomainEnums.AssetState status, int offset, int limit) {
+        var query = entityManager.createQuery("from AssetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian"
+                + " where a.item = :item and a.active = true" + (status == null ? "" : " and a.availabilityStatus = :status")
+                + " order by a.assetCode asc, a.id", AssetInstance.class).setParameter("item", item);
+        if (status != null) query.setParameter("status", status);
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public long countAssets(Item item) {

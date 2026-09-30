@@ -6,6 +6,8 @@ Updated 1 October 2026 against `offlineQueue.ts`, `resourceFactory.ts`, `apiClie
 
 The PWA service worker caches the application shell. IndexedDB stores account-scoped catalog reads and a durable command queue. Items, assemblies, storage locations and events can fall back to saved query-specific results on eligible network/server failures. Cache timestamps indicate the last successful download; cached quantities are not a current availability promise.
 
+Current limitation: collection hooks still use the default online query scheduling, so a cold offline start can pause before their service-level IndexedDB fallback runs. Warm in-memory lists can conceal this. Exact item detail queries explicitly allow a first offline attempt; collection scheduling remains R04 in the [current review](REPOSITORY_REVIEW.md).
+
 Item details are cached by exact item identity within the account/role/faction namespace. Online detail reads, downloaded list pages (including later and filtered pages), and successful create/update responses populate these entries. A downloaded item can be opened offline even if its detail was never visited; an item never downloaded has no fallback. Query-specific lists remain separate and are not assumed complete. Online 403/404 or successful deletion removes the exact item entry. Offline detail queries run their first attempt so IndexedDB fallback can be reached; fallback timestamps remain the original download time. Item pages cache themselves instead of a separate page-zero reconnect precache.
 
 | Queued write | Server action |

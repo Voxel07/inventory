@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** F01–F23 present in source; consolidation reviewed 30 September 2026; runtime acceptance pending
+> **Status:** F01–F23 present in source; consolidation re-reviewed 1 October 2026 after A/P/U refactors; runtime acceptance pending
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -38,7 +38,7 @@ The application is a modular monolith. This is deliberate: inventory, orders, da
 
 ## 3. Functional requirements and implementation status
 
-### Current delivery status — 30 September 2026
+### Current delivery status — 1 October 2026
 
 F01–F23 have frontend workflows and backend implementations in source. The [repository review](docs/REPOSITORY_REVIEW.md) consolidates their ownership map, operational semantics, source-confirmed defects, C01–C09 status and verification limits. Source presence does not imply conformance with every requirement.
 
@@ -47,8 +47,8 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 | F01–F18 | Event planning/results, purchasing/receiving, location stock, transfers/counts/lots, orders/custody, repairs/maintenance, hierarchy, offline correction, reporting and operator tools present |
 | F19–F23 | Ownership/commitments, member self-service, action inbox/reminders, camera/code management and borrowing/rental lifecycle present |
 | Consolidation | One disposable SQL baseline; shared query feedback, snackbar, catalog dialogs and warehouse service; unused catalog view and CRUD aliases removed; category/catalog/general-order persistence follows ORM boundaries |
-| Architectural gaps | Direct persistence extraction and shared order/transport controls exist; response mapping still chooses database work, account isolation and draft resets are incomplete, and maintenance policy adoption has regressed. See the current review for exact findings. |
-| Verification | Current frontend non-emitting typecheck and targeted lint, Java syntax and schema structural inspection only; backend compilation, fresh PostgreSQL initialization and responsive/role acceptance pending |
+| Architectural gaps | Original A01–A06, P01–P05 and U01–U02 fixes confirmed in source: scoped REST assembly reads, session isolation, stock/count/return policy, batch projections, report filtering/export, invalidation and preparation/exact-detail cache changes. MCP R01/R02 fixes now authenticate production transport and delegate authorized catalog/stock use cases with scoped reads and outbox publication. Remaining source gaps are report contributor-hold parity, cold-start collection scheduling, camera deployment policy and inbox query fan-out. |
+| Verification | Current non-emitting frontend typechecks, full src lint, reachability and schema structural checks passed. Refactoring progress records earlier A-stage builds/87 H2 tests and P-stage builds/95 H2 tests plus 13 client tests; these predate U/MCP changes. MCP Java syntax and static contracts/boundaries checked; new targeted regression cases authored but not run. Fresh PostgreSQL initialization, responsive/role/browser acceptance and performance traces remain pending. |
 
 “Implemented” below means source coverage, not release verification. Earlier build/test results do not validate subsequent changes.
 
@@ -152,13 +152,15 @@ For a bulk item, the authoritative read model is:
 ```text
 onHand = inbound ledger movements - outbound ledger movements
 checkedOut = checkout - checkin - consumed - missing
-totalOwned = onHand + checkedOut
-available = max(0, onHand - unresolvedDamage - activeReservations)
+totalOwned = onHand + checkedOut + inTransit
+physicalAvailable = max(0, onHand - unresolvedDamage - activeReservations - blockedPositions)
 ```
+
+`blockedPositions` excludes quarantined or unusable lot stock without subtracting already-counted damage twice. Final `available` further applies active-item/maintenance, unresolved contributor-damage and ownership/commitment eligibility. An event-scoped projection may credit that order's reservation or eligible committed supply; cached or report quantities never replace command validation.
 
 Invariants:
 
-- `totalOwned` includes material currently in custody; valuation and procurement must not treat checkout as loss.
+- `totalOwned` includes material currently in custody and organization stock in physical transfer; valuation and procurement must not treat checkout or transfer transit as loss.
 - `onHand` is physically at an inventory location.
 - `available` is the only quantity allocatable to a new order.
 - `ordered` is the unreceived quantity on external purchase orders in `ordered` or `partially_received` status. It is shown as in transit and is excluded from physical, owned, and available stock until a goods receipt posts. Draft and cancelled orders do not contribute.
@@ -169,7 +171,7 @@ Invariants:
 - Direct checkout commands require an event and faction snapshot. Order checkout and return transactions derive the same snapshot from their source order.
 - A return associated with a faction order must use the order reconciliation use case; the generic transaction endpoint rejects order-linked stock changes.
 
-The item collection is intentionally **not server-cached** because it carries dynamic stock. Its stock projection is computed with three grouped queries—transaction totals, unresolved damage, and active reservations—rather than per-item queries. Stable catalog collections may use server caching and ETags. Exact SKU/code resolution uses bounded server-side filters; barcode handling must not fetch an unbounded collection and search it in the browser.
+The item collection is intentionally **not server-cached** because it carries dynamic stock. Its projection batches ledger/damage/reservation aggregates, positions/lots, serialized assets, equipment/maintenance facts, images and outstanding purchase supply through explicit query assemblers. This is not a promise of three total statements; actual lazy loading and query cost require measurement. Stable catalog collections may use server caching and ETags; dynamic event metrics bypass the catalog ETag shortcut. Exact SKU/code resolution uses bounded server-side filters; barcode handling must not fetch an unbounded collection and search it in the browser.
 
 ### 5.1 Serialized inventory and tracking mode rules
 
@@ -304,4 +306,4 @@ The [repository review](docs/REPOSITORY_REVIEW.md) is the canonical review and r
 
 ### Derived state synchronization
 
-`react-hooks/set-state-in-effect` is enabled as an error. Form drafts use guarded source changes, allowed selections derive from current options, and object URL previews use an external-resource subscription with cleanup. Frontend lint passes, but faction preparation does not reset its source-location draft consistently. Reopen/refetch/permission and preview behavior still needs browser acceptance under C09 in the [repository review](docs/REPOSITORY_REVIEW.md). No new bundle-size measurement is claimed.
+`react-hooks/set-state-in-effect` is enabled as an error. Form drafts use guarded source changes, allowed selections derive from current options, and object URL previews use an external-resource subscription with cleanup. The U01 guarded preparation draft now resets quantities, assets and sources together on meaningful source/permission changes; frontend static checks passed before the MCP follow-up. Reopen/refetch/permission and preview behavior still needs browser acceptance under C09 in the [repository review](docs/REPOSITORY_REVIEW.md). No new bundle-size measurement is claimed.

@@ -3,7 +3,7 @@ package org.ash.inventory.helper.security;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.core.HttpHeaders;
+import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.UserAccount;
@@ -17,16 +17,16 @@ import java.util.Set;
 @RequestScoped
 public class ActorService {
     private final SecurityIdentity identity;
-    private final HttpHeaders headers;
+    private final CurrentVertxRequest request;
     private final UserOrm users;
     private final boolean devAuthEnabled;
 
     private UserAccount cached;
 
-    public ActorService(SecurityIdentity identity, HttpHeaders headers, UserOrm users,
+    public ActorService(SecurityIdentity identity, CurrentVertxRequest request, UserOrm users,
             @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled) {
         this.identity = identity;
-        this.headers = headers;
+        this.request = request;
         this.users = users;
         this.devAuthEnabled = devAuthEnabled;
     }
@@ -145,7 +145,10 @@ public class ActorService {
     }
 
     private String header(String name, String fallback) {
-        String value = headers.getHeaderString(name);
+        // MCP uses Vert.x routes rather than JAX-RS. Both transports share the
+        // same request headers; direct CDI calls have no HTTP request.
+        var context = request.getCurrent();
+        String value = context == null ? null : context.request().getHeader(name);
         return value == null || value.isBlank() ? fallback : value;
     }
 

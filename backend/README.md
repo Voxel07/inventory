@@ -50,6 +50,8 @@ The domain and event contract is documented in [`../docs/DOMAIN_ARCHITECTURE.md`
 
 Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` receives those projections without invoking ORM readers or stock/event services. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/REFACTOR_PROGRESS.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
 
+MCP tools/resources/prompts delegate through the transactional `McpInventoryService` and the existing catalog/query/stock owners. Production `/mcp` and `/mcp/*` require OIDC authentication; manager/planner mutations, item/component visibility, real actor attribution and catalog outbox publication use canonical rules. The [MCP guide](../docs/MCP_SUPPORT.md) documents the shared typed inputs and scoped outputs. R01/R02 are implemented in source; the new regression cases have not been run, so production transport and domain acceptance remain open.
+
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
 
 ## Item and assembly images
