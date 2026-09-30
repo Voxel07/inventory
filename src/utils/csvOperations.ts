@@ -1,6 +1,10 @@
 import type { Item } from '../types';
 
 export const CSV_OPERATIONS = {
+  stock: ['Bestandsänderung', 'Stock change', ['itemId', 'transactionType', 'quantityChanged', 'reason']],
+  damage: ['Schadensmeldung', 'Damage report', ['itemId', 'amount', 'description', 'severity']],
+  repair: ['Reparaturfall', 'Repair case', ['damageReportId']],
+  repair_transition: ['Reparaturstatus', 'Repair transition', ['repairId', 'status']],
   lot: ['Charge', 'Lot', ['itemId', 'lotNumber']],
   maintenance: ['Wartungsplan', 'Maintenance schedule', ['itemId', 'maintenanceType', 'intervalType', 'intervalValue']],
   purchase: ['Einkauf', 'Purchase order', ['vendorName', 'orderNumber', 'orderDate', 'lines']],
@@ -44,6 +48,33 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
       if (!name || names.has(name)) throw new Error('Ein eindeutiger Name für die Aktion fehlt');
       for (const key of CSV_OPERATIONS[operation][2]) {
         if (data[key] == null || data[key] === '' || (Array.isArray(data[key]) && !data[key].length)) throw new Error(`Pflichtfeld fehlt: ${key}`);
+      }
+      if (['stock', 'damage', 'repair', 'repair_transition'].includes(operation)) {
+        const quantity = operation === 'stock' ? data.quantityChanged : data.amount;
+        if (quantity != null && (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1)) {
+          throw new Error('Die Menge muss eine positive ganze Zahl sein');
+        }
+        if (operation === 'stock' && !['adjusted', 'checkout', 'checkin'].includes(String(data.transactionType))) {
+          throw new Error('Bestandsänderungen verwenden adjusted, checkout oder checkin; Abschreibungen erfolgen über Reparaturen');
+        }
+        if (operation === 'stock' && data.transactionType === 'checkout' && (!data.eventType || !data.faction)) {
+          throw new Error('Eventtyp und Fraktion sind für Ausleihen erforderlich');
+        }
+        if (operation === 'damage' && !['low', 'medium', 'high', 'critical', 'total_loss'].includes(String(data.severity))) {
+          throw new Error('Ungültiger Schweregrad');
+        }
+        if (operation === 'repair_transition') {
+          if (!['triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service', 'written_off'].includes(String(data.status))) {
+            throw new Error('Ungültiger Reparaturstatus');
+          }
+          if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error('Die Reparatur-/Abschreibungsmenge fehlt');
+          if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error('Das Prüfergebnis fehlt');
+        }
+        if (data.occurredAt != null && (typeof data.occurredAt !== 'string'
+          || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.occurredAt)
+          || !Number.isFinite(Date.parse(data.occurredAt)) || Date.parse(data.occurredAt) > Date.now())) {
+          throw new Error('occurredAt muss ein gültiger ISO-Zeitstempel mit Zeitzone in der Vergangenheit sein');
+        }
       }
       function check(value: unknown): void {
         if (typeof value === 'string') {
