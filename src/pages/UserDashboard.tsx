@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useCustodyBalances } from '../hooks/useCustodyBalances';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
@@ -6,7 +7,6 @@ import {
     Typography,
     Grid,
     Paper,
-    Button,
     DialogTitle,
     DialogContent,
     Stack,
@@ -31,7 +31,7 @@ import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { CheckedOutList } from '../components/lists/CheckedOutList';
 import type { CheckedOutRow } from '../types/custody';
 import type { DamageReportFormData, Item, ReturnSubmissionFormData } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 
@@ -106,7 +106,7 @@ export function UserDashboard() {
 
     if (itemsError || txError || custody.isError) return <Paper sx={{ p: 3 }}>
         <Typography>{t('Die vollständige Übersicht konnte nicht geladen werden.', 'Could not load the complete overview.')}</Typography>
-        <Button onClick={() => { void refetchItems(); void custody.refetch(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+        <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void refetchItems(); void custody.refetch(); void refetchTransactions(); }}>{t('Erneut versuchen', 'Retry')}</Button>
     </Paper>;
     if (itemsLoading || txLoading || custody.isLoading) return <Paper sx={{ p: 3 }}><Typography>{t('Übersicht wird geladen…', 'Loading overview…')}</Typography></Paper>;
 
@@ -120,7 +120,7 @@ export function UserDashboard() {
             </Typography>
 
             <Stack direction="row" spacing={1.5} sx={{ mb: 3, display: { xs: 'flex', md: 'none' } }}>
-                <Button fullWidth variant="outlined" color="success" size="large" startIcon={<AssignmentReturnIcon />} onClick={() => navigate('/checked-out')} sx={{ minHeight: 52 }}>
+                <Button title={translate('Ausgeliehene Artikel für die Rückgabe anzeigen', 'Display checked-out items for return')} fullWidth variant="outlined" color="success" size="large" startIcon={<AssignmentReturnIcon />} onClick={() => navigate('/checked-out')} sx={{ minHeight: 52 }}>
                     {t('Rückgabe', 'Return')}
                 </Button>
             </Stack>

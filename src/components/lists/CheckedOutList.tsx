@@ -1,27 +1,7 @@
+import { Chip, IconButton, Button } from '../shared/ActionButtons';
 import type { CheckedOutRow } from '../../types/custody';
 import { Fragment, useState } from 'react';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Collapse,
-  Divider,
-  IconButton,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material';
+import { Box, Card, CardContent, Collapse, Divider, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import CategoryIcon from '@mui/icons-material/Category';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -29,10 +9,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { Link } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { ListPagination } from '../shared/ListPagination';
 import { useClientPagination } from '../../hooks/useClientPagination';
-
 
 interface Props {
   rows: CheckedOutRow[];
@@ -156,7 +135,7 @@ export function CheckedOutList({
                       {group.rows[0]?.event} · {group.rows.length} {t('Artikel', 'items')}
                     </Typography>
                   </Box>
-                  <IconButton size="small" onClick={() => toggleGroup(groupKey)}>
+                  <IconButton title={translate('Die ausgeliehenen Artikel dieser Gruppe ein- oder ausblenden', 'Show or hide this group\'s checked-out items')} size="small" onClick={() => toggleGroup(groupKey)}>
                     {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                   </IconButton>
                 </Stack>
@@ -216,7 +195,7 @@ export function CheckedOutList({
                         {group.assembly.name}
                       </Typography>
                       {group.rows[0]?.factionOrderId && (
-                        <Chip
+                        <Chip title={translate('Die zugehörige Fraktionsbestellung öffnen', 'Open the related faction order')}
                           component={Link}
                           to={`/orders/faction/${group.rows[0].factionOrderId}`}
                           clickable
@@ -267,12 +246,12 @@ export function CheckedOutList({
         </Box>
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
           {onQuickReturn && (
-            <Button fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut} sx={{ minHeight: 44 }}>
+            <Button title={translate('Eine Rückgabe für diesen Artikel melden', 'Submit a return for this item')} fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut} sx={{ minHeight: 44 }}>
               {t('Zurückgeben', 'Return')}
             </Button>
           )}
           {onDamageReport && (
-            <Button fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)} sx={{ minHeight: 44 }}>
+            <Button title={translate('Einen Schaden an diesem Artikel melden', 'Report damage to this item')} fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)} sx={{ minHeight: 44 }}>
               {t('Schaden', 'Damage')}
             </Button>
           )}
@@ -302,20 +281,18 @@ export function CheckedOutList({
           <TableCell align="right">
             <Stack direction="row" spacing={0.75} sx={{ justifyContent: 'flex-end' }}>
               {onQuickReturn && (
-                <Tooltip title={t('1 Einheit zurückgeben', 'Return 1 unit')} arrow>
-                  <span>
-                    <Button size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut}>
+
+                    <Button title={translate('Eine Rückgabe für diesen Artikel melden', 'Submit a return for this item')} size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut}>
                       {t('Schnellrückgabe', 'Quick return')}
                     </Button>
-                  </span>
-                </Tooltip>
+
               )}
               {onDamageReport && (
-                <Tooltip title={t('Schaden melden', 'Report damage')} arrow>
-                  <Button size="small" variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)}>
-                    {t('Schaden', 'Damage')}
-                  </Button>
-                </Tooltip>
+
+                <Button title={t('Schaden melden', 'Report damage')} size="small" variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)}>
+                  {t('Schaden', 'Damage')}
+                </Button>
+
               )}
             </Stack>
           </TableCell>

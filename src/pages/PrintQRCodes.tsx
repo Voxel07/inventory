@@ -1,23 +1,22 @@
+import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { useEffect, useState } from 'react';
 import {
     Box,
     Typography,
-    Button,
     Paper,
     CircularProgress,
     Grid,
     ToggleButtonGroup,
-    ToggleButton,
     Autocomplete,
     TextField,
-    Tooltip,
+
     MenuItem,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { ListPagination } from '../components/shared/ListPagination';
 import { useClientPagination } from '../hooks/useClientPagination';
 
@@ -177,18 +176,15 @@ export function PrintQRCodesPage() {
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">QR-Codes</Typography>
-                <Tooltip title={t('PDF mit ausgewählten QR-Codes generieren und herunterladen', 'Generate and download a PDF with the selected QR codes')} arrow>
-                    <span>
-                        <Button
-                            variant="contained"
-                            startIcon={<PictureAsPdfIcon />}
-                            onClick={handleGeneratePDF}
-                            disabled={filteredEntries.length === 0 || pdfGenerating}
-                        >
-                            {pdfGenerating ? t('Wird generiert…', 'Generating…') : t('PDF herunterladen', 'Download PDF')}
-                        </Button>
-                    </span>
-                </Tooltip>
+
+                <Button title={translate('QR-Etiketten für die gefilterten Einträge als PDF herunterladen', 'Download QR labels for the filtered entries as PDF')}
+                    variant="contained"
+                    startIcon={<PictureAsPdfIcon />}
+                    onClick={handleGeneratePDF}
+                    disabled={filteredEntries.length === 0 || pdfGenerating}
+                >
+                    {pdfGenerating ? t('Wird generiert…', 'Generating…') : t('PDF herunterladen', 'Download PDF')}
+                </Button>
             </Box>
 
             <Paper sx={{ p: 2, mb: 3 }}>
@@ -207,11 +203,11 @@ export function PrintQRCodesPage() {
                         }}
                         size="small"
                     >
-                        <ToggleButton value="all">{t('Alle', 'All')}</ToggleButton>
-                        <ToggleButton value="items">{t('Nur Artikel', 'Items only')}</ToggleButton>
-                        <ToggleButton value="assemblies">{t('Nur Baugruppen', 'Assemblies only')}</ToggleButton>
-                        <ToggleButton value="single">{t('Einzeln', 'Single')}</ToggleButton>
-                        <ToggleButton value="selected">{t('Auswahl', 'Selection')}</ToggleButton>
+                        <ToggleButton title={translate('QR-Etiketten für Artikel und Baugruppen anzeigen', 'Display QR labels for items and assemblies')} value="all">{t('Alle', 'All')}</ToggleButton>
+                        <ToggleButton title={translate('Nur QR-Etiketten für Artikel anzeigen', 'Display QR labels for items only')} value="items">{t('Nur Artikel', 'Items only')}</ToggleButton>
+                        <ToggleButton title={translate('Nur QR-Etiketten für Baugruppen anzeigen', 'Display QR labels for assemblies only')} value="assemblies">{t('Nur Baugruppen', 'Assemblies only')}</ToggleButton>
+                        <ToggleButton title={translate('Ein einzelnes QR-Etikett auswählen', 'Choose a single QR label')} value="single">{t('Einzeln', 'Single')}</ToggleButton>
+                        <ToggleButton title={translate('Mehrere QR-Etiketten gezielt auswählen', 'Select specific QR labels')} value="selected">{t('Auswahl', 'Selection')}</ToggleButton>
                     </ToggleButtonGroup>
 
                     {filterMode === 'single' && (

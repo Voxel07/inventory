@@ -1,5 +1,6 @@
+import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, Button, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
@@ -10,7 +11,7 @@ import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useEventReports } from '../../hooks/useEvents';
 import { getWarehouses } from '../../services/warehouseService';
 import { locationPath } from '../../utils/locationHierarchy';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 const title = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const labels = { events: ['Eventbedarf und Nutzung', 'Event demand and use'], availability: ['Verfügbarkeit nach Lagerort', 'Availability by location'], returns: ['Offene Rückgaben', 'Unresolved returns'], repairs: ['Reparaturrückstand', 'Repair backlog'], maintenance: ['Wartungsbedarf', 'Maintenance due'], purchases: ['Einkaufshistorie', 'Purchase history'], counts: ['Inventurdifferenzen', 'Count variance'], movements: ['Verbrauch und Abschreibungen', 'Consumption and write-offs'] } as const;
@@ -40,7 +41,7 @@ export function ReportsPanel() {
     <TextField select label={t('Bericht', 'Report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label[0], label[1])}</MenuItem>)}</TextField>
     <Typography variant="body2">{report.data?.definition ?? definitions.data?.[name]}</Typography>
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('Erstellt', 'Generated')}: {new Date(report.data.generatedAt).toLocaleString()} · {report.data.stale ? t('Quelldaten oder Zeitbezug haben sich geändert. Neu berechnen.', 'Sources or time reference changed. Rebuild required.') : t('Stand der letzten Berechnung', 'As of the last rebuild')}</> : t('Noch kein Bericht erstellt. Jetzt aus den Quelldaten neu berechnen.', 'No report built yet. Rebuild from source records now.')}</Alert>
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button disabled={exporting || !report.data?.generatedAt} onClick={() => { void download(); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('Diesen Bericht mit aktuellen Daten neu berechnen', 'Recalculate this report using current data')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button title={translate('Die gefilterten Berichtsdaten als CSV herunterladen', 'Download the filtered report data as CSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download(); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button title={translate('Alle Berichtsfilter zurücksetzen', 'Reset all report filters')} onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
       <TextField select fullWidth label={t('Artikel', 'Item')} value={filters.itemId ?? ''} onChange={(e) => change('itemId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{items.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('Veranstaltung', 'Event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}

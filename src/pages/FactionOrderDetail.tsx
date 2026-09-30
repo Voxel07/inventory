@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 import { CustodyEvidence } from '../components/orders/CustodyEvidence';
 import { useEquipmentAvailability } from '../hooks/useEquipment';
@@ -6,7 +7,7 @@ import { useStockLookups } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, Button, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
@@ -33,7 +34,7 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { Assembly, FactionOrder, Item } from '../types';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
@@ -142,8 +143,6 @@ export function FactionOrderDetail() {
     return assemblyAvailability(assembly, availableForItemId);
   }
 
-
-
   function savePrepared() {
     if (!order) return;
     const values = Object.fromEntries(Object.entries(prepared).map(([id, value]) => [id, Number(value) || 0]));
@@ -238,7 +237,7 @@ export function FactionOrderDetail() {
   if (isLoading) return <LinearProgress />;
   if (isError || !order) {
     return (
-      <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
+      <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Bestellliste nicht gefunden.', 'Order list not found.')}
       </Alert>
     );
@@ -247,7 +246,7 @@ export function FactionOrderDetail() {
   const currentUser = user;
   if (!canAccessFaction(currentUser, order.eventType, order.faction)) {
     return (
-      <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
+      <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}
       </Alert>
     );

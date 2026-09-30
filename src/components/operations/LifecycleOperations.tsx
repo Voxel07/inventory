@@ -1,3 +1,4 @@
+import { Button } from '../shared/ActionButtons';
 import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useAssignableUsers } from '../../hooks/useUsers';
@@ -6,7 +7,7 @@ import { createMaintenanceRecord } from '../../services/maintenanceService';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, Stack, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useDamageReports } from '../../hooks/useDamageReports';
@@ -14,7 +15,7 @@ import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import type { Repair, Schedule } from '../../types/operations';
 import { OperationForm, type Values } from './OperationForm';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
@@ -29,7 +30,7 @@ export function SchedulesPanel() {
   const [complete, setComplete] = useState<Schedule | null>(null);
   const [retire, setRetire] = useState<Schedule | null>(null);
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setChooseItem(true)}>{t('Wartungsplan anlegen', 'New maintenance schedule')}</Button>
+    <Button title={translate('Einen Wartungsplan für einen Artikel anlegen', 'Create a maintenance schedule for an item')} variant="contained" onClick={() => setChooseItem(true)}>{t('Wartungsplan anlegen', 'New maintenance schedule')}</Button>
     <QueryFeedback isLoading={schedules.isLoading} error={schedules.error} isEmpty={!schedules.data?.length} emptyMessage={t('Noch keine Wartungspläne.', 'No maintenance schedules yet.')} />
     {schedules.data?.map((schedule) => <Card key={schedule.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{lookup.items.find((item) => item.id === schedule.itemId)?.name} · {schedule.maintenanceType}</Typography>
@@ -37,10 +38,10 @@ export function SchedulesPanel() {
       <Typography>{schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')} · {schedule.checkoutBlocking ? t('Sperrt Ausgabe bei Fälligkeit', 'Blocks checkout when due') : t('Hinweis', 'Advisory')}</Typography>
       {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-        <Button onClick={() => setEdit({ itemId: schedule.itemId, schedule })}>{t('Bearbeiten', 'Edit')}</Button>
-        <Button component={Link} to={schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}`}>{t('Gerät / Wartungsnachweis', 'Asset / maintenance records')}</Button>
-        {schedule.active && <Button variant="contained" onClick={() => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); }}>{t('Wartung dokumentieren', 'Record maintenance')}</Button>}
-        {schedule.active && <Button onClick={() => setRetire(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
+        <Button title={translate('Intervall und Checkliste dieses Wartungsplans bearbeiten', 'Edit this maintenance schedule\'s interval and checklist')} onClick={() => setEdit({ itemId: schedule.itemId, schedule })}>{t('Bearbeiten', 'Edit')}</Button>
+        <Button title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')} component={Link} to={schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}`}>{t('Gerät / Wartungsnachweis', 'Asset / maintenance records')}</Button>
+        {schedule.active && <Button title={translate('Die durchgeführte Wartung dokumentieren', 'Record completed maintenance')} variant="contained" onClick={() => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); }}>{t('Wartung dokumentieren', 'Record maintenance')}</Button>}
+        {schedule.active && <Button title={translate('Diesen Wartungsplan stilllegen', 'Retire this maintenance schedule')} onClick={() => setRetire(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
       </Stack>
     </Stack></CardContent></Card>)}
     {chooseItem && <OperationForm title={t('Wartung planen', 'Schedule maintenance')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
@@ -76,7 +77,7 @@ export function RepairsPanel() {
   const [action, setAction] = useState<{ repair: Repair; status: string; key: string } | null>(null);
   const labels: Record<string, string> = { triaged: t('Sichten', 'Triage'), awaiting_repair: t('Zur Reparatur', 'Queue repair'), in_repair: t('Reparatur starten', 'Start repair'), repaired: t('Reparatur abschließen', 'Complete repair'), verified: t('Prüfung bestätigen', 'Verify'), returned_to_service: t('Freigeben', 'Return to service'), written_off: t('Abschreiben', 'Write off') };
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setCreate(true)}>{t('Reparatur anlegen', 'New repair case')}</Button>
+    <Button title={translate('Einen neuen Reparaturfall erfassen', 'Create a new repair case')} variant="contained" onClick={() => setCreate(true)}>{t('Reparatur anlegen', 'New repair case')}</Button>
     <QueryFeedback isLoading={repairs.isLoading || damage.isLoading} error={repairs.error || damage.error} isEmpty={!repairs.data?.length} emptyMessage={t('Noch keine Reparaturen.', 'No repair cases yet.')} />
     {repairs.data?.map((repair) => {
       const report = damage.data?.find((value) => value.id === repair.damageReportId);
@@ -86,8 +87,8 @@ export function RepairsPanel() {
         {repair.safetyImpact && <Alert severity="warning">{t('Sicherheitsrelevanter Schaden', 'Safety-impacting damage')}</Alert>}
         {repair.verificationResult && <Typography>{t('Prüfergebnis', 'Verification')}: {repair.verificationResult}</Typography>}
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          {repairNext[repair.status] && <Button onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
-          {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
+          {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
+          {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
         </Stack>
       </Stack></CardContent></Card>;
     })}

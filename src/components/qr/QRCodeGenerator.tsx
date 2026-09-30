@@ -1,5 +1,6 @@
+import { Button } from '../shared/ActionButtons';
 import { useEffect, useState } from 'react';
-import { Box, Button, CircularProgress, Stack, Typography, Tooltip } from '@mui/material';
+import { Box, CircularProgress, Stack, Typography } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import { generateQRCodeDataURL, type QRResourceType } from '../../utils/qrCode';
 import { useLocalizedText } from '../../utils/naming';
@@ -52,13 +53,10 @@ export function QRCodeGenerator({ itemId, itemName, resourceType = 'item', textC
                 sx={{ width: 256, height: 256 }}
             />
             {textCode && <Typography sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{textCode}</Typography>}
-            <Tooltip title={t('QR-Code-Bilddatei auf Ihrem Gerät speichern', 'Save the QR code image on your device')} arrow>
-                <span>
-                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
-                        {t('QR-Code herunterladen', 'Download QR code')}
-                    </Button>
-                </span>
-            </Tooltip>
+
+            <Button title={t('QR-Code-Bilddatei auf Ihrem Gerät speichern', 'Save the QR code image on your device')} variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
+                {t('QR-Code herunterladen', 'Download QR code')}
+            </Button>
         </Stack>
     );
 }

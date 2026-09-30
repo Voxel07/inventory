@@ -1,4 +1,5 @@
-import { IconButton, Tooltip } from '@mui/material';
+import { IconButton } from './ActionButtons';
+
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -41,9 +42,9 @@ export function ProcurementGuard({ children }: { children: ReactNode }) {
 export function FactionAccessNotice() {
   const t = useLocalizedText();
   const message = t('Sie sehen nur Bestelllisten Ihrer zugewiesenen Fraktionen.', 'You only see order lists for your assigned factions.');
-  return <Tooltip title={message} arrow>
-    <IconButton aria-label={message} color="info" size="small">
-      <InfoOutlinedIcon fontSize="small" />
-    </IconButton>
-  </Tooltip>;
+  return (
+  <IconButton title={message} aria-label={message} color="info" size="small">
+    <InfoOutlinedIcon fontSize="small" />
+  </IconButton>
+  );
 }

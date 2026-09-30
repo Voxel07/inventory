@@ -1,8 +1,9 @@
+import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Autocomplete, Box, Button, Chip, createFilterOptions, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Autocomplete, Box, Chip, createFilterOptions, MenuItem, Stack, TextField,  Typography } from '@mui/material';
 import type { Assembly, AssetInstance, DamageReportFormData, DamageSeverity, Item } from '../../types';
 import { useItemAssets } from '../../hooks/useItems';
-import { nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
 interface Props {
@@ -134,13 +135,10 @@ export function DamageReportForm({
                 </TextField>
                 <TextField label={t('Menge', 'Quantity')} type="number" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} slotProps={{ htmlInput: { min: 1, max: effectiveMaxAmount, step: 1 } }} helperText={needsAsset ? t('Ein serialisiertes Einzelgerät entspricht der Menge 1.', 'A serialized asset always has quantity 1.') : undefined} disabled={needsAsset} required fullWidth />
                 <TextField label={t('Beschreibung', 'Description')} value={formData.description} onChange={(event) => setFormData((previous) => ({ ...previous, description: event.target.value }))} multiline rows={4} required fullWidth />
-                <Tooltip title={t('Neuen Schadensbericht einreichen', 'Submit a new damage report')} arrow>
-                    <span>
-                        <Button type="submit" variant="contained" color="error" disabled={isLoading || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
-                            {t('Schadensbericht einreichen', 'Submit damage report')}
-                        </Button>
-                    </span>
-                </Tooltip>
+
+                <Button title={translate('Den Schaden mit Menge und Beschreibung melden', 'Submit the damage report with quantity and description')} type="submit" variant="contained" color="error" disabled={isLoading || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
+                    {t('Schadensbericht einreichen', 'Submit damage report')}
+                </Button>
             </Stack>
         </Box>
     );

@@ -1,8 +1,9 @@
+import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Stack, TextField, Typography } from '@mui/material';
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
 import type { Item, ReturnSubmissionFormData } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 type Props = {
   item: Item;
@@ -65,7 +66,7 @@ export function ReturnSubmissionForm({
           slotProps={{ htmlInput: { min: 1, max: Math.max(1, maxQuantity) } }}
           required
         />
-        <Button component="label" variant="outlined" startIcon={<AddAPhotoIcon />} disabled={isLoading}>
+        <Button title={translate('Ein Foto vom Rückgabeort aufnehmen oder auswählen', 'Take or select a photo of the return location')} component="label" variant="outlined" startIcon={<AddAPhotoIcon />} disabled={isLoading}>
           {image ? image.name : t('Foto vom Ablageort hinzufügen', 'Add photo of where it was placed')}
           <input
             hidden
@@ -82,7 +83,7 @@ export function ReturnSubmissionForm({
           multiline
           minRows={3}
         />
-        <Button
+        <Button title={translate('Die Rückgabe zur Bestätigung einreichen', 'Submit the return for acknowledgement')}
           type="submit"
           variant="contained"
           color="success"

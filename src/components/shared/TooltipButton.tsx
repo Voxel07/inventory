@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, IconButton, Tooltip } from '@mui/material';
+import { Button, IconButton } from './ActionButtons';
 
 export interface TooltipButtonProps {
     tooltipText: string;
@@ -28,38 +28,32 @@ export function TooltipButton({
 }: TooltipButtonProps) {
     if (!label || variant === 'icon') {
         return (
-            <Tooltip title={tooltipText} arrow>
-                <span>
-                    <IconButton
-                        color={color}
-                        size={size}
-                        onClick={onClick}
-                        disabled={disabled}
-                        type={type}
-                    >
-                        {icon}
-                    </IconButton>
-                </span>
-            </Tooltip>
+            <IconButton
+                title={tooltipText}
+                color={color}
+                size={size}
+                onClick={onClick}
+                disabled={disabled}
+                type={type}
+            >
+                {icon}
+            </IconButton>
         );
     }
 
     return (
-        <Tooltip title={tooltipText} arrow>
-            <span>
-                <Button
-                    variant={variant}
-                    color={color}
-                    size={size}
-                    onClick={onClick}
-                    disabled={disabled}
-                    startIcon={icon}
-                    fullWidth={fullWidth}
-                    type={type}
-                >
-                    {label}
-                </Button>
-            </span>
-        </Tooltip>
+        <Button
+            title={tooltipText}
+            variant={variant}
+            color={color}
+            size={size}
+            onClick={onClick}
+            disabled={disabled}
+            startIcon={icon}
+            fullWidth={fullWidth}
+            type={type}
+        >
+            {label}
+        </Button>
     );
 }

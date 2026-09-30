@@ -1,10 +1,10 @@
+import { Button } from '../components/shared/ActionButtons';
 import { SupplierDraft } from '../components/procurement/SupplierDraft';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -39,7 +39,7 @@ import { ProcurementOrders } from '../components/procurement/ProcurementOrders';
 import { PlanningDetails } from '../components/procurement/PlanningDetails';
 import { useEventReports } from '../hooks/useEvents';
 import { EVENT_TYPES } from '../types';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
 
@@ -206,10 +206,10 @@ export function Procurement() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button variant="outlined" startIcon={<DownloadIcon />} disabled={!deficits.length} onClick={exportCsv}>
+          <Button title={translate('Die aktuellen Fehlmengen als CSV herunterladen', 'Download the current shortages as CSV')} variant="outlined" startIcon={<DownloadIcon />} disabled={!deficits.length} onClick={exportCsv}>
             {t('CSV', 'CSV')}
           </Button>
-          <Button variant="contained" startIcon={<PrintIcon />} disabled={!deficits.length} onClick={exportPdf}>
+          <Button title={translate('Den Bestellschein als PDF herunterladen', 'Download the purchase order sheet as PDF')} variant="contained" startIcon={<PrintIcon />} disabled={!deficits.length} onClick={exportPdf}>
             {t('Bestellschein PDF', 'Purchase order PDF')}
           </Button>
         </Stack>
@@ -374,8 +374,8 @@ export function Procurement() {
                       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
                         <Chip size="small" color="info" variant="outlined" label={`${row.orderedStock ?? 0} ${t('unterwegs', 'in transit')}`} />
                         {row.recommendedAction === 'obtain_commitment'
-                          ? <Button size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
-                          : <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellung erfassen', 'Record order')}</Button>}
+                          ? <Button title={translate('Den Artikel öffnen, um eine Zusage einzuholen', 'Open the item to obtain an availability commitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
+                          : <Button title={translate('Eine Bestellung für diese Fehlmenge erfassen', 'Record a purchase for this shortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellung erfassen', 'Record order')}</Button>}
                       </Stack>
                       <Box
                         sx={{
@@ -465,8 +465,8 @@ export function Procurement() {
                         <TableCell align="right">{row.orderedStock ?? 0}</TableCell>
                         <TableCell>
                           {row.recommendedAction === 'obtain_commitment'
-                            ? <Button size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
-                            : <Button size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellen', 'Order')}</Button>}
+                            ? <Button title={translate('Den Artikel öffnen, um eine Zusage einzuholen', 'Open the item to obtain an availability commitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
+                            : <Button title={translate('Eine Bestellung für diese Fehlmenge erfassen', 'Record a purchase for this shortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellen', 'Order')}</Button>}
                         </TableCell>
                       </TableRow>
                     ))}

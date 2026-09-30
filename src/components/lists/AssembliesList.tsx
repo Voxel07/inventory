@@ -1,5 +1,6 @@
+import { IconButton, Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Paper, Stack, TextField,  Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -7,7 +8,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { useNavigate } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
-import { useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
 import { CatalogInstructionsDialog } from './CatalogInstructionsDialog';
@@ -82,16 +83,16 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         { field: 'totalValue', headerName: t('Gesamtwert', 'Total value'), type: 'number', width: 130,
             valueFormatter: (value: number) => `${value.toFixed(2)} €` },
         { field: 'info', headerName: t('Hinweis', 'Instructions'), width: 90, sortable: false, filterable: false,
-            renderCell: ({ row }) => <Tooltip title={t('Hinweise und enthaltene Artikel anzeigen', 'Show instructions and included items')}>
-                <IconButton color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
-                    onClick={(event) => { event.stopPropagation(); setInfoRow(row); }}>
-                    <InfoOutlinedIcon fontSize="small" />
-                </IconButton>
-            </Tooltip> },
+            renderCell: ({ row }) =>
+              <IconButton title={t('Hinweise und enthaltene Artikel anzeigen', 'Show instructions and included items')} color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
+                  onClick={(event) => { event.stopPropagation(); setInfoRow(row); }}>
+                  <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+             },
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">
-                <Tooltip title={t('Bearbeiten', 'Edit')}><IconButton size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                <Tooltip title={t('Löschen', 'Delete')}><IconButton size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+              <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton>
+              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
             </Stack> } satisfies GridColDef<AssemblyRow>] : []),
     ];
 
@@ -107,7 +108,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />
         {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
             <Typography sx={{ fontWeight: 700 }}>{t(`${selectedIds.size} Baugruppen ausgewählt`, `${selectedIds.size} assemblies selected`)}</Typography>
-            <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
+            <Button title={translate('Das Löschen der ausgewählten Baugruppen bestätigen', 'Review deletion of the selected assemblies')} color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
                 {t('Auswahl löschen', 'Delete selected')}
             </Button>
         </Paper>}
@@ -122,7 +123,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                     '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />
         </Box>
         {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
-        {loadError && <Button size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+        {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
         <CatalogInstructionsDialog open={Boolean(infoRow)} title={infoRow?.name ?? ''} hint={infoRow?.assembly.hint}
             parts={infoRow?.parts} onClose={() => setInfoRow(null)} />
     </Box>;

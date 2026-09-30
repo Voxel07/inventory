@@ -1,7 +1,8 @@
+import { IconButton } from './ActionButtons';
 import type { ReactNode } from 'react';
-import { Dialog as MuiDialog, IconButton, type DialogProps } from '@mui/material';
+import { Dialog as MuiDialog, type DialogProps } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 export function Dialog({ children, onClose, ...props }: DialogProps & { children?: ReactNode }) {
   const t = useLocalizedText();
@@ -11,7 +12,7 @@ export function Dialog({ children, onClose, ...props }: DialogProps & { children
       '& .MuiDialogTitle-root': { paddingRight: 7 },
       ...props.sx,
     }}>
-      <IconButton
+      <IconButton title={translate('Diesen Dialog schließen', 'Close this dialog')}
         aria-label={t('Schließen', 'Close')}
         onClick={(event) => onClose?.(event, 'escapeKeyDown')}
         disabled={!onClose}

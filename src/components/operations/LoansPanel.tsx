@@ -1,6 +1,7 @@
+import { Button } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
+import { Alert, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { loanApi } from '../../services/loanService';
 import { useLoans } from '../../hooks/useLoans';
@@ -9,7 +10,7 @@ import { inputChoice, inputText } from '../../utils/inputValues';
 import { operationsApi } from '../../services/operationsService';
 import { useOperationList } from '../../hooks/useOperations';
 import { useStockLookups } from '../../hooks/useStockLookups';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { Fields, OperationForm } from './OperationForm';
 
 export function LoansPanel() {
@@ -23,7 +24,7 @@ export function LoansPanel() {
     <Typography variant="h6">{t('Leih- & Mietvereinbarungen', 'Borrowing & rental arrangements')}</Typography>
     <Alert severity="info">{t('Externes oder privates Material als eigenen Artikel mit Eigentümer und Zusage führen. Vereinbarung vor dem Transport anlegen. Abholung und Rückgabe durch vollständig empfangene Umlagerungen zum/vom Anbieter belegen. Nur abgeholte, noch nicht zurückgegebene Mengen sind ausgabefähig.', 'Record external or private equipment as a separate item with an owner and commitment. Create the arrangement before transport. Record collection and return using fully received transfers from/to the provider. Only collected quantities still on loan are available for checkout.')}</Alert>
     <Fields fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.items.map(i => ({ value: i.id, label: i.name })) }]} values={{ itemId }} onChange={v => setItemId(String(v.itemId))} />
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button disabled={!itemId || !profile.data} onClick={() => setCreate(true)}>{t('Vereinbarung anlegen', 'New arrangement')}</Button>{itemId && <Button component={Link} to={`/items/${itemId}`}>{t('Eigentum / Zusage bearbeiten', 'Edit ownership / commitment')}</Button>}<Button component={Link} to="/operations?tab=transfers">{t('Transport erfassen', 'Record transport')}</Button></Stack>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button title={translate('Eine neue Leihvereinbarung erfassen', 'Create a new loan arrangement')} disabled={!itemId || !profile.data} onClick={() => setCreate(true)}>{t('Vereinbarung anlegen', 'New arrangement')}</Button>{itemId && <Button title={translate('Eigentumsdaten und Verfügbarkeitszusagen öffnen', 'Open ownership details and availability commitments')} component={Link} to={`/items/${itemId}`}>{t('Eigentum / Zusage bearbeiten', 'Edit ownership / commitment')}</Button>}<Button title={translate('Die Transport- und Umlagerungsübersicht öffnen', 'Open the transport and transfer overview')} component={Link} to="/operations?tab=transfers">{t('Transport erfassen', 'Record transport')}</Button></Stack>
     {(loans.isLoading || profile.isLoading) && <LinearProgress />}{(loans.error || profile.error || transfers.error || lookup.error) && <Alert severity="error">{(loans.error || profile.error || transfers.error || lookup.error)?.message}</Alert>}
     {loans.data?.map(l => <Card key={l.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{l.item} · {l.provider} · {l.kind === 'rental' ? t('Miete', 'Rental') : t('Leihe', 'Borrowing')}</Typography><Typography>{l.status} · {l.contact}</Typography><Typography>{l.terms}</Typography>
@@ -31,10 +32,10 @@ export function LoansPanel() {
       <Typography>{t('Abholung / verfügbar bis / Rückgabe fällig', 'Collection / available through / return due')}: {l.collectionDate} / {l.availableUntil} / {l.returnDue}</Typography>
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {l.assetCodes.join(', ')}</Typography>}
       {!['returned', 'cancelled'].includes(l.status) && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        {l.collected < l.quantity && <Button onClick={() => setAction({ loan: l, type: 'collect' })}>{t('Abholung belegen', 'Record collection')}</Button>}
-        {l.returned < l.collected && <Button onClick={() => setAction({ loan: l, type: 'return' })}>{t('Anbieter-Rückgabe belegen', 'Record provider return')}</Button>}
-        <Button onClick={() => setAction({ loan: l, type: 'extend' })}>{t('Verlängern', 'Extend')}</Button>
-        {l.collected === l.returned && <Button component={Link} to={`/items/${l.itemId}`}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
+        {l.collected < l.quantity && <Button title={translate('Abholung und Übergabe der Leihgabe dokumentieren', 'Record collection and handover of the loan')} onClick={() => setAction({ loan: l, type: 'collect' })}>{t('Abholung belegen', 'Record collection')}</Button>}
+        {l.returned < l.collected && <Button title={translate('Die Rückgabe an den Anbieter dokumentieren', 'Record return to the provider')} onClick={() => setAction({ loan: l, type: 'return' })}>{t('Anbieter-Rückgabe belegen', 'Record provider return')}</Button>}
+        <Button title={translate('Die Leihfrist verlängern', 'Extend the loan period')} onClick={() => setAction({ loan: l, type: 'extend' })}>{t('Verlängern', 'Extend')}</Button>
+        {l.collected === l.returned && <Button title={translate('Den Artikel öffnen, um die Zusage zu stornieren', 'Open the item to cancel its commitment')} component={Link} to={`/items/${l.itemId}`}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
       </Stack>}
       {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{new Date(h.at).toLocaleString()} · {h.actor} · {h.action} · {h.notes}</Typography>)}
     </Stack></CardContent></Card>)}

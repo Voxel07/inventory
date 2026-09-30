@@ -1,26 +1,8 @@
+import { Chip, MenuItem, IconButton, Button } from './ActionButtons';
 import { CameraScanner } from './CameraScanner';
 import { useActionInbox } from '../../hooks/useActionInbox';
 import { Dialog } from './ClosableDialog';
-import {
-    AppBar,
-    Toolbar,
-    Typography,
-    IconButton,
-    Box,
-    Chip,
-    Divider,
-    ListItemText,
-    Menu,
-    MenuItem,
-    Tooltip,
-    DialogTitle,
-    DialogContent,
-    TextField,
-    Button,
-    Badge,
-    useTheme,
-    useMediaQuery,
-} from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Divider, ListItemText, Menu, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
@@ -33,7 +15,7 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useUIStore } from '../../store/uiStore';
-import { useT } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type MouseEvent } from 'react';
@@ -173,7 +155,7 @@ export function Header() {
         <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
-                <IconButton
+                <IconButton title={translate('Das Navigationsmenü ein- oder ausblenden', 'Show or hide the navigation menu')}
                     color="inherit"
                     edge="start"
                     onClick={toggleSidebar}
@@ -187,21 +169,21 @@ export function Header() {
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
-                <IconButton color="inherit" aria-label="Actions / Aufgaben" onClick={() => navigate('/actions')} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
-                <Tooltip title={t('header.quickScan', 'QR / Barcode Scan')}>
-                    <IconButton
-                        color="inherit"
-                        onClick={() => setQuickScanOpen(true)}
-                        aria-label="Scan QR/Barcode"
-                        sx={{ mr: 0.5 }}
-                    >
-                        <QrCodeScannerIcon />
-                    </IconButton>
-                </Tooltip>
+                <IconButton title={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} color="inherit" aria-label={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} onClick={() => navigate('/actions')} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
+
+                <IconButton title={translate('Den QR- und Barcode-Scanner öffnen', 'Open the QR code and barcode scanner')}
+                    color="inherit"
+                    onClick={() => setQuickScanOpen(true)}
+                    aria-label={translate('QR- oder Barcode scannen', 'Scan a QR code or barcode')}
+                    sx={{ mr: 0.5 }}
+                >
+                    <QrCodeScannerIcon />
+                </IconButton>
+
                 {unreadNotifications.length > 0 && (
                     <>
                         {isMobile ? (
-                            <IconButton
+                            <IconButton title={translate('Abholbenachrichtigungen anzeigen', 'Display pickup notifications')}
                                 id="pickup-notices-button"
                                 color="inherit"
                                 onClick={openNotifications}
@@ -215,7 +197,7 @@ export function Header() {
                                 </Badge>
                             </IconButton>
                         ) : (
-                            <Chip
+                            <Chip title={translate('Abholbenachrichtigungen anzeigen', 'Display pickup notifications')}
                                 id="pickup-notices-button"
                                 size="small"
                                 color="primary"
@@ -244,7 +226,7 @@ export function Header() {
                                 const pickupLocation = payloadText(notification, 'pickupLocation');
                                 const details = [faction, pickupLocation].filter(Boolean).join(' · ');
                                 return (
-                                    <MenuItem key={notification.id} onClick={() => openNotification(notification)} sx={{ px: 1.5, py: 0.75, minHeight: { xs: 44, sm: 'auto' } }}>
+                                    <MenuItem title={translate('Die zugehörige abholbereite Bestellung öffnen', 'Open the related order ready for pickup')} key={notification.id} onClick={() => openNotification(notification)} sx={{ px: 1.5, py: 0.75, minHeight: { xs: 44, sm: 'auto' } }}>
                                         <ListItemText
                                             primary={orderCode
                                                 ? t('header.orderReady', { orderCode })
@@ -260,14 +242,14 @@ export function Header() {
                                 );
                             })}
                             <Divider />
-                            <MenuItem onClick={dismissAllNotifications} disabled={markRead.isPending} sx={{ px: 1.5, py: 0.75, fontSize: '0.8125rem', minHeight: { xs: 44, sm: 'auto' } }}>
+                            <MenuItem title={translate('Alle Abholbenachrichtigungen als gelesen markieren', 'Mark all pickup notifications as read')} onClick={dismissAllNotifications} disabled={markRead.isPending} sx={{ px: 1.5, py: 0.75, fontSize: '0.8125rem', minHeight: { xs: 44, sm: 'auto' } }}>
                                 <DoneAllIcon fontSize="small" sx={{ mr: 1 }} />
                                 {t('header.markAllRead')}
                             </MenuItem>
                         </Menu>
                     </>
                 )}
-                <IconButton
+                <IconButton title={translate('Zwischen hellem und dunklem Farbschema wechseln', 'Switch between light and dark mode')}
                     color="inherit"
                     onClick={toggleThemeMode}
                     aria-label={t('header.toggleColourScheme')}
@@ -275,31 +257,31 @@ export function Header() {
                 >
                     {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
                 </IconButton>
-                <Tooltip title={t('header.openProfile')}>
-                    <IconButton
-                        color="inherit"
-                        onClick={() => navigate('/profile')}
-                        aria-label={t('header.openProfile')}
-                        sx={{ mr: { xs: 0.5, sm: 1 } }}
-                    >
-                        <AccountCircleIcon />
-                    </IconButton>
-                </Tooltip>
+
+                <IconButton title={t('header.openProfile')}
+                    color="inherit"
+                    onClick={() => navigate('/profile')}
+                    aria-label={t('header.openProfile')}
+                    sx={{ mr: { xs: 0.5, sm: 1 } }}
+                >
+                    <AccountCircleIcon />
+                </IconButton>
+
                 {syncIssues > 0 && (
                     isMobile ? (
-                        <Tooltip title={t('header.syncIssues', { count: syncIssues })}>
-                            <IconButton
-                                color="error"
-                                onClick={openSyncIssues}
-                                sx={{ mr: 0.5 }}
-                            >
-                                <Badge badgeContent={syncIssues} color="error">
-                                    <ErrorOutlineIcon />
-                                </Badge>
-                            </IconButton>
-                        </Tooltip>
+
+                        <IconButton title={translate('Synchronisationskonflikte prüfen', 'Review synchronization conflicts')}
+                            color="error"
+                            onClick={openSyncIssues}
+                            sx={{ mr: 0.5 }}
+                        >
+                            <Badge badgeContent={syncIssues} color="error">
+                                <ErrorOutlineIcon />
+                            </Badge>
+                        </IconButton>
+
                     ) : (
-                        <Chip
+                        <Chip title={translate('Synchronisationskonflikte prüfen', 'Review synchronization conflicts')}
                             size="small"
                             color="error"
                             icon={<ErrorOutlineIcon />}
@@ -311,23 +293,21 @@ export function Header() {
                 )}
                 {(
                     isMobile ? (
-                        <Tooltip title={cachedAt ? `${t('header.cachedData', 'Cached data')} · ${new Date(cachedAt).toLocaleString()}` : online
-                            ? (queued ? t('header.queuedActions', { count: queued }) : t('header.syncStatus', 'Sync / Offline'))
-                            : t('header.offlineQueued', { count: queued })}>
-                            <IconButton
-                                size="small"
-                                color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
-                                onClick={openQueuedActions}
-                                aria-label={t('header.viewQueuedActions')}
-                                sx={{ ml: 0.5 }}
-                            >
-                                <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}>
-                                    {online ? <CloudUploadIcon /> : <CloudOffIcon />}
-                                </Badge>
-                            </IconButton>
-                        </Tooltip>
+
+                        <IconButton title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
+                            size="small"
+                            color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
+                            onClick={openQueuedActions}
+                            aria-label={t('header.viewQueuedActions')}
+                            sx={{ ml: 0.5 }}
+                        >
+                            <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}>
+                                {online ? <CloudUploadIcon /> : <CloudOffIcon />}
+                            </Badge>
+                        </IconButton>
+
                     ) : (
-                        <Chip
+                        <Chip title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
                             size="small"
                             color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
                             label={cachedAt ? t('header.cachedData', 'Cached data') : online
@@ -364,8 +344,8 @@ export function Header() {
                         sx={{ mb: 2 }}
                     />
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                        <Button onClick={() => setQuickScanOpen(false)}>{t('common.cancel', 'Abbrechen')}</Button>
-                        <Button variant="contained" type="submit" disabled={!quickScanInput.trim()}>
+                        <Button title={translate('Den Scanner schließen', 'Close the scanner')} onClick={() => setQuickScanOpen(false)}>{t('common.cancel', 'Abbrechen')}</Button>
+                        <Button title={translate('Das Ziel des eingegebenen QR- oder Barcodes öffnen', 'Open the target of the entered QR code or barcode')} variant="contained" type="submit" disabled={!quickScanInput.trim()}>
                             {t('common.open', 'Öffnen')}
                         </Button>
                     </Box>

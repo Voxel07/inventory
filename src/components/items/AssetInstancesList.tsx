@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -5,7 +6,6 @@ import {
     Paper,
     Typography,
     Stack,
-    Button,
     TextField,
     MenuItem,
     Chip,
@@ -15,12 +15,11 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    IconButton,
     DialogTitle,
     DialogContent,
     DialogActions,
     CircularProgress,
-    Tooltip,
+
     Card,
     CardContent,
     useTheme,
@@ -38,7 +37,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { QRCodeGenerator } from '../qr/QRCodeGenerator';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -244,7 +243,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     </Typography>
                 </Box>
                 {canEdit && <Stack direction="row" spacing={1}>
-                    <Button
+                    <Button title={translate('Mehrere Geräte auf einmal anlegen', 'Create several assets at once')}
                         variant="outlined"
                         size="small"
                         startIcon={<DynamicFeedIcon />}
@@ -252,7 +251,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     >
                         {t('Stapel generieren', 'Batch generate')}
                     </Button>
-                    <Button
+                    <Button title={translate('Ein einzelnes Gerät registrieren', 'Register a single asset')}
                         variant="contained"
                         size="small"
                         startIcon={<AddIcon />}
@@ -313,7 +312,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     <Typography color="text.secondary">
                         {t('Keine Einzelgeräte für diesen Artikel vorhanden.', 'No asset instances recorded for this item.')}
                     </Typography>
-                    {canEdit && <Button
+                    {canEdit && <Button title={translate('Das erste Gerät für diesen Artikel registrieren', 'Register the first asset for this item')}
                         size="small"
                         sx={{ mt: 1 }}
                         startIcon={<AddIcon />}
@@ -355,19 +354,19 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     )}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                    <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={t('Infoseite', 'Info page')}>
+                                    <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')}>
                                         <InfoOutlinedIcon fontSize="small" />
                                     </IconButton>
-                                    {canReportDamage && <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={t('Schaden melden', 'Report damage')}>
+                                    {canReportDamage && <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={translate('Einen Schaden für dieses Gerät melden', 'Report damage to this asset')}>
                                         <ReportProblemOutlinedIcon fontSize="small" />
                                     </IconButton>}
-                                    <IconButton size="small" onClick={() => setQrAsset(asset)} title={t('QR-Code', 'QR Code')}>
+                                    <IconButton size="small" onClick={() => setQrAsset(asset)} title={translate('Den QR-Code dieses Geräts anzeigen', 'Display the QR code for this asset')}>
                                         <QrCode2Icon fontSize="small" />
                                     </IconButton>
-                                    {canEdit && <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={t('Bearbeiten', 'Edit')}>
+                                    {canEdit && <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={translate('Die Gerätedaten bearbeiten', 'Edit the asset details')}>
                                         <EditIcon fontSize="small" />
                                     </IconButton>}
-                                    {canEdit && <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
+                                    {canEdit && <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={translate('Die Ausbuchung dieses Geräts bestätigen', 'Review retirement of this asset')}>
                                         <DeleteIcon fontSize="small" />
                                     </IconButton>}
                                 </Stack>
@@ -417,31 +416,31 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     <TableCell>{asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}</TableCell>
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>
                                     <TableCell align="right">
-                                        <Tooltip title={t('Asset-Infoseite öffnen', 'Open asset info page')}>
-                                            <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)}>
-                                                <InfoOutlinedIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {canReportDamage && <Tooltip title={t('Schaden an diesem Asset melden', 'Report damage to this asset')}>
-                                            <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)}>
-                                                <ReportProblemOutlinedIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>}
-                                        <Tooltip title={t('QR-Code anzeigen', 'Show QR code')}>
-                                            <IconButton size="small" onClick={() => setQrAsset(asset)}>
-                                                <QrCode2Icon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {canEdit && <Tooltip title={t('Bearbeiten', 'Edit')}>
-                                            <IconButton size="small" onClick={() => handleOpenEdit(asset)}>
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>}
-                                        {canEdit && <Tooltip title={t('Ausbuchen / Ausmustern', 'Write off / Retire')}>
-                                            <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)}>
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>}
+
+                                        <IconButton title={t('Asset-Infoseite öffnen', 'Open asset info page')} size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)}>
+                                            <InfoOutlinedIcon fontSize="small" />
+                                        </IconButton>
+
+                                        {canReportDamage &&
+                                        <IconButton title={t('Schaden an diesem Asset melden', 'Report damage to this asset')} size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)}>
+                                            <ReportProblemOutlinedIcon fontSize="small" />
+                                        </IconButton>
+                                        }
+
+                                        <IconButton title={t('QR-Code anzeigen', 'Show QR code')} size="small" onClick={() => setQrAsset(asset)}>
+                                            <QrCode2Icon fontSize="small" />
+                                        </IconButton>
+
+                                        {canEdit &&
+                                        <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={() => handleOpenEdit(asset)}>
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                        }
+                                        {canEdit &&
+                                        <IconButton title={t('Ausbuchen / Ausmustern', 'Write off / Retire')} size="small" color="error" onClick={() => setDeleteTarget(asset)}>
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                        }
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -524,8 +523,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setAddSingleOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button variant="contained" onClick={handleSaveSingle} disabled={createAsset.isPending}>
+                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setAddSingleOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
+                    <Button title={translate('Das neue Gerät speichern', 'Save the new asset')} variant="contained" onClick={handleSaveSingle} disabled={createAsset.isPending}>
                         {t('Anlegen', 'Create')}
                     </Button>
                 </DialogActions>
@@ -574,8 +573,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     </TextField>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setBatchOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button variant="contained" onClick={handleSaveBatch} disabled={createAsset.isPending}>
+                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setBatchOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
+                    <Button title={translate('Die Geräte mit den eingegebenen Daten generieren', 'Generate assets using the entered details')} variant="contained" onClick={handleSaveBatch} disabled={createAsset.isPending}>
                         {t('Generieren', 'Generate')}
                     </Button>
                 </DialogActions>
@@ -614,8 +613,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setEditAsset(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button variant="contained" onClick={handleSaveEdit} disabled={updateAsset.isPending}>
+                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setEditAsset(null)}>{t('Abbrechen', 'Cancel')}</Button>
+                    <Button title={translate('Änderungen am Gerät speichern', 'Save changes to this asset')} variant="contained" onClick={handleSaveEdit} disabled={updateAsset.isPending}>
                         {t('Speichern', 'Save')}
                     </Button>
                 </DialogActions>
@@ -634,7 +633,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setQrAsset(null)}>{t('Schließen', 'Close')}</Button>
+                    <Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setQrAsset(null)}>{t('Schließen', 'Close')}</Button>
                 </DialogActions>
             </Dialog>
 

@@ -1,3 +1,4 @@
+import { Button } from '../components/shared/ActionButtons';
 import { OperationForm } from '../components/operations/OperationForm';
 import { useAuth } from '../hooks/useAuth';
 import { canOperateWarehouse } from '../utils/access';
@@ -5,7 +6,6 @@ import { useState } from 'react';
 import {
   Alert,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -25,7 +25,7 @@ import {
   useReturnSubmissions,
 } from '../hooks/useReturnSubmissions';
 import type { ReturnSubmissionStatus } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -104,7 +104,7 @@ export function ReturnedItemsPage() {
                   {entry.acknowledgementNotes && <Typography sx={{ mt: 1 }}>{t('Prüfnotiz', 'Inspection notes')}: {entry.acknowledgementNotes}</Typography>}
                   {entry.status === 'pending' && canOperateWarehouse(user) && (
                     <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                      <Button
+                      <Button title={translate('Die Rückgabe bestätigen und den Bestand einlagern', 'Acknowledge this return and restore it to stock')}
                         variant="contained"
                         color="success"
                         startIcon={<CheckCircleIcon />}
@@ -113,7 +113,7 @@ export function ReturnedItemsPage() {
                       >
                         {t('Bestätigen & einlagern', 'Acknowledge & return to stock')}
                       </Button>
-                      <Button
+                      <Button title={translate('Diese Rückgabemeldung mit Begründung ablehnen', 'Reject this return submission with a reason')}
                         variant="outlined"
                         color="error"
                         startIcon={<CancelIcon />}

@@ -1,6 +1,7 @@
+import { Button } from '../shared/ActionButtons';
 import { useEffect, useState } from 'react';
 import { useMediaUrl } from '../../hooks/useMediaUrl';
-import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
 import TouchAppIcon from '@mui/icons-material/TouchApp';
 import CheckIcon from '@mui/icons-material/Check';
 import {
@@ -14,7 +15,7 @@ import {
 } from 'react-leaflet';
 import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import type { MapBounds } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 const DEFAULT_CENTER = [52.375953, 11.826278] as const;
 const DEFAULT_ZOOM = 19;
@@ -118,7 +119,7 @@ export function StorageLocationMap({
           </CircleMarker>
         </MapContainer>
         {isMobile && !editable && (
-          <Button
+          <Button title={translate('Die Bedienung der Karte ein- oder ausschalten', 'Enable or disable map interaction')}
             size="small"
             variant="contained"
             color={touchActive ? 'primary' : 'inherit'}

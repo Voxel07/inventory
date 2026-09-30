@@ -1,9 +1,9 @@
+import { Button } from '../../shared/ActionButtons';
 import { useAuth } from '../../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, canAccessProcurement } from '../../../utils/access';
 import {
   Alert,
   Box,
-  Button,
   Chip,
   LinearProgress,
   Paper,
@@ -25,7 +25,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import SaveIcon from '@mui/icons-material/Save';
 import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { FactionOrder, FactionOrderStatus, StorageLocation } from '../../../types';
-import { useAppLanguage, useLocalizedText } from '../../../utils/naming';
+import { translate, useAppLanguage, useLocalizedText } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
 export interface OrderDetailHeaderProps {
@@ -129,7 +129,7 @@ export function OrderDetailHeader({
 
   return (
     <>
-      <Button startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 1 }}>
+      <Button title={translate('Zur Übersicht der Fraktionslisten zurückkehren', 'Return to the faction order list')} startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 1 }}>
         {t('Alle Fraktionslisten', 'All faction lists')}
       </Button>
 
@@ -150,9 +150,9 @@ export function OrderDetailHeader({
           <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { xs: 'stretch', md: 'flex-start' } }}>
-          <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('Listen-QR', 'List QR')}</Button>
-          <Button variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
-          {canEditOrderContents && <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('Bearbeiten', 'Edit')}</Button>}
+          <Button title={translate('Den QR-Code dieser Bestellliste anzeigen', 'Display the QR code for this order list')} variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('Listen-QR', 'List QR')}</Button>
+          <Button title={translate('Den Kommissionierschein als PDF herunterladen', 'Download the packing slip as PDF')} variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
+          {canEditOrderContents && <Button title={translate('Artikel und Mengen dieser Bestellliste bearbeiten', 'Edit the items and quantities in this order list')} variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
 
@@ -160,7 +160,7 @@ export function OrderDetailHeader({
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           {canEditOrder && order.status === 'draft' && (
-            <Button
+            <Button title={translate('Den Bedarf als vollständig einreichen', 'Submit the request as complete')}
               variant="contained"
               startIcon={<CheckCircleIcon />}
               onClick={onSubmit}
@@ -170,7 +170,7 @@ export function OrderDetailHeader({
             </Button>
           )}
           {warehouse && order.status === 'submitted' && (
-            <Button
+            <Button title={translate('Mit der Vorbereitung dieser Bestellliste beginnen', 'Start preparing this order list')}
               variant="contained"
               startIcon={<PlayArrowIcon />}
               onClick={onStartPreparation}
@@ -181,13 +181,13 @@ export function OrderDetailHeader({
           )}
           {warehouse && order.status === 'preparing' && (
             <>
-              <Button variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
+              <Button title={translate('Vorbereitete Mengen mit verfügbarem Bestand auffüllen', 'Fill prepared quantities using available stock')} variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
                 {t('Verfügbare Mengen füllen', 'Fill available amounts')}
               </Button>
-              <Button variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
+              <Button title={translate('Die vorbereiteten Mengen speichern', 'Save the prepared quantities')} variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
                 {t('Fortschritt speichern', 'Save progress')}
               </Button>
-              <Button
+              <Button title={translate('Abholort wählen und die Liste abholbereit melden', 'Choose a pickup location and mark this list ready')}
                 variant="contained"
                 color="success"
                 startIcon={<CheckCircleIcon />}
@@ -200,7 +200,7 @@ export function OrderDetailHeader({
           )}
           {(warehouse || custody) && order.status === 'ready' && (
             <>
-              <Button
+              <Button title={translate('Die Liste erneut zur Vorbereitung öffnen', 'Reopen this list for preparation')}
                 variant="outlined"
                 startIcon={<ReplayIcon />}
                 onClick={onReopenPreparation}
@@ -208,18 +208,18 @@ export function OrderDetailHeader({
               >
                 {t('Zurück in Vorbereitung', 'Back to preparation')}
               </Button>
-              <Button variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
+              <Button title={translate('Die vollständige Liste als abgeholt buchen', 'Record pickup of the complete list')} variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
                 {t('Komplette Liste abholen', 'Pick up complete list')}
               </Button>
             </>
           )}
           {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
-            <Button variant="contained" size="large" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
+            <Button title={translate('Die Rückgaben der einzelnen Komponenten prüfen', 'Review returns for each component')} variant="contained" size="large" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
               {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
             </Button>
           )}
           {planner && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
-            <Button color="error" startIcon={<CancelIcon />} onClick={onCancel} sx={{ ml: { sm: 'auto' } }}>
+            <Button title={translate('Die Stornierung dieser Bestellliste bestätigen', 'Review cancellation of this order list')} color="error" startIcon={<CancelIcon />} onClick={onCancel} sx={{ ml: { sm: 'auto' } }}>
               {t('Stornieren', 'Cancel')}
             </Button>
           )}
@@ -243,7 +243,7 @@ export function OrderDetailHeader({
         <Paper sx={{ p: 1.5, mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="h6">{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
-            <Button
+            <Button title={translate('Den Abholort in Google Maps öffnen', 'Open the pickup location in Google Maps')}
               size="small"
               variant="outlined"
               startIcon={<OpenInNewIcon fontSize="small" />}

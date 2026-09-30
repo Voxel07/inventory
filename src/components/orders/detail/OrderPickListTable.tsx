@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../../shared/ActionButtons';
 import { QuantityControl } from '../QuantityControl';
 import { CatalogSearchField } from '../CatalogSearchField';
 import { filterCatalogItems, filterCatalogAssemblies } from '../../../utils/orderCatalog';
@@ -5,7 +6,6 @@ import { useState } from 'react';
 import {
   Autocomplete,
   Box,
-  Button,
   Card,
   CardContent,
   Checkbox,
@@ -13,7 +13,6 @@ import {
   Collapse,
   Divider,
   FormControl,
-  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -29,7 +28,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
 import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
-import { useLocalizedText } from '../../../utils/naming';
+import { translate, useLocalizedText } from '../../../utils/naming';
 
 export interface OrderPickListTableProps {
   order: FactionOrder;
@@ -272,7 +271,7 @@ export function OrderPickListTable({
                 color={sortByLocation ? 'primary' : 'inherit'}
                 startIcon={<LocationOnIcon fontSize="small" />}
                 aria-pressed={sortByLocation}
-                title={t('Artikel nach Lagerort sortieren', 'Sort items by location')}
+                title={translate('Die Sortierung nach Lagerort ein- oder ausschalten', 'Toggle sorting by storage location')}
                 onClick={() => setSortByLocation((prev) => !prev)}
                 sx={{
                   minHeight: 40,
@@ -365,7 +364,7 @@ export function OrderPickListTable({
                           <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
                             <QuantityControl label={`${assembly.name} ${t('Bereit', 'Prepared')}`} value={preparedAssemblies[assembly.id] ?? ''} max={requested}
                             onChange={(value) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: value }))} />
-                            <Button
+                            <Button title={translate('Die angefragte Baugruppenmenge als vorbereitet eintragen', 'Set the prepared assembly quantity to the requested amount')}
                               size="small"
                               variant={isPrepComplete ? 'contained' : 'outlined'}
                               color={isPrepComplete ? 'success' : 'primary'}
@@ -376,7 +375,7 @@ export function OrderPickListTable({
                             </Button>
                           </Stack>
                         )}
-                        <IconButton size="small" onClick={() => toggleAssemblyExpand(assembly.id)}>
+                        <IconButton title={translate('Die Komponenten dieser Baugruppe ein- oder ausblenden', 'Show or hide the components of this assembly')} size="small" onClick={() => toggleAssemblyExpand(assembly.id)}>
                           {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                         </IconButton>
                       </Stack>
@@ -387,7 +386,7 @@ export function OrderPickListTable({
                         <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
                           <QuantityControl label={`${assembly.name} ${t('Bereit', 'Prepared')}`} value={preparedAssemblies[assembly.id] ?? ''} max={requested}
                             onChange={(value) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: value }))} />
-                          <Button
+                          <Button title={translate('Die angefragte Baugruppenmenge als vorbereitet eintragen', 'Set the prepared assembly quantity to the requested amount')}
                             size="small"
                             variant={isPrepComplete ? 'contained' : 'outlined'}
                             color={isPrepComplete ? 'success' : 'primary'}
@@ -483,7 +482,7 @@ export function OrderPickListTable({
                           <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', flexShrink: 0 }}>
                             <QuantityControl label={`${item.name} ${t('Bereit', 'Prepared')}`} value={prepared[item.id] ?? ''} max={requested}
                             onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))} />
-                            <Button
+                            <Button title={translate('Die angefragte Artikelmenge als vorbereitet eintragen', 'Set the prepared item quantity to the requested amount')}
                               size="small"
                               variant={isPrepComplete ? 'contained' : 'outlined'}
                               color={isPrepComplete ? 'success' : 'primary'}
@@ -502,7 +501,7 @@ export function OrderPickListTable({
                         <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
                           <QuantityControl label={`${item.name} ${t('Bereit', 'Prepared')}`} value={prepared[item.id] ?? ''} max={requested}
                             onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))} />
-                          <Button
+                          <Button title={translate('Die angefragte Artikelmenge als vorbereitet eintragen', 'Set the prepared item quantity to the requested amount')}
                             size="small"
                             variant={isPrepComplete ? 'contained' : 'outlined'}
                             color={isPrepComplete ? 'success' : 'primary'}

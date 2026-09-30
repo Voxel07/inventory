@@ -1,10 +1,10 @@
+import { Button } from '../components/shared/ActionButtons';
 import { useState } from 'react';
 import {
     Alert,
     Box,
     Paper,
     Typography,
-    Button,
     Container,
 } from '@mui/material';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -12,7 +12,7 @@ import LoginIcon from '@mui/icons-material/Login';
 import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 
 export function LoginPage() {
     const t = useLocalizedText();
@@ -82,7 +82,7 @@ export function LoginPage() {
 
                     {authError && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{authError}</Alert>}
 
-                    <Button
+                    <Button title={translate('Über Authentik anmelden', 'Sign in through Authentik')}
                         variant="contained"
                         fullWidth
                         size="large"

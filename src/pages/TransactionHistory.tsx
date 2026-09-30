@@ -1,4 +1,5 @@
-import { Box, Button, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Button } from '../components/shared/ActionButtons';
+import { Box, MenuItem, Stack, TextField,  Typography } from '@mui/material';
 import { useState } from 'react';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
 import { useTransactions } from '../hooks/useTransactions';
@@ -65,9 +66,8 @@ export function TransactionHistoryPage() {
         </TextField>
         <TextField label={t('Startdatum', 'Start date')} type="date" value={transactionFilters.startDate} onChange={(event) => updateFilters({ startDate: event.target.value })} size="small" slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label={t('Enddatum', 'End date')} type="date" value={transactionFilters.endDate} onChange={(event) => updateFilters({ endDate: event.target.value })} size="small" slotProps={{ inputLabel: { shrink: true } }} />
-        <Tooltip title={t('Alle Filter zurücksetzen', 'Reset all filters')} arrow>
-          <Button variant="outlined" onClick={clearFilters} size="small">{names.action.reset}</Button>
-        </Tooltip>
+
+        <Button title={t('Alle Filter zurücksetzen', 'Reset all filters')} variant="outlined" onClick={clearFilters} size="small">{names.action.reset}</Button>
       </Stack>
 
       <TransactionHistoryList transactions={pageTransactions} items={items} users={users} isLoading={isLoading} />

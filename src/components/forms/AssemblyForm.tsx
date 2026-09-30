@@ -1,27 +1,11 @@
+import { Chip, IconButton, ListItemButton, Button } from '../shared/ActionButtons';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
-import {
-    Box,
-    TextField,
-    Button,
-    Stack,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    Checkbox,
-    Paper,
-    Typography,
-    Chip,
-    IconButton,
-    Tooltip,
-    Autocomplete,
-} from '@mui/material';
+import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import { EVENT_TYPES, type AssemblyFormData, type Assembly, type Item } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 
 interface Props {
     initialData?: Assembly;
@@ -129,25 +113,24 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                         <Stack spacing={0.5}>
                             {selectedItems.map((item) => (
                                 <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Chip
+                                    <Chip title={translate('Diesen Artikel aus der Auswahl entfernen', 'Remove this item from the selection')}
                                         label={item.name}
                                         size="small"
                                         onDelete={() => handleToggle(item.id)}
                                         sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
                                     />
-                                    <Tooltip title={t('Menge verringern', 'Decrease quantity')} arrow>
-                                        <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, -1)}>
-                                            <RemoveIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
+
+                                    <IconButton title={t('Menge verringern', 'Decrease quantity')} type="button" size="small" onClick={() => handleQuantityChange(item.id, -1)}>
+                                        <RemoveIcon fontSize="small" />
+                                    </IconButton>
+
                                     <Typography variant="body2" sx={{ minWidth: 20, textAlign: 'center' }}>
                                         {formData.itemQuantities[item.id] ?? 1}
                                     </Typography>
-                                    <Tooltip title={t('Menge erhöhen', 'Increase quantity')} arrow>
-                                        <IconButton type="button" size="small" onClick={() => handleQuantityChange(item.id, 1)}>
-                                            <AddIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
+
+                                    <IconButton title={t('Menge erhöhen', 'Increase quantity')} type="button" size="small" onClick={() => handleQuantityChange(item.id, 1)}>
+                                        <AddIcon fontSize="small" />
+                                    </IconButton>
                                 </Box>
                             ))}
                         </Stack>
@@ -171,7 +154,7 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                         <List dense disablePadding>
                             {filteredItems.map((item) => (
                                 <ListItem key={item.id} disablePadding>
-                                    <ListItemButton onClick={() => handleToggle(item.id)} dense>
+                                    <ListItemButton title={translate('Artikel zur Baugruppe hinzufügen oder entfernen', 'Add or remove this item from the assembly')} onClick={() => handleToggle(item.id)} dense>
                                         <ListItemIcon sx={{ minWidth: 36 }}>
                                             <Checkbox
                                                 edge="start"
@@ -191,13 +174,9 @@ export function AssemblyForm({ initialData, items, onSubmit, isLoading }: Props)
                     )}
                 </Paper>
 
-                <Tooltip title={initialData ? t('Änderungen an dieser Baugruppe speichern', 'Save changes to this assembly') : t('Neue Baugruppe erstellen', 'Create a new assembly')} arrow>
-                    <span>
-                        <Button type="submit" variant="contained" disabled={isLoading || !formData.name}>
-                            {initialData ? t('Baugruppe aktualisieren', 'Update assembly') : t('Baugruppe erstellen', 'Create assembly')}
-                        </Button>
-                    </span>
-                </Tooltip>
+                <Button title={translate('Die Baugruppe mit den gewählten Artikeln speichern', 'Save the assembly with the selected items')} type="submit" variant="contained" disabled={isLoading || !formData.name}>
+                    {initialData ? t('Baugruppe aktualisieren', 'Update assembly') : t('Baugruppe erstellen', 'Create assembly')}
+                </Button>
             </Stack>
         </Box>
     );

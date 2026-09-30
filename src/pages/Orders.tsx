@@ -1,8 +1,9 @@
-import { Box, Paper, Tab, Tabs } from '@mui/material';
+import { Tab } from '../components/shared/ActionButtons';
+import { Box, Paper, Tabs } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { GeneralOrders } from '../components/orders/GeneralOrders';
 import { FactionOrders } from './FactionOrders';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 
 type OrderTab = 'general' | 'faction';
 
@@ -20,8 +21,8 @@ export function Orders() {
           variant="scrollable"
           allowScrollButtonsMobile
         >
-          <Tab value="general" label={t('Allgemeine Bestellungen', 'General orders')} />
-          <Tab value="faction" label={t('Fraktionsbestellungen', 'Faction orders')} />
+          <Tab title={translate('Allgemeine Bestellungen anzeigen', 'Display general orders')} value="general" label={t('Allgemeine Bestellungen', 'General orders')} />
+          <Tab title={translate('Fraktionsbestellungen anzeigen', 'Display faction orders')} value="faction" label={t('Fraktionsbestellungen', 'Faction orders')} />
         </Tabs>
       </Paper>
       {tab === 'general' ? <GeneralOrders /> : <FactionOrders />}

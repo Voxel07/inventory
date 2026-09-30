@@ -1,11 +1,22 @@
+import { Button } from '../components/shared/ActionButtons';
 import { CodeManagement } from '../components/qr/CodeManagement';
 import { canOperateWarehouse } from '../utils/access';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-    Alert, Box, Button, Chip, DialogContent, DialogTitle, Divider, Paper, Skeleton,
-    Stack, Typography, useMediaQuery, useTheme,
+    Alert,
+    Box,
+    Chip,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    Paper,
+    Skeleton,
+    Stack,
+    Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -19,7 +30,7 @@ import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { useUIStore } from '../store/uiStore';
 import type { DamageReportFormData } from '../types';
 import { formatStatus } from '../utils/formatters';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { useAuth } from '../hooks/useAuth';
 import { canPerformCustody } from '../utils/access';
@@ -103,7 +114,7 @@ export function AssetDetail() {
 
     return (
         <Box>
-            <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/items/${item.id}`)} sx={{ mb: 2 }}>
+            <Button title={translate('Zur Detailseite des Artikels zurückkehren', 'Return to the item details')} startIcon={<ArrowBackIcon />} onClick={() => navigate(`/items/${item.id}`)} sx={{ mb: 2 }}>
                 {t('Zurück zum Artikel', 'Back to item')}
             </Button>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -114,7 +125,7 @@ export function AssetDetail() {
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
-                    {canReportDamage && <Button variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
+                    {canReportDamage && <Button title={translate('Einen Schaden an diesem Gerät melden', 'Report damage to this asset')} variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
                         {t('Schaden melden', 'Report damage')}
                     </Button>}
                 </Stack>

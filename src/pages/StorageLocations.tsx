@@ -1,3 +1,4 @@
+import { AccordionSummary, Button, ListItemButton, IconButton } from '../components/shared/ActionButtons';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { WarehousesPanel } from '../components/operations/WarehousesPanel';
 import { getWarehouses } from '../services/warehouseService';
@@ -9,36 +10,7 @@ import { useOperationList } from '../hooks/useOperations';
 import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import {
-    Accordion, AccordionSummary, AccordionDetails, Alert, MenuItem, Checkbox, FormControlLabel,
-    Box,
-    Typography,
-    Paper,
-    List,
-    ListItemButton,
-    ListItemText,
-    Grid,
-    Button,
-    TextField,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Chip,
-    Stack,
-    Divider,
-    IconButton,
-    Tooltip,
-    Card,
-    CardContent,
-    useTheme,
-    useMediaQuery,
-} from '@mui/material';
+import { Accordion, AccordionDetails, Alert, MenuItem, Checkbox, FormControlLabel, Box, Typography, Paper, List, ListItemText, Grid, TextField, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Stack, Divider, Card, CardContent, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -52,7 +24,7 @@ import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { formatStatus } from '../utils/formatters';
-import { useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
@@ -86,7 +58,6 @@ export function StorageLocations() {
     const [showInactive, setShowInactive] = useState(false);
     const [warehousesOpen, setWarehousesOpen] = useState(false);
     const warehouses = useOperationList('warehouses', getWarehouses);
-
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -206,14 +177,14 @@ export function StorageLocations() {
 
     return (
         <Box>
-            <Button disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
-            <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
+            <Button title={translate('Standorte anlegen und bearbeiten', 'Create and edit warehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
+            <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
             {(!isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h4" sx={{ fontWeight: 700 }}>
                         {t('Lagerorte', 'Storage locations')}
                     </Typography>
-                    <Button
+                    <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
                         variant="contained"
                         startIcon={<AddIcon />}
                         disabled={!canEdit} onClick={handleOpenCreate}
@@ -224,7 +195,7 @@ export function StorageLocations() {
             )}
 
             {isMobile && selectedLocId && (
-                <Button
+                <Button title={translate('Zur Lagerortübersicht zurückkehren', 'Return to the storage location list')}
                     startIcon={<ArrowBackIcon />}
                     onClick={() => setSelectedLocId(null)}
                     sx={{ mb: 2 }}
@@ -262,7 +233,7 @@ export function StorageLocations() {
                                 <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
                                     {pageLocations.map((loc) => {
                                         return (
-                                            <ListItemButton
+                                            <ListItemButton title={translate('Details und Bestand dieses Lagerorts anzeigen', 'Display this storage location\'s details and stock')}
                                                 key={loc.id}
                                                 selected={selectedLocId === loc.id}
                                                 onClick={() => { setSelectedLocId(loc.id); setItemPage(1); }}
@@ -301,16 +272,14 @@ export function StorageLocations() {
                                                         size="small"
                                                         variant="outlined"
                                                     />
-                                                    <Tooltip title={t('Bearbeiten', 'Edit')} arrow>
-                                                        <IconButton size="small" disabled={!canEdit} onClick={(e) => handleOpenEdit(loc, e)}>
-                                                            <EditIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title={t('Deaktivieren', 'Deactivate')} arrow>
-                                                        <IconButton size="small" color="error" disabled={!canEdit} onClick={(e) => handleOpenDelete(loc.id, e)}>
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
+
+                                                    <IconButton title={t('Bearbeiten', 'Edit')} size="small" disabled={!canEdit} onClick={(e) => handleOpenEdit(loc, e)}>
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+
+                                                    <IconButton title={t('Deaktivieren', 'Deactivate')} size="small" color="error" disabled={!canEdit} onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
                                                 </Box>
                                             </ListItemButton>
                                         );
@@ -353,7 +322,7 @@ export function StorageLocations() {
                                             </Box>
                                         </Box>
                                     </Box>
-                                    <Button
+                                    <Button title={translate('Die Daten dieses Lagerorts bearbeiten', 'Edit this storage location\'s details')}
                                         size="small"
                                         variant="outlined"
                                         startIcon={<EditIcon />}
@@ -363,7 +332,7 @@ export function StorageLocations() {
                                     </Button>
                                 </Box>
 
-                                <Accordion key={activeLocation.id}><AccordionSummary>{t('Chargen, Geräte und Bestandszustände', 'Lots, assets and stock conditions')}</AccordionSummary><AccordionDetails><Button onClick={() => navigate(`/locations/${activeLocation.id}`)}>{t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}</Button><StockPositions locationId={activeLocation.id} /></AccordionDetails></Accordion>
+                                <Accordion key={activeLocation.id}><AccordionSummary title={translate('Chargen, Geräte und Bestandszustände ein- oder ausblenden', 'Show or hide lots, assets and stock conditions')}>{t('Chargen, Geräte und Bestandszustände', 'Lots, assets and stock conditions')}</AccordionSummary><AccordionDetails><Button title={translate('Etiketten, Scans und Umlagerungen für diesen Lagerort öffnen', 'Open labels, scanning and transfers for this location')} onClick={() => navigate(`/locations/${activeLocation.id}`)}>{t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}</Button><StockPositions locationId={activeLocation.id} /></AccordionDetails></Accordion>
                                 {activeLocation.description && (
                                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2, pl: { xs: 0, md: 6 } }}>
                                         {activeLocation.description}
@@ -464,7 +433,7 @@ export function StorageLocations() {
                                                             />
                                                         </TableCell>
                                                         <TableCell align="right">
-                                                            <IconButton size="small" color="primary">
+                                                            <IconButton title={translate('Die Details dieses Artikels öffnen', 'Open this item\'s details')} size="small" color="primary">
                                                                 <ArrowForwardIosIcon sx={{ fontSize: 14 }} />
                                                             </IconButton>
                                                         </TableCell>
@@ -570,12 +539,12 @@ export function StorageLocations() {
                                     fullWidth
                                 />
                             </Stack>
-                            <Button component="label" variant="outlined">
+                            <Button title={translate('Eine Bilddatei als Kartenebene auswählen', 'Choose an image file for the map overlay')} component="label" variant="outlined">
                                 {t('Eigene Kartenebene hochladen', 'Upload custom map overlay')}
                                 <input hidden type="file" accept="image/*" onChange={(event) => setFormData((current) => ({ ...current, mapOverlayFile: event.target.files?.[0], removeMapOverlay: false }))} />
                             </Button>
                             {editingLoc?.mapOverlay && !formData.removeMapOverlay && (
-                                <Button color="error" onClick={() => setFormData((current) => ({ ...current, removeMapOverlay: true, mapOverlayFile: undefined }))}>
+                                <Button title={translate('Die gespeicherte Kartenebene entfernen', 'Remove the saved map overlay')} color="error" onClick={() => setFormData((current) => ({ ...current, removeMapOverlay: true, mapOverlayFile: undefined }))}>
                                     {t('Vorhandene Kartenebene entfernen', 'Remove existing map overlay')}
                                 </Button>
                             )}
@@ -591,10 +560,10 @@ export function StorageLocations() {
                         </Stack>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
-                        <Button onClick={() => setDialogOpen(false)} color="inherit">
+                        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setDialogOpen(false)} color="inherit">
                             {t('Abbrechen', 'Cancel')}
                         </Button>
-                        <Button
+                        <Button title={translate('Die Daten und Kartenebene dieses Lagerorts speichern', 'Save this storage location\'s details and map overlay')}
                             type="submit"
                             variant="contained"
                             disabled={createMutation.isPending || updateMutation.isPending || !formData.name}

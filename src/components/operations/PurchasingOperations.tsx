@@ -1,15 +1,16 @@
+import { Button } from '../shared/ActionButtons';
 import { receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useEventReports } from '../../hooks/useEvents';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
 import { canOperateWarehouse } from '../../utils/access';
-import { useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type ProcurementDeficit, type PurchaseOrder, type Vendor } from '../../services/procurementService';
 import { operationsApi } from '../../services/operationsService';
 import { Fields, OperationForm, type Field, type Values } from './OperationForm';
@@ -22,7 +23,7 @@ export function PurchasingPanel({ eventId = '', selected = null, onClose = () =>
   const [transition, setTransition] = useState<{ order: PurchaseOrder; status: 'ordered' | 'cancelled' } | null>(null);
   const [history, setHistory] = useState<string | null>(null);
   return <Stack spacing={2}>
-    <Button variant="contained" onClick={() => setEdit('new')}>{t('Einkaufsentwurf anlegen', 'New purchase draft')}</Button>
+    <Button title={translate('Einen neuen Einkaufsentwurf erstellen', 'Create a new purchase draft')} variant="contained" onClick={() => setEdit('new')}>{t('Einkaufsentwurf anlegen', 'New purchase draft')}</Button>
     <QueryFeedback isLoading={orders.isLoading} error={orders.error} isEmpty={!orders.data?.length} emptyMessage={t('Noch keine Einkaufsbestellungen.', 'No purchase orders yet.')} />
     {orders.data?.filter((order) => !eventId || order.eventOccurrenceId === eventId).map((order) => <Card key={order.id}><CardContent><Stack spacing={1}>
       <Typography variant="h6">{order.orderNumber} · {order.vendorName}</Typography><Typography>{order.status} · {t('Bestelldatum', 'Order date')}: {order.orderDate} · {t('Erwartet', 'Expected')}: {order.expectedDeliveryDate ?? '—'}</Typography>
@@ -30,11 +31,11 @@ export function PurchasingPanel({ eventId = '', selected = null, onClose = () =>
       {order.lines.map((line) => <Box key={line.id}><Typography component={Link} to={`/items/${line.itemId}`}>{line.itemName}</Typography><Typography>{t('Bestellt', 'Ordered')}: {line.orderedQuantity} · {t('Erhalten', 'Received')}: {line.receivedQuantity} · {t('Offen', 'Remaining')}: {line.remainingQuantity} · €{(line.unitPriceCents / 100).toFixed(2)}</Typography></Box>)}
       {order.notes && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-        {order.status === 'draft' && <><Button onClick={() => setEdit(order)}>{t('Entwurf bearbeiten', 'Edit draft')}</Button><Button onClick={() => setTransition({ order, status: 'ordered' })}>{t('Als bestellt markieren', 'Mark ordered')}</Button></>}
-        {['draft', 'ordered', 'partially_received'].includes(order.status) && <Button onClick={() => setTransition({ order, status: 'cancelled' })}>{t('Rest stornieren', 'Cancel remaining')}</Button>}
+        {order.status === 'draft' && <><Button title={translate('Lieferant und Positionen des Einkaufsentwurfs bearbeiten', 'Edit the supplier and lines of this purchase draft')} onClick={() => setEdit(order)}>{t('Entwurf bearbeiten', 'Edit draft')}</Button><Button title={translate('Den Einkauf als bestellt markieren', 'Mark this purchase as ordered')} onClick={() => setTransition({ order, status: 'ordered' })}>{t('Als bestellt markieren', 'Mark ordered')}</Button></>}
+        {['draft', 'ordered', 'partially_received'].includes(order.status) && <Button title={translate('Die noch offenen Bestellmengen stornieren', 'Cancel the remaining ordered quantities')} onClick={() => setTransition({ order, status: 'cancelled' })}>{t('Rest stornieren', 'Cancel remaining')}</Button>}
         {canOperateWarehouse(user) && <>
-          {['ordered', 'partially_received'].includes(order.status) && <Button onClick={() => setReceive(order)}>{t('Lieferung annehmen', 'Receive delivery')}</Button>}
-          <Button onClick={() => setHistory(history === order.id ? null : order.id)}>{t('Wareneingänge / Belege', 'Receipts / documents')}</Button>
+          {['ordered', 'partially_received'].includes(order.status) && <Button title={translate('Gelieferte Mengen und Wareneingang erfassen', 'Record delivered quantities and goods receipt')} onClick={() => setReceive(order)}>{t('Lieferung annehmen', 'Receive delivery')}</Button>}
+          <Button title={translate('Wareneingänge und zugehörige Belege ein- oder ausblenden', 'Show or hide goods receipts and their documents')} onClick={() => setHistory(history === order.id ? null : order.id)}>{t('Wareneingänge / Belege', 'Receipts / documents')}</Button>
         </>}
       </Stack>
       {history === order.id && <><ReceiptsPanel purchaseOrderId={order.id} /><DocumentsPanel order={order} /></>}
@@ -61,12 +62,12 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
       { key: 'orderNumber', label: t('Referenz (optional)', 'Reference (optional)') }, { key: 'orderDate', label: t('Bestelldatum', 'Order date'), type: 'date', required: true },
       { key: 'expectedDeliveryDate', label: t('Erwartete Lieferung', 'Expected delivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('Event (optional)', 'Event (optional)'), options: (events.data ?? []).map((event) => ({ value: event.id, label: `${event.name || event.eventType} · ${event.eventDate}` })) }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
     ]} />
-    <Button onClick={() => setNewVendor(true)}>{t('Neuer Lieferant', 'New supplier')}</Button>
+    <Button title={translate('Einen neuen Lieferanten anlegen', 'Create a new supplier')} onClick={() => setNewVendor(true)}>{t('Neuer Lieferant', 'New supplier')}</Button>
     {lines.map((line, index) => <Card key={index}><CardContent><Stack spacing={1}><Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
       { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }, { key: 'orderedQuantity', label: t('Menge', 'Quantity'), type: 'number', min: 1, required: true }, { key: 'price', label: t('Einzelpreis (€)', 'Unit price (€)'), type: 'number', min: 0, step: 0.01, required: true },
-    ]} /><Button disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('Zeile entfernen', 'Remove line')}</Button></Stack></CardContent></Card>)}
-    <Button onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1, price: 0 }])}>{t('Artikel hinzufügen', 'Add item')}</Button>
-  </Stack></DialogContent><DialogActions><Button disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button variant="contained" type="submit" disabled={command.isPending}>{t('Entwurf speichern', 'Save draft')}</Button></DialogActions></Box>
+    ]} /><Button title={translate('Diese Position aus dem Einkaufsentwurf entfernen', 'Remove this line from the purchase draft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('Zeile entfernen', 'Remove line')}</Button></Stack></CardContent></Card>)}
+    <Button title={translate('Eine Artikelposition zum Einkaufsentwurf hinzufügen', 'Add an item line to the purchase draft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1, price: 0 }])}>{t('Artikel hinzufügen', 'Add item')}</Button>
+  </Stack></DialogContent><DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Den Einkaufsentwurf speichern', 'Save the purchase draft')} variant="contained" type="submit" disabled={command.isPending}>{t('Entwurf speichern', 'Save draft')}</Button></DialogActions></Box>
     {newVendor && <VendorForm onClose={() => setNewVendor(false)} onSaved={(vendor) => setHeader({ ...header, vendorId: vendor.id })} />}
   </Dialog>;
 }
@@ -97,7 +98,7 @@ export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string })
 
 export function VendorsPanel() {
   const t = useLocalizedText(); const vendors = useOperationList('vendors', getVendors); const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
-  return <Stack spacing={2}><Button variant="contained" onClick={() => setEdit('new')}>{t('Lieferant anlegen', 'New supplier')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <Card key={vendor.id}><CardContent><Typography variant="h6">{vendor.name} {!vendor.active && t('(inaktiv)', '(inactive)')}</Typography><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography><Button onClick={() => setEdit(vendor)}>{t('Bearbeiten', 'Edit')}</Button></CardContent></Card>)}{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
+  return <Stack spacing={2}><Button title={translate('Einen neuen Lieferanten anlegen', 'Create a new supplier')} variant="contained" onClick={() => setEdit('new')}>{t('Lieferant anlegen', 'New supplier')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <Card key={vendor.id}><CardContent><Typography variant="h6">{vendor.name} {!vendor.active && t('(inaktiv)', '(inactive)')}</Typography><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography><Button title={translate('Die Lieferantendaten bearbeiten', 'Edit the supplier details')} onClick={() => setEdit(vendor)}>{t('Bearbeiten', 'Edit')}</Button></CardContent></Card>)}{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
 }
 
 function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: () => void; onSaved?: (vendor: Vendor) => void }) {
@@ -111,8 +112,8 @@ export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
   const t = useLocalizedText(); const documents = useOperationList(`documents:${order.id}`, operationsApi.documents(order.id)); const command = useOperationCommand();
   const receipts = useOperationList(`document-receipts:${order.id}`, operationsApi.receipts(order.id));
   const [attach, setAttach] = useState(false); const [file, setFile] = useState<File | null>(null);
-  return <Stack spacing={1}><Typography variant="h6">{t('Belege', 'Documents')}</Typography><Button onClick={() => setAttach(true)}>{t('Beleg anhängen', 'Attach document')}</Button>{(documents.error || command.error) && <Alert severity="error">{(documents.error || command.error)?.message}</Alert>}
-    {documents.data?.map((document) => <Card key={document.id}><CardContent><Typography>{document.originalFilename} · {document.documentType} · {document.referenceNumber}</Typography><Typography>{document.documentDate} {document.totalAmountCents != null ? `${document.totalAmountCents / 100} ${document.currency}` : ''}</Typography><Button disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.downloadDocument(document))}>{t('Herunterladen', 'Download')}</Button></CardContent></Card>)}
+  return <Stack spacing={1}><Typography variant="h6">{t('Belege', 'Documents')}</Typography><Button title={translate('Einen Beleg zu dieser Bestellung hinzufügen', 'Attach a document to this order')} onClick={() => setAttach(true)}>{t('Beleg anhängen', 'Attach document')}</Button>{(documents.error || command.error) && <Alert severity="error">{(documents.error || command.error)?.message}</Alert>}
+    {documents.data?.map((document) => <Card key={document.id}><CardContent><Typography>{document.originalFilename} · {document.documentType} · {document.referenceNumber}</Typography><Typography>{document.documentDate} {document.totalAmountCents != null ? `${document.totalAmountCents / 100} ${document.currency}` : ''}</Typography><Button title={translate('Den ausgewählten Beleg herunterladen', 'Download the selected document')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.downloadDocument(document))}>{t('Herunterladen', 'Download')}</Button></CardContent></Card>)}
     {attach && <OperationForm title={t('Beleg anhängen', 'Attach document')} initial={{ documentType: 'invoice', currency: 'EUR' }} onClose={() => { setAttach(false); setFile(null); }} fields={[
       { key: 'goodsReceiptId', label: t('Wareneingang (optional)', 'Goods receipt (optional)'), options: (receipts.data ?? []).map((receipt) => ({ value: receipt.id, label: `${receipt.receiptNumber} · ${new Date(receipt.receivedAt).toLocaleDateString()}` })) },
       { key: 'documentType', label: t('Belegart', 'Document type'), required: true, options: ['invoice', 'delivery_note', 'quote', 'warranty', 'certificate', 'other'].map((value) => ({ value, label: value })) }, { key: 'documentDate', label: t('Datum', 'Date'), type: 'date' }, { key: 'referenceNumber', label: t('Referenz', 'Reference') }, { key: 'amount', label: t('Gesamtbetrag', 'Total amount'), type: 'number', min: 0, step: 0.01 }, { key: 'currency', label: t('Währung', 'Currency') }, { key: 'retentionUntil', label: t('Aufbewahren bis', 'Retain until'), type: 'date' }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
