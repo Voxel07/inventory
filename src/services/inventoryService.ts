@@ -28,6 +28,7 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
   '/api/items',
   'items',
   {
+    cacheDetails: true,
     transformPayload: payload,
     customCreate: async (data: ItemFormData, basePath: string, context) => {
       const images = await uploadItemImages(data.imageFiles, context);

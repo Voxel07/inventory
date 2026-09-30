@@ -4,7 +4,7 @@ import { useEquipmentAvailability } from '../hooks/useEquipment';
 import { Fields } from '../components/operations/OperationForm';
 import { useStockLookups } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useState } from 'react';
+import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
@@ -32,7 +32,7 @@ import {
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import type { Assembly, Item } from '../types';
+import type { Assembly, FactionOrder, Item } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
@@ -42,6 +42,18 @@ import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../uti
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 
+function preparationDraft(key: string, order?: FactionOrder) {
+  return {
+    key,
+    sources: { ...order?.sourceLocations },
+    prepared: Object.fromEntries(Object.entries(order?.preparedQuantities ?? {}).map(([id, value]) => [id, String(value)])),
+    preparedAssemblies: Object.fromEntries(Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)])),
+    assetAssignments: Object.fromEntries(Object.entries(order?.assetAssignments ?? {}).map(([id, assets]) => [id, assets.map((asset) => asset.id)])),
+  };
+}
+
+type PreparationDraft = ReturnType<typeof preparationDraft>;
+
 export function FactionOrderDetail() {
   const { orderId = '' } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
@@ -50,7 +62,7 @@ export function FactionOrderDetail() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { success, error: handleError } = useMutationFeedback();
-  const { user } = useAuth();
+  const { user, generation } = useAuth();
 
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
@@ -70,35 +82,32 @@ export function FactionOrderDetail() {
   const cancelOrder = useCancelFactionOrder();
 
   const lookup = useStockLookups();
-  const [sources, setSources] = useState<Record<string, string>>({});
-  const [prepared, setPrepared] = useState<Record<string, string>>({});
-  const [preparedAssemblies, setPreparedAssemblies] = useState<Record<string, string>>({});
-  const [assetAssignments, setAssetAssignments] = useState<Record<string, string[]>>({});
+  const preparationKey = JSON.stringify([
+    generation, orderId, order?.id, order?.updated, order?.status,
+    order?.requestedQuantities, order?.requestedAssemblyQuantities,
+    order?.sourceLocations, order?.preparedQuantities, order?.preparedAssemblyQuantities,
+    Object.entries(order?.assetAssignments ?? {}).map(([id, assets]) => [id, assets.map((asset) => asset.id)]),
+  ]);
+  const [draft, setDraft] = useState(() => preparationDraft(preparationKey, order));
+  // Keep edits on unchanged refetches and failed saves. A new order, saved
+  // revision/preparation or permission generation replaces every field together.
+  if (draft.key !== preparationKey) setDraft(preparationDraft(preparationKey, order));
+  const { sources, prepared, preparedAssemblies, assetAssignments } = draft;
+  function setPreparationField<K extends Exclude<keyof PreparationDraft, 'key'>>(field: K, value: SetStateAction<PreparationDraft[K]>) {
+    setDraft((current) => ({
+      ...current,
+      [field]: typeof value === 'function' ? value(current[field]) : value,
+    }));
+  }
+  const setPrepared = (value: SetStateAction<PreparationDraft['prepared']>) => setPreparationField('prepared', value);
+  const setPreparedAssemblies = (value: SetStateAction<PreparationDraft['preparedAssemblies']>) => setPreparationField('preparedAssemblies', value);
+  const setAssetAssignments = (value: SetStateAction<PreparationDraft['assetAssignments']>) => setPreparationField('assetAssignments', value);
   const [editOpen, setEditOpen] = useState(false);
   const [editReady, setEditReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [pickupMapOpen, setPickupMapOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
-
-  const preparationKey = JSON.stringify([order?.id, order?.updated, order?.preparedQuantities, order?.preparedAssemblyQuantities, order?.assetAssignments]);
-  const [preparationSource, setPreparationSource] = useState<string | undefined>(undefined);
-  if (preparationSource !== preparationKey) {
-    setPreparationSource(preparationKey);
-    setPrepared(
-      Object.fromEntries(
-        Object.entries(order?.preparedQuantities ?? {}).map(([id, value]) => [id, String(value)]),
-      ),
-    );
-    setPreparedAssemblies(
-      Object.fromEntries(
-        Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)]),
-      ),
-    );
-    setAssetAssignments(Object.fromEntries(
-      Object.entries(order?.assetAssignments ?? {}).map(([itemId, assets]) => [itemId, assets.map((asset) => asset.id)]),
-    ));
-  }
 
   const itemMap = new Map(items.map((item) => [item.id, item]));
   const assemblyMap = new Map(assemblies.map((assembly) => [assembly.id, assembly]));
@@ -158,7 +167,7 @@ export function FactionOrderDetail() {
       }
     }
     savePreparation.mutate(
-      { id: order.id, values, assemblyValues, assetAssignments, sourceLocations: Object.fromEntries(Object.entries({ ...order.sourceLocations, ...sources }).filter(([, value]) => value)) },
+      { id: order.id, values, assemblyValues, assetAssignments, sourceLocations: Object.fromEntries(Object.entries(sources).filter(([, value]) => value)) },
       {
         onSuccess: () => success(t('Vorbereitung gespeichert', 'Preparation saved')),
         onError: handleError,
@@ -186,8 +195,7 @@ export function FactionOrderDetail() {
         remaining[itemId] = Math.max(0, (remaining[itemId] ?? 0) - amount * perAssembly);
       }
     }
-    setPrepared(nextItems);
-    setPreparedAssemblies(nextAssemblies);
+    setDraft((current) => ({ ...current, prepared: nextItems, preparedAssemblies: nextAssemblies }));
   }
 
   function runConfirmedAction() {
@@ -325,7 +333,7 @@ export function FactionOrderDetail() {
         isReopeningPreparation={reopenPreparation.isPending}
       />
 
-      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.filter((item) => item.trackingMode !== 'serialized').map((item) => ({ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options: lookup.locationOptions, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }))} values={{ ...order.sourceLocations, ...sources }} onChange={(values) => setSources(Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
+      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.filter((item) => item.trackingMode !== 'serialized').map((item) => ({ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options: lookup.locationOptions, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }))} values={sources} onChange={(values) => setPreparationField('sources', Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
       <OrderPickListTable
         order={order}
         orderItems={orderItems}

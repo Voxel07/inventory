@@ -1,6 +1,6 @@
 # Repository review and refactoring plan
 
-A01–A06 and P01–P05 implementation: [progress](REFACTOR_PROGRESS.md). The findings below retain the reviewed revision's evidence; current implementation owners, interface changes and validation limits are recorded in the progress document. U01/U02 and C09 remain open.
+A01–A06, P01–P05 and U01–U02 implementation: [progress](REFACTOR_PROGRESS.md). The findings below retain the reviewed revision's evidence; current implementation owners, interface changes and validation limits are recorded in the progress document. C09 runtime and performance acceptance remains open.
 
 Reviewed **30 September 2026** against source at `af49b5a6f7d29e9d7607d6e64fbe0d42a18c9986` (clean working tree at review start). This is a source-based assessment and a plan, not an implementation or release approval. The documentation changes accompanying this report do not fix the findings below.
 
@@ -191,6 +191,8 @@ Change: pass the full required event/date scope to PlanningOrm and retrieve late
 
 **P2/medium · high confidence · ORD-03, F05, C08 incomplete.**
 
+Implemented **1 October 2026**: preparation quantities, assembly quantities, asset assignments and sources share one guarded draft. Unchanged refetches and failed saves retain edits; a changed order/revision, saved preparation (including source-only changes), workflow status or session/permission generation resets every field. Display and submission use the same source map, including explicitly cleared defaults. See [validation and pending journeys](REFACTOR_PROGRESS.md#u01u02).
+
 Evidence: [src/pages/FactionOrderDetail.tsx:73](../src/pages/FactionOrderDetail.tsx#L73) is independent draft state. [src/pages/FactionOrderDetail.tsx:84](../src/pages/FactionOrderDetail.tsx#L84) resets quantities and assignments on order/source updates, but neither resets sources nor includes order.sourceLocations in its key. [src/pages/FactionOrderDetail.tsx:161](../src/pages/FactionOrderDetail.tsx#L161) overlays retained sources onto the current order; [src/pages/FactionOrderDetail.tsx:328](../src/pages/FactionOrderDetail.tsx#L328) does the same for display.
 
 Trigger: unsaved source selection for order A followed by navigation to order B in the same route component, or a refetch changes the saved source. An old source can silently win for a shared item, causing preparation conflicts or an unintended location choice. Server source/stock checks remain the final guard.
@@ -202,6 +204,8 @@ Change: own all preparation fields as one draft with explicit order/revision res
 ### U02 — Offline item-detail fallback sees only the initial catalog page
 
 **P2/medium · high confidence · OFF-01/02, F16, C05.**
+
+Implemented **1 October 2026**: exact account/permission-scoped item entries are populated from online detail reads, every downloaded item page and successful catalog writes. Query-specific lists remain separate; no partial/filtered page is declared complete. Detail fallback can run offline and reports the original download timestamp; online 403/404 and deletion remove the exact entry. Redundant page-zero item precaching was removed. See [validation and pending journeys](REFACTOR_PROGRESS.md#u01u02).
 
 Evidence: [src/services/apiClient.ts:425](../src/services/apiClient.ts#L425) fetches `/api/items` without pagination and saves the response as base `items`; [backend/src/main/java/org/ash/inventory/resource/CatalogResource.java:48](../backend/src/main/java/org/ash/inventory/resource/CatalogResource.java#L48) defaults to 100. Progressive item reads store normalized page/size keys through resourceFactory. [src/services/resourceFactory.ts:66](../src/services/resourceFactory.ts#L66) in getById searches only the unpaged base catalog, and successful detail reads are not stored there.
 
@@ -303,7 +307,7 @@ These distinctions are requirements/intent to preserve during fixes. Findings ab
 
 ## 9. Staged refactoring plan
 
-This table records the original staged plan. A01–A06 and P01–P05 have since been implemented; see [progress](REFACTOR_PROGRESS.md) for current evidence. U01/U02 and runtime/performance acceptance remain pending. Stock reads remain authoritative and request-local; the bounded P03 cache holds only filtered manual report generations. No upgrade migration, compatibility alias, distributed service or generic mode-driven component was introduced.
+This table records the original staged plan. A01–A06, P01–P05 and U01–U02 have since been implemented; see [progress](REFACTOR_PROGRESS.md) for current evidence. Runtime/performance acceptance remains pending. Stock reads remain authoritative and request-local; the bounded P03 cache holds only filtered manual report generations. No upgrade migration, compatibility alias, distributed service or generic mode-driven component was introduced.
 
 | Stage / dependency | Work and accountable owners | Exit evidence |
 |---|---|---|

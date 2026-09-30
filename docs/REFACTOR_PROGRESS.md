@@ -46,3 +46,20 @@ Validation on P01–P05 (1 October 2026, builds/tests explicitly requested):
 No PostgreSQL baseline initialization, browser journey or performance trace was run. No schema changes were needed. No latency or measured SQL-count improvement is claimed.
 
 Pending acceptance: mixed/all-empty image pages; stock parity for bulk/lot/serialized and restricted pools; large order histories; report monthly totals/cache eviction and rebuild/source changes during export; local/SSE/CSV request traces and terminal retries; overlapping/sequential planning, tied overrides and late/undated supply. Capture statement counts, result rows, timings and client requests on the same datasets before/after as described in [C09](REPOSITORY_REVIEW.md#10-c09-acceptance-and-performance-measurements-still-required). First report reads/cache misses still load stored JSON, and watermarks still scan source tables; normalized report rows/shared source revisions remain a later measured decision.
+
+## U01–U02
+
+Implemented **1 October 2026**. Earlier A/P build and suite results do not validate these changes.
+
+| Finding | Status | Change |
+|---|---|---|
+| U01 | Implemented | One preparation draft owns item/assembly quantities, exact asset assignments and source locations. Guarded resets include route/order identity, revision, saved sources/quantities/assignments, requested quantities, workflow status and session/permission generation. Unchanged refetches and failed saves retain unsaved edits; changed server preparation replaces the entire draft. Display and submission use the same sources, and clearing a source selects the item default. |
+| U02 | Implemented | Item pages and details populate exact item entries within the existing account/role/faction catalog namespace. A page and its entries share one IndexedDB transaction/download timestamp; filtered/page caches remain query-specific. Detail queries attempt offline fallback on the first fetch. Successful create/update refreshes the exact entry; deletion and online 403/404 remove it. Item precaching no longer requests page zero separately. |
+
+Owners: [preparation draft](../src/pages/FactionOrderDetail.tsx), [item cache opt-in](../src/services/inventoryService.ts), [resource reads/writes](../src/services/resourceFactory.ts), [IndexedDB entries](../src/services/offlineQueue.ts), [detail query policy](../src/hooks/useResourceApi.ts), and [remaining catalog precache](../src/services/apiClient.ts).
+
+Cache coverage is explicit: only downloaded items are available offline, including unvisited details from later or filtered list pages. An item never downloaded has no fallback. Item fallback does not search a base/partial catalog, and cache reads never advance the original timestamp. Role/faction changes use a different namespace; obsolete session results still fail the A02 generation checks. Stock remains informational while cached. No API/schema changes, compatibility reads or database version upgrades were introduced.
+
+Validation (1 October 2026): `bun ./node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit` passed; `bun ./node_modules/eslint/bin/eslint.js src --max-warnings 0` passed, and targeted lint passed again after the final source edit. Documentation file links and `git diff --check` passed. Builds and regression suites were not run because `agent.md` requires an explicit execution request; browser journeys remain pending.
+
+Pending acceptance: A→B orders with shared/different items; source-only refetch, unchanged dirty refetch, cleared default source, failed/save/reopen and permission change; >100 items, visited and unvisited downloaded details, never-downloaded details, filtered catalogs, cold start, 403/404 then offline, catalog updates/deletions, A→B→A and delayed IndexedDB completion. Browser acceptance should confirm displayed/submitted source IDs and visible cache timestamps. C09 remains open.

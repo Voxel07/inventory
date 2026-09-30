@@ -487,7 +487,8 @@ async function precacheCatalogForOfflineUse(): Promise<void> {
   const context = captureAuthSession();
   if (!navigator.onLine || !context.accountId) return;
   const catalogs = [
-    { key: 'items', path: '/api/items' },
+    // Item pages/details cache themselves as they are read; a page-zero
+    // precache is neither a complete catalog nor needed for detail fallback.
     { key: 'assemblies', path: '/api/assemblies' },
     { key: 'storageLocations', path: '/api/storage-locations' },
     { key: 'events', path: '/api/events' },

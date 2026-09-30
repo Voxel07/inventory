@@ -15,7 +15,7 @@ export function createMutableResourceHooks<T extends { id: string }, TForm>(api:
   return {
     ...createCreateResourceHooks(api, queryKey),
     useDetail(id?: string) {
-      return useQuery({ queryKey: [queryKey, id], queryFn: () => api.getById(id!), enabled: Boolean(id) });
+      return useQuery({ queryKey: [queryKey, id], queryFn: () => api.getById(id!), enabled: Boolean(id), networkMode: 'offlineFirst' });
     },
     useUpdate() { return useMutation({ mutationFn: ({ id, data }: { id: string; data: Partial<TForm> }) => api.update(id, data) }); },
   };

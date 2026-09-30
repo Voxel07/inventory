@@ -1,10 +1,12 @@
 # Offline operation and sync
 
-Updated 30 September 2026 against `offlineQueue.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI.
+Updated 1 October 2026 against `offlineQueue.ts`, `resourceFactory.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI.
 
 ## Supported scope
 
 The PWA service worker caches the application shell. IndexedDB stores account-scoped catalog reads and a durable command queue. Items, assemblies, storage locations and events can fall back to saved query-specific results on eligible network/server failures. Cache timestamps indicate the last successful download; cached quantities are not a current availability promise.
+
+Item details are cached by exact item identity within the account/role/faction namespace. Online detail reads, downloaded list pages (including later and filtered pages), and successful create/update responses populate these entries. A downloaded item can be opened offline even if its detail was never visited; an item never downloaded has no fallback. Query-specific lists remain separate and are not assumed complete. Online 403/404 or successful deletion removes the exact item entry. Offline detail queries run their first attempt so IndexedDB fallback can be reached; fallback timestamps remain the original download time. Item pages cache themselves instead of a separate page-zero reconnect precache.
 
 | Queued write | Server action |
 |---|---|

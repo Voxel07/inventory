@@ -43,18 +43,43 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 export async function setOfflineCatalog<T>(key: string, data: T, context = captureAuthSession()): Promise<void> {
+  return setOfflineCatalogEntries([{ key, data }], context);
+}
+
+/** Save a query page and its exact resource entries with one download timestamp. */
+export async function setOfflineCatalogEntries(entries: { key: string; data: unknown }[], context = captureAuthSession()): Promise<void> {
+  assertAuthSession(context);
+  if (!context.accountId || !entries.length) return;
+  const cachedAt = new Date().toISOString();
+  const rows = entries.map((entry) => ({ ...entry, key: `${context.catalogScope}:${entry.key}`, cachedAt }));
+  try {
+    const db = await openDatabase();
+    assertAuthSession(context);
+    await transactionPromise(db, CATALOG_STORE, 'readwrite', (store) => {
+      rows.forEach((row) => store.put(row));
+    });
+    assertAuthSession(context);
+    const cleared = rows.map((row) => catalogFallbacks.delete(row.key)).some(Boolean);
+    if (cleared) window.dispatchEvent(new Event('ash-offline-cache'));
+  } catch (err) {
+    assertAuthSession(context);
+    console.warn('Failed to cache catalog offline', err);
+  }
+}
+
+export async function removeOfflineCatalog(key: string, context = captureAuthSession()): Promise<void> {
   assertAuthSession(context);
   if (!context.accountId) return;
   const catalogKey = `${context.catalogScope}:${key}`;
   try {
     const db = await openDatabase();
     assertAuthSession(context);
-    await transactionPromise(db, CATALOG_STORE, 'readwrite', (store) => store.put({ key: catalogKey, data, cachedAt: new Date().toISOString() }));
+    await transactionPromise(db, CATALOG_STORE, 'readwrite', (store) => store.delete(catalogKey));
     assertAuthSession(context);
     if (catalogFallbacks.delete(catalogKey)) window.dispatchEvent(new Event('ash-offline-cache'));
   } catch (err) {
     assertAuthSession(context);
-    console.warn('Failed to cache catalog offline', key, err);
+    console.warn('Failed to remove offline catalog entry', err);
   }
 }
 
@@ -268,7 +293,7 @@ async function notifyQueueChanged() {
   window.dispatchEvent(new CustomEvent('ash-offline-queue', { detail: { queued, failures } }));
 }
 
-function transactionPromise(db: IDBDatabase, storeName: string, mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest): Promise<void> {
+function transactionPromise(db: IDBDatabase, storeName: string, mode: IDBTransactionMode, operation: (store: IDBObjectStore) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, mode);
     operation(transaction.objectStore(storeName));
