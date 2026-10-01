@@ -51,9 +51,9 @@ public class CatalogResource {
 
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
-    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { actor.requireManager(); return queries.projectItem(service.createItem(input)); }
-    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { actor.requireManager(); return queries.projectItem(service.updateItem(id, input)); }
-    @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { actor.requireManager(); service.retireItem(id); return Response.noContent().build(); }
+    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }
+    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { return queries.projectItem(service.updateItem(id, input)); }
+    @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { service.retireItem(id); return Response.noContent().build(); }
 
     @GET @Path("/items/{id}/assets")
     public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id,
@@ -70,48 +70,50 @@ public class CatalogResource {
 
     @POST @Path("/items/{id}/assets") @Transactional
     public List<ApiResponses.AssetInstanceResponse> createAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
-        actor.requireManager();
+        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.assets(service.createAssets(id, input));
     }
 
     @PATCH @Path("/items/{id}/assets/{assetId}") @Transactional
     public ApiResponses.AssetInstanceResponse updateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId, @Valid ApiModels.AssetInstanceInput input) {
-        actor.requireManager();
+        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.asset(service.updateAsset(id, assetId, input));
     }
 
     @POST @Path("/items/{id}/assets/{assetId}/relocate") @Transactional
     public ApiResponses.AssetInstanceResponse relocateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
             @Valid ApiModels.AssetRelocationInput input) {
-        actor.requireWarehouse();
+        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.asset(service.relocateAsset(id, assetId, input));
     }
 
     @POST @Path("/items/{id}/assets/{assetId}/condition") @Transactional
     public ApiResponses.AssetInstanceResponse updateAssetCondition(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
             @Valid ApiModels.AssetConditionInput input) {
-        actor.requireMaintenance();
+        var item = service.getVisibleItem(id);
+        if (item.accessPolicy == null) actor.requireMaintenance(); else actor.requireItemEdit(item);
         return mapper.asset(service.updateAssetCondition(id, assetId, input));
     }
 
     @DELETE @Path("/items/{id}/assets/{assetId}") @Transactional
     public Response deleteAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId) {
-        actor.requireAdmin();
+        var item = service.getVisibleItem(id);
+        if (item.accessPolicy == null) actor.requireAdmin(); else actor.requireItemEdit(item);
         service.deleteAsset(id, assetId);
         return Response.noContent().build();
     }
 
-    @GET @Path("/storage-locations")
+    @GET @Path("/storage-locations") @Transactional
     public Response locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive) {
         actor.current();
         if (includeInactive) return Response.ok(service.getAllLocations().stream().map(mapper::location).toList()).build();
-        return catalogResponse(responses.locations());
+        return Response.ok(service.getLocations().stream().map(mapper::location).toList()).build();
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }
-    @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.createLocation(input)); }
-    @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { actor.requireManager(); return mapper.location(service.updateLocation(id, input)); }
-    @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { actor.requireManager(); service.deleteLocation(id); return Response.noContent().build(); }
+    @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { return mapper.location(service.createLocation(input)); }
+    @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.updateLocation(id, input)); }
+    @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { service.deleteLocation(id); return Response.noContent().build(); }
 
     @GET @Path("/assemblies")
     public List<ApiResponses.AssemblyResponse> assemblies() { return queries.assemblies(); }

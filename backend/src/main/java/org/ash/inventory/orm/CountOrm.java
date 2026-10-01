@@ -12,24 +12,27 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CountOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public CountOrm(EntityManager entityManager) { this.entityManager = entityManager; }
     public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
     public <T> T locked(Class<T> type, UUID id) {
         var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
         if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
-        return value;
+        return accessActor.protect(value, true);
     }
 
     public List<InventoryCountSession> sessions(String status, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = status == null || status.isBlank()
-                ? "select session from InventoryCountSession session left join fetch session.warehouse left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy order by session.createdAt desc"
-                : "select session from InventoryCountSession session left join fetch session.warehouse left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status order by session.createdAt desc";
+                ? "select session from InventoryCountSession session left join fetch session.warehouse left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where 1=1" + InventoryAccessOrm.excluding("session", denied) + " order by session.createdAt desc"
+                : "select session from InventoryCountSession session left join fetch session.warehouse left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status" + InventoryAccessOrm.excluding("session", denied) + " order by session.createdAt desc";
         var query = entityManager.createQuery(jpql, InventoryCountSession.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.CountStatus.valueOf(status));
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryCountLine> lines(Collection<InventoryCountSession> sessions) {
         if (sessions.isEmpty()) return List.of();
@@ -38,10 +41,10 @@ public class CountOrm {
     }
     public List<InventoryCountLine> lockedLines(InventoryCountSession session) {
         return entityManager.createQuery("select line from InventoryCountLine line where line.session = :session order by line.item.id, line.id", InventoryCountLine.class)
-                .setParameter("session", session).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                .setParameter("session", session).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList().stream().map(value -> accessActor.protect(value, true)).toList();
     }
     public List<InventoryPosition> scopedPositions(Warehouse warehouse, StorageLocation location, Item item, String category) {
-        var jpql = new StringBuilder("select position from InventoryPosition position join fetch position.item join fetch position.location left join fetch position.lot where 1=1");
+        var jpql = new StringBuilder("select position from InventoryPosition position join fetch position.item join fetch position.location left join fetch position.lot where " + InventoryAccessOrm.visible("position.item.accessPolicy") + " and " + InventoryAccessOrm.visible("position.location.accessPolicy") + "");
         if (warehouse != null) jpql.append(" and position.location.warehouse = :warehouse");
         if (location != null) jpql.append(" and position.location = :location");
         if (item != null) jpql.append(" and position.item = :item");
@@ -51,10 +54,10 @@ public class CountOrm {
         if (location != null) query.setParameter("location", location);
         if (item != null) query.setParameter("item", item);
         if (category != null && !category.isBlank()) query.setParameter("category", category.trim().toLowerCase(Locale.ROOT));
-        return query.getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
     }
     public List<AssetInstance> scopedAssets(Warehouse warehouse, StorageLocation location, Item item, String category) {
-        var jpql = new StringBuilder("select asset from AssetInstance asset join fetch asset.item join fetch asset.currentLocation where asset.active = true");
+        var jpql = new StringBuilder("select asset from AssetInstance asset join fetch asset.item join fetch asset.currentLocation where asset.active = true and " + InventoryAccessOrm.visible("asset.item.accessPolicy") + " and " + InventoryAccessOrm.visible("asset.currentLocation.accessPolicy"));
         if (warehouse != null) jpql.append(" and asset.currentLocation.warehouse = :warehouse");
         if (location != null) jpql.append(" and asset.currentLocation = :location");
         if (item != null) jpql.append(" and asset.item = :item");
@@ -64,7 +67,7 @@ public class CountOrm {
         if (location != null) query.setParameter("location", location);
         if (item != null) query.setParameter("item", item);
         if (category != null && !category.isBlank()) query.setParameter("category", category.trim().toLowerCase(Locale.ROOT));
-        return query.getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
     }
     public InventoryPosition lockedPosition(Item item, StorageLocation location, InventoryLot lot) {
         var jpql = lot == null

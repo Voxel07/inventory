@@ -1,3 +1,5 @@
+import { useAuth } from '../../hooks/useAuth';
+import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Box, Paper, Stack, TextField,  Typography } from '@mui/material';
@@ -39,6 +41,8 @@ type ItemRow = {
 };
 
 export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, showAllEvents = false }: Props) {
+    const { user } = useAuth();
+    const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
     const t = useLocalizedText();
@@ -90,8 +94,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
              },
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
-              <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>
-              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>
+              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
             </Stack> } satisfies GridColDef<ItemRow>] : []),
     ];
 
@@ -99,7 +103,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         const ids = model.type === 'exclude'
             ? rows.map((row) => row.id).filter((id) => !model.ids.has(id))
             : [...model.ids].map(String);
-        setSelectedIds(new Set(ids));
+        setSelectedIds(new Set(ids.filter(id => rows.some(row => row.id === id && canEditItem(row.item)))));
     }
 
     return <Box>
@@ -113,7 +117,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         </Paper>}
         <Box sx={{ width: '100%' }}>
             <DataGrid rows={rows} columns={columns} loading={isLoading} density="compact" autoHeight checkboxSelection={canManage}
-                disableRowSelectionOnClick onRowClick={({ row }) => { if (canManage) navigate(`/items/${row.id}`); }}
+                isRowSelectable={({ row }) => canEditItem(row.item)} disableRowSelectionOnClick onRowClick={({ row }) => { navigate(`/items/${row.id}`); }}
                 rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
                 initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
                 pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}

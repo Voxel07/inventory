@@ -97,7 +97,9 @@ public class ApiQueryService {
     @Transactional
     public ApiResponses.StorageLocationResponse location(UUID id) {
         actors.current();
-        return mapper.location(required(StorageLocation.class, id, "Storage location"));
+        var location = required(StorageLocation.class, id, "Storage location");
+        actors.requireLocationAccess(location, false);
+        return mapper.location(location);
     }
 
     @Transactional
@@ -282,6 +284,7 @@ public class ApiQueryService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.NotificationResponse markNotificationRead(UUID id) {
         var actor = actors.current();
         var notification = notifications.find(id);

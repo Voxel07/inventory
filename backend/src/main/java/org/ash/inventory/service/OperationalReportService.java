@@ -20,7 +20,8 @@ public class OperationalReportService {
     @Inject CustodyBalanceService custody;
     @Inject InventoryOperationsService inventory;
     @Inject ApiQueryService queries;
-    private record FilterKey(String name, long version, Instant generation, Map<String, String> filters) {}
+    @Inject PrivacyProjectionService privacy;
+    private record FilterKey(String name, long version, Instant generation, Map<String, String> filters, UUID actorId, Set<String> denied) {}
     private record Filtered(List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals, Instant cachedAt) {}
     private final Map<FilterKey, Filtered> filteredCache = new LinkedHashMap<>(16, 0.75f, true);
     private int cachedRows;
@@ -57,13 +58,14 @@ public class OperationalReportService {
         if (generation != null && (header == null || !generation.equals(header.generatedAt())))
             throw ApiException.conflict("Report generation changed during export; restart the export");
         if (header == null) return new View(name, DEFINITIONS.get(name), null, null, true, 0, List.of(), List.of());
-        var key = new FilterKey(name, header.version(), header.generatedAt(), Collections.unmodifiableMap(new TreeMap<>(filters)));
+        var denied = Set.copyOf(privacy.deniedIds());
+        var key = new FilterKey(name, header.version(), header.generatedAt(), Collections.unmodifiableMap(new TreeMap<>(filters)), actors.current().id, denied);
         var filtered = cached(key);
         if (filtered == null) {
             var report = orm.find(OperationalReport.class, name);
             if (report == null || report.version != header.version() || !Objects.equals(report.generatedAt, header.generatedAt()))
                 throw ApiException.conflict("Report generation changed while reading; reload the report");
-            var rows = report.rows.stream().filter(row -> matches(row, filters))
+            var rows = report.rows.stream().filter(row -> privacy.visible(row, denied)).filter(row -> matches(row, filters))
                     .map(row -> Collections.unmodifiableMap(new LinkedHashMap<>(row))).toList();
             filtered = new Filtered(rows, filters.containsKey("itemId") ? monthlyTotals(name, rows) : List.of(), Instant.now());
             cache(key, filtered);

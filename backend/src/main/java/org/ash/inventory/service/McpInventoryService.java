@@ -30,18 +30,18 @@ public class McpInventoryService {
 
     public void authenticate() { actors.current(); }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.ItemResponse createItem(ApiModels.ItemInput input) {
-        actors.requireManager();
         return queries.projectItem(catalog.createItem(valid(input)));
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.ItemResponse updateItem(UUID id, ApiModels.ItemInput input) {
-        actors.requireManager();
         return queries.projectItem(catalog.updateItem(id, valid(input)));
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto retireItem(UUID id) {
-        actors.requireManager();
         catalog.retireItem(id);
         return new InventoryMcpDtos.DeleteResultDto(true, "Item", id, "Item retired; history preserved");
     }
@@ -53,16 +53,19 @@ public class McpInventoryService {
         return queries.projectItems(catalog.getItems(search, category, bounds.offset(), bounds.limit()));
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.AssemblyResponse createAssembly(ApiModels.AssemblyInput input) {
         actors.requireManager();
         return queries.projectAssembly(catalog.createAssembly(valid(input)));
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.AssemblyResponse updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         actors.requireManager();
         return queries.projectAssembly(catalog.updateAssembly(id, valid(input)));
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto deleteAssembly(UUID id) {
         actors.requireManager();
         catalog.deleteAssembly(id);
@@ -76,6 +79,7 @@ public class McpInventoryService {
                 || a.eventTypes().contains(eventTag.trim())).toList();
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.EventResponse createEvent(ApiModels.EventInput input) {
         actors.requirePlanner();
         valid(input);
@@ -83,6 +87,7 @@ public class McpInventoryService {
         return visibleEvents(List.of(queries.projectEvent(catalog.createEvent(input)))).getFirst();
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.EventResponse updateEvent(UUID id, ApiModels.EventInput input) {
         actors.requirePlanner();
         valid(input);
@@ -90,6 +95,7 @@ public class McpInventoryService {
         return visibleEvents(List.of(queries.projectEvent(catalog.updateEvent(id, input)))).getFirst();
     }
 
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto deleteEvent(UUID id) {
         actors.requirePlanner();
         catalog.deleteEvent(id);
@@ -154,7 +160,7 @@ public class McpInventoryService {
         var policy = inventory.readStock(List.of(item)).get(id).policy();
         var reserved = positions.reservedAt(List.of(item), policy.positions());
         boolean usable = EquipmentService.freelyAvailable(item) && policy.itemUsable() && !policy.hasMemberDamage();
-        return policy.positions().stream().map(p -> new InventoryMcpDtos.StockPositionDto(p.id,
+        return policy.positions().stream().filter(p -> actors.canViewLocation(p.location)).map(p -> new InventoryMcpDtos.StockPositionDto(p.id,
                 p.location.id.toString(), p.location.name, p.quantityOnHand,
                 p.quantityReserved + reserved.getOrDefault(p.id, 0),
                 usable ? Math.max(0, p.availableQuantity() - reserved.getOrDefault(p.id, 0)) : 0,
@@ -170,7 +176,7 @@ public class McpInventoryService {
         return items.stream().filter(i -> (long) stock.get(i.id).available() <= (long) i.minStock + buffer)
                 .map(i -> new InventoryMcpDtos.LowStockAlertDto(i.id, i.sku, i.name, stock.get(i.id).onHand(),
                         stock.get(i.id).available(), i.minStock, Math.max(0, i.minStock - stock.get(i.id).available()),
-                        i.storageLocation == null ? null : i.storageLocation.name)).toList();
+                        actors.canViewLocation(i.storageLocation) ? i.storageLocation.name : null)).toList();
     }
 
     public InventoryMcpDtos.OperationalMetricsDto summary() {

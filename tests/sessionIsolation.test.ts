@@ -10,7 +10,8 @@ function deferred<T>() {
 
 const storage = new Map<string, string>();
 Object.assign(globalThis, {
-  window: new EventTarget(),
+  window: Object.assign(new EventTarget(), { setInterval: () => 1, clearInterval: () => {} }),
+  document: Object.assign(new EventTarget(), { visibilityState: 'visible' }),
   sessionStorage: {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
@@ -81,6 +82,7 @@ const api = await import('../src/services/apiClient');
 const offline = await import('../src/services/offlineQueue');
 const resources = await import('../src/services/resourceFactory');
 const queries = await import('../src/services/sessionQueryClient');
+const privacy = await import('../src/services/privateInventoryCache');
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
@@ -100,6 +102,30 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => { connectivity.onLine = false; await auth.clearAuth(); api.stopRealtimeEvents(); });
+
+test('private catalog responses remove durable snapshots and private writes cannot enter the queue', async () => {
+  signIn('privacy-owner');
+  await offline.setOfflineCatalog('items', [{ id: 'public-item' }]);
+  const rows = [{ id: 'secret-item', access: { privateResource: true } }];
+  privacy.markPrivateInventoryResponse(rows);
+  await offline.setOfflineCatalog('items', rows);
+  expect(await offline.getOfflineCatalog('items')).toBeNull();
+  await expect(offline.enqueueOfflineAction({ idempotencyKey: 'secret-write', type: 'checkout', payload: { itemId: 'secret-item' }, localTimestamp: '2026-10-01' })).rejects.toThrow('online connection');
+  expect(await offline.getOfflineActions()).toEqual([]);
+});
+
+test('losing connectivity evicts private query data while retaining public snapshots', async () => {
+  signIn('privacy-owner');
+  const client = queries.getSessionQueryClient();
+  const rows = [{ id: 'secret', access: { privateResource: true } }];
+  privacy.markPrivateInventoryResponse(rows);
+  client.setQueryData(['private-items'], rows);
+  client.setQueryData(['public-items'], [{ id: 'public' }]);
+  window.dispatchEvent(new Event('offline'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(client.getQueryData(['private-items'])).toBeUndefined();
+  expect(client.getQueryData(['public-items'])).toEqual([{ id: 'public' }]);
+});
 
 test('a late refresh cannot replace the next account tokens', async () => {
   const response = deferred<OidcTokenSet>();
@@ -209,6 +235,8 @@ test('an account switch while IndexedDB opens prevents an old catalog write', as
   openDatabase = (request) => { opened = request; };
   signIn('A');
   const pending = outcome(offline.setOfflineCatalog('items', [{ id: 'A-private' }], auth.captureAuthSession()));
+  await Promise.resolve();
+  await Promise.resolve();
   signIn('B'); opened.result = database; (opened.onsuccess as () => void)();
   expect((await pending).error).toBeInstanceOf(auth.SessionChangedError);
   expect(catalogs.size).toBe(0);

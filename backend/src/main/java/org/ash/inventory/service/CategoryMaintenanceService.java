@@ -33,6 +33,7 @@ public class CategoryMaintenanceService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Policy save(Policy input) {
         actors.requireManager();
         var name = input.category() == null ? "" : input.category().trim();

@@ -1,3 +1,4 @@
+import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
 import type { User } from '../types';
 import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
@@ -227,10 +228,11 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
       throw error;
     }
     const result = response.status === 204 ? undefined as T : await response.json() as T;
+    if (response.headers.get('X-Private-Inventory') === 'true') markPrivateInventoryResponse(result);
     assertAuthSession(context);
     if (method === 'GET') {
       const etag = response.headers.get('ETag');
-      if (etag) conditionalGetCache.set(cacheKey, { etag, value: result });
+      if (etag && response.headers.get('X-Private-Inventory') !== 'true') conditionalGetCache.set(cacheKey, { etag, value: result });
     } else {
       invalidateConditionalCacheFor(path);
       publishApiChange(localWriteChange(path), context);
@@ -261,7 +263,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const context = options.session ?? captureAuthSession();
   assertAuthSession(context);
   const rateLimitListener = apiBatches.get(context.generation)?.rateLimitListener;
-  const offlineAction = options.offline
+  const offlineAction = options.offline && !referencesPrivateInventory([path, options.body, options.offline.payload])
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
   if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error('This action requires an online connection. It has not been queued.');
@@ -445,6 +447,9 @@ export async function startRealtimeEvents(): Promise<void> {
     });
     assertAuthSession(context);
     if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
+    // Permission changes may have committed while the event stream was disconnected.
+    conditionalGetCache.clear();
+    publishApiChange({ type: 'access.invalidated' }, context);
     if (controller.signal.aborted) return;
     // The stream has no replay cursor; reconnects must recover changes missed while disconnected.
     if (realtimeGeneration === context.generation) publishApiChange({ type: 'realtime.reconnected' }, context);
@@ -513,6 +518,7 @@ subscribeAuth(() => {
   requestGeneration = getAuthSnapshot().generation;
   activeRequests.forEach((controller) => controller.abort());
   conditionalGetCache.clear();
+  clearPrivateResourceIds();
   seenEventIds.clear();
   apiBatches.clear();
   stopRealtimeEvents();

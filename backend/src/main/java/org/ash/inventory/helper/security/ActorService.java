@@ -16,6 +16,8 @@ import java.util.Set;
 
 @RequestScoped
 public class ActorService {
+    @jakarta.inject.Inject InventoryAccess privateAccess;
+    public int privateMutationDepth;
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
@@ -91,6 +93,7 @@ public class ActorService {
     }
 
     public boolean canViewItem(org.ash.inventory.model.Item item, UserAccount actor) {
+        if (item.accessPolicy != null) return privateAccess.allows(item.accessPolicy, actor, false);
         if (actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew
                 || item.visibilityScope == null || item.visibilityScope == DomainEnums.ItemVisibilityScope.global
                 || item.visibilityScope == DomainEnums.ItemVisibilityScope.event) return true;
@@ -101,6 +104,52 @@ public class ActorService {
 
     public void requireItemAccess(org.ash.inventory.model.Item item) {
         if (item == null || !item.active || !canViewItem(item, current())) throw ApiException.notFound("Item not found");
+    }
+
+    public boolean canViewLocation(org.ash.inventory.model.StorageLocation location) {
+        return location != null && privateAccess.allows(location.accessPolicy, current(), false);
+    }
+    public void requireLocationAccess(org.ash.inventory.model.StorageLocation location, boolean edit) {
+        if (location == null) throw ApiException.notFound("Location not found");
+        privateAccess.require(location.accessPolicy, current(), edit);
+    }
+    public void requireItemEdit(org.ash.inventory.model.Item item) {
+        requireItemAccess(item);
+        if (item.accessPolicy == null) requireManager();
+        else privateAccess.require(item.accessPolicy, current(), true);
+    }
+    public void requireLocationEdit(org.ash.inventory.model.StorageLocation location) {
+        requireLocationAccess(location, true);
+        if (location.accessPolicy == null) requireManager();
+    }
+
+    /** Defense at entity lookup for commands addressed by asset, lot, repair, return or location IDs. */
+    public <T> T protect(T value, boolean edit) {
+        protectReferences(value, edit || privateMutationDepth > 0,
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
+        return value;
+    }
+
+    private void protectReferences(Object value, boolean edit, Set<Object> visited) {
+        if (value == null || !(value instanceof org.ash.inventory.model.BaseEntity)) return;
+        value = org.hibernate.Hibernate.unproxy(value);
+        if (!visited.add(value)) return;
+        if (value instanceof org.ash.inventory.model.Item item) {
+            if (item.accessPolicy != null) privateAccess.require(item.accessPolicy, current(), edit);
+        } else if (value instanceof org.ash.inventory.model.StorageLocation location) {
+            if (location.accessPolicy != null) requireLocationAccess(location, edit);
+        } else if (!(value instanceof UserAccount)
+                && !(value instanceof org.ash.inventory.model.InventoryAccessPolicy)
+                && !(value instanceof org.ash.inventory.model.InventoryAccessGroup)
+                && !(value instanceof org.ash.inventory.model.InventoryAccessGrant)) {
+            // Follow singular resource associations (repair -> damage -> item, loan -> commitment -> item).
+            // Collections and user/group graphs are deliberately excluded; collection queries have their own scopes.
+            for (var field : value.getClass().getFields()) {
+                if (!org.ash.inventory.model.BaseEntity.class.isAssignableFrom(field.getType())) continue;
+                try { protectReferences(field.get(value), edit, visited); }
+                catch (IllegalAccessException e) { throw new IllegalStateException(e); }
+            }
+        }
     }
 
     public void requireAdmin() {

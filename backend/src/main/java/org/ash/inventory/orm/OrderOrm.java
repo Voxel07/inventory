@@ -21,6 +21,8 @@ import java.util.UUID;
 /** Database access for faction orders and their related models. */
 @ApplicationScoped
 public class OrderOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public OrderOrm(EntityManager entityManager) { this.entityManager = entityManager; }
@@ -30,6 +32,7 @@ public class OrderOrm {
         if (factionNames != null && factionNames.isEmpty() && factionKeys != null && factionKeys.isEmpty()) {
             return List.of();
         }
+        var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = new StringBuilder("select o from FactionOrder o "
                 + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where 1 = 1");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
@@ -46,20 +49,20 @@ public class OrderOrm {
             }
             jpql.append(')');
         }
-        jpql.append(" order by o.eventOccurrence.startDate desc");
+        jpql.append(InventoryAccessOrm.excluding("o", denied)).append(" order by o.eventOccurrence.startDate desc");
         var query = entityManager.createQuery(jpql.toString(), FactionOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
         if (factionNames != null && !factionNames.isEmpty()) query.setParameter("factionNames", factionNames);
         if (factionKeys != null && !factionKeys.isEmpty()) query.setParameter("factionKeys", factionKeys);
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public FactionOrder findOrder(UUID id) { return entityManager.find(FactionOrder.class, id); }
     public FactionOrder findLockedOrder(UUID id) { return entityManager.find(FactionOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T findLocked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
     public void persist(Object entity) { entityManager.persist(entity); }
 
     public List<FactionOrderLine> lines(FactionOrder order) {

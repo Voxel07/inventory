@@ -9,7 +9,7 @@ type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'
   | 'inventory_code.changed' | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
   | 'vendor_document.attached' | 'loan.changed' | 'planning.overridden' | 'report.rebuilt' | 'reminder.changed'
-  | 'notification.read' | 'user.changed' | 'location.keeper_assigned' | 'member_request.changed' | 'outbox.changed' | 'unknown';
+  | 'access.changed' | 'notification.read' | 'user.changed' | 'location.keeper_assigned' | 'member_request.changed' | 'outbox.changed' | 'unknown';
 type LocalWriteChange = ApiChangeDetail & { source: 'local'; type: LocalChangeType };
 
 /** Local commands use the same vocabulary and consumer map as outbox events. */
@@ -17,6 +17,7 @@ export function localWriteChange(path: string): LocalWriteChange {
   const [, resource, id, action] = path.split('/').filter(Boolean);
   const change = (type: LocalChangeType): LocalWriteChange => ({ type, resource, id, source: 'local' });
   switch (resource) {
+    case 'access': return change('access.changed');
     case 'items': return change(action === 'equipment' ? 'equipment.changed' : action === 'assets' ? 'asset.updated' : 'catalog.changed');
     case 'assemblies': case 'storage-locations': case 'events': case 'factions': case 'category-maintenance': return change('catalog.changed');
     case 'orders': return change('order.changed');

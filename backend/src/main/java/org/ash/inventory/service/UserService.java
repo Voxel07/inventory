@@ -37,6 +37,7 @@ public class UserService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public UserAccount updatePermissions(UUID id, ApiModels.UserPermissionsInput input) {
         actors.requireAdmin();
         var user = users.find(id);

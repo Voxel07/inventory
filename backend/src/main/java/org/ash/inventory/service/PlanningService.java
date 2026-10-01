@@ -21,6 +21,7 @@ public class PlanningService {
     }
     public record OverrideInput(UUID eventId, UUID itemId, int quantity, String reason) {}
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void override(OverrideInput input) {
         actors.requirePlanner();
         if (input.eventId() == null || input.itemId() == null || input.quantity() < 0 || input.reason() == null || input.reason().isBlank()) throw ApiException.badRequest("Event, item, non-negative forecast and reason are required");

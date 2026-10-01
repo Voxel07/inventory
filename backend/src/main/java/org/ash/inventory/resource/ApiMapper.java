@@ -35,6 +35,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class ApiMapper {
+    @jakarta.inject.Inject org.ash.inventory.helper.security.ActorService actors;
+    @jakarta.inject.Inject org.ash.inventory.service.InventoryAccessService accessPolicies;
     private final MediaService media;
     public ApiMapper(MediaService media) { this.media = media; }
 
@@ -126,8 +128,8 @@ public class ApiMapper {
                 value.overlayBounds,
                 value.warehouse == null ? null : value.warehouse.id.toString(),
                 value.warehouse == null ? null : value.warehouse.name,
-                value.parent == null ? null : value.parent.id.toString(),
-                value.active
+                actors.canViewLocation(value.parent) ? value.parent.id.toString() : null,
+                value.active, accessPolicies.view(value.accessPolicy)
         );
     }
 
@@ -137,12 +139,12 @@ public class ApiMapper {
                 .map(image -> media.mediaReference(image.objectKey))
                 .toList();
         Map<String, Object> expand = new LinkedHashMap<>();
-        if (value.storageLocation != null) expand.put("storageLocation", location(value.storageLocation));
-        if (value.returnLocation != null) expand.put("returnLocation", location(value.returnLocation));
+        if (actors.canViewLocation(value.storageLocation)) expand.put("storageLocation", location(value.storageLocation));
+        if (actors.canViewLocation(value.returnLocation)) expand.put("returnLocation", location(value.returnLocation));
         if (value.assignedUser != null) expand.put("assignedUser", user(value.assignedUser));
 
         ApiResponses.StockDto stockDto = state == null ? null : new ApiResponses.StockDto(
-                value.ownershipType == Item.Ownership.organization ? state.totalOwned() : 0,
+                value.accessPolicy != null || value.ownershipType == Item.Ownership.organization ? state.totalOwned() : 0,
                 state.onHand(),
                 state.checkedOut(),
                 state.inTransit(),
@@ -173,12 +175,12 @@ public class ApiMapper {
                 value.consumable,
                 value.trackingMode.name(),
                 value.inventoryRole.name(),
-                value.storageLocation == null ? null : value.storageLocation.id.toString(),
-                value.returnLocation == null ? null : value.returnLocation.id.toString(),
+                actors.canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
+                actors.canViewLocation(value.returnLocation) ? value.returnLocation.id.toString() : null,
                 value.active ? "available" : "retired",
                 imageReferences,
                 value.hint,
-                value.positionDetails,
+                actors.canViewLocation(value.storageLocation) ? value.positionDetails : null,
                 value.containerSize,
                 value.containerCount,
                 value.containersOpened,
@@ -191,7 +193,7 @@ public class ApiMapper {
                 value.bestBeforeDate,
                 value.maintenanceStatus == null ? null : value.maintenanceStatus.name(),
                 stockDto,
-                expand
+                expand, accessPolicies.view(value.accessPolicy), !actors.canViewLocation(value.storageLocation) && value.storageLocation != null
         );
     }
 
@@ -544,8 +546,8 @@ public class ApiMapper {
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
                 value.serviceStatus == null ? null : value.serviceStatus.name(),
                 value.operatingHours,
-                value.currentLocation == null ? null : value.currentLocation.id.toString(),
-                value.currentLocation == null ? null : value.currentLocation.name,
+                actors.canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
+                actors.canViewLocation(value.currentLocation) ? value.currentLocation.name : null,
                 value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
                 value.currentCustodian == null ? null : value.currentCustodian.name,
                 value.notes,

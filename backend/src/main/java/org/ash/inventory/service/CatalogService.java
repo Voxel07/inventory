@@ -26,6 +26,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class CatalogService {
     @Inject LocationHierarchyService hierarchy;
+    @Inject InventoryAccessService accessPolicies;
     @jakarta.inject.Inject PositionService positions;
     @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
     private final org.ash.inventory.helper.storage.MediaService media;
@@ -68,11 +69,11 @@ public class CatalogService {
     }
 
     public List<StorageLocation> getLocations() {
-        return orm.locations();
+        return orm.locations().stream().filter(actorService::canViewLocation).toList();
     }
 
     public List<StorageLocation> getAllLocations() {
-        return orm.allLocations();
+        return orm.allLocations().stream().filter(actorService::canViewLocation).toList();
     }
 
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
@@ -123,8 +124,20 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item createItem(ApiModels.ItemInput input) {
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
         var item = new Item();
+        boolean privateItem = Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current());
+        if (input.storageLocation() != null) {
+            var location = required(StorageLocation.class, input.storageLocation(), "Location");
+            privateItem |= location.accessPolicy != null;
+        }
+        if (privateItem) {
+            item.accessPolicy = accessPolicies.create();
+            item.ownershipType = Item.Ownership.private_owner; item.ownerName = actorService.current().name;
+            item.availabilityPolicy = Item.AvailabilityPolicy.unavailable;
+        } else actorService.requireManager();
         apply(item, input);
         orm.persist(item);
         persistImages(item, input.images());
@@ -162,8 +175,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = locked(Item.class, id, "Item");
+        actorService.requireItemEdit(item);
         if (input.amount() != null && input.amount() != item.baseAmount) {
             throw ApiException.badRequest("Existing stock cannot be edited on the item; create a stock adjustment instead");
         }
@@ -190,13 +205,17 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireItem(UUID id) {
         var item = locked(Item.class, id, "Item");
+        actorService.requireItemEdit(item);
         item.active = false;
         catalogChanged("items", item.id);
     }
 
     private void apply(Item item, ApiModels.ItemInput input) {
+        if (input.privateResource() != null && input.privateResource() != (item.accessPolicy != null))
+            throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
         item.name = input.name().trim();
         item.sku = input.sku() == null || input.sku().isBlank() ? generateSku(item.name) : input.sku().trim().toUpperCase(Locale.ROOT);
         item.description = input.description();
@@ -272,20 +291,27 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
         hierarchy.lockHierarchy();
         var location = new StorageLocation();
-        apply(location, input);
+        location.name = input.name().trim();
+        if (Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current())) location.accessPolicy = accessPolicies.create();
+        else actorService.requireManager();
         orm.persist(location);
+        apply(location, input);
         catalogChanged("storage-locations", location.id);
         return location;
     }
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
+        actorService.requireLocationEdit(location);
         apply(location, input);
         catalogChanged("storage-locations", location.id);
         return location;
@@ -293,15 +319,19 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "locations-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteLocation(UUID id) {
         hierarchy.lockHierarchy();
         var location = locked(StorageLocation.class, id, "Storage location");
+        actorService.requireLocationEdit(location);
         if (!location.active) throw ApiException.notFound("Storage location not found");
         hierarchy.deactivate(location);
         catalogChanged("storage-locations", location.id);
     }
 
     private void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
+        if (input.privateResource() != null && input.privateResource() != (target.accessPolicy != null))
+            throw ApiException.badRequest("Privacy cannot be changed through location edits");
         target.name = input.name().trim();
         target.locationType = input.locationType() == null ? DomainEnums.LocationType.bin : input.locationType();
         target.description = input.description();
@@ -311,12 +341,13 @@ public class CatalogService {
         target.latitude = input.latitude();
         target.longitude = input.longitude();
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
-        target.mapOverlayUrl = input.mapOverlay();
+        target.mapOverlayUrl = input.mapOverlay() == null ? null : media.attachToLocation(input.mapOverlay(), target.id);
         target.overlayBounds = input.overlayBounds();
         hierarchy.apply(target, input);
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
         var assembly = new Assembly();
         apply(assembly, input);
@@ -328,6 +359,7 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         var assembly = locked(Assembly.class, id, "Assembly");
         apply(assembly, input);
@@ -339,6 +371,7 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
         if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);
@@ -380,6 +413,7 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence createEvent(ApiModels.EventInput input) {
         var event = new EventOccurrence();
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -398,6 +432,7 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence updateEvent(UUID id, ApiModels.EventInput input) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -415,6 +450,7 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteEvent(UUID id) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
         if (orm.hasLinkedOrders(id)) {
@@ -426,6 +462,7 @@ public class CatalogService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "factions-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Faction createFaction(ApiModels.FactionInput input) {
         var faction = new Faction();
         faction.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -498,8 +535,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public List<AssetInstance> createAssets(UUID itemId, ApiModels.AssetInstanceInput input) {
         var item = locked(Item.class, itemId, "Item");
+        actorService.requireItemEdit(item);
         if (item.trackingMode != DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("Asset instances can only be registered for serialized items");
         }
@@ -582,8 +621,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance updateAsset(UUID itemId, UUID assetId, ApiModels.AssetInstanceInput input) {
         var item = locked(Item.class, itemId, "Item");
+        actorService.requireItemEdit(item);
         var asset = locked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         assertExpectedVersion(asset, input.expectedVersion());
@@ -615,8 +656,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteAsset(UUID itemId, UUID assetId) {
         var item = locked(Item.class, itemId, "Item");
+        actorService.requireItemEdit(item);
         var asset = locked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         if (!asset.active) return;
@@ -646,8 +689,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance relocateAsset(UUID itemId, UUID assetId, ApiModels.AssetRelocationInput input) {
         var item = locked(Item.class, itemId, "Item");
+        actorService.requireItemEdit(item);
         var asset = locked(AssetInstance.class, assetId, "Asset");
         assertOwnedActiveAsset(item, asset);
         assertExpectedVersion(asset, input.expectedVersion());
@@ -679,8 +724,10 @@ public class CatalogService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance updateAssetCondition(UUID itemId, UUID assetId, ApiModels.AssetConditionInput input) {
         var item = locked(Item.class, itemId, "Item");
+        if (item.accessPolicy == null) actorService.requireMaintenance(); else actorService.requireItemEdit(item);
         var asset = locked(AssetInstance.class, assetId, "Asset");
         assertOwnedActiveAsset(item, asset);
         assertExpectedVersion(asset, input.expectedVersion());

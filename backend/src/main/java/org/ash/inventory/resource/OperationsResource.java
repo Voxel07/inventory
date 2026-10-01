@@ -76,7 +76,6 @@ public class OperationsResource {
     @Path("/transactions")
     @Transactional
     public ApiResponses.TransactionResponse transaction(@Valid ApiModels.TransactionInput input) {
-        actor.requireWarehouse();
         return mapper.transaction(service.transact(input));
     }
 

@@ -82,7 +82,7 @@ public class CustodyBalanceService {
         var location = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         UUID eventId = event == null ? null : event.id;
         return new Balance(key(item.id, user.id, eventId, faction, general, asset), item.id, item.name, item.category,
-                location == null ? "" : location.name, amount, 0, user.id, person == null ? user.name : person,
+                actors.canViewLocation(location) ? location.name : "", amount, 0, user.id, person == null ? user.name : person,
                 eventId == null ? "" : eventId.toString(), event == null ? "" : event.name,
                 faction, general, asset, eventId);
     }

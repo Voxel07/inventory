@@ -88,6 +88,7 @@ export function Navigation() {
             ...(canViewCatalog(user) ? [
                 { label: t('nav.items'), path: '/items', icon: <InventoryIcon /> },
                 { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
+                { label: t('nav.storageLocations'), path: '/storage-locations', icon: <RoomIcon /> },
             ] : []),
             { label: t('nav.orders'), path: '/orders', icon: <GroupsIcon /> },
         ];

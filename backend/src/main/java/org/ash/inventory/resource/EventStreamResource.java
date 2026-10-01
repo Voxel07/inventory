@@ -33,16 +33,9 @@ public class EventStreamResource {
     public Multi<Map<String, Object>> stream() {
         actors.current();
         return broadcaster.stream().map(event -> {
-            String type = String.valueOf(event.get("type"));
-            // Shared SSE is an invalidation channel, not access to private agreement/request evidence.
-            if (type.startsWith("member_request.") || type.startsWith("loan.") || type.startsWith("equipment.")
-                    || type.equals("location.keeper_assigned")) {
-                var signal = new java.util.LinkedHashMap<String, Object>();
-                for (String key : java.util.List.of("type", "eventId", "timestamp", "occurredAt"))
-                    if (event.containsKey(key)) signal.put(key, event.get(key));
-                return signal;
-            }
-            return event;
+            // SSE carries only a generic invalidation; no resource/actor/command identifiers or evidence.
+            if ("heartbeat".equals(String.valueOf(event.get("type")))) return Map.of("type", "heartbeat");
+            return Map.of("type", "access.invalidated");
         });
     }
 }

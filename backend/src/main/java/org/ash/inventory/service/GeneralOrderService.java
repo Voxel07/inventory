@@ -24,6 +24,7 @@ public class GeneralOrderService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public GeneralOrder create(ApiModels.GeneralOrderInput input) {
         if (actors.current().role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
         var order = new GeneralOrder(); order.createdBy = actors.current();
@@ -31,12 +32,14 @@ public class GeneralOrderService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public GeneralOrder update(UUID id, ApiModels.GeneralOrderInput input) {
         var order = locked(id); requireOwnerOrPlanner(order); requireStatus(order, "draft");
         assign(order, input); audit(order, "updated", null, null); return order;
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public GeneralOrder transition(UUID id, String action, ApiModels.GeneralOrderPickupInput input) {
         var order = locked(id);
         var key = input == null ? null : input.idempotencyKey();
@@ -118,6 +121,7 @@ public class GeneralOrderService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public GeneralOrder returnItems(UUID id, ApiModels.GeneralOrderReturnInput input) {
         actors.requireMarshal(); var order = locked(id);
         if (input == null) throw ApiException.badRequest("Return data is required");

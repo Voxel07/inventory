@@ -427,7 +427,7 @@ function AppContent() {
               <Route path="/actions" element={<ActionInbox />} />
               <Route path="/locations/:locationId" element={<LocationScan />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
+              <Route path="/storage-locations" element={<CatalogAccessGuard><StorageLocations /></CatalogAccessGuard>} />
               <Route path="/operations" element={<InventoryManagerGuard><Operations /></InventoryManagerGuard>} />
               <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
               <Route path="*" element={<Navigate to="/" replace />} />

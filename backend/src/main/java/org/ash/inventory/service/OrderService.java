@@ -77,6 +77,7 @@ public class OrderService {
             DomainEnums.OrderStatus.returned, Set.of(DomainEnums.OrderStatus.closed));
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder create(ApiModels.OrderInput input) {
         requireWritable();
         var actor = actors.current();
@@ -111,6 +112,7 @@ public class OrderService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder update(UUID id, ApiModels.OrderInput input) {
         requireWritable();
         var order = lockedOrder(id);
@@ -150,6 +152,7 @@ public class OrderService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder prepare(UUID id, ApiModels.PreparationInput input) {
         actors.requireWarehouse();
         var order = lockedOrder(id);
@@ -204,6 +207,7 @@ public class OrderService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder transition(UUID id, DomainEnums.OrderStatus target, ApiModels.TransitionInput input) {
         requireWritable();
         var order = lockedOrder(id);
@@ -249,6 +253,7 @@ public class OrderService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder returnItems(UUID id, ApiModels.ReturnInput input) {
         actors.requireMarshal();
         var order = lockedOrder(id);
@@ -326,6 +331,7 @@ public class OrderService {
 
     @Transactional
     @CacheInvalidateAll(cacheName = "events-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
         var order = lockedOrder(id);
         var lines = orm.lines(order);

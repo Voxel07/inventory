@@ -35,6 +35,9 @@ import { isOfflineQueuedError } from '../utils/offline';
 import { useAuth } from '../hooks/useAuth';
 import { canPerformCustody } from '../utils/access';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
+import { OperationForm } from '../components/operations/OperationForm';
+import { useStorageLocations } from '../hooks/useStorageLocations';
+import { apiRequest } from '../services/apiClient';
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
     available: 'success', in_custody: 'warning', in_field: 'warning', damaged: 'error',
@@ -52,6 +55,9 @@ export function AssetDetail() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [damageOpen, setDamageOpen] = useState(canReportDamage && searchParams.get('reportDamage') === '1');
     const { data: item, isLoading: itemLoading } = useItem(itemId ?? '');
+    const { data: locations = [] } = useStorageLocations();
+    const canEditPrivate = Boolean(item?.access?.privateResource && item.access.canEdit);
+    const [privateAction, setPrivateAction] = useState<'relocate' | 'condition' | null>(null);
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
     const { data: transactions, isLoading: transactionsLoading } = useTransactions({ assetInstanceId: assetId, size: 200 });
     const { data: reports, isLoading: reportsLoading } = useDamageReports(undefined, { assetInstanceId: assetId, size: 200 });
@@ -166,8 +172,18 @@ export function AssetDetail() {
                 </Paper>
             </Box>
 
-            <EquipmentOwnership item={item} canEdit={false} />
-            {canOperateWarehouse(user) && <CodeManagement targetId={asset.id} targetType="asset" />}
+            <EquipmentOwnership item={item} canEdit={canEditPrivate} />
+            {canEditPrivate && <Stack direction="row" spacing={1} sx={{ my: 2 }}>
+                <Button title={t('Gerät an einen anderen Lagerort verschieben', 'Move asset to another storage location')} onClick={() => setPrivateAction('relocate')}>{t('Gerät verschieben', 'Move asset')}</Button>
+                <Button title={t('Zustand des eigenen Geräts aktualisieren', 'Update private asset condition')} onClick={() => setPrivateAction('condition')}>{t('Zustand aktualisieren', 'Update condition')}</Button>
+            </Stack>}
+            {(item.access?.privateResource ? canEditPrivate : canOperateWarehouse(user)) && <CodeManagement targetId={asset.id} targetType="asset" />}
+            {canEditPrivate && privateAction && <OperationForm title={privateAction === 'relocate' ? t('Gerät verschieben', 'Move asset') : t('Zustand aktualisieren', 'Update condition')}
+                onClose={() => setPrivateAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
+                fields={privateAction === 'relocate'
+                    ? [{ key: 'locationId', label: t('Lagerort', 'Location'), required: true, options: locations.filter(l => l.active).map(l => ({ value: l.id, label: l.name })) }]
+                    : [{ key: 'conditionStatus', label: t('Zustand', 'Condition'), required: true, options: ['new_condition', 'good', 'fair', 'damaged', 'unsafe'].map(value => ({ value, label: formatStatus(value) })) }]}
+                onSave={values => apiRequest(`/api/items/${item.id}/assets/${asset.id}/${privateAction}`, { method: 'POST', body: { expectedVersion: asset.version, ...(privateAction === 'relocate' ? { locationId: values.locationId } : { conditionStatus: values.conditionStatus }) } })} />}
             <Dialog open={damageOpen} onClose={closeDamageDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
                 <DialogTitle>{t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}</DialogTitle>
                 <DialogContent sx={{ pt: '24px !important' }}>

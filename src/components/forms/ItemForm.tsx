@@ -1,3 +1,5 @@
+import { useAuth } from '../../hooks/useAuth';
+import { canEditCatalog } from '../../utils/access';
 import { Button } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
@@ -41,7 +43,10 @@ export function ItemForm({
     isLoading,
 }: Props) {
     const t = useLocalizedText();
+    const { user } = useAuth();
+    const canCreatePublic = canEditCatalog(user);
     const [formData, setFormData] = useState<ItemFormData>({
+        privateResource: initialData ? Boolean(initialData.access?.privateResource) : true,
         name: initialData?.name ?? '',
         description: initialData?.description ?? '',
         amount: undefined,
@@ -96,6 +101,7 @@ export function ItemForm({
         location: '',
         position: '',
         description: '',
+        privateResource: true,
     });
 
     const createLoc = useCreateStorageLocation();
@@ -125,9 +131,9 @@ export function ItemForm({
         if (!newLocData.name.trim()) return;
         createLoc.mutate(newLocData, {
             onSuccess: (newLoc) => {
-                setFormData((prev) => ({ ...prev, storageLocation: newLoc.id }));
+                setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), storageLocation: newLoc.id }));
                 setAddLocationOpen(false);
-                setNewLocData({ name: '', area: '', location: '', position: '', description: '' });
+                setNewLocData({ name: '', area: '', location: '', position: '', description: '', privateResource: true });
                 showSnackbar(t('Lagerort erfolgreich erstellt', 'Storage location created'), 'success');
             },
             onError: () => {
@@ -179,6 +185,9 @@ export function ItemForm({
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
+                <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
+                    onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />}
+                    label={t('Privater Artikel — nur Eigentümer, HQ-Admins und Freigaben', 'Private item — owner, HQ admins and explicit shares only')} />
                 <TextField
                     label={t('Name', 'Name')}
                     value={formData.name}
@@ -397,7 +406,7 @@ export function ItemForm({
                         getOptionLabel={(option) => option.name || ''}
                         isOptionEqualToValue={(option, val) => option.id === val.id}
                         value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
-                        onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, storageLocation: newValue ? newValue.id : '' }))}
+                        onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), storageLocation: newValue ? newValue.id : '' }))}
                         renderInput={(params) => (
                             <TextField {...params} label={t('Lagerort', 'Storage location')} fullWidth />
                         )}
@@ -423,6 +432,7 @@ export function ItemForm({
                     )}
                 />
 
+                {!formData.privateResource && <>
                 <TextField
                     select
                     label={t('Sichtbarkeit / Zuordnung', 'Visibility / assignment')}
@@ -457,6 +467,7 @@ export function ItemForm({
                     />
                 )}
 
+                </>}
                 <Autocomplete
                     multiple
                     options={[...EVENT_TYPES]}

@@ -10,6 +10,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class PlanningOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager em;
     public PlanningOrm(EntityManager em) { this.em = em; }
     public List<EventOccurrence> events(LocalDate through) {
@@ -45,6 +46,6 @@ public class PlanningOrm {
                 order by p.event.id, p.item.id
                 """, PlanningOverride.class).setParameter("eventIds", eventIds).setParameter("itemIds", itemIds).getResultList();
     }
-    public <T> T find(Class<T> type, UUID id) { return em.find(type, id); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(em.find(type, id), false); }
     public void persist(Object value) { em.persist(value); }
 }

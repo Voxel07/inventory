@@ -24,7 +24,7 @@ public class CategoryMaintenanceOrm {
     }
 
     public List<Item> items(String category) {
-        return entityManager.createQuery("select i from Item i where lower(i.category) = lower(:name)", Item.class)
+        return entityManager.createQuery("select i from Item i where i.accessPolicy is null and lower(i.category) = lower(:name)", Item.class)
                 .setParameter("name", category).getResultList();
     }
 

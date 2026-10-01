@@ -41,6 +41,7 @@ public class TransferService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse create(TransferDtos.TransferInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -93,6 +94,7 @@ public class TransferService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse dispatch(UUID id, TransferDtos.CommandInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -140,6 +142,7 @@ public class TransferService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse receive(UUID id, TransferDtos.ReceiveInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -180,6 +183,7 @@ public class TransferService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse cancel(UUID id, TransferDtos.CommandInput input) {
         actors.requireWarehouse();
         var transfer = requiredLocked(InventoryTransfer.class, id, "Transfer");

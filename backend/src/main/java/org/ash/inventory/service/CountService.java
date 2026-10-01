@@ -40,6 +40,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse create(CountDtos.CountInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -96,6 +97,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse start(UUID id, CountDtos.CountCommandInput input) {
         actors.requireWarehouse();
         var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
@@ -108,6 +110,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse submit(UUID id, CountDtos.CountSubmissionInput input, boolean recount) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -142,6 +145,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse approve(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
         actors.requireAdmin();
@@ -168,6 +172,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse post(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -222,6 +227,7 @@ public class CountService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse cancel(UUID id, CountDtos.CountCommandInput input) {
         actors.requireWarehouse();
         var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");

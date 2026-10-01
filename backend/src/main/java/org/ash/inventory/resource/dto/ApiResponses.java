@@ -110,7 +110,7 @@ public final class ApiResponses {
             String warehouseId,
             String warehouseName,
             String parentLocationId,
-            boolean active
+            boolean active, org.ash.inventory.service.InventoryAccessService.View access
     ) {}
 
     public record ItemResponse(
@@ -152,7 +152,8 @@ public final class ApiResponses {
             LocalDate bestBeforeDate,
             String maintenanceStatus,
             StockDto stock,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand,
+            org.ash.inventory.service.InventoryAccessService.View access, boolean locationRestricted
     ) {}
 
     public record ReturnSubmissionResponse(

@@ -26,7 +26,7 @@ public final class ApiModels {
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             DomainEnums.ItemVisibilityScope visibilityScope, UUID assignedUserId, String assignedGroup,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
-            LocalDate batteryReplacementDue, LocalDate bestBeforeDate) {}
+            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource) {}
 
     public record ReturnSubmissionInput(
             @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
@@ -42,7 +42,7 @@ public final class ApiModels {
     public record StorageLocationInput(
             @NotBlank String name, String description, String area, String location, String position,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
-            DomainEnums.LocationType locationType, UUID warehouseId, UUID parentLocationId, Boolean active) {}
+            DomainEnums.LocationType locationType, UUID warehouseId, UUID parentLocationId, Boolean active, Boolean privateResource) {}
 
 
     public record AssemblyInput(

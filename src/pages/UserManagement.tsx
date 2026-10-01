@@ -1,3 +1,4 @@
+import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
 import { Button } from '../components/shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Autocomplete, Box, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
@@ -109,6 +110,7 @@ export function UserManagement() {
         {isLoading ? <Paper sx={{ p: 3 }}>{t('Benutzer werden geladen …', 'Loading users…')}</Paper> : pageUsers.map((user) => <UserPermissionsEditor key={`${user.id}:${user.role}:${(user.faction ?? []).join(',')}`} user={user} />)}
       </Stack>
       <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={users.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+      <InventoryAccessGroups />
     </Box>
   );
 }

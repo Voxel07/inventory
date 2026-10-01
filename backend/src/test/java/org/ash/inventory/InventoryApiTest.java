@@ -510,7 +510,7 @@ class InventoryApiTest {
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "removed-role-user")
                 .header("X-Actor-Role", "admin")
-                .body(Map.of("sku", "REMOVED-ROLE-001", "name", "Must not be created",
+                .body(Map.of("privateResource", false, "sku", "REMOVED-ROLE-001", "name", "Must not be created",
                         "category", "Test", "amount", 1, "value", 0))
                 .post("/api/items").then().statusCode(403);
     }
@@ -730,7 +730,7 @@ class InventoryApiTest {
         String component = request().body(Map.of("name", "Assembly image component", "category", "Equipment", "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
-        String staged = given().header("X-Actor-Id", "media-admin")
+        String staged = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", bytes, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         var body = new java.util.HashMap<String, Object>();
@@ -749,7 +749,7 @@ class InventoryApiTest {
         body.remove("image");
         body.put("description", "Unrelated edit keeps the image");
         request().body(body).patch("/api/assemblies/" + id).then().statusCode(200).body("image", equalTo(first));
-        String replacement = given().header("X-Actor-Id", "media-admin")
+        String replacement = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", bytes, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         body.put("image", replacement);
@@ -768,10 +768,10 @@ class InventoryApiTest {
     @Test
     void uploadedImagesAreNamedForTheItemAndServedWithoutRedirects() {
         byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
-        String first = given().header("X-Actor-Id", "media-admin")
+        String first = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", bytes, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
-        String second = given().header("X-Actor-Id", "media-admin")
+        String second = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", bytes, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         var item = request().body(Map.of("name", "Image test", "category", "Equipment", "value", 0,
@@ -784,7 +784,7 @@ class InventoryApiTest {
         for (String key : images) {
             org.junit.jupiter.api.Assertions.assertTrue(key.matches("items/[0-9a-f-]{36}/" + id + "\\.webp"));
             byte[] served = request().get("/api/media/" + key).then().statusCode(200)
-                    .contentType("image/webp").header("Cache-Control", "private, max-age=3600")
+                    .contentType("image/webp").header("Cache-Control", "private, no-store")
                     .extract().asByteArray();
             org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, served);
         }
@@ -796,14 +796,14 @@ class InventoryApiTest {
                 .body("images[0]", equalTo(images.get(1))).body("images.size()", equalTo(1));
         request().get("/api/media/" + images.get(0)).then().statusCode(404);
         request().get("/api/media/" + images.get(1)).then().statusCode(200);
-        request().delete("/api/media/" + images.get(1)).then().statusCode(400);
+        request().delete("/api/media/" + images.get(1)).then().statusCode(404);
         request().get("/api/media/" + images.get(1)).then().statusCode(200);
     }
 
     @Test
     void abandonedStagedImageCanBeDeleted() {
         byte[] bytes = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
-        String staged = given().header("X-Actor-Id", "media-admin")
+        String staged = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", bytes, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
 
@@ -814,7 +814,7 @@ class InventoryApiTest {
 
     @Test
     void failedImageAttachmentKeepsTheUploadForRetry() {
-        String staged = given().header("X-Actor-Id", "media-admin")
+        String staged = given().header("X-Actor-Id", "test-admin")
                 .multiPart("file", "image.webp", new byte[]{1, 2, 3}, "image/webp")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         String missing = "2026-00000000-0000-0000-0000-000000000000-image.webp";
@@ -1341,7 +1341,7 @@ class InventoryApiTest {
         factionLeaderRequest().get("/api/assemblies/" + assemblyId).then().statusCode(200);
 
         var itemInput = Map.of("name", "Changed item", "category", "Test", "value", 0);
-        factionLeaderRequest().body(itemInput).post("/api/items").then().statusCode(403);
+        factionLeaderRequest().body(itemInput).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true));
         factionLeaderRequest().body(itemInput).patch("/api/items/" + itemId).then().statusCode(403);
         factionLeaderRequest().delete("/api/items/" + itemId).then().statusCode(403);
         factionLeaderRequest().body(assemblyInput).post("/api/assemblies").then().statusCode(403);

@@ -36,7 +36,8 @@ class RemainingP1ApiTest {
         admin().get("/api/storage-locations?includeInactive=true").then().statusCode(200).body("find { it.id == '" + child + "' }.active", equalTo(false));
         admin().delete("/api/storage-locations/" + parent).then().statusCode(204);
         admin().body(Map.of("name", "P1 child", "warehouseId", warehouse, "parentLocationId", parent, "active", true)).patch("/api/storage-locations/" + child).then().statusCode(409);
-        reader().body(Map.of("name", "Unauthorized location")).post("/api/storage-locations").then().statusCode(403);
+        reader().body(Map.of("name", "Private location")).post("/api/storage-locations").then().statusCode(200).body("access.privateResource", equalTo(true));
+        reader().body(Map.of("name", "Unauthorized public location", "privateResource", false)).post("/api/storage-locations").then().statusCode(403);
     }
 
     @Test void correctionRetainsOriginalAndCannotApplyTwiceOrCrossAccounts() {

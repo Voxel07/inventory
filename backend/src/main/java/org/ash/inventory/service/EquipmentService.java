@@ -60,9 +60,9 @@ public class EquipmentService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Profile update(UUID itemId, ProfileInput input) {
-        actors.requireWarehouse();
-        var item = item(itemId, true); revision(item, input.revision());
+        var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
         if (input.ownershipType() != Item.Ownership.organization &&
                 (blank(input.ownerName()) || input.availabilityPolicy() == Item.AvailabilityPolicy.available))
             throw ApiException.badRequest("Private/external equipment needs an owner and an explicit commitment or unavailable policy");
@@ -82,9 +82,9 @@ public class EquipmentService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Profile commit(UUID itemId, CommitmentInput input) {
-        actors.requireWarehouse();
-        var item = item(itemId, true); revision(item, input.revision());
+        var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required)
             throw ApiException.conflict("Select commitment required before recording an offer");
         if (input.availableUntil().isBefore(input.availableFrom()) || input.availableUntil().isBefore(LocalDate.now()))
@@ -123,8 +123,9 @@ public class EquipmentService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Profile cancel(UUID itemId, UUID id, CancelInput input) {
-        actors.requireWarehouse(); var item = item(itemId, true); revision(item, input.revision());
+        var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
         var c = orm.find(EquipmentCommitment.class, id);
         if (c == null || !c.item.id.equals(item.id)) throw ApiException.notFound("Commitment not found");
         if (c.cancelled) return view(item);

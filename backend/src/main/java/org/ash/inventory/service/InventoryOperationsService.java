@@ -33,6 +33,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class InventoryOperationsService {
+    @jakarta.inject.Inject org.ash.inventory.helper.storage.MediaService media;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
     @jakarta.inject.Inject MaintenanceEvaluationService maintenance;
@@ -61,6 +62,7 @@ public class InventoryOperationsService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StockTransaction transact(ApiModels.TransactionInput input) {
         var actor = actors.current();
         var occurredAt = historicalTimestamp(input.occurredAt());
@@ -72,11 +74,18 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
         }
         if (input.idempotencyKey() != null) {
+            actors.requireItemEdit(orm.find(Item.class, input.itemId()));
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
-            if (existing != null)
+            if (existing != null) {
+                actors.protect(existing, true);
+                if (!existing.item.id.equals(input.itemId())) throw ApiException.conflict("Idempotency key belongs to a different item");
                 return existing;
+            }
         }
         var item = lockedItem(input.itemId());
+        actors.requireItemEdit(item);
+        if (item.accessPolicy != null && !org.ash.inventory.service.EquipmentService.freelyAvailable(item)
+                && input.transactionType() == DomainEnums.TransactionType.checkout) actors.requireWarehouse();
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             return transactSerialized(input, item, actor, occurredAt);
         }
@@ -348,6 +357,7 @@ public class InventoryOperationsService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public DamageReport createDamage(ApiModels.DamageInput input) {
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (input.idempotencyKey() != null) {
@@ -399,9 +409,11 @@ public class InventoryOperationsService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public DamageReport resolveDamage(UUID id, ApiModels.DamageResolutionInput input) {
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (input.idempotencyKey() != null) {
+            actors.protect(orm.find(DamageReport.class, id), true);
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
             if (existing != null && existing.damageReport != null && existing.damageReport.id.equals(id))
                 return existing.damageReport;
@@ -517,8 +529,10 @@ public class InventoryOperationsService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceRecord recordMaintenance(ApiModels.MaintenanceInput input) {
         var item = lockedItem(input.itemId());
+        actors.protect(item, true);
         var record = new MaintenanceRecord();
         record.item = item;
         if (input.assetInstanceId() != null) {
@@ -552,10 +566,11 @@ public class InventoryOperationsService {
         record.operatingHours = input.operatingHours();
         record.result = input.result();
         record.certificateNumber = input.certificateNumber();
-        record.certificateObjectKey = input.certificateObjectKey();
         record.notes = input.notes();
         advanceSchedule(record);
         orm.persist(record);
+        if (input.certificateObjectKey() != null)
+            record.certificateObjectKey = media.attachToMaintenance(input.certificateObjectKey(), record.id);
         if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
             item.currentOperatingHours = input.operatingHours();
         item.nextMaintenanceDue = record.nextDueAt == null ? null
@@ -635,6 +650,7 @@ public class InventoryOperationsService {
 
     private Item lockedItem(UUID id) {
         var item = orm.findLockedItem(id);
+        actors.protect(item, true);
         if (item == null || !item.active)
             throw ApiException.notFound("Item not found");
         return item;

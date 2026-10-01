@@ -136,8 +136,8 @@ export function CountsPanel() {
   </Stack>;
 }
 
-export function LotsPanel() {
-  const t = useLocalizedText(); const lookup = useStockLookups(); const lots = useOperationList('lots', operationsApi.lots());
+export function LotsPanel({ itemId }: { itemId?: string } = {}) {
+  const t = useLocalizedText(); const lookup = useStockLookups(); const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
   const [edit, setEdit] = useState<Lot | 'new' | null>(null);
   return <Stack spacing={2}>
     <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
@@ -147,8 +147,8 @@ export function LotsPanel() {
       <Typography>{lot.status} · {t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
       <Typography>{lot.storageRequirements} {lot.notes}</Typography><Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>
     </Stack></CardContent></Card>)}
-    {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[
-      { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions.filter((option) => lookup.items.find((item) => item.id === option.value)?.trackingMode === 'lot_tracked'), required: true },
+    {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available', itemId: itemId ?? '' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[
+      { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions.filter((option) => (!itemId || option.value === itemId) && lookup.items.find((item) => item.id === option.value)?.trackingMode === 'lot_tracked'), required: true },
       { key: 'lotNumber', label: t('Chargennummer', 'Lot number'), required: true }, { key: 'supplierLot', label: t('Lieferantencharge', 'Supplier lot') },
       { key: 'manufactureDate', label: t('Herstellungsdatum', 'Manufactured'), type: 'date' }, { key: 'expiryDate', label: t('Ablaufdatum', 'Expiry date'), type: 'date' }, { key: 'bestBeforeDate', label: t('Mindesthaltbarkeit', 'Best before'), type: 'date' },
       { key: 'status', label: t('Status', 'Status'), required: true, options: ['available', 'hold', 'recalled', 'expired', 'depleted'].map((value) => ({ value, label: value })) },

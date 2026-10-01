@@ -12,20 +12,23 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class TransferOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public TransferOrm(EntityManager entityManager) { this.entityManager = entityManager; }
     public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T locked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T locked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<InventoryTransfer> transfers(String status, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = status == null || status.isBlank()
-                ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy order by transfer.createdAt desc"
-                : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status order by transfer.createdAt desc";
+                ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1" + InventoryAccessOrm.excluding("transfer", denied) + " order by transfer.createdAt desc"
+                : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status" + InventoryAccessOrm.excluding("transfer", denied) + " order by transfer.createdAt desc";
         var query = entityManager.createQuery(jpql, InventoryTransfer.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.TransferStatus.valueOf(status));
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryTransferLine> lines(Collection<InventoryTransfer> transfers) {
         if (transfers.isEmpty()) return List.of();
@@ -34,7 +37,7 @@ public class TransferOrm {
     }
     public List<InventoryTransferLine> lockedLines(InventoryTransfer transfer) {
         return entityManager.createQuery("select line from InventoryTransferLine line join fetch line.item left join fetch line.assetInstance left join fetch line.lot where line.transfer = :transfer order by line.createdAt", InventoryTransferLine.class)
-                .setParameter("transfer", transfer).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                .setParameter("transfer", transfer).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList().stream().map(value -> accessActor.protect(value, true)).toList();
     }
     public InventoryTransfer byIdempotencyKey(UUID key) {
         return entityManager.createQuery("from InventoryTransfer transfer where transfer.idempotencyKey = :key", InventoryTransfer.class)

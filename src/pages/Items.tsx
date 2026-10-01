@@ -21,27 +21,19 @@ import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
 
 export function Items({ showAllEvents = false }: { showAllEvents?: boolean }) {
-    const { user } = useAuth();
-    return canEditCatalog(user) ? <ManagedItems showAllEvents={showAllEvents} /> : <ReadOnlyItems showAllEvents={showAllEvents} />;
-}
-
-function ReadOnlyItems({ showAllEvents }: { showAllEvents: boolean }) {
-    const t = useLocalizedText();
-    const { data: items = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useItems();
-    return <Box>
-        <Typography variant="h4" sx={{ mb: 3 }}>{t('Artikel', 'Items')}</Typography>
-        <ItemsList showAllEvents={showAllEvents} items={items} isLoading={isLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
-    </Box>;
+    return <ManagedItems showAllEvents={showAllEvents} />;
 }
 
 function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
+    const { user } = useAuth();
+    const catalogManager = canEditCatalog(user);
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: items, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: itemsComplete } = useItems();
     const { data: assemblies, isComplete: assembliesComplete, isError: assembliesError } = useAssemblies();
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers();
+    const { data: assignableUsers } = useAssignableUsers(catalogManager);
 
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
@@ -64,13 +56,13 @@ function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 1 }}>
                 <Typography variant="h4">{t('Artikel', 'Items')}</Typography>
                 <Box sx={{ display: 'flex', gap: { xs: 0.25, sm: 1 }, flexShrink: 0 }}>
-                    <TooltipButton
+                    {catalogManager && <TooltipButton
                         tooltipText={t('Artikel und Baugruppen aus CSV importieren', 'Import items and assemblies from CSV')}
                         icon={<FileUploadIcon />}
                         label={isMobile ? undefined : t('CSV Import', 'CSV import')}
                         variant={isMobile ? 'icon' : 'outlined'}
                         onClick={() => setImportOpen(true)}
-                    />
+                    />}
                     <TooltipButton
                         tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
                         icon={<AddIcon />}

@@ -44,6 +44,7 @@ public class LifecycleService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceSchedule createSchedule(LifecycleDtos.ScheduleInput input) {
         actors.requireMaintenance();
         var schedule = new MaintenanceSchedule();
@@ -55,6 +56,7 @@ public class LifecycleService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceSchedule updateSchedule(UUID id, LifecycleDtos.ScheduleInput input) {
         actors.requireMaintenance();
         var schedule = requiredLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
@@ -63,6 +65,7 @@ public class LifecycleService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireSchedule(UUID id) {
         actors.requireMaintenance();
         requiredLocked(MaintenanceSchedule.class, id, "Maintenance schedule").active = false;
@@ -99,6 +102,7 @@ public class LifecycleService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public RepairCase createRepair(LifecycleDtos.RepairInput input) {
         actors.requireMaintenance();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
@@ -123,6 +127,7 @@ public class LifecycleService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
         actors.requireMaintenance();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());

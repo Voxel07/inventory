@@ -17,6 +17,8 @@ import java.util.UUID;
 @ApplicationScoped
 public class StockManagementService {
     @jakarta.inject.Inject LocationHierarchyService hierarchy;
+    @jakarta.inject.Inject PrivacyProjectionService privacy;
+    @jakarta.inject.Inject CatalogService catalog;
     private final StockManagementOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -33,6 +35,7 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Warehouse createWarehouse(StockDtos.WarehouseInput input) {
         actors.requireWarehouse();
         if (orm.warehouseCodeExists(input.code(), null)) throw ApiException.conflict("Warehouse code already exists");
@@ -45,6 +48,7 @@ public class StockManagementService {
 
     @Transactional
     @io.quarkus.cache.CacheInvalidateAll(cacheName = "locations-cache")
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Warehouse updateWarehouse(UUID id, StockDtos.WarehouseInput input) {
         actors.requireWarehouse();
         hierarchy.lockHierarchy();
@@ -56,6 +60,7 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireWarehouse(UUID id) {
         actors.requireWarehouse();
         hierarchy.lockHierarchy();
@@ -74,8 +79,21 @@ public class StockManagementService {
     }
 
     public List<InventoryCode> codes(UUID targetId, int page, int size) {
-        actors.requireWarehouse();
-        return orm.codes(targetId, offset(page, size), size);
+        if (targetId == null) actors.requireWarehouse();
+        else {
+            Object target = null;
+            for (var type : List.of(Item.class, StorageLocation.class, AssetInstance.class, InventoryLot.class, Assembly.class)) {
+                target = orm.find(type, targetId); if (target != null) break;
+            }
+            if (target == null) throw ApiException.notFound("Code target not found");
+            boolean privateTarget = target instanceof Item i && i.accessPolicy != null
+                    || target instanceof StorageLocation l && l.accessPolicy != null
+                    || target instanceof AssetInstance a && a.item.accessPolicy != null
+                    || target instanceof InventoryLot lot && lot.item.accessPolicy != null;
+            if (!privateTarget) actors.requireWarehouse();
+        }
+        var denied = privacy.deniedIds().stream().map(UUID::fromString).collect(java.util.stream.Collectors.toSet());
+        return orm.codes(targetId, offset(page, size), size, denied);
     }
 
     @Transactional
@@ -85,13 +103,16 @@ public class StockManagementService {
         if (result == null) throw ApiException.notFound("Inventory code not found");
         var item = codeItem(result);
         if (item != null) actors.requireItemAccess(item);
+        if (result.targetType == DomainEnums.CodeTargetType.assembly && !catalog.canViewAssembly(orm.find(Assembly.class, result.targetId))) throw ApiException.notFound("Code target not found");
+        if (result.targetType == DomainEnums.CodeTargetType.location) actors.requireLocationAccess(orm.find(StorageLocation.class, result.targetId), false);
         if (!result.active) throw new ApiException(410, "This label has been retired; use its replacement");
         return result;
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryCode createCode(StockDtos.InventoryCodeInput input) {
-        actors.requireWarehouse();
+        requireCodeEdit(input.targetType(), input.targetId());
         validateCodeTarget(input.targetType(), input.targetId());
         if (orm.codeExists(input.code(), null)) throw ApiException.conflict("Inventory code already exists");
         orm.findLocked(targetClass(input.targetType()), input.targetId());
@@ -105,8 +126,8 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryCode updateCode(UUID id, StockDtos.InventoryCodeInput input) {
-        actors.requireWarehouse();
         var code = lockCode(id);
         validateCodeTarget(input.targetType(), input.targetId());
         if (orm.codeExists(input.code(), id)) throw ApiException.conflict("Inventory code already exists");
@@ -119,8 +140,8 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireCode(UUID id) {
-        actors.requireWarehouse();
         var code = lockCode(id);
         code.active = false;
         code.primaryCode = false;
@@ -130,6 +151,7 @@ public class StockManagementService {
 
     private InventoryCode lockCode(UUID id) {
         var code = required(InventoryCode.class, id, "Inventory code");
+        requireCodeEdit(code.targetType, code.targetId);
         orm.findLocked(targetClass(code.targetType), code.targetId);
         return requiredLocked(InventoryCode.class, id, "Inventory code");
     }
@@ -143,14 +165,21 @@ public class StockManagementService {
         };
     }
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryCode replaceCode(UUID id, StockDtos.InventoryCodeInput input) {
-        actors.requireWarehouse();
         var old = lockCode(id);
         if (!old.active || old.targetType != input.targetType() || !old.targetId.equals(input.targetId())) throw ApiException.conflict("Replace an active label for the same target");
         var replacement = createCode(input);
         retireCode(id);
         events.record("inventory_code.replaced", "inventory_code", old.id, actors.current().id, null, Map.of("replacementId", replacement.id.toString(), "oldCode", old.code, "newCode", replacement.code));
         return replacement;
+    }
+    private void requireCodeEdit(DomainEnums.CodeTargetType type, UUID id) {
+        var target = required(targetClass(type), id, "Code target");
+        Item item = target instanceof Item i ? i : target instanceof AssetInstance a ? a.item : target instanceof InventoryLot l ? l.item : null;
+        if (item != null) actors.requireItemEdit(item);
+        else if (target instanceof StorageLocation l) actors.requireLocationEdit(l);
+        else actors.requireWarehouse();
     }
     private Class<?> targetClass(DomainEnums.CodeTargetType type) {
         return switch(type) { case product -> Item.class; case asset -> AssetInstance.class; case location -> StorageLocation.class; case assembly -> Assembly.class; case lot -> InventoryLot.class; default -> throw ApiException.badRequest("Unsupported code target"); };
@@ -183,8 +212,9 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryLot createLot(StockDtos.LotInput input) {
-        actors.requireWarehouse();
+
         var lot = new InventoryLot();
         apply(lot, input, null);
         orm.persist(lot);
@@ -194,15 +224,18 @@ public class StockManagementService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryLot updateLot(UUID id, StockDtos.LotInput input) {
-        actors.requireWarehouse();
+
         var lot = requiredLocked(InventoryLot.class, id, "Inventory lot");
+        actors.requireItemEdit(lot.item);
         apply(lot, input, id);
         return lot;
     }
 
     private void apply(InventoryLot lot, StockDtos.LotInput input, UUID excluding) {
-        var item = required(Item.class, input.itemId(), "Item");
+        var item = requiredLocked(Item.class, input.itemId(), "Item");
+        actors.requireItemEdit(item);
         if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked) {
             throw ApiException.badRequest("Inventory lots require an item with lot_tracked tracking mode");
         }
@@ -219,11 +252,13 @@ public class StockManagementService {
     }
 
     public List<AssetInstance> assets(UUID itemId, UUID locationId, int page, int size) {
+        if (locationId != null) actors.requireLocationAccess(required(StorageLocation.class, locationId, "Location"), false);
         return orm.assets(itemId, locationId, offset(page, size), size, actors.current());
     }
 
     public List<InventoryPosition> positions(UUID itemId, UUID locationId, int page, int size) {
         actors.current();
+        if (locationId != null) actors.requireLocationAccess(required(StorageLocation.class, locationId, "Location"), false);
         return orm.positions(itemId, locationId, offset(page, size), size, actors.current());
     }
 

@@ -17,6 +17,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class StockManagementOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public StockManagementOrm(EntityManager entityManager) {
@@ -24,8 +25,8 @@ public class StockManagementOrm {
     }
 
     public void persist(Object entity) { entityManager.persist(entity); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T findLocked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<Warehouse> warehouses(int offset, int limit) {
         return entityManager.createQuery("from Warehouse warehouse order by warehouse.active desc, warehouse.name", Warehouse.class)
@@ -42,11 +43,13 @@ public class StockManagementOrm {
         return query.getSingleResult() > 0;
     }
 
-    public List<InventoryCode> codes(UUID targetId, int offset, int limit) {
-        var query = new StringBuilder("from InventoryCode code");
-        if (targetId != null) query.append(" where code.targetId = :targetId");
+    public List<InventoryCode> codes(UUID targetId, int offset, int limit, java.util.Set<UUID> denied) {
+        var query = new StringBuilder("from InventoryCode code where 1=1");
+        if (!denied.isEmpty()) query.append(" and code.id not in :denied and code.targetId not in :denied");
+        if (targetId != null) query.append(" and code.targetId = :targetId");
         query.append(" order by code.active desc, code.code");
         var typed = entityManager.createQuery(query.toString(), InventoryCode.class);
+        if (!denied.isEmpty()) typed.setParameter("denied", denied);
         if (targetId != null) typed.setParameter("targetId", targetId);
         return typed.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
@@ -94,7 +97,7 @@ public class StockManagementOrm {
     }
 
     public List<InventoryPosition> positions(UUID itemId, UUID locationId, int offset, int limit, UserAccount actor) {
-        var jpql = new StringBuilder("select position from InventoryPosition position join fetch position.item join fetch position.location left join fetch position.lot where ").append(visibility("position.item"));
+        var jpql = new StringBuilder("select position from InventoryPosition position join fetch position.item join fetch position.location left join fetch position.lot where ").append(visibility("position.item")).append(" and ").append(InventoryAccessOrm.visible("position.location.accessPolicy"));
         if (itemId != null) jpql.append(" and position.item.id = :itemId");
         if (locationId != null) jpql.append(" and position.location.id = :locationId");
         jpql.append(" order by position.item.name, position.location.name");
@@ -111,10 +114,10 @@ public class StockManagementOrm {
         return visible(query, actor).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     private String visibility(String item) {
-        return "(:manager = true or " + item + ".visibilityScope in :publicScopes or " + item + ".assignedUser.id = :actorId or " + item + ".assignedGroup in :groups)";
+        return InventoryAccessOrm.visible(item + ".accessPolicy") + " and (" + item + ".accessPolicy is not null or :manager = true or " + item + ".visibilityScope in :publicScopes or " + item + ".assignedUser.id = :actorId or " + item + ".assignedGroup in :groups)";
     }
     private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query, UserAccount actor) {
-        return query.setParameter("manager", actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew)
+        return InventoryAccessOrm.bind(query, actor).setParameter("manager", actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew)
                 .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
                 .setParameter("actorId", actor.id).setParameter("groups", actor.factions == null || actor.factions.isEmpty() ? List.of("__none__") : actor.factions);
     }

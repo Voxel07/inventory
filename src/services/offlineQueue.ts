@@ -1,4 +1,5 @@
 import { API_URL } from '../config/runtimeConfig';
+import { containsPrivateInventory, referencesPrivateInventory } from './privateInventoryCache';
 import { assertAuthSession, captureAuthSession, getAuthSnapshot, getAuthorizationHeaders, type AuthSessionContext } from './authManager';
 
 export type OfflineAction = {
@@ -49,6 +50,9 @@ export async function setOfflineCatalog<T>(key: string, data: T, context = captu
 /** Save a query page and its exact resource entries with one download timestamp. */
 export async function setOfflineCatalogEntries(entries: { key: string; data: unknown }[], context = captureAuthSession()): Promise<void> {
   assertAuthSession(context);
+  const protectedEntries = entries.filter(entry => containsPrivateInventory(entry.data));
+  await Promise.all(protectedEntries.map(entry => removeOfflineCatalog(entry.key, context)));
+  entries = entries.filter(entry => !containsPrivateInventory(entry.data));
   if (!context.accountId || !entries.length) return;
   const cachedAt = new Date().toISOString();
   const rows = entries.map((entry) => ({ ...entry, key: `${context.catalogScope}:${entry.key}`, cachedAt }));
@@ -106,6 +110,7 @@ export async function getOfflineCatalog<T>(key: string, context = captureAuthSes
 }
 
 export async function enqueueOfflineAction(action: OfflineAction, context: AuthSessionContext = captureAuthSession()): Promise<void> {
+  if (referencesPrivateInventory(action.payload)) throw new Error('Private inventory actions require an online connection.');
   assertAuthSession(context);
   const actionOwner = context.accountId;
   const db = await openDatabase();

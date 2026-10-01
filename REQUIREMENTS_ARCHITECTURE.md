@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** F01–F23 present in source; consolidation re-reviewed 1 October 2026 after A/P/U refactors; runtime acceptance pending
+> **Status:** F01–F23 present in source; consolidation and private-inventory access reviewed 1 October 2026; private inventory/sharing implemented in source; runtime acceptance pending
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -46,6 +46,7 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 |---|---|
 | F01–F18 | Event planning/results, purchasing/receiving, location stock, transfers/counts/lots, orders/custody, repairs/maintenance, hierarchy, offline correction, reporting and operator tools present |
 | F19–F23 | Ownership/commitments, member self-service, action inbox/reminders, camera/code management and borrowing/rental lifecycle present |
+| Private inventory and sharing | Account-owned private items/locations, owner self-service, multiple person/group view/edit grants, admin-managed share groups, revocation, audit/revision control and resource-associated media implemented. Warehouse roles have no private bypass. Source boundaries and runtime acceptance limits are documented in Sections 5.4 and 6.1. |
 | Consolidation | One disposable SQL baseline; shared query feedback, snackbar, catalog dialogs and warehouse service; unused catalog view and CRUD aliases removed; category/catalog/general-order persistence follows ORM boundaries |
 | Architectural gaps | Original A01–A06, P01–P05 and U01–U02 fixes confirmed in source: scoped REST assembly reads, session isolation, stock/count/return policy, batch projections, report filtering/export, invalidation and preparation/exact-detail cache changes. MCP R01/R02 fixes now authenticate production transport and delegate authorized catalog/stock use cases with scoped reads and outbox publication. Remaining source gaps are report contributor-hold parity, cold-start collection scheduling, camera deployment policy and inbox query fan-out. |
 | Verification | Current non-emitting frontend typechecks, full src lint, reachability and schema structural checks passed. Refactoring progress records earlier A-stage builds/87 H2 tests and P-stage builds/95 H2 tests plus 13 client tests; these predate U/MCP changes. MCP Java syntax and static contracts/boundaries checked; new targeted regression cases authored but not run. Fresh PostgreSQL initialization, responsive/role/browser acceptance and performance traces remain pending. |
@@ -60,9 +61,12 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 | CAT-02 | Maintain assemblies with fixed component quantities | Implemented | `Assembly`, catalog service, Assemblies UI |
 | CAT-03 | Consolidated serialized item tracking: single parent catalog entry with aggregate stock, min-stock alerting, asset ID provisioning, and instance drill-down | Implemented | `CatalogService`, `AssetInstance`, Items UI |
 | CAT-04 | Provide an item details view in which free-form product information and category-specific operational data can be added and reviewed | Implemented | `ItemDetail`, `ItemForm`, `Item`, maintenance query |
-| CAT-05 | Support shared, event-driven, person-local, and group-local items; person/group items are excluded from other users' catalog reads while inventory managers retain operational access | Implemented | `ItemVisibilityScope`, `CatalogOrm`, `CatalogService`, item form |
+| CAT-05 | Support shared/event catalogs and private items visible to their owner, administrators and explicitly authorized people/groups | Implemented | `InventoryAccessPolicy`, `InventoryAccess`, scoped `CatalogOrm`, `InventorySharing`; public/event visibility remains separate |
 | CAT-06 | Category-aware fields include vehicle fuel consumption and battery replacement date, generator running hours and maintenance log, and food best-before date | Implemented | `Item`, `ItemForm`, `ItemDetail`, `MaintenanceRecord` |
 | LOC-01 | Maintain hierarchical/georeferenced storage and pickup locations | Implemented | `StorageLocation`, map components, pickup map dialog |
+| LOC-02 | Track private storage locations with account-linked ownership and explicit user/group access; protect address, coordinates, overlays and contents | Implemented | `StorageLocation.accessPolicy`, scoped location reads, `ApiMapper` whereabouts/parent redaction, associated overlay media and sharing UI |
+| OWN-01 | Link privately owned items to a real user account independently of owner display name, keeper, physical location and current custodian | Implemented | `InventoryAccessPolicy.owner` references `UserAccount`; ownership/keeper/custody display fields remain independent |
+| OWN-02 | Let individual users create and maintain their own private items and locations without requiring warehouse privileges | Implemented | `CatalogService`, catalog routes/forms, private asset/lot/code editing and direct stock commands authorize the owner or an edit grant |
 | INV-01 | Distinguish total owned, on-hand, checked-out, damaged, reserved, and available stock | Implemented | `InventoryOperationsService.StockState`, `StockDto` |
 | INV-02 | Block over-allocation and unsafe/overdue checkout | Implemented | locked transaction paths and maintenance guard |
 | INV-03 | Require event and faction context for every direct checkout and retain that context on the immutable transaction | Implemented | `TransactionForm`, assembly checkout, `InventoryOperationsService`, `StockTransaction` |
@@ -87,6 +91,12 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 | OFF-02 | Keep filtered offline catalogs isolated by normalized query | Implemented | query-scoped keys in `resourceFactory.ts` |
 | SEC-01 | Authenticate with Authentik OIDC and authorize on the server | Implemented | Quarkus OIDC and `ActorService` |
 | SEC-02 | Use only canonical roles and namespaced Authentik groups | Implemented | Section 6 |
+| SEC-03 | Default new private items/locations to owner and `hq_admin` access; other staff roles require an explicit grant | Implemented | `InventoryAccess` and ORM visibility predicates; only `hq_admin` has implicit private access |
+| SEC-04 | Allow owners/admins to grant and revoke view access for multiple people and groups on each private item/location | Implemented | `InventoryAccessService`, `/api/access`, `InventorySharing`, `InventoryAccessGroups`; view is the default grant |
+| SEC-05 | Separate view, private-record editing, sharing administration and inventory-operation permissions; prevent viewers from escalating access | Implemented | Owner/admin policy management, view/edit grants and command interceptor preserve existing operational role/consent checks |
+| SEC-06 | Apply one resource policy to REST/MCP, nested records, search, stock, reports/exports, media and realtime delivery | Implemented | Scoped primary queries, entity-reference protection, response projection defense, actor/access-scoped report filtering, authorized media and scoped MCP catalog/stock paths |
+| SEC-07 | Audit permission/owner changes, reject stale concurrent changes and revalidate access at each server operation | Implemented | Locked access policies/groups, revision checks, validated principals and immutable `access.changed` before/after audit events |
+| SEC-08 | Scope caches to access context and invalidate restricted data after permission/group changes; define offline revocation limits | Implemented | Private no-store responses, resource-free SSE invalidation, query/media refresh, private durable-cache/queue exclusion and current-access report filtering |
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
 
@@ -204,12 +214,13 @@ The item collection is intentionally **not server-cached** because it carries dy
    - vehicles expose fuel consumption in litres per 100 km and the next battery replacement date;
    - generators expose current running hours, the next maintenance date/interval, and their maintenance-record history;
    - food exposes a best-before date.
-3. An item's `visibilityScope` is one of `global`, `event`, `person`, or `group`.
+3. The current implementation's `visibilityScope` is one of `global`, `event`, `person`, or `group`.
    - `event` requires at least one event type tag;
    - `person` requires an assigned user and is visible only to that user and inventory managers;
    - `group` requires an assigned group and is visible only to members of that group and inventory managers;
-   - inventory managers retain access because catalog maintenance, return acknowledgement, and stock correctness require operational oversight.
+   - this assignment policy applies only to catalog entries without a private access policy. Private resources instead use account ownership and grants; only `hq_admin` has implicit administrative access under Section 6.1.
 4. Collection and item-detail endpoints enforce the same visibility policy. Client-side hiding is not a security boundary.
+5. `ownershipType=private_owner` currently controls ownership/availability rules, not confidentiality. An owner name, keeper assignment, storage location, commitment or loan must never be treated as an access grant. Sections 5.4 and 6.1 define the required private-resource behavior and supersede the existing manager bypass for private items.
 
 ### 5.3 Two-stage return intake
 
@@ -231,6 +242,39 @@ Invariants:
 - The submitted placement image is evidence for locating the physical item, not proof of stock acceptance.
 - The separate returned-items view defaults to pending submissions and also exposes accepted/rejected history.
 
+### 5.4 Private items, storage locations and owner self-service
+
+These are required target behaviors, **not a claim of complete implementation**.
+
+1. An authenticated user can register private items and private storage locations, track bulk/lot/serialized stock and find their current physical location through the system. Creation binds the resource to the authenticated owner's stable account ID and defaults to private access. A normal user cannot create resources owned by another account or change organizational inventory by supplying a different ID.
+2. Private-resource ownership uses an account relationship. `ownerName` remains descriptive equipment data; keeper, assigned contributor, borrowing recipient and current custodian remain separate concepts. Ownership transfer requires owner/admin authorization, records old/new owners, revalidates outstanding stock/custody obligations and reviews existing shares without making the resource public.
+3. The owner can maintain their own private catalog data, images, location and tracking records through dedicated authorized workflows. Stock changes retain the same atomicity, locks, asset identity and immutable movement evidence as organizational inventory. Private self-service does not confer warehouse, user-management or procurement privileges.
+4. Item/location details provide an explicit sharing control for selecting multiple people and groups, reviewing effective access and its source, and removing grants. A viewer can find the item and its authorized current whereabouts. Viewing does not authorize editing, sharing, checkout, transfer or lending; operational consent/commitment rules continue to apply independently.
+5. Private locations protect their descriptions, address, coordinates, map overlays and hierarchy details. Private contents in a shared warehouse remain hidden from users without item access. A location share does not grant access to independently private items stored there, and an item share does not grant access to unrelated items at the same location.
+6. A new item created in private storage defaults to private access. Location hierarchy/access rules must be explicit: grants are resource-specific, with no implicit access to parents, children or siblings. Moving an item or changing a parent cannot silently widen item visibility.
+7. To make an item share useful for locating it, the owner must explicitly authorize disclosure of its current whereabouts. If the location is independently private, its owner/admin must authorize that disclosure too. Without both authorizations, show the item with a restricted-location indicator and omit sensitive location fields. An authorized location projection reveals only the details needed to locate that item, not the location's other private contents.
+
+#### Delivered access architecture — 1 October 2026
+
+The earlier ownership feature provided descriptive owner/keeper fields and lending availability. Its single-user/faction visibility assignment, warehouse bypass and authentication-only location/media reads did not meet these requirements. The following source changes provide a separate privacy policy:
+
+| Boundary | Current implementation |
+|---|---|
+| Ownership and grants | Each private item/location has its own `InventoryAccessPolicy`, stable owner account and revision. `InventoryAccessGrant` references exactly one user or `InventoryAccessGroup` and an optional edit capability. HQ admins manage group membership independently of faction/RBAC groups. |
+| Creation and editing | Item/location forms default to private creation. Non-managers create private resources owned by their current account; public organization records retain manager checks. Private editors can maintain catalog data, lot/asset identities and labels. Privacy is immutable through ordinary catalog edits. |
+| Whereabouts | Item and location grants are independent. `ApiMapper` omits inaccessible storage/return locations, position details and parent IDs; it supplies `locationRestricted` for a hidden current location. Viewing a location never grants private-item access. |
+| Reads and indirect references | Catalog/category/lot/position/maintenance queries enforce resource visibility before pagination. `ActorService.protect` follows singular entity associations, including repair → damage → item and loan → commitment → item. `PrivacyProjectionService` expands related evidence IDs (aliases, history/aggregate references, inbox records) and conservatively omits an entire mixed record if unauthorized evidence remains. |
+| Writes and concurrency | `PrivateInventoryCommandInterceptor` authorizes direct and related IDs before commands, locks referenced policies in stable order and requires edit access. The service rechecks locked records. Share updates and group membership edits lock policies, reject stale revisions and record actor/reason/before/after evidence. Private access supplements the existing role and lending-consent rules. |
+| Owner transfer | HQ admins can transfer the account owner with an audit reason. Items must have no outstanding custody/reservations/transit/current commitments; locations must be empty. Grants remain explicit and are reviewed in the same save. |
+| Media and reports | `InventoryMediaObject` binds staged uploads to the uploader and attached item/location/return/assembly/maintenance media to their resource. Downloads authorize current access and use no-store headers. Reports filter protected rows before totals, pagination and export; cached variants include the actor and denied-reference set. |
+| Browser and realtime | SSE carries resource-free `access.invalidated` messages. Private responses bypass conditional/durable catalog caches, and known private commands cannot enter the offline queue. Query snapshots and media object URLs refresh every 60 seconds, clear on offline/session change, and invalidate on live access events and foreground/reconnection. |
+
+Private administration and private inventory writes are online-only. Existing public offline commands still revalidate server permissions when replayed. A disconnected device cannot receive revocation events, and downloaded/exported copies cannot be recalled. The 60-second refresh bounds active browser query/media snapshots; browser suspension can delay timers, so foreground/reconnect triggers revalidation. Query eviction does not erase copies a user already downloaded or manually copied.
+
+Organizational bulk category-maintenance changes update public items; private records retain their owner's settings. Aggregate order/count/transfer/purchase lists exclude denied related IDs before pagination. The response projection check additionally protects immutable history and mixed nested evidence.
+
+The source implementation is statically reviewed, not release-verified. PostgreSQL initialization, concurrent grant/group revocation, role/browser acceptance, media storage integration and performance of related-reference filtering still need runtime acceptance. Conservative mixed-record omission can shorten legacy lists when only their history exposes a protected reference; query optimization must preserve confidentiality and correct visible totals.
+
 ## 6. Authentication and authorization
 
 Production authentication uses Authentik OIDC bearer tokens. Development header authentication exists only when `inventory.dev-auth.enabled=true` and uses the same canonical roles.
@@ -243,9 +287,43 @@ Production authentication uses Authentik OIDC bearer tokens. Development header 
 | `event_planner` | `inventory_event_planner` | events, planning, and procurement deficits |
 | `maintenance_crew` | `inventory_maintenance_crew` | maintenance and damage workflows |
 | `faction_leader` | `inventory_faction_leader` | assigned factions only |
-| `read_only` | `inventory_read_only` | read-only operational visibility |
+| `read_only` | `inventory_read_only` | read-only organizational visibility; own/shared private resources use their explicit policy |
 
 There are no aliases for earlier role names, unprefixed identity-provider groups, local-storage token formats, or URL-form media references. Unknown roles are least-privilege `faction_leader`; authorization is still enforced at every protected backend use case. Disposable databases must be recreated with canonical role data; runtime compatibility is intentionally absent.
+
+### 6.1 Private-resource authorization and sharing
+
+Private-resource authorization combines existing role permissions with an explicit resource access policy. **Only `hq_admin` has an implicit bypass for private items and locations.** No warehouse, marshal, planner, maintenance, read-only or faction role grants private access by itself.
+
+| Actor/access source | View private resource | Edit private record | Manage shares/ownership | Perform stock/custody/lending operations |
+|---|---|---|---|---|
+| Owner account | Yes | Own resource | Shares; owner transfer requires `hq_admin` | Authorized own-resource workflows and existing domain invariants |
+| `hq_admin` | Yes | Yes | Yes, audited | Existing role permissions and domain invariants |
+| Explicitly shared user/group member | Yes | Only with a separate explicit edit grant | No | Only with explicit resource authorization, applicable workflow permissions and lending consent |
+| Other authenticated users, including staff | No | No | No | No |
+
+Required policy and enforcement rules:
+
+- **Stable principals and validated grants:** Private items and locations reference an owner account. Share grants reference stable user or group IDs, resource ID/type and capability (`view` by default; editing is separate). Store who granted access and when in immutable access-change events. Validate existing account/group principals, prevent duplicate grants and reject arbitrary group strings. Groups need a canonical identity and authoritative membership source, independent of RBAC role groups. Reuse faction groups only through explicit validated mappings. Group administration must not let a user self-enrol into a group with existing shares.
+- **Explicit effective access:** Owner/admin access and active direct/group grants determine resource visibility. An owner/admin can grant or revoke sharing. Delegated editing never includes permission administration or ownership transfer. Removing one grant leaves any other valid grant in effect; the UI identifies each remaining access source. Local share-group membership is checked from the database on every authorization; changes emit live invalidation and the browser has a 60-second query/media refresh fallback.
+- **Consistent server boundary:** A shared policy service defines resource decisions; ORM queries apply equivalent predicates before pagination, counts and aggregation. Every use case rechecks the authenticated actor, including writes, exact-ID/SKU/QR lookup, nested assemblies, assets, positions/lots, custody, returns, maintenance, planning, contributor views, reports/CSV/PDF, MCP tools/resources and media. A private item requires item authorization; location fields additionally require the disclosure authorization from Section 5.4. Unauthorized detail/media requests use a non-disclosing not-found response; lists, autocomplete, totals, category choices and maps exclude unauthorized evidence.
+- **Media association:** Protected object keys resolve to their owning item/location/return record and use that record's current policy. A guessed key, a cached catalog reference or an authentication token alone cannot authorize a download. Staged uploads belong to their uploader; attachment and deletion require the relevant resource capability. Public object storage or direct media URLs must not bypass the application policy.
+- **Revision and audit:** Permission changes lock/version the access policy, reject stale revisions and atomically record actor, timestamp, reason and old/new owner or grant values. Keep audit/history immutable and authorized; revocation hides current private evidence without rewriting stock history. An operation cannot proceed using a stale permission snapshot when revocation has already committed.
+- **Realtime and caches:** Permission/group changes invalidate affected catalog, location, media, report and detail projections. Server caches/ETags include the actor's effective access context or store raw projections that are always filtered under current authorization before response. SSE payloads must not disclose private IDs, names, addresses or permission audit details to unauthorized recipients; revocation can issue a recipient-scoped invalidation so the affected client removes data.
+- **Offline limits:** Access administration is online-only. On logout, account/role/group changes or a received revocation, remove affected protected in-memory and durable cache entries and invalidate object URLs. Server access ends on revocation; an offline device cannot receive immediate cache removal, and already downloaded/exported copies cannot be recalled. Document this limit and define a bounded private-cache freshness policy; queued commands must revalidate current permissions on replay.
+
+Runtime acceptance evidence required before these source implementations can be considered release-verified:
+
+| Scenario | Expected result |
+|---|---|
+| Owner A creates a private item/location; unrelated user B and unshared warehouse crew browse or guess IDs/keys | A and `hq_admin` can access it; B and crew cannot discover details, stock, location or media |
+| A shares with two people and two groups | Each authorized recipient can view the item and explicitly authorized whereabouts; recipients cannot edit/share/checkout through a view grant |
+| A revokes a person/group grant or membership is removed | Subsequent server requests and queued replay deny access unless another valid grant remains; reachable clients evict affected caches |
+| Item stored in a shared warehouse or moved into/out of private storage | Item privacy persists; moving/hierarchy changes do not create shares; private location fields require separate disclosure authorization |
+| Viewer opens location contents, assemblies, reports/exports, media, QR resolution or MCP | All paths use the same policy; other private resources and aggregate evidence remain hidden |
+| Owner edits own inventory or attempts to edit another owner's/organizational item | Own authorized workflow succeeds with stock invariants; unrelated mutations and forged ownership/share inputs fail |
+| Owner/admin updates shares concurrently or transfers ownership | Stale updates fail; resulting ownership/grants are explicit; immutable audit identifies actor and before/after access |
+| Roles/accounts change, a privileged report cache is warm, or the client goes offline | No cross-account/access-context reuse; online revocation is enforced and the documented offline freshness limit applies |
 
 ## 7. Order lifecycle and traceability
 
@@ -274,7 +352,7 @@ The detail UI exposes the immutable history, lifecycle actors, timestamps, and t
 
 ## 9. Persistence and schema state
 
-The runtime uses Jakarta Persistence/Hibernate with PostgreSQL; Panache is not used. Production enables Flyway at startup and Hibernate `validate`. One canonical creation script, `backend/src/main/resources/db/migration/V1.0.0__init.sql`, defines all 49 tables, relationships, constraints and indexes. Edit that baseline and the entity definitions directly. Incremental migrations, legacy stock backfills, out-of-order application and baseline-on-existing-database switches have been removed.
+The runtime uses Jakarta Persistence/Hibernate with PostgreSQL; Panache is not used. Production enables Flyway at startup and Hibernate `validate`. One canonical creation script, `backend/src/main/resources/db/migration/V1.0.0__init.sql`, defines all 54 tables, relationships, constraints and indexes. Edit that baseline and the entity definitions directly. Incremental migrations, legacy stock backfills, out-of-order application and baseline-on-existing-database switches have been removed.
 
 All current data is disposable. Recreate an empty database when the baseline changes; an existing Flyway history will not accept its changed checksum. This repository provides no upgrade/repair procedure for old databases. No database was changed during consolidation.
 

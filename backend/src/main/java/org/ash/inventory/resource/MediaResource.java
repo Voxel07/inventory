@@ -18,6 +18,7 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 @Path("/api/media")
 public class MediaResource {
+    @jakarta.inject.Inject org.ash.inventory.service.InventoryMediaService permissions;
     private final MediaService media;
     private final ActorService actors;
 
@@ -29,17 +30,19 @@ public class MediaResource {
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
+    @jakarta.transaction.Transactional
     public ApiResponses.MediaResponse upload(@RestForm("file") FileUpload upload) {
         actors.current();
         if (upload == null) throw ApiException.badRequest("A file is required");
         String contentType = upload.contentType() == null ? "application/octet-stream" : upload.contentType();
         var stored = media.store(upload.fileName(), contentType, upload.uploadedFile());
+        permissions.register(stored.key());
         return new ApiResponses.MediaResponse(stored.key(), stored.url());
     }
 
     @GET @Path("/{key:.+}")
     public Response get(@PathParam("key") String key) {
-        if (key.startsWith("vendor-documents/")) actors.requireWarehouse(); else actors.current();
+        permissions.requireRead(key);
         var content = media.read(key);
         StreamingOutput output = target -> {
             try (var source = content.stream()) {
@@ -48,7 +51,7 @@ public class MediaResource {
         };
         return Response.ok(output).type(content.contentType())
                 .header("Content-Length", content.contentLength())
-                .header("Cache-Control", "private, max-age=3600")
+                .header("Cache-Control", "private, no-store")
                 .header("Vary", "Authorization")
                 .header("X-Content-Type-Options", "nosniff").build();
     }
@@ -56,6 +59,7 @@ public class MediaResource {
     @DELETE @Path("/{key:.+}")
     public Response deleteStaged(@PathParam("key") String key) {
         actors.current();
+        permissions.requireStaged(key);
         media.deleteStaged(key);
         return Response.noContent().build();
     }

@@ -1,3 +1,4 @@
+import { InventorySharing } from '../components/items/InventorySharing';
 import { AccordionSummary, Button, ListItemButton, IconButton, Tab } from '../components/shared/ActionButtons';
 import { Tabs } from '@mui/material';
 import { StorageResponsibilities } from '../components/operations/StorageResponsibilities';
@@ -110,7 +111,7 @@ export function StorageLocations() {
 
     function handleOpenCreate() {
         setEditingLoc(null);
-        setFormData({ warehouseId: null, parentLocationId: null, locationType: 'bin', active: true, name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
+        setFormData({ privateResource: true, warehouseId: null, parentLocationId: null, locationType: 'bin', active: true, name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
         setDialogOpen(true);
     }
 
@@ -118,7 +119,7 @@ export function StorageLocations() {
         e?.stopPropagation();
         setEditingLoc(loc);
         setFormData({
-            warehouseId: loc.warehouseId ?? null, parentLocationId: loc.parentLocationId ?? null, locationType: loc.locationType, active: loc.active,
+            privateResource: Boolean(loc.access?.privateResource), warehouseId: loc.warehouseId ?? null, parentLocationId: loc.parentLocationId ?? null, locationType: loc.locationType, active: loc.active,
             name: loc.name,
             mapOverlay: loc.mapOverlay ?? null,
             area: loc.area || '',
@@ -191,7 +192,7 @@ export function StorageLocations() {
                     <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
                         variant="contained"
                         startIcon={<AddIcon />}
-                        disabled={!canEdit} onClick={handleOpenCreate}
+                        onClick={handleOpenCreate}
                     >
                         {t('Lagerort hinzufügen', 'Add storage location')}
                     </Button>
@@ -285,11 +286,11 @@ export function StorageLocations() {
                                                         variant="outlined"
                                                     />
 
-                                                    <IconButton title={t('Bearbeiten', 'Edit')} size="small" disabled={!canEdit} onClick={(e) => handleOpenEdit(loc, e)}>
+                                                    <IconButton title={t('Bearbeiten', 'Edit')} size="small" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(loc, e)}>
                                                         <EditIcon fontSize="small" />
                                                     </IconButton>
 
-                                                    <IconButton title={t('Deaktivieren', 'Deactivate')} size="small" color="error" disabled={!canEdit} onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                    <IconButton title={t('Deaktivieren', 'Deactivate')} size="small" color="error" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenDelete(loc.id, e)}>
                                                         <DeleteIcon fontSize="small" />
                                                     </IconButton>
                                                 </Box>
@@ -306,6 +307,7 @@ export function StorageLocations() {
                 {/* Right Column: Location Details & Stored Items */}
                 {(!isMobile || Boolean(selectedLocId)) && (
                     <Grid size={{ xs: 12, md: 8 }}>
+                        {activeLocation && <InventorySharing kind="storage-locations" id={activeLocation.id} access={activeLocation.access} />}
                         {activeLocation ? (
                             <Paper sx={{ p: { xs: 2, md: 3 }, height: isMobile ? 'auto' : 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
@@ -338,7 +340,7 @@ export function StorageLocations() {
                                         size="small"
                                         variant="outlined"
                                         startIcon={<EditIcon />}
-                                        disabled={!canEdit} onClick={(e) => handleOpenEdit(activeLocation, e)}
+                                        disabled={!(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(activeLocation, e)}
                                     >
                                         {t('Bearbeiten', 'Edit')}
                                     </Button>
@@ -487,6 +489,8 @@ export function StorageLocations() {
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
+                            <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource)} disabled={Boolean(editingLoc) || !canEdit}
+                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('Privater Lagerort — nur Eigentümer, HQ-Admins und Freigaben', 'Private storage location — owner, HQ admins and explicit shares only')} />
                             <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>
                             <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => setFormData({ ...formData, parentLocationId: e.target.value || null })}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
                             <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{type.replaceAll('_', ' ')}</MenuItem>)}</TextField>

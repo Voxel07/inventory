@@ -46,6 +46,7 @@ public class MediaService {
     private static final Pattern STAGED_IMAGE = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-image\\.webp");
     private static final Pattern STAGED_UPLOAD = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-.+");
 
+    @jakarta.inject.Inject org.ash.inventory.service.InventoryMediaService permissions;
     private final TransactionSynchronizationRegistry transactions;
     private final String mode;
     private final String localDirectory;
@@ -151,6 +152,10 @@ public class MediaService {
         return attachToRecord(reference, itemId, "items");
     }
 
+    public String attachToLocation(String reference, UUID locationId) {
+        return attachToRecord(reference, locationId, "locations");
+    }
+
     public String attachToAssembly(String reference, UUID assemblyId) {
         return attachToRecord(reference, assemblyId, "assemblies");
     }
@@ -159,8 +164,13 @@ public class MediaService {
         return attachToRecord(reference, returnSubmissionId, "returns");
     }
 
+    public String attachToMaintenance(String reference, UUID maintenanceId) {
+        return attachToRecord(reference, maintenanceId, "maintenance");
+    }
+
     public StoredDocument attachToVendorDocument(String reference, UUID documentId, String originalFilename) {
         String source = mediaReference(reference);
+        permissions.requireStaged(source);
         if (!STAGED_UPLOAD.matcher(source).matches()) {
             throw ApiException.badRequest("Only staged uploads can be attached as vendor documents");
         }
@@ -177,6 +187,7 @@ public class MediaService {
                 .replaceAll("[^a-zA-Z0-9._-]", "_");
         String destination = "vendor-documents/" + documentId + "/" + safeName;
         copy(source, destination);
+        permissions.attach(source, destination, "vendor-documents", documentId);
         transactions.registerInterposedSynchronization(new Synchronization() {
             public void beforeCompletion() {}
             public void afterCompletion(int status) {
@@ -189,7 +200,7 @@ public class MediaService {
 
     public void deleteStaged(String reference) {
         String key = mediaReference(reference);
-        if (!STAGED_IMAGE.matcher(key).matches()) throw ApiException.badRequest("Only staged images can be deleted");
+        if (!STAGED_UPLOAD.matcher(key).matches()) throw ApiException.badRequest("Only staged uploads can be deleted");
         delete(key);
     }
 
@@ -207,9 +218,12 @@ public class MediaService {
 
     private String attachToRecord(String reference, UUID recordId, String directory) {
         String key = mediaReference(reference);
-        if (!STAGED_IMAGE.matcher(key).matches()) return key;
-        String destination = directory + "/" + UUID.randomUUID() + "/" + recordId + ".webp";
+        if (!STAGED_UPLOAD.matcher(key).matches()) { permissions.requireAttached(key, directory, recordId); return key; }
+        permissions.requireStaged(key);
+        String extension = key.contains(".") ? key.substring(key.lastIndexOf('.')) : ".bin";
+        String destination = directory + "/" + UUID.randomUUID() + "/" + recordId + extension;
         copy(key, destination);
+        permissions.attach(key, destination, directory, recordId);
         transactions.registerInterposedSynchronization(new Synchronization() {
             public void beforeCompletion() {}
             public void afterCompletion(int status) {

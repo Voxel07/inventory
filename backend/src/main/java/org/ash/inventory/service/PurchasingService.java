@@ -41,6 +41,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorResponse createVendor(PurchasingDtos.VendorInput input) {
         actors.requireProcurement();
         if (orm.vendorNameExists(input.name(), null)) throw ApiException.conflict("Vendor name already exists");
@@ -52,6 +53,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorResponse updateVendor(UUID id, PurchasingDtos.VendorInput input) {
         actors.requireProcurement();
         var value = requiredLocked(Vendor.class, id, "Vendor");
@@ -62,6 +64,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireVendor(UUID id) {
         actors.requireProcurement();
         var value = requiredLocked(Vendor.class, id, "Vendor");
@@ -82,6 +85,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse createPurchaseOrder(PurchasingDtos.PurchaseOrderInput input) {
         var actor = actors.current();
         actors.requireProcurement();
@@ -107,6 +111,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse updatePurchaseOrder(UUID id, PurchasingDtos.PurchaseOrderInput input) {
         actors.requireProcurement();
         var order = requiredLocked(PurchaseOrder.class, id, "Purchase order");
@@ -132,6 +137,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse transitionPurchaseOrder(UUID id,
             PurchasingDtos.PurchaseOrderTransitionInput input) {
         actors.requireProcurement();
@@ -158,6 +164,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.GoodsReceiptResponse postReceipt(PurchasingDtos.GoodsReceiptInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
@@ -249,6 +256,7 @@ public class PurchasingService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorDocumentResponse attachDocument(PurchasingDtos.VendorDocumentInput input) {
         var actor = actors.current();
         actors.requireWarehouse();

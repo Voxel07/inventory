@@ -13,6 +13,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class ReturnSubmissionOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public ReturnSubmissionOrm(EntityManager entityManager) {
@@ -31,13 +32,13 @@ public class ReturnSubmissionOrm {
     }
 
     public <T> T find(Class<T> type, UUID id) {
-        return entityManager.find(type, id);
+        return accessActor.protect(entityManager.find(type, id), false);
     }
 
     public <T> T findLocked(Class<T> type, UUID id) {
         var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
         if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
-        return value;
+        return accessActor.protect(value, true);
     }
 
     public ReturnSubmission findLocked(UUID id) {
@@ -53,12 +54,15 @@ public class ReturnSubmissionOrm {
                         + " left join fetch r.factionOrder"
                         + " join fetch r.returnedFor"
                         + " join fetch r.submittedBy"
-                        + " left join fetch r.expectedReturnLocation"
+                        + " left join fetch r.expectedReturnLocation location"
                         + " left join fetch r.acknowledgedBy"
-                        + " where (:status is null or r.status = :status)" + ownerFilter
+                        + " where " + InventoryAccessOrm.visible("r.item.accessPolicy")
+                        + " and (location is null or " + InventoryAccessOrm.visible("location.accessPolicy") + ")"
+                        + " and (:status is null or r.status = :status)" + ownerFilter
                         + " order by r.createdAt desc", ReturnSubmission.class)
                 .setParameter("status", status);
         if (!manager) query.setParameter("actor", actor);
+        InventoryAccessOrm.bind(query, actor);
         return query.getResultList();
     }
 

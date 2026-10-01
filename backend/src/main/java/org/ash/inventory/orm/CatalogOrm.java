@@ -22,6 +22,7 @@ import java.util.UUID;
 /** Database access for the catalogue aggregate. */
 @ApplicationScoped
 public class CatalogOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public CatalogOrm(EntityManager entityManager) { this.entityManager = entityManager; }
@@ -45,14 +46,15 @@ public class CatalogOrm {
     }
 
     private String visibility() {
-        return " and (:manager = true or i.visibilityScope is null or i.visibilityScope in (:publicScopes)"
+        return " and " + InventoryAccessOrm.visible("i.accessPolicy") + " and (i.accessPolicy is not null or :manager = true or i.visibilityScope is null or i.visibilityScope in (:publicScopes)"
                 + " or (i.visibilityScope = :personScope and i.assignedUser.id = :actorId)"
                 + " or (i.visibilityScope = :groupScope and :hasGroups = true and i.assignedGroup in (:actorGroups)))";
     }
 
     private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query,
             UUID actorId, List<String> actorGroups, boolean manager) {
-        return query.setParameter("manager", manager)
+        return query.setParameter("accessAdmin", accessActor.current().role == DomainEnums.UserRole.hq_admin)
+                .setParameter("accessActor", actorId).setParameter("manager", manager)
                 .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
                 .setParameter("personScope", DomainEnums.ItemVisibilityScope.person)
                 .setParameter("groupScope", DomainEnums.ItemVisibilityScope.group)
@@ -164,8 +166,8 @@ public class CatalogOrm {
         return images.stream().collect(java.util.stream.Collectors.groupingBy(img -> img.item.id));
     }
 
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T findLocked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
     public void persist(Object entity) { entityManager.persist(entity); }
     public void remove(Object entity) { entityManager.remove(entity); }
 

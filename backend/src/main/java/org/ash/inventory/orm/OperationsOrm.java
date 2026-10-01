@@ -25,6 +25,7 @@ import java.util.UUID;
 /** Database access for stock, damage, maintenance, and procurement views. */
 @ApplicationScoped
 public class OperationsOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public OperationsOrm(EntityManager entityManager) { this.entityManager = entityManager; }
@@ -35,7 +36,7 @@ public class OperationsOrm {
 
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             int offset, int limit) {
-        var jpql = new StringBuilder("from StockTransaction tx where 1 = 1");
+        var jpql = new StringBuilder("from StockTransaction tx where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -50,11 +51,11 @@ public class OperationsOrm {
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int offset, int limit) {
-        var jpql = new StringBuilder("from DamageReport d where 1 = 1");
+        var jpql = new StringBuilder("select d from DamageReport d left join d.item di where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
         if (itemId != null) jpql.append(" and d.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
@@ -63,13 +64,13 @@ public class OperationsOrm {
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (assemblyId != null) query.setParameter("assemblyId", assemblyId);
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<MaintenanceRecord> maintenanceRecords(UUID itemId, int offset, int limit) {
-        if (itemId == null) return entityManager.createQuery("from MaintenanceRecord m order by m.performedAt desc", MaintenanceRecord.class)
+        if (itemId == null) return InventoryAccessOrm.bind(entityManager.createQuery("from MaintenanceRecord m where " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc", MaintenanceRecord.class), accessActor.current())
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
-        return entityManager.createQuery("from MaintenanceRecord m where m.item.id = :itemId order by m.performedAt desc", MaintenanceRecord.class)
+        return InventoryAccessOrm.bind(entityManager.createQuery("from MaintenanceRecord m where m.item.id = :itemId and " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc", MaintenanceRecord.class), accessActor.current())
                 .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -110,7 +111,7 @@ public class OperationsOrm {
     }
 
     public AssetInstance findLockedAsset(UUID id) {
-        return entityManager.find(AssetInstance.class, id, LockModeType.PESSIMISTIC_WRITE);
+        return accessActor.protect(entityManager.find(AssetInstance.class, id, LockModeType.PESSIMISTIC_WRITE), true);
     }
 
     public DamageReport damageByIdempotencyKey(UUID key) {
@@ -263,9 +264,9 @@ public class OperationsOrm {
                 .setParameter("statuses", statuses).setParameter("eventId", eventOccurrenceId).getResultList();
     }
 
-    public Item findLockedItem(UUID id) { return entityManager.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE); }
-    public DamageReport findLockedDamage(UUID id) { return entityManager.find(DamageReport.class, id, LockModeType.PESSIMISTIC_WRITE); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
+    public Item findLockedItem(UUID id) { return accessActor.protect(entityManager.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE), true); }
+    public DamageReport findLockedDamage(UUID id) { return accessActor.protect(entityManager.find(DamageReport.class, id, LockModeType.PESSIMISTIC_WRITE), true); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
     public void persist(Object entity) { entityManager.persist(entity); }
 
     public List<AssetInstance> assetsForItem(Item item) {

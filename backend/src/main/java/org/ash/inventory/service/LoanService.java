@@ -23,7 +23,7 @@ public class LoanService {
             String contact, String terms, int quantity, int collected, int returned, List<String> assetCodes,
             LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,String>> history) {}
     @Transactional public List<View> list() { actors.requireWarehouse(); return orm.arrangements().map(this::view).toList(); }
-    @Transactional public View create(Input input) {
+    @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand public View create(Input input) {
         actors.requireWarehouse(); var c = orm.find(EquipmentCommitment.class, input.commitmentId());
         if (c == null) throw ApiException.notFound("Commitment not found");
         orm.refreshLocked(c.item); orm.refresh(c);
@@ -36,7 +36,8 @@ public class LoanService {
         var l = new LoanArrangement(); l.commitment = c; l.providerLocation = location; l.kind = input.kind(); l.provider = input.provider().trim(); l.contact = input.contact().trim(); l.terms = input.terms().trim();
         orm.persist(l); history(l, "agreed", l.terms); c.item.equipmentRevision++; return view(l);
     }
-    @Transactional public View move(UUID id, Movement input, boolean returning) {
+    @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public View move(UUID id, Movement input, boolean returning) {
         var l = locked(id, input.revision()); var c = l.commitment;
         if (l.transferIds.contains(input.transferId().toString())) throw ApiException.conflict("Transfer already recorded");
         if (c.cancelled) throw ApiException.conflict("Arrangement is cancelled");
@@ -58,7 +59,7 @@ public class LoanService {
         l.transferIds = append(l.transferIds, List.of(transfer.id.toString())); c.item.equipmentRevision++;
         history(l, returning ? "returned" : "collected", quantity + " · " + transfer.transferNumber + " · " + input.notes()); orm.flush(); return view(l);
     }
-    @Transactional public View extend(UUID id, Extension input) {
+    @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand public View extend(UUID id, Extension input) {
         var l = locked(id, input.revision()); var c = l.commitment;
         if (c.cancelled || l.returned == c.quantity || input.availableUntil().isBefore(c.availableUntil) || input.returnDue().isBefore(c.returnDue)
                 || input.returnDue().isBefore(input.availableUntil()) || input.availableUntil().isBefore(LocalDate.now())) throw ApiException.conflict("Extension must keep or lengthen both dates on an open arrangement");

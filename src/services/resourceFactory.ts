@@ -1,3 +1,4 @@
+import { containsPrivateInventory } from './privateInventoryCache';
 import { apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog, setOfflineCatalogEntries } from './offlineQueue';
 import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
@@ -48,7 +49,10 @@ function operations<T extends { id: string }, TForm>(
   const detailKey = (id: string) => cacheKey && options?.cacheDetails ? `${cacheKey}:detail:${encodeURIComponent(id)}` : undefined;
   async function cacheDetail(data: T, context: AuthSessionContext) {
     const key = detailKey(data.id);
-    if (key) await setOfflineCatalog(key, data, context);
+    if (key) {
+      if (containsPrivateInventory(data)) await removeOfflineCatalog(key, context);
+      else await setOfflineCatalog(key, data, context);
+    }
     assertAuthSession(context);
     return data;
   }
@@ -59,13 +63,14 @@ function operations<T extends { id: string }, TForm>(
       try {
         const data = await apiRequest<T[]>(basePath, { query, session: context });
         assertAuthSession(context);
-        if (scopedCacheKey) await setOfflineCatalogEntries([
+        if (scopedCacheKey && !containsPrivateInventory(data)) await setOfflineCatalogEntries([
           { key: scopedCacheKey, data },
           ...data.flatMap((item) => {
             const key = detailKey(item.id);
             return key ? [{ key, data: item }] : [];
           }),
         ], context);
+        if (scopedCacheKey && containsPrivateInventory(data)) await removeOfflineCatalog(scopedCacheKey, context);
         assertAuthSession(context);
         return data;
       } catch (error) {

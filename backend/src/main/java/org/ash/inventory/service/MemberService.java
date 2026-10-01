@@ -61,6 +61,7 @@ public class MemberService {
                 .map(l -> new LocationView(l.id, l.name, l.keeperUser == null ? null : l.keeperUser.id)).toList();
     }
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void assign(UUID id, Assignment input) {
         actors.requireWarehouse(); var l = orm.findLocked(StorageLocation.class, id);
         if (l == null) throw ApiException.notFound("Location not found");
@@ -96,6 +97,7 @@ public class MemberService {
         return view(r);
     }
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public RequestView decide(UUID id, Decision input) {
         actors.requireWarehouse(); var r = orm.findLocked(MemberRequest.class, id);
         if (r == null) throw ApiException.notFound("Request not found");
@@ -105,6 +107,7 @@ public class MemberService {
         orm.flush(); return view(r);
     }
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public UUID submitReturn(ReturnInput input) {
         writable(); var actor = actors.current();
         var prior = orm.returnCommands(input.commandId()).findFirst().orElse(null);

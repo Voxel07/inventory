@@ -11,20 +11,24 @@ import jakarta.persistence.LockModeType;
 
 @ApplicationScoped
 public class GeneralOrderOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public GeneralOrderOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
     public List<GeneralOrder> orders(int offset, int limit) {
-        return entityManager.createQuery("from GeneralOrder orderEntry order by orderEntry.createdAt desc", GeneralOrder.class)
+        var denied = privacyScopes.deniedReferences(accessActor.current());
+        return InventoryAccessOrm.bindDenied(entityManager.createQuery("from GeneralOrder orderEntry where 1=1" + InventoryAccessOrm.excluding("orderEntry", denied) + " order by orderEntry.createdAt desc", GeneralOrder.class), denied)
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(actor);
         boolean scoped = actor.role == org.ash.inventory.model.DomainEnums.UserRole.faction_leader;
-        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence" + (scoped ? " where o.createdBy = :actor" : "") + " order by o.createdAt desc", GeneralOrder.class);
+        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence" + (scoped ? " where o.createdBy = :actor" : " where 1=1") + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc", GeneralOrder.class);
         if (scoped) query.setParameter("actor", actor);
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public GeneralOrderHistory commandHistory(UUID key) {
@@ -37,8 +41,8 @@ public class GeneralOrderOrm {
                 .setParameter("order", order).getResultList();
     }
 
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T findLocked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
     public void flush() { entityManager.flush(); }
     public void persist(Object value) { entityManager.persist(value); }
     public GeneralOrder locked(UUID id) { return entityManager.find(GeneralOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }

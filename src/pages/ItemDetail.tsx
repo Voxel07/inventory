@@ -1,5 +1,6 @@
+import { InventorySharing } from '../components/items/InventorySharing';
 import { CodeManagement } from '../components/qr/CodeManagement';
-import { StockPositions } from '../components/operations/StockOperations';
+import { LotsPanel, StockPositions } from '../components/operations/StockOperations';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
@@ -101,8 +102,8 @@ function buildStockHistory(transactions: StockTransaction[], initialAmount: numb
 
 export function ItemDetail() {
     const { user } = useAuth();
-    const canEdit = canEditCatalog(user);
-    const canTransact = canOperateWarehouse(user);
+
+
     const canReportDamage = canPerformCustody(user);
     const t = useLocalizedText();
     const theme = useTheme();
@@ -111,13 +112,15 @@ export function ItemDetail() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const { data: item, isLoading } = useItem(itemId ?? '');
+    const canEdit = item?.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
+    const canTransact = item?.access?.privateResource ? item.access.canEdit : canOperateWarehouse(user);
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
     const { data: factionOrders = [] } = useFactionOrders();
     const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers(canEdit);
+    const { data: assignableUsers } = useAssignableUsers(canEditCatalog(user));
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
@@ -664,7 +667,10 @@ export function ItemDetail() {
                 </DialogContent>
             </Dialog>
 
+            <InventorySharing kind="items" id={item.id} access={item.access} />
+            {item.locationRestricted && <Alert severity="info">{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert>}
             <EquipmentOwnership item={item} canEdit={canEdit} />
+            {canEdit && item.trackingMode === 'lot_tracked' && <Paper sx={{ p: 2, my: 2 }}><LotsPanel itemId={item.id} /></Paper>}
             {canEdit && <CodeManagement targetId={item.id} targetType="product" />}
             {canTransact && <Paper sx={{ p: 2, my: 2 }}><StockPositions itemId={item.id} /></Paper>}
             {/* Checkout Dialog */}

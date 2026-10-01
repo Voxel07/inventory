@@ -8,6 +8,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class PositionOrm {
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager em;
     public PositionOrm(EntityManager em) { this.em = em; }
     public List<InventoryPosition> positions(Item item) {
@@ -33,7 +34,7 @@ public class PositionOrm {
         if (existing != null) return existing;
         var value = new InventoryPosition(); value.item = item; value.location = location; value.lot = lot; em.persist(value); return value;
     }
-    public <T> T find(Class<T> type, UUID id) { return em.find(type, id); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(em.find(type, id), false); }
     public void lock(Item item) { em.lock(item, LockModeType.PESSIMISTIC_WRITE); }
     public int reserved(Item item, StorageLocation location, UUID exceptFaction, UUID exceptGeneral) {
         int result = 0;

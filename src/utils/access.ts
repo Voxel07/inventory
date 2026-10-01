@@ -11,7 +11,7 @@ export function canManageInventory(user: User | null | undefined): boolean {
 }
 
 export function canViewCatalog(user: User | null | undefined): boolean {
-  return canManageInventory(user) || ['faction_leader', 'read_only'].includes(effectiveAccess(user));
+  return Boolean(user);
 }
 
 export function canEditCatalog(user: User | null | undefined): boolean {

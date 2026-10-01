@@ -1024,3 +1024,35 @@ alter table equipment_commitments add constraint equipment_commitments_event_id_
 alter table equipment_commitments add constraint equipment_commitments_recorded_by_fkey foreign key (recorded_by) references app_users(id);
 alter table loan_arrangements add constraint loan_arrangements_commitment_id_fkey foreign key (commitment_id) references equipment_commitments(id);
 alter table loan_arrangements add constraint loan_arrangements_provider_location_id_fkey foreign key (provider_location_id) references storage_locations(id);
+
+-- Private resource policies and stable, administrator-managed share groups.
+create table inventory_access_policies (
+    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    owner_user_id uuid not null references app_users(id), revision bigint not null
+);
+create table inventory_access_groups (
+    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    name varchar(255) not null unique, revision bigint not null
+);
+create unique index inventory_access_group_name on inventory_access_groups(lower(name));
+create table inventory_access_group_members (
+    group_id uuid not null references inventory_access_groups(id), user_id uuid not null references app_users(id),
+    primary key (group_id, user_id)
+);
+create index inventory_access_members_user on inventory_access_group_members(user_id, group_id);
+create table inventory_access_grants (
+    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    policy_id uuid not null references inventory_access_policies(id), user_id uuid references app_users(id),
+    group_id uuid references inventory_access_groups(id), can_edit boolean not null,
+    check ((user_id is null) <> (group_id is null)), unique (policy_id, user_id), unique (policy_id, group_id)
+);
+create index inventory_access_grants_user on inventory_access_grants(user_id, policy_id);
+create index inventory_access_grants_group on inventory_access_grants(group_id, policy_id);
+alter table items add column access_policy_id uuid unique references inventory_access_policies(id);
+alter table storage_locations add column access_policy_id uuid unique references inventory_access_policies(id);
+create table inventory_media_objects (
+    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    object_key varchar(1024) not null unique, uploader_id uuid not null references app_users(id),
+    resource_type varchar(255), resource_id uuid,
+    check ((resource_type is null) = (resource_id is null))
+);

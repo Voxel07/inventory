@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class EtagResponseFilter implements ContainerRequestFilter, ContainerResponseFilter {
     private static final Set<String> CATALOG_LIST_PATHS = Set.of(
-            "api/storage-locations", "api/assemblies", "api/factions");
+            "api/assemblies", "api/factions");
     // Event metrics change with stock/order commands; catalog-only invalidation cannot validate them.
     private static final int MAX_TRACKED_VARIANTS = 1_000;
 
@@ -66,20 +66,14 @@ public class EtagResponseFilter implements ContainerRequestFilter, ContainerResp
         }
         if (!CATALOG_LIST_PATHS.contains(path)) return;
 
-        String etag = knownEtags.get(cacheKey(request));
-        String ifNoneMatch = request.getHeaderString("If-None-Match");
-        if (etag != null && matches(ifNoneMatch, etag)) {
-            request.abortWith(Response.status(Response.Status.NOT_MODIFIED)
-                    .header("ETag", etag)
-                    .header("Cache-Control", "private, no-cache, must-revalidate")
-                    .build());
-        }
+        // Always evaluate current resource grants before considering a 304.
+
     }
 
     @Override
     public void filter(ContainerRequestContext request, ContainerResponseContext response) {
         if (!"GET".equalsIgnoreCase(request.getMethod())) return;
-        if (response.getStatus() != 200 || response.getEntity() == null) return;
+        if (response.getStatus() != 200 || response.getEntity() == null || response.getHeaders().containsKey("X-Private-Inventory")) return;
 
         String path = normalizedPath(request);
         if (!CATALOG_LIST_PATHS.contains(path)) return;

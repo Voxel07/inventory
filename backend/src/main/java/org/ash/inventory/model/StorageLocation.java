@@ -16,6 +16,8 @@ import java.util.List;
 @Entity
 @Table(name = "storage_locations")
 public class StorageLocation extends BaseEntity {
+    @jakarta.persistence.OneToOne(fetch = FetchType.LAZY) @JoinColumn(name = "access_policy_id", unique = true)
+    public InventoryAccessPolicy accessPolicy;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "keeper_user_id") public UserAccount keeperUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "warehouse_id") public Warehouse warehouse;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "parent_location_id") public StorageLocation parent;

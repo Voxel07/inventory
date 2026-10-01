@@ -1,3 +1,4 @@
+import { containsPrivateInventory } from './privateInventoryCache';
 import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { getAuthSnapshot, subscribeAuth } from './authManager';
 import { ApiError, OfflineQueuedError } from './apiClient';
@@ -43,3 +44,13 @@ export function subscribeSessionQueryClient(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+// Private snapshots stay in memory for at most a minute and disappear when connectivity is lost.
+const evictPrivateQueries = () => {
+  const predicate = (query: { state: { data: unknown } }) => containsPrivateInventory(query.state.data);
+  void client.cancelQueries({ predicate }).then(() => client.resetQueries({ predicate }));
+};
+window.setInterval(evictPrivateQueries, 60_000);
+window.addEventListener('offline', evictPrivateQueries);
+window.addEventListener('online', evictPrivateQueries);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') evictPrivateQueries(); });

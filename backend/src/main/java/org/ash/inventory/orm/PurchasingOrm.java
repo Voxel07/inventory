@@ -14,6 +14,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class PurchasingOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
+    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
     private final EntityManager entityManager;
 
     public PurchasingOrm(EntityManager entityManager) {
@@ -21,8 +23,8 @@ public class PurchasingOrm {
     }
 
     public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return entityManager.find(type, id); }
-    public <T> T locked(Class<T> type, UUID id) { return entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE); }
+    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
+    public <T> T locked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<Vendor> vendors(int offset, int limit) {
         return entityManager.createQuery("from Vendor vendor order by vendor.active desc, vendor.preferredVendor desc, vendor.name", Vendor.class)
@@ -39,12 +41,13 @@ public class PurchasingOrm {
     }
 
     public List<PurchaseOrder> purchaseOrders(String status, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = status == null || status.isBlank()
-                ? "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc"
-                : "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where purchaseOrder.status = :status order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc";
+                ? "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where 1=1" + InventoryAccessOrm.excluding("purchaseOrder", denied) + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc"
+                : "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where purchaseOrder.status = :status" + InventoryAccessOrm.excluding("purchaseOrder", denied) + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc";
         var query = entityManager.createQuery(jpql, PurchaseOrder.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.PurchaseOrderStatus.valueOf(status));
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public boolean orderNumberExists(String number) {
         return entityManager.createQuery("select count(purchaseOrder) from PurchaseOrder purchaseOrder where lower(purchaseOrder.orderNumber) = :number", Long.class)
@@ -82,12 +85,13 @@ public class PurchasingOrm {
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);
     }
     public List<GoodsReceipt> receipts(UUID purchaseOrderId, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = purchaseOrderId == null
-                ? "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation order by receipt.receivedAt desc"
-                : "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.purchaseOrder.id = :purchaseOrderId order by receipt.receivedAt desc";
+                ? "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where 1=1" + InventoryAccessOrm.excluding("receipt", denied) + " order by receipt.receivedAt desc"
+                : "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.purchaseOrder.id = :purchaseOrderId" + InventoryAccessOrm.excluding("receipt", denied) + " order by receipt.receivedAt desc";
         var query = entityManager.createQuery(jpql, GoodsReceipt.class);
         if (purchaseOrderId != null) query.setParameter("purchaseOrderId", purchaseOrderId);
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<GoodsReceiptLine> receiptLines(Collection<GoodsReceipt> receipts) {
         if (receipts.isEmpty()) return List.of();

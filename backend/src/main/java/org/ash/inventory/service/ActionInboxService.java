@@ -16,6 +16,7 @@ public class ActionInboxService {
     @Inject ActorService actors;
     @Inject CustodyBalanceService custody;
     @Inject MaintenanceEvaluationService maintenancePolicy;
+    @Inject PrivacyProjectionService privacy;
     public record Action(String key, String kind, String title, String detail, LocalDate due, String path, Instant remindAt) {}
     public record ReminderInput(@NotNull String key, Instant remindAt) {}
     @Transactional public List<Action> list() {
@@ -24,7 +25,8 @@ public class ActionInboxService {
         return live().stream().map(a -> new Action(a.key, a.kind, a.title, a.detail, a.due, a.path, reminders.get(a.key)))
                 .sorted(Comparator.comparing(Action::due, Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(Action::key)).toList();
     }
-    @Transactional public void remind(ReminderInput input) {
+    @Transactional
+    public void remind(ReminderInput input) {
         var user = actors.current(); orm.lock(user);
         if (live().stream().noneMatch(a -> a.key.equals(input.key()))) throw ApiException.notFound("Action is no longer available");
         if (input.remindAt() != null && (input.remindAt().isBefore(Instant.now()) || input.remindAt().isAfter(Instant.now().plus(Duration.ofDays(30))))) throw ApiException.badRequest("Choose a reminder within the next 30 days");
@@ -67,7 +69,8 @@ public class ActionInboxService {
             add(out, "loan:" + l.id, l.collected < c.quantity ? "collection" : "provider_return", l.provider + " · " + c.item.name,
                     (l.collected - l.returned) + " / " + c.quantity, l.collected < c.quantity ? c.availableFrom : c.returnDue, "/operations?tab=loans");
         }
-        return out;
+        var denied = privacy.deniedIds();
+        return out.stream().filter(action -> privacy.visible(action, denied)).toList();
     }
     private void add(List<Action> out, String key, String kind, String title, String detail, LocalDate due, String path) { out.add(new Action(key, kind, title, detail, due, path, null)); }
 }

@@ -1,4 +1,6 @@
+import type { InventoryAccess } from './inventoryAccess';
 export interface StorageLocation {
+  access?: InventoryAccess;
   warehouseId?: string;
   warehouseName?: string;
   parentLocationId?: string;
@@ -22,6 +24,7 @@ export interface StorageLocation {
 export type MapBounds = [[number, number], [number, number]];
 
 export interface StorageLocationFormData {
+  privateResource?: boolean;
   mapOverlay?: string | null;
   warehouseId?: string | null;
   parentLocationId?: string | null;
@@ -52,6 +55,8 @@ export interface ItemStock {
 }
 
 export interface Item {
+  access?: InventoryAccess;
+  locationRestricted?: boolean;
   id: string;
   sku?: string;
   barcode?: string;
@@ -100,6 +105,7 @@ export interface Item {
 export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
 
 export interface ItemFormData {
+  privateResource?: boolean;
   name: string;
   description?: string;
   amount?: number;

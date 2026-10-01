@@ -54,7 +54,6 @@ public class CatalogResponseCache {
         removeEventListener.run();
     }
 
-    @CacheResult(cacheName = "locations-cache")
     @Transactional
     public String locations() {
         return json(catalog.getLocations().stream().map(mapper::location).toList());

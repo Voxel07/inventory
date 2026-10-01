@@ -42,6 +42,7 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ReturnSubmission create(ApiModels.ReturnSubmissionInput input) {
         var actor = actors.current();
         if (actor.role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
@@ -109,6 +110,7 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ReturnSubmission acknowledge(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
@@ -143,6 +145,7 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ReturnSubmission reject(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
