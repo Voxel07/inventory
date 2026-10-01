@@ -44,10 +44,6 @@ public class CountService {
     public CountDtos.CountResponse create(CountDtos.CountInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        if (input.warehouseId() == null && input.locationId() == null && input.itemId() == null
-                && (input.category() == null || input.category().isBlank())) {
-            throw ApiException.badRequest("At least one inventory count scope is required");
-        }
         var warehouse = input.warehouseId() == null ? null : required(Warehouse.class, input.warehouseId(), "Warehouse");
         var location = input.locationId() == null ? null : required(StorageLocation.class, input.locationId(), "Location");
         var item = input.itemId() == null ? null : required(Item.class, input.itemId(), "Item");
@@ -64,6 +60,8 @@ public class CountService {
         session.blindCount = input.blindCount();
         session.createdBy = actor;
         session.notes = input.notes();
+        session.status = DomainEnums.CountStatus.counting;
+        session.startedAt = Instant.now();
         orm.persist(session);
         var lines = new ArrayList<InventoryCountLine>();
         for (var position : orm.scopedPositions(warehouse, location, item, input.category())) {
@@ -118,11 +116,9 @@ public class CountService {
         var expectedStatus = recount ? DomainEnums.CountStatus.awaiting_recount : DomainEnums.CountStatus.counting;
         if (session.status != expectedStatus) throw ApiException.conflict("Inventory count is not ready for this submission");
         var lines = orm.lockedLines(session);
-        if (input.lines().size() != lines.size()) throw ApiException.badRequest("Every count line must be submitted exactly once");
         var byId = new LinkedHashMap<UUID, InventoryCountLine>();
         lines.forEach(line -> byId.put(line.id, line));
         var seen = new HashSet<UUID>();
-        boolean variance = false;
         for (var submitted : input.lines()) {
             if (!seen.add(submitted.lineId())) throw ApiException.badRequest("A count line can occur only once");
             var line = byId.get(submitted.lineId());
@@ -133,14 +129,22 @@ public class CountService {
             if (recount) line.recountedQuantity = submitted.quantity(); else line.countedQuantity = submitted.quantity();
             line.countedBy = actor;
             line.notes = submitted.notes();
-            variance |= submitted.quantity() != line.expectedQuantity;
         }
-        session.completedAt = Instant.now();
-        session.status = !recount && variance ? DomainEnums.CountStatus.awaiting_recount
-                : DomainEnums.CountStatus.awaiting_approval;
+        boolean complete = lines.stream().allMatch(line ->
+                (recount ? line.recountedQuantity : line.countedQuantity) != null);
+        boolean variance = lines.stream().anyMatch(line -> {
+            Integer quantity = recount ? line.recountedQuantity : line.countedQuantity;
+            return quantity != null && quantity != line.expectedQuantity;
+        });
+        if (complete) {
+            session.completedAt = Instant.now();
+            session.status = !recount && variance ? DomainEnums.CountStatus.awaiting_recount
+                    : DomainEnums.CountStatus.awaiting_approval;
+        }
         if (input.notes() != null) session.notes = input.notes();
-        events.record(recount ? "count.recounted" : "count.counted", "inventory_count", session.id,
-                actor.id, null, Map.of("sessionNumber", session.sessionNumber, "variance", variance));
+        events.record(complete ? (recount ? "count.recounted" : "count.counted") : "count.progress_saved",
+                "inventory_count", session.id, actor.id, null,
+                Map.of("sessionNumber", session.sessionNumber, "variance", variance, "complete", complete));
         return response(session, lines);
     }
 

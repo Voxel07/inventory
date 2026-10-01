@@ -1,7 +1,8 @@
+import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { useState } from 'react';
-import { Alert, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
+import { Alert, LinearProgress, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { loanApi } from '../../services/loanService';
 import { useLoans } from '../../hooks/useLoans';
@@ -26,8 +27,7 @@ export function LoansPanel() {
     <Fields fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.items.map(i => ({ value: i.id, label: i.name })) }]} values={{ itemId }} onChange={v => setItemId(String(v.itemId))} />
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button title={translate('Eine neue Leihvereinbarung erfassen', 'Create a new loan arrangement')} disabled={!itemId || !profile.data} onClick={() => setCreate(true)}>{t('Vereinbarung anlegen', 'New arrangement')}</Button>{itemId && <Button title={translate('Eigentumsdaten und Verfügbarkeitszusagen öffnen', 'Open ownership details and availability commitments')} component={Link} to={`/items/${itemId}`}>{t('Eigentum / Zusage bearbeiten', 'Edit ownership / commitment')}</Button>}<Button title={translate('Die Transport- und Umlagerungsübersicht öffnen', 'Open the transport and transfer overview')} component={Link} to="/operations?tab=transfers">{t('Transport erfassen', 'Record transport')}</Button></Stack>
     {(loans.isLoading || profile.isLoading) && <LinearProgress />}{(loans.error || profile.error || transfers.error || lookup.error) && <Alert severity="error">{(loans.error || profile.error || transfers.error || lookup.error)?.message}</Alert>}
-    {loans.data?.map(l => <Card key={l.id}><CardContent><Stack spacing={1}>
-      <Typography variant="h6">{l.item} · {l.provider} · {l.kind === 'rental' ? t('Miete', 'Rental') : t('Leihe', 'Borrowing')}</Typography><Typography>{l.status} · {l.contact}</Typography><Typography>{l.terms}</Typography>
+    {loans.data?.map(l => <OperationListEntry key={l.id} title={<>{l.item} · {l.provider} · {l.kind === 'rental' ? t('Miete', 'Rental') : t('Leihe', 'Borrowing')}</>}><Typography>{l.status} · {l.contact}</Typography><Typography>{l.terms}</Typography>
       <Typography>{t('Zugesagt / abgeholt / zurückgegeben', 'Committed / collected / returned')}: {l.quantity} / {l.collected} / {l.returned}</Typography>
       <Typography>{t('Abholung / verfügbar bis / Rückgabe fällig', 'Collection / available through / return due')}: {l.collectionDate} / {l.availableUntil} / {l.returnDue}</Typography>
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {l.assetCodes.join(', ')}</Typography>}
@@ -38,7 +38,7 @@ export function LoansPanel() {
         {l.collected === l.returned && <Button title={translate('Den Artikel öffnen, um die Zusage zu stornieren', 'Open the item to cancel its commitment')} component={Link} to={`/items/${l.itemId}`}>{t('Zusage stornieren', 'Cancel commitment')}</Button>}
       </Stack>}
       {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{new Date(h.at).toLocaleString()} · {h.actor} · {h.action} · {h.notes}</Typography>)}
-    </Stack></CardContent></Card>)}
+    </OperationListEntry>)}
     {create && <OperationForm title={t('Neue Vereinbarung', 'New arrangement')} onClose={() => setCreate(false)} initial={{ kind: 'borrow', provider: profile.data?.ownerName ?? '' }} fields={[
       { key: 'commitmentId', label: t('Zusage', 'Commitment'), required: true, options: (profile.data?.commitments ?? []).filter(c => ['active', 'scheduled'].includes(c.status)).map(c => ({ value: c.id, label: `${c.eventName ?? ''} · ${c.quantity} · ${c.availableFrom} – ${c.returnDue}` })) },
       { key: 'kind', label: t('Art', 'Kind'), required: true, options: [{ value: 'borrow', label: t('Leihe', 'Borrowing') }, { value: 'rental', label: t('Miete', 'Rental') }] },

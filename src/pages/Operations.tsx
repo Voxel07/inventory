@@ -1,8 +1,9 @@
+import { OperationListEntry } from '../components/operations/OperationListEntry';
 import { Tab, Button } from '../components/shared/ActionButtons';
 import { LoansPanel } from '../components/operations/LoansPanel';
 import { useQuery } from '@tanstack/react-query';
 import { ReportsPanel } from '../components/operations/ReportsPanel';
-import { Alert, Card, CardContent, Chip, LinearProgress, Stack, Tabs, Typography } from '@mui/material';
+import { Alert, Chip, LinearProgress, Stack, Tabs, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
@@ -37,7 +38,8 @@ export function Operations() {
   const active = tabs.find((tab) => tab.key === params.get('tab')) ?? tabs[0];
   if (!active) return <Alert severity="info">{t('Für diese Aufgaben ist eine Lager-, Einkaufs- oder Wartungsberechtigung erforderlich.', 'These tasks require warehouse, purchasing or maintenance permission.')}</Alert>;
   return <Stack spacing={2} sx={{
-    '& .MuiCardContent-root': { p: 1, '&:last-child': { pb: 1 } },
+    '& > .MuiStack-root > .MuiButton-root': { alignSelf: 'flex-start' },
+    '& .MuiTableCell-root': { px: 1, py: 0.75 },
     '& a:not(.MuiButton-root)': { color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
   }}><Typography variant="h4">{t('Betrieb', 'Operations')}</Typography>
     <Tabs value={active.key} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile onChange={(_, value: string) => setParams({ tab: value })} aria-label={t('Betriebsaufgaben', 'Operational tasks')}>
@@ -56,10 +58,10 @@ function SystemPanel() {
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{Object.entries(status.data?.counts ?? {}).map(([key, value]) => <Chip key={key} label={`${key}: ${value}`} />)}</Stack>
     <Typography variant="body2">{t('Aktualisiert', 'Updated')}: {status.dataUpdatedAt ? new Date(status.dataUpdatedAt).toLocaleString() : '—'}</Typography>
     <Button title={translate('Systemstatus und fehlgeschlagene Zustellungen aktualisieren', 'Refresh system status and failed deliveries')} onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('Aktualisieren', 'Refresh')}</Button>
-    {dead.data?.map((event) => <Card key={event.id}><CardContent><Typography variant="h6">{event.eventType}</Typography><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography><Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button></CardContent></Card>)}
+    {dead.data?.map((event) => <OperationListEntry key={event.id} title={<>{event.eventType}</>}><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography><Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button></OperationListEntry>)}
     {!dead.isLoading && !dead.data?.length && <Alert severity="success">{t('Keine dauerhaft fehlgeschlagenen Ereignisse.', 'No dead-letter events.')}</Alert>}
     <Typography variant="h6">{t('Synchronisationsprotokoll', 'Sync audit')}</Typography>
-    {sync.data?.map((entry) => <Card key={entry.id}><CardContent><Typography>{entry.operationType} · {entry.syncStatus} · {new Date(entry.createdAt).toLocaleString()}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</CardContent></Card>)}
+    {sync.data?.map((entry) => <OperationListEntry key={entry.id} title={<>{entry.operationType} · {entry.syncStatus} · {new Date(entry.createdAt).toLocaleString()}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
   </Stack>;
 }
 

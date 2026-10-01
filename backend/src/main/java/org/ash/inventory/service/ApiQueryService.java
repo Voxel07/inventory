@@ -106,7 +106,9 @@ public class ApiQueryService {
     public List<ApiResponses.AssemblyResponse> assemblies() {
         actors.current();
         var visible = catalog.getVisibleAssemblies();
-        return projectAssemblies(visible.assemblies(), visible.components());
+        // List clients already load the item catalog; do not duplicate every component projection.
+        return visible.assemblies().stream().map(value -> mapper.assembly(value,
+                visible.components().getOrDefault(value.id, List.of()), Map.of())).toList();
     }
 
     @Transactional

@@ -2,12 +2,12 @@ import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, Checkbox, FormControl, InputLabel, ListItemText, MenuItem, Paper, Select, Stack, TextField, Typography, useMediaQuery } from '@mui/material';
+import { Alert, Box, Checkbox, FormControl, InputLabel, ListItemText, MenuItem, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock } from '../../utils/stock';
 import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
@@ -16,6 +16,7 @@ import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
+import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 
 interface Props {
     items: Item[] | undefined;
@@ -27,6 +28,8 @@ interface Props {
     onDelete?: (id: string) => void;
     onDeleteMany?: (ids: string[]) => void;
     showAllEvents?: boolean;
+    requiredQuantities?: Record<string, number>;
+    onRemoveItem?: (id: string) => void;
 }
 
 type ItemRow = {
@@ -42,7 +45,7 @@ type ItemRow = {
     events: string;
 };
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, showAllEvents = false }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, showAllEvents = false, requiredQuantities, onRemoveItem }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -98,7 +101,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
     const columns: GridColDef<ItemRow>[] = [
         { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 180,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography> },
+            renderCell: ({ row }) => <Link component={RouterLink} to={`/items/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600 }}>{row.name}</Link> },
+        ...(requiredQuantities ? [{ field: 'required', headerName: t('Menge in Baugruppe', 'Assembly quantity'), type: 'number', width: 150, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
         { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
         { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 155,
             renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock <= 0 ? 'error.main' : row.stock <= (row.item.minStock ?? 5) ? 'warning.main' : 'success.main', fontWeight: 700 }}>
@@ -108,6 +112,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             valueFormatter: (value: number) => `${value.toFixed(2)} €` },
         { field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 },
         { field: 'events', headerName: t('Events', 'Events'), width: 145 },
+        ...(onRemoveItem ? [{ field: 'remove', headerName: t('Aktionen', 'Actions'), width: 90, sortable: false, filterable: false, renderCell: ({ row }: { row: ItemRow }) => <IconButton title={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onRemoveItem(row.id); }}><DeleteIcon fontSize="small" /></IconButton> } satisfies GridColDef<ItemRow>] : []),
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
               <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>
@@ -154,7 +159,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         </Paper>}
         <Box sx={{ width: '100%' }}>
             <DataGrid rows={rows} columns={columns} loading={isLoading || filtersLoading} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight checkboxSelection={canManage}
-                isRowSelectable={({ row }) => canEditItem(row.item)} disableRowSelectionOnClick onRowClick={({ row }) => navigate(`/items/${row.id}`)}
+                slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/items') } }}
+                isRowSelectable={({ row }) => canEditItem(row.item)} disableRowSelectionOnClick onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/items/${row.id}`); }}
                 rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
                 initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
                 pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}

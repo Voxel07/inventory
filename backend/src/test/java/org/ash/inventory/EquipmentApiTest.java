@@ -154,6 +154,23 @@ class EquipmentApiTest {
         admin().get("/api/reports/availability?itemId=" + item).then().body("stale", equalTo(true));
     }
 
+    @Test void externalEquipmentRemainsTransferableBeforeCheckoutCommitment() {
+        String source = admin().body(Map.of("name", "External equipment provider"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String destination = admin().body(Map.of("name", "External equipment intake"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String item = admin().body(Map.of("name", "External transferable bulk", "category", "F19", "amount", 3, "value", 0, "storageLocation", source))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        makePrivate(item);
+        admin().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200)
+                .body("[0].availableQuantity", equalTo(0)).body("[0].transferableQuantity", equalTo(3));
+        String transfer = admin().body(Map.of("sourceLocationId", source, "destinationLocationId", destination, "idempotencyKey", UUID.randomUUID().toString(),
+                "lines", List.of(Map.of("itemId", item, "quantity", 2))))
+                .post("/api/transfers").then().statusCode(201).extract().path("id");
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID().toString())).post("/api/transfers/" + transfer + "/dispatch")
+                .then().statusCode(200).body("status", equalTo("in_transit"));
+    }
+
     @Test void catalogScopeAlsoProtectsEquipmentDetailsAndAvailability() {
         String item = admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "Scoped private stock", "category", "F19", "amount", 1, "visibilityScope", "group", "assignedGroup", "F19-secret"))
                 .post("/api/items").then().statusCode(200).extract().path("id");

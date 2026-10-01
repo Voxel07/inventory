@@ -31,5 +31,5 @@ public final class StockDtos {
 
     public record PositionResponse(UUID id, UUID itemId, UUID locationId, UUID lotId,
             int quantityOnHand, int quantityReserved, int quantityDamaged, int quantityQuarantined,
-            int quantityInTransit, int availableQuantity, Instant lastCountedAt, long version) {}
+            int quantityInTransit, int availableQuantity, int transferableQuantity, Instant lastCountedAt, long version) {}
 }

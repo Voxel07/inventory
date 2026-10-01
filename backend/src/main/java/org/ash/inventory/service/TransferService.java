@@ -61,8 +61,14 @@ public class TransferService {
         orm.persist(transfer);
         var lines = new ArrayList<InventoryTransferLine>();
         var assets = new HashSet<UUID>();
+        var requestedByPosition = new LinkedHashMap<String, Long>();
+        var requestedByItem = new LinkedHashMap<UUID, Long>();
+        input.lines().stream().map(TransferDtos.TransferLineInput::itemId).distinct()
+                .sorted(java.util.Comparator.comparing(UUID::toString))
+                .forEach(itemId -> requiredLocked(Item.class, itemId, "Item"));
         for (var lineInput : input.lines()) {
             var item = required(Item.class, lineInput.itemId(), "Item");
+            if (!item.active) throw ApiException.conflict("Transfer item must be active");
             var line = new InventoryTransferLine();
             line.transfer = transfer;
             line.item = item;
@@ -72,8 +78,13 @@ public class TransferService {
                     throw ApiException.badRequest("Serialized transfer lines require exactly one asset");
                 }
                 if (!assets.add(lineInput.assetInstanceId())) throw ApiException.badRequest("An asset can occur only once per transfer");
-                line.assetInstance = required(AssetInstance.class, lineInput.assetInstanceId(), "Asset");
+                line.assetInstance = requiredLocked(AssetInstance.class, lineInput.assetInstanceId(), "Asset");
                 if (!line.assetInstance.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to transfer item");
+                if (StockPolicy.classify(line.assetInstance).available() != 1
+                        || line.assetInstance.currentLocation == null
+                        || !line.assetInstance.currentLocation.id.equals(source.id)) {
+                    throw ApiException.conflict("Asset is not available at the source location");
+                }
                 if (lineInput.lotId() != null) throw ApiException.badRequest("Serialized transfer lines cannot reference lots");
             } else {
                 if (lineInput.assetInstanceId() != null) throw ApiException.badRequest("Bulk transfer lines cannot reference assets");
@@ -83,6 +94,15 @@ public class TransferService {
                     if (!line.lot.item.id.equals(item.id)) throw ApiException.badRequest("Lot does not belong to transfer item");
                 } else if (lineInput.lotId() != null) {
                     throw ApiException.badRequest("Bulk transfer lines cannot reference lots");
+                }
+                if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
+                var position = orm.lockedPosition(item, source, line.lot);
+                String positionKey = item.id + ":" + (line.lot == null ? "" : line.lot.id);
+                long requested = requestedByPosition.merge(positionKey, (long) lineInput.quantity(), Long::sum);
+                long itemRequested = requestedByItem.merge(item.id, (long) lineInput.quantity(), Long::sum);
+                if (position == null || requested > Math.max(0, position.availableQuantity() - positions.reservedAt(position))
+                        || itemRequested > Math.min(inventory.physicalStock(item).available(), positions.availableAt(item, source, null, null))) {
+                    throw ApiException.conflict("Insufficient available source stock for " + item.name);
                 }
             }
             orm.persist(line);
@@ -111,7 +131,7 @@ public class TransferService {
             if (line.assetInstance != null) {
                 requiredLocked(Item.class, line.item.id, "Item");
                 var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
-                if (asset.availabilityStatus != DomainEnums.AssetState.available
+                if (StockPolicy.classify(asset).available() != 1
                         || asset.currentLocation == null || !asset.currentLocation.id.equals(transfer.sourceLocation.id)) {
                     throw ApiException.conflict("Asset " + asset.assetCode + " is not available at the source location");
                 }
@@ -122,7 +142,7 @@ public class TransferService {
                 if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
                 if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null, null))) throw ApiException.conflict("Stock is reserved or unavailable");
                 var position = orm.lockedPosition(line.item, transfer.sourceLocation, line.lot);
-                if (position == null || position.availableQuantity() < line.requestedQuantity) {
+                if (position == null || Math.max(0, position.availableQuantity() - positions.reservedAt(position)) < line.requestedQuantity) {
                     throw ApiException.conflict("Insufficient source stock for " + line.item.name);
                 }
                 position.quantityOnHand -= line.requestedQuantity;

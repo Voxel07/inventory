@@ -9,12 +9,6 @@ import {
     Box,
     Typography,
     Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Chip,
     DialogActions,
     DialogContentText,
@@ -27,15 +21,12 @@ import {
 
     Autocomplete,
     Stack,
-    Card,
-    CardContent,
     useTheme,
     useMediaQuery,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
 import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -49,18 +40,11 @@ import { useUIStore } from '../store/uiStore';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
 import type { AssemblyFormData, DamageReportFormData, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
-import { formatStatus } from '../utils/formatters';
+import { ItemsList } from '../components/lists/ItemsList';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canOperateWarehouse } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
-
-const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-    available: 'success',
-    checked_out: 'warning',
-    damaged: 'error',
-    retired: 'default',
-};
 
 export function AssemblyDetail() {
     const { user } = useAuth();
@@ -73,7 +57,8 @@ export function AssemblyDetail() {
     const { assemblyId } = useParams<{ assemblyId: string }>();
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
-    const { data: items } = useItems();
+    const itemsQuery = useItems();
+    const items = itemsQuery.data;
     const updateAssembly = useUpdateAssembly();
     const createDamageReport = useCreateDamageReport();
     const checkoutAssembly = useAssemblyCheckout();
@@ -195,16 +180,11 @@ export function AssemblyDetail() {
         );
     }
 
-    // Calculate available stock for each item
-    const stockInfo = (() => {
-        if (!items) return new Map<string, number>();
-        const map = new Map<string, number>();
-        for (const item of items) {
-            const { remaining } = getItemStock(item);
-            map.set(item.id, remaining);
-        }
-        return map;
-    })();
+    const currentItems = new Map((items ?? []).map(item => [item.id, item]));
+    const assemblyItems: Item[] = [...new Set([...(assembly?.itemIds ?? []), ...Object.keys(assembly?.itemQuantities ?? {})])]
+        .map(id => currentItems.get(id))
+        .filter((item): item is Item => Boolean(item));
+    const stockInfo = new Map(assemblyItems.map(item => [item.id, getItemStock(item).remaining]));
 
     if (isLoading) {
         return (
@@ -232,12 +212,6 @@ export function AssemblyDetail() {
         );
     }
 
-    const assemblyItems: Item[] = assembly.expand?.itemIds?.length
-        ? assembly.expand.itemIds
-        : (assembly.itemIds ?? [])
-            .map((id) => items?.find((i) => i.id === id))
-            .filter((i): i is Item => !!i);
-
     const totalValue = assemblyItems.reduce(
         (sum, item) => sum + (item.value ?? 0) * (assembly.itemQuantities?.[item.id] ?? 1), 0,
     );
@@ -249,7 +223,8 @@ export function AssemblyDetail() {
         return available < needed;
     });
 
-    const canCheckout = insufficientItems.length === 0 && assemblyItems.length > 0;
+    const componentsReady = assemblyItems.length === new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})]).size;
+    const canCheckout = componentsReady && insufficientItems.length === 0 && assemblyItems.length > 0;
 
     const maxAssembliesPossible = (() => {
         if (assemblyItems.length === 0) return 0;
@@ -361,7 +336,7 @@ export function AssemblyDetail() {
                             {[
                                 [t('Komponenten', 'Components'), String(assemblyItems.length), 'text.primary'],
                                 [t('Gesamtwert', 'Total value'), `${totalValue.toFixed(2)} €`, 'text.primary'],
-                                [t('Verfügbar', 'Available'), String(maxAssembliesPossible), maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
+                                [t('Verfügbar', 'Available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
                                 [t('Erstellt', 'Created'), new Date(assembly.created).toLocaleDateString(), 'text.primary'],
                             ].map(([label, value, color]) => (
                                 <Box key={label} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}>
@@ -386,7 +361,7 @@ export function AssemblyDetail() {
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6">
-                    Komponenten in dieser Baugruppe
+                    {t('Komponenten in dieser Baugruppe', 'Items in this assembly')}
                 </Typography>
                 {canEdit && <Autocomplete
                     options={availableItemsToAdd}
@@ -402,161 +377,10 @@ export function AssemblyDetail() {
                 />}
             </Box>
 
-            {assemblyItems.length === 0 ? (
-                <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">{t('Keine Komponenten in dieser Baugruppe', 'No components in this assembly')}</Typography>
-                </Paper>
-            ) : isMobile ? (
-                <Stack spacing={1.5}>
-                    {assemblyItems.map((item) => {
-                        const qty = assembly.itemQuantities?.[item.id] ?? 1;
-                        const available = stockInfo.get(item.id) ?? 0;
-                        const isInsufficient = available < qty;
-                        const loc = item.expand?.storageLocation;
-                        const locStr = loc
-                            ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
-                            : item.storageLocation || '—';
-
-                        return (
-                            <Card
-                                key={item.id}
-                                variant="outlined"
-                                onClick={() => navigate(`/items/${item.id}`)}
-                                sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }}
-                            >
-                                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
-                                        <Box sx={{ minWidth: 0, mr: 1 }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                                                {isInsufficient && <WarningAmberIcon fontSize="small" color="warning" />}
-                                            </Box>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {item.category ? `${item.category} · ` : ''}{locStr}
-                                            </Typography>
-                                        </Box>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                            <Chip
-                                                label={formatStatus(item.status)}
-                                                color={statusColors[item.status] ?? 'default'}
-                                                size="small"
-                                            />
-                                            {canEdit && <TooltipButton
-                                                variant="icon"
-                                                tooltipText={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')}
-                                                icon={<DeleteIcon />}
-                                                size="small"
-                                                color="error"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRemoveItem(item.id);
-                                                }}
-                                            />}
-                                        </Box>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                                        <Stack direction="row" spacing={1}>
-                                            <Chip
-                                                size="small"
-                                                variant="outlined"
-                                                label={`${t('Menge', 'Qty')}: ${qty}`}
-                                            />
-                                            <Chip
-                                                size="small"
-                                                color={isInsufficient ? 'error' : 'success'}
-                                                label={`${t('Verfügbar', 'Available')}: ${available}`}
-                                            />
-                                        </Stack>
-                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                            {((item.value ?? 0) * qty).toFixed(2)} €
-                                        </Typography>
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </Stack>
-            ) : (
-                <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>{t('Name', 'Name')}</TableCell>
-                                <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                                <TableCell align="right">{t('Verfügbar', 'Available')}</TableCell>
-                                <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                                <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-                                <TableCell align="right">{t('Wert', 'Value')}</TableCell>
-                                <TableCell>{t('Status', 'Status')}</TableCell>
-                                {canEdit && <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {assemblyItems.map((item) => {
-                                const qty = assembly.itemQuantities?.[item.id] ?? 1;
-                                const available = stockInfo.get(item.id) ?? 0;
-                                const isInsufficient = available < qty;
-                                return (
-                                    <TableRow
-                                        key={item.id}
-                                        hover
-                                        onClick={() => navigate(`/items/${item.id}`)}
-                                        sx={{ cursor: 'pointer' }}
-                                    >
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                {item.name}
-                                                {isInsufficient && (
-                                                    <WarningAmberIcon fontSize="small" color="warning" />
-                                                )}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell align="right">{qty}</TableCell>
-                                        <TableCell align="right">
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: isInsufficient ? 'error.main' : 'success.main',
-                                                    fontWeight: isInsufficient ? 700 : 400,
-                                                }}
-                                            >
-                                                {available}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>{item.category || '—'}</TableCell>
-                                        <TableCell>
-                                            {(() => {
-                                                const loc = item.expand?.storageLocation;
-                                                return loc
-                                                    ? [loc.name, loc.location, loc.position].filter(Boolean).join(' / ')
-                                                    : item.storageLocation || '—';
-                                            })()}
-                                        </TableCell>
-                                        <TableCell align="right">{((item.value ?? 0) * qty).toFixed(2)} €</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={formatStatus(item.status)}
-                                                color={statusColors[item.status] ?? 'default'}
-                                                size="small"
-                                            />
-                                        </TableCell>
-                                        {canEdit && <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                                            <TooltipButton
-                                                variant="icon"
-                                                tooltipText={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')}
-                                                icon={<DeleteIcon />}
-                                                size="small"
-                                                color="error"
-                                                onClick={() => handleRemoveItem(item.id)}
-                                            />
-                                        </TableCell>}
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            )}
+            <ItemsList items={assemblyItems} showAllEvents isLoading={itemsQuery.isLoading && !assemblyItems.length}
+                requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit ? handleRemoveItem : undefined}
+                loadingMore={itemsQuery.hasNextPage || itemsQuery.isFetchingNextPage} loadError={itemsQuery.isError}
+                onRetry={() => { void itemsQuery.refetch(); }} />
 
             {/* Checkout Dialog */}
             <Dialog open={checkoutOpen} fullScreen={isMobile} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>

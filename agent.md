@@ -23,3 +23,6 @@ This project is in active **new development**. Follow these mandatory rules:
 ## 4. Disposable Data & Greenfield State
 - **All data can simply be replaced:** Assume data is non-production, disposable, and can be dropped, recreated, or wiped at any time.
 - Prefer clean, straightforward schema and code updates over data-preservation workarounds.
+
+## 5. Adding Data
+- If not needed for UI tests use the availabel MCP server of the application for crud operations

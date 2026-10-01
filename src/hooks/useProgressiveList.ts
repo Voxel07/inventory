@@ -18,13 +18,13 @@ export function useProgressiveList<T>(
     getNextPageParam: (lastPage, _pages, lastPageParam) =>
       options?.page === undefined && lastPage.length === size ? lastPageParam + 1 : undefined,
   });
-  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = query;
+  const { hasNextPage, isFetching, isFetchingNextPage, isError, fetchNextPage } = query;
 
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !isError) {
-      void fetchNextPage();
+    if (options?.enabled !== false && hasNextPage && !isFetching && !isError) {
+      void fetchNextPage({ cancelRefetch: false });
     }
-  }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
+  }, [options?.enabled, hasNextPage, isFetching, isError, fetchNextPage]);
   const data = query.data?.pages.flat();
 
   return {

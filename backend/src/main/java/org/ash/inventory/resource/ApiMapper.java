@@ -230,7 +230,8 @@ public class ApiMapper {
         var items = new ArrayList<ApiResponses.ItemResponse>();
         for (var component : components) {
             quantities.put(component.item.id.toString(), component.quantity);
-            items.add(componentViews.get(component.item.id));
+            var view = componentViews.get(component.item.id);
+            if (view != null) items.add(view);
         }
         return new ApiResponses.AssemblyResponse(
                 value.id,

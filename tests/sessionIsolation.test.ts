@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, expect, mock, test } from 'bun:test';
+import { QueryObserver } from '@tanstack/react-query';
 import type { User, UserRole } from '../src/types';
 import type { OidcTokenSet } from '../src/services/oidcClient';
 
@@ -125,6 +126,59 @@ test('losing connectivity evicts private query data while retaining public snaps
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(client.getQueryData(['private-items'])).toBeUndefined();
   expect(client.getQueryData(['public-items'])).toEqual([{ id: 'public' }]);
+});
+
+test('active private snapshots refresh without clearing stock or returning to a loading screen', async () => {
+  signIn('privacy-owner');
+  const client = queries.getSessionQueryClient();
+  const original = [{ id: 'secret', quantity: 3, access: { privateResource: true } }];
+  privacy.markPrivateInventoryResponse(original);
+  client.setQueryData(['private-items'], original);
+  const refreshed = deferred<typeof original>();
+  const observer = new QueryObserver(client, { queryKey: ['private-items'], queryFn: () => refreshed.promise, staleTime: Infinity });
+  const loadingStates: boolean[] = [];
+  const unsubscribe = observer.subscribe(result => loadingStates.push(result.isLoading));
+  connectivity.onLine = true;
+  document.dispatchEvent(new Event('visibilitychange'));
+  expect(client.getQueryData(['private-items'])).toEqual(original);
+  expect(observer.getCurrentResult().isLoading).toBe(false);
+  const updated = [{ ...original[0], quantity: 4 }];
+  privacy.markPrivateInventoryResponse(updated);
+  refreshed.resolve(updated);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(client.getQueryData(['private-items'])).toEqual(updated);
+  expect(loadingStates).not.toContain(true);
+  unsubscribe();
+});
+
+test('inactive private snapshots are evicted during refresh', async () => {
+  signIn('privacy-owner');
+  const client = queries.getSessionQueryClient();
+  const rows = [{ id: 'secret', access: { privateResource: true } }];
+  privacy.markPrivateInventoryResponse(rows);
+  client.setQueryData(['inactive-private-items'], rows);
+  connectivity.onLine = true;
+  document.dispatchEvent(new Event('visibilitychange'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(client.getQueryData(['inactive-private-items'])).toBeUndefined();
+});
+
+test('cancelling a private refresh does not erase the current snapshot', async () => {
+  signIn('privacy-owner');
+  const client = queries.getSessionQueryClient();
+  const original = [{ id: 'secret', access: { privateResource: true } }];
+  privacy.markPrivateInventoryResponse(original);
+  client.setQueryData(['private-items'], original);
+  const pending = deferred<typeof original>();
+  const observer = new QueryObserver(client, { queryKey: ['private-items'], queryFn: () => pending.promise, staleTime: Infinity });
+  const unsubscribe = observer.subscribe(() => {});
+  connectivity.onLine = true;
+  document.dispatchEvent(new Event('visibilitychange'));
+  await client.cancelQueries({ queryKey: ['private-items'] });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(client.getQueryData(['private-items'])).toEqual(original);
+  pending.resolve(original);
+  unsubscribe();
 });
 
 test('a late refresh cannot replace the next account tokens', async () => {

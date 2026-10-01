@@ -1,17 +1,16 @@
 import { IconButton, Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Box, Paper, Stack, TextField,  Typography } from '@mui/material';
+import { Box, Link, Paper, Stack, TextField,  Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
 import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
-import { CatalogInstructionsDialog } from './CatalogInstructionsDialog';
+import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -35,6 +34,7 @@ type AssemblyRow = {
     components: string;
     stock: number;
     totalStock: number;
+    stockReady: boolean;
     totalValue: number;
 };
 
@@ -45,7 +45,6 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [infoRow, setInfoRow] = useState<AssemblyRow | null>(null);
 
     const rows: AssemblyRow[] = (() => {
         const itemById = new Map((items ?? []).map((item) => [item.id, item]));
@@ -55,7 +54,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             const componentIds = [...new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})])];
             const parts = componentIds.map((id) => ({
                 id,
-                name: itemById.get(id)?.name ?? expandedById.get(id)?.name ?? id,
+                name: search.trim() ? itemById.get(id)?.name ?? expandedById.get(id)?.name ?? id : '',
                 quantity: assembly.itemQuantities?.[id] ?? 1,
             }));
             return {
@@ -64,7 +63,8 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 name: assembly.name,
                 description: assembly.description,
                 parts,
-                components: parts.map((part) => `${part.quantity} × ${part.name}`).join(' · '),
+                components: search.trim() ? parts.map((part) => part.name).join(' ') : '',
+                stockReady: componentIds.every(id => itemById.has(id)),
                 stock: assemblyAvailability(assembly, (id) => stockById.get(id)?.remaining ?? 0),
                 totalStock: assemblyAvailability(assembly, (id) => stockById.get(id)?.totalStock ?? 0),
                 totalValue: parts.reduce((sum, part) => sum + (itemById.get(part.id)?.value ?? expandedById.get(part.id)?.value ?? 0) * part.quantity, 0),
@@ -74,21 +74,12 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
 
     const columns: GridColDef<AssemblyRow>[] = [
         { field: 'name', headerName: t('Name', 'Name'), flex: 1.2, minWidth: 180,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography> },
+            renderCell: ({ row }) => <Link component={RouterLink} to={`/assemblies/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600 }}>{row.name}</Link> },
         { field: 'description', headerName: t('Beschreibung', 'Description'), flex: 1, minWidth: 160 },
-        { field: 'components', headerName: t('Komponenten', 'Components'), flex: 2, minWidth: 260,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ whiteSpace: 'normal' }}>{row.components || '—'}</Typography> },
         { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 120,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock > 0 ? 'success.main' : 'error.main', fontWeight: 700 }}>{row.stock}/{row.totalStock}</Typography> },
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: !row.stockReady ? 'text.secondary' : row.stock > 0 ? 'success.main' : 'error.main', fontWeight: 700 }}>{row.stockReady ? `${row.stock}/${row.totalStock}` : '…'}</Typography> },
         { field: 'totalValue', headerName: t('Gesamtwert', 'Total value'), type: 'number', width: 130,
             valueFormatter: (value: number) => `${value.toFixed(2)} €` },
-        { field: 'info', headerName: t('Hinweis', 'Instructions'), width: 90, sortable: false, filterable: false,
-            renderCell: ({ row }) =>
-              <IconButton title={t('Hinweise und enthaltene Artikel anzeigen', 'Show instructions and included items')} color="info" size="small" aria-label={t(`Hinweise für ${row.name}`, `Instructions for ${row.name}`)}
-                  onClick={(event) => { event.stopPropagation(); setInfoRow(row); }}>
-                  <InfoOutlinedIcon fontSize="small" />
-              </IconButton>
-             },
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">
               <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton>
@@ -114,17 +105,16 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         </Paper>}
         <Box sx={{ width: '100%' }}>
             <DataGrid rows={rows} columns={columns} loading={isLoading} density="compact" autoHeight checkboxSelection={canManage}
-                getRowHeight={() => 'auto'} disableRowSelectionOnClick
-                onRowClick={({ row }) => { if (canManage) navigate(`/assemblies/${row.id}`); }}
+                slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/assemblies') } }}
+                rowHeight={44} disableRowSelectionOnClick
+                onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/assemblies/${row.id}`); }}
                 rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
                 initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
                 pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
-                sx={{ '& .MuiDataGrid-row': { cursor: canManage ? 'pointer' : 'default' },
+                sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
                     '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />
         </Box>
         {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
         {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
-        <CatalogInstructionsDialog open={Boolean(infoRow)} title={infoRow?.name ?? ''} hint={infoRow?.assembly.hint}
-            parts={infoRow?.parts} onClose={() => setInfoRow(null)} />
     </Box>;
 }

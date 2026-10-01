@@ -125,6 +125,7 @@ public class StockManagementResource {
         return new StockDtos.PositionResponse(value.id, value.item.id, value.location.id,
                 value.lot == null ? null : value.lot.id, value.quantityOnHand, reserved,
                 value.quantityDamaged, value.quantityQuarantined, value.quantityInTransit,
-                org.ash.inventory.service.EquipmentService.freelyAvailable(value.item) ? Math.max(0, value.availableQuantity() - reserved) : 0, value.lastCountedAt, value.version);
+                org.ash.inventory.service.EquipmentService.freelyAvailable(value.item) ? Math.max(0, value.availableQuantity() - reserved) : 0,
+                Math.max(0, value.availableQuantity() - reserved), value.lastCountedAt, value.version);
     }
 }

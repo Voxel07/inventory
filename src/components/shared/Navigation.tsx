@@ -26,7 +26,7 @@ import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
 import { LanguageSelector } from './LanguageSelector';
@@ -135,9 +135,10 @@ export function Navigation() {
                         return (
                             <ListItemButton title={translate('Den gewählten Bereich öffnen', 'Open the selected section')}
                                 key={item.path}
+                                component={RouterLink}
+                                to={item.path}
                                 selected={isActive}
                                 onClick={() => {
-                                    navigate(item.path);
                                     if (isMobile) setSidebarOpen(false);
                                 }}
                                 sx={{

@@ -342,6 +342,8 @@ class InventoryApiTest {
                 .body("status", equalTo("partially_accepted"))
                 .body("lines[0].expectedQuantity", equalTo(5));
         request().body(receipt).post("/api/goods-receipts").then().statusCode(201);
+        request().queryParam("itemId", itemId).queryParam("transactionType", "received").get("/api/transactions")
+                .then().statusCode(200).body("size()", equalTo(1)).body("[0].quantityChanged", equalTo(3));
 
         request().get("/api/items/" + itemId).then().statusCode(200)
                 .body("stock.totalOwned", equalTo(3))
@@ -404,6 +406,66 @@ class InventoryApiTest {
         request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
                 .body("[0].availabilityStatus", equalTo("available"))
                 .body("[0].currentLocationId", equalTo(destinationId));
+    }
+
+    @Test
+    void partialCountPersistsZeroAndResumesBothCountAndRecount() {
+        String location = request().body(Map.of("name", "Partial count location"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String first = request().body(Map.of("name", "Partial count first", "category", "Test", "amount", 3, "value", 0, "storageLocation", location))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String second = request().body(Map.of("name", "Partial count second", "category", "Test", "amount", 5, "value", 0, "storageLocation", location))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var count = request().body(Map.of("locationId", location, "blindCount", false))
+                .post("/api/inventory-counts").then().statusCode(201).body("status", equalTo("counting"))
+                .body("lines.find { it.itemId == '" + first + "' }.expectedQuantity", equalTo(3))
+                .body("lines.find { it.itemId == '" + second + "' }.expectedQuantity", equalTo(5))
+                .body("lines[0].locationId", equalTo(location)).extract().jsonPath();
+        String id = count.getString("id");
+        String firstLine = count.getString("lines.find { it.itemId == '" + first + "' }.id");
+        String secondLine = count.getString("lines.find { it.itemId == '" + second + "' }.id");
+        var firstSubmission = Map.of("lines", java.util.List.of(Map.of("lineId", firstLine, "quantity", 0)));
+        var secondSubmission = Map.of("lines", java.util.List.of(Map.of("lineId", secondLine, "quantity", 5)));
+        request().body(firstSubmission).post("/api/inventory-counts/" + id + "/submit").then().statusCode(200)
+                .body("status", equalTo("counting")).body("lines.find { it.id == '" + firstLine + "' }.countedQuantity", equalTo(0));
+        request().get("/api/inventory-counts").then().statusCode(200)
+                .body("find { it.id == '" + id + "' }.lines.find { it.id == '" + firstLine + "' }.countedQuantity", equalTo(0))
+                .body("find { it.id == '" + id + "' }.lines.find { it.id == '" + secondLine + "' }.countedQuantity", nullValue());
+        request().body(secondSubmission).post("/api/inventory-counts/" + id + "/submit").then().statusCode(200).body("status", equalTo("awaiting_recount"));
+        request().body(firstSubmission).post("/api/inventory-counts/" + id + "/recount").then().statusCode(200).body("status", equalTo("awaiting_recount"));
+        request().body(secondSubmission).post("/api/inventory-counts/" + id + "/recount").then().statusCode(200).body("status", equalTo("awaiting_approval"));
+        given().contentType(ContentType.JSON).header("X-Actor-Id", "partial-count-approver").header("X-Actor-Role", "hq_admin")
+                .body(Map.of()).post("/api/inventory-counts/" + id + "/approve").then().statusCode(200);
+        request().body(Map.of()).post("/api/inventory-counts/" + id + "/post").then().statusCode(200).body("status", equalTo("posted"));
+        request().get("/api/items/" + first).then().statusCode(200).body("stock.onHand", equalTo(0));
+        request().get("/api/items/" + second).then().statusCode(200).body("stock.onHand", equalTo(5));
+    }
+
+    @Test
+    void transfersRejectEmptySourcesAndAmountsAboveAvailableStock() {
+        String source = request().body(Map.of("name", "Limited transfer source"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String destination = request().body(Map.of("name", "Limited transfer destination"))
+                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String item = request().body(Map.of("name", "Limited transfer stock", "category", "Test", "amount", 2, "value", 0, "storageLocation", source))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        request().body(Map.of("sourceLocationId", destination, "destinationLocationId", source, "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "lines", java.util.List.of(Map.of("itemId", item, "quantity", 1))))
+                .post("/api/transfers").then().statusCode(409);
+        request().body(Map.of("sourceLocationId", source, "destinationLocationId", destination, "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "lines", java.util.List.of(Map.of("itemId", item, "quantity", 3))))
+                .post("/api/transfers").then().statusCode(409);
+        request().body(Map.of("sourceLocationId", source, "destinationLocationId", destination, "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "lines", java.util.List.of(Map.of("itemId", item, "quantity", 2), Map.of("itemId", item, "quantity", 1))))
+                .post("/api/transfers").then().statusCode(409);
+        String transfer = request().body(Map.of("sourceLocationId", source, "destinationLocationId", destination, "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "lines", java.util.List.of(Map.of("itemId", item, "quantity", 2))))
+                .post("/api/transfers").then().statusCode(201).extract().path("id");
+        request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString()))
+                .post("/api/transfers/" + transfer + "/dispatch").then().statusCode(200);
+        request().body(Map.of("sourceLocationId", source, "destinationLocationId", destination, "idempotencyKey", java.util.UUID.randomUUID().toString(),
+                "lines", java.util.List.of(Map.of("itemId", item, "quantity", 1))))
+                .post("/api/transfers").then().statusCode(409);
     }
 
     @Test

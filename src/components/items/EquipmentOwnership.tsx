@@ -2,7 +2,7 @@ import { Button } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { equipmentProfileInput, equipmentCommitmentInput } from '../../services/equipmentInputs';
 import { useState } from 'react';
-import { Alert, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
 import type { Item } from '../../types';
 import { equipmentApi } from '../../services/equipmentService';
 import type { EquipmentCommitment, EquipmentProfile } from '../../types/equipment';
@@ -11,7 +11,7 @@ import { useEventReports } from '../../hooks/useEvents';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm, type Field } from '../operations/OperationForm';
 
-export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boolean }) {
+export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: Item; canEdit: boolean; embedded?: boolean }) {
   const t = useLocalizedText();
   const profile = useEquipmentProfile(item.id);
   const { data: events = [] } = useEventReports();
@@ -24,16 +24,20 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
   const statuses = { active: t('Aktiv', 'Active'), scheduled: t('Geplant', 'Scheduled'), expired: t('Abgelaufen', 'Expired'), cancelled: t('Storniert', 'Cancelled') };
   const data = profile.data;
   const readyAssets = assets.filter(a => a.active && a.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(a.conditionStatus));
-  return <Paper sx={{ p: { xs: 2, sm: 3 }, my: 2 }}>
-    <Stack spacing={2}>
-      <Typography variant="h6">{t('Eigentum, Verwahrung & Zusagen', 'Ownership, keeper & commitments')}</Typography>
-      <Typography variant="body2" color="text.secondary">{t('Eigentum und Verwahrung gelten für alle Einheiten dieses Artikels. Für unterschiedliche Eigentümer separate Artikel anlegen. Sichtbarkeit, Lagerort und aktuelle Ausleihe sind unabhängig davon.', 'Ownership and keeper apply to every unit of this item. Use separate items for different owners. Catalog visibility, physical location and current custody are independent.')}</Typography>
+  return <Box component={embedded ? 'div' : Paper} sx={embedded ? {} : { p: { xs: 2, sm: 3 }, my: 2 }}>
+    <Stack spacing={embedded ? 1 : 2} sx={embedded ? { '& .MuiButton-root': { alignSelf: 'flex-start', fontSize: '0.8125rem', py: 0.25 }, '& .MuiCardContent-root': { p: 1, '&:last-child': { pb: 1 } } } : {}}>
+      {!embedded && <>
+        <Typography variant="h6">{t('Eigentum, Verwahrung & Zusagen', 'Ownership, keeper & commitments')}</Typography>
+        <Typography variant="body2" color="text.secondary">{t('Eigentum und Verwahrung gelten für alle Einheiten dieses Artikels. Für unterschiedliche Eigentümer separate Artikel anlegen. Sichtbarkeit, Lagerort und aktuelle Ausleihe sind unabhängig davon.', 'Ownership and keeper apply to every unit of this item. Use separate items for different owners. Catalog visibility, physical location and current custody are independent.')}</Typography>
+      </>}
       {profile.isLoading && <Typography>{t('Wird geladen …', 'Loading…')}</Typography>}
       {profile.error && <Alert severity="error" action={<Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
       {data && <>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip label={ownership[data.ownershipType]} /><Chip label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
-        <Typography>{t('Eigentümer / Anbieter', 'Owner / provider')}: {data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography>
-        <Typography>{t('Verwahrer / Kontakt', 'Keeper / contact')}: {[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip size={embedded ? 'small' : 'medium'} label={ownership[data.ownershipType]} /><Chip size={embedded ? 'small' : 'medium'} label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
+        <Box sx={{ display: 'grid', gridTemplateColumns: embedded ? { xs: '1fr', sm: '1fr 1fr' } : '1fr', gap: 1 }}>
+          <Box><Typography variant="subtitle2" color="text.secondary">{t('Eigentümer / Anbieter', 'Owner / provider')}</Typography><Typography variant="body2">{data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography></Box>
+          <Box><Typography variant="subtitle2" color="text.secondary">{t('Verwahrer / Kontakt', 'Keeper / contact')}</Typography><Typography variant="body2">{[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography></Box>
+        </Box>
         <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
         {data.availabilityPolicy !== 'available' && <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>}
         {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -76,5 +80,5 @@ export function EquipmentOwnership({ item, canEdit }: { item: Item; canEdit: boo
       <Alert severity="info">{t('Der Zeitraum muss das gesamte Event abdecken. Pro Artikel ist nur eine überlappende Zusage inklusive Rückgabefrist zulässig. Zusagen erzeugen keinen Bestand.', 'The dates must cover the entire event. A stock pool can have only one overlapping commitment, including its return window. Commitments do not create stock.')}</Alert>
     </OperationForm>}
     {cancelling && <OperationForm title={t('Zusage stornieren', 'Cancel commitment')} onClose={() => setCancelling(null)} fields={[{ key: 'reason', label: t('Begründung', 'Reason'), required: true }]} onSave={values => equipmentApi.cancel(item.id, cancelling.commitment.id, { reason: String(values.reason), revision: cancelling.profile.revision })} />}
-  </Paper>;
+  </Box>;
 }

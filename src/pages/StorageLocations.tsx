@@ -21,7 +21,7 @@ import RoomIcon from '@mui/icons-material/Room';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MapIcon from '@mui/icons-material/Map';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
@@ -51,7 +51,16 @@ export function StorageLocations() {
     const updateMutation = useUpdateStorageLocation();
     const deleteMutation = useDeleteStorageLocation();
 
-    const [selectedLocId, setSelectedLocId] = useState<string | null>(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedLocId = searchParams.get('locationId');
+    function setSelectedLocId(id: string | null) {
+        setSearchParams(current => {
+            const next = new URLSearchParams(current);
+            if (id) next.set('locationId', id);
+            else next.delete('locationId');
+            return next;
+        });
+    }
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingLoc, setEditingLoc] = useState<StorageLocation | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);

@@ -1,14 +1,16 @@
 import { InventorySharing } from '../components/items/InventorySharing';
 import { CodeManagement } from '../components/qr/CodeManagement';
-import { LotsPanel, StockPositions } from '../components/operations/StockOperations';
+import { LotsPanel } from '../components/operations/StockOperations';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
+import { ItemStockLocations } from '../components/items/ItemStockLocations';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Typography,
+    Link,
     Paper,
     Grid,
     Chip,
@@ -45,6 +47,7 @@ import { useItem, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useFactionOrders } from '../hooks/useFactionOrders';
 import { getItemStock } from '../utils/stock';
+import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useAssignableUsers } from '../hooks/useUsers';
@@ -53,7 +56,7 @@ import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
-import type { ItemFormData, TransactionFormData, StockTransaction } from '../types';
+import type { ItemFormData, TransactionFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canOperateWarehouse, canPerformCustody } from '../utils/access';
@@ -69,36 +72,6 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
     damaged: 'error',
     retired: 'default',
 };
-
-function buildStockHistory(transactions: StockTransaction[], initialAmount: number) {
-    const sorted = [...transactions].sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-    );
-
-    const hasAddedTransaction = transactions.some((tx) => tx.transactionType === 'added');
-    let stock = hasAddedTransaction ? 0 : initialAmount;
-    const data: { date: string; stock: number }[] = [];
-
-    for (const tx of sorted) {
-        if (tx.transactionType === 'added') {
-            stock += tx.quantityChanged;
-        } else if (tx.transactionType === 'checkout') {
-            stock -= tx.quantityChanged;
-        } else if (tx.transactionType === 'checkin') {
-            stock += tx.quantityChanged;
-        }
-        data.push({
-            date: new Date(tx.timestamp).toLocaleDateString(),
-            stock,
-        });
-    }
-
-    if (data.length === 0) {
-        data.push({ date: 'Now', stock: initialAmount });
-    }
-
-    return data;
-}
 
 export function ItemDetail() {
     const { user } = useAuth();
@@ -156,7 +129,7 @@ export function ItemDetail() {
 
     const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
-    const stockHistory = buildStockHistory(itemTransactions, item?.amount ?? 0);
+    const stockHistory = buildStockHistory(itemTransactions, item?.stock?.onHand ?? item?.amount ?? 0);
 
     function handleUpdate(data: ItemFormData) {
         if (!itemId) return;
@@ -317,9 +290,7 @@ export function ItemDetail() {
                     </Box>
                 </Grid>
 
-                {canTransact && <Grid size={12}>
-                    <Paper sx={{ p: 2 }}><StockPositions key={item.id} itemId={item.id} /></Paper>
-                </Grid>}
+                <ItemStockLocations key={item.id} item={item} />
 
                 {!!item.images?.length && (
                     <Grid size={12}>
@@ -340,8 +311,8 @@ export function ItemDetail() {
                 )}
 
                 {/* Details */}
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Paper sx={{ p: 3 }}>
+                <Grid size={{ xs: 12, md: item.hint ? 8 : 12 }}>
+                    <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" sx={{ mb: 2 }}>
                             Details
                         </Typography>
@@ -362,7 +333,7 @@ export function ItemDetail() {
                                 <Typography variant="subtitle2" color="text.secondary">
                                     {t('Lagerort', 'Storage location')}
                                 </Typography>
-                                <Typography>{item.expand?.storageLocation?.name || item.storageLocation || '—'}</Typography>
+                                {item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${item.storageLocation}`} underline="hover">{item.expand?.storageLocation?.name || item.storageLocation}</Link> : <Typography>—</Typography>}
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
@@ -425,8 +396,19 @@ export function ItemDetail() {
                                 )}
                             </Box>
                         </Box>
+                        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                            <EquipmentOwnership item={item} canEdit={canEdit} embedded />
+                        </Box>
                     </Paper>
                 </Grid>
+
+                {item.hint && <Grid size={{ xs: 12, md: 4 }}>
+                    <Alert severity="info" sx={{ py: 1, alignItems: 'flex-start',
+                        '& .MuiAlert-icon': { py: 0, mt: '3px' }, '& .MuiAlert-message': { py: 0 } }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
+                    </Alert>
+                </Grid>}
 
                 {(isVehicle || isGenerator || isFood) && (
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -471,14 +453,6 @@ export function ItemDetail() {
                     </Grid>
                 )}
 
-                {item.hint && <Grid size={{ xs: 12, md: 6 }}>
-                    <Alert severity="info" sx={{ height: '100%', alignItems: 'flex-start',
-                        '& .MuiAlert-icon': { py: 0, mt: '3px' }, '& .MuiAlert-message': { py: 0 } }}>
-                        <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
-                    </Alert>
-                </Grid>}
-
                 {/* Container info */}
                 {(item.containerSize ?? 0) > 0 && (
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -518,7 +492,6 @@ export function ItemDetail() {
                 <Grid size={12}><InventorySharing kind="items" id={item.id} access={item.access} /></Grid>
                 {item.locationRestricted && <Grid size={12}><Alert severity="info">{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert></Grid>}
                 {canEdit && item.trackingMode === 'lot_tracked' && <Grid size={12}><Paper sx={{ p: 2 }}><LotsPanel itemId={item.id} /></Paper></Grid>}
-                <Grid size={12}><EquipmentOwnership item={item} canEdit={canEdit} /></Grid>
                 {canEdit && <Grid size={12}><CodeManagement targetId={item.id} targetType="product" /></Grid>}
 
                 {/* Stock History Graph */}

@@ -1,7 +1,7 @@
 import type { Assembly, AssemblyFormData } from '../types';
 import { assemblyApi } from '../services/assemblyService';
 import { createResourceHooks } from './useResourceApi';
-import { useProgressiveList } from './useProgressiveList';
+import { useQuery } from '@tanstack/react-query';
 
 export const {
   useDetail: useAssembly,
@@ -12,5 +12,7 @@ export const {
 } = createResourceHooks<Assembly, AssemblyFormData>(assemblyApi, 'assemblies');
 
 export function useAssemblies() {
-  return useProgressiveList<Assembly>(['assemblies'], (page, size) => assemblyApi.getAll({ page, size }));
+  // This endpoint returns the whole assembly catalog and has no paging parameters.
+  const query = useQuery({ queryKey: ['assemblies'], queryFn: () => assemblyApi.getAll() });
+  return { ...query, hasNextPage: false, isFetchingNextPage: false, isComplete: !query.isLoading && !query.isError };
 }

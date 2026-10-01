@@ -34,7 +34,7 @@ export interface StockTransaction {
 }
 
 
-export type TransactionType = 'checkout' | 'checkin' | 'added' | 'adjusted' | 'repaired' | 'written_off' | 'consumed';
+export type TransactionType = 'received' | 'adjusted' | 'reserved' | 'reservation_released' | 'transfer_out' | 'transfer_in' | 'staged' | 'checkout' | 'checkin' | 'added' | 'consumed' | 'damaged' | 'missing' | 'repaired' | 'written_off';
 
 export interface TransactionFormData {
   occurredAt?: string;

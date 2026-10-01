@@ -1,5 +1,5 @@
 import { containsPrivateInventory } from './privateInventoryCache';
-import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { isCancelledError, MutationCache, QueryClient } from '@tanstack/react-query';
 import { getAuthSnapshot, subscribeAuth } from './authManager';
 import { ApiError, OfflineQueuedError } from './apiClient';
 import { SessionChangedError } from './authManager';
@@ -18,7 +18,7 @@ function createSessionClient(generation: number): QueryClient {
         }
       },
     }),
-    defaultOptions: { queries: { staleTime: 30_000, retry: (failures, error) => failures < 2
+    defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: (failures, error) => failures < 2
       && !(error instanceof SessionChangedError)
       && (!(error instanceof ApiError) || error.status === 408 || error.status === 429 || error.status >= 500) } },
   });
@@ -45,12 +45,27 @@ export function subscribeSessionQueryClient(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-// Private snapshots stay in memory for at most a minute and disappear when connectivity is lost.
+// Refresh active private snapshots in place; purge failed/inactive reads and lost connectivity.
 const evictPrivateQueries = () => {
   const predicate = (query: { state: { data: unknown } }) => containsPrivateInventory(query.state.data);
   void client.cancelQueries({ predicate }).then(() => client.resetQueries({ predicate }));
 };
-window.setInterval(evictPrivateQueries, 60_000);
+const refreshPrivateQueries = () => {
+  if (!navigator.onLine) { evictPrivateQueries(); return; }
+  const refreshClient = client;
+  const queries = refreshClient.getQueryCache().findAll({ predicate: query => containsPrivateInventory(query.state.data) });
+  for (const query of queries) {
+    if (!query.isActive()) {
+      void refreshClient.resetQueries({ queryKey: query.queryKey, exact: true });
+    } else if (query.state.fetchStatus === 'idle') {
+      // Infinite-query behavior remains attached to Query.fetch, preserving all loaded pages.
+      void query.fetch().catch(error => {
+        if (!isCancelledError(error)) return refreshClient.resetQueries({ queryKey: query.queryKey, exact: true });
+      });
+    }
+  }
+};
+window.setInterval(refreshPrivateQueries, 60_000);
 window.addEventListener('offline', evictPrivateQueries);
-window.addEventListener('online', evictPrivateQueries);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') evictPrivateQueries(); });
+window.addEventListener('online', refreshPrivateQueries);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPrivateQueries(); });
