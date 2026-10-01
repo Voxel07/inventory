@@ -5,7 +5,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Card, CardContent, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Autocomplete, Card, CardContent, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useOperationList } from '../../hooks/useOperations';
@@ -24,24 +24,35 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
   const selectedLocation = String(filters.locationId || locationId || '');
   const positions = useOperationList(`positions:${selectedItem}:${selectedLocation}`, operationsApi.positions({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const assets = useOperationList(`assets:${selectedItem}:${selectedLocation}`, operationsApi.assets({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
-  const lots = useOperationList('stock-lot-labels', operationsApi.lots());
+  const lots = useOperationList(`stock-lot-labels:${itemId ?? ''}`, operationsApi.lots({ itemId }));
   return <Stack spacing={1}>
-    <Typography variant="h6">{t('Bestand nach Lagerort', 'Stock by location')}</Typography>
-    <Fields values={filters} onChange={setFilters} fields={[
+    <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}>
+      <Typography variant="h6">{t('Bestand nach Lagerort', 'Stock by location')}</Typography>
+      {itemId && !locationId && <Autocomplete size="small" sx={{ width: { xs: '100%', sm: 300 } }}
+        options={lookup.locationOptions} value={lookup.locationOptions.find((option) => option.value === selectedLocation) ?? null}
+        getOptionLabel={(option) => option.label} isOptionEqualToValue={(a, b) => a.value === b.value}
+        onChange={(_, option) => setFilters({ ...filters, locationId: option?.value ?? '' })}
+        renderInput={(params) => <TextField {...params} label={t('Lagerort', 'Location')} placeholder={t('Alle Lagerorte', 'All locations')} />} />}
+    </Stack>
+    {!itemId && <Fields values={filters} onChange={setFilters} fields={[
       ...(!itemId ? [{ key: 'itemId', label: t('Artikel / Geräte anzeigen', 'Item / show individual assets'), options: lookup.itemOptions }] : []),
       ...(!locationId ? [{ key: 'locationId', label: t('Lagerort', 'Location'), options: lookup.locationOptions }] : []),
-    ]} />
+    ]} />}
     <QueryFeedback isLoading={positions.isLoading || assets.isLoading} error={positions.error || assets.error || lookup.error} isEmpty={!positions.data?.length && !assets.data?.length} emptyMessage={t('Kein lokalisierter Bestand für diese Auswahl.', 'No located stock for this selection.')} />
     {!!positions.data?.length && <TableContainer component={Paper} variant="outlined">
       <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')} sx={{ '& td, & th': { px: 1, py: 0.75 }, '& tr:last-child td, & tr:last-child th': { borderBottom: 0 } }}>
         <TableHead><TableRow>
-          <TableCell sx={{ minWidth: 200 }}>{t('Artikel / Lagerort', 'Item / location')}</TableCell>
+          <TableCell sx={{ minWidth: 200 }}>{itemId ? t('Lagerort', 'Location') : t('Artikel / Lagerort', 'Item / location')}</TableCell>
           {[t('Verfügbar', 'Available'), t('Vor Ort', 'On hand'), t('Reserviert', 'Reserved'), t('Beschädigt', 'Damaged'), t('Quarantäne', 'Quarantine'), t('Unterwegs', 'In transit')].map((label) => <TableCell key={label} align="right">{label}</TableCell>)}
         </TableRow></TableHead>
         <TableBody>{positions.data.map((position) => <TableRow key={position.id} hover>
           <TableCell component="th" scope="row">
-            <Link component={RouterLink} to={`/items/${position.itemId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.items.find((item) => item.id === position.itemId)?.name ?? position.itemId}</Link>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{lookup.locations.find((location) => location.id === position.locationId)?.name ?? t('Ohne Lagerort', 'Unassigned location')}{position.lotId ? ` · ${t('Charge', 'Lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}</Typography>
+            {itemId ? <Typography variant="body2" sx={{ fontWeight: 600 }}>{lookup.locationOptions.find((location) => location.value === position.locationId)?.label ?? t('Ohne Lagerort', 'Unassigned location')}</Typography>
+              : <Link component={RouterLink} to={`/items/${position.itemId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.items.find((item) => item.id === position.itemId)?.name ?? position.itemId}</Link>}
+            {(!itemId || position.lotId) && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {!itemId && (lookup.locationOptions.find((location) => location.value === position.locationId)?.label ?? t('Ohne Lagerort', 'Unassigned location'))}
+              {position.lotId ? `${!itemId ? ' · ' : ''}${t('Charge', 'Lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}
+            </Typography>}
           </TableCell>
           <TableCell align="right" sx={{ color: position.availableQuantity > 0 ? 'success.main' : 'text.secondary', fontWeight: 700 }}>{position.availableQuantity}</TableCell>
           {[position.quantityOnHand, position.quantityReserved, position.quantityDamaged, position.quantityQuarantined, position.quantityInTransit].map((quantity, index) => <TableCell key={index} align="right">{quantity}</TableCell>)}

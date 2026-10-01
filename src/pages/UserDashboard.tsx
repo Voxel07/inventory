@@ -58,7 +58,7 @@ export function UserDashboard() {
         <Box role="tabpanel" id={`dashboard-panel-${tab}`} aria-labelledby={`dashboard-tab-${tab}`}>
             {tab === 'items' && <Items showAllEvents />}
             {tab === 'assemblies' && <Assemblies />}
-            {tab === 'equipment' && <Contributor />}
+            {tab === 'equipment' && <Contributor embedded />}
             {tab === 'activity' && <PersonalActivity />}
         </Box>
     </Stack>;

@@ -59,7 +59,6 @@ export function Navigation() {
     const isManager = canManageInventory(user);
     const sharedNavItems = [
         { label: t('nav.myDashboard'), path: '/', icon: <DashboardIcon /> },
-        { label: text('Aufgaben & Erinnerungen', 'Actions & reminders'), path: '/actions', icon: <AssignmentReturnIcon /> },
     ];
     const managerNavItems = [
         ...sharedNavItems,
