@@ -1,6 +1,6 @@
 # Airsoft Inventory — Requirements and Current Architecture
 
-> **Status:** F01–F23 present in source; consolidation and private-inventory access reviewed 1 October 2026; private inventory/sharing implemented in source; runtime acceptance pending
+> **Status:** F01–F23 present in source; consolidation and private-inventory access reviewed 1 October 2026; private inventory/sharing implemented; automated privacy regressions and PostgreSQL schema validation passed; browser/load acceptance pending
 >
 > **Purpose:** Normative requirements, architectural boundaries, invariants, and implementation traceability for the current repository.
 > **Related detail:** [`docs/DOMAIN_ARCHITECTURE.md`](docs/DOMAIN_ARCHITECTURE.md), [`docs/DEPLOYMENT_STEP1.md`](docs/DEPLOYMENT_STEP1.md), and [`docs/DEPLOYMENT_STEP2.md`](docs/DEPLOYMENT_STEP2.md).
@@ -49,7 +49,7 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 | Private inventory and sharing | Account-owned private items/locations, owner self-service, multiple person/group view/edit grants, admin-managed share groups, revocation, audit/revision control and resource-associated media implemented. Warehouse roles have no private bypass. Source boundaries and runtime acceptance limits are documented in Sections 5.4 and 6.1. |
 | Consolidation | One disposable SQL baseline; shared query feedback, snackbar, catalog dialogs and warehouse service; unused catalog view and CRUD aliases removed; category/catalog/general-order persistence follows ORM boundaries |
 | Architectural gaps | Original A01–A06, P01–P05 and U01–U02 fixes confirmed in source: scoped REST assembly reads, session isolation, stock/count/return policy, batch projections, report filtering/export, invalidation and preparation/exact-detail cache changes. MCP R01/R02 fixes now authenticate production transport and delegate authorized catalog/stock use cases with scoped reads and outbox publication. Remaining source gaps are report contributor-hold parity, cold-start collection scheduling, camera deployment policy and inbox query fan-out. |
-| Verification | Current non-emitting frontend typechecks, full src lint, reachability and schema structural checks passed. Refactoring progress records earlier A-stage builds/87 H2 tests and P-stage builds/95 H2 tests plus 13 client tests; these predate U/MCP changes. MCP Java syntax and static contracts/boundaries checked; new targeted regression cases authored but not run. Fresh PostgreSQL initialization, responsive/role/browser acceptance and performance traces remain pending. |
+| Verification | On 1 October 2026: 111 backend tests passed on PostgreSQL 17, including 8 private-inventory API cases and canonical Flyway baseline/Hibernate schema validation; 18 client tests, backend packaging, frontend production build and full src lint passed after incorporating current main. Coverage includes sharing, edit/management separation, personal/group revocation, a simultaneous edit/group-revocation case, independent location disclosure, media authorization, codes/history, report cache isolation, offline protection and account isolation. Browser visual acceptance, S3 integration and load/performance traces remain pending. |
 
 “Implemented” below means source coverage, not release verification. Earlier build/test results do not validate subsequent changes.
 
@@ -100,7 +100,7 @@ F01–F23 have frontend workflows and backend implementations in source. The [re
 | API-01 | Return explicit DTOs; never serialize persistence entities directly | Implemented | `ApiResponses` and `ApiMapper` |
 | API-02 | Expose only supported operations in each frontend API contract | Implemented | capability interfaces in `resourceFactory.ts` |
 
-Counts, transfers, purchasing, custody, and stock management have backend modules and frontend operational workflows. Procurement supports editable purchase drafts and ordering; warehouse users receive deliveries from purchase details. Operations provides role-specific access to warehouse, purchasing, lifecycle and recovery tasks. All schema definitions are in the canonical disposable baseline; fresh PostgreSQL execution is not yet verified.
+Counts, transfers, purchasing, custody, and stock management have backend modules and frontend operational workflows. Procurement supports editable purchase drafts and ordering; warehouse users receive deliveries from purchase details. Operations provides role-specific access to warehouse, purchasing, lifecycle and recovery tasks. All schema definitions are in the canonical disposable baseline; fresh PostgreSQL initialization and Hibernate entity validation passed in `BaselineSchemaTest`.
 
 ## 4. Architectural boundaries
 
@@ -273,7 +273,7 @@ Private administration and private inventory writes are online-only. Existing pu
 
 Organizational bulk category-maintenance changes update public items; private records retain their owner's settings. Aggregate order/count/transfer/purchase lists exclude denied related IDs before pagination. The response projection check additionally protects immutable history and mixed nested evidence.
 
-The source implementation is statically reviewed, not release-verified. PostgreSQL initialization, concurrent grant/group revocation, role/browser acceptance, media storage integration and performance of related-reference filtering still need runtime acceptance. Conservative mixed-record omission can shorten legacy lists when only their history exposes a protected reference; query optimization must preserve confidentiality and correct visible totals.
+The implementation passes automated PostgreSQL and client regressions, including a simultaneous edit/group membership revocation case and local media authorization. PostgreSQL baseline initialization and Hibernate schema validation passed. Browser visual acceptance, concurrency under load, S3 storage integration and production-scale performance of related-reference filtering still need acceptance. Conservative mixed-record omission can shorten legacy lists when only their history exposes a protected reference; query optimization must preserve confidentiality and correct visible totals.
 
 ## 6. Authentication and authorization
 
@@ -356,7 +356,7 @@ The runtime uses Jakarta Persistence/Hibernate with PostgreSQL; Panache is not u
 
 All current data is disposable. Recreate an empty database when the baseline changes; an existing Flyway history will not accept its changed checksum. This repository provides no upgrade/repair procedure for old databases. No database was changed during consolidation.
 
-The unqualified and development profiles currently use PostgreSQL with Hibernate `update` and Flyway disabled. H2/drop-and-create is configured for tests. Shared or production-like environments must use the production profile and the single baseline plus validation. Fresh PostgreSQL execution and full SQL/entity type validation remain pending; structural inspection alone is insufficient.
+The unqualified and development profiles currently use PostgreSQL with Hibernate `update` and Flyway disabled. PostgreSQL/drop-and-create is configured for regular tests, with Docker Dev Services or an explicitly configured disposable test database. A separate baseline test schema runs Flyway plus Hibernate validation. Shared or production-like environments must use the production profile and the single baseline plus validation. Fresh PostgreSQL baseline execution and Hibernate SQL/entity validation passed in the automated baseline test. See [privacy testing](docs/PRIVACY_TESTING.md) for repeatable commands and remaining acceptance limits.
 
 Persisted domains include catalog/assets, warehouses/locations, orders/reservations, custody/returns, stock/positions/lots, purchases/receipts/documents, transfers/counts, damage/repairs/maintenance, ownership/commitments/loans, contributor requests, personal reminders, sync evidence, report snapshots and outbox events.
 
@@ -368,7 +368,7 @@ Authenticated users may stage a return-placement image. Once the return submissi
 
 ## 11. Verification policy and current evidence
 
-Repository instructions in `.codex/AGENTS.md` prohibit application builds, packaging and test suites unless the user explicitly requests them. Non-emitting frontend type checking, targeted lint and source/schema inspection are permitted. See the [repository review](docs/REPOSITORY_REVIEW.md) for checks actually executed and the remaining C09 acceptance and performance measurements. Historical F19 build/backend regression results apply to that earlier revision only.
+Repository instructions in `.codex/AGENTS.md` prohibit application builds, packaging and test suites unless the user explicitly requests them. Non-emitting frontend type checking, targeted lint and source/schema inspection are permitted. See the [repository review](docs/REPOSITORY_REVIEW.md) for checks actually executed and the remaining C09 acceptance and performance measurements. The user explicitly requested builds/tests and merge for this privacy change; current automated verification is recorded above. Historical F19 results apply to that earlier revision only.
 
 ## 12. Current consolidation priorities
 

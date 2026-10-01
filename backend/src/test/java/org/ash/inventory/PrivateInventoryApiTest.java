@@ -119,14 +119,14 @@ class PrivateInventoryApiTest {
         owner().get("/api/inventory-codes/resolve/" + code).then().statusCode(200).body("targetId", equalTo(item));
         actor("warehouse", "warehouse_crew").get("/api/inventory-codes/resolve/" + code).then().statusCode(404);
         actor("warehouse", "warehouse_crew").get("/api/transactions").then().statusCode(200).body("itemId", not(hasItem(item)));
-        admin().body(Map.of()).post("/api/reports/movements/rebuild").then().statusCode(204);
-        admin().queryParam("itemId", item).get("/api/reports/movements").then().statusCode(200).body("total", greaterThan(0));
-        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/movements").then().statusCode(200).body("total", equalTo(0)).body("rows", empty());
+        admin().body(Map.of()).post("/api/reports/availability/rebuild").then().statusCode(204);
+        admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", greaterThan(0));
+        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", equalTo(0)).body("rows", empty());
         String warehouseId = actor("warehouse", "warehouse_crew").get("/api/access/people").then().extract().jsonPath().getString("find { it.name == 'privacy-warehouse' }.id");
         owner().body(shares(0, List.of(Map.of("userId", warehouseId, "canEdit", false)))).put(policy("items", item)).then().statusCode(200);
-        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/movements").then().statusCode(200).body("total", greaterThan(0));
+        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", greaterThan(0));
         owner().body(shares(1, List.of())).put(policy("items", item)).then().statusCode(200);
-        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/movements").then().statusCode(200).body("total", equalTo(0));
+        actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", equalTo(0));
     }
 
     @Test void concurrentEditsAndGroupRevocationCompleteAndSubsequentEditsAreDenied() throws Exception {
