@@ -1,6 +1,7 @@
 import { Chip, MenuItem, IconButton, Button } from './ActionButtons';
 import { CameraScanner } from './CameraScanner';
 import { useActionInbox } from '../../hooks/useActionInbox';
+import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { Dialog } from './ClosableDialog';
 import { AppBar, Toolbar, Typography, Box, Divider, ListItemText, Menu, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -32,6 +33,7 @@ function payloadText(notification: AppNotification, key: string): string | undef
 }
 
 export function Header() {
+    const { openActionInbox } = useActionInboxDialog();
     const inbox = useActionInbox();
     const actionCount = (inbox.data ?? []).filter(a => !a.remindAt || Date.parse(a.remindAt) <= inbox.dataUpdatedAt).length;
     const toggleSidebar = useUIStore((s) => s.toggleSidebar);
@@ -169,7 +171,7 @@ export function Header() {
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
-                <IconButton title={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} color="inherit" aria-label={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} onClick={() => navigate('/actions')} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
+                <IconButton title={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} color="inherit" aria-label={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} aria-haspopup="dialog" onClick={openActionInbox} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
 
                 <IconButton title={translate('Den QR- und Barcode-Scanner öffnen', 'Open the QR code and barcode scanner')}
                     color="inherit"

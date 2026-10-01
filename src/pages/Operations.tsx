@@ -7,7 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
 import { translate, useLocalizedText } from '../utils/naming';
-import { StockPositions, TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
+import { TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
 import { RepairsPanel, SchedulesPanel } from '../components/operations/LifecycleOperations';
 import { PurchasingPanel, ReceiptsPanel, VendorsPanel } from '../components/operations/PurchasingOperations';
 import { operationsApi } from '../services/operationsService';
@@ -17,7 +17,6 @@ export function Operations() {
   const t = useLocalizedText(); const { user } = useAuth(); const [params, setParams] = useSearchParams();
   const tabs = [
     ...(canOperateWarehouse(user) ? [
-      { key: 'stock', label: t('Lagerbestand', 'Location stock'), component: <StockPositions /> },
       { key: 'transfers', label: t('Umlagerungen', 'Transfers'), component: <TransfersPanel /> },
       { key: 'loans', label: t('Leihe / Miete', 'Borrowing / rental'), component: <LoansPanel /> },
       { key: 'counts', label: t('Inventur', 'Stock counts'), component: <CountsPanel /> },

@@ -1,4 +1,5 @@
 import { AppSnackbar } from './components/shared/AppSnackbar';
+import { ActionInboxDialogProvider } from './components/dialogs/ActionInboxDialogProvider';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
@@ -38,7 +39,6 @@ const TransactionHistoryPage = lazy(() => import('./pages/TransactionHistory').t
 const Procurement = lazy(() => import('./pages/Procurement').then((m) => ({ default: m.Procurement })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ default: m.Maintenance })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
-const ActionInbox = lazy(() => import('./pages/ActionInbox').then(m => ({ default: m.ActionInbox })));
 const LocationScan = lazy(() => import('./pages/LocationScan').then(m => ({ default: m.LocationScan })));
 const Operations = lazy(() => import('./pages/Operations').then((m) => ({ default: m.Operations })));
 
@@ -384,7 +384,7 @@ function AppContent() {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <ActionInboxDialogProvider><Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Header />
       <Navigation />
       <Box
@@ -424,7 +424,6 @@ function AppContent() {
               <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
               <Route path="/procurement" element={<ProcurementGuard><Procurement /></ProcurementGuard>} />
               <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
-              <Route path="/actions" element={<ActionInbox />} />
               <Route path="/locations/:locationId" element={<LocationScan />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/storage-locations" element={<InventoryManagerGuard><StorageLocations /></InventoryManagerGuard>} />
@@ -436,7 +435,7 @@ function AppContent() {
         </ErrorBoundary>
       </Box>
       <AppSnackbar />
-    </Box>
+    </Box></ActionInboxDialogProvider>
   );
 }
 

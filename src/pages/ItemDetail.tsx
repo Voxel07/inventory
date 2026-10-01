@@ -265,20 +265,6 @@ export function ItemDetail() {
                 />}
             </Box>
 
-            {!!item.images?.length && (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5, mb: 2 }}>
-                    {item.images.map((filename) => (
-                        <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
-                    ))}
-                </Box>
-            )}
-            {item.description && (
-                <Paper sx={{ p: 2, mb: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 0.75 }}>{t('Produktdetails', 'Product details')}</Typography>
-                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>{item.description}</Typography>
-                </Paper>
-            )}
-
             <Grid container spacing={2}>
                 {/* Info Cards */}
                 <Grid size={12}>
@@ -327,6 +313,28 @@ export function ItemDetail() {
                         </Paper>
                     </Box>
                 </Grid>
+
+                {canTransact && <Grid size={12}>
+                    <Paper sx={{ p: 2 }}><StockPositions key={item.id} itemId={item.id} /></Paper>
+                </Grid>}
+
+                {!!item.images?.length && (
+                    <Grid size={12}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+                            {item.images.map((filename) => (
+                                <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
+                            ))}
+                        </Box>
+                    </Grid>
+                )}
+                {item.description && (
+                    <Grid size={12}>
+                        <Paper sx={{ p: 2 }}>
+                            <Typography variant="h6" sx={{ mb: 0.75 }}>{t('Produktdetails', 'Product details')}</Typography>
+                            <Typography sx={{ whiteSpace: 'pre-wrap' }}>{item.description}</Typography>
+                        </Paper>
+                    </Grid>
+                )}
 
                 {/* Details */}
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -461,7 +469,8 @@ export function ItemDetail() {
                 )}
 
                 {item.hint && <Grid size={{ xs: 12, md: 6 }}>
-                    <Alert severity="info" sx={{ height: '100%', alignItems: 'flex-start' }}>
+                    <Alert severity="info" sx={{ height: '100%', alignItems: 'flex-start',
+                        '& .MuiAlert-icon': { py: 0, mt: '3px' }, '& .MuiAlert-message': { py: 0 } }}>
                         <Typography sx={{ fontWeight: 700 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
                     </Alert>
@@ -502,6 +511,9 @@ export function ItemDetail() {
                         <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
                     </Grid>
                 )}
+
+                <Grid size={12}><EquipmentOwnership item={item} canEdit={canEdit} /></Grid>
+                {canEdit && <Grid size={12}><CodeManagement targetId={item.id} targetType="product" /></Grid>}
 
                 {/* Stock History Graph */}
                 <Grid size={12}>
@@ -546,7 +558,7 @@ export function ItemDetail() {
                 <Grid size={12}>
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h6" sx={{ mb: 2 }}>
-                            Transaktionsverlauf
+                            {t('Transaktionsverlauf', 'Transaction history')}
                         </Typography>
                         {itemTransactions.length === 0 ? (
                             <Typography color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
@@ -664,9 +676,6 @@ export function ItemDetail() {
                 </DialogContent>
             </Dialog>
 
-            <EquipmentOwnership item={item} canEdit={canEdit} />
-            {canEdit && <CodeManagement targetId={item.id} targetType="product" />}
-            {canTransact && <Paper sx={{ p: 2, my: 2 }}><StockPositions itemId={item.id} /></Paper>}
             {/* Checkout Dialog */}
             <Dialog
                 open={checkoutOpen}
