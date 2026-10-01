@@ -22,6 +22,7 @@ interface Props {
     onEdit?: (item: Item) => void;
     onDelete?: (id: string) => void;
     onDeleteMany?: (ids: string[]) => void;
+    showAllEvents?: boolean;
 }
 
 type ItemRow = {
@@ -37,7 +38,7 @@ type ItemRow = {
     events: string;
 };
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, showAllEvents = false }: Props) {
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
     const t = useLocalizedText();
@@ -48,7 +49,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const [infoItem, setInfoItem] = useState<Item | null>(null);
 
     const rows: ItemRow[] = (() => (items ?? [])
-        .filter((item) => item.eventTypes?.includes(activeEventType))
+        .filter((item) => showAllEvents || item.eventTypes?.includes(activeEventType))
         .filter((item) => `${item.name} ${item.category} ${item.subcategory ?? ''} ${item.sku ?? ''}`
             .toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
         .map((item) => {

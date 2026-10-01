@@ -285,7 +285,28 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
       }
     }
 
-    // Step 5: Import faction orders after their event occurrences exist.
+    // A leading stock-history sequence establishes balances before orders and
+    // standalone custody rows use them. Keep repairs interleaved with movements.
+    const operations = parsedOperations.filter((entry) => entry.status === 'valid');
+    const historyTypes = new Set(['stock', 'damage', 'repair', 'repair_transition']);
+    const firstWorkflow = operations.findIndex((row) => !historyTypes.has(row.operation) || !row.data.occurredAt);
+    const historyEnd = firstWorkflow < 0 ? operations.length : firstWorkflow;
+    const importOperation = createCsvOperationImporter([...createdItemsMap.values()], locCache, existingEvents);
+    async function applyOperation(row: ParsedOperationRow) {
+      setImportStatusText(t(`Importiere Aktion ${row.name}...`, `Importing action ${row.name}...`));
+      try {
+        await importOperation(row);
+        successOperations++;
+      } catch (error) {
+        assertAuthSession(context);
+        errors.push(`Aktion ${row.name}: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        reportCompletedRow();
+      }
+    }
+    for (const row of operations.slice(0, historyEnd)) await applyOperation(row);
+
+    // Step 5: Import faction orders after their event occurrences and stock exist.
     const existingOrders = parsedOrders.length > 0
       ? await loadAllPages((page, size) => getFactionOrders({ page, size })) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
@@ -538,20 +559,8 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
       }
     }
 
-    // Operations follow stock, assets, events and custody creation. Later rows can reference earlier operations.
-    const importOperation = createCsvOperationImporter([...createdItemsMap.values()], locCache, existingEvents);
-    for (const row of parsedOperations.filter((entry) => entry.status === 'valid')) {
-      setImportStatusText(t(`Importiere Aktion ${row.name}...`, `Importing action ${row.name}...`));
-      try {
-        await importOperation(row);
-        successOperations++;
-      } catch (error) {
-        assertAuthSession(context);
-        errors.push(`Aktion ${row.name}: ${error instanceof Error ? error.message : String(error)}`);
-      } finally {
-        reportCompletedRow();
-      }
-    }
+    // Remaining workflows can reference history operations and newly created custody.
+    for (const row of operations.slice(historyEnd)) await applyOperation(row);
   } catch (error) {
     assertAuthSession(context);
     errors.push(t('Import abgebrochen: ', 'Import stopped: ') + (error instanceof Error ? error.message : String(error)));

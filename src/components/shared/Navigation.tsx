@@ -58,13 +58,12 @@ export function Navigation() {
     const { logout, user } = useAuth();
     const isManager = canManageInventory(user);
     const sharedNavItems = [
-        { label: text('Meine Ausrüstung', 'My equipment'), path: '/contributor', icon: <InventoryIcon /> },
+        { label: t('nav.myDashboard'), path: '/', icon: <DashboardIcon /> },
         { label: text('Aufgaben & Erinnerungen', 'Actions & reminders'), path: '/actions', icon: <AssignmentReturnIcon /> },
     ];
     const managerNavItems = [
         ...sharedNavItems,
         { label: t('nav.globalDashboard'), path: '/global-dashboard', icon: <AssessmentIcon /> },
-        { label: t('nav.myDashboard'), path: '/', icon: <DashboardIcon /> },
         { label: t('nav.items'), path: '/items', icon: <InventoryIcon /> },
         { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryIcon /> },
         { label: t('nav.storageLocations'), path: '/storage-locations', icon: <RoomIcon /> },
@@ -248,7 +247,7 @@ export function Navigation() {
                         }}
                         sx={{ height: 64 }}
                     >
-                        {isManager && <BottomNavigationAction title={translate('Die persönliche Übersicht öffnen', 'Open your dashboard')} label={t('nav.home')} value="/" icon={<DashboardIcon />} />}
+                        <BottomNavigationAction label={t('nav.myDashboard')} value="/" icon={<DashboardIcon />} />
                         {isManager && <BottomNavigationAction title={translate('Den Artikelkatalog öffnen', 'Open the item catalog')} label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}
                         {isManager && <BottomNavigationAction title={translate('Ausgeliehene Artikel für die Rückgabe anzeigen', 'Display checked-out items for return')} label={t('nav.return')} value="/checked-out" icon={<AssignmentReturnIcon />} />}
                         {!isManager && canViewCatalog(user) && <BottomNavigationAction title={translate('Den Artikelkatalog öffnen', 'Open the item catalog')} label={t('nav.items')} value="/items" icon={<InventoryIcon />} />}

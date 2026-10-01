@@ -20,21 +20,21 @@ import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
 
-export function Items() {
+export function Items({ showAllEvents = false }: { showAllEvents?: boolean }) {
     const { user } = useAuth();
-    return canEditCatalog(user) ? <ManagedItems /> : <ReadOnlyItems />;
+    return canEditCatalog(user) ? <ManagedItems showAllEvents={showAllEvents} /> : <ReadOnlyItems showAllEvents={showAllEvents} />;
 }
 
-function ReadOnlyItems() {
+function ReadOnlyItems({ showAllEvents }: { showAllEvents: boolean }) {
     const t = useLocalizedText();
     const { data: items = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useItems();
     return <Box>
         <Typography variant="h4" sx={{ mb: 3 }}>{t('Artikel', 'Items')}</Typography>
-        <ItemsList items={items} isLoading={isLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
+        <ItemsList showAllEvents={showAllEvents} items={items} isLoading={isLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
     </Box>;
 }
 
-function ManagedItems() {
+function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -82,6 +82,7 @@ function ManagedItems() {
             </Box>
 
             <ItemsList
+                showAllEvents={showAllEvents}
                 items={items}
                 isLoading={isLoading}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}

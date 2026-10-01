@@ -3,12 +3,11 @@ import { useState } from 'react';
 import { Alert, Card, CardContent, LinearProgress, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { memberApi } from '../services/memberService';
-import { useMember, useMemberAssignments } from '../hooks/useMember';
+import { useMember } from '../hooks/useMember';
 import type { MemberStored as Stored, MemberRequest as Request } from '../types/member';
 import { inputNumber, inputText, optionalText, inputBoolean } from '../utils/inputValues';
 import { useAuth } from '../hooks/useAuth';
 import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
-import { useAssignableUsers } from '../hooks/useUsers';
 import { canOperateWarehouse } from '../utils/access';
 import { translate, useLocalizedText } from '../utils/naming';
 import { OperationForm } from '../components/operations/OperationForm';
@@ -23,7 +22,7 @@ export function Contributor() {
   const error = custody.error || stored.error || requests.error || returns.error;
   const report = (item: Stored, kind: string) => setRequest({ item, kind, commandId: crypto.randomUUID() });
   return <Stack spacing={2}>
-    <Typography variant="h4">{t('Meine Ausrüstung & Abholungen', 'My equipment & pickups')}</Typography>
+    <Typography variant="h6">{t('Meine Ausrüstung & Abholungen', 'My equipment & pickups')}</Typography>
     <Button title={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} component={Link} to="/actions">{t('Aufgaben & Erinnerungen', 'Actions & reminders')}</Button>
     {(custody.isLoading || stored.isLoading || requests.isLoading) && <LinearProgress />}
     {error && <Alert severity="error" action={<Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>{error.message}</Alert>}
@@ -42,17 +41,8 @@ export function Contributor() {
     {requests.data?.map(r => <Card key={r.id}><CardContent><Stack spacing={1}><Typography variant="h6">{r.item} · {r.quantity} · {r.kind === 'damage' ? t('Schaden', 'Damage') : t('Abholung', 'Pickup')}</Typography><Typography>{r.requester} · {r.status} · {new Date(r.createdAt).toLocaleString()}</Typography><Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.notes}</Typography>{r.response && <Alert severity="info">{r.response}</Alert>}{warehouse && r.status !== 'resolved' && <Stack direction="row"><Button title={translate('Auf diese Anfrage antworten oder sie abschließen', 'Respond to this request or resolve it')} onClick={() => setReply(r)}>{t('Antworten / abschließen', 'Respond / resolve')}</Button><Button title={translate('Die zugehörigen Artikeldetails öffnen', 'Open the related item details')} component={Link} to={`/items/${r.itemId}`}>{t('Artikel prüfen', 'Inspect item')}</Button></Stack>}</Stack></CardContent></Card>)}
     <Typography variant="h6">{t('Rückgabestatus', 'Return status')}</Typography>
     {returns.data?.filter(r => r.returnedForUserId === user?.id).map(r => <Card key={r.id}><CardContent><Typography>{r.itemName} · {r.quantity} · {r.status}</Typography><Typography>{r.acknowledgementNotes}</Typography></CardContent></Card>)}
-    {warehouse && <StorageAssignments />}
     {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes) })} />}
     {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}
     {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => memberApi.decide(reply.id, { response: inputText(v.response), resolved: inputBoolean(v.resolved), revision: reply.revision })} />}
-  </Stack>;
-}
-function StorageAssignments() {
-  const t = useLocalizedText(); const users = useAssignableUsers();
-  const assignments = useMemberAssignments();
-  const [editing, setEditing] = useState<import('../types/member').MemberAssignment | null>(null);
-  return <Stack spacing={1}><Typography variant="h6">{t('Lager-Verantwortung zuweisen', 'Assign storage responsibility')}</Typography>{assignments.error && <Alert severity="error">{assignments.error.message}</Alert>}{assignments.data?.map(a => <Button title={translate('Die Zuordnung dieses Lagerorts bearbeiten', 'Edit this storage location\'s assignment')} key={a.id} onClick={() => setEditing(a)}>{a.name} · {users.data?.find(u => u.id === a.userId)?.name ?? t('Nicht zugewiesen', 'Unassigned')}</Button>)}
-    {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }} fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter(u => u.role !== 'read_only').map(u => ({ value: u.id, label: u.name })) }]} onSave={v => memberApi.assign(editing.id, optionalText(v.userId))} />}
   </Stack>;
 }

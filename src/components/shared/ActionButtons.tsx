@@ -61,10 +61,11 @@ function withActionTooltip<C extends ElementType>(Component: C, iconOnly = false
   const ActionControl = forwardRef<HTMLElement, TooltipControlProps>(function ActionControl(
     { title, sx, ...props }, ref,
   ) {
+    const showTooltip = Boolean(title && (iconOnly || props.disabled));
     const button = <Control {...props} ref={ref}
       aria-label={props['aria-label'] ?? (iconOnly ? title : undefined)}
-      sx={props.disabled && title ? splitSx(sx, false) : sx} />;
-    if (!title) return button;
+      sx={props.disabled && showTooltip ? splitSx(sx, false) : sx} />;
+    if (!showTooltip) return button;
 
     return <Tooltip title={title} arrow describeChild>
       {props.disabled
@@ -80,7 +81,7 @@ function withActionTooltip<C extends ElementType>(Component: C, iconOnly = false
   return ActionControl as unknown as C;
 }
 
-/** The title is the localized action description, shown on hover and focus. */
+/** Visible labels explain enabled controls; icons and disabled controls retain hints. */
 export const Button = withActionTooltip(MuiButton);
 export const IconButton = withActionTooltip(MuiIconButton, true);
 export const Tab = withActionTooltip(MuiTab);

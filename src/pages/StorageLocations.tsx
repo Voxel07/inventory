@@ -1,4 +1,6 @@
-import { AccordionSummary, Button, ListItemButton, IconButton } from '../components/shared/ActionButtons';
+import { AccordionSummary, Button, ListItemButton, IconButton, Tab } from '../components/shared/ActionButtons';
+import { Tabs } from '@mui/material';
+import { StorageResponsibilities } from '../components/operations/StorageResponsibilities';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { WarehousesPanel } from '../components/operations/WarehousesPanel';
 import { getWarehouses } from '../services/warehouseService';
@@ -41,7 +43,7 @@ export function StorageLocations() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const { data: locations, isLoading: locationsLoading } = useStorageLocations({ includeInactive: true });
+    const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = useStorageLocations({ includeInactive: true });
     const { data: items, isLoading: itemsLoading } = useItems();
 
     const createMutation = useCreateStorageLocation();
@@ -57,6 +59,7 @@ export function StorageLocations() {
     const [parentFilter, setParentFilter] = useState('');
     const [showInactive, setShowInactive] = useState(false);
     const [warehousesOpen, setWarehousesOpen] = useState(false);
+    const [tab, setTab] = useState('locations');
     const warehouses = useOperationList('warehouses', getWarehouses);
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
@@ -111,8 +114,8 @@ export function StorageLocations() {
         setDialogOpen(true);
     }
 
-    function handleOpenEdit(loc: StorageLocation, e: React.MouseEvent) {
-        e.stopPropagation();
+    function handleOpenEdit(loc: StorageLocation, e?: React.MouseEvent) {
+        e?.stopPropagation();
         setEditingLoc(loc);
         setFormData({
             warehouseId: loc.warehouseId ?? null, parentLocationId: loc.parentLocationId ?? null, locationType: loc.locationType, active: loc.active,
@@ -177,9 +180,10 @@ export function StorageLocations() {
 
     return (
         <Box>
+            {locationsError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('Erneut laden', 'Retry')}</Button>}>{locationsError.message}</Alert>}
             <Button title={translate('Standorte anlegen und bearbeiten', 'Create and edit warehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
             <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
-            {(!isMobile || !selectedLocId) && (
+            {(tab !== 'locations' || !isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h4" sx={{ fontWeight: 700 }}>
                         {t('Lagerorte', 'Storage locations')}
@@ -194,6 +198,14 @@ export function StorageLocations() {
                 </Box>
             )}
 
+            <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }} aria-label={t('Lagerort-Bereiche', 'Storage location sections')}>
+                <Tab value="locations" label={t('Lagerorte & Bestand', 'Locations & stock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
+                {canEdit && <Tab value="responsibilities" label={t('Verantwortung & fehlende Angaben', 'Responsibility & missing information')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
+            </Tabs>
+            {tab === 'responsibilities' && canEdit && !locationsError && <Box role="tabpanel" id="storage-panel-responsibilities" aria-labelledby="storage-tab-responsibilities">
+                <StorageResponsibilities locations={locations ?? []} loading={locationsLoading} onEditLocation={handleOpenEdit} />
+            </Box>}
+            <Box hidden={tab !== 'locations'} role="tabpanel" id="storage-panel-locations" aria-labelledby="storage-tab-locations">
             {isMobile && selectedLocId && (
                 <Button title={translate('Zur Lagerortübersicht zurückkehren', 'Return to the storage location list')}
                     startIcon={<ArrowBackIcon />}
@@ -467,6 +479,7 @@ export function StorageLocations() {
                     </Grid>
                 )}
             </Grid>
+            </Box>
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} fullScreen={isMobile} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>

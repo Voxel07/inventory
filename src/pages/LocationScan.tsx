@@ -10,7 +10,7 @@ import { CodeLabel, CodeManagement } from '../components/qr/CodeManagement';
 import { locationPath } from '../utils/locationHierarchy';
 export function LocationScan() {
   const t = useLocalizedText(); const { user } = useAuth();
-  if (!canOperateWarehouse(user)) return <Stack spacing={2}><Alert severity="info">{t('Eigene Lagerbestände und Abholungen finden Sie in Ihrer Ausrüstungsübersicht.', 'Your assigned storage and pickups are available in your equipment workspace.')}</Alert><Button title={translate('Die eigene Ausrüstungsübersicht öffnen', 'Open your equipment overview')} component={Link} to="/contributor">{t('Meine Ausrüstung', 'My equipment')}</Button></Stack>;
+  if (!canOperateWarehouse(user)) return <Stack spacing={2}><Alert severity="info">{t('Eigene Lagerbestände und Abholungen finden Sie auf Ihrem Dashboard.', 'Your assigned storage and pickups are available on your dashboard.')}</Alert><Button component={Link} to="/?tab=equipment">{t('Mein Dashboard', 'My dashboard')}</Button></Stack>;
   return <WarehouseLocation />;
 }
 function WarehouseLocation() {
