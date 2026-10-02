@@ -56,7 +56,7 @@ export function UserDashboard() {
             {tabs.map((entry) => <Tab key={entry.value} value={entry.value} label={entry.label} id={`dashboard-tab-${entry.value}`} aria-controls={`dashboard-panel-${entry.value}`} />)}
         </Tabs>
         <Box role="tabpanel" id={`dashboard-panel-${tab}`} aria-labelledby={`dashboard-tab-${tab}`}>
-            {tab === 'items' && <Items showAllEvents />}
+            {tab === 'items' && <Items personal custody={custody.data ?? []} />}
             {tab === 'assemblies' && <Assemblies />}
             {tab === 'equipment' && <Contributor embedded />}
             {tab === 'activity' && <PersonalActivity />}

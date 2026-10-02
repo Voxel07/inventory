@@ -1,16 +1,14 @@
-import { InventorySharing } from '../components/items/InventorySharing';
-import { CodeManagement } from '../components/qr/CodeManagement';
+import { ItemOverview } from '../components/items/ItemOverview';
+import { useEquipmentProfile } from '../hooks/useEquipment';
 import { LotsPanel } from '../components/operations/StockOperations';
-import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { ItemStockLocations } from '../components/items/ItemStockLocations';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
-import { Link as RouterLink, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Typography,
-    Link,
     Paper,
     Grid,
     Chip,
@@ -84,7 +82,8 @@ export function ItemDetail() {
     const { itemId } = useParams<{ itemId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data: item, isLoading } = useItem(itemId ?? '');
+    const { data: item, isLoading, error: itemError, refetch: refetchItem } = useItem(itemId ?? '');
+    const equipment = useEquipmentProfile(itemId ?? '');
     const canEdit = item?.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canTransact = item?.access?.privateResource ? item.access.canEdit : canOperateWarehouse(user);
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
@@ -196,6 +195,8 @@ export function ItemDetail() {
         );
     }
 
+    if (itemError) return <Alert severity="error" action={<TooltipButton variant="text" tooltipText={t('Artikel erneut laden', 'Reload item')} label={t('Erneut laden', 'Retry')} onClick={() => void refetchItem()} />}>{t('Artikel konnte nicht geladen werden.', 'Could not load item.')}</Alert>;
+
     if (!item) {
         return (
             <Box>
@@ -213,83 +214,49 @@ export function ItemDetail() {
         );
     }
 
-    const totalValue = (item.value ?? 0) * totalStock;
+    const physicalTotal = item.stock ? item.stock.onHand + item.stock.checkedOut + item.stock.inTransit : totalStock;
+    const totalValue = (item.value ?? 0) * physicalTotal;
+    const ownershipLabels = { organization: t('Organisation', 'Organization'), private_owner: t('Privat', 'Private'), external: t('Extern', 'External') };
+    const policyLabels = { available: t('Verfügbar', 'Available'), commitment_required: t('Zusage erforderlich', 'Commitment required'), unavailable: t('Nicht verfügbar', 'Unavailable') };
+    const metrics = [
+        { label: t('Gesamt', 'Total'), value: physicalTotal },
+        { label: t('Verfügbar', 'Available'), value: remaining, color: 'success.main' },
+        { label: t('Ausgeliehen', 'Checked out'), value: checkedOut, color: 'warning.main' },
+        { label: t('Im Transfer', 'In transit'), value: inTransit },
+        { label: t('Defekt', 'Damaged'), value: damaged, color: 'error.main' },
+        { label: t('Mindestbestand', 'Minimum stock'), value: item.minStock ?? 5 },
+        { label: t('Bestellt', 'Ordered'), value: item.stock?.ordered ?? 0 },
+        { label: t('Einzelwert', 'Unit value'), value: `${(item.value ?? 0).toFixed(2)} €` },
+        { label: t('Gesamtwert', 'Total value'), value: `${totalValue.toFixed(2)} €` },
+    ];
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                <TooltipButton
-                    variant="icon"
-                    tooltipText={t('Zurück zur Artikelübersicht', 'Back to items')}
-                    icon={<ArrowBackIcon />}
-                    onClick={() => navigate('/items')}
-                />
-                <Typography variant="h4" sx={{ flexGrow: 1 }}>
-                    {item.name}
-                </Typography>
-                <TooltipButton
-                    variant="icon"
-                    tooltipText={t('QR-Code generieren und anzeigen', 'Generate and display QR code')}
-                    icon={<QrCode2Icon />}
-                    onClick={() => setQrOpen(true)}
-                />
-                {canEdit && <TooltipButton
-                    variant="icon"
-                    tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')}
-                    icon={<EditIcon />}
-                    onClick={() => setEditOpen(true)}
-                />}
-            </Box>
-
-            <Grid container spacing={2}>
-                {/* Info Cards */}
-                <Grid size={12}>
-                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', '& > *': { flex: 1, minWidth: 90 } }}>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Status', 'Status')}</Typography>
-                            <Box sx={{ mt: 0.5 }}>
-                                <Chip
-                                    label={formatStatus(item.status)}
-                                    color={statusColors[item.status] ?? 'default'}
-                                    size="small"
-                                />
-                            </Box>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Organisationseigentum', 'Organization owned')}</Typography>
-                            <Typography variant="h6">{totalStock}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">Ausgeliehen</Typography>
-                            <Typography variant="h6" color="warning.main">{checkedOut}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Im Transfer', 'In transit')}</Typography>
-                            <Typography variant="h6" color="info.main">{inTransit}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">Defekt</Typography>
-                            <Typography variant="h6" color="error.main">{damaged}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Verfügbar', 'Available')}</Typography>
-                            <Typography variant="h6" color="success.main">{remaining}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">Mindestbestand</Typography>
-                            <Typography variant="h6">{item.minStock ?? 5}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">{t('Bestellt', 'Ordered')}</Typography>
-                            <Typography variant="h6" color="info.main">{item.stock?.ordered ?? 0}</Typography>
-                        </Paper>
-                        <Paper sx={{ p: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">Einzelwert</Typography>
-                            <Typography variant="h6">{item.value?.toFixed(2) ?? '0.00'} €</Typography>
-                        </Paper>
+            <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 1.5, borderRadius: 2 }}>
+                <Stack direction="row" useFlexGap sx={{ display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: 'minmax(0, 1fr) auto auto', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <TooltipButton variant="icon" tooltipText={t('Zurück zur Artikelübersicht', 'Back to items')} icon={<ArrowBackIcon />} onClick={() => navigate('/items')} />
+                    <Box sx={{ flex: 1, minWidth: { xs: 0, sm: 180 }, gridColumn: { xs: '1 / -1', sm: 'auto' }, gridRow: { xs: 2, sm: 'auto' } }}>
+                        <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                            <Typography variant="h5" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                            <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" />
+                            {equipment.data && <Chip size="small" variant="outlined" color={equipment.data.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[equipment.data.ownershipType]} · ${policyLabels[equipment.data.availabilityPolicy]}`} />}
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">{t('Erstellt', 'Created')} {new Date(item.created).toLocaleDateString()} · {t('Sichtbarkeit', 'Visibility')}: {item.access?.privateResource ? t('Privat', 'Private') : item.visibilityScope || 'global'}{item.assignedUserName ? ` · ${item.assignedUserName}` : ''}{item.assignedGroup ? ` · ${item.assignedGroup}` : ''}</Typography>
                     </Box>
-                </Grid>
-
+                    <TooltipButton variant={isMobile ? 'icon' : 'outlined'} tooltipText={t('QR-Code generieren und anzeigen', 'Generate and display QR code')} icon={<QrCode2Icon />} label={isMobile ? undefined : t('Label drucken', 'Print label')} onClick={() => setQrOpen(true)} />
+                    {canEdit && <TooltipButton variant={isMobile ? 'icon' : 'contained'} tooltipText={t('Artikeldetails bearbeiten', 'Edit item details')} icon={<EditIcon />} label={isMobile ? undefined : t('Bearbeiten', 'Edit')} onClick={() => setEditOpen(true)} />}
+                </Stack>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 1, mb: 2, borderRadius: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3, minmax(0, 1fr))', sm: 'repeat(5, minmax(0, 1fr))', lg: 'repeat(9, minmax(0, 1fr))' }, gap: 1 }}>
+                    {metrics.map(metric => <Box key={metric.label} sx={{ p: 1, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">{metric.label}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: metric.color ?? 'text.primary', mt: 0.5 }}>{metric.value}</Typography>
+                    </Box>)}
+                </Box>
+            </Paper>
+            <Grid container spacing={1.5}>
+                <ItemOverview item={item} canEdit={canEdit} />
                 <ItemStockLocations key={item.id} item={item} />
 
                 {!!item.images?.length && (
@@ -310,98 +277,6 @@ export function ItemDetail() {
                     </Grid>
                 )}
 
-                {/* Details */}
-                <Grid size={{ xs: 12, md: item.hint ? 8 : 12 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" sx={{ mb: 2 }}>
-                            Details
-                        </Typography>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    {t('Kategorie', 'Category')}
-                                </Typography>
-                                <Typography>{item.category || '—'}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    Unterkategorie
-                                </Typography>
-                                <Typography>{item.subcategory || '—'}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    {t('Lagerort', 'Storage location')}
-                                </Typography>
-                                {item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${item.storageLocation}`} underline="hover">{item.expand?.storageLocation?.name || item.storageLocation}</Link> : <Typography>—</Typography>}
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    {t('Vorgesehener Rückgabeort', 'Expected return location')}
-                                </Typography>
-                                <Typography>{item.expand?.returnLocation?.name || item.returnLocation || '—'}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    {t('Sichtbarkeit', 'Visibility')}
-                                </Typography>
-                                <Typography>
-                                    {item.visibilityScope || 'global'}
-                                    {item.assignedUserName ? ` · ${item.assignedUserName}` : ''}
-                                    {item.assignedGroup ? ` · ${item.assignedGroup}` : ''}
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    Position
-                                </Typography>
-                                <Typography>{item.expand?.storageLocation?.position || '—'}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    Genauer Ort
-                                </Typography>
-                                <Typography>{item.expand?.storageLocation?.location || '—'}</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    Gesamtwert
-                                </Typography>
-                                <Typography>{totalValue.toFixed(2)} €</Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    Erstellt
-                                </Typography>
-                                <Typography>{new Date(item.created).toLocaleDateString()}</Typography>
-                            </Box>
-                            <Box sx={{ gridColumn: '1 / -1' }}>
-                                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
-                                    {t('Event-Nutzung', 'Event use')}
-                                </Typography>
-                                {item.eventTypes?.length ? (
-                                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                                        {item.eventTypes.map((eventType) => (
-                                            <Chip
-                                                key={eventType}
-                                                label={eventType === 'LS' ? 'LightSim' : eventType}
-                                                color="primary"
-                                                variant="outlined"
-                                                size="small"
-                                            />
-                                        ))}
-                                    </Stack>
-                                ) : (
-                                    <Typography>—</Typography>
-                                )}
-                            </Box>
-                        </Box>
-                        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                            <EquipmentOwnership item={item} canEdit={canEdit} embedded />
-                        </Box>
-                    </Paper>
-                </Grid>
-
                 {item.hint && <Grid size={{ xs: 12, md: 4 }}>
                     <Alert severity="info" sx={{ py: 1, alignItems: 'flex-start',
                         '& .MuiAlert-icon': { py: 0, mt: '3px' }, '& .MuiAlert-message': { py: 0 } }}>
@@ -412,7 +287,7 @@ export function ItemDetail() {
 
                 {(isVehicle || isGenerator || isFood) && (
                     <Grid size={{ xs: 12, md: 6 }}>
-                        <Paper sx={{ p: 3 }}>
+                        <Paper sx={{ p: 2 }}>
                             <Typography variant="h6" sx={{ mb: 2 }}>{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
                             <Stack spacing={1.5}>
                                 {isVehicle && (
@@ -435,7 +310,7 @@ export function ItemDetail() {
 
                 {isGenerator && (
                     <Grid size={12}>
-                        <Paper sx={{ p: 3 }}>
+                        <Paper sx={{ p: 2 }}>
                             <Typography variant="h6" sx={{ mb: 2 }}>{t('Wartungsprotokoll', 'Maintenance log')}</Typography>
                             {maintenanceRecords.length === 0 ? (
                                 <Typography color="text.secondary">{t('Noch keine Wartungseinträge.', 'No maintenance records yet.')}</Typography>
@@ -489,14 +364,12 @@ export function ItemDetail() {
                     </Grid>
                 )}
 
-                <Grid size={12}><InventorySharing kind="items" id={item.id} access={item.access} /></Grid>
                 {item.locationRestricted && <Grid size={12}><Alert severity="info">{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert></Grid>}
                 {canEdit && item.trackingMode === 'lot_tracked' && <Grid size={12}><Paper sx={{ p: 2 }}><LotsPanel itemId={item.id} /></Paper></Grid>}
-                {canEdit && <Grid size={12}><CodeManagement targetId={item.id} targetType="product" /></Grid>}
 
                 {/* Stock History Graph */}
                 <Grid size={12}>
-                    <Paper sx={{ p: 3 }}>
+                    <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" sx={{ mb: 2 }}>
                             {t('Bestandsverlauf', 'Stock history')}
                         </Typography>
@@ -535,7 +408,7 @@ export function ItemDetail() {
 
                 {/* Recent transactions for this item */}
                 <Grid size={12}>
-                    <Paper sx={{ p: 3 }}>
+                    <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" sx={{ mb: 2 }}>
                             {t('Transaktionsverlauf', 'Transaction history')}
                         </Typography>
@@ -543,7 +416,7 @@ export function ItemDetail() {
                             <Typography color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
                         ) : isMobile ? (
                             <Stack spacing={1.5}>
-                                {itemTransactions
+                                {[...itemTransactions]
                                     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                                     .map((tx) => (
                                         <Card key={tx.id} variant="outlined">
@@ -595,7 +468,7 @@ export function ItemDetail() {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {itemTransactions
+                                        {[...itemTransactions]
                                             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                                             .map((tx) => (
                                                 <TableRow key={tx.id} hover>

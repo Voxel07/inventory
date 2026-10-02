@@ -1,3 +1,4 @@
+import { OperationLines } from './OperationLines';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
@@ -76,14 +77,14 @@ export function TransfersPanel() {
   return <Stack spacing={2}>
     <Button title={translate('Eine Umlagerung zwischen Lagerorten anlegen', 'Create a transfer between storage locations')} variant="contained" onClick={() => setChooseItem(true)}>{t('Umlagerung anlegen', 'New transfer')}</Button>
     <QueryFeedback isLoading={transfers.isLoading} error={transfers.error} isEmpty={!transfers.data?.length} emptyMessage={t('Noch keine Umlagerungen.', 'No transfers yet.')} />
-    {transfers.data?.map((transfer) => <OperationListEntry key={transfer.id} title={<>{transfer.transferNumber} · {transfer.status}</>}>
-      <Typography>{lookup.locations.find((value) => value.id === transfer.sourceLocationId)?.name} → {lookup.locations.find((value) => value.id === transfer.destinationLocationId)?.name}</Typography>
-      {transfer.lines.map((line) => <Typography key={line.id}>{line.itemName} {line.assetCode} · {t('Angefordert', 'Requested')}: {line.requestedQuantity} · {t('Erhalten', 'Received')}: {line.receivedQuantity} · {t('Abweichung', 'Discrepancy')}: {line.discrepancyQuantity}{line.discrepancyNotes ? ` — ${line.discrepancyNotes}` : ''}</Typography>)}
-      {transfer.notes && <Typography>{transfer.notes}</Typography>}
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+    {transfers.data?.map((transfer) => <OperationListEntry key={transfer.id} actions={<>
         {['requested', 'picking'].includes(transfer.status) && <><Button title={translate('Die Umlagerung als versendet erfassen', 'Record dispatch of this transfer')} onClick={() => setAction({ transfer, type: 'dispatch', key: crypto.randomUUID() })}>{t('Versenden', 'Dispatch')}</Button><Button title={translate('Diese Umlagerung stornieren', 'Cancel this transfer')} onClick={() => setAction({ transfer, type: 'cancel', key: crypto.randomUUID() })}>{t('Stornieren', 'Cancel transfer')}</Button></>}
         {['in_transit', 'partially_received'].includes(transfer.status) && <Button title={translate('Die empfangenen Mengen der Umlagerung erfassen', 'Record the quantities received in this transfer')} onClick={() => setAction({ transfer, type: 'receive', key: crypto.randomUUID() })}>{t('Empfang erfassen', 'Receive transfer')}</Button>}
-      </Stack>
+       </>} title={<>{transfer.transferNumber}</>} status={transfer.status}>
+      <Typography>{lookup.locations.find((value) => value.id === transfer.sourceLocationId)?.name} → {lookup.locations.find((value) => value.id === transfer.destinationLocationId)?.name}</Typography>
+      <OperationLines label={t('Umlagerungspositionen', 'Transfer lines')} headers={[t('Artikel / Gerät', 'Item / asset'), t('Angefordert', 'Requested'), t('Erhalten', 'Received'), t('Abweichung', 'Discrepancy')]} rows={transfer.lines.map(line => ({ id: line.id, cells: [<Link component={RouterLink} to={`/items/${line.itemId}`} key={line.id}>{line.itemName} {line.assetCode}{line.discrepancyNotes && <Typography variant="caption" sx={{ display: 'block' }}>{line.discrepancyNotes}</Typography>}</Link>, line.requestedQuantity, line.receivedQuantity, line.discrepancyQuantity] }))} />
+      {transfer.notes && <Typography>{transfer.notes}</Typography>}
+
     </OperationListEntry>)}
     {chooseItem && <OperationForm title={t('Artikel umlagern', 'Transfer item')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => { setChooseItem(false); setItemId(String(values.itemId)); setCreateKey(crypto.randomUUID()); }} />}
     {item && <TransferItemForm item={item} sourceLocationId={params.get('sourceLocationId') ?? ''} idempotencyKey={createKey} onClose={() => setItemId('')} />}
@@ -148,16 +149,16 @@ export function CountsPanel() {
   return <Stack spacing={2}>
     <Button title={translate('Eine neue Inventur anlegen', 'Create a new stock count')} variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
     <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
-    {counts.data?.map((count) => <OperationListEntry key={count.id} title={<>{count.sessionNumber} · {count.status}</>}>
-      <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t(' · Blindzählung', ' · Blind count') : ''}</Typography>
-      {count.lines.map((line) => <Typography key={line.id}>{line.itemName} {line.assetCode} · {lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'} · {t('Gezählt', 'Counted')}: {line.countedQuantity ?? '—'} · {t('Nachzählung', 'Recount')}: {line.recountedQuantity ?? '—'}{line.expectedQuantity != null ? ` · ${t('Erwartet', 'Expected')}: ${line.expectedQuantity}` : ''}{line.varianceQuantity != null ? ` · ${t('Abweichung', 'Variance')}: ${line.varianceQuantity}` : ''}</Typography>)}
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+    {counts.data?.map((count) => <OperationListEntry key={count.id} actions={<>
         {count.status === 'counting' && <Button title={translate('Die gezählten Mengen eingeben', 'Enter the counted quantities')} onClick={() => setAction({ count, type: 'submit' })}>{count.lines.some(line => line.countedQuantity != null) ? t('Zählung fortsetzen', 'Resume count') : t('Zählung erfassen', 'Record count')}</Button>}
         {count.status === 'awaiting_recount' && <Button title={translate('Eine Nachzählung der Inventur starten', 'Start a recount of this inventory')} onClick={() => setAction({ count, type: 'recount' })}>{t('Nachzählen', 'Recount')}</Button>}
         {count.status === 'awaiting_approval' && canManageUsers(user) && <Button title={translate('Die erfassten Zählmengen freigeben', 'Approve the recorded count quantities')} onClick={() => setAction({ count, type: 'approve' })}>{t('Freigeben', 'Approve')}</Button>}
         {count.status === 'approved' && <Button title={translate('Den Bestand anhand der freigegebenen Inventur korrigieren', 'Adjust stock using the approved count')} onClick={() => setAction({ count, type: 'post' })}>{t('Bestand korrigieren', 'Post adjustment')}</Button>}
         {!['posted', 'cancelled'].includes(count.status) && <Button title={translate('Diese Inventur abbrechen', 'Cancel this stock count')} onClick={() => setAction({ count, type: 'cancel' })}>{t('Abbrechen', 'Cancel count')}</Button>}
-      </Stack>
+       </>} title={<>{count.sessionNumber}</>} status={count.status}>
+      <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t(' · Blindzählung', ' · Blind count') : ''}</Typography>
+      <OperationLines label={t('Inventurpositionen', 'Count lines')} headers={[t('Artikel / Lagerort', 'Item / location'), t('Erwartet', 'Expected'), t('Gezählt', 'Counted'), t('Nachzählung', 'Recount'), t('Abweichung', 'Variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, line.expectedQuantity ?? '—', line.countedQuantity ?? '—', line.recountedQuantity ?? '—', line.varianceQuantity ?? '—'] }))} />
+
     </OperationListEntry>)}
     {create && <OperationForm title={t('Neue Inventur', 'New stock count')} initial={{ blindCount: false }} fields={[
       { key: 'locationId', label: t('Lagerort (leer = alle)', 'Location (empty = all)'), options: lookup.locationOptions },
@@ -187,9 +188,9 @@ export function LotsPanel({ itemId }: { itemId?: string } = {}) {
   return <Stack spacing={2}>
     <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
     <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('Noch keine Chargen.', 'No lots yet.')} />
-    {lots.data?.map((lot) => <OperationListEntry key={lot.id} title={<>{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</>}>
-      <Typography>{lot.status} · {t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
-      <Typography>{lot.storageRequirements} {lot.notes}</Typography><Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>
+    {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={<Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>} title={<>{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</>}>
+      <Typography>{t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
+      <Typography>{lot.storageRequirements} {lot.notes}</Typography>
     </OperationListEntry>)}
     {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available', itemId: itemId ?? '' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[
       { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions.filter((option) => (!itemId || option.value === itemId) && lookup.items.find((item) => item.id === option.value)?.trackingMode === 'lot_tracked'), required: true },

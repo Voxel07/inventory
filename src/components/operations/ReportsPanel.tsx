@@ -1,6 +1,6 @@
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField as MuiTextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
@@ -12,6 +12,8 @@ import { useEventReports } from '../../hooks/useEvents';
 import { getWarehouses } from '../../services/warehouseService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { translate, useLocalizedText } from '../../utils/naming';
+
+const TextField: typeof MuiTextField = (props) => <MuiTextField size="small" {...props} />;
 
 const title = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const labels = { events: ['Eventbedarf und Nutzung', 'Event demand and use'], availability: ['Verfügbarkeit nach Lagerort', 'Availability by location'], returns: ['Offene Rückgaben', 'Unresolved returns'], repairs: ['Reparaturrückstand', 'Repair backlog'], maintenance: ['Wartungsbedarf', 'Maintenance due'], purchases: ['Einkaufshistorie', 'Purchase history'], counts: ['Inventurdifferenzen', 'Count variance'], movements: ['Verbrauch und Abschreibungen', 'Consumption and write-offs'] } as const;

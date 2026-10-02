@@ -1,20 +1,21 @@
 import { Button } from '../shared/ActionButtons';
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Alert, Box, Card, CardContent, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Stack, Typography, Paper } from '@mui/material';
 import { apiRequest } from '../../services/apiClient';
 import { useOperationList } from '../../hooks/useOperations';
 import { OperationForm } from '../operations/OperationForm';
 import { translate, useLocalizedText } from '../../utils/naming';
 
 interface Code { id: string; code: string; targetId: string; targetType: string; primaryCode: boolean; active: boolean; retiredAt?: string }
-export function CodeManagement({ targetId, targetType }: { targetId: string; targetType: 'product' | 'asset' | 'location' }) {
+export function CodeManagement({ targetId, targetType, embedded = false }: { targetId: string; targetType: 'product' | 'asset' | 'location'; embedded?: boolean }) {
   const t = useLocalizedText();
   const codes = useOperationList(`codes:${targetId}`, (page, size) => apiRequest<Code[]>('/api/inventory-codes', { query: { targetId, page, size } }));
   const [action, setAction] = useState<{ type: 'add' | 'replace' | 'retire'; code?: Code } | null>(null);
-  return <Stack spacing={1} sx={{ my: 2 }}><Typography variant="h6">{t('Etiketten & Code-Aliasse', 'Labels & code aliases')}</Typography>
+  return <Stack component={embedded ? Paper : 'div'} variant={embedded ? 'outlined' : undefined} spacing={1} sx={embedded ? { p: 2, borderRadius: 2 } : { my: 2 }}>
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}><Typography variant={embedded ? 'subtitle2' : 'h6'}>{t('Etiketten & Code-Aliasse', 'Labels & code aliases')}</Typography><Button size="small" title={translate('Einen zusätzlichen QR- oder Barcode zuordnen', 'Assign an additional QR code or barcode')} onClick={() => setAction({ type: 'add' })}>{t('Alias hinzufügen', 'Add alias')}</Button></Stack>
     {codes.error && <Alert severity="error">{codes.error.message}</Alert>}
-    <Button title={translate('Einen zusätzlichen QR- oder Barcode zuordnen', 'Assign an additional QR code or barcode')} onClick={() => setAction({ type: 'add' })}>{t('Alias hinzufügen', 'Add alias')}</Button>
+    {!codes.isLoading && !codes.error && !codes.data?.length && <Typography variant="body2" color="text.secondary">{t('Keine alternativen Scan-Codes hinterlegt.', 'No alternative scan codes recorded.')}</Typography>}
     {codes.data?.map(c => <Card key={c.id}><CardContent><Stack spacing={1}><Typography sx={{ overflowWrap: 'anywhere' }}>{c.code} · {c.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')}{c.primaryCode ? ' · primary' : ''}</Typography>{c.active && <><CodeLabel code={c.code} /><Stack direction="row"><Button title={translate('Dieses Etikett durch einen neuen Code ersetzen', 'Replace this label with a new code')} onClick={() => setAction({ type: 'replace', code: c })}>{t('Etikett ersetzen', 'Replace label')}</Button><Button title={translate('Dieses Etikett für künftige Scans stilllegen', 'Retire this label from future scanning')} onClick={() => setAction({ type: 'retire', code: c })}>{t('Stilllegen', 'Retire')}</Button></Stack></>}{c.retiredAt && <Typography>{new Date(c.retiredAt).toLocaleString()}</Typography>}</Stack></CardContent></Card>)}
     {action && <OperationForm title={action.type === 'retire' ? t('Etikett stilllegen', 'Retire label') : t('Etikett erfassen', 'Record label')} onClose={() => setAction(null)} initial={{ primaryCode: action.code?.primaryCode ?? false }} fields={action.type === 'retire' ? [] : [{ key: 'code', label: t('Neuer eindeutiger Code', 'New unique code'), required: true }, { key: 'primaryCode', label: t('Hauptetikett', 'Primary label'), type: 'checkbox' }]} onSave={v => apiRequest(action.type === 'add' ? '/api/inventory-codes' : `/api/inventory-codes/${action.code!.id}${action.type === 'replace' ? '/replace' : ''}`, { method: action.type === 'retire' ? 'DELETE' : 'POST', body: action.type === 'retire' ? undefined : { ...v, targetId, targetType } })}>
       <Alert severity="info">{t('Stillgelegte Codes bleiben in der Historie und können nicht erneut vergeben werden.', 'Retired codes remain in history and cannot be reassigned.')}</Alert>

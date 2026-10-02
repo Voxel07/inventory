@@ -1,4 +1,4 @@
-import { Button } from '../components/shared/ActionButtons';
+import { Button, IconButton } from '../components/shared/ActionButtons';
 import { OperationForm } from '../components/operations/OperationForm';
 import { useAuth } from '../hooks/useAuth';
 import { canOperateWarehouse } from '../utils/access';
@@ -6,26 +6,30 @@ import { useState } from 'react';
 import {
   Alert,
   Box,
-  Card,
-  CardContent,
   Chip,
-  Grid,
   MenuItem,
-  Skeleton,
+  Tooltip,
+  Link,
   Stack,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import PhotoOutlinedIcon from '@mui/icons-material/PhotoOutlined';
+import { Link as RouterLink } from 'react-router-dom';
+import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { MediaImage } from '../components/common/MediaImage';
 import {
   useAcknowledgeReturnSubmission,
   useRejectReturnSubmission,
   useReturnSubmissions,
 } from '../hooks/useReturnSubmissions';
-import type { ReturnSubmissionStatus } from '../types';
-import { translate, useLocalizedText } from '../utils/naming';
+import type { ReturnSubmission, ReturnSubmissionStatus } from '../types';
+import { useAppLanguage, useLocalizedText } from '../utils/naming';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -36,11 +40,37 @@ const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'erro
 export function ReturnedItemsPage() {
   const t = useLocalizedText();
   const { user } = useAuth();
+  const language = useAppLanguage();
+  const isMobile = useMediaQuery('(max-width:599.95px)');
+  const [search, setSearch] = useState('');
   const [decision, setDecision] = useState<{ id: string; accept: boolean } | null>(null);
   const [status, setStatus] = useState<ReturnSubmissionStatus | ''>('pending');
-  const { data = [], isLoading, error } = useReturnSubmissions(status || undefined);
+  const { data = [], isLoading, error, refetch } = useReturnSubmissions(status || undefined);
   const acknowledge = useAcknowledgeReturnSubmission();
   const reject = useRejectReturnSubmission();
+
+  const labels = { pending: t('Prüfung ausstehend', 'Pending'), accepted: t('Bestätigt', 'Accepted'), rejected: t('Abgelehnt', 'Rejected') };
+  const columns: GridColDef<ReturnSubmission>[] = [
+    { field: 'itemName', headerName: t('Artikel', 'Item'), minWidth: isMobile ? 140 : 180, flex: 1.3,
+      renderCell: ({ row }) => <Stack sx={{ minWidth: 0 }}><Link component={RouterLink} to={`/items/${row.itemId}`} underline="hover" color="text.primary" sx={{ fontWeight: 600, lineHeight: 1.4 }}>{row.itemName}</Link>{isMobile && <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} sx={{ alignSelf: 'flex-start' }} />}{!isMobile && row.assetCode && <Typography variant="caption" color="text.secondary">{row.assetCode}</Typography>}</Stack> },
+    { field: 'quantity', headerName: isMobile ? t('Anz.', 'Qty') : t('Menge', 'Quantity'), type: 'number', width: 60 },
+    { field: 'returnedForUserName', headerName: t('Für', 'For'), minWidth: 120, flex: 0.8, valueGetter: (_, row) => row.returnedForUserName || row.returnedForUserId },
+    { field: 'expectedReturnLocationName', headerName: t('Rückgabeort', 'Return location'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
+    { field: 'status', headerName: t('Status', 'Status'), width: 130, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
+    { field: 'created', headerName: t('Gemeldet', 'Submitted'), width: 140, valueFormatter: (value: string) => new Date(value).toLocaleString() },
+    { field: 'actions', headerName: t('Prüfung', 'Review'), sortable: false, filterable: false, width: isMobile ? 132 : 145,
+      renderCell: ({ row }) => <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+        <Tooltip arrow enterTouchDelay={0} title={<Stack spacing={0.5} sx={{ maxWidth: 360 }}><Typography variant="body2">{t('Gemeldet von', 'Submitted by')}: {row.submittedByName}</Typography><Typography variant="body2">{t('Für', 'For')}: {row.returnedForUserName || row.returnedForUserId} · {row.expectedReturnLocationName || '—'}</Typography><Typography variant="body2">{new Date(row.created).toLocaleString()}{row.assetCode ? ` · ${row.assetCode}` : ''}</Typography>{row.notes && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{row.notes}</Typography>}{row.acknowledgementNotes && <Typography variant="body2">{t('Prüfnotiz', 'Inspection notes')}: {row.acknowledgementNotes}</Typography>}</Stack>}>
+          <IconButton size="small" aria-label={t('Rückgabedetails', 'Return details')}><InfoOutlinedIcon fontSize="small" /></IconButton>
+        </Tooltip>
+        {row.placementImage && <Tooltip arrow enterTouchDelay={0} title={<MediaImage src={row.placementImage} alt={t('Foto des Rückgabeorts', 'Return placement photo')} sx={{ width: 280, height: 180, objectFit: 'contain' }} />} ><IconButton size="small" aria-label={t('Rückgabefoto', 'Return photo')}><PhotoOutlinedIcon fontSize="small" /></IconButton></Tooltip>}
+        {row.status === 'pending' && canOperateWarehouse(user) && <>
+          <IconButton size="small" color="success" title={t('Bestätigen & einlagern', 'Acknowledge & return to stock')} disabled={acknowledge.isPending || reject.isPending} onClick={() => setDecision({ id: row.id, accept: true })}><CheckCircleIcon fontSize="small" /></IconButton>
+          <IconButton size="small" color="error" title={t('Ablehnen', 'Reject')} disabled={acknowledge.isPending || reject.isPending} onClick={() => setDecision({ id: row.id, accept: false })}><CancelIcon fontSize="small" /></IconButton>
+        </>}
+      </Stack> },
+  ];
+  const rows = data.filter(row => [row.itemName, row.assetCode, row.returnedForUserName, row.returnedForUserId, row.expectedReturnLocationName, row.notes].filter(Boolean).join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
 
   return (
     <Box>
@@ -66,70 +96,12 @@ export function ReturnedItemsPage() {
         </TextField>
       </Stack>
 
-      {error && <Alert severity="error">{t('Rückgaben konnten nicht geladen werden.', 'Could not load returns.')}</Alert>}
-      {isLoading ? (
-        <Stack spacing={2}>{[1, 2, 3].map((key) => <Skeleton key={key} variant="rounded" height={170} />)}</Stack>
-      ) : data.length === 0 ? (
-        <Alert severity="info">{t('Keine Rückgaben mit diesem Status.', 'No returns with this status.')}</Alert>
-      ) : (
-        <Grid container spacing={2}>
-          {data.map((entry) => (
-            <Grid key={entry.id} size={{ xs: 12, md: 6 }}>
-              <Card variant="outlined">
-                {entry.placementImage && (
-                  <MediaImage
-                    src={entry.placementImage}
-                    alt={t('Foto des Rückgabeorts', 'Return placement photo')}
-                    sx={{ width: '100%', height: 220, objectFit: 'cover' }}
-                  />
-                )}
-                <CardContent>
-                  <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                    <Typography variant="h6" sx={{ flexGrow: 1 }}>{entry.itemName}</Typography>
-                    <Chip size="small" color={statusColors[entry.status]} label={entry.status} />
-                  </Stack>
-                  <Typography variant="body2">
-                    {t('Menge', 'Quantity')}: {entry.quantity}{entry.assetCode ? ` · ${entry.assetCode}` : ''}
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('Zurückgegeben für', 'Returned for')}: {entry.returnedForUserName || entry.returnedForUserId}
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('Vorgesehener Rückgabeort', 'Expected return location')}: {entry.expectedReturnLocationName || '—'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                    {new Date(entry.created).toLocaleString()} · {entry.submittedByName}
-                  </Typography>
-                  {entry.notes && <Typography sx={{ mt: 1 }}>{entry.notes}</Typography>}
-                  {entry.acknowledgementNotes && <Typography sx={{ mt: 1 }}>{t('Prüfnotiz', 'Inspection notes')}: {entry.acknowledgementNotes}</Typography>}
-                  {entry.status === 'pending' && canOperateWarehouse(user) && (
-                    <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                      <Button title={translate('Die Rückgabe bestätigen und den Bestand einlagern', 'Acknowledge this return and restore it to stock')}
-                        variant="contained"
-                        color="success"
-                        startIcon={<CheckCircleIcon />}
-                        disabled={acknowledge.isPending || reject.isPending}
-                        onClick={() => setDecision({ id: entry.id, accept: true })}
-                      >
-                        {t('Bestätigen & einlagern', 'Acknowledge & return to stock')}
-                      </Button>
-                      <Button title={translate('Diese Rückgabemeldung mit Begründung ablehnen', 'Reject this return submission with a reason')}
-                        variant="outlined"
-                        color="error"
-                        startIcon={<CancelIcon />}
-                        disabled={acknowledge.isPending || reject.isPending}
-                        onClick={() => setDecision({ id: entry.id, accept: false })}
-                      >
-                        {t('Ablehnen', 'Reject')}
-                      </Button>
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      )}
+      <TextField size="small" fullWidth label={t('Artikel, Person oder Rückgabeort suchen', 'Search item, person or return location')} value={search} onChange={event => setSearch(event.target.value)} sx={{ mb: 1.5 }} />
+      {error && <Alert severity="error" sx={{ mb: 1 }} action={<Button onClick={() => void refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{t('Rückgaben konnten nicht geladen werden.', 'Could not load returns.')}</Alert>}
+      <DataGrid columnVisibilityModel={{ returnedForUserName: !isMobile, expectedReturnLocationName: !isMobile, created: !isMobile, status: !isMobile }} rows={rows} columns={columns} loading={isLoading} density="compact" rowHeight={isMobile ? 64 : 54} autoHeight disableRowSelectionOnClick
+        initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }} pageSizeOptions={[20, 50, 100]}
+        localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
+        sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
       {decision && <OperationForm title={decision.accept ? t('Rückgabe bestätigen', 'Acknowledge return') : t('Rückgabe ablehnen', 'Reject return')} fields={[{ key: 'notes', label: t('Prüfnotiz / Begründung', 'Inspection notes / reason'), required: !decision.accept, multiline: true }]} onClose={() => setDecision(null)} onSave={(values) => (decision.accept ? acknowledge : reject).mutateAsync({ id: decision.id, notes: String(values.notes || '') })} />}
     </Box>
   );

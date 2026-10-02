@@ -1,8 +1,9 @@
-import { Button } from '../shared/ActionButtons';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { Button, IconButton } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
 import { equipmentProfileInput, equipmentCommitmentInput } from '../../services/equipmentInputs';
 import { useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import type { Item } from '../../types';
 import { equipmentApi } from '../../services/equipmentService';
 import type { EquipmentCommitment, EquipmentProfile } from '../../types/equipment';
@@ -38,13 +39,13 @@ export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: 
           <Box><Typography variant="subtitle2" color="text.secondary">{t('Eigentümer / Anbieter', 'Owner / provider')}</Typography><Typography variant="body2">{data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography></Box>
           <Box><Typography variant="subtitle2" color="text.secondary">{t('Verwahrer / Kontakt', 'Keeper / contact')}</Typography><Typography variant="body2">{[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography></Box>
         </Box>
-        <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
-        {data.availabilityPolicy !== 'available' && <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>}
+        <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
+        {data.availabilityPolicy !== 'available' && (embedded ? <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Typography variant="caption" color="text.secondary">{t('Zusagen-Richtlinie', 'Commitment policy')}</Typography><Tooltip arrow enterTouchDelay={0} title={t('Nur passende Zusagen zählen für Planung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgaben mit dem Eigentümer abstimmen.', 'Only matching commitments count toward planning and checkout. Storage movements do not change ownership or commitments. Coordinate returns with the owner.')}><IconButton size="small" aria-label={t('Information zur Zusagen-Richtlinie', 'About commitment policy')}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip></Stack> : <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>)}
         {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Button title={translate('Eigentümer, Verwahrer und Verfügbarkeit bearbeiten', 'Edit the owner, keeper and availability')} onClick={() => setEditing(data)}>{t('Eigentum / Verwahrung bearbeiten', 'Edit ownership / keeper')}</Button>
+          <Button title={translate('Eigentümer, Verwahrer und Verfügbarkeit bearbeiten', 'Edit the owner, keeper and availability')} onClick={() => setEditing(data)}>{t('Eigentum bearbeiten', 'Edit ownership')}</Button>
           <Button title={translate('Eine Verfügbarkeitszusage für ein Event erfassen', 'Record an availability commitment for an event')} variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('Zusage erfassen', 'Record commitment')}</Button>
         </Stack>}
-        {data.commitments.length === 0 && <Typography color="text.secondary">{t('Keine Zusagen erfasst.', 'No commitments recorded.')}</Typography>}
+        {data.availabilityPolicy === 'commitment_required' && data.commitments.length === 0 && <Typography variant="body2" color="text.secondary">{t('Keine Zusagen erfasst.', 'No commitments recorded.')}</Typography>}
         {data.commitments.map(c => <Card key={c.id} variant="outlined"><CardContent><Stack spacing={1}>
           <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('Datumsgebundene Zusage ohne Eventbindung', 'Date range without event restriction')} · {c.quantity} · {statuses[c.status]}</Typography>
           <Typography>{c.availableFrom} – {c.availableUntil}</Typography>

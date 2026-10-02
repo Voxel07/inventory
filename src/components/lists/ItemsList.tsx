@@ -11,7 +11,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock } from '../../utils/stock';
 import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
-import { useUIStore } from '../../store/uiStore';
+import { EVENT_TYPES, type EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
@@ -27,7 +27,6 @@ interface Props {
     onEdit?: (item: Item) => void;
     onDelete?: (id: string) => void;
     onDeleteMany?: (ids: string[]) => void;
-    showAllEvents?: boolean;
     requiredQuantities?: Record<string, number>;
     onRemoveItem?: (id: string) => void;
 }
@@ -45,7 +44,7 @@ type ItemRow = {
     events: string;
 };
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, showAllEvents = false, requiredQuantities, onRemoveItem }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -53,7 +52,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const t = useLocalizedText();
     const language = useAppLanguage();
     const isMobile = useMediaQuery('(max-width:599.95px)');
-    const activeEventType = useUIStore((state) => state.activeEventType);
+    const [eventType, setEventType] = useState<EventType | ''>('');
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [locationIds, setLocationIds] = useState<string[]>([]);
@@ -61,7 +60,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const locations = useStorageLocations({ includeInactive: true });
     const positions = useOperationList('positions:item-list', operationsApi.positions(), locationIds.length > 0);
     const assets = useOperationList('assets:item-list', operationsApi.assets(), locationIds.length > 0);
-    const eventItems = (items ?? []).filter((item) => showAllEvents || item.eventTypes?.includes(activeEventType));
+    const eventItems = (items ?? []).filter((item) => !eventType || item.eventTypes?.includes(eventType));
     const categories = [...new Set(eventItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const locationOptions = new Map((locations.data ?? []).map((location) => [location.id, locationPath(location, locations.data ?? [])]));
     for (const item of eventItems) {
@@ -116,7 +115,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
               <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>
-              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton disabled={!canEditItem(row.item)} title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
             </Stack> } satisfies GridColDef<ItemRow>] : []),
     ];
 
@@ -128,13 +127,18 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     }
 
     return <Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)' }, gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.4fr) repeat(3, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>
             <TextField label={t('Nach Name suchen', 'Search by name')} value={search}
                 onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
             <TextField select label={t('Kategorie', 'Category')} value={category} size="small" fullWidth
                 onChange={(event) => setCategory(event.target.value)}>
                 <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
                 {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            </TextField>
+            <TextField select label={t('Event', 'Event')} value={eventType} size="small" fullWidth
+                onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
+                <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
+                {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{value === 'LS' ? 'LightSim' : value}</MenuItem>)}
             </TextField>
             <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
                 <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>

@@ -42,7 +42,7 @@ export function Operations() {
     '& .MuiTableCell-root': { px: 1, py: 0.75 },
     '& a:not(.MuiButton-root)': { color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
   }}><Typography variant="h4">{t('Betrieb', 'Operations')}</Typography>
-    <Tabs value={active.key} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile onChange={(_, value: string) => setParams({ tab: value })} aria-label={t('Betriebsaufgaben', 'Operational tasks')}>
+    <Tabs value={active.key} sx={{ borderBottom: 1, borderColor: 'divider' }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile onChange={(_, value: string) => setParams(current => { current.set('tab', value); return current; })} aria-label={t('Betriebsaufgaben', 'Operational tasks')}>
       {tabs.map((tab) => <Tab title={translate('Den gewählten Betriebsbereich anzeigen', 'Display the selected operations section')} key={tab.key} value={tab.key} label={tab.label} />)}
     </Tabs>{active.component}
   </Stack>;
@@ -58,10 +58,10 @@ function SystemPanel() {
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{Object.entries(status.data?.counts ?? {}).map(([key, value]) => <Chip key={key} label={`${key}: ${value}`} />)}</Stack>
     <Typography variant="body2">{t('Aktualisiert', 'Updated')}: {status.dataUpdatedAt ? new Date(status.dataUpdatedAt).toLocaleString() : '—'}</Typography>
     <Button title={translate('Systemstatus und fehlgeschlagene Zustellungen aktualisieren', 'Refresh system status and failed deliveries')} onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('Aktualisieren', 'Refresh')}</Button>
-    {dead.data?.map((event) => <OperationListEntry key={event.id} title={<>{event.eventType}</>}><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography><Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button></OperationListEntry>)}
+    {dead.data?.map((event) => <OperationListEntry key={event.id} actions={<Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button>} title={<>{event.eventType}</>}><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography></OperationListEntry>)}
     {!dead.isLoading && !dead.data?.length && <Alert severity="success">{t('Keine dauerhaft fehlgeschlagenen Ereignisse.', 'No dead-letter events.')}</Alert>}
     <Typography variant="h6">{t('Synchronisationsprotokoll', 'Sync audit')}</Typography>
-    {sync.data?.map((entry) => <OperationListEntry key={entry.id} title={<>{entry.operationType} · {entry.syncStatus} · {new Date(entry.createdAt).toLocaleString()}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
+    {sync.data?.map((entry) => <OperationListEntry key={entry.id} status={entry.syncStatus} title={<>{entry.operationType} · {new Date(entry.createdAt).toLocaleString()}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
   </Stack>;
 }
 

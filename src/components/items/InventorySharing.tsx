@@ -57,7 +57,8 @@ export function InventorySharing({ kind, id, access }: { kind: 'items' | 'storag
   const t = useLocalizedText();
   const [open, setOpen] = useState(false);
   if (!access?.privateResource) return null;
-  return <Paper variant="outlined" sx={{ p: 2, my: 2 }}><Stack spacing={1}>
+  return <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Stack spacing={1}>
+    <Typography variant="subtitle2">{t('Zugriff & Freigaben', 'Access & sharing')}</Typography>
     <Box><Chip label={t('Privat', 'Private')} color="info" size="small" /> <Typography component="span">{t('Eigentümer', 'Owner')}: {access.ownerName}</Typography></Box>
     <Typography variant="body2">{access.canManage
       ? t('Nur du, HQ-Admins und ausdrücklich freigegebene Personen oder Gruppen sehen diesen Eintrag.', 'Only you, HQ admins and explicitly shared people or groups can see this record.')

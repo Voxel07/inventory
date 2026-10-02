@@ -377,7 +377,7 @@ export function AssemblyDetail() {
                 />}
             </Box>
 
-            <ItemsList items={assemblyItems} showAllEvents isLoading={itemsQuery.isLoading && !assemblyItems.length}
+            <ItemsList items={assemblyItems} isLoading={itemsQuery.isLoading && !assemblyItems.length}
                 requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit ? handleRemoveItem : undefined}
                 loadingMore={itemsQuery.hasNextPage || itemsQuery.isFetchingNextPage} loadError={itemsQuery.isError}
                 onRetry={() => { void itemsQuery.refetch(); }} />

@@ -1,3 +1,4 @@
+import { formatStatus } from '../../utils/formatters';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
@@ -33,16 +34,17 @@ export function SchedulesPanel() {
   return <Stack spacing={2}>
     <Button title={translate('Einen Wartungsplan für einen Artikel anlegen', 'Create a maintenance schedule for an item')} variant="contained" onClick={() => setChooseItem(true)}>{t('Wartungsplan anlegen', 'New maintenance schedule')}</Button>
     <QueryFeedback isLoading={schedules.isLoading} error={schedules.error} isEmpty={!schedules.data?.length} emptyMessage={t('Noch keine Wartungspläne.', 'No maintenance schedules yet.')} />
-    {schedules.data?.map((schedule) => <OperationListEntry key={schedule.id} title={<>{lookup.items.find((item) => item.id === schedule.itemId)?.name} · {schedule.maintenanceType}</>}>
-      <Typography>{schedule.intervalType} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? new Date(schedule.nextDueAt).toLocaleDateString() : schedule.nextDueValue}</Typography>
-      <Typography>{schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')} · {schedule.checkoutBlocking ? t('Sperrt Ausgabe bei Fälligkeit', 'Blocks checkout when due') : t('Hinweis', 'Advisory')}</Typography>
-      {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+    {schedules.data?.map((schedule) => <OperationListEntry key={schedule.id} actions={<>
         <Button title={translate('Intervall und Checkliste dieses Wartungsplans bearbeiten', 'Edit this maintenance schedule\'s interval and checklist')} onClick={() => setEdit({ itemId: schedule.itemId, schedule })}>{t('Bearbeiten', 'Edit')}</Button>
         <Button title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')} component={Link} to={schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}`}>{t('Gerät / Wartungsnachweis', 'Asset / maintenance records')}</Button>
         {schedule.active && <Button title={translate('Die durchgeführte Wartung dokumentieren', 'Record completed maintenance')} variant="contained" onClick={() => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); }}>{t('Wartung dokumentieren', 'Record maintenance')}</Button>}
         {schedule.active && <Button title={translate('Diesen Wartungsplan stilllegen', 'Retire this maintenance schedule')} onClick={() => setRetire(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
-      </Stack>
+       </>} title={lookup.items.find((item) => item.id === schedule.itemId)?.name} status={schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')}>
+      <Typography color="text.secondary">{formatStatus(schedule.maintenanceType)}</Typography>
+      <Typography>{schedule.intervalType} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? new Date(schedule.nextDueAt).toLocaleDateString() : schedule.nextDueValue}</Typography>
+      <Typography>{schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')} · {schedule.checkoutBlocking ? t('Sperrt Ausgabe bei Fälligkeit', 'Blocks checkout when due') : t('Hinweis', 'Advisory')}</Typography>
+      {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
+
     </OperationListEntry>)}
     {chooseItem && <OperationForm title={t('Wartung planen', 'Schedule maintenance')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
     {edit && <OperationForm title={t('Wartungsplan', 'Maintenance schedule')} initial={edit.schedule ? Object.fromEntries(Object.entries(edit.schedule).filter(([, value]) => value != null).map(([key, value]) => [key, key === 'nextDueAt' ? String(value).slice(0, 16) : value])) as Values : { maintenanceType: 'generator_service', intervalType: 'date', intervalValue: 365, warningWindow: 14, active: true, checkoutBlocking: true }} onClose={() => setEdit(null)} fields={(values) => [
@@ -81,14 +83,14 @@ export function RepairsPanel() {
     <QueryFeedback isLoading={repairs.isLoading || damage.isLoading} error={repairs.error || damage.error} isEmpty={!repairs.data?.length} emptyMessage={t('Noch keine Reparaturen.', 'No repair cases yet.')} />
     {repairs.data?.map((repair) => {
       const report = damage.data?.find((value) => value.id === repair.damageReportId);
-      return <OperationListEntry key={repair.id} title={<>{lookup.items.find((item) => item.id === report?.itemId)?.name ?? report?.assemblyName} {report?.assetCode} · {repair.status}</>}>
+      return <OperationListEntry key={repair.id} actions={<>
+          {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
+          {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
+         </>} title={<>{lookup.items.find((item) => item.id === report?.itemId)?.name ?? report?.assemblyName} {report?.assetCode}</>} status={repair.status}>
         <Typography>{report?.description}</Typography><Typography>{repair.partsAndCostNotes}</Typography><Typography>{repair.notes}</Typography>
         {repair.safetyImpact && <Alert severity="warning">{t('Sicherheitsrelevanter Schaden', 'Safety-impacting damage')}</Alert>}
         {repair.verificationResult && <Typography>{t('Prüfergebnis', 'Verification')}: {repair.verificationResult}</Typography>}
-        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
-          {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
-        </Stack>
+
       </OperationListEntry>;
     })}
     {create && <OperationForm title={t('Reparatur anlegen', 'New repair case')} fields={[

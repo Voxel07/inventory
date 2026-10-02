@@ -11,10 +11,6 @@ import {
     Box,
     BottomNavigation,
     Paper,
-    FormControl,
-    InputLabel,
-    MenuItem,
-    Select,
     Typography,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -38,7 +34,6 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import BuildIcon from '@mui/icons-material/Build';
-import { EVENT_TYPES, type EventType } from '../../types';
 import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog } from '../../utils/access';
 
 const DRAWER_WIDTH = 260;
@@ -51,8 +46,6 @@ export function Navigation() {
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
     const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
     const showSnackbar = useUIStore((s) => s.showSnackbar);
-    const activeEventType = useUIStore((s) => s.activeEventType);
-    const setActiveEventType = useUIStore((s) => s.setActiveEventType);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout, user } = useAuth();
@@ -95,35 +88,6 @@ export function Navigation() {
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Toolbar />
-            <Box sx={{ px: 2, pt: 1.5, pb: 2, borderBottom: '1px solid rgba(255, 255, 255, 0.14)' }}>
-                <Typography variant="overline" sx={{ display: 'block', mb: 0.75, color: 'rgba(255, 255, 255, 0.62)' }}>
-                    {t('nav.currentEvent')}
-                </Typography>
-                <FormControl fullWidth size="small">
-                    <InputLabel id="active-event-label" sx={{ color: 'rgba(255, 255, 255, 0.68)' }}>
-                        {t('nav.event')}
-                    </InputLabel>
-                    <Select
-                        labelId="active-event-label"
-                        label={t('nav.event')}
-                        value={activeEventType}
-                        onChange={(event) => setActiveEventType(event.target.value as EventType)}
-                        sx={{
-                            color: '#ffffff',
-                            bgcolor: 'rgba(255, 255, 255, 0.08)',
-                            '& .MuiSelect-icon': { color: 'rgba(255, 255, 255, 0.72)' },
-                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.3)' },
-                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.58)' },
-                        }}
-                    >
-                        {EVENT_TYPES.map((eventType) => (
-                            <MenuItem key={eventType} value={eventType}>
-                                {eventType === 'LS' ? 'LightSim' : eventType}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            </Box>
             <List sx={{ px: 1, pt: 1, flexGrow: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ flexGrow: 1 }}>
                     {navItems.map((item) => {

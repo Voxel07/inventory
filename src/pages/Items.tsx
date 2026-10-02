@@ -18,13 +18,11 @@ import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
+import { personalItems } from '../utils/personalItems';
+import type { MemberCustody } from '../types/member';
 import { canEditCatalog } from '../utils/access';
 
-export function Items({ showAllEvents = false }: { showAllEvents?: boolean }) {
-    return <ManagedItems showAllEvents={showAllEvents} />;
-}
-
-function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
+export function Items({ personal = false, custody = [] }: { personal?: boolean; custody?: MemberCustody[] }) {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
     const t = useLocalizedText();
@@ -48,6 +46,7 @@ function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
     const [importOpen, setImportOpen] = useState(false);
     const [qrItem, setQrItem] = useState<Item | undefined>();
 
+    const visibleItems = personal ? personalItems(items ?? [], user?.id, custody) : items;
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
     const allNames = items?.map((i) => i.name) ?? [];
 
@@ -74,8 +73,7 @@ function ManagedItems({ showAllEvents }: { showAllEvents: boolean }) {
             </Box>
 
             <ItemsList
-                showAllEvents={showAllEvents}
-                items={items}
+                items={visibleItems}
                 isLoading={isLoading}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
                 loadError={isError}

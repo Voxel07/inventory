@@ -18,7 +18,7 @@ export function ActionInboxDialogProvider({ children }: { children: ReactNode })
     <Dialog open={open} onClose={closeActionInbox} fullWidth maxWidth="md" aria-labelledby="action-inbox-title"
       slotProps={{ paper: { sx: { m: { xs: 1, sm: 3 }, width: { xs: 'calc(100% - 16px)', sm: undefined }, maxHeight: 'calc(100dvh - 48px)' } } }}>
       <DialogTitle id="action-inbox-title">{t('Aufgaben & Erinnerungen', 'Actions & reminders')}</DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ px: { xs: 1.5, sm: 2 }, pb: 2 }}>
         {open && <Suspense fallback={<LinearProgress />}><ActionInboxContent onOpenTask={closeActionInbox} /></Suspense>}
       </DialogContent>
     </Dialog>
