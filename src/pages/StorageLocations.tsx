@@ -1,5 +1,5 @@
 import { InventorySharing } from '../components/items/InventorySharing';
-import { AccordionSummary, Button, ListItemButton, IconButton, Tab } from '../components/shared/ActionButtons';
+import { Button, ListItemButton, IconButton, Tab } from '../components/shared/ActionButtons';
 import { Tabs } from '@mui/material';
 import { StorageResponsibilities } from '../components/operations/StorageResponsibilities';
 import { useObjectUrl } from '../hooks/useObjectUrl';
@@ -8,17 +8,17 @@ import { getWarehouses } from '../services/warehouseService';
 import { locationPath, isDescendant } from '../utils/locationHierarchy';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
-import { StockPositions } from '../components/operations/StockOperations';
+import { ItemsList } from '../components/lists/ItemsList';
+import { getLocationInventory } from '../utils/locationStock';
 import { useOperationList } from '../hooks/useOperations';
 import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Accordion, AccordionDetails, Alert, MenuItem, Checkbox, FormControlLabel, Box, Typography, Paper, List, ListItemText, Grid, TextField, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Stack, Divider, Card, CardContent, useTheme, useMediaQuery } from '@mui/material';
+import { Alert, MenuItem, Checkbox, FormControlLabel, Box, Typography, Paper, List, ListItemText, Grid, TextField, DialogTitle, DialogContent, DialogActions, Chip, Stack, Divider, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RoomIcon from '@mui/icons-material/Room';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MapIcon from '@mui/icons-material/Map';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -26,7 +26,6 @@ import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation
 import { useItems } from '../hooks/useItems';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
-import { formatStatus } from '../utils/formatters';
 import { translate, useLocalizedText } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
@@ -45,7 +44,7 @@ export function StorageLocations() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = useStorageLocations({ includeInactive: true });
-    const { data: items, isLoading: itemsLoading } = useItems();
+    const itemQuery = useItems();
 
     const createMutation = useCreateStorageLocation();
     const updateMutation = useUpdateStorageLocation();
@@ -103,20 +102,15 @@ export function StorageLocations() {
 
     const locatedAssets = useOperationList(`storage-assets:${selectedLocId}`, operationsApi.assets({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
 
-    // Items stored in the selected location
-    const storedItems = (() => {
-        if (!items || !selectedLocId) return [];
-        return items.filter((item) => item.trackingMode === 'serialized' ? locatedAssets.data?.some((asset) => asset.itemId === item.id) : positions.data?.some((position) => position.itemId === item.id && position.quantityOnHand > 0));
-    })();
-
-    // Enriched items with checkouts and damage calculations
-    const enrichedStoredItems = storedItems.map((item) => {
-        const rows = positions.data?.filter((position) => position.itemId === item.id) ?? [];
-        const assets = locatedAssets.data?.filter((asset) => asset.itemId === item.id && !['in_field', 'in_custody', 'lost', 'written_off', 'in_transit'].includes(asset.availabilityStatus)) ?? [];
-        const { totalStock, remaining, checkedOut } = item.trackingMode === 'serialized' ? { totalStock: assets.length, remaining: assets.filter((asset) => asset.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)).length, checkedOut: 0 } : { totalStock: rows.reduce((sum, row) => sum + row.quantityOnHand, 0), remaining: rows.reduce((sum, row) => sum + row.availableQuantity, 0), checkedOut: 0 };
-        return { item, totalStock, remaining, checkedOut };
-    });
-    const { pageItems: pageStoredItems, page: currentItemPage, setPage: setItemPage, pageSize: itemPageSize, onPageSizeChange: onItemPageSizeChange } = useClientPagination(enrichedStoredItems);
+    const inventory = getLocationInventory(itemQuery.data ?? [], positions.data ?? [], locatedAssets.data ?? [], selectedLocId);
+    const inventoryLoading = itemQuery.isLoading || positions.isLoading || locatedAssets.isLoading;
+    const inventoryError = itemQuery.error || positions.error || locatedAssets.error;
+    const inventoryLoadingMore = [itemQuery, positions, locatedAssets].some(query => query.hasNextPage || query.isFetchingNextPage);
+    function retryInventory() {
+        void itemQuery.refetch();
+        void positions.refetch();
+        void locatedAssets.refetch();
+    }
 
     function handleOpenCreate() {
         setEditingLoc(null);
@@ -230,7 +224,7 @@ export function StorageLocations() {
                 {/* Left Column: Locations List */}
                 {(!isMobile || !selectedLocId) && (
                     <Grid size={{ xs: 12, md: 4 }}>
-                        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 180px)', overflow: isMobile ? 'visible' : 'hidden' }}>
+                        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 180px)', overflowY: isMobile ? 'visible' : 'auto' }}>
                             <TextField
                                 label={t('Lagerorte suchen', 'Search storage locations')}
                                 value={searchQuery}
@@ -258,7 +252,7 @@ export function StorageLocations() {
                                             <ListItemButton title={translate('Details und Bestand dieses Lagerorts anzeigen', 'Display this storage location\'s details and stock')}
                                                 key={loc.id}
                                                 selected={selectedLocId === loc.id}
-                                                onClick={() => { setSelectedLocId(loc.id); setItemPage(1); }}
+                                                onClick={() => { setSelectedLocId(loc.id); }}
                                                 sx={{
                                                     borderRadius: 2,
                                                     mb: 1,
@@ -318,7 +312,7 @@ export function StorageLocations() {
                     <Grid size={{ xs: 12, md: 8 }}>
                         {activeLocation && <InventorySharing kind="storage-locations" id={activeLocation.id} access={activeLocation.access} />}
                         {activeLocation ? (
-                            <Paper sx={{ p: { xs: 2, md: 3 }, height: isMobile ? 'auto' : 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
+                            <Paper sx={{ p: { xs: 2, md: 3 }, height: isMobile ? 'auto' : 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column', overflowY: isMobile ? 'visible' : 'auto' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                         <RoomIcon color="primary" sx={{ fontSize: 32 }} />
@@ -329,12 +323,12 @@ export function StorageLocations() {
                                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
                                                 {activeLocation.area && (
                                                     <Typography variant="subtitle2" color="text.secondary">
-                                                        Bereich/Sektion: {activeLocation.area}
+                                                        {t('Bereich/Sektion', 'Area/section')}: {activeLocation.area}
                                                     </Typography>
                                                 )}
                                                 {activeLocation.location && (
                                                     <Typography variant="subtitle2" color="text.secondary">
-                                                        Ort: {activeLocation.location}
+                                                        {t('Ort', 'Place')}: {activeLocation.location}
                                                     </Typography>
                                                 )}
                                                 {activeLocation.position && (
@@ -345,17 +339,22 @@ export function StorageLocations() {
                                             </Box>
                                         </Box>
                                     </Box>
-                                    <Button title={translate('Die Daten dieses Lagerorts bearbeiten', 'Edit this storage location\'s details')}
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<EditIcon />}
-                                        disabled={!(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(activeLocation, e)}
-                                    >
-                                        {t('Bearbeiten', 'Edit')}
-                                    </Button>
+                                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
+                                        <Button size="small" title={t('Etiketten, Scans und Umlagerungen für diesen Lagerort öffnen', 'Open labels, scanning and transfers for this location')}
+                                            onClick={() => navigate(`/locations/${activeLocation.id}`)}>
+                                            {t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}
+                                        </Button>
+                                        <Button title={translate('Die Daten dieses Lagerorts bearbeiten', 'Edit this storage location\'s details')}
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<EditIcon />}
+                                            disabled={!(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(activeLocation, e)}
+                                        >
+                                            {t('Bearbeiten', 'Edit')}
+                                        </Button>
+                                    </Stack>
                                 </Box>
 
-                                <Accordion key={activeLocation.id}><AccordionSummary title={translate('Chargen, Geräte und Bestandszustände ein- oder ausblenden', 'Show or hide lots, assets and stock conditions')}>{t('Chargen, Geräte und Bestandszustände', 'Lots, assets and stock conditions')}</AccordionSummary><AccordionDetails><Button title={translate('Etiketten, Scans und Umlagerungen für diesen Lagerort öffnen', 'Open labels, scanning and transfers for this location')} onClick={() => navigate(`/locations/${activeLocation.id}`)}>{t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}</Button><StockPositions locationId={activeLocation.id} /></AccordionDetails></Accordion>
                                 {activeLocation.description && (
                                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2, pl: { xs: 0, md: 6 } }}>
                                         {activeLocation.description}
@@ -377,96 +376,17 @@ export function StorageLocations() {
 
                                 <Divider sx={{ my: 2 }} />
 
-                                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                    {t('Hier gelagerte Artikel', 'Items stored here')} ({enrichedStoredItems.length})
-                                </Typography>
-
-                                {itemsLoading ? (
-                                    <Typography sx={{ p: 2 }}>{t('Artikel werden geladen...', 'Loading items...')}</Typography>
-                                ) : enrichedStoredItems.length === 0 ? (
-                                    <Box sx={{ p: 4, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-                                        <Typography color="text.secondary">{t('In diesem Lagerort sind noch keine Artikel gelagert.', 'No items are stored at this location yet.')}</Typography>
-                                    </Box>
-                                ) : isMobile ? (
-                                    <Stack spacing={0.5}>
-                                        {pageStoredItems.map(({ item, remaining }) => (
-                                            <Card
-                                                key={item.id}
-                                                variant="outlined"
-                                                onClick={() => navigate(`/items/${item.id}`)}
-                                                sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }}
-                                            >
-                                                <CardContent sx={{ px: 1.5, py: 1, '&:last-child': { pb: 1 } }}>
-                                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                                        <Typography noWrap sx={{ minWidth: 0, flexGrow: 1, fontWeight: 700 }}>
-                                                            {item.name}
-                                                        </Typography>
-                                                        <Typography sx={{ flexShrink: 0, color: remaining > 0 ? 'success.main' : 'error.main', fontWeight: 800 }}>
-                                                            {remaining}
-                                                        </Typography>
-                                                        <ArrowForwardIosIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-                                                    </Box>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </Stack>
-                                ) : (
-                                    <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
-                                        <Table size="small">
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>{t('Artikelname', 'Item name')}</TableCell>
-                                                    <TableCell>{t('Kategorie', 'Category')}</TableCell>
-                                                    <TableCell align="right">{t('Verfügbarer Bestand', 'Available stock')}</TableCell>
-                                                    <TableCell>{t('Status', 'Status')}</TableCell>
-                                                    <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {pageStoredItems.map(({ item, totalStock, remaining, checkedOut }) => (
-                                                    <TableRow
-                                                        key={item.id}
-                                                        hover
-                                                        onClick={() => navigate(`/items/${item.id}`)}
-                                                        sx={{ cursor: 'pointer' }}
-                                                    >
-                                                        <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
-                                                        <TableCell>{item.category || '—'}</TableCell>
-                                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                {remaining}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {totalStock} gesamt {checkedOut > 0 && `(${checkedOut} ausgeliehen)`}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Chip
-                                                                label={formatStatus(item.status)}
-                                                                color={
-                                                                    item.status === 'available'
-                                                                        ? 'success'
-                                                                        : item.status === 'checked_out'
-                                                                            ? 'warning'
-                                                                            : item.status === 'damaged'
-                                                                                ? 'error'
-                                                                                : 'default'
-                                                                }
-                                                                size="small"
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell align="right">
-                                                            <IconButton title={translate('Die Details dieses Artikels öffnen', 'Open this item\'s details')} size="small" color="primary">
-                                                                <ArrowForwardIosIcon sx={{ fontSize: 14 }} />
-                                                            </IconButton>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                )}
-                                <ListPagination count={enrichedStoredItems.length} page={currentItemPage} onChange={setItemPage} pageSize={itemPageSize} onPageSizeChange={onItemPageSizeChange} />
+                                <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                        {t('Hier gelagerte Artikel', 'Items stored here')}
+                                    </Typography>
+                                    <Chip size="small" label={inventory.items.length} />
+                                </Stack>
+                                {inventoryError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={retryInventory}>{t('Erneut laden', 'Retry')}</Button>}>
+                                    {t('Die gelagerten Artikel konnten nicht vollständig geladen werden.', 'Could not load all items stored here.')}
+                                </Alert>}
+                                <ItemsList key={activeLocation.id} items={inventory.items} locationStock={inventory.stockByItemId}
+                                    isLoading={inventoryLoading} loadingMore={inventoryLoadingMore} />
                             </Paper>
                         ) : (
                             <Paper

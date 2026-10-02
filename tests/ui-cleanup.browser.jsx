@@ -48,12 +48,32 @@ items.push({ ...items[0], id: 'private-1', name: 'My private light', access: pri
 items.push({ ...items[1], id: 'rental-1', name: 'My checked-out rental', eventTypes: ['LS'] });
 const custody = [{ key: 'rental:preview', itemId: 'rental-1', personId: 'preview', person: 'Preview user', name: 'My checked-out rental', checkedOut: 1, category: 'Equipment', event: 'LightSim', storageLocation: 'Shelf A', eventKey: 'LS', pendingQuantity: 0 }];
 const returns = [{ id: 'return-1', itemId: 'item-1', itemName: 'Radio', quantity: 1, returnedForUserName: 'Preview user', returnedForUserId: 'preview', expectedReturnLocationName: 'Shelf A', status: 'pending', created: now, submittedByName: 'Preview user', notes: 'Left on the labelled return shelf; warehouse acknowledgement outstanding.' }];
+const assets = [];
+if (new URLSearchParams(location.search).has('storagePreview')) {
+  items[1].category = 'Cabling';
+  items[1].eventTypes = ['TNO'];
+  items.push({ ...items[0], id: 'camera', name: 'Camera', trackingMode: 'serialized', category: 'Optics', eventTypes: ['TNO'], stock: { ...items[0].stock, available: 9, totalOwned: 10 } });
+  items.push({ ...items[0], id: 'offsite', name: 'Checked-out device', trackingMode: 'serialized' });
+  items.push({ ...items[0], id: 'inactive', name: 'Inactive device', trackingMode: 'serialized' });
+  assets.push(...[
+    { id: 'camera-a', itemId: 'camera', availabilityStatus: 'available' },
+    { id: 'camera-reserved', itemId: 'camera', availabilityStatus: 'reserved' },
+    { id: 'camera-b', itemId: 'camera', availabilityStatus: 'available', currentLocationId: 'location-b' },
+    { id: 'offsite-a', itemId: 'offsite', availabilityStatus: 'in_custody' },
+    { id: 'inactive-a', itemId: 'inactive', availabilityStatus: 'available', active: false },
+  ].map(row => ({ active: true, currentLocationId: 'location-a', conditionStatus: 'good', ...row })));
+}
 
 const originalFetch = window.fetch.bind(window);
+let positionFailures = new URLSearchParams(location.search).has('storageError') ? 1 : 0;
 window.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (url.hostname !== 'fixture.invalid') return originalFetch(input, init);
   const path = url.pathname;
+  if (path === '/api/inventory-positions' && positionFailures > 0) {
+    positionFailures -= 1;
+    return Response.json({ message: 'Fixture inventory temporarily unavailable' }, { status: 503 });
+  }
   if (path === '/api/events/stream') return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"type":"heartbeat"}\n\n')); } }), { headers: { 'Content-Type': 'text/event-stream' } });
   const body = init.body ? JSON.parse(init.body) : {};
   let data = [];
@@ -63,7 +83,8 @@ window.fetch = async (input, init = {}) => {
   else if (path === '/api/assemblies') data = assemblies;
   else if (path === '/api/assemblies/assembly-1') data = { ...assemblies[0], expand: { itemIds: items.map(item => ({ ...item, stock: null, amount: 999 })) } };
   else if (path === '/api/transactions') data = transactions.filter(row => !url.searchParams.get('itemId') || row.itemId === url.searchParams.get('itemId'));
-  else if (path === '/api/inventory-positions') data = positions.filter(row => !url.searchParams.get('itemId') || row.itemId === url.searchParams.get('itemId'));
+  else if (path === '/api/inventory-positions') data = positions.filter(row => (!url.searchParams.get('itemId') || row.itemId === url.searchParams.get('itemId')) && (!url.searchParams.get('locationId') || row.locationId === url.searchParams.get('locationId')));
+  else if (path === '/api/inventory-assets') data = assets.filter(row => (!url.searchParams.get('itemId') || row.itemId === url.searchParams.get('itemId')) && (!url.searchParams.get('locationId') || row.currentLocationId === url.searchParams.get('locationId')));
   else if (path === '/api/purchase-orders') data = purchases;
   else if (path === '/api/inventory-counts') data = counts;
   else if (path === '/api/inventory-counts/count-1/submit') {
@@ -108,7 +129,7 @@ root.render(<ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider cli
     <Typography variant="caption" color="text.secondary">Local regression preview · {'fixture inventory'}</Typography>
     <Stack direction="row" spacing={2} sx={{ mb: 2 }}><Link to="/operations">Operations</Link><Link to="/items">Items</Link><Link to="/assemblies">Assemblies</Link><Link to="/inbox">Actions & reminders</Link></Stack>
     <InboxLauncher />
-    <Routes><Route path="/" element={<UserDashboard />} /><Route path="/returns" element={<ReturnedItemsPage />} /><Route path="/operations" element={<Operations />} /><Route path="/items" element={<Catalog />} /><Route path="/items/:itemId" element={<ItemDetail />} /><Route path="/storage-locations" element={<StorageLocations />} /><Route path="/assemblies" element={<Catalog assembly />} /><Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} /><Route path="/inbox" element={<ActionInboxContent onOpenTask={() => {}} />} /><Route path="*" element={<Operations />} /></Routes>
+    <Routes><Route path="/tests/ui-cleanup.browser.html" element={new URLSearchParams(location.search).has('storagePreview') ? <StorageLocations /> : <Operations />} /><Route path="/" element={<UserDashboard />} /><Route path="/returns" element={<ReturnedItemsPage />} /><Route path="/operations" element={<Operations />} /><Route path="/items" element={<Catalog />} /><Route path="/items/:itemId" element={<ItemDetail />} /><Route path="/storage-locations" element={<StorageLocations />} /><Route path="/assemblies" element={<Catalog assembly />} /><Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} /><Route path="/inbox" element={<ActionInboxContent onOpenTask={() => {}} />} /><Route path="*" element={<Operations />} /></Routes>
   </Box>
 </ActionInboxDialogProvider></BrowserRouter></QueryClientProvider></ThemeProvider>);
 

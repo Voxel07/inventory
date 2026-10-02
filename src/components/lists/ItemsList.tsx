@@ -9,7 +9,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
-import { getItemStock } from '../../utils/stock';
+import { getItemStock, type StockCalculation } from '../../utils/stock';
 import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { EVENT_TYPES, type EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
@@ -29,6 +29,8 @@ interface Props {
     onDeleteMany?: (ids: string[]) => void;
     requiredQuantities?: Record<string, number>;
     onRemoveItem?: (id: string) => void;
+    /** A location view uses local stock and omits the redundant location column/filter. */
+    locationStock?: ReadonlyMap<string, StockCalculation>;
 }
 
 type ItemRow = {
@@ -44,7 +46,7 @@ type ItemRow = {
     events: string;
 };
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -58,8 +60,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const [locationIds, setLocationIds] = useState<string[]>([]);
     const [category, setCategory] = useState('');
     const locations = useStorageLocations({ includeInactive: true });
-    const positions = useOperationList('positions:item-list', operationsApi.positions(), locationIds.length > 0);
-    const assets = useOperationList('assets:item-list', operationsApi.assets(), locationIds.length > 0);
+    const positions = useOperationList('positions:item-list', operationsApi.positions(), !locationStock && locationIds.length > 0);
+    const assets = useOperationList('assets:item-list', operationsApi.assets(), !locationStock && locationIds.length > 0);
     const eventItems = (items ?? []).filter((item) => !eventType || item.eventTypes?.includes(eventType));
     const categories = [...new Set(eventItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const locationOptions = new Map((locations.data ?? []).map((location) => [location.id, locationPath(location, locations.data ?? [])]));
@@ -73,16 +75,16 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         ...(assets.data ?? []).filter((asset) => asset.active && asset.currentLocationId && locationIds.includes(asset.currentLocationId)
             && !['lost', 'written_off'].includes(asset.availabilityStatus)).map((asset) => asset.itemId),
     ]);
-    const filterError = locations.error || (locationIds.length > 0 && (positions.error || assets.error));
-    const filtersLoading = locationIds.length > 0 && (positions.isLoading || assets.isLoading ||
+    const filterError = !locationStock && (locations.error || (locationIds.length > 0 && (positions.error || assets.error)));
+    const filtersLoading = !locationStock && locationIds.length > 0 && (positions.isLoading || assets.isLoading ||
         (!positions.isError && !positions.isComplete) || (!assets.isError && !assets.isComplete));
 
     const rows: ItemRow[] = (() => eventItems
         .filter((item) => item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
         .filter((item) => !category || item.category === category)
-        .filter((item) => locationIds.length === 0 || locationIds.includes(item.storageLocation) || matchingItemIds.has(item.id))
+        .filter((item) => locationStock ? locationStock.has(item.id) : locationIds.length === 0 || locationIds.includes(item.storageLocation) || matchingItemIds.has(item.id))
         .map((item) => {
-            const stock = getItemStock(item);
+            const stock = locationStock?.get(item.id) ?? getItemStock(item);
             const location = item.expand?.storageLocation;
             return {
                 id: item.id,
@@ -99,18 +101,18 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         }))();
 
     const columns: GridColDef<ItemRow>[] = [
-        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 180,
+        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: locationStock ? (isMobile ? 125 : 150) : 180,
             renderCell: ({ row }) => <Link component={RouterLink} to={`/items/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600 }}>{row.name}</Link> },
         ...(requiredQuantities ? [{ field: 'required', headerName: t('Menge in Baugruppe', 'Assembly quantity'), type: 'number', width: 150, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
-        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
-        { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 155,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock <= 0 ? 'error.main' : row.stock <= (row.item.minStock ?? 5) ? 'warning.main' : 'success.main', fontWeight: 700 }}>
+        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: locationStock ? 125 : 150 },
+        { field: 'stock', headerName: locationStock ? (isMobile ? t('Verfügbar / gesamt', 'Available / total') : t('Verfügbar / vor Ort', 'Available / on hand')) : t('Bestand', 'Stock'), type: 'number', width: locationStock ? (isMobile ? 170 : 185) : 155,
+            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock <= 0 ? 'error.main' : !locationStock && row.stock <= (row.item.minStock ?? 5) ? 'warning.main' : 'success.main', fontWeight: 700 }}>
                 {row.stock}/{row.totalStock}{row.damaged > 0 ? ` · ${row.damaged} ${t('defekt', 'damaged')}` : ''}
             </Typography> },
-        { field: 'value', headerName: t('Einzelwert', 'Unit value'), type: 'number', width: 125,
-            valueFormatter: (value: number) => `${value.toFixed(2)} €` },
-        { field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 },
-        { field: 'events', headerName: t('Events', 'Events'), width: 145 },
+        ...(!locationStock ? [{ field: 'value', headerName: t('Einzelwert', 'Unit value'), type: 'number', width: 125,
+            valueFormatter: (value: number) => `${value.toFixed(2)} €` } satisfies GridColDef<ItemRow>] : []),
+        ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 } satisfies GridColDef<ItemRow>] : []),
+        { field: 'events', headerName: t('Events', 'Events'), width: locationStock ? 95 : 145 },
         ...(onRemoveItem ? [{ field: 'remove', headerName: t('Aktionen', 'Actions'), width: 90, sortable: false, filterable: false, renderCell: ({ row }: { row: ItemRow }) => <IconButton title={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onRemoveItem(row.id); }}><DeleteIcon fontSize="small" /></IconButton> } satisfies GridColDef<ItemRow>] : []),
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
@@ -127,7 +129,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     }
 
     return <Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.4fr) repeat(3, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: `minmax(0, 1.4fr) repeat(${locationStock ? 2 : 3}, minmax(0, 1fr))` }, gap: 1, mb: 2 }}>
             <TextField label={t('Nach Name suchen', 'Search by name')} value={search}
                 onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
             <TextField select label={t('Kategorie', 'Category')} value={category} size="small" fullWidth
@@ -140,7 +142,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
                 {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{value === 'LS' ? 'LightSim' : value}</MenuItem>)}
             </TextField>
-            <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
+            {!locationStock && <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
                 <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>
                 <Select multiple labelId="item-location-filter-label" label={t('Lagerorte', 'Locations')} value={locationIds}
                     onChange={(event) => { const ids = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value; setLocationIds(ids.includes('') ? [] : ids); }}
@@ -150,7 +152,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                         <Checkbox checked={locationIds.includes(id)} size="small" /><ListItemText primary={name} />
                     </MenuItem>)}
                 </Select>
-            </FormControl>
+            </FormControl>}
         </Box>
         {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); void positions.refetch(); void assets.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>
             {t('Lagerortfilter konnten nicht vollständig geladen werden.', 'Could not load all location filter data.')}
@@ -162,7 +164,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             </Button>
         </Paper>}
         <Box sx={{ width: '100%' }}>
-            <DataGrid rows={rows} columns={columns} loading={isLoading || filtersLoading} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight checkboxSelection={canManage}
+            <DataGrid rows={rows} columns={locationStock && isMobile ? columns.filter(column => !['category', 'events'].includes(column.field)) : columns}
+                loading={isLoading || filtersLoading} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight checkboxSelection={canManage}
                 slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/items') } }}
                 isRowSelectable={({ row }) => canEditItem(row.item)} disableRowSelectionOnClick onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/items/${row.id}`); }}
                 rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}

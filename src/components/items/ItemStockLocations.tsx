@@ -7,6 +7,7 @@ import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { useLocalizedText } from '../../utils/naming';
 import { QueryFeedback } from '../common/QueryFeedback';
+import { isAssetStored } from '../../utils/locationStock';
 
 /** Show physical stock grouped by location when the item occupies multiple locations. */
 export function ItemStockLocations({ item }: { item: Item }) {
@@ -18,8 +19,7 @@ export function ItemStockLocations({ item }: { item: Item }) {
   const quantities = new Map<string, { quantity: number; name?: string }>();
   if (serialized) {
     for (const asset of assets.data ?? []) {
-      if (!asset.active || !asset.currentLocationId || asset.conditionStatus === 'lost'
-        || ['in_custody', 'in_field', 'returned_pending_check', 'in_transit', 'lost', 'written_off'].includes(asset.availabilityStatus)) continue;
+      if (!asset.currentLocationId || !isAssetStored(asset)) continue;
       const current = quantities.get(asset.currentLocationId);
       quantities.set(asset.currentLocationId, { quantity: (current?.quantity ?? 0) + 1, name: asset.currentLocationName });
     }
