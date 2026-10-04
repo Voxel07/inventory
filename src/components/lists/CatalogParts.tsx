@@ -28,7 +28,7 @@ export function CatalogRow({ to, title, primary, primarySuffix, secondary, selec
     {selectable && <Checkbox checked={selected} onChange={onToggleSelected} sx={{ ml: 0.5, p: 1.25 }}
       slotProps={{ input: { 'aria-label': t(`${title} auswählen`, `Select ${title}`) } }} />}
     <ButtonBase component={RouterLink} to={to} sx={{
-      flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 1.25, minHeight: 56,
+      flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
       '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { bgcolor: 'action.focus', outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
     }}>
       <Typography component="span" sx={{ display: 'block', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.35 }}>{title}</Typography>

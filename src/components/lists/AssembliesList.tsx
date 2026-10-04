@@ -15,6 +15,7 @@ import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
 import { CatalogRow, CatalogSearchBar, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
+import { selectFilterColumn } from '../../utils/catalogFilters';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -34,7 +35,9 @@ type AssemblyRow = {
     assembly: Assembly;
     name: string;
     category: string;
+    categories: string[];
     location: string;
+    locations: string[];
     events: string;
     components: string;
     stock: number;
@@ -58,7 +61,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
     const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
     const [menu, setMenu] = useState<{ anchor: HTMLElement; row: AssemblyRow } | null>(null);
 
-    const rows: AssemblyRow[] = (() => {
+    const allRows: AssemblyRow[] = (() => {
         const itemById = new Map((items ?? []).map((item) => [item.id, item]));
         const stockById = new Map((items ?? []).map((item) => [item.id, getItemStock(item)]));
         return (assemblies ?? []).map((assembly) => {
@@ -66,24 +69,27 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             const componentIds = [...new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})])];
             const componentItems = componentIds.map((id) => itemById.get(id) ?? expandedById.get(id));
             const categories = componentItems.map((item) => [item?.category, item?.subcategory].filter(Boolean).join(' · '));
-            const locations = componentItems.map((item) => {
+            const locations = [...new Set(componentItems.map((item) => {
                 const location = item?.expand?.storageLocation;
                 return location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item?.storageLocation;
-            });
+            }).filter((location): location is string => Boolean(location)))];
             return {
                 id: assembly.id,
                 assembly,
                 name: assembly.name,
                 category: [...new Set(categories.filter(Boolean))].join(', ') || '—',
-                location: [...new Set(locations.filter(Boolean))].join(', ') || '—',
-                events: assembly.eventTypes?.join(', ') || '—',
+                categories: componentItems.map((item) => item?.category).filter((category): category is string => Boolean(category)),
+                location: locations.join(', ') || '—',
+                locations,
+                events: assembly.eventTypes?.map((event) => event === 'LS' ? 'LightSim' : event).join(', ') || '—',
                 components: search.trim() ? componentIds.map((id, index) => componentItems[index]?.name ?? id).join(' ') : '',
                 stockReady: componentIds.every(id => itemById.has(id)),
                 stock: assemblyAvailability(assembly, (id) => stockById.get(id)?.remaining ?? 0),
                 totalStock: assemblyAvailability(assembly, (id) => stockById.get(id)?.totalStock ?? 0),
             };
-        }).filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+        });
     })();
+    const rows = allRows.filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
 
     const availabilityText = (row: AssemblyRow) => !row.stockReady ? t('Bestand wird berechnet…', 'Calculating stock…')
         : row.stock > 0 ? t(`${row.stock} von ${row.totalStock} baubar`, `${row.stock} of ${row.totalStock} buildable`)
@@ -99,15 +105,15 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
 
     const columns: GridColDef<AssemblyRow>[] = [
         { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 200,
-            renderCell: ({ row }) => <Box sx={{ minWidth: 0, py: 0.5 }}>
-                <Link component={RouterLink} to={`/assemblies/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.35 }}>{row.name}</Link>
-                {narrowTable && row.category !== '—' && <Typography variant="body2" color="text.secondary" noWrap>{row.category}</Typography>}
+            renderCell: ({ row }) => <Box sx={{ minWidth: 0 }}>
+                <Link component={RouterLink} to={`/assemblies/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.3 }}>{row.name}</Link>
+                {narrowTable && row.category !== '—' && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{row.category}</Typography>}
             </Box> },
-        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
+        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => row.categories) },
         { field: 'stock', headerName: t('Verfügbar', 'Available'), type: 'number', width: 180,
             renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor(row), fontWeight: 600, whiteSpace: 'normal', textAlign: 'right' }}>{availabilityText(row)}</Typography> },
-        { field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150 },
-        { field: 'events', headerName: t('Events', 'Events'), width: 130 },
+        { field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => row.locations) },
+        { field: 'events', headerName: t('Events', 'Events'), width: 130, ...selectFilterColumn(allRows, (row) => (row.assembly.eventTypes ?? []).map((event) => event === 'LS' ? 'LightSim' : event)) },
         ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 104, sortable: false, filterable: false,
             renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">
               <IconButton title={t('Bearbeiten', 'Edit')} onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton>
@@ -160,7 +166,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             </Button>}
         </>;
         return <DataGrid rows={rows} columns={columns} columnVisibilityModel={{ category: !narrowTable, events: !narrowTable }}
-            loading={isLoading} density="standard" getRowHeight={() => 'auto'} autoHeight checkboxSelection={canManage}
+            loading={isLoading} density="compact" getRowHeight={() => 'auto'} autoHeight checkboxSelection={canManage}
             slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/assemblies') } }}
             disableRowSelectionOnClick
             onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/assemblies/${row.id}`); }}
@@ -168,7 +174,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } } }}
             pageSizeOptions={[25, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
             sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
-                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 1 } }} />;
+                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />;
     })();
 
     return <Box>
@@ -176,7 +182,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             ? <CatalogSearchBar search={search} onSearch={setSearch} label={t('Name oder Komponente suchen', 'Search name or component')}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
             : <TextField type="search" label={t('Nach Name oder Komponente suchen', 'Search by name or component')} value={search}
-                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />}
+                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
         {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('Erneut laden', 'Retry')}</Button>}>
             {t(`Es konnten nur ${assemblies?.length ?? 0} Baugruppen geladen werden. Die Liste ist unvollständig.`, `Only ${assemblies?.length ?? 0} assemblies could be loaded. The list is incomplete.`)}
         </Alert>}

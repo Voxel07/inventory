@@ -21,6 +21,7 @@ import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
 import { CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
+import { selectFilterColumn } from '../../utils/catalogFilters';
 
 interface Props {
     items: Item[] | undefined;
@@ -56,6 +57,7 @@ type ItemRow = {
 };
 
 const PAGE_STEP = 30;
+const eventLabel = (event: EventType) => event === 'LS' ? 'LightSim' : event;
 
 export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint }: Props) {
     const { user } = useAuth();
@@ -97,10 +99,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         (!positions.isError && !positions.isComplete) || (!assets.isError && !assets.isComplete));
     const activeFilters = (category ? 1 : 0) + (eventType ? 1 : 0) + (locationIds.length ? 1 : 0);
 
-    const rows: ItemRow[] = eventItems
-        .filter((item) => item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
-        .filter((item) => !category || item.category === category)
-        .filter((item) => locationStock ? locationStock.has(item.id) : locationIds.length === 0 || locationIds.includes(item.storageLocation) || matchingItemIds.has(item.id))
+    const allRows: ItemRow[] = eventItems
+        .filter((item) => !locationStock || locationStock.has(item.id))
         .map((item): ItemRow => {
             const stock = locationStock?.get(item.id) ?? getItemStock(item);
             const location = item.expand?.storageLocation;
@@ -114,9 +114,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 damaged: stock.damaged,
                 availability: stock.remaining <= 0 ? 'none' : !locationStock && stock.remaining <= (item.minStock ?? 5) ? 'low' : 'ok',
                 location: location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
-                events: item.eventTypes?.map((event) => event === 'LS' ? 'LightSim' : event).join(', ') || '—',
+                events: item.eventTypes?.map(eventLabel).join(', ') || '—',
             };
         });
+    // Search applies everywhere; the compact layout's filter sheet adds category, event and location filters.
+    const rows = allRows
+        .filter((row) => row.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+        .filter((row) => !category || row.item.category === category)
+        .filter((row) => locationStock || locationIds.length === 0 || locationIds.includes(row.item.storageLocation) || matchingItemIds.has(row.id));
 
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' } as const;
     function availabilityText(row: ItemRow) {
@@ -147,18 +152,18 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
     const columns: GridColDef<ItemRow>[] = [
         { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 200,
-            renderCell: ({ row }) => <Box sx={{ minWidth: 0, py: 0.5 }}>
-                <Link component={RouterLink} to={`/items/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.35 }}>{row.name}</Link>
-                {narrowTable && row.category && <Typography variant="body2" color="text.secondary" noWrap>{row.category}</Typography>}
+            renderCell: ({ row }) => <Box sx={{ minWidth: 0 }}>
+                <Link component={RouterLink} to={`/items/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.3 }}>{row.name}</Link>
+                {narrowTable && row.category && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{row.category}</Typography>}
             </Box> },
         ...(requiredQuantities ? [{ field: 'required', headerName: t('Menge je Baugruppe', 'Per assembly'), type: 'number', width: 130, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
-        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
-        { field: 'stock', headerName: locationStock ? t('Verfügbar hier', 'Available here') : t('Verfügbar', 'Available'), type: 'number', width: 190,
-            renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor[row.availability], fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'right' }}>
+        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.item.category]) },
+        { field: 'stock', headerName: locationStock ? t('Verfügbar hier', 'Available here') : t('Verfügbar', 'Available'), type: 'number', width: 210,
+            renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor[row.availability], fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.3, textAlign: 'right' }}>
                 {availabilityText(row)}
             </Typography> },
-        ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150 } satisfies GridColDef<ItemRow>] : []),
-        { field: 'events', headerName: t('Events', 'Events'), width: 130 },
+        ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.location === '—' ? undefined : row.location]) } satisfies GridColDef<ItemRow>] : []),
+        { field: 'events', headerName: t('Events', 'Events'), width: 130, ...selectFilterColumn(allRows, (row) => (row.item.eventTypes ?? []).map(eventLabel)) },
         ...(canManage || onRemoveItem ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: canManage ? 104 : 72, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
                 {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>}
@@ -191,7 +196,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         <TextField select label={t('Event', 'Event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
             onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
             <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
-            {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{value === 'LS' ? 'LightSim' : value}</MenuItem>)}
+            {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{eventLabel(value)}</MenuItem>)}
         </TextField>
         {!locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
             <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>
@@ -242,14 +247,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         </>;
         return <DataGrid rows={rows} columns={columns}
             columnVisibilityModel={{ category: !narrowTable, events: !narrowTable }}
-            loading={isLoading || filtersLoading} density="standard" getRowHeight={() => 'auto'} autoHeight checkboxSelection={canManage}
+            loading={isLoading || filtersLoading} density="compact" getRowHeight={() => 'auto'} autoHeight checkboxSelection={canManage}
             slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/items') } }}
             isRowSelectable={({ row }) => canEditItem(row.item)} disableRowSelectionOnClick onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/items/${row.id}`); }}
             rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
             initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } } }}
             pageSizeOptions={[25, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
             sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
-                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 1 } }} />;
+                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />;
     })();
 
     return <Box>
@@ -265,12 +270,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                     <FilterSheetActions resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters} onDone={() => setFiltersOpen(false)} />
                 </Stack>
             </Drawer>
-        </> : <Box sx={{ display: 'grid', gridTemplateColumns: { md: `minmax(0, 1.4fr) repeat(${locationStock ? 2 : 3}, minmax(0, 1fr)) auto` }, gap: 1, mb: 2, alignItems: 'center' }}>
-            <TextField type="search" label={t('Nach Name suchen', 'Search by name')} value={search}
-                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
-            {filterControls}
-            <Button onClick={clearFilters} disabled={!activeFilters}>{t('Filter zurücksetzen', 'Clear filters')}</Button>
-        </Box>}
+        </> : <TextField type="search" label={t('Nach Name suchen', 'Search by name')} value={search}
+            onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
         {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); void positions.refetch(); void assets.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>
             {t('Lagerortfilter konnten nicht vollständig geladen werden.', 'Could not load all location filter data.')}
         </Alert>}

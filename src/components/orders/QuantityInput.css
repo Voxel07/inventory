@@ -14,3 +14,8 @@
 
 .order-quantity-input:hover { border-color: currentColor; }
 .order-quantity-input:focus { border: 2px solid #3949ab; outline: none; }
+
+/* The surrounding −/+ buttons step the value; native spinners would duplicate them. */
+.order-quantity-input { appearance: textfield; -moz-appearance: textfield; }
+.order-quantity-input::-webkit-inner-spin-button,
+.order-quantity-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

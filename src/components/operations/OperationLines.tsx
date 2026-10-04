@@ -1,5 +1,9 @@
-import type { ReactNode } from 'react';
-import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { useId, useState, type ReactNode } from 'react';
+import { Box, Collapse, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery, useTheme } from '@mui/material';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { Button } from '../shared/ActionButtons';
+import { useLocalizedText } from '../../utils/naming';
 
 /**
  * Line items of an operation. Phones get stacked label/value rows instead of a
@@ -25,4 +29,21 @@ export function OperationLines({ label, headers, rows }: { label: string; header
     <TableHead><TableRow>{headers.map((header, index) => <TableCell key={index} align={index ? 'right' : 'left'}>{header}</TableCell>)}</TableRow></TableHead>
     <TableBody>{rows.map(row => <TableRow key={row.id}>{row.cells.map((cell, index) => <TableCell key={index} align={index ? 'right' : 'left'}>{cell}</TableCell>)}</TableRow>)}</TableBody>
   </Table></TableContainer>;
+}
+
+/** Line items behind a toggle, for records whose lines would otherwise make the page very long. */
+export function CollapsibleOperationLines({ summary, ...props }: Parameters<typeof OperationLines>[0] & { summary?: ReactNode }) {
+  const t = useLocalizedText();
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <Box>
+    <Stack direction="row" useFlexGap sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      <Button size="small" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={id}
+        startIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ px: 0.5 }}>
+        {open ? t('Positionen ausblenden', 'Hide lines') : t(`${props.rows.length} Positionen anzeigen`, `Show ${props.rows.length} lines`)}
+      </Button>
+      {summary && <Typography variant="body2" color="text.secondary">{summary}</Typography>}
+    </Stack>
+    <Collapse in={open} unmountOnExit><Box id={id}><OperationLines {...props} /></Box></Collapse>
+  </Box>;
 }

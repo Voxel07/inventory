@@ -159,10 +159,11 @@ export function FactionOrderForm({
     excludeId: initialData?.id,
   });
 
+  // Entries the user has touched stay in place (even at 0) until removed, so the catalog does not reflow while editing.
   const visibleItems = filterCatalogItems(sortedItems, search, category,
-    (item) => Number(quantities[item.id]) > 0 || Boolean(item.eventTypes?.includes(eventType)));
+    (item) => item.id in quantities || Boolean(item.eventTypes?.includes(eventType)));
   const visibleAssemblies = filterCatalogAssemblies(sortedAssemblies, search,
-    (assembly) => Number(assemblyQuantities[assembly.id]) > 0 || Boolean(assembly.eventTypes?.includes(eventType)));
+    (assembly) => assembly.id in assemblyQuantities || Boolean(assembly.eventTypes?.includes(eventType)));
   const { page: currentItemPage, entries: pageItems } = catalogPage(visibleItems, itemPage, ORDER_CATALOG_PAGE_SIZE);
   const { page: currentAssemblyPage, entries: pageAssemblies } = catalogPage(visibleAssemblies, assemblyPage, ORDER_CATALOG_PAGE_SIZE);
 
@@ -466,14 +467,6 @@ export function FactionOrderForm({
           <Typography variant="h6">
             {isMobile ? t('Artikel auswählen', 'Choose items') : t('Benötigte Artikel', 'Requested items')}
           </Typography>
-          {shortageCount > 0 && (
-            <Alert severity="warning" sx={{ my: 1 }}>
-              {t(
-                `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen" angezeigt.`,
-                `This order exceeds available stock by ${shortageCount} units. Delivery is not guaranteed; the shortage will appear in Procurement as needing to be ordered.`,
-              )}
-            </Alert>
-          )}
           {viewMode === 'tiles' ? (
             <Box key={currentItemPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
               {pageItems.map((item) => {
@@ -490,11 +483,10 @@ export function FactionOrderForm({
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
                     <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {available}</Typography>
-                    {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
-                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
-                        {t('Nach Bestellung', 'After order')}: {projected}
-                      </Typography>
-                    )}
+                    {/* Always reserve the line so the tile does not grow when the item is added. */}
+                    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
+                      {t('Nach Bestellung', 'After order')}: {projected}
+                    </Typography>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
                       <QuantityControl label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                     </Stack>
@@ -522,12 +514,14 @@ export function FactionOrderForm({
                         : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{item.category} · {t('Verfügbar', 'Available')}: {available}</Typography>
-                        {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
-                          <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 700 }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
-                            {t('Nach Bestellung', 'After order')}: {projected}
-                          </Typography>
-                        )}
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                          {item.category} · {t('Verfügbar', 'Available')}: {available}
+                          {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
+                            <Box component="span" sx={{ fontWeight: 700, color: projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main' }}>
+                              {' · '}{t('Nach Bestellung', 'After order')}: {projected}
+                            </Box>
+                          )}
+                        </Typography>
                       </Box>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
                         <QuantityControl label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
@@ -564,51 +558,44 @@ export function FactionOrderForm({
                   : t(`${selectedEntryCount} Positionen`, `${selectedEntryCount} entries`)}
               />
             </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              {t(
-                'Bereits hinzugefügte Positionen. Entfernen ist hier bewusst von den Schnellwahl-Tasten getrennt.',
-                'Items already added. Remove actions are kept separate from the quick quantity controls.',
-              )}
-            </Typography>
-            <Stack spacing={1}>
-              {selectedAssemblies.map((assembly) => {
-                return (
-                  <Paper key={`selected-assembly-${assembly.id}`} variant="outlined" sx={{ p: 1 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{assembly.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('Baugruppe', 'Assembly')} · {Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')}
-                    </Typography>
-                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
-                      <Stack direction="row" sx={{ alignItems: 'center' }}>
-                        <QuantityControl label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
-                      </Stack>
-                      <Button title={translate('Diese Baugruppe aus der Bestellliste entfernen', 'Remove this assembly from the order list')} size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(assembly.id, true)}>
-                        {t('Entfernen', 'Remove')}
-                      </Button>
-                    </Stack>
-                  </Paper>
-                );
-              })}
-              {selectedItems.map((item) => {
-                const available = availableByItem.get(item.id) ?? 0;
-                return (
-                  <Paper key={`selected-item-${item.id}`} variant="outlined" sx={{ p: 1 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {item.category} · {t('Verfügbar', 'Available')}: {available}
-                    </Typography>
-                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
-                      <Stack direction="row" sx={{ alignItems: 'center' }}>
-                        <QuantityControl label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
-                      </Stack>
-                      <Button title={translate('Diesen Artikel aus der Bestellliste entfernen', 'Remove this item from the order list')} size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeItem(item.id)}>
-                        {t('Entfernen', 'Remove')}
-                      </Button>
-                    </Stack>
-                  </Paper>
-                );
-              })}
-            </Stack>
+            {shortageCount > 0 && (
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                {t(
+                  `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen" angezeigt.`,
+                  `This order exceeds available stock by ${shortageCount} units. Delivery is not guaranteed; the shortage will appear in Procurement as needing to be ordered.`,
+                )}
+              </Alert>
+            )}
+            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+              {[
+                ...selectedAssemblies.map((assembly) => ({
+                  key: `selected-assembly-${assembly.id}`, id: assembly.id, name: assembly.name, assembly: true,
+                  detail: `${t('Baugruppe', 'Assembly')} · ${Object.keys(assembly.itemQuantities ?? {}).length} ${t('Komponenten', 'components')}`,
+                  value: assemblyQuantities[assembly.id] ?? '',
+                })),
+                ...selectedItems.map((item) => ({
+                  key: `selected-item-${item.id}`, id: item.id, name: item.name, assembly: false,
+                  detail: `${item.category} · ${t('Verfügbar', 'Available')}: ${availableByItem.get(item.id) ?? 0}`,
+                  value: quantities[item.id] ?? '',
+                })),
+              ].map((entry) => (
+                <Stack key={entry.key} component="li" direction="row" spacing={1}
+                  sx={{ alignItems: 'center', px: 1, py: 0.25, borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{entry.name}</Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{entry.detail}</Typography>
+                  </Box>
+                  <QuantityControl label={`${entry.name} ${t('Menge', 'quantity')}`} value={entry.value} onChange={(value) => setQuantity(entry.id, value, entry.assembly)} />
+                  <IconButton
+                    title={entry.assembly
+                      ? translate('Diese Baugruppe aus der Bestellliste entfernen', 'Remove this assembly from the order list')
+                      : translate('Diesen Artikel aus der Bestellliste entfernen', 'Remove this item from the order list')}
+                    size="small" color="error" onClick={() => removeItem(entry.id, entry.assembly)}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Paper>
           </Box>
         )}
 

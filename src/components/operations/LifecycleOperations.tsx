@@ -1,5 +1,5 @@
 import { formatStatus } from '../../utils/formatters';
-import { OperationListEntry } from './OperationListEntry';
+import { OperationDetail, OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
@@ -77,22 +77,29 @@ export function RepairsPanel() {
   const repairs = useOperationList('repairs', operationsApi.repairs); const damage = useDamageReports();
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ repair: Repair; status: string; key: string } | null>(null);
+  const closed = (repair: Repair) => ['returned_to_service', 'written_off'].includes(repair.status);
+  const openRepairs = (repairs.data ?? []).filter((repair) => !closed(repair));
+  const closedRepairs = (repairs.data ?? []).filter(closed);
+  const repairEntry = (repair: Repair) => {
+    const report = damage.data?.find((value) => value.id === repair.damageReportId);
+    return <OperationListEntry key={repair.id} actions={closed(repair) ? undefined : <>
+        {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
+        {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
+       </>} title={<>{lookup.items.find((item) => item.id === report?.itemId)?.name ?? report?.assemblyName} {report?.assetCode}</>} status={repair.status}>
+      <OperationDetail label={t('Schaden', 'Damage')}>{report?.description}</OperationDetail>
+      <OperationDetail label={t('Teile und Kosten', 'Parts and costs')}>{repair.partsAndCostNotes}</OperationDetail>
+      <OperationDetail label={t('Notiz', 'Notes')}>{repair.notes}</OperationDetail>
+      <OperationDetail label={t('Prüfergebnis', 'Verification')}>{repair.verificationResult}</OperationDetail>
+      {repair.safetyImpact && <Alert severity="warning">{t('Sicherheitsrelevanter Schaden', 'Safety-impacting damage')}</Alert>}
+    </OperationListEntry>;
+  };
   const labels: Record<string, string> = { triaged: t('Sichten', 'Triage'), awaiting_repair: t('Zur Reparatur', 'Queue repair'), in_repair: t('Reparatur starten', 'Start repair'), repaired: t('Reparatur abschließen', 'Complete repair'), verified: t('Prüfung bestätigen', 'Verify'), returned_to_service: t('Freigeben', 'Return to service'), written_off: t('Abschreiben', 'Write off') };
   return <Stack spacing={2}>
     <Button title={translate('Einen neuen Reparaturfall erfassen', 'Create a new repair case')} variant="contained" onClick={() => setCreate(true)}>{t('Reparatur anlegen', 'New repair case')}</Button>
     <QueryFeedback isLoading={repairs.isLoading || damage.isLoading} error={repairs.error || damage.error} isEmpty={!repairs.data?.length} emptyMessage={t('Noch keine Reparaturen.', 'No repair cases yet.')} />
-    {repairs.data?.map((repair) => {
-      const report = damage.data?.find((value) => value.id === repair.damageReportId);
-      return <OperationListEntry key={repair.id} actions={<>
-          {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
-          {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
-         </>} title={<>{lookup.items.find((item) => item.id === report?.itemId)?.name ?? report?.assemblyName} {report?.assetCode}</>} status={repair.status}>
-        <Typography>{report?.description}</Typography><Typography>{repair.partsAndCostNotes}</Typography><Typography>{repair.notes}</Typography>
-        {repair.safetyImpact && <Alert severity="warning">{t('Sicherheitsrelevanter Schaden', 'Safety-impacting damage')}</Alert>}
-        {repair.verificationResult && <Typography>{t('Prüfergebnis', 'Verification')}: {repair.verificationResult}</Typography>}
-
-      </OperationListEntry>;
-    })}
+    {openRepairs.length > 0 && <Typography variant="h6" component="h2">{t('Offene Reparaturen', 'Open repairs')} ({openRepairs.length})</Typography>}
+    {openRepairs.map(repairEntry)}
+    <OperationHistory title={t('Reparaturhistorie', 'Repair history')} count={closedRepairs.length}>{closedRepairs.map(repairEntry)}</OperationHistory>
     {create && <OperationForm title={t('Reparatur anlegen', 'New repair case')} fields={[
       { key: 'damageReportId', label: t('Schadensmeldung', 'Damage report'), required: true, options: (damage.data ?? []).filter((report) => !['resolved', 'written_off'].includes(report.status)).map((report) => ({ value: report.id, label: `${lookup.items.find((item) => item.id === report.itemId)?.name ?? report.assemblyName ?? ''} ${report.assetCode ?? ''} · ${report.description}` })) },
       { key: 'repairOwnerId', label: t('Verantwortlich', 'Repair owner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },

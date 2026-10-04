@@ -1,4 +1,4 @@
-import { useStockLookups } from '../../hooks/useStockLookups';
+import { useSourceLocationOptions } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -13,21 +13,24 @@ import { useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
-export function GeneralOrderWorkflow({ order, action, items, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; onClose: () => void }) {
+/** `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. */
+export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; itemIds?: string[]; onClose: () => void }) {
   const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
-  const lookup = useStockLookups();
+  const sourceOptions = useSourceLocationOptions(action === 'prepare');
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
   const t = useLocalizedText(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
     const ids = Object.keys(order.requestedQuantities).filter((id) => items.find((item) => item.id === id)?.trackingMode === 'serialized');
     return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getItemAssets(id)] as const)));
   }, enabled: action !== 'history' });
-  const ids = Object.keys(action === 'return' ? order.handedOverQuantities : order.requestedQuantities);
+  const ids = Object.keys(action === 'return' ? order.handedOverQuantities : order.requestedQuantities).filter((id) => !itemIds || itemIds.includes(id));
   const outstanding = (id: string) => (order.handedOverQuantities[id] ?? 0) - (order.returnedQuantities[id] ?? 0) - (order.consumedQuantities[id] ?? 0) - (order.damagedQuantities?.[id] ?? 0) - (order.writtenOffQuantities?.[id] ?? 0);
   const fields: Field[] = ids.flatMap((id): Field[] => {
     const item = items.find((value) => value.id === id); const name = order.itemNames?.[id] ?? item?.name ?? id;
+    // Only items stored in several places need a source choice.
+    const sources = action === 'prepare' && item?.trackingMode !== 'serialized' ? sourceOptions(id, order.sourceLocations?.[id]) : undefined;
     if (action === 'prepare') return [
-      ...(item?.trackingMode !== 'serialized' ? [{ key: `source:${id}`, label: `${name} · ${t('Quelllager', 'Source location')}`, options: lookup.locationOptions, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }] : []),
+      ...(sources ? [{ key: `source:${id}`, label: `${name} · ${t('Quelllager', 'Source location')}`, options: sources, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }] : []),
       { key: `prepare:${id}`, label: `${name} · ${t('Vorbereitet', 'Prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('Angefragt', 'Requested')}: ${order.requestedQuantities[id]}` },
       ...(assets.data?.[id] ?? []).filter((asset) => (asset.availabilityStatus === 'available' && (!equipment.data?.[id] || equipment.data[id].assetIds.includes(asset.id))) || order.assetAssignments[id]?.includes(asset.id)).map((asset): Field => ({ key: `asset:${asset.id}`, label: `${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox' })),
     ];

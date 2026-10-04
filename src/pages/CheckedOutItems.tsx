@@ -14,7 +14,6 @@ import {
     Typography,
 } from '@mui/material';
 import { useItems } from '../hooks/useItems';
-import { useNavigate } from 'react-router-dom';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
@@ -23,19 +22,23 @@ import type { CheckedOutRow } from '../types/custody';
 import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 import type { ReturnSubmissionFormData } from '../types';
+import { useOrders } from '../hooks/useOrders';
+import { GeneralOrderWorkflow } from '../components/orders/GeneralOrderWorkflow';
 
 export function CheckedOutItemsPage() {
     const t = useLocalizedText();
     const custody = useCustodyBalances();
     const { data: items, isLoading: itemsPending, isComplete: itemsComplete, isError: itemsError, refetch: refetchItems } = useItems();
-    const navigate = useNavigate();
     const { data: assemblies } = useAssemblies();
     const createReturn = useCreateReturnSubmission();
+    const generalOrders = useOrders();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [search, setSearch] = useState('');
     const [personFilter, setPersonFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [returnRow, setReturnRow] = useState<CheckedOutRow>();
+    const [generalReturnRow, setGeneralReturnRow] = useState<CheckedOutRow>();
+    const generalReturnOrder = generalReturnRow && generalOrders.data?.find((order) => order.id === generalReturnRow.generalOrderId);
 
     const checkedOutRows: CheckedOutRow[] = custody.data ?? [];
 
@@ -48,10 +51,10 @@ export function CheckedOutItemsPage() {
             && (!eventFilter || row.eventKey === eventFilter);
     });
 
+    // General-order custody is reconciled on the order itself; everything else is submitted for acknowledgement.
     function handleQuickReturn(row: CheckedOutRow) {
-        if (row.generalOrderId) { navigate('/orders?tab=general'); return; }
-        if (row.factionOrderId) { navigate(`/orders/faction/${row.factionOrderId}`); return; }
-        setReturnRow(row);
+        if (row.generalOrderId) setGeneralReturnRow(row);
+        else setReturnRow(row);
     }
 
     function submitReturn(data: ReturnSubmissionFormData) {
@@ -127,6 +130,18 @@ export function CheckedOutItemsPage() {
                     )}
                 </DialogContent>
             </Dialog>
+            {generalReturnRow && !generalReturnOrder && <Dialog open onClose={() => setGeneralReturnRow(undefined)} maxWidth="sm" fullWidth>
+                <DialogTitle>{t('Rückgabe erfassen', 'Record return')}</DialogTitle>
+                <DialogContent>
+                    <Typography color={generalOrders.isError ? 'error' : 'text.secondary'}>
+                        {generalOrders.isError || generalOrders.isComplete
+                            ? t('Die zugehörige Bestellung konnte nicht geladen werden.', 'Could not load the related order.')
+                            : t('Bestellung wird geladen…', 'Loading order…')}
+                    </Typography>
+                </DialogContent>
+            </Dialog>}
+            {generalReturnRow && generalReturnOrder && items && <GeneralOrderWorkflow order={generalReturnOrder} action="return" items={items}
+                itemIds={[generalReturnRow.itemId]} onClose={() => setGeneralReturnRow(undefined)} />}
         </Box>
     );
 }

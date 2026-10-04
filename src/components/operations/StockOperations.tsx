@@ -1,5 +1,5 @@
-import { OperationLines } from './OperationLines';
-import { OperationListEntry } from './OperationListEntry';
+import { CollapsibleOperationLines, OperationLines } from './OperationLines';
+import { OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
 import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
@@ -146,10 +146,16 @@ export function CountsPanel() {
   const counts = useOperationList('counts', operationsApi.counts);
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ count: Count; type: 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
-  return <Stack spacing={2}>
-    <Button title={translate('Eine neue Inventur anlegen', 'Create a new stock count')} variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
-    <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
-    {counts.data?.map((count) => <OperationListEntry key={count.id} actions={<>
+  const finished = (count: Count) => ['posted', 'cancelled'].includes(count.status);
+  const activeCounts = (counts.data ?? []).filter((count) => !finished(count));
+  const finishedCounts = (counts.data ?? []).filter(finished);
+  const countSummary = (count: Count) => {
+    const counted = count.lines.filter((line) => line.countedQuantity != null).length;
+    const variances = count.lines.filter((line) => line.varianceQuantity != null && line.varianceQuantity !== 0).length;
+    return [t(`${counted} von ${count.lines.length} gezählt`, `${counted} of ${count.lines.length} counted`),
+      variances ? t(`${variances} Abweichungen`, `${variances} with variance`) : ''].filter(Boolean).join(' · ');
+  };
+  const countEntry = (count: Count) => <OperationListEntry key={count.id} actions={<>
         {count.status === 'counting' && <Button title={translate('Die gezählten Mengen eingeben', 'Enter the counted quantities')} onClick={() => setAction({ count, type: 'submit' })}>{count.lines.some(line => line.countedQuantity != null) ? t('Zählung fortsetzen', 'Resume count') : t('Zählung erfassen', 'Record count')}</Button>}
         {count.status === 'awaiting_recount' && <Button title={translate('Eine Nachzählung der Inventur starten', 'Start a recount of this inventory')} onClick={() => setAction({ count, type: 'recount' })}>{t('Nachzählen', 'Recount')}</Button>}
         {count.status === 'awaiting_approval' && canManageUsers(user) && <Button title={translate('Die erfassten Zählmengen freigeben', 'Approve the recorded count quantities')} onClick={() => setAction({ count, type: 'approve' })}>{t('Freigeben', 'Approve')}</Button>}
@@ -157,9 +163,13 @@ export function CountsPanel() {
         {!['posted', 'cancelled'].includes(count.status) && <Button title={translate('Diese Inventur abbrechen', 'Cancel this stock count')} onClick={() => setAction({ count, type: 'cancel' })}>{t('Abbrechen', 'Cancel count')}</Button>}
        </>} title={<>{count.sessionNumber}</>} status={count.status}>
       <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t(' · Blindzählung', ' · Blind count') : ''}</Typography>
-      <OperationLines label={t('Inventurpositionen', 'Count lines')} headers={[t('Artikel / Lagerort', 'Item / location'), t('Erwartet', 'Expected'), t('Gezählt', 'Counted'), t('Nachzählung', 'Recount'), t('Abweichung', 'Variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, line.expectedQuantity ?? '—', line.countedQuantity ?? '—', line.recountedQuantity ?? '—', line.varianceQuantity ?? '—'] }))} />
-
-    </OperationListEntry>)}
+      <CollapsibleOperationLines summary={countSummary(count)} label={t('Inventurpositionen', 'Count lines')} headers={[t('Artikel / Lagerort', 'Item / location'), t('Erwartet', 'Expected'), t('Gezählt', 'Counted'), t('Nachzählung', 'Recount'), t('Abweichung', 'Variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, line.expectedQuantity ?? '—', line.countedQuantity ?? '—', line.recountedQuantity ?? '—', line.varianceQuantity ?? '—'] }))} />
+    </OperationListEntry>;
+  return <Stack spacing={2}>
+    <Button title={translate('Eine neue Inventur anlegen', 'Create a new stock count')} variant="contained" onClick={() => setCreate(true)}>{t('Inventur starten', 'New stock count')}</Button>
+    <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
+    {activeCounts.map(countEntry)}
+    <OperationHistory title={t('Abgeschlossene Inventuren', 'Completed stock counts')} count={finishedCounts.length}>{finishedCounts.map(countEntry)}</OperationHistory>
     {create && <OperationForm title={t('Neue Inventur', 'New stock count')} initial={{ blindCount: false }} fields={[
       { key: 'locationId', label: t('Lagerort (leer = alle)', 'Location (empty = all)'), options: lookup.locationOptions },
       { key: 'itemId', label: t('Artikel (leer = alle)', 'Item (empty = all)'), options: lookup.itemOptions },

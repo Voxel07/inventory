@@ -3,7 +3,7 @@ import { useMutationFeedback } from '../hooks/useMutationFeedback';
 import { CustodyEvidence } from '../components/orders/CustodyEvidence';
 import { useEquipmentAvailability } from '../hooks/useEquipment';
 import { Fields } from '../components/operations/OperationForm';
-import { useStockLookups } from '../hooks/useStockLookups';
+import { useSourceLocationOptions } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -82,7 +82,7 @@ export function FactionOrderDetail() {
   const returnOrderItems = useReturnFactionOrderItems();
   const cancelOrder = useCancelFactionOrder();
 
-  const lookup = useStockLookups();
+  const sourceOptions = useSourceLocationOptions(order?.status === 'preparing');
   const preparationKey = JSON.stringify([
     generation, orderId, order?.id, order?.updated, order?.status,
     order?.requestedQuantities, order?.requestedAssemblyQuantities,
@@ -332,7 +332,11 @@ export function FactionOrderDetail() {
         isReopeningPreparation={reopenPreparation.isPending}
       />
 
-      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.filter((item) => item.trackingMode !== 'serialized').map((item) => ({ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options: lookup.locationOptions, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }))} values={sources} onChange={(values) => setPreparationField('sources', Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
+      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.flatMap((item) => {
+        // Only items stored in several places need a source choice.
+        const options = item.trackingMode === 'serialized' ? undefined : sourceOptions(item.id, sources[item.id]);
+        return options ? [{ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }] : [];
+      })} values={sources} onChange={(values) => setPreparationField('sources', Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
       <OrderPickListTable
         order={order}
         orderItems={orderItems}
