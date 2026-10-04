@@ -28,12 +28,15 @@ const layoutKeys = new Set([
 ]);
 
 function splitStyle(style: SystemStyleObject<Theme>, layout: boolean): SystemStyleObject<Theme> {
-  return Object.fromEntries(Object.entries(style ?? {}).flatMap(([key, value]) => {
+  const entries: [string, unknown][] = Object.entries((style ?? {}) as Record<string, unknown>);
+  const kept = entries.flatMap<[string, unknown]>(([key, value]) => {
     if (key.startsWith('@') && value && typeof value === 'object') {
-      return [[key, splitStyle(value as SystemStyleObject<Theme>, layout)]];
+      const nested: unknown = splitStyle(value as SystemStyleObject<Theme>, layout);
+      return [[key, nested]];
     }
     return layoutKeys.has(key) === layout ? [[key, value]] : [];
-  })) as SystemStyleObject<Theme>;
+  });
+  return Object.fromEntries(kept) as SystemStyleObject<Theme>;
 }
 
 type SxArray = Extract<SxProps<Theme>, readonly unknown[]>;
