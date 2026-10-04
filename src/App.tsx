@@ -81,24 +81,21 @@ function buildTheme(mode: 'light' | 'dark') {
     error: { main: '#d12222' },
   },
   typography: {
-    fontFamily: '"Titillium Web", "Inter", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Roboto Mono", monospace',
     h4: {
-      fontFamily: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif',
-      fontWeight: 800,
+      fontWeight: 500,
       letterSpacing: '0.025em',
-      lineHeight: 1.05,
+      lineHeight: 1.3,
       textTransform: 'uppercase',
     },
     h5: {
-      fontFamily: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif',
-      fontWeight: 800,
+      fontWeight: 500,
       letterSpacing: '0.02em',
-      lineHeight: 1.1,
+      lineHeight: 1.3,
       textTransform: 'uppercase',
     },
     h6: {
-      fontFamily: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif',
-      fontWeight: 700,
+      fontWeight: 500,
       letterSpacing: '0.025em',
     },
     button: {
@@ -179,7 +176,6 @@ function buildTheme(mode: 'light' | 'dark') {
         head: {
           backgroundColor: '#0e0e0f',
           color: '#ffffff',
-          fontFamily: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif',
           fontWeight: 700,
           letterSpacing: '0.055em',
           textTransform: 'uppercase',
@@ -203,6 +199,7 @@ function buildTheme(mode: 'light' | 'dark') {
         root: { width: '100%', minWidth: 0 },
         toolbar: { justifyContent: 'flex-end', flexWrap: 'wrap' },
         spacer: { display: 'none' },
+        actions: { display: 'flex', alignItems: 'center', flexShrink: 0 },
       },
     },
     MuiTableRow: {

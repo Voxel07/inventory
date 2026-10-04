@@ -353,7 +353,7 @@ export function Procurement() {
                           <Typography sx={{ fontWeight: 700 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link></Typography>
                           {row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} />}
                           {row.sku && (
-                            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                               SKU: {row.sku}
                             </Typography>
                           )}
@@ -445,7 +445,7 @@ export function Procurement() {
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.itemId} hover>
-                        <TableCell sx={{ fontFamily: 'monospace' }}>{row.sku || '—'}</TableCell>
+                        <TableCell>{row.sku || '—'}</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link>{row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} sx={{ ml: 1 }} />}</TableCell>
                         <TableCell>
                           <Chip

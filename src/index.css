@@ -12,6 +12,7 @@ body,
 }
 
 body {
+  font-family: 'Roboto Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
@@ -41,6 +42,19 @@ input,
 select,
 textarea {
   touch-action: manipulation;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+body .leaflet-container,
+.leaflet-container .leaflet-bar a,
+.leaflet-container .leaflet-popup-close-button {
+  font-family: 'Roboto Mono', monospace;
 }
 
 @media (max-width: 599.95px) {

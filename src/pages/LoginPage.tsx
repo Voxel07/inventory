@@ -73,7 +73,7 @@ export function LoginPage() {
                     >
                         <ShieldIcon sx={{ fontSize: 28 }} />
                     </Box>
-                    <Typography component="h1" variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
+                    <Typography component="h1" variant="h5" sx={{ mb: 1 }}>
                         {t('Inventarverwaltung', 'Inventory management')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 4 }}>

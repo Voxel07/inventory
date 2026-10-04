@@ -155,7 +155,7 @@ export function Navigation() {
                     </ListItemButton>
                     <Typography
                         variant="caption"
-                        sx={{ display: 'block', px: 1, pt: 1.25, color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'monospace' }}
+                        sx={{ display: 'block', px: 1, pt: 1.25, color: 'rgba(255, 255, 255, 0.45)' }}
                     >
                         {t('nav.version')} {__APP_VERSION__}
                     </Typography>

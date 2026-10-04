@@ -41,7 +41,6 @@ type ItemRow = {
     stock: number;
     totalStock: number;
     damaged: number;
-    value: number;
     location: string;
     events: string;
 };
@@ -94,7 +93,6 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 stock: stock.remaining,
                 totalStock: stock.totalStock,
                 damaged: stock.damaged,
-                value: item.value ?? 0,
                 location: location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
                 events: item.eventTypes?.join(', ') || '—',
             };
@@ -109,8 +107,6 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             renderCell: ({ row }) => <Typography variant="body2" sx={{ color: row.stock <= 0 ? 'error.main' : !locationStock && row.stock <= (row.item.minStock ?? 5) ? 'warning.main' : 'success.main', fontWeight: 700 }}>
                 {row.stock}/{row.totalStock}{row.damaged > 0 ? ` · ${row.damaged} ${t('defekt', 'damaged')}` : ''}
             </Typography> },
-        ...(!locationStock ? [{ field: 'value', headerName: t('Einzelwert', 'Unit value'), type: 'number', width: 125,
-            valueFormatter: (value: number) => `${value.toFixed(2)} €` } satisfies GridColDef<ItemRow>] : []),
         ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 } satisfies GridColDef<ItemRow>] : []),
         { field: 'events', headerName: t('Events', 'Events'), width: locationStock ? 95 : 145 },
         ...(onRemoveItem ? [{ field: 'remove', headerName: t('Aktionen', 'Actions'), width: 90, sortable: false, filterable: false, renderCell: ({ row }: { row: ItemRow }) => <IconButton title={t('Artikel aus Baugruppe entfernen', 'Remove item from assembly')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onRemoveItem(row.id); }}><DeleteIcon fontSize="small" /></IconButton> } satisfies GridColDef<ItemRow>] : []),

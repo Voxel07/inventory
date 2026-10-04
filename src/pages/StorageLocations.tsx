@@ -185,11 +185,10 @@ export function StorageLocations() {
     return (
         <Box>
             {locationsError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('Erneut laden', 'Retry')}</Button>}>{locationsError.message}</Alert>}
-            <Button title={translate('Standorte anlegen und bearbeiten', 'Create and edit warehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
             <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
             {(tab !== 'locations' || !isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                    <Typography variant="h4">
                         {t('Lagerorte', 'Storage locations')}
                     </Typography>
                     <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
@@ -202,10 +201,13 @@ export function StorageLocations() {
                 </Box>
             )}
 
-            <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }} aria-label={t('Lagerort-Bereiche', 'Storage location sections')}>
-                <Tab value="locations" label={t('Lagerorte & Bestand', 'Locations & stock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
-                {canEdit && <Tab value="responsibilities" label={t('Verantwortung & fehlende Angaben', 'Responsibility & missing information')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
-            </Tabs>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minWidth: 0, maxWidth: '100%' }} aria-label={t('Lagerort-Bereiche', 'Storage location sections')}>
+                    <Tab value="locations" label={t('Lagerorte & Bestand', 'Locations & stock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
+                    {canEdit && <Tab value="responsibilities" label={t('Verantwortung & fehlende Angaben', 'Responsibility & missing information')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
+                </Tabs>
+                <Button title={translate('Standorte anlegen und bearbeiten', 'Create and edit warehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
+            </Box>
             {tab === 'responsibilities' && canEdit && !locationsError && <Box role="tabpanel" id="storage-panel-responsibilities" aria-labelledby="storage-tab-responsibilities">
                 <StorageResponsibilities locations={locations ?? []} loading={locationsLoading} onEditLocation={handleOpenEdit} />
             </Box>}
@@ -317,7 +319,7 @@ export function StorageLocations() {
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                         <RoomIcon color="primary" sx={{ fontSize: 32 }} />
                                         <Box>
-                                            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                                            <Typography variant="h5">
                                                 {locationPath(activeLocation, locations ?? [])}
                                             </Typography>
                                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
@@ -377,7 +379,7 @@ export function StorageLocations() {
                                 <Divider sx={{ my: 2 }} />
 
                                 <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
-                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                    <Typography variant="h6">
                                         {t('Hier gelagerte Artikel', 'Items stored here')}
                                     </Typography>
                                     <Chip size="small" label={inventory.items.length} />

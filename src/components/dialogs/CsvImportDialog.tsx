@@ -195,7 +195,7 @@ export function CsvImportDialog({
   return (
     <Dialog open={open} onClose={isImporting ? undefined : onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
-        <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+        <Typography variant="h6" component="span">
           {t('CSV-Import (Artikel & Baugruppen)', 'CSV Import (Items & Assemblies)')}
         </Typography>
         <Stack direction="row" spacing={1}>

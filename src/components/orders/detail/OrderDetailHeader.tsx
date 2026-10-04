@@ -147,7 +147,7 @@ export function OrderDetailHeader({
               {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
             </Typography>
           )}
-          <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
+          <Typography sx={{ fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { xs: 'stretch', md: 'flex-start' } }}>
           <Button title={translate('Den QR-Code dieser Bestellliste anzeigen', 'Display the QR code for this order list')} variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('Listen-QR', 'List QR')}</Button>

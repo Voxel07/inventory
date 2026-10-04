@@ -26,3 +26,10 @@ This project is in active **new development**. Follow these mandatory rules:
 
 ## 5. Adding Data
 - If not needed for UI tests use the availabel MCP server of the application for crud operations
+
+
+## 6. Bugfixes
+- If a bugfix is requested. You are allowed to run build and tests to ensure nothing breaks
+- Always create a review file with all points that need to be worked on. 
+- Track the progress of the tasks in the same file
+- Other problems that are found during the investigation of the other problems should also be fixed and documented as well

@@ -237,7 +237,7 @@ export function ItemDetail() {
                     <TooltipButton variant="icon" tooltipText={t('Zurück zur Artikelübersicht', 'Back to items')} icon={<ArrowBackIcon />} onClick={() => navigate('/items')} />
                     <Box sx={{ flex: 1, minWidth: { xs: 0, sm: 180 }, gridColumn: { xs: '1 / -1', sm: 'auto' }, gridRow: { xs: 2, sm: 'auto' } }}>
                         <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                            <Typography variant="h5" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                            <Typography variant="h5" sx={{ overflowWrap: 'anywhere' }}>{item.name}</Typography>
                             <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" />
                             {equipment.data && <Chip size="small" variant="outlined" color={equipment.data.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[equipment.data.ownershipType]} · ${policyLabels[equipment.data.availabilityPolicy]}`} />}
                         </Stack>

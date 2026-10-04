@@ -167,7 +167,7 @@ export function Header() {
                     <MenuIcon />
                 </IconButton>
                 <InventoryIcon sx={{ mr: 1, color: 'primary.main', display: { xs: 'none', sm: 'block' } }} />
-                <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography variant="h6" noWrap component="div" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />

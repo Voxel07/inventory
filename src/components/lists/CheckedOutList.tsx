@@ -232,7 +232,7 @@ export function CheckedOutList({
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
           <Box sx={{ minWidth: 0 }}>
             {linkToItem
-              ? <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }} component={Link} to={`/items/${row.itemId}`} color="inherit" style={{ textDecoration: 'none', fontWeight: 700 }}>{row.name}</Typography>
+              ? <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }} component={Link} to={`/items/${row.itemId}`} color="inherit" style={{ textDecoration: 'none' }}>{row.name}</Typography>
               : <Typography variant="h6" sx={{ fontSize: '1rem', overflowWrap: 'anywhere' }}>{row.name}</Typography>}
             <Typography variant="body2" color="text.secondary">{row.category || '—'} · {row.storageLocation}</Typography>
             {showPerson && <Typography variant="body2">{row.person}</Typography>}

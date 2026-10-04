@@ -328,7 +328,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                                     <Box>
-                                        <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '1rem' }}>
+                                        <Typography sx={{ fontWeight: 700, fontSize: '1rem' }}>
                                             {asset.assetCode}
                                         </Typography>
                                         {asset.serialNumber && (
@@ -400,7 +400,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                             onChange={() => toggleSelect(asset.id)}
                                         />
                                     </TableCell>}
-                                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                                    <TableCell sx={{ fontWeight: 700 }}>
                                         {asset.assetCode}
                                     </TableCell>
                                     <TableCell>{asset.serialNumber || '—'}</TableCell>

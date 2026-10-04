@@ -52,7 +52,7 @@ export function QRCodeGenerator({ itemId, itemName, resourceType = 'item', textC
                 alt={t(`QR-Code für ${itemName}`, `QR code for ${itemName}`)}
                 sx={{ width: 256, height: 256 }}
             />
-            {textCode && <Typography sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{textCode}</Typography>}
+            {textCode && <Typography sx={{ fontWeight: 700 }}>{textCode}</Typography>}
 
             <Button title={t('QR-Code-Bilddatei auf Ihrem Gerät speichern', 'Save the QR code image on your device')} variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownload}>
                 {t('QR-Code herunterladen', 'Download QR code')}
