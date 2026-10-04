@@ -13,4 +13,4 @@
 }
 
 .order-quantity-input:hover { border-color: currentColor; }
-.order-quantity-input:focus { border: 2px solid #e30613; outline: none; }
+.order-quantity-input:focus { border: 2px solid #3949ab; outline: none; }

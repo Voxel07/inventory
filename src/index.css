@@ -12,28 +12,9 @@ body,
 }
 
 body {
-  font-family: 'Roboto Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #eceef1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #9b9da3;
-  border: 2px solid #eceef1;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #e30613;
 }
 
 button,
@@ -54,16 +35,14 @@ textarea {
 body .leaflet-container,
 .leaflet-container .leaflet-bar a,
 .leaflet-container .leaflet-popup-close-button {
-  font-family: 'Roboto Mono', monospace;
+  font-family: inherit;
 }
 
-@media (max-width: 599.95px) {
-  h1,
-  h2,
-  h3,
-  h4 {
-    overflow-wrap: anywhere;
-  }
+h1,
+h2,
+h3,
+h4 {
+  overflow-wrap: break-word;
 }
 
 @media print {

@@ -35,6 +35,7 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblyCheckout } from '../hooks/useTransactions';
 import { useCreateDamageReport } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
+import { FormDialog } from '../components/shared/FormDialog';
 import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { useUIStore } from '../store/uiStore';
 import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
@@ -465,17 +466,16 @@ export function AssemblyDetail() {
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Baugruppe bearbeiten', 'Edit assembly')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
-                    <AssemblyForm
-                        initialData={assembly}
-                        items={items ?? []}
-                        onSubmit={handleUpdate}
-                        isLoading={updateAssembly.isPending}
-                    />
-                </DialogContent>
-            </Dialog>
+            <FormDialog open={editOpen} onClose={() => setEditOpen(false)}>
+                <AssemblyForm
+                    title={t('Baugruppe bearbeiten', 'Edit assembly')}
+                    onCancel={() => setEditOpen(false)}
+                    initialData={assembly}
+                    items={items ?? []}
+                    onSubmit={handleUpdate}
+                    isLoading={updateAssembly.isPending}
+                />
+            </FormDialog>
             <Dialog open={damageOpen} fullScreen={isMobile} onClose={() => setDamageOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}</DialogTitle>
                 <DialogContent sx={{ pt: '24px !important' }}>

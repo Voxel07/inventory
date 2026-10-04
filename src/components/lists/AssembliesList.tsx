@@ -1,16 +1,20 @@
-import { IconButton, Button } from '../shared/ActionButtons';
+import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Box, Link, Paper, Stack, TextField, Typography, useMediaQuery } from '@mui/material';
+import { Alert, Box, Link, ListItemIcon, ListItemText, Menu, Paper, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
-import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
+import { StateMessage } from '../common/StateMessage';
+import { CatalogRow, CatalogSearchBar, type RowAction } from './CatalogParts';
+import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 
 interface Props {
     assemblies: Assembly[] | undefined;
@@ -19,6 +23,7 @@ interface Props {
     loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
+    onCreate?: () => void;
     onEdit?: (assembly: Assembly) => void;
     onDelete?: (id: string) => void;
     onDeleteMany?: (ids: string[]) => void;
@@ -37,14 +42,21 @@ type AssemblyRow = {
     stockReady: boolean;
 };
 
-export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onEdit, onDelete, onDeleteMany }: Props) {
+const PAGE_STEP = 30;
+
+export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany }: Props) {
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const t = useLocalizedText();
     const language = useAppLanguage();
-    const isMobile = useMediaQuery('(max-width:599.95px)');
+    const theme = useTheme();
+    const compact = useCompactCatalog();
+    const narrowTable = useMediaQuery(theme.breakpoints.down('lg'));
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [selecting, setSelecting] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
+    const [menu, setMenu] = useState<{ anchor: HTMLElement; row: AssemblyRow } | null>(null);
 
     const rows: AssemblyRow[] = (() => {
         const itemById = new Map((items ?? []).map((item) => [item.id, item]));
@@ -73,18 +85,33 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         }).filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
     })();
 
+    const availabilityText = (row: AssemblyRow) => !row.stockReady ? t('Bestand wird berechnet…', 'Calculating stock…')
+        : row.stock > 0 ? t(`${row.stock} von ${row.totalStock} baubar`, `${row.stock} of ${row.totalStock} buildable`)
+        : t('Nicht baubar', 'None buildable');
+    const availabilityColor = (row: AssemblyRow) => !row.stockReady ? 'text.secondary' : row.stock > 0 ? 'success.main' : 'error.main';
+
+    function rowActions(row: AssemblyRow): RowAction[] {
+        return canManage ? [
+            { label: t('Bearbeiten', 'Edit'), icon: <EditIcon fontSize="small" />, onClick: () => onEdit?.(row.assembly) },
+            { label: t('Löschen', 'Delete'), icon: <DeleteIcon fontSize="small" />, onClick: () => onDelete?.(row.id), destructive: true },
+        ] : [];
+    }
+
     const columns: GridColDef<AssemblyRow>[] = [
-        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 180,
-            renderCell: ({ row }) => <Link component={RouterLink} to={`/assemblies/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600 }}>{row.name}</Link> },
+        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 200,
+            renderCell: ({ row }) => <Box sx={{ minWidth: 0, py: 0.5 }}>
+                <Link component={RouterLink} to={`/assemblies/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.35 }}>{row.name}</Link>
+                {narrowTable && row.category !== '—' && <Typography variant="body2" color="text.secondary" noWrap>{row.category}</Typography>}
+            </Box> },
         { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150 },
-        { field: 'stock', headerName: t('Bestand', 'Stock'), type: 'number', width: 155,
-            renderCell: ({ row }) => <Typography variant="body2" sx={{ color: !row.stockReady ? 'text.secondary' : row.stock > 0 ? 'success.main' : 'error.main', fontWeight: 700 }}>{row.stockReady ? `${row.stock}/${row.totalStock}` : '…'}</Typography> },
-        { field: 'location', headerName: t('Lagerort', 'Storage location'), flex: 1, minWidth: 150 },
-        { field: 'events', headerName: t('Events', 'Events'), width: 145 },
-        ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 110, sortable: false, filterable: false,
+        { field: 'stock', headerName: t('Verfügbar', 'Available'), type: 'number', width: 180,
+            renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor(row), fontWeight: 600, whiteSpace: 'normal', textAlign: 'right' }}>{availabilityText(row)}</Typography> },
+        { field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150 },
+        { field: 'events', headerName: t('Events', 'Events'), width: 130 },
+        ...(canManage ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: 104, sortable: false, filterable: false,
             renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">
-              <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton>
-              <IconButton title={t('Löschen', 'Delete')} size="small" color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton title={t('Bearbeiten', 'Edit')} onClick={(event) => { event.stopPropagation(); onEdit?.(row.assembly); }}><EditIcon fontSize="small" /></IconButton>
+              <IconButton title={t('Löschen', 'Delete')} color="error" onClick={(event) => { event.stopPropagation(); onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>
             </Stack> } satisfies GridColDef<AssemblyRow>] : []),
     ];
 
@@ -95,27 +122,80 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         setSelectedIds(new Set(ids));
     }
 
+    function toggleSelected(id: string) {
+        setSelectedIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+
+    const initialLoading = !assemblies && (isLoading || (!loadError && loadingMore));
+    const initialError = !assemblies?.length && loadError && !isLoading;
+    const empty = !initialLoading && !initialError && (assemblies?.length ?? 0) === 0;
+    const noMatches = !initialLoading && !initialError && !empty && rows.length === 0;
+
+    const content = (() => {
+        if (initialError) return <StateMessage kind="error" title={t('Baugruppen konnten nicht geladen werden', 'Could not load assemblies')}
+            description={t('Der Katalog ist gerade nicht erreichbar. Deine Daten sind nicht verloren.', 'The catalog cannot be reached right now. Nothing has been lost.')}
+            action={onRetry && <Button variant="contained" onClick={onRetry}>{t('Erneut versuchen', 'Try again')}</Button>} />;
+        if (initialLoading) return <StateMessage kind="loading" title={t('Baugruppen werden geladen…', 'Loading assemblies…')} />;
+        if (empty) return <StateMessage kind="empty" title={t('Noch keine Baugruppen', 'No assemblies yet')}
+            description={t('Baugruppen bündeln Artikel, die gemeinsam ausgegeben werden.', 'Assemblies bundle items that are issued together.')}
+            action={onCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>} />;
+        if (noMatches) return <StateMessage kind="no-matches" title={t('Keine passenden Baugruppen', 'No matching assemblies')}
+            description={t('Prüfe die Schreibweise oder suche nach einem enthaltenen Artikel.', 'Check the spelling or search for a contained item.')}
+            action={<Button variant="outlined" onClick={() => setSearch('')}>{t('Suche zurücksetzen', 'Clear search')}</Button>} />;
+        if (compact) return <>
+            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('Baugruppen', 'Assemblies')}>
+                {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id} to={`/assemblies/${row.id}`} title={row.name}
+                    primary={<Box component="span" sx={{ color: availabilityColor(row), fontWeight: 600 }}>{availabilityText(row)}</Box>}
+                    primarySuffix={row.location !== '—' ? row.location : undefined}
+                    secondary={[row.category !== '—' ? row.category : '', row.events !== '—' ? row.events : ''].filter(Boolean).join(' · ')}
+                    selectable={selecting} selected={selectedIds.has(row.id)} onToggleSelected={() => toggleSelected(row.id)}
+                    onOpenMenu={(anchor) => setMenu({ anchor, row })} />)}
+            </Paper>
+            {rows.length > visibleCount && <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => setVisibleCount((count) => count + PAGE_STEP)}>
+                {t(`Weitere anzeigen (${rows.length - visibleCount} übrig)`, `Show more (${rows.length - visibleCount} remaining)`)}
+            </Button>}
+        </>;
+        return <DataGrid rows={rows} columns={columns} columnVisibilityModel={{ category: !narrowTable, events: !narrowTable }}
+            loading={isLoading} density="standard" getRowHeight={() => 'auto'} autoHeight checkboxSelection={canManage}
+            slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/assemblies') } }}
+            disableRowSelectionOnClick
+            onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/assemblies/${row.id}`); }}
+            rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
+            initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } } }}
+            pageSizeOptions={[25, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
+            sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
+                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 1 } }} />;
+    })();
+
     return <Box>
-        <TextField label={t('Nach Name oder Komponente suchen', 'Search by name or component')} value={search}
-            onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />
-        {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, mb: 2 }}>
-            <Typography sx={{ fontWeight: 700 }}>{t(`${selectedIds.size} Baugruppen ausgewählt`, `${selectedIds.size} assemblies selected`)}</Typography>
-            <Button title={translate('Das Löschen der ausgewählten Baugruppen bestätigen', 'Review deletion of the selected assemblies')} color="error" size="small" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
+        {compact
+            ? <CatalogSearchBar search={search} onSearch={setSearch} label={t('Name oder Komponente suchen', 'Search name or component')}
+                selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
+            : <TextField type="search" label={t('Nach Name oder Komponente suchen', 'Search by name or component')} value={search}
+                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 2 }} />}
+        {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('Erneut laden', 'Retry')}</Button>}>
+            {t(`Es konnten nur ${assemblies?.length ?? 0} Baugruppen geladen werden. Die Liste ist unvollständig.`, `Only ${assemblies?.length ?? 0} assemblies could be loaded. The list is incomplete.`)}
+        </Alert>}
+        {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, pl: 2, mb: 1.5 }}>
+            <Typography sx={{ fontWeight: 600 }}>{t(`${selectedIds.size} Baugruppen ausgewählt`, `${selectedIds.size} assemblies selected`)}</Typography>
+            <Button color="error" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
                 {t('Auswahl löschen', 'Delete selected')}
             </Button>
         </Paper>}
-        <Box sx={{ width: '100%' }}>
-            <DataGrid rows={rows} columns={columns} loading={isLoading} density="compact" autoHeight checkboxSelection={canManage}
-                slotProps={{ row: { onAuxClick: event => openCatalogRowInNewTab(event, '/assemblies') } }}
-                rowHeight={isMobile ? 60 : 52} disableRowSelectionOnClick
-                onRowClick={({ row }, event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) navigate(`/assemblies/${row.id}`); }}
-                rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
-                initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }}
-                pageSizeOptions={[20, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
-                sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
-                    '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
-        </Box>
-        {loadingMore && <Typography variant="caption" color="text.secondary">{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
-        {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} size="small" onClick={onRetry}>{t('Weitere Einträge konnten nicht geladen werden. Erneut versuchen', 'Could not load more entries. Retry')}</Button>}
+        {content}
+        {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+            <MenuItem component={RouterLink} to={menu ? `/assemblies/${menu.row.id}` : '#'} onClick={() => setMenu(null)}>
+                <ListItemText>{t('Öffnen', 'Open')}</ListItemText>
+            </MenuItem>
+            {menu && rowActions(menu.row).map((action) => <MenuItem key={action.label} onClick={() => { setMenu(null); action.onClick(); }} sx={action.destructive ? { color: 'error.main' } : undefined}>
+                <ListItemIcon sx={action.destructive ? { color: 'error.main' } : undefined}>{action.icon}</ListItemIcon>
+                <ListItemText>{action.label}</ListItemText>
+            </MenuItem>)}
+        </Menu>
     </Box>;
 }

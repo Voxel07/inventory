@@ -3,7 +3,7 @@ import type { MemberAssignment, MemberCustody, MemberDecisionInput, MemberReques
 export const memberApi = {
   custody: () => apiRequest<MemberCustody[]>('/api/member/custody'),
   storage: () => apiRequest<MemberStored[]>('/api/member/storage'),
-  requests: () => apiRequest<MemberRequest[]>('/api/member/requests'),
+  requests: (page = 0) => apiRequest<MemberRequest[]>('/api/member/requests', { query: { page, size: 100 } }),
   assignments: () => apiRequest<MemberAssignment[]>('/api/member/assignments'),
   request: (body: MemberRequestInput) => apiRequest<MemberRequest>('/api/member/requests', { method: 'POST', body }),
   submitReturn: (body: MemberReturnInput) => apiRequest<{ id: string }>('/api/member/returns', { method: 'POST', body }),

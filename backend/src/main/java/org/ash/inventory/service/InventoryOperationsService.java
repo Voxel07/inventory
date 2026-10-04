@@ -263,14 +263,17 @@ public class InventoryOperationsService {
         return result;
     }
 
+    @jakarta.inject.Inject org.ash.inventory.orm.StockFactsOrm stockFacts;
+
     public record ReadStock(StockState physical, EquipmentReadService.Facts policy) {}
 
     public Map<UUID, ReadStock> readStock(List<Item> items) {
         if (items.isEmpty()) return Map.of();
         var itemIds = items.stream().map(item -> item.id).toList();
-        var transactionTotals = orm.transactionTotals(itemIds);
-        var damageQuantities = orm.unresolvedDamageQuantities(itemIds);
-        var reservationQuantities = orm.activeReservationQuantities(itemIds);
+        var facts = stockFacts.load(itemIds);
+        var transactionTotals = facts.totals();
+        var damageQuantities = facts.damage();
+        var reservationQuantities = facts.reservations();
         var positionsByItem = positions.load(itemIds);
         var serializedAssets = orm.assetsForItems(items.stream()
                 .filter(i -> i.trackingMode == DomainEnums.TrackingMode.serialized)
@@ -279,7 +282,7 @@ public class InventoryOperationsService {
         for (var asset : serializedAssets) {
             assetsByItem.computeIfAbsent(asset.item.id, ignored -> new ArrayList<>()).add(asset);
         }
-        var policies = readPolicy.load(items, assetsByItem, positionsByItem);
+        var policies = readPolicy.load(items, assetsByItem, positionsByItem, facts.memberDamage());
 
         var result = new LinkedHashMap<UUID, StockState>();
         for (var item : items) {

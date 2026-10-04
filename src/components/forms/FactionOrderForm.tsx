@@ -407,7 +407,7 @@ export function FactionOrderForm({
                   <Paper
                     key={assembly.id}
                     variant="outlined"
-                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
                   >
                     {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: '100%', height: 64, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 64, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><CategoryIcon color="primary" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{assembly.name}</Typography>
@@ -432,7 +432,7 @@ export function FactionOrderForm({
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
                 return (
-                  <Paper key={assembly.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
+                  <Paper key={assembly.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'action.selected' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                        {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} /> : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -485,7 +485,7 @@ export function FactionOrderForm({
                   <Paper
                     key={item.id}
                     variant="outlined"
-                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', borderColor: isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
@@ -515,7 +515,7 @@ export function FactionOrderForm({
                 const available = availableByItem.get(item.id) ?? 0;
                 const projected = projectedStockByItem.get(item.id) ?? available;
                 return (
-                  <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'rgba(227, 6, 19, 0.045)' : 'background.paper' }}>
+                  <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'action.selected' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       {image
                         ? <MediaImage src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'contain', borderRadius: 0.75 }} />

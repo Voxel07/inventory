@@ -2,7 +2,7 @@ import { AppSnackbar } from './components/shared/AppSnackbar';
 import { ActionInboxDialogProvider } from './components/dialogs/ActionInboxDialogProvider';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline, Box, Toolbar, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
+import { ThemeProvider, CssBaseline, Box, Toolbar, CircularProgress, Link, useMediaQuery, useTheme } from '@mui/material';
 import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
@@ -10,15 +10,14 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
-import { useAppLanguage, translate } from './utils/naming';
+import { useAppLanguage, translate, useLocalizedText } from './utils/naming';
 import { subscribeToApiChanges } from './services/apiClient';
 import { getSessionQueryClient, subscribeSessionQueryClient } from './services/sessionQueryClient';
 import { invalidateForApiChange } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { LoginPage } from './pages/LoginPage';
-import { IconButton } from './components/shared/ActionButtons';
+import { buildTheme } from './theme';
 
-const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Items = lazy(() => import('./pages/Items').then((m) => ({ default: m.Items })));
 const ItemDetail = lazy(() => import('./pages/ItemDetail').then((m) => ({ default: m.ItemDetail })));
 const AssetDetail = lazy(() => import('./pages/AssetDetail').then((m) => ({ default: m.AssetDetail })));
@@ -48,297 +47,6 @@ function RouteLoadingFallback() {
       <CircularProgress size={36} />
     </Box>
   );
-}
-
-function buildTheme(mode: 'light' | 'dark') {
-  const dark = mode === 'dark';
-  return createTheme({
-  palette: {
-    mode,
-    primary: {
-      main: '#e30613',
-      dark: '#b8000a',
-      light: '#ff3340',
-      contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#0e0e0f',
-      dark: '#000000',
-      light: '#333333',
-      contrastText: '#ffffff',
-    },
-    background: {
-      default: dark ? '#121315' : '#f4f5f6',
-      paper: dark ? '#1c1d20' : '#ffffff',
-    },
-    text: {
-      primary: dark ? '#f0f1f3' : '#0e0e0f',
-      secondary: dark ? '#a7adbb' : '#656e85',
-    },
-    divider: dark ? '#2c2d31' : '#e2e4e9',
-    success: { main: '#5f8068' },
-    warning: { main: '#b66a00' },
-    error: { main: '#d12222' },
-  },
-  typography: {
-    fontFamily: '"Roboto Mono", monospace',
-    h4: {
-      fontWeight: 500,
-      letterSpacing: '0.025em',
-      lineHeight: 1.3,
-      textTransform: 'uppercase',
-    },
-    h5: {
-      fontWeight: 500,
-      letterSpacing: '0.02em',
-      lineHeight: 1.3,
-      textTransform: 'uppercase',
-    },
-    h6: {
-      fontWeight: 500,
-      letterSpacing: '0.025em',
-    },
-    button: {
-      fontWeight: 700,
-      letterSpacing: '0.055em',
-    },
-  },
-  shape: {
-    borderRadius: 3,
-  },
-  components: {
-    MuiCssBaseline: {
-      styleOverrides: {
-        body: {
-          backgroundColor: dark ? '#121315' : '#f4f5f6',
-          backgroundImage: 'linear-gradient(135deg, rgba(14, 14, 15, 0.018) 25%, transparent 25%, transparent 75%, rgba(14, 14, 15, 0.018) 75%)',
-          backgroundSize: '28px 28px',
-        },
-        '::selection': {
-          backgroundColor: '#e30613',
-          color: '#ffffff',
-        },
-      },
-    },
-    MuiPaper: {
-      defaultProps: { elevation: 0 },
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-          border: dark ? '1px solid #2c2d31' : '1px solid #e2e4e9',
-          boxShadow: '0 1px 2px rgba(14, 14, 15, 0.035)',
-        },
-      },
-    },
-    MuiButton: {
-      defaultProps: { disableElevation: true },
-      styleOverrides: {
-        root: {
-          borderRadius: 2,
-          textTransform: 'uppercase',
-          fontWeight: 700,
-          letterSpacing: '0.055em',
-          minHeight: 38,
-          '@media (max-width: 599.95px)': { minHeight: 44 },
-        },
-        contained: {
-          boxShadow: 'none',
-          '&:hover': { boxShadow: 'none' },
-        },
-        outlined: {
-          borderWidth: 1,
-          '&:hover': { borderWidth: 1 },
-        },
-      },
-    },
-    MuiIconButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 2,
-          '@media (max-width: 599.95px)': { minWidth: 44, minHeight: 44 },
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 2,
-          fontWeight: 700,
-          letterSpacing: '0.025em',
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderColor: '#e2e4e9',
-        },
-        head: {
-          backgroundColor: '#0e0e0f',
-          color: '#ffffff',
-          fontWeight: 700,
-          letterSpacing: '0.055em',
-          textTransform: 'uppercase',
-        },
-      },
-    },
-    MuiTablePagination: {
-      defaultProps: {
-        getItemAriaLabel: (type) => ({
-          first: translate('Die erste Seite anzeigen', 'Display the first page'),
-          last: translate('Die letzte Seite anzeigen', 'Display the last page'),
-          next: translate('Die nächste Seite anzeigen', 'Display the next page'),
-          previous: translate('Die vorherige Seite anzeigen', 'Display the previous page'),
-        })[type],
-        slots: { actions: {
-          firstButton: IconButton, lastButton: IconButton,
-          nextButton: IconButton, previousButton: IconButton,
-        } },
-      },
-      styleOverrides: {
-        root: { width: '100%', minWidth: 0 },
-        toolbar: { justifyContent: 'flex-end', flexWrap: 'wrap' },
-        spacer: { display: 'none' },
-        actions: { display: 'flex', alignItems: 'center', flexShrink: 0 },
-      },
-    },
-    MuiTableRow: {
-      styleOverrides: {
-        root: {
-          '&.MuiTableRow-hover:hover': {
-            backgroundColor: dark ? 'rgba(227, 6, 19, 0.12)' : 'rgba(227, 6, 19, 0.045)',
-          },
-        },
-      },
-    },
-    MuiOutlinedInput: {
-      styleOverrides: {
-        root: {
-          borderRadius: 2,
-          backgroundColor: dark ? '#1c1d20' : '#ffffff',
-          '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#3a3b40' : '#cfd2d8' },
-          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#0e0e0f' },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#e30613',
-            borderWidth: 2,
-          },
-        },
-      },
-    },
-    MuiInputLabel: {
-      styleOverrides: {
-        root: {
-          '&.Mui-focused': { color: '#b8000a' },
-        },
-      },
-    },
-    MuiDialog: {
-      styleOverrides: {
-        paper: {
-          border: dark ? '1px solid #2c2d31' : '1px solid #e2e4e9',
-          borderTop: '4px solid #e30613',
-          boxShadow: '0 18px 60px rgba(0, 0, 0, 0.22)',
-        },
-      },
-    },
-    MuiAppBar: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-          backgroundColor: '#0e0e0f',
-          color: '#ffffff',
-          border: 0,
-          borderBottom: '2px solid #e30613',
-          boxShadow: 'none',
-        },
-      },
-    },
-    MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          backgroundColor: '#0e0e0f',
-          color: '#ffffff',
-          border: 0,
-          borderRight: '1px solid #292a2d',
-          boxShadow: 'none',
-          '& .MuiListItemIcon-root': { color: 'rgba(255, 255, 255, 0.68)' },
-          '& .MuiListItemButton-root:hover': { backgroundColor: 'rgba(255, 255, 255, 0.07)' },
-          '& .MuiDivider-root': { borderColor: 'rgba(255, 255, 255, 0.14)' },
-        },
-      },
-    },
-    MuiBottomNavigation: {
-      styleOverrides: {
-        root: {
-          backgroundColor: '#0e0e0f',
-          color: 'rgba(255, 255, 255, 0.68)',
-        },
-      },
-    },
-    MuiBottomNavigationAction: {
-      styleOverrides: {
-        root: {
-          color: 'rgba(255, 255, 255, 0.68)',
-          '&.Mui-selected': { color: '#ffffff' },
-          '&.Mui-selected::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: '24%',
-            right: '24%',
-            height: 3,
-            backgroundColor: '#e30613',
-          },
-        },
-      },
-    },
-    MuiTabs: {
-      defaultProps: {
-        slotProps: { scrollButtons: {
-          title: translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
-          'aria-label': translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
-        } },
-      },
-      styleOverrides: {
-        indicator: { height: 3, backgroundColor: '#e30613' },
-      },
-    },
-    MuiTab: {
-      styleOverrides: {
-        root: {
-          fontWeight: 700,
-          letterSpacing: '0.045em',
-          textTransform: 'uppercase',
-        },
-      },
-    },
-    MuiAlert: {
-      defaultProps: {
-        closeText: translate('Diese Meldung schließen', 'Dismiss this message'),
-        slots: { closeButton: IconButton },
-      },
-      styleOverrides: {
-        root: { borderRadius: 2 },
-      },
-    },
-    MuiTooltip: {
-      styleOverrides: {
-        tooltip: {
-          borderRadius: 2,
-          backgroundColor: '#0e0e0f',
-          fontSize: '0.75rem',
-        },
-      },
-    },
-    MuiAutocomplete: {
-      defaultProps: {
-        clearText: translate('Auswahl löschen', 'Clear the selection'),
-        openText: translate('Auswahlmöglichkeiten anzeigen', 'Show available options'),
-        closeText: translate('Auswahlmöglichkeiten schließen', 'Hide available options'),
-      },
-    },
-  },
-  });
 }
 
 function AppContent() {
@@ -382,14 +90,19 @@ function AppContent() {
 
   return (
     <ActionInboxDialogProvider><Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <SkipLink />
       <Header />
       <Navigation />
       <Box
         component="main"
+        id="main-content"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
-          p: { xs: 2, sm: 3 },
-          pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 3 },
+          px: { xs: 2, md: 3, lg: 4 },
+          py: { xs: 2, md: 3 },
+          pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 4 },
+          '&:focus': { outline: 'none' },
           width: !isMobile && sidebarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
           transition: (theme) => theme.transitions.create('width', {
             easing: !isMobile && sidebarOpen ? theme.transitions.easing.easeOut : theme.transitions.easing.sharp,
@@ -404,7 +117,7 @@ function AppContent() {
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
               <Route path="/" element={<HomeRoute />} />
-              <Route path="/global-dashboard" element={<InventoryManagerGuard><Dashboard /></InventoryManagerGuard>} />
+              <Route path="/global-dashboard" element={<Navigate to="/?scope=team" replace />} />
               <Route path="/items" element={<CatalogAccessGuard><Items /></CatalogAccessGuard>} />
               <Route path="/items/:itemId" element={<CatalogAccessGuard><ItemDetail /></CatalogAccessGuard>} />
               <Route path="/items/:itemId/assets/:assetId" element={<CatalogAccessGuard><AssetDetail /></CatalogAccessGuard>} />
@@ -433,6 +146,20 @@ function AppContent() {
       </Box>
       <AppSnackbar />
     </Box></ActionInboxDialogProvider>
+  );
+}
+
+/** Visible on keyboard focus so keyboard users can bypass the header and navigation. */
+function SkipLink() {
+  const t = useLocalizedText();
+  return (
+    <Link href="#main-content" className="no-print" sx={{
+      position: 'fixed', left: 8, top: 8, zIndex: (theme) => theme.zIndex.tooltip + 1,
+      px: 2, py: 1.25, borderRadius: 1, bgcolor: 'background.paper', color: 'primary.main', fontWeight: 600,
+      boxShadow: 3, transform: 'translateY(-200%)', '&:focus': { transform: 'none' },
+    }}>
+      {t('Zum Inhalt springen', 'Skip to content')}
+    </Link>
   );
 }
 

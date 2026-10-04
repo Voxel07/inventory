@@ -63,14 +63,16 @@ public class ApiQueryService {
         this.mapper = mapper;
     }
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<ApiResponses.ItemResponse> items(String search, int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
         return projectItems(catalog.getItems(search, bounds.offset(), bounds.limit()));
     }
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public ApiResponses.ItemResponse item(UUID id) {
         return projectItem(catalog.getVisibleItem(id));
     }
@@ -148,6 +150,7 @@ public class ApiQueryService {
         for (var component : orders.assemblyItems(assemblyIds)) {
             componentQuantities.put(component.id, component.quantity);
         }
+        mapper.prepareLocations(values.stream().map(o -> o.pickupLocation).toList());
         return values.stream()
                 .map(value -> mapper.orderSummary(value, linesByOrder.getOrDefault(value.id, List.of()), componentQuantities))
                 .toList();
@@ -166,8 +169,9 @@ public class ApiQueryService {
             Instant start, Instant end, int page, int size) {
         actors.current();
         var bounds = bounds(page, size);
-        return operations.transactions(itemId, assetInstanceId, userId, type, start, end, bounds.offset(), bounds.limit())
-                .stream().map(mapper::transaction).toList();
+        var values = operations.transactions(itemId, assetInstanceId, userId, type, start, end, bounds.offset(), bounds.limit());
+        mapper.prepareLocations(values.stream().filter(t -> t.assetInstance != null).map(t -> t.assetInstance.currentLocation).toList());
+        return values.stream().map(mapper::transaction).toList();
     }
 
     @Transactional
@@ -185,9 +189,7 @@ public class ApiQueryService {
                 .map(mapper::maintenance).toList();
     }
 
-    @Transactional
     public List<ApiResponses.DeficitResponse> deficits(UUID eventOccurrenceId) {
-        actors.requirePlanner();
         return planning.deficits(eventOccurrenceId);
     }
 
@@ -211,6 +213,7 @@ public class ApiQueryService {
     }
 
     public List<ApiResponses.ItemResponse> projectItems(List<Item> values) {
+        mapper.prepareItems(values);
         var stock = inventory.stock(values);
         var images = catalogOrm.itemImages(values);
         var ordered = purchasing.outstandingQuantities(values.stream().map(i -> i.id).toList());
@@ -225,6 +228,7 @@ public class ApiQueryService {
     public List<ApiResponses.AssemblyResponse> projectAssemblies(List<Assembly> values,
             Map<UUID, List<org.ash.inventory.model.AssemblyItem>> components) {
         var items = components.values().stream().flatMap(List::stream).map(c -> c.item).distinct().toList();
+        mapper.prepareItems(items);
         var images = catalogOrm.itemImages(items);
         var views = new LinkedHashMap<UUID, ApiResponses.ItemResponse>();
         for (var item : items) views.put(item.id, mapper.item(item, null, images.getOrDefault(item.id, List.of()), 0));

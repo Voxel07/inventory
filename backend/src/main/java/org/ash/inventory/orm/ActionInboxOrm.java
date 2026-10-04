@@ -16,35 +16,39 @@ public class ActionInboxOrm extends EntityOrm {
         return entityManager.createQuery("from ActionReminder where user = :u and actionKey = :key", ActionReminder.class).setParameter("u", user).setParameter("key", key).getResultStream();
     }
 
-    public List<FactionOrder> readyFactionOrders() {
-        return entityManager.createQuery("from FactionOrder where status = :s", FactionOrder.class).setParameter("s", DomainEnums.OrderStatus.ready).getResultList();
+    private <T> List<T> scoped(String jpql, Class<T> type, java.util.UUID actor, String owner) {
+        var query = entityManager.createQuery(jpql + (actor == null ? "" : " and " + owner + " = :actor"), type);
+        if (actor != null) query.setParameter("actor", actor);
+        return query.getResultList();
     }
-
-    public List<GeneralOrder> readyGeneralOrders() {
-        return entityManager.createQuery("from GeneralOrder where status = 'ready'", GeneralOrder.class).getResultList();
+    public List<FactionOrder> readyFactionOrders(java.util.UUID actor) {
+        return scoped("from FactionOrder o join fetch o.createdBy where o.status = ready", FactionOrder.class, actor, "o.createdBy.id");
     }
-
-    public List<ReturnSubmission> pendingReturns() {
-        return entityManager.createQuery("from ReturnSubmission where status = :s", ReturnSubmission.class).setParameter("s", DomainEnums.ReturnSubmissionStatus.pending).getResultList();
+    public List<GeneralOrder> readyGeneralOrders(java.util.UUID actor) {
+        return scoped("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence where o.status = 'ready'", GeneralOrder.class, actor, "o.createdBy.id");
     }
-
+    public List<ReturnSubmission> pendingReturns(java.util.UUID actor) {
+        return scoped("from ReturnSubmission r join fetch r.item join fetch r.returnedFor where r.status = pending", ReturnSubmission.class, actor, "r.returnedFor.id");
+    }
     public List<PurchaseOrder> incomingPurchases() {
-        return entityManager.createQuery("from PurchaseOrder where status in :states", PurchaseOrder.class).setParameter("states", List.of(DomainEnums.PurchaseOrderStatus.ordered, DomainEnums.PurchaseOrderStatus.partially_received)).getResultList();
+        return entityManager.createQuery("from PurchaseOrder p join fetch p.vendor where p.status in (ordered, partially_received)", PurchaseOrder.class).getResultList();
     }
-
-    public List<InventoryLot> availableLots() {
-        return entityManager.createQuery("from InventoryLot where status = :s", InventoryLot.class).setParameter("s", DomainEnums.LotStatus.available).getResultList();
+    public List<InventoryLot> availableLots(java.time.LocalDate deadline) {
+        return entityManager.createQuery("from InventoryLot l join fetch l.item where l.status = available and (l.expiryDate <= :deadline or l.bestBeforeDate <= :deadline)", InventoryLot.class)
+                .setParameter("deadline", deadline).getResultList();
     }
-
-    public List<MaintenanceSchedule> activeSchedules() {
-        return entityManager.createQuery("from MaintenanceSchedule where active = true", MaintenanceSchedule.class).getResultList();
+    public List<MaintenanceSchedule> activeSchedules(java.util.UUID actor) {
+        return scoped("from MaintenanceSchedule s join fetch s.item left join fetch s.assetInstance left join fetch s.responsiblePerson where s.active = true", MaintenanceSchedule.class, actor, "s.responsiblePerson.id");
     }
-
-    public List<MemberRequest> openMemberRequests() {
-        return entityManager.createQuery("from MemberRequest where status <> 'resolved'", MemberRequest.class).getResultList();
+    public List<MemberRequest> openMemberRequests(java.util.UUID actor) {
+        return scoped("from MemberRequest r join fetch r.item join fetch r.requester where r.status <> 'resolved'", MemberRequest.class, actor, "r.requester.id");
     }
-
     public List<LoanArrangement> loans() {
-        return entityManager.createQuery("from LoanArrangement", LoanArrangement.class).getResultList();
+        return entityManager.createQuery("from LoanArrangement l join fetch l.commitment c join fetch c.item join fetch l.providerLocation where c.cancelled = false and l.returned <> c.quantity", LoanArrangement.class).getResultList();
+    }
+    public java.util.Map<java.util.UUID, EventOccurrence> events(java.util.Collection<java.util.UUID> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        return entityManager.createQuery("from EventOccurrence e where e.id in :ids", EventOccurrence.class).setParameter("ids", ids)
+                .getResultStream().collect(java.util.stream.Collectors.toMap(e -> e.id, e -> e));
     }
 }

@@ -1,6 +1,8 @@
-import { CatalogFormDialog } from '../components/shared/CatalogFormDialog';
+import { FormDialog } from '../components/shared/FormDialog';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Button } from '../components/shared/ActionButtons';
 import { useState } from 'react';
-import { Box, Typography, useTheme, useMediaQuery } from '@mui/material';
+import { Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
@@ -11,7 +13,6 @@ import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly,
 import { useItems } from '../hooks/useItems';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useCrudManager } from '../hooks/useCrudManager';
-import { TooltipButton } from '../components/shared/TooltipButton';
 import type { Assembly, AssemblyFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
@@ -27,15 +28,13 @@ function ReadOnlyAssemblies() {
     const { data: assemblies = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useAssemblies();
     const { data: items = [], isLoading: itemsLoading } = useItems();
     return <Box>
-        <Typography variant="h4" sx={{ mb: 3 }}>{t('Baugruppen', 'Assemblies')}</Typography>
+        <PageHeader title={t('Baugruppen', 'Assemblies')} />
         <AssembliesList assemblies={assemblies} items={items} isLoading={isLoading || itemsLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
     </Box>;
 }
 
 function ManagedAssemblies() {
     const t = useLocalizedText();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: assemblies, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: assembliesComplete } = useAssemblies();
     const { data: items, isComplete: itemsComplete, isError: itemsError } = useItems();
     const { data: storageLocations } = useStorageLocations();
@@ -54,25 +53,13 @@ function ManagedAssemblies() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">{t('Baugruppen', 'Assemblies')}</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <TooltipButton
-                        tooltipText={t('Baugruppen und Artikel aus CSV importieren', 'Import assemblies and items from CSV')}
-                        icon={<FileUploadIcon />}
-                        label={t('CSV Import', 'CSV import')}
-                        variant="outlined"
-                        onClick={() => setImportOpen(true)}
-                    />
-                    <TooltipButton
-                        tooltipText={t('Eine neue Baugruppe erstellen', 'Create a new assembly')}
-                        icon={<AddIcon />}
-                        label={t('Baugruppe hinzufügen', 'Add assembly')}
-                        variant="contained"
-                        onClick={crud.openCreate}
-                    />
-                </Box>
-            </Box>
+            <PageHeader
+                title={t('Baugruppen', 'Assemblies')}
+                actions={<>
+                    <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('CSV-Import', 'Import CSV')}</Button>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>
+                </>}
+            />
 
             <AssembliesList
                 assemblies={assemblies}
@@ -81,21 +68,23 @@ function ManagedAssemblies() {
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
                 loadError={isError}
                 onRetry={() => { void refetch(); }}
+                onCreate={crud.openCreate}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
             />
 
-            <CatalogFormDialog open={crud.formOpen} onClose={crud.closeForm} fullScreen={isMobile}
-                title={crud.editingEntity ? t('Baugruppe bearbeiten', 'Edit assembly') : t('Neue Baugruppe erstellen', 'Create new assembly')}>
+            <FormDialog open={crud.formOpen} onClose={crud.closeForm}>
                 <AssemblyForm
                     key={crud.editingEntity?.id ?? 'create'}
+                    title={crud.editingEntity ? t('Baugruppe bearbeiten', 'Edit assembly') : t('Neue Baugruppe', 'New assembly')}
+                    onCancel={crud.closeForm}
                     initialData={crud.editingEntity}
                     items={items ?? []}
                     onSubmit={crud.handleSave}
                     isLoading={createAssembly.isPending || updateAssembly.isPending}
                 />
-            </CatalogFormDialog>
+            </FormDialog>
 
             {/* Delete Confirmation */}
             <ConfirmDialog
@@ -120,9 +109,9 @@ function ManagedAssemblies() {
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
-                  assemblies={assemblies ?? []}
-                  storageLocations={storageLocations ?? []}
-                  catalogComplete={itemsComplete && assembliesComplete && !isError && !itemsError && !!items && !!assemblies}
+                assemblies={assemblies ?? []}
+                storageLocations={storageLocations ?? []}
+                catalogComplete={itemsComplete && assembliesComplete && !isError && !itemsError && !!items && !!assemblies}
             />
         </Box>
     );

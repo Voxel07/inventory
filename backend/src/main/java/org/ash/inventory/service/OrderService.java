@@ -1,6 +1,5 @@
 package org.ash.inventory.service;
 
-import io.quarkus.cache.CacheInvalidateAll;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -206,7 +205,6 @@ public class OrderService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder transition(UUID id, DomainEnums.OrderStatus target, ApiModels.TransitionInput input) {
         requireWritable();
@@ -252,7 +250,6 @@ public class OrderService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder returnItems(UUID id, ApiModels.ReturnInput input) {
         actors.requireMarshal();
@@ -330,7 +327,6 @@ public class OrderService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
         var order = lockedOrder(id);

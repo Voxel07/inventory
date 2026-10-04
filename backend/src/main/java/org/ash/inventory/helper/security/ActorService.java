@@ -36,7 +36,10 @@ public class ActorService {
     @Transactional
     public UserAccount current() {
         if (cached != null) {
-            var managed = users.findByExternalSubject(cached.externalSubject);
+            // Sync replay and response filters can open another transaction in the
+            // same request. Reuse only an entity managed by the current context.
+            if (users.isManaged(cached)) return cached;
+            var managed = users.find(cached.id);
             if (managed != null) {
                 cached = managed;
                 return cached;

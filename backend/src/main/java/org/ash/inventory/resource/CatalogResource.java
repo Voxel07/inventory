@@ -57,10 +57,8 @@ public class CatalogResource {
 
     @GET @Path("/items/{id}/assets")
     public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id,
-            @QueryParam("page") Integer page, @QueryParam("size") Integer size) {
-        return page == null && size == null
-                ? queries.itemAssets(id)
-                : queries.itemAssets(id, page == null ? 0 : page, size == null ? 100 : size);
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.itemAssets(id, page, size);
     }
 
     @GET @Path("/assets/by-code/{code:.+}")
@@ -106,8 +104,8 @@ public class CatalogResource {
     @GET @Path("/storage-locations") @Transactional
     public Response locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive) {
         actor.current();
-        if (includeInactive) return Response.ok(service.getAllLocations().stream().map(mapper::location).toList()).build();
-        return Response.ok(service.getLocations().stream().map(mapper::location).toList()).build();
+        if (includeInactive) return Response.ok(mapper.locations(service.getAllLocations())).build();
+        return Response.ok(mapper.locations(service.getLocations())).build();
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }

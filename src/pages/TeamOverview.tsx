@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material';
+import { Paper, Stack, Typography } from '@mui/material';
 import { StockMetrics } from '../components/dashboard/StockMetrics';
 import { TransactionHistory } from '../components/lists/TransactionHistory';
 import { useItems } from '../hooks/useItems';
@@ -7,27 +7,27 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { useUsers } from '../hooks/useUsers';
 import { useLocalizedText } from '../utils/naming';
 
-export function Dashboard() {
+/** Whole-inventory scope of the Overview page for inventory managers. */
+export function TeamOverview() {
     const t = useLocalizedText();
     const { data: items, isLoading: itemsLoading } = useItems();
     const { data: transactions, isLoading: txLoading } = useTransactions();
     const { data: damageReports } = useDamageReports();
     const { data: users } = useUsers();
     return (
-        <Box>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-                {t('Dashboard', 'Dashboard')}
-            </Typography>
+        <Stack spacing={3}>
             <StockMetrics items={items} transactions={transactions} damageReports={damageReports} />
-            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-                {t('Kürzliche Transaktionen', 'Recent transactions')}
-            </Typography>
-            <TransactionHistory
-                transactions={transactions?.slice(0, 10)}
-                items={items}
-                users={users}
-                isLoading={txLoading || itemsLoading}
-            />
-        </Box>
+            <Paper component="section" aria-labelledby="team-transactions" sx={{ p: { xs: 2, sm: 3 } }}>
+                <Typography id="team-transactions" variant="h6" component="h2" sx={{ mb: 1.5 }}>
+                    {t('Letzte Buchungen', 'Recent transactions')}
+                </Typography>
+                <TransactionHistory
+                    transactions={transactions?.slice(0, 10)}
+                    items={items}
+                    users={users}
+                    isLoading={txLoading || itemsLoading}
+                />
+            </Paper>
+        </Stack>
     );
 }

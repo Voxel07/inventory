@@ -47,7 +47,6 @@ public class StockManagementService {
     }
 
     @Transactional
-    @io.quarkus.cache.CacheInvalidateAll(cacheName = "locations-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Warehouse updateWarehouse(UUID id, StockDtos.WarehouseInput input) {
         actors.requireWarehouse();

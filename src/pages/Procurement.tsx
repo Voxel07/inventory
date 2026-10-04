@@ -78,10 +78,10 @@ export function Procurement() {
       return <Skeleton variant="text" width={60} height={32} />;
     }
     if (error) {
-      return <Typography variant="h5" color="text.secondary">—</Typography>;
+      return <Typography variant="h5" component="p" color="text.secondary">—</Typography>;
     }
     return (
-      <Typography variant="h5" sx={{ fontWeight: 800, color }}>
+      <Typography variant="h5" component="p" sx={{ fontWeight: 700, color }}>
         {value}
       </Typography>
     );

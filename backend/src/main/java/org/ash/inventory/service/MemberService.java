@@ -30,16 +30,18 @@ public class MemberService {
     @Transactional
     public List<CustodyBalanceService.Balance> custodyRows() {
         var result = new ArrayList<CustodyBalanceService.Balance>();
-        for (var b : custody.list(true)) {
-            var item = orm.find(Item.class, b.itemId());
+        var balances = custody.list(true);
+        var items = orm.custodyItems(balances.stream().map(CustodyBalanceService.Balance::itemId).distinct().toList());
+        var orders = balances.stream().filter(b -> b.factionOrderId() != null && items.get(b.itemId()).trackingMode == DomainEnums.TrackingMode.serialized)
+                .map(CustodyBalanceService.Balance::factionOrderId).distinct().toList();
+        var assets = orm.custodyAssets(orders).stream().collect(java.util.stream.Collectors.groupingBy(a -> a.order() + ":" + a.item()));
+        for (var b : balances) {
+            var item = items.get(b.itemId());
             if (b.factionOrderId() == null || item.trackingMode != DomainEnums.TrackingMode.serialized) { result.add(b); continue; }
-            var assets = orm.checkoutAssets(b.factionOrderId(), b.itemId());
-            for (var asset : assets) {
-                long reconciled = orm.reconciledAssets(b.factionOrderId(), asset);
-                if (reconciled > 0) continue;
-                int pending = orm.pendingAssets(b.factionOrderId(), asset).intValue();
-                result.add(new CustodyBalanceService.Balance(b.key() + ":" + asset.id, b.itemId(), b.name() + " Â· " + asset.assetCode,
-                        b.category(), b.storageLocation(), 1, pending, b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), null, asset.id, b.eventOccurrenceId()));
+            for (var candidate : assets.getOrDefault(b.factionOrderId() + ":" + b.itemId(), List.of())) {
+                var asset = candidate.asset();
+                result.add(new CustodyBalanceService.Balance(b.key() + ":" + asset.id, b.itemId(), b.name() + " · " + asset.assetCode,
+                        b.category(), b.storageLocation(), 1, candidate.pending(), b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), null, asset.id, b.eventOccurrenceId()));
             }
         }
         return result;
@@ -71,9 +73,10 @@ public class MemberService {
         events.record("location.keeper_assigned", "storage_location", id, actors.current().id, null, Map.of("userId", user == null ? "" : user.id.toString()));
     }
     @Transactional
-    public List<RequestView> requests() {
+    public List<RequestView> requests(int page, int size) {
         var actor = actors.current(); boolean staff = staff();
-        return orm.requests(actor, staff).stream().map(this::view).toList();
+        var bounds = org.ash.inventory.helper.PageBounds.of(page, size);
+        return orm.requests(actor, staff, bounds.offset(), bounds.limit()).stream().map(this::view).toList();
     }
     @Transactional
     public RequestView request(RequestInput input) {

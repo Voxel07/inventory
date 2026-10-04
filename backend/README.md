@@ -22,11 +22,17 @@ For a local JVM run, use a Java 25 installation and Maven:
 mvn -Ddev quarkus:dev
 ```
 
-Development currently uses PostgreSQL and Hibernate `update`; H2/drop-and-create is configured for tests. Production uses PostgreSQL, the single Flyway baseline and Hibernate validation.
+Development currently uses PostgreSQL and Hibernate `update`; tests use PostgreSQL/drop-and-create with `TEST_DB_URL`, `TEST_DB_USER` and `TEST_DB_PASSWORD`. Production uses PostgreSQL, the single Flyway baseline and Hibernate validation.
 
 Production requires `OIDC_ENABLED=true` and the Authentik issuer/client settings. `DEV_AUTH_ENABLED` must be `false` outside local development.
 
 Edit `src/main/resources/db/migration/V1.0.0__init.sql` and entity definitions directly. Current data is disposable; recreate an empty database after baseline changes. Do not add incremental scripts or repair old Flyway histories. The production profile runs this creation baseline and validates the resulting schema.
+
+Faction snapshots use a transactional source revision and database epoch in their shared cache key. Reads started after a mutation commits select its revision even when event fan-out fails. Cache outages fall back to PostgreSQL; database loader failures propagate. One snapshot per revision contains all event types; filtering introduces no extra cache keys. Entries expire after five minutes, and the local backend retains at most 64 revisions. Locations and events remain uncached.
+
+Stock catalog, planning and report read boundaries establish PostgreSQL REPEATABLE READ before querying. Commands keep their existing locks and recalculate after writes in their command transaction. Report source triggers advance compact revisions with each source statement; rollback also rolls back the revision. Production installs triggers from the baseline; dev/test Hibernate schemas install the matching `source-revisions.sql` at startup. Revision row locks last until commit and add write contention per source table.
+
+Loan and member-request lists and item-asset GETs accept `page` and `size` (maximum 200); the web client loads further pages explicitly.
 
 ## Backend package structure
 
@@ -48,7 +54,7 @@ resource -> service -> orm -> model
 
 The domain and event contract is documented in [`../docs/DOMAIN_ARCHITECTURE.md`](../docs/DOMAIN_ARCHITECTURE.md). Business services append events to `domain_event_outbox` in the same transaction as aggregate changes. The outbox dispatcher provides at-least-once SSE/Redis delivery, so consumers deduplicate on `eventId`.
 
-Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` receives those projections without invoking ORM readers or stock/event services. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/REFACTOR_PROGRESS.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
+Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` consumes stock/event projections and transaction-scoped access views prepared in bounded batches. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/REFACTOR_PROGRESS.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
 
 MCP tools/resources/prompts delegate through the transactional `McpInventoryService` and the existing catalog/query/stock owners. Production `/mcp` and `/mcp/*` require OIDC authentication; manager/planner mutations, item/component visibility, real actor attribution and catalog outbox publication use canonical rules. The [MCP guide](../docs/MCP_SUPPORT.md) documents the shared typed inputs and scoped outputs. R01/R02 are implemented in source; the new regression cases have not been run, so production transport and domain acceptance remain open.
 

@@ -36,7 +36,7 @@ public class OperationsOrm {
 
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             int offset, int limit) {
-        var jpql = new StringBuilder("from StockTransaction tx where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.factionOrder o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -55,11 +55,11 @@ public class OperationsOrm {
     }
 
     public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int offset, int limit) {
-        var jpql = new StringBuilder("select d from DamageReport d left join d.item di where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
+        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly left join fetch d.assetInstance where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
         if (itemId != null) jpql.append(" and d.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
-        jpql.append(" order by d.createdAt desc");
+        jpql.append(" order by d.createdAt desc, d.id desc");
         var query = entityManager.createQuery(jpql.toString(), DamageReport.class);
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
@@ -68,9 +68,9 @@ public class OperationsOrm {
     }
 
     public List<MaintenanceRecord> maintenanceRecords(UUID itemId, int offset, int limit) {
-        if (itemId == null) return InventoryAccessOrm.bind(entityManager.createQuery("from MaintenanceRecord m where " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc", MaintenanceRecord.class), accessActor.current())
+        if (itemId == null) return InventoryAccessOrm.bind(entityManager.createQuery("select m from MaintenanceRecord m join fetch m.item join fetch m.inspector left join fetch m.assetInstance left join fetch m.schedule where " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc, m.id desc", MaintenanceRecord.class), accessActor.current())
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
-        return InventoryAccessOrm.bind(entityManager.createQuery("from MaintenanceRecord m where m.item.id = :itemId and " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc", MaintenanceRecord.class), accessActor.current())
+        return InventoryAccessOrm.bind(entityManager.createQuery("select m from MaintenanceRecord m join fetch m.item join fetch m.inspector left join fetch m.assetInstance left join fetch m.schedule where m.item.id = :itemId and " + InventoryAccessOrm.visible("m.item.accessPolicy") + " order by m.performedAt desc, m.id desc", MaintenanceRecord.class), accessActor.current())
                 .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -120,31 +120,25 @@ public class OperationsOrm {
     }
 
     public Map<DomainEnums.TransactionType, Long> transactionTotals(Item item) {
-        var totals = new EnumMap<DomainEnums.TransactionType, Long>(DomainEnums.TransactionType.class);
-        for (var row : entityManager.createQuery(
-                "select tx.type, sum(tx.quantity) from StockTransaction tx where tx.item = :item group by tx.type",
-                Object[].class).setParameter("item", item).getResultList()) {
-            totals.put((DomainEnums.TransactionType) row[0], (Long) row[1]);
-        }
-        normalizeCustodyWriteOff(totals, entityManager.createQuery("select coalesce(sum(tx.quantity), 0) from StockTransaction tx where tx.item = :item and tx.custodyWriteOff = true", Long.class).setParameter("item", item).getSingleResult());
-        return totals;
+        return transactionTotals(List.of(item.id)).getOrDefault(item.id, Map.of());
     }
 
     public Map<UUID, Map<DomainEnums.TransactionType, Long>> transactionTotals(Collection<UUID> itemIds) {
         var totals = new LinkedHashMap<UUID, Map<DomainEnums.TransactionType, Long>>();
         if (itemIds.isEmpty()) return totals;
+        var custody = new LinkedHashMap<UUID, Long>();
         for (var row : entityManager.createQuery("""
-                select tx.item.id, tx.type, sum(tx.quantity)
-                from StockTransaction tx
-                where tx.item.id in :itemIds
+                select tx.item.id, tx.type, sum(tx.quantity),
+                    sum(case when tx.custodyWriteOff = true then tx.quantity else 0 end)
+                from StockTransaction tx where tx.item.id in :itemIds
                 group by tx.item.id, tx.type
                 """, Object[].class).setParameter("itemIds", itemIds).getResultList()) {
-            UUID itemId = (UUID) row[0];
-            totals.computeIfAbsent(itemId, ignored -> new EnumMap<>(DomainEnums.TransactionType.class))
-                    .put((DomainEnums.TransactionType) row[1], (Long) row[2]);
+            UUID id = (UUID) row[0];
+            totals.computeIfAbsent(id, ignored -> new EnumMap<>(DomainEnums.TransactionType.class))
+                    .put((DomainEnums.TransactionType) row[1], ((Number) row[2]).longValue());
+            custody.merge(id, ((Number) row[3]).longValue(), Long::sum);
         }
-        for (var row : entityManager.createQuery("select tx.item.id, sum(tx.quantity) from StockTransaction tx where tx.item.id in :ids and tx.custodyWriteOff = true group by tx.item.id", Object[].class).setParameter("ids", itemIds).getResultList())
-            normalizeCustodyWriteOff(totals.get((UUID) row[0]), (Long) row[1]);
+        custody.forEach((id, quantity) -> normalizeCustodyWriteOff(totals.get(id), quantity));
         return totals;
     }
 
@@ -217,13 +211,21 @@ public class OperationsOrm {
                 .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
                         DomainEnums.ReservationStatus.partially_released))
                 .getSingleResult();
-        return Math.toIntExact(quantity + generalReservations().getOrDefault(item.id, 0L));
+        return Math.toIntExact(quantity + generalReservations(List.of(item.id)).getOrDefault(item.id, 0L));
     }
 
-    public Map<UUID, Long> generalReservations() {
+    public Map<UUID, Long> generalReservations(Collection<UUID> itemIds) {
         var result = new LinkedHashMap<UUID, Long>();
-        for (var order : entityManager.createQuery("from GeneralOrder o where o.status in ('preparing', 'ready')", org.ash.inventory.model.GeneralOrder.class).getResultList())
-            order.preparedQuantities.forEach((id, quantity) -> result.merge(UUID.fromString(id), quantity.longValue(), Long::sum));
+        if (itemIds.isEmpty()) return result;
+        for (var value : entityManager.createNativeQuery("""
+                select i.id, sum(q.value::bigint) from general_orders o
+                cross join lateral jsonb_each_text(o.prepared_quantities) q
+                join items i on lower(q.key) = i.id::text
+                where o.status in ('preparing', 'ready') and i.id in (:ids) group by i.id
+                """, Object[].class).setParameter("ids", itemIds).getResultList()) {
+            var row = (Object[]) value;
+            result.put(UUID.fromString(row[0].toString()), ((Number) row[1]).longValue());
+        }
         return result;
     }
 
@@ -251,7 +253,7 @@ public class OperationsOrm {
                 .getResultList()) {
             quantities.put((UUID) row[0], (Long) row[1]);
         }
-        generalReservations().forEach((id, quantity) -> { if (itemIds.contains(id)) quantities.merge(id, quantity, Long::sum); });
+        generalReservations(itemIds).forEach((id, quantity) -> { if (itemIds.contains(id)) quantities.merge(id, quantity, Long::sum); });
         return quantities;
     }
 

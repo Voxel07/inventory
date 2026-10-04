@@ -4,8 +4,8 @@
   "description": "Offline-capable event inventory and custody management",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0e0e0f",
-  "theme_color": "#0e0e0f",
+  "background_color": "#f6f7f9",
+  "theme_color": "#ffffff",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]

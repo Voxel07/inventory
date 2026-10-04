@@ -1,7 +1,8 @@
-import { CatalogFormDialog } from '../components/shared/CatalogFormDialog';
+import { FormDialog } from '../components/shared/FormDialog';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Box, Typography, DialogTitle, DialogContent, useMediaQuery, useTheme } from '@mui/material';
+import { Box, DialogTitle, DialogContent, ToggleButtonGroup } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';
@@ -9,29 +10,31 @@ import { ItemsList } from '../components/lists/ItemsList';
 import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useAssignableUsers } from '../hooks/useUsers';
 import { useCrudManager } from '../hooks/useCrudManager';
-import { TooltipButton } from '../components/shared/TooltipButton';
+import { useMember } from '../hooks/useMember';
 import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { personalItems } from '../utils/personalItems';
-import type { MemberCustody } from '../types/member';
 import { canEditCatalog } from '../utils/access';
 
-export function Items({ personal = false, custody = [] }: { personal?: boolean; custody?: MemberCustody[] }) {
+export function Items() {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
     const t = useLocalizedText();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const [params, setParams] = useSearchParams();
+    const mine = params.get('scope') === 'mine';
     const { data: items, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: itemsComplete } = useItems();
     const { data: assemblies, isComplete: assembliesComplete, isError: assembliesError } = useAssemblies();
     const { data: storageLocations } = useStorageLocations();
     const { data: assignableUsers } = useAssignableUsers(catalogManager);
+    const { custody } = useMember();
 
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
@@ -46,47 +49,47 @@ export function Items({ personal = false, custody = [] }: { personal?: boolean; 
     const [importOpen, setImportOpen] = useState(false);
     const [qrItem, setQrItem] = useState<Item | undefined>();
 
-    const visibleItems = personal ? personalItems(items ?? [], user?.id, custody) : items;
+    const visibleItems = mine && items ? personalItems(items, user?.id, custody.data ?? []) : items;
     const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
     const allNames = items?.map((i) => i.name) ?? [];
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 1 }}>
-                <Typography variant="h4">{t('Artikel', 'Items')}</Typography>
-                <Box sx={{ display: 'flex', gap: { xs: 0.25, sm: 1 }, flexShrink: 0 }}>
-                    {catalogManager && <TooltipButton
-                        tooltipText={t('Artikel und Baugruppen aus CSV importieren', 'Import items and assemblies from CSV')}
-                        icon={<FileUploadIcon />}
-                        label={isMobile ? undefined : t('CSV Import', 'CSV import')}
-                        variant={isMobile ? 'icon' : 'outlined'}
-                        onClick={() => setImportOpen(true)}
-                    />}
-                    <TooltipButton
-                        tooltipText={t('Neuen Inventarartikel erstellen', 'Create a new inventory item')}
-                        icon={<AddIcon />}
-                        label={isMobile ? undefined : t('Artikel hinzufügen', 'Add item')}
-                        variant={isMobile ? 'icon' : 'contained'}
-                        onClick={crud.openCreate}
-                    />
-                </Box>
-            </Box>
+            <PageHeader
+                title={t('Artikel', 'Items')}
+                actions={<>
+                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>
+                        {t('CSV-Import', 'Import CSV')}
+                    </Button>}
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
+                        {t('Artikel hinzufügen', 'Add item')}
+                    </Button>
+                </>}
+            />
+            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
+                onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
+                <ToggleButton value="all">{t('Alle Artikel', 'All items')}</ToggleButton>
+                <ToggleButton value="mine">{t('Meine Artikel', 'My items')}</ToggleButton>
+            </ToggleButtonGroup>
 
             <ItemsList
                 items={visibleItems}
-                isLoading={isLoading}
+                isLoading={isLoading || (mine && custody.isLoading)}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
                 loadError={isError}
                 onRetry={() => { void refetch(); }}
+                onCreate={crud.openCreate}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
+                emptyHint={mine ? t('Dir sind derzeit keine Artikel zugeordnet und du hast keine ausgeliehen.', 'Nothing is assigned to you or checked out to you right now.') : undefined}
             />
 
-            <CatalogFormDialog open={crud.formOpen} onClose={crud.closeForm} fullScreen={isMobile}
-                title={crud.editingEntity ? t('Artikel bearbeiten', 'Edit item') : t('Neuen Artikel erstellen', 'Create new item')}>
+            <FormDialog open={crud.formOpen} onClose={crud.closeForm}>
                 <ItemForm
                     key={crud.editingEntity?.id ?? 'create'}
+                    title={crud.editingEntity ? t('Artikel bearbeiten', 'Edit item') : t('Neuer Artikel', 'New item')}
+                    onCancel={crud.closeForm}
                     initialData={crud.editingEntity}
                     onSubmit={crud.handleSave}
                     isLoading={createItem.isPending || updateItem.isPending}
@@ -95,17 +98,15 @@ export function Items({ personal = false, custody = [] }: { personal?: boolean; 
                     existingNames={allNames.filter((name) => name !== crud.editingEntity?.name)}
                     assignableUsers={assignableUsers ?? []}
                 />
-            </CatalogFormDialog>
+            </FormDialog>
 
-            {/* QR Code Dialog */}
             <Dialog open={!!qrItem} onClose={() => setQrItem(undefined)} maxWidth="xs" fullWidth>
-                <DialogTitle>QR-Code</DialogTitle>
+                <DialogTitle>{t('QR-Code', 'QR code')}</DialogTitle>
                 <DialogContent>
                     {qrItem && <QRCodeGenerator itemId={qrItem.id} itemName={qrItem.name} />}
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirmation Dialog */}
             <ConfirmDialog
                 open={crud.isDeleteOpen}
                 title={t('Artikel löschen', crud.deletingIds.length > 1 ? 'Delete items' : 'Delete item')}
@@ -121,14 +122,13 @@ export function Items({ personal = false, custody = [] }: { personal?: boolean; 
                 pending={deleteItem.isPending || deleteItems.isPending}
             />
 
-            {/* CSV Import Dialog */}
             <CsvImportDialog
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
-                  assemblies={assemblies ?? []}
-                  storageLocations={storageLocations ?? []}
-                  catalogComplete={itemsComplete && assembliesComplete && !isError && !assembliesError && !!items && !!assemblies}
+                assemblies={assemblies ?? []}
+                storageLocations={storageLocations ?? []}
+                catalogComplete={itemsComplete && assembliesComplete && !isError && !assembliesError && !!items && !!assemblies}
             />
         </Box>
     );

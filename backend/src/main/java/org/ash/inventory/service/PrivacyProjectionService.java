@@ -23,18 +23,6 @@ public class PrivacyProjectionService {
     public Set<String> deniedIds() {
         return orm.deniedReferences(actors.current()).stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
     }
-    private Set<String> expand(Set<String> ids) {
-        var roots = ids.stream().map(UUID::fromString).collect(java.util.stream.Collectors.toSet());
-        orm.relatedReferences(roots).forEach(id -> ids.add(id.toString()));
-        return ids;
-    }
-    @Transactional
-    public boolean containsPrivateReference(Object value) {
-        var ids = new HashSet<String>();
-        orm.privateItems().forEach(i -> ids.add(i.id.toString()));
-        orm.privateLocations().forEach(l -> ids.add(l.id.toString()));
-        return !visible(value, expand(ids));
-    }
     public boolean visible(Object value, Set<String> denied) { return visibleTree(json.valueToTree(value), denied); }
     public boolean visibleTree(JsonNode node, Set<String> denied) {
         if (denied.isEmpty() || node == null) return true;
@@ -43,37 +31,57 @@ public class PrivacyProjectionService {
             while (matcher.find()) if (denied.contains(matcher.group().toLowerCase(Locale.ROOT))) return false;
         } else if (node.isObject()) {
             var fields = node.properties();
-            for (var field : fields) if (denied.contains(field.getKey()) || !visibleTree(field.getValue(), denied)) return false;
+            for (var field : fields) if (denied.contains(field.getKey().toLowerCase(Locale.ROOT)) || !visibleTree(field.getValue(), denied)) return false;
         } else if (node.isArray()) for (var child : node) if (!visibleTree(child, denied)) return false;
         return true;
     }
+    public record Projection(JsonNode value, boolean containsPrivateReference) {}
+
     @Transactional
-    public JsonNode filter(Object value) {
+    public Projection filter(Object value) {
         JsonNode tree;
         try { tree = value instanceof String s ? json.readTree(s) : json.valueToTree(value); }
         catch (Exception e) { throw new IllegalStateException("Cannot authorize response projection", e); }
-        var denied = deniedIds();
+        var facts = orm.referenceAccess(references(tree), actors.current());
+        var denied = strings(facts.deniedIds());
         if (tree.isArray()) {
             var result = json.createArrayNode();
             for (var row : tree) if (visibleTree(row, denied)) result.add(row);
-            return result;
+            tree = result;
+        } else {
+            if (!visibleTree(tree, denied)) throw ApiException.notFound("Resource not found");
         }
-        if (!visibleTree(tree, denied)) throw ApiException.notFound("Resource not found");
-        return tree;
+        return new Projection(tree, !visibleTree(tree, strings(facts.privateIds())));
     }
     public void requireEditableReferences(Object value) {
         JsonNode tree = json.valueToTree(value); var actor = actors.current();
         // Lock policies in a deterministic order while the command transaction is active.
-        var policies = new HashMap<UUID, org.ash.inventory.model.InventoryAccessPolicy>();
-        orm.privateItems().forEach(i -> policies.put(i.id, i.accessPolicy));
-        orm.privateLocations().forEach(l -> policies.put(l.id, l.accessPolicy));
-        var resources = new TreeMap<UUID, org.ash.inventory.model.InventoryAccessPolicy>();
-        orm.referenceOrigins(policies.keySet()).forEach((root, references) -> {
-            if (references.stream().anyMatch(id -> contains(tree, id.toString()))) {
-                var policy = policies.get(root); resources.put(policy.id, policy);
-            }
-        });
-        resources.values().forEach(policy -> access.require(policy, actor, true));
+        orm.referencedPolicies(references(tree)).stream().sorted(Comparator.comparing(policy -> policy.id))
+                .forEach(policy -> access.require(policy, actor, true));
     }
-    private boolean contains(JsonNode tree, String id) { return !visibleTree(tree, Set.of(id)); }
+
+    private Set<String> strings(Set<UUID> ids) {
+        return ids.stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
+    }
+
+    private Set<UUID> references(JsonNode tree) {
+        var result = new HashSet<UUID>();
+        collectReferences(tree, result);
+        return result;
+    }
+
+    private void collectReferences(JsonNode node, Set<UUID> result) {
+        if (node == null) return;
+        if (node.isTextual()) {
+            var matcher = UUID_TEXT.matcher(node.textValue());
+            while (matcher.find()) result.add(UUID.fromString(matcher.group()));
+        } else if (node.isObject()) {
+            for (var field : node.properties()) {
+                if (UUID_TEXT.matcher(field.getKey()).matches()) result.add(UUID.fromString(field.getKey()));
+                collectReferences(field.getValue(), result);
+            }
+        } else if (node.isArray()) {
+            for (var child : node) collectReferences(child, result);
+        }
+    }
 }

@@ -31,7 +31,8 @@ public class PlanningService {
         events.record("planning.overridden", "event", event.id, actors.current().id, null, Map.of("itemId", item.id.toString(), "quantity", input.quantity(), "reason", override.reason));
     }
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<ApiResponses.DeficitResponse> deficits(UUID eventId) {
         actors.requirePlanner();
         EventOccurrence selected = eventId == null ? null : orm.find(EventOccurrence.class, eventId);

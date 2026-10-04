@@ -871,6 +871,17 @@ create index ix_reservation_item_status on stock_reservations (item_id, status);
 create index ix_reservation_order on stock_reservations (faction_order_id);
 create index ix_return_submission_status on return_submissions (status, created_at);
 create index ix_return_submission_user on return_submissions (returned_for_user_id, status);
+
+-- Stock snapshots, usage counters, paged history and batched child projections.
+create index ix_tx_item_type on stock_transactions (item_id, type);
+create index ix_tx_asset_type on stock_transactions (asset_instance_id, type) where asset_instance_id is not null;
+create index ix_tx_occurred_page on stock_transactions (occurred_at desc, id desc);
+create index ix_damage_item_status on damage_reports (item_id, status);
+create index ix_asset_item_active on asset_instances (item_id, active);
+create index ix_schedule_item_active on maintenance_schedules (item_id, active);
+create index ix_images_item_order on item_images (item_id, display_order);
+create index ix_order_lines_order on faction_order_lines (faction_order_id);
+create index ix_purchase_lines_item on purchase_order_lines (item_id, purchase_order_id);
 alter table if exists assembly_items add constraint FK4gy48ars675efhc1kyjqkvu7n foreign key (assembly_id) references assemblies;
 alter table if exists assembly_items add constraint FKq6cfebw2dybsanpmpubg7yx7l foreign key (item_id) references items;
 alter table if exists asset_instances add constraint FKrlema8bn57buxawxdeffoo0hb foreign key (current_custodian_id) references app_users;
@@ -999,6 +1010,7 @@ create index ix_general_order_history_order on general_order_history(order_id);
 create index idx_location_parent on storage_locations(parent_location_id);
 create index idx_sync_resolution_root on sync_command_audit(resolution_root);
 create index equipment_commitments_item_dates on equipment_commitments(item_id, available_from, available_until);
+create index ix_overrides_latest on planning_overrides (event_id, item_id, created_at desc, id desc);
 alter table general_orders add constraint general_orders_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_general_order_id_fkey foreign key (general_order_id) references general_orders(id);
@@ -1056,3 +1068,69 @@ create table inventory_media_objects (
     resource_type varchar(255), resource_id uuid,
     check ((resource_type is null) = (resource_id is null))
 );
+
+-- Commit-ordered revisions: row updates roll back with source writes.
+CREATE TABLE IF NOT EXISTS source_revisions (name varchar(100) PRIMARY KEY, revision bigint NOT NULL DEFAULT 0, epoch uuid NOT NULL DEFAULT gen_random_uuid());
+CREATE OR REPLACE FUNCTION advance_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE touched bigint;
+BEGIN
+    EXECUTE format('UPDATE %I.source_revisions SET revision = revision + 1 WHERE name = $1', TG_TABLE_SCHEMA) USING TG_TABLE_NAME;
+    GET DIAGNOSTICS touched = ROW_COUNT;
+    IF touched = 0 THEN RAISE EXCEPTION 'Missing source revision for %', TG_TABLE_NAME; END IF;
+    RETURN NULL;
+END;
+$$;
+INSERT INTO source_revisions (name, revision) VALUES ('items', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('storage_locations', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON storage_locations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('warehouses', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON warehouses FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('event_occurrences', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON event_occurrences FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('faction_orders', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('faction_order_lines', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('general_orders', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON general_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('app_users', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON app_users FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('vendors', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON vendors FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('stock_reservations', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_reservations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('inventory_positions', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_positions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('inventory_lots', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_lots FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('asset_instances', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON asset_instances FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('return_submissions', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON return_submissions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('damage_reports', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON damage_reports FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('repair_cases', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON repair_cases FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('maintenance_schedules', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_schedules FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('maintenance_records', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_records FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('purchase_orders', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('purchase_order_lines', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('inventory_count_sessions', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_sessions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('inventory_count_lines', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('stock_transactions', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_transactions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('equipment_commitments', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON equipment_commitments FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('loan_arrangements', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON loan_arrangements FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('member_requests', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON member_requests FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, revision) VALUES ('factions', 0) ON CONFLICT (name) DO NOTHING;
+CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON factions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();

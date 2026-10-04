@@ -2,7 +2,7 @@ import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../t
 import { apiRequest } from './apiClient';
 import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
-import { assertAuthSession, type AuthSessionContext } from './authManager';
+import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
 
 export interface InventoryCodeResolution {
   code: string;
@@ -58,7 +58,15 @@ export const deleteItem = itemApi.delete;
 export const deleteItems = itemApi.deleteMany;
 
 export async function getItemAssets(itemId: string, query?: { page?: number; size?: number }): Promise<AssetInstance[]> {
-  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query });
+  if (query) return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query });
+  const context = captureAuthSession();
+  const assets: AssetInstance[] = [];
+  for (let page = 0; ; page++) {
+    const rows = await apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query: { page, size: 200 }, session: context });
+    assertAuthSession(context);
+    assets.push(...rows);
+    if (rows.length < 200) return assets;
+  }
 }
 
 export function resolveInventoryCode(code: string): Promise<InventoryCodeResolution> {

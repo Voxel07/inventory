@@ -33,20 +33,76 @@ public class InventoryAccessService {
         var policy = new InventoryAccessPolicy(); policy.owner = actors.current(); orm.persist(policy); return policy;
     }
     public View view(InventoryAccessPolicy policy) {
-        var actor = actors.current(); access.require(policy, actor, false);
-        if (policy == null) return new View(false, null, null, 0, false, false, List.of(), List.of());
-        boolean manage = access.manages(policy, actor);
-        var sources = new ArrayList<Source>();
-        if (policy.owner.id.equals(actor.id)) sources.add(new Source("owner", actor.id, actor.name, true));
-        if (actor.role == DomainEnums.UserRole.hq_admin) sources.add(new Source("admin", actor.id, actor.name, true));
-        var grants = orm.grants(policy);
-        for (var g : grants) {
-            if (g.user != null && g.user.id.equals(actor.id)) sources.add(new Source("person", actor.id, actor.name, g.canEdit));
-            if (g.group != null && g.group.members.stream().anyMatch(u -> u.id.equals(actor.id)))
-                sources.add(new Source("group", g.group.id, g.group.name, g.canEdit));
+        if (policy == null) return publicView();
+        var result = views(List.of(policy.id)).get(policy.id);
+        if (result == null) throw ApiException.notFound("Resource not found");
+        return result;
+    }
+    private View publicView() { return new View(false, null, null, 0, false, false, List.of(), List.of()); }
+    public Map<UUID, View> views(Collection<UUID> ids) {
+        var actor = actors.current();
+        var grantRows = orm.grantViews(ids, actor.id);
+        var byPolicy = new HashMap<UUID, List<Object[]>>();
+        grantRows.forEach(row -> byPolicy.computeIfAbsent((UUID) row[0], ignored -> new ArrayList<>()).add(row));
+        var result = new HashMap<UUID, View>();
+        for (var row : orm.policyViews(ids)) {
+            UUID id = (UUID) row[0], owner = (UUID) row[1];
+            boolean manage = owner.equals(actor.id) || actor.role == DomainEnums.UserRole.hq_admin;
+            boolean edit = manage, visible = manage;
+            var sources = new ArrayList<Source>(); var grants = new ArrayList<Grant>();
+            if (owner.equals(actor.id)) sources.add(new Source("owner", actor.id, actor.name, true));
+            if (actor.role == DomainEnums.UserRole.hq_admin) sources.add(new Source("admin", actor.id, actor.name, true));
+            for (var g : byPolicy.getOrDefault(id, List.of())) {
+                boolean canEdit = (Boolean) g[4];
+                grants.add(new Grant((UUID) g[1], (UUID) g[2], canEdit));
+                if (actor.id.equals(g[1])) { sources.add(new Source("person", actor.id, actor.name, canEdit)); visible = true; edit |= canEdit; }
+                if (g[2] != null && (Boolean) g[5]) { sources.add(new Source("group", (UUID) g[2], (String) g[3], canEdit)); visible = true; edit |= canEdit; }
+            }
+            if (visible) result.put(id, new View(true, owner, (String) row[2], ((Number) row[3]).longValue(), edit, manage,
+                    manage ? List.copyOf(grants) : List.of(), List.copyOf(sources)));
         }
-        return new View(true, policy.owner.id, policy.owner.name, policy.revision,
-                access.allows(policy, actor, true), manage, manage ? grants.stream().map(this::grant).toList() : List.of(), sources);
+        return result;
+    }
+    @Inject jakarta.transaction.TransactionSynchronizationRegistry transactions;
+    private static final Object PROJECTION_KEY = new Object();
+    @SuppressWarnings("unchecked")
+    private Map<UUID, View> projections() {
+        var values = (Map<UUID, View>) transactions.getResource(PROJECTION_KEY);
+        if (values == null) { values = new HashMap<>(); transactions.putResource(PROJECTION_KEY, values); }
+        return values;
+    }
+    public void prepare(Collection<InventoryAccessPolicy> policies) {
+        var ids = policies.stream().filter(Objects::nonNull).map(p -> p.id).distinct().toList();
+        if (ids.isEmpty()) return;
+        var loaded = views(ids); var values = projections();
+        ids.forEach(id -> values.put(id, loaded.get(id)));
+    }
+    public void prepareItems(List<Item> items) {
+        var policies = new ArrayList<org.ash.inventory.model.InventoryAccessPolicy>();
+        var locations = new ArrayList<StorageLocation>();
+        for (var item : items) { policies.add(item.accessPolicy); locations.add(item.storageLocation); locations.add(item.returnLocation); }
+        prepareLocations(locations, policies);
+    }
+    public void prepareLocations(java.util.Collection<StorageLocation> locations) { prepareLocations(locations, new ArrayList<>()); }
+    private void prepareLocations(java.util.Collection<StorageLocation> locations, List<org.ash.inventory.model.InventoryAccessPolicy> policies) {
+        var ids = locations.stream().filter(java.util.Objects::nonNull).map(l -> l.id).distinct().toList();
+        // Also materialize the parent policy used by location DTOs in a bounded batch.
+        var loaded = orm.projectionLocations(ids);
+        var parents = loaded.stream().filter(l -> l.parent != null).map(l -> l.parent.id).distinct().toList();
+        for (var location : loaded) policies.add(location.accessPolicy);
+        for (var parent : orm.projectionLocations(parents)) policies.add(parent.accessPolicy);
+        prepare(policies);
+    }
+    public boolean projectionAllows(InventoryAccessPolicy policy) {
+        if (policy == null) return true;
+        var values = projections();
+        if (!values.containsKey(policy.id)) prepare(List.of(policy));
+        return values.get(policy.id) != null;
+    }
+    public View projection(InventoryAccessPolicy policy) {
+        if (policy == null) return publicView();
+        if (!projectionAllows(policy)) throw ApiException.notFound("Resource not found");
+        return projections().get(policy.id);
     }
     public View get(String kind, UUID id) { return view(policy(kind, id)); }
     public View update(String kind, UUID id, Input input) {

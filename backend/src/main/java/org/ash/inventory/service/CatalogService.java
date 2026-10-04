@@ -1,6 +1,5 @@
 package org.ash.inventory.service;
 
-import io.quarkus.cache.CacheInvalidateAll;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.inject.Inject;
@@ -69,11 +68,11 @@ public class CatalogService {
     }
 
     public List<StorageLocation> getLocations() {
-        return orm.locations().stream().filter(actorService::canViewLocation).toList();
+        return orm.locations();
     }
 
     public List<StorageLocation> getAllLocations() {
-        return orm.allLocations().stream().filter(actorService::canViewLocation).toList();
+        return orm.allLocations();
     }
 
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
@@ -290,7 +289,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "locations-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
@@ -306,7 +304,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "locations-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         hierarchy.lockHierarchy();
@@ -318,7 +315,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "locations-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteLocation(UUID id) {
         hierarchy.lockHierarchy();
@@ -412,7 +408,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence createEvent(ApiModels.EventInput input) {
         var event = new EventOccurrence();
@@ -431,7 +426,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence updateEvent(UUID id, ApiModels.EventInput input) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
@@ -449,7 +443,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "events-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteEvent(UUID id) {
         var event = locked(EventOccurrence.class, id, "Event occurrence");
@@ -461,7 +454,6 @@ public class CatalogService {
     }
 
     @Transactional
-    @CacheInvalidateAll(cacheName = "factions-cache")
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Faction createFaction(ApiModels.FactionInput input) {
         var faction = new Faction();

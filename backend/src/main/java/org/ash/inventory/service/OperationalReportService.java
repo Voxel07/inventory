@@ -39,13 +39,15 @@ public class OperationalReportService {
     public record View(String name, String definition, Instant startedAt, Instant generatedAt, boolean stale,
             int total, List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals) {}
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public View read(String name, Map<String, String> filters, int page, int size) {
         if (page < 0 || page > 100000 || size < 1 || size > 200) throw ApiException.badRequest("Invalid report page bounds");
         return readGeneration(name, filters, (long) page * size, size, null);
     }
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public View export(String name, Map<String, String> filters, Instant generation) {
         if (generation == null) throw ApiException.badRequest("Export requires a report generation");
         return readGeneration(name, filters, 0, Integer.MAX_VALUE, generation);
@@ -112,7 +114,8 @@ public class OperationalReportService {
         return grouped.values().stream().map(Collections::unmodifiableMap).toList();
     }
 
-    @Transactional
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void rebuild(String name) {
         actors.requireWarehouse(); validate(name);
         String before = sourceToken(); Instant start = Instant.now();
@@ -121,24 +124,15 @@ public class OperationalReportService {
             case "repairs" -> repairs(); case "maintenance" -> maintenance(); case "purchases" -> purchases();
             case "counts" -> counts(); case "movements" -> movements(); default -> throw ApiException.badRequest("Unknown report");
         };
-        // Never publish a projection assembled while committed source records changed.
-        if (!before.equals(sourceToken())) throw ApiException.conflict("Source records changed during rebuild. Retry to obtain a stable report.");
+        // All source reads and the token share the repeatable-read snapshot. A later commit makes this generation stale.
         var report = orm.find(OperationalReport.class, name);
         if (report == null) { report = new OperationalReport(); report.name = name; orm.persist(report); }
         report.rows = rows; report.startedAt = start; report.generatedAt = Instant.now(); report.sourceToken = before;
     }
 
     private void validate(String name) { if (!DEFINITIONS.containsKey(name)) throw ApiException.notFound("Unknown report"); }
-    private String sourceToken() {
-        var token = new StringBuilder(LocalDate.now(ZoneOffset.UTC).toString());
-        // Sort explicitly: SQL UNION result order is not guaranteed.
-        var values = new ArrayList<>(orm.watermarks());
-        values.sort(Comparator.comparing(row -> (String) row[0]));
-        for (var row : values) {
-            token.append('|').append(row[0]).append(':').append(row[1]).append(':').append(row[2]);
-        }
-        return token.toString();
-    }
+    @Inject org.ash.inventory.orm.SourceRevisionOrm revisions;
+    private String sourceToken() { return revisions.reportToken(); }
     private <T> List<T> all(Class<T> type) { return orm.all(type); }
     private Map<String, Object> row(Object... pairs) {
         var result = new LinkedHashMap<String, Object>();

@@ -8,10 +8,21 @@ import java.util.stream.Stream;
 /** Persistence queries for the Loan use cases. Business rules remain in the service. */
 @ApplicationScoped
 public class LoanOrm extends EntityOrm {
-    public Stream<LoanArrangement> arrangements() {
-        return entityManager.createQuery("from LoanArrangement order by createdAt desc", LoanArrangement.class).getResultStream();
+    @jakarta.inject.Inject InventoryAccessOrm access;
+    public List<LoanArrangement> arrangements(int offset, int limit) {
+        var denied = access.deniedReferences(accessActor.current());
+        var query = entityManager.createQuery("from LoanArrangement l join fetch l.commitment c join fetch c.item join fetch l.providerLocation where 1 = 1"
+                + InventoryAccessOrm.excluding("l", denied) + " order by l.createdAt desc, l.id desc", LoanArrangement.class);
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
+    public java.util.Map<String, String> assetCodes(java.util.Collection<String> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        var result = new java.util.HashMap<String, String>();
+        for (var row : entityManager.createQuery("select a.id, a.assetCode from AssetInstance a where a.id in :ids", Object[].class)
+                .setParameter("ids", ids.stream().map(java.util.UUID::fromString).toList()).getResultList()) result.put(row[0].toString(), (String) row[1]);
+        return result;
+    }
     public Long commitmentCount(EquipmentCommitment commitment) {
         return entityManager.createQuery("select count(l) from LoanArrangement l where l.commitment = :c", Long.class).setParameter("c", commitment).getSingleResult();
     }

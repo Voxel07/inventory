@@ -2,19 +2,14 @@ package org.ash.inventory.resource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.cache.CacheManager;
-import io.quarkus.cache.CacheResult;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import io.quarkus.cache.Cache;
+import io.quarkus.cache.CacheName;
+import java.time.Duration;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
-import org.ash.inventory.helper.event.EventBroadcaster;
 import org.ash.inventory.service.CatalogService;
 import org.jboss.logging.Logger;
 
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Caches API-ready catalog snapshots rather than managed Hibernate entities.
@@ -28,35 +23,19 @@ public class CatalogResponseCache {
     private final ApiMapper mapper;
     @jakarta.inject.Inject org.ash.inventory.service.ApiQueryService queries;
     private final ObjectMapper objectMapper;
-    private final CacheManager cacheManager;
-    private final EventBroadcaster broadcaster;
-    private Runnable removeEventListener = () -> {};
+    private final Cache cache;
 
     public CatalogResponseCache(CatalogService catalog, ApiMapper mapper, ObjectMapper objectMapper,
-            CacheManager cacheManager, EventBroadcaster broadcaster) {
+            @CacheName("factions-cache") Cache cache) {
         this.catalog = catalog;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
-        this.cacheManager = cacheManager;
-        this.broadcaster = broadcaster;
-    }
-
-    @PostConstruct
-    void initializeInvalidationListener() {
-        removeEventListener = broadcaster.addListener(event -> {
-            if (!"catalog.changed".equals(event.get("type"))) return;
-            invalidateFor(String.valueOf(event.get("resource")));
-        });
-    }
-
-    @PreDestroy
-    void shutdownInvalidationListener() {
-        removeEventListener.run();
+        this.cache = cache;
     }
 
     @Transactional
     public String locations() {
-        return json(catalog.getLocations().stream().map(mapper::location).toList());
+        return json(mapper.locations(catalog.getLocations()));
     }
 
     @Transactional
@@ -64,10 +43,39 @@ public class CatalogResponseCache {
         return json(queries.projectEvents(catalog.getEvents(eventType)));
     }
 
-    @CacheResult(cacheName = "factions-cache")
-    @Transactional
+    @jakarta.inject.Inject org.ash.inventory.orm.SourceRevisionOrm revisions;
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public String factions(String eventType) {
-        return json(catalog.getFactions(eventType).stream().map(mapper::faction).toList());
+        String normalized = eventType == null || eventType.isBlank() ? "" : eventType.trim();
+        if (normalized.length() > 255) throw ApiException.badRequest("eventType is too long");
+        return selectFactions(cachedFactions(revisions.factions()), normalized);
+    }
+    String cachedFactions(String revision) {
+        var loadFailure = new java.util.concurrent.atomic.AtomicReference<RuntimeException>();
+        try {
+            return cache.<String, String>get(revision, key -> {
+                try { return loadFactions(); }
+                catch (RuntimeException failure) { loadFailure.set(failure); throw failure; }
+            }).await().atMost(Duration.ofSeconds(2));
+        } catch (RuntimeException failure) {
+            if (loadFailure.get() != null) throw loadFailure.get();
+            LOG.warnv("Faction cache unavailable; reading database: {0}", failure.getMessage());
+            return loadFactions();
+        }
+    }
+    String loadFactions() {
+        return json(catalog.getFactions(null).stream().map(mapper::faction).toList());
+    }
+
+    private String selectFactions(String snapshot, String eventType) {
+        if (eventType.isEmpty()) return snapshot;
+        try {
+            var selected = objectMapper.createArrayNode();
+            for (var row : objectMapper.readTree(snapshot))
+                if (eventType.equals(row.path("eventType").asText())) selected.add(row);
+            return objectMapper.writeValueAsString(selected);
+        } catch (JsonProcessingException e) { throw new IllegalStateException("Invalid faction snapshot", e); }
     }
 
     private String json(java.util.List<?> values) {
@@ -78,19 +86,4 @@ public class CatalogResponseCache {
         }
     }
 
-    private void invalidateFor(String resource) {
-        Set<String> cacheNames = new LinkedHashSet<>();
-        switch (resource) {
-            case "items", "category-maintenance", "assemblies" -> {}
-            case "storage-locations" -> cacheNames.add("locations-cache");
-            case "events" -> cacheNames.add("events-cache");
-            case "factions" -> cacheNames.add("factions-cache");
-            default -> cacheNames.addAll(Set.of("locations-cache", "events-cache", "factions-cache"));
-        }
-        for (String cacheName : cacheNames) {
-            cacheManager.getCache(cacheName).ifPresent(cache ->
-                    cache.invalidateAll().subscribe().with(ignored -> {}, failure ->
-                            LOG.warnv("Could not invalidate catalog cache {0}: {1}", cacheName, failure.getMessage())));
-        }
-    }
 }

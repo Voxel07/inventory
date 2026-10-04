@@ -114,7 +114,7 @@ export function StorageLocationMap({
           <DraggingController enabled={canDrag} />
           <ClickHandler onSelect={editable ? onCenterChange : undefined} />
           {resolvedOverlayUrl && <ImageOverlay url={resolvedOverlayUrl} bounds={bounds} opacity={0.62} />}
-          <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#e30613', fillOpacity: 1, weight: 2 }}>
+          <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#3949ab', fillOpacity: 1, weight: 2 }}>
             <Popup>{kind === 'pickup' ? t('Abholpunkt', 'Pickup point') : t('Lagerort', 'Storage location')}</Popup>
           </CircleMarker>
         </MapContainer>

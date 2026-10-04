@@ -75,11 +75,12 @@ public class CatalogOrm {
     }
 
     public List<StorageLocation> locations() {
-        return entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true order by l.createdAt desc", StorageLocation.class).getResultList();
+        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true and " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.createdAt desc", StorageLocation.class);
+        return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
     }
 
     public List<StorageLocation> allLocations() {
-        return entityManager.createQuery("from StorageLocation order by name, id", StorageLocation.class).getResultList();
+        return InventoryAccessOrm.bind(entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.name, l.id", StorageLocation.class), accessActor.current()).getResultList();
     }
 
     public boolean hasLinkedOrders(UUID eventId) {

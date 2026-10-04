@@ -3,7 +3,6 @@ import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
 import {
     Box,
-    Paper,
     Typography,
     Stack,
     TextField,
@@ -231,14 +230,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     }
 
     return (
-        <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
+        <Box sx={{ mt: 1 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
                 <Box>
-                    <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DynamicFeedIcon color="primary" />
-                        {t('Einzelgeräte & Seriennummern (Assets)', 'Serialized Assets & Sub-Units')}
+                    <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DynamicFeedIcon color="primary" fontSize="small" />
+                        {t('Einzelgeräte', 'Serialized assets')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary">
                         {t('Physisch identifizierte Einzelstücke mit individuellem Status, QR-Code und Wartungshistorie.', 'Individually identified physical units with distinct statuses, QR codes, and maintenance history.')}
                     </Typography>
                 </Box>
@@ -652,6 +651,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 onConfirm={handleDeleteConfirm}
                 pending={deleteAsset.isPending}
             />
-        </Paper>
+        </Box>
     );
 }

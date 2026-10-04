@@ -91,10 +91,10 @@ public class StockManagementResource {
         return lot(service.updateLot(id, input));
     }
 
-    @GET @Path("/inventory-assets")
+    @GET @Path("/inventory-assets") @jakarta.transaction.Transactional
     public List<org.ash.inventory.resource.dto.ApiResponses.AssetInstanceResponse> assets(@QueryParam("itemId") UUID itemId,
             @QueryParam("locationId") UUID locationId, @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
-        return service.assets(itemId, locationId, page, size).stream().map(mapper::asset).toList();
+        return mapper.assets(service.assets(itemId, locationId, page, size));
     }
 
     @GET @Path("/inventory-positions")

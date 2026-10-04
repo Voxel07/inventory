@@ -38,31 +38,35 @@ public class ActionInboxService {
         var actor = actors.current(); var today = LocalDate.now(); var out = new ArrayList<Action>();
         boolean warehouse = Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew).contains(actor.role);
         boolean maintenance = actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.maintenance_crew;
-        for (var o : orm.readyFactionOrders())
+        for (var o : orm.readyFactionOrders(warehouse ? null : actor.id))
             if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, o.createdBy.id.equals(actor.id) || warehouse ? "/orders/faction/" + o.id : "/contributor");
-        for (var o : orm.readyGeneralOrders())
+        for (var o : orm.readyGeneralOrders(warehouse ? null : actor.id))
             if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.name, o.purpose, o.eventOccurrence == null ? null : o.eventOccurrence.startDate, "/orders?tab=general");
-        for (var b : custody.list(!warehouse)) {
-            var event = b.eventOccurrenceId() == null ? null : orm.find(EventOccurrence.class, b.eventOccurrenceId());
+        var balances = custody.list(!warehouse);
+        var events = orm.events(balances.stream().map(CustodyBalanceService.Balance::eventOccurrenceId).filter(Objects::nonNull).distinct().toList());
+        for (var b : balances) {
+            var event = b.eventOccurrenceId() == null ? null : events.get(b.eventOccurrenceId());
             if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : "/contributor");
         }
-        for (var r : orm.pendingReturns())
+        for (var r : orm.pendingReturns(warehouse ? null : actor.id))
             if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, r.createdAt.atZone(ZoneId.systemDefault()).toLocalDate(), warehouse ? "/returns" : "/contributor");
         if (warehouse || actor.role == DomainEnums.UserRole.event_planner)
             for (var p : orm.incomingPurchases())
                 add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=" + (warehouse ? "receipts" : "purchases"));
         if (warehouse)
-            for (var l : orm.availableLots()) {
+            for (var l : orm.availableLots(today.plusDays(30))) {
                 var due = l.expiryDate == null ? l.bestBeforeDate : l.bestBeforeDate == null || l.expiryDate.isBefore(l.bestBeforeDate) ? l.expiryDate : l.bestBeforeDate;
                 if (due != null && !due.isAfter(today.plusDays(30))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots");
             }
-        for (var s : orm.activeSchedules()) {
+        var schedules = orm.activeSchedules(maintenance ? null : actor.id);
+        var statuses = maintenancePolicy.statuses(schedules, Instant.now());
+        for (var s : schedules) {
             if (!maintenance && (s.responsiblePerson == null || !s.responsiblePerson.id.equals(actor.id))) continue;
             LocalDate due = s.nextDueAt == null ? null : s.nextDueAt.atZone(ZoneId.systemDefault()).toLocalDate();
-            if (maintenancePolicy.status(s, Instant.now()) != MaintenancePolicy.Status.healthy)
+            if (statuses.get(s.id) != MaintenancePolicy.Status.healthy)
                 add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules" : "/contributor");
         }
-        for (var r : orm.openMemberRequests())
+        for (var r : orm.openMemberRequests(warehouse ? null : actor.id))
             if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, "/contributor");
         if (warehouse) for (var l : orm.loans()) {
             var c = l.commitment; if (c.cancelled || l.returned == c.quantity) continue;

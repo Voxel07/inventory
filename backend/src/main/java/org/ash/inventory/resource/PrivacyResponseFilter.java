@@ -22,8 +22,8 @@ public class PrivacyResponseFilter implements ContainerResponseFilter {
         }
         try {
             var filtered = projections.filter(response.getEntity());
-            response.setEntity(filtered);
-            if (projections.containsPrivateReference(filtered)) response.getHeaders().putSingle("X-Private-Inventory", "true");
+            response.setEntity(filtered.value());
+            if (filtered.containsPrivateReference()) response.getHeaders().putSingle("X-Private-Inventory", "true");
         } catch (ApiException denied) {
             response.setStatus(denied.status);
             response.setEntity(java.util.Map.of("message", denied.getMessage()));

@@ -1,29 +1,33 @@
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
-import { Button } from '../shared/ActionButtons';
-import { Dialog } from '../shared/ClosableDialog';
+import { AccordionSummary, Button } from '../shared/ActionButtons';
+import { DialogForm, FormDialog, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import {
+    Accordion,
+    AccordionDetails,
     Box,
     TextField,
     Stack,
     Autocomplete,
-
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Checkbox,
     FormControlLabel,
+    FormHelperText,
     MenuItem,
+    Switch,
     Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
+    title: string;
+    onCancel: () => void;
     initialData?: Item;
     storageLocations?: StorageLocation[];
     categories?: string[];
@@ -34,6 +38,8 @@ interface Props {
 }
 
 export function ItemForm({
+    title,
+    onCancel,
     initialData,
     storageLocations = [],
     categories = [],
@@ -126,8 +132,7 @@ export function ItemForm({
         };
     }
 
-    function handleCreateLocSubmit(e: React.FormEvent) {
-        e.preventDefault();
+    function handleCreateLocSubmit() {
         if (!newLocData.name.trim()) return;
         createLoc.mutate(newLocData, {
             onSuccess: (newLoc) => {
@@ -142,8 +147,7 @@ export function ItemForm({
         });
     }
 
-    function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
+    function handleSubmit() {
         if (nameError) return;
         const parseOptional = (value: string) => value === '' ? undefined : Number(value);
         const submitData: ItemFormData = {
@@ -181,376 +185,383 @@ export function ItemForm({
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
     const isFood = ['food', 'lebensmittel', 'verpflegung'].some((value) => normalizedCategory.includes(value));
+    const categorySpecific = isVehicle || isGenerator || isFood;
+    const hasAdditionalDetails = Boolean(initialData && (initialData.supplier || initialData.hint || initialData.images?.length));
 
     return (
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-            <Stack spacing={2}>
-                <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
-                    onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />}
-                    label={t('Privater Artikel — nur Eigentümer, HQ-Admins und Freigaben', 'Private item — owner, HQ admins and explicit shares only')} />
-                <TextField
-                    label={t('Name', 'Name')}
-                    value={formData.name}
-                    onChange={handleChange('name')}
-                    required
-                    fullWidth
-                    error={!!nameError}
-                    helperText={nameError}
-                />
-                <TextField
-                    label={t('Produktdetails / zusätzliche Informationen', 'Product details / additional information')}
-                    value={formData.description ?? ''}
-                    onChange={handleChange('description')}
-                    multiline
-                    minRows={3}
-                    fullWidth
-                />
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', columnGap: 2, flexWrap: 'wrap' }}>
-                    <FormControlLabel
-                        control={<Checkbox checked={Boolean(formData.isConsumable)} onChange={(event) => setFormData((prev) => ({
-                            ...prev,
-                            isConsumable: event.target.checked,
-                            inventoryRole: event.target.checked ? 'consumable'
-                                : prev.inventoryRole === 'consumable' ? 'returnable' : prev.inventoryRole,
-                            trackingMode: event.target.checked && prev.trackingMode === 'serialized' ? 'bulk' : prev.trackingMode,
-                        }))} />}
-                        label={t('Verbrauchsmaterial', 'Consumable')}
-                    />
-                    <FormControlLabel
-                        control={(
-                            <Checkbox
-                                checked={isBulkPackage}
-                                disabled={formData.trackingMode === 'serialized'}
-                                onChange={(event) => {
-                                    const checked = event.target.checked;
-                                    setIsBulkPackage(checked);
-                                    if (!checked) {
-                                        setNumericInputs((prev) => ({
-                                            ...prev,
-                                            containerSize: '',
-                                            containerCount: '',
-                                            containersOpened: '',
-                                            containerRemainingPercent: '',
-                                        }));
-                                    }
-                                }}
-                            />
-                        )}
-                        label={t('Box mit mehreren gleichen Artikeln', 'Box with multiple identical items')}
-                    />
-                </Box>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <>
+            <DialogForm title={title} onSubmit={handleSubmit} onCancel={onCancel} noValidate pending={isLoading} submitDisabled={isDisabled}
+                submitLabel={initialData ? t('Artikel speichern', 'Save item') : t('Artikel erstellen', 'Create item')}>
+                <FormSection title={t('Grunddaten', 'Basic details')}>
                     <TextField
-                        select
-                        fullWidth
-                        label={t('Bestandsführung', 'Tracking mode')}
-                        value={formData.trackingMode ?? 'bulk'}
-                        disabled={hasStock}
-                        helperText={hasStock ? t('Bestandsführung kann bei Artikeln mit Bestand nicht geändert werden.', 'Tracking mode cannot be changed for items with existing stock.') : undefined}
-                        onChange={(event) => {
-                            const trackingMode = event.target.value as ItemFormData['trackingMode'];
-                            setFormData((prev) => ({
-                                ...prev,
-                                trackingMode,
-                                inventoryRole: trackingMode === 'serialized' && prev.inventoryRole === 'consumable'
-                                    ? 'returnable' : prev.inventoryRole,
-                                isConsumable: trackingMode === 'serialized' ? false : prev.isConsumable,
-                            }));
-                            if (trackingMode === 'serialized') setIsBulkPackage(false);
-                        }}
-                    >
-                        <MenuItem value="bulk">{t('Mengenbestand', 'Bulk')}</MenuItem>
-                        <MenuItem value="serialized">{t('Einzelgeräte / Seriennummern', 'Serialized assets')}</MenuItem>
-                        <MenuItem value="lot_tracked">{t('Chargenbestand', 'Lot tracked')}</MenuItem>
-                    </TextField>
-                    <TextField
-                        select
-                        fullWidth
-                        label={t('Inventarrolle', 'Inventory role')}
-                        value={formData.inventoryRole ?? 'returnable'}
-                        onChange={(event) => {
-                            const inventoryRole = event.target.value as ItemFormData['inventoryRole'];
-                            setFormData((prev) => ({
-                                ...prev,
-                                inventoryRole,
-                                isConsumable: inventoryRole === 'consumable',
-                                trackingMode: inventoryRole === 'consumable' && prev.trackingMode === 'serialized'
-                                    ? 'bulk' : prev.trackingMode,
-                            }));
-                        }}
-                    >
-                        <MenuItem value="consumable">{t('Verbrauchsmaterial', 'Consumable')}</MenuItem>
-                        <MenuItem value="returnable">{t('Rückgabepflichtig', 'Returnable')}</MenuItem>
-                        <MenuItem value="repairable">{t('Reparierbar', 'Repairable')}</MenuItem>
-                        <MenuItem value="rental">{t('Mietgerät', 'Rental')}</MenuItem>
-                    </TextField>
-                </Stack>
-                {!initialData && (
-                    <TextField
-                        label={isBulkPackage ? t('Anzahl der Boxen', 'Number of boxes') : t('Menge', 'Amount')}
-                        type="number"
-                        value={numericInputs.amount}
-                        onChange={handleNumberChange('amount')}
+                        label={t('Name', 'Name')}
+                        value={formData.name}
+                        onChange={handleChange('name')}
                         required
                         fullWidth
-                        helperText={formData.trackingMode === 'serialized'
-                            ? t('Erstellt automatisch die entsprechende Anzahl an Einzelgeräten/Assets (z. B. SKU-001..).', 'Automatically creates the corresponding number of asset instances (e.g. SKU-001..).')
-                            : isBulkPackage ? t('Die Menge wird als Anzahl vollständiger Boxen gespeichert', 'The amount is stored as the number of full boxes') : undefined}
-                        slotProps={{ htmlInput: { min: 0 } }}
+                        error={!!nameError}
+                        helperText={nameError}
                     />
-                )}
-                {isBulkPackage && (
-                    <TextField
-                        label={t('Artikel pro Box', 'Items per box')}
-                        type="number"
-                        value={numericInputs.containerSize}
-                        onChange={handleNumberChange('containerSize')}
-                        required
-                        fullWidth
-                        helperText={t('z. B. 500 Schrauben pro Box', 'e.g. 500 screws per box')}
-                        slotProps={{ htmlInput: { min: 1 } }}
-                    />
-                )}
-                <TextField
-                    label={t('Mindestbestand', 'Minimum stock')}
-                    type="number"
-                    value={numericInputs.minStock}
-                    onChange={handleNumberChange('minStock')}
-                    required
-                    fullWidth
-                    slotProps={{ htmlInput: { min: 0 } }}
-                />
-                <TextField
-                    label={t('Einzelwert (€)', 'Unit value (€)')}
-                    type="number"
-                    value={numericInputs.value}
-                    onChange={handleNumberChange('value')}
-                    fullWidth
-                    slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
-                />
-                <Autocomplete
-                    freeSolo
-                    options={categories}
-                    value={formData.category}
-                    onInputChange={(_e, newValue) => setFormData((prev) => ({ ...prev, category: newValue }))}
-                    renderInput={(params) => (
-                        <TextField {...params} label={t('Kategorie', 'Category')} fullWidth />
-                    )}
-                />
-                <TextField
-                    label={t('Unterkategorie (optional)', 'Subcategory (optional)')}
-                    value={formData.subcategory ?? ''}
-                    onChange={handleChange('subcategory')}
-                    fullWidth
-                />
-                {(isVehicle || isGenerator || isFood) && (
-                    <Stack spacing={2} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="subtitle2">{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
-                        {isVehicle && (
-                            <>
-                                <TextField
-                                    label={t('Kraftstoffverbrauch (l/100 km)', 'Fuel consumption (L/100 km)')}
-                                    type="number"
-                                    value={numericInputs.fuelConsumptionLitersPer100Km}
-                                    onChange={handleNumberChange('fuelConsumptionLitersPer100Km')}
-                                    slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
-                                />
-                                <TextField
-                                    label={t('Batteriewechsel fällig', 'Battery replacement due')}
-                                    type="date"
-                                    value={formData.batteryReplacementDue ?? ''}
-                                    onChange={handleChange('batteryReplacementDue')}
-                                    slotProps={{ inputLabel: { shrink: true } }}
-                                />
-                            </>
-                        )}
-                        {isGenerator && (
-                            <>
-                                <TextField
-                                    label={t('Betriebsstunden', 'Running hours')}
-                                    type="number"
-                                    value={numericInputs.currentOperatingHours}
-                                    onChange={handleNumberChange('currentOperatingHours')}
-                                    slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
-                                />
-                                <TextField
-                                    label={t('Wartungsintervall (Tage)', 'Maintenance interval (days)')}
-                                    type="number"
-                                    value={numericInputs.maintenanceIntervalDays}
-                                    onChange={handleNumberChange('maintenanceIntervalDays')}
-                                    slotProps={{ htmlInput: { min: 0 } }}
-                                />
-                                <TextField
-                                    label={t('Nächste Wartung', 'Next maintenance')}
-                                    type="date"
-                                    value={formData.nextMaintenanceDue ?? ''}
-                                    onChange={handleChange('nextMaintenanceDue')}
-                                    slotProps={{ inputLabel: { shrink: true } }}
-                                />
-                            </>
-                        )}
-                        {isFood && (
-                            <TextField
-                                label={t('Mindestens haltbar bis', 'Best before date')}
-                                type="date"
-                                value={formData.bestBeforeDate ?? ''}
-                                onChange={handleChange('bestBeforeDate')}
-                                slotProps={{ inputLabel: { shrink: true } }}
-                            />
-                        )}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <Autocomplete
+                            freeSolo
+                            fullWidth
+                            options={categories}
+                            value={formData.category}
+                            onInputChange={(_e, newValue) => setFormData((prev) => ({ ...prev, category: newValue }))}
+                            renderInput={(params) => <TextField {...params} label={t('Kategorie', 'Category')} fullWidth />}
+                        />
+                        <TextField
+                            label={t('Unterkategorie', 'Subcategory')}
+                            value={formData.subcategory ?? ''}
+                            onChange={handleChange('subcategory')}
+                            helperText={t('Optional', 'Optional')}
+                            fullWidth
+                        />
                     </Stack>
-                )}
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <TextField
+                        label={t('Beschreibung', 'Description')}
+                        value={formData.description ?? ''}
+                        onChange={handleChange('description')}
+                        multiline
+                        minRows={2}
+                        fullWidth
+                        helperText={t('Produktdetails und weitere nützliche Informationen', 'Product details and other useful information')}
+                    />
+                </FormSection>
+
+                <FormSection title={t('Sichtbarkeit', 'Visibility')}>
+                    <Box>
+                        <FormControlLabel
+                            control={<Switch checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
+                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />}
+                            label={formData.privateResource ? t('Privater Artikel', 'Private item') : t('Im gemeinsamen Katalog', 'In the shared catalog')} />
+                        <FormHelperText sx={{ mt: 0 }}>
+                            {formData.privateResource
+                                ? t('Nur du, HQ-Admins und Personen, für die du ihn freigibst, sehen diesen Artikel.', 'Only you, HQ admins and people you share it with can see this item.')
+                                : t('Alle mit Katalogzugriff sehen diesen Artikel.', 'Everyone with catalog access can see this item.')}
+                            {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
+                        </FormHelperText>
+                    </Box>
+                    {!formData.privateResource && <>
+                        <TextField
+                            select
+                            label={t('Zuordnung', 'Assignment')}
+                            value={formData.visibilityScope ?? 'global'}
+                            onChange={(event) => setFormData((prev) => ({
+                                ...prev,
+                                visibilityScope: event.target.value as ItemFormData['visibilityScope'],
+                            }))}
+                        >
+                            <MenuItem value="global">{t('Allgemeiner Bestand', 'Shared inventory')}</MenuItem>
+                            <MenuItem value="event">{t('Eventbezogen', 'Event driven')}</MenuItem>
+                            <MenuItem value="person">{t('Nur für eine Person', 'Assigned to one person')}</MenuItem>
+                            <MenuItem value="group">{t('Nur für eine Gruppe', 'Assigned to one group')}</MenuItem>
+                        </TextField>
+                        {formData.visibilityScope === 'person' && (
+                            <Autocomplete
+                                options={assignableUsers}
+                                getOptionLabel={(user) => user.name || user.email}
+                                isOptionEqualToValue={(option, value) => option.id === value.id}
+                                value={assignableUsers.find((user) => user.id === formData.assignedUserId) || null}
+                                onChange={(_event, user) => setFormData((prev) => ({ ...prev, assignedUserId: user?.id ?? '' }))}
+                                renderInput={(params) => <TextField {...params} required label={t('Zugeordnete Person', 'Assigned person')} />}
+                            />
+                        )}
+                        {formData.visibilityScope === 'group' && (
+                            <TextField
+                                required
+                                label={t('Zugeordnete Gruppe', 'Assigned group')}
+                                value={formData.assignedGroup ?? ''}
+                                onChange={handleChange('assignedGroup')}
+                                helperText={t('Zum Beispiel eine Fraktion oder ein lokales Team', 'For example a faction or local team')}
+                            />
+                        )}
+                    </>}
+                </FormSection>
+
+                <FormSection title={t('Bestand & Nachverfolgung', 'Stock & tracking')}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <TextField
+                            select
+                            fullWidth
+                            label={t('Bestandsführung', 'Tracking mode')}
+                            value={formData.trackingMode ?? 'bulk'}
+                            disabled={hasStock}
+                            helperText={hasStock ? t('Nicht änderbar, solange Bestand vorhanden ist.', 'Cannot change while stock exists.') : undefined}
+                            onChange={(event) => {
+                                const trackingMode = event.target.value as ItemFormData['trackingMode'];
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    trackingMode,
+                                    inventoryRole: trackingMode === 'serialized' && prev.inventoryRole === 'consumable'
+                                        ? 'returnable' : prev.inventoryRole,
+                                    isConsumable: trackingMode === 'serialized' ? false : prev.isConsumable,
+                                }));
+                                if (trackingMode === 'serialized') setIsBulkPackage(false);
+                            }}
+                        >
+                            <MenuItem value="bulk">{t('Mengenbestand', 'Bulk')}</MenuItem>
+                            <MenuItem value="serialized">{t('Einzelgeräte / Seriennummern', 'Serialized assets')}</MenuItem>
+                            <MenuItem value="lot_tracked">{t('Chargenbestand', 'Lot tracked')}</MenuItem>
+                        </TextField>
+                        <TextField
+                            select
+                            fullWidth
+                            label={t('Inventarrolle', 'Inventory role')}
+                            value={formData.inventoryRole ?? 'returnable'}
+                            onChange={(event) => {
+                                const inventoryRole = event.target.value as ItemFormData['inventoryRole'];
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    inventoryRole,
+                                    isConsumable: inventoryRole === 'consumable',
+                                    trackingMode: inventoryRole === 'consumable' && prev.trackingMode === 'serialized'
+                                        ? 'bulk' : prev.trackingMode,
+                                }));
+                            }}
+                        >
+                            <MenuItem value="consumable">{t('Verbrauchsmaterial', 'Consumable')}</MenuItem>
+                            <MenuItem value="returnable">{t('Rückgabepflichtig', 'Returnable')}</MenuItem>
+                            <MenuItem value="repairable">{t('Reparierbar', 'Repairable')}</MenuItem>
+                            <MenuItem value="rental">{t('Mietgerät', 'Rental')}</MenuItem>
+                        </TextField>
+                    </Stack>
+                    {formData.trackingMode !== 'serialized' && <Box>
+                        <FormControlLabel
+                            control={(
+                                <Checkbox
+                                    checked={isBulkPackage}
+                                    onChange={(event) => {
+                                        const checked = event.target.checked;
+                                        setIsBulkPackage(checked);
+                                        if (!checked) {
+                                            setNumericInputs((prev) => ({
+                                                ...prev,
+                                                containerSize: '',
+                                                containerCount: '',
+                                                containersOpened: '',
+                                                containerRemainingPercent: '',
+                                            }));
+                                        }
+                                    }}
+                                />
+                            )}
+                            label={t('In Boxen gelagert', 'Stored in boxes')}
+                        />
+                        <FormHelperText sx={{ mt: 0 }}>{t('Mehrere gleiche Artikel pro Box, z. B. 500 Schrauben.', 'Several identical items per box, e.g. 500 screws.')}</FormHelperText>
+                    </Box>}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+                        {!initialData && (
+                            <TextField
+                                label={isBulkPackage ? t('Anzahl Boxen', 'Number of boxes') : t('Menge', 'Quantity')}
+                                type="number"
+                                value={numericInputs.amount}
+                                onChange={handleNumberChange('amount')}
+                                required
+                                fullWidth
+                                helperText={formData.trackingMode === 'serialized'
+                                    ? t('Legt je Einheit ein Einzelgerät an (z. B. SKU-001).', 'Creates one asset per unit (e.g. SKU-001).')
+                                    : isBulkPackage ? t('Anzahl vollständiger Boxen', 'Number of full boxes') : undefined}
+                                slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
+                            />
+                        )}
+                        {isBulkPackage && (
+                            <TextField
+                                label={t('Artikel pro Box', 'Items per box')}
+                                type="number"
+                                value={numericInputs.containerSize}
+                                onChange={handleNumberChange('containerSize')}
+                                required
+                                fullWidth
+                                slotProps={{ htmlInput: { min: 1, inputMode: 'numeric' } }}
+                            />
+                        )}
+                        <TextField
+                            label={t('Mindestbestand', 'Minimum stock')}
+                            type="number"
+                            value={numericInputs.minStock}
+                            onChange={handleNumberChange('minStock')}
+                            required
+                            fullWidth
+                            slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
+                        />
+                        <TextField
+                            label={t('Einzelwert (€)', 'Unit value (€)')}
+                            type="number"
+                            value={numericInputs.value}
+                            onChange={handleNumberChange('value')}
+                            fullWidth
+                            slotProps={{ htmlInput: { min: 0, step: 0.01, inputMode: 'decimal' } }}
+                        />
+                    </Box>
+                </FormSection>
+
+                <FormSection title={t('Lagerort', 'Location')}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                        <Autocomplete
+                            options={storageLocations}
+                            getOptionLabel={(option) => option.name || ''}
+                            isOptionEqualToValue={(option, val) => option.id === val.id}
+                            value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
+                            onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), storageLocation: newValue ? newValue.id : '' }))}
+                            renderInput={(params) => <TextField {...params} label={t('Lagerort', 'Storage location')} fullWidth />}
+                            sx={{ flexGrow: 1, minWidth: 0 }}
+                        />
+                        <Button variant="outlined" startIcon={<AddLocationAltOutlinedIcon />} onClick={() => setAddLocationOpen(true)}
+                            aria-label={t('Neuen Lagerort anlegen', 'Create a new storage location')} sx={{ height: 56, flexShrink: 0 }}>
+                            {t('Neu', 'New')}
+                        </Button>
+                    </Box>
                     <Autocomplete
                         options={storageLocations}
                         getOptionLabel={(option) => option.name || ''}
                         isOptionEqualToValue={(option, val) => option.id === val.id}
-                        value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
-                        onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), storageLocation: newValue ? newValue.id : '' }))}
+                        value={storageLocations.find((loc) => loc.id === formData.returnLocation) || null}
+                        onChange={(_event, value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))}
                         renderInput={(params) => (
-                            <TextField {...params} label={t('Lagerort', 'Storage location')} fullWidth />
+                            <TextField {...params} label={t('Rückgabeort', 'Return location')} helperText={t('Wohin der Artikel nach Gebrauch zurückkommt', 'Where the item goes back after use')} fullWidth />
                         )}
-                        sx={{ flexGrow: 1 }}
                     />
-                    <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
-                        variant="outlined"
-                        onClick={() => setAddLocationOpen(true)}
-                        sx={{ height: 56, minWidth: 56, p: 0, fontSize: '1.5rem' }}
-                    >
-                        +
-                    </Button>
-                </Box>
+                </FormSection>
 
-                <Autocomplete
-                    options={storageLocations}
-                    getOptionLabel={(option) => option.name || ''}
-                    isOptionEqualToValue={(option, val) => option.id === val.id}
-                    value={storageLocations.find((loc) => loc.id === formData.returnLocation) || null}
-                    onChange={(_event, value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))}
-                    renderInput={(params) => (
-                        <TextField {...params} label={t('Vorgesehener Rückgabeort', 'Expected return location')} fullWidth />
-                    )}
-                />
-
-                {!formData.privateResource && <>
-                <TextField
-                    select
-                    label={t('Sichtbarkeit / Zuordnung', 'Visibility / assignment')}
-                    value={formData.visibilityScope ?? 'global'}
-                    onChange={(event) => setFormData((prev) => ({
-                        ...prev,
-                        visibilityScope: event.target.value as ItemFormData['visibilityScope'],
-                    }))}
-                >
-                    <MenuItem value="global">{t('Allgemeiner Bestand', 'Shared inventory')}</MenuItem>
-                    <MenuItem value="event">{t('Eventbezogen', 'Event driven')}</MenuItem>
-                    <MenuItem value="person">{t('Nur für eine Person', 'Assigned to one person')}</MenuItem>
-                    <MenuItem value="group">{t('Nur für eine Gruppe', 'Assigned to one group')}</MenuItem>
-                </TextField>
-                {formData.visibilityScope === 'person' && (
-                    <Autocomplete
-                        options={assignableUsers}
-                        getOptionLabel={(user) => user.name || user.email}
-                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                        value={assignableUsers.find((user) => user.id === formData.assignedUserId) || null}
-                        onChange={(_event, user) => setFormData((prev) => ({ ...prev, assignedUserId: user?.id ?? '' }))}
-                        renderInput={(params) => <TextField {...params} required label={t('Zugeordnete Person', 'Assigned person')} />}
-                    />
-                )}
-                {formData.visibilityScope === 'group' && (
-                    <TextField
-                        required
-                        label={t('Zugeordnete Gruppe', 'Assigned group')}
-                        value={formData.assignedGroup ?? ''}
-                        onChange={handleChange('assignedGroup')}
-                        helperText={t('Zum Beispiel eine Fraktion oder ein lokales Team', 'For example a faction or local team')}
-                    />
-                )}
-
-                </>}
-                <Autocomplete
-                    multiple
-                    options={[...EVENT_TYPES]}
-                    value={formData.eventTypes ?? []}
-                    onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
-                    renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
-                />
-                <TextField
-                    label={t('Lieferant (optional)', 'Supplier (optional)')}
-                    value={formData.supplier ?? ''}
-                    onChange={handleChange('supplier')}
-                    fullWidth
-                />
-                <TextField
-                    label={t('Hinweis / besondere Anweisungen', 'Hint / special instructions')}
-                    value={formData.hint ?? ''}
-                    onChange={handleChange('hint')}
-                    multiline
-                    minRows={3}
-                    fullWidth
-                    helperText={t('Hinweise zur Verwendung, Vorbereitung oder Montage', 'Instructions for use, preparation, or assembly')}
-                />
-                <ImageAttachments existing={initialData?.images} value={images} onChange={setImages} disabled={isLoading} />
-
-                <Button title={translate('Die Artikeldaten speichern', 'Save the item details')} type="submit" variant="contained" disabled={isDisabled}>
-                    {initialData ? t('Artikel aktualisieren', 'Update item') : t('Artikel erstellen', 'Create item')}
-                </Button>
-            </Stack>
-
-            {/* Quick Add Storage Location Dialog */}
-            <Dialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('Lagerort hinzufügen', 'Add storage location')}</DialogTitle>
-                <DialogContent>
-                    <Box component="form" onSubmit={handleCreateLocSubmit} noValidate sx={{ mt: 1 }}>
+                <Accordion defaultExpanded={hasAdditionalDetails || categorySpecific}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box>
+                            <Typography variant="subtitle2">{t('Weitere Angaben', 'Additional details')}</Typography>
+                            <Typography variant="body2" color="text.secondary">{t('Events, Lieferant, Anweisungen und Bilder', 'Events, supplier, instructions and images')}</Typography>
+                        </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
                         <Stack spacing={2}>
-                            <TextField
-                                label={t('Name', 'Name')}
-                                value={newLocData.name}
-                                onChange={(e) => setNewLocData((prev) => ({ ...prev, name: e.target.value }))}
-                                required
-                                fullWidth
-                                autoFocus
+                            <Autocomplete
+                                multiple
+                                options={[...EVENT_TYPES]}
+                                value={formData.eventTypes ?? []}
+                                onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
+                                renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
                             />
                             <TextField
-                                label={t('Bereich (optional)', 'Area (optional)')}
-                                value={newLocData.area}
-                                onChange={(e) => setNewLocData((prev) => ({ ...prev, area: e.target.value }))}
-                                fullWidth
-                            />
-                            <TextField
-                                label={t('Ort (optional)', 'Location (optional)')}
-                                value={newLocData.location}
-                                onChange={(e) => setNewLocData((prev) => ({ ...prev, location: e.target.value }))}
+                                label={t('Lieferant', 'Supplier')}
+                                value={formData.supplier ?? ''}
+                                onChange={handleChange('supplier')}
                                 fullWidth
                             />
                             <TextField
-                                label={t('Position (optional)', 'Position (optional)')}
-                                value={newLocData.position}
-                                onChange={(e) => setNewLocData((prev) => ({ ...prev, position: e.target.value }))}
-                                fullWidth
-                            />
-                            <TextField
-                                label={t('Beschreibung (optional)', 'Description (optional)')}
-                                value={newLocData.description}
-                                onChange={(e) => setNewLocData((prev) => ({ ...prev, description: e.target.value }))}
-                                fullWidth
+                                label={t('Besondere Anweisungen', 'Special instructions')}
+                                value={formData.hint ?? ''}
+                                onChange={handleChange('hint')}
                                 multiline
-                                rows={2}
+                                minRows={2}
+                                fullWidth
+                                helperText={t('Hinweise zur Verwendung, Vorbereitung oder Montage', 'Instructions for use, preparation, or assembly')}
                             />
+                            {categorySpecific && (
+                                <Stack spacing={2}>
+                                    <Typography variant="subtitle2">{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
+                                    {isVehicle && (
+                                        <>
+                                            <TextField
+                                                label={t('Kraftstoffverbrauch (l/100 km)', 'Fuel consumption (L/100 km)')}
+                                                type="number"
+                                                value={numericInputs.fuelConsumptionLitersPer100Km}
+                                                onChange={handleNumberChange('fuelConsumptionLitersPer100Km')}
+                                                slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }}
+                                            />
+                                            <TextField
+                                                label={t('Batteriewechsel fällig', 'Battery replacement due')}
+                                                type="date"
+                                                value={formData.batteryReplacementDue ?? ''}
+                                                onChange={handleChange('batteryReplacementDue')}
+                                                slotProps={{ inputLabel: { shrink: true } }}
+                                            />
+                                        </>
+                                    )}
+                                    {isGenerator && (
+                                        <>
+                                            <TextField
+                                                label={t('Betriebsstunden', 'Running hours')}
+                                                type="number"
+                                                value={numericInputs.currentOperatingHours}
+                                                onChange={handleNumberChange('currentOperatingHours')}
+                                                slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }}
+                                            />
+                                            <TextField
+                                                label={t('Wartungsintervall (Tage)', 'Maintenance interval (days)')}
+                                                type="number"
+                                                value={numericInputs.maintenanceIntervalDays}
+                                                onChange={handleNumberChange('maintenanceIntervalDays')}
+                                                slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
+                                            />
+                                            <TextField
+                                                label={t('Nächste Wartung', 'Next maintenance')}
+                                                type="date"
+                                                value={formData.nextMaintenanceDue ?? ''}
+                                                onChange={handleChange('nextMaintenanceDue')}
+                                                slotProps={{ inputLabel: { shrink: true } }}
+                                            />
+                                        </>
+                                    )}
+                                    {isFood && (
+                                        <TextField
+                                            label={t('Mindestens haltbar bis', 'Best before date')}
+                                            type="date"
+                                            value={formData.bestBeforeDate ?? ''}
+                                            onChange={handleChange('bestBeforeDate')}
+                                            slotProps={{ inputLabel: { shrink: true } }}
+                                        />
+                                    )}
+                                </Stack>
+                            )}
+                            <ImageAttachments existing={initialData?.images} value={images} onChange={setImages} disabled={isLoading} />
                         </Stack>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setAddLocationOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button title={translate('Den neuen Lagerort speichern', 'Save the new storage location')}
-                        onClick={handleCreateLocSubmit}
-                        variant="contained"
-                        disabled={createLoc.isPending || !newLocData.name.trim()}
-                    >
-                        {createLoc.isPending ? t('Wird erstellt...', 'Creating...') : t('Erstellen', 'Create')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
+                    </AccordionDetails>
+                </Accordion>
+            </DialogForm>
+
+            <FormDialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs">
+                <DialogForm title={t('Lagerort hinzufügen', 'Add storage location')} onSubmit={handleCreateLocSubmit} onCancel={() => setAddLocationOpen(false)}
+                    noValidate pending={createLoc.isPending} submitDisabled={!newLocData.name.trim()} submitLabel={t('Erstellen', 'Create')}>
+                    <TextField
+                        label={t('Name', 'Name')}
+                        value={newLocData.name}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, name: e.target.value }))}
+                        required
+                        fullWidth
+                        autoFocus
+                    />
+                    <TextField
+                        label={t('Bereich', 'Area')}
+                        helperText={t('Optional', 'Optional')}
+                        value={newLocData.area}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, area: e.target.value }))}
+                        fullWidth
+                    />
+                    <TextField
+                        label={t('Ort', 'Location')}
+                        helperText={t('Optional', 'Optional')}
+                        value={newLocData.location}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, location: e.target.value }))}
+                        fullWidth
+                    />
+                    <TextField
+                        label={t('Position', 'Position')}
+                        helperText={t('Optional', 'Optional')}
+                        value={newLocData.position}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, position: e.target.value }))}
+                        fullWidth
+                    />
+                    <TextField
+                        label={t('Beschreibung', 'Description')}
+                        helperText={t('Optional', 'Optional')}
+                        value={newLocData.description}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, description: e.target.value }))}
+                        fullWidth
+                        multiline
+                        minRows={2}
+                    />
+                </DialogForm>
+            </FormDialog>
+        </>
     );
 }

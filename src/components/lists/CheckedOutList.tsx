@@ -123,7 +123,7 @@ export function CheckedOutList({
             <Card
               key={groupKey}
               variant="outlined"
-              sx={{ borderColor: 'primary.dark', bgcolor: 'rgba(227, 6, 19, 0.035)' }}
+              sx={{ borderColor: 'primary.dark', bgcolor: 'action.selected' }}
             >
               <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -186,7 +186,7 @@ export function CheckedOutList({
               <Fragment key={groupKey}>
                 <TableRow
                   onClick={() => toggleGroup(groupKey)}
-                  sx={{ cursor: 'pointer', bgcolor: 'rgba(227, 6, 19, 0.045)' }}
+                  sx={{ cursor: 'pointer', bgcolor: 'action.selected' }}
                 >
                   <TableCell colSpan={columnCount} sx={{ py: 1 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
@@ -239,7 +239,7 @@ export function CheckedOutList({
             <Typography variant="caption" color="text.secondary">{row.event}</Typography>
           </Box>
           <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
-            <Typography variant="h5" color="warning.main">{row.checkedOut}</Typography>
+            <Typography variant="h5" component="p" color="warning.main">{row.checkedOut}</Typography>
             {!!row.pendingQuantity && <Chip color="info" size="small" label={`${t('Wartet auf Prüfung', 'Pending inspection')}: ${row.pendingQuantity}`} />}
             <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
           </Box>

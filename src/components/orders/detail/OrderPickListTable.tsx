@@ -340,7 +340,7 @@ export function OrderPickListTable({
                   variant="outlined"
                   sx={{
                     borderColor: allChecked ? 'success.main' : 'primary.dark',
-                    bgcolor: allChecked ? 'rgba(95, 128, 104, 0.06)' : 'rgba(227, 6, 19, 0.045)',
+                    bgcolor: allChecked ? 'action.hover' : 'action.selected',
                   }}
                 >
                   <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, '&:last-child': { pb: { xs: 1.25, md: 1.5 } } }}>

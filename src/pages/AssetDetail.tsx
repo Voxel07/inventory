@@ -126,7 +126,7 @@ export function AssetDetail() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <Box>
                     <Typography variant="overline" color="text.secondary">{item.name}</Typography>
-                    <Typography variant="h4" sx={{ overflowWrap: 'anywhere' }}>{asset.assetCode}</Typography>
+                    <Typography variant="h4" className="mono" sx={{ overflowWrap: 'anywhere' }}>{asset.assetCode}</Typography>
                     {asset.serialNumber && <Typography color="text.secondary">S/N {asset.serialNumber}</Typography>}
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>

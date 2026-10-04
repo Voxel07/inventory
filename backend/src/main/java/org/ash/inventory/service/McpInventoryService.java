@@ -46,8 +46,11 @@ public class McpInventoryService {
         return new InventoryMcpDtos.DeleteResultDto(true, "Item", id, "Item retired; history preserved");
     }
 
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public ApiResponses.ItemResponse item(UUID id) { return queries.item(id); }
 
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<ApiResponses.ItemResponse> items(String search, String category, Integer page, Integer limit) {
         var bounds = bounds(page, limit);
         return queries.projectItems(catalog.getItems(search, category, bounds.offset(), bounds.limit()));
@@ -142,8 +145,8 @@ public class McpInventoryService {
 
     public List<ApiResponses.StorageLocationResponse> locations(UUID warehouseId) {
         actors.current();
-        return catalog.getLocations().stream().filter(l -> warehouseId == null
-                || (l.warehouse != null && warehouseId.equals(l.warehouse.id))).map(mapper::location).toList();
+        return mapper.locations(catalog.getLocations().stream().filter(l -> warehouseId == null
+                || (l.warehouse != null && warehouseId.equals(l.warehouse.id))).toList());
     }
 
     public List<String> categories() { return catalog.getVisibleCategories(); }

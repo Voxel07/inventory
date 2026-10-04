@@ -22,6 +22,25 @@ public class InventoryAccessOrm extends EntityOrm {
         return entityManager.createQuery("from InventoryAccessGrant g left join fetch g.user left join fetch g.group where g.policy = :policy", InventoryAccessGrant.class)
                 .setParameter("policy", policy).getResultList();
     }
+    public List<Object[]> policyViews(Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("select p.id, p.owner.id, p.owner.name, p.revision from InventoryAccessPolicy p where p.id in :ids", Object[].class)
+                .setParameter("ids", ids).getResultList();
+    }
+    public List<Object[]> grantViews(Collection<UUID> ids, UUID actor) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("""
+                select g.policy.id, u.id, grp.id, grp.name, g.canEdit,
+                    case when exists (select m.id from InventoryAccessGroup members join members.members m
+                        where members = grp and m.id = :actor) then true else false end
+                from InventoryAccessGrant g left join g.user u left join g.group grp where g.policy.id in :ids
+                """, Object[].class).setParameter("ids", ids).setParameter("actor", actor).getResultList();
+    }
+    public List<StorageLocation> projectionLocations(Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.id in :ids", StorageLocation.class)
+                .setParameter("ids", ids).getResultList();
+    }
     public boolean granted(InventoryAccessPolicy policy, UserAccount actor, boolean edit) {
         return !entityManager.createQuery("select g.id from InventoryAccessGrant g where g.policy = :policy"
                 + (edit ? " and g.canEdit = true" : "")
@@ -57,28 +76,29 @@ public class InventoryAccessOrm extends EntityOrm {
     public List<UserAccount> people() {
         return entityManager.createQuery("from UserAccount order by name, id", UserAccount.class).getResultList();
     }
-    public List<Item> privateItems() {
-        return entityManager.createQuery("from Item i join fetch i.accessPolicy p join fetch p.owner", Item.class).getResultList();
-    }
-    public List<StorageLocation> privateLocations() {
-        return entityManager.createQuery("from StorageLocation l join fetch l.accessPolicy p join fetch p.owner", StorageLocation.class).getResultList();
-    }
     public Set<UUID> deniedReferences(UserAccount actor) {
-        if (actor.role == DomainEnums.UserRole.hq_admin) return Set.of();
+        return relatedReferences(deniedRoots(actor, null));
+    }
+    /** Two set-based authorization reads, independent of the number of policies. */
+    private Set<UUID> deniedRoots(UserAccount actor, Set<UUID> candidates) {
+        if (actor.role == DomainEnums.UserRole.hq_admin || candidates != null && candidates.isEmpty()) return Set.of();
         var roots = new HashSet<UUID>();
-        for (var i : privateItems()) if (!i.accessPolicy.owner.id.equals(actor.id) && !granted(i.accessPolicy, actor, false)) roots.add(i.id);
-        for (var l : privateLocations()) if (!l.accessPolicy.owner.id.equals(actor.id) && !granted(l.accessPolicy, actor, false)) roots.add(l.id);
-        return relatedReferences(roots);
+        for (String type : List.of("Item", "StorageLocation")) {
+            var query = entityManager.createQuery("select r.id from " + type + " r where r.accessPolicy is not null"
+                    + " and not " + visible("r.accessPolicy")
+                    + (candidates == null ? "" : " and r.id in :candidates"), UUID.class);
+            if (candidates != null) query.setParameter("candidates", candidates);
+            roots.addAll(bind(query, actor).getResultList());
+        }
+        return roots;
     }
     public static String excluding(String alias, Set<UUID> denied) { return denied.isEmpty() ? "" : " and " + alias + ".id not in :privateDenied"; }
     public static <T> TypedQuery<T> bindDenied(TypedQuery<T> query, Set<UUID> denied) {
         return denied.isEmpty() ? query : query.setParameter("privateDenied", denied);
     }
-    /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly. */
-    public Map<UUID, Set<UUID>> referenceOrigins(Set<UUID> roots) {
-        if (roots.isEmpty()) return Map.of();
-        String sql = """
-            with recursive edges(source, target) as (
+    // Both traversal directions share the same evidence graph, including JSON
+    // order references. UNION in the recursion also terminates cycles.
+    private static final String REFERENCE_EDGES = """
                 select item_id as source, id as target from asset_instances where item_id is not null
                 union all select item_id as source, id as target from inventory_lots where item_id is not null
                 union all select item_id as source, id as target from inventory_positions where item_id is not null
@@ -134,7 +154,13 @@ public class InventoryAccessOrm extends EntityOrm {
                     || o.returned_quantities || o.consumed_quantities || o.damaged_quantities || o.missing_quantities
                     || o.written_off_quantities || o.asset_assignments || o.source_locations) as key
                 where key ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-            ), protected(root, id) as (
+            """;
+
+    /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly. */
+    public Map<UUID, Set<UUID>> referenceOrigins(Set<UUID> roots) {
+        if (roots.isEmpty()) return Map.of();
+        String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), " + """
+            protected(root, id) as (
                 select id, id from items where id in (:roots)
                 union select id, id from storage_locations where id in (:roots)
                 union select p.root, e.target from edges e join protected p on e.source = p.id
@@ -151,6 +177,54 @@ public class InventoryAccessOrm extends EntityOrm {
 
     public Set<UUID> relatedReferences(Set<UUID> roots) {
         return referenceOrigins(roots).values().stream().flatMap(Set::stream).collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** Walk only the ancestors of IDs present in a response or command. */
+    public Map<UUID, Set<UUID>> privateReferenceOrigins(Set<UUID> references) {
+        if (references.isEmpty()) return Map.of();
+        String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), " + """
+            roots(id) as not materialized (
+                select id from items where access_policy_id is not null
+                union select id from storage_locations where access_policy_id is not null
+            ), ancestors(reference, id) as (
+                select id, id from roots where id in (:references)
+                union select target, source from edges where target in (:references)
+                union select a.reference, e.source from edges e join ancestors a on e.target = a.id
+            ) select distinct a.reference, a.id from ancestors a join roots r on r.id = a.id
+            """;
+        List<?> rows = entityManager.createNativeQuery(sql).setParameter("references", references).getResultList();
+        var result = new HashMap<UUID, Set<UUID>>();
+        for (var value : rows) {
+            var row = (Object[]) value;
+            result.computeIfAbsent(UUID.fromString(row[0].toString()), ignored -> new HashSet<>())
+                    .add(UUID.fromString(row[1].toString()));
+        }
+        return result;
+    }
+
+    public record ReferenceAccess(Set<UUID> privateIds, Set<UUID> deniedIds) {}
+
+    public ReferenceAccess referenceAccess(Set<UUID> references, UserAccount actor) {
+        var origins = privateReferenceOrigins(references);
+        var roots = origins.values().stream().flatMap(Set::stream).collect(java.util.stream.Collectors.toSet());
+        var deniedRoots = deniedRoots(actor, roots);
+        var denied = new HashSet<UUID>();
+        origins.forEach((reference, parents) -> {
+            if (parents.stream().anyMatch(deniedRoots::contains)) denied.add(reference);
+        });
+        return new ReferenceAccess(Set.copyOf(origins.keySet()), Set.copyOf(denied));
+    }
+
+    public List<InventoryAccessPolicy> referencedPolicies(Set<UUID> references) {
+        var roots = privateReferenceOrigins(references).values().stream().flatMap(Set::stream)
+                .collect(java.util.stream.Collectors.toSet());
+        if (roots.isEmpty()) return List.of();
+        return entityManager.createQuery("""
+                select p from InventoryAccessPolicy p join fetch p.owner where
+                    exists (select i.id from Item i where i.accessPolicy = p and i.id in :roots)
+                    or exists (select l.id from StorageLocation l where l.accessPolicy = p and l.id in :roots)
+                order by p.id
+                """, InventoryAccessPolicy.class).setParameter("roots", roots).getResultList();
     }
 
 }

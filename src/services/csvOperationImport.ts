@@ -147,12 +147,12 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         break;
       }
       case 'loan': {
-        result = (await loanApi.list()).find((loan) => loan.commitmentId === data.commitmentId)
+        result = (await loanApi.find((loan) => loan.commitmentId === data.commitmentId))
           ?? await loanApi.create({ commitmentId: inputText(data.commitmentId), providerLocationId: inputText(data.providerLocationId), kind: inputChoice(data.kind, ['borrow', 'rental']), provider: inputText(data.provider), contact: inputText(data.contact), terms: inputText(data.terms) });
         break;
       }
       case 'loan_collect': {
-        const loan = (await loanApi.list()).find((entry) => entry.id === data.loanId);
+        const loan = (await loanApi.find((entry) => entry.id === data.loanId));
         if (!loan) throw new Error('Leihvereinbarung nicht gefunden');
         result = loan.collected >= loan.quantity ? loan : await loanApi.move(loan.id, 'collect', { transferId: inputText(data.transferId), notes: inputText(data.notes), revision: loan.revision });
         break;

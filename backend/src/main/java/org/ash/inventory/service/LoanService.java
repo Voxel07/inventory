@@ -22,7 +22,12 @@ public class LoanService {
     public record View(UUID id, UUID itemId, String item, UUID commitmentId, UUID providerLocationId, String kind, String provider,
             String contact, String terms, int quantity, int collected, int returned, List<String> assetCodes,
             LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,String>> history) {}
-    @Transactional public List<View> list() { actors.requireWarehouse(); return orm.arrangements().map(this::view).toList(); }
+    @Transactional public List<View> list(int page, int size) {
+        actors.requireWarehouse(); var bounds = org.ash.inventory.helper.PageBounds.of(page, size);
+        var loans = orm.arrangements(bounds.offset(), bounds.limit());
+        var codes = orm.assetCodes(loans.stream().flatMap(l -> l.commitment.assetIds.stream()).distinct().toList());
+        return loans.stream().map(l -> view(l, codes)).toList();
+    }
     @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand public View create(Input input) {
         actors.requireWarehouse(); var c = orm.find(EquipmentCommitment.class, input.commitmentId());
         if (c == null) throw ApiException.notFound("Commitment not found");
@@ -81,5 +86,6 @@ public class LoanService {
         var history = new ArrayList<>(l.history); history.add(entry); l.history = history;
         events.record("loan." + action, "loan_arrangement", l.id, actors.current().id, null, Map.of("itemId", l.commitment.item.id.toString(), "entry", entry));
     }
-    private View view(LoanArrangement l) { var c = l.commitment; return new View(l.id, c.item.id, c.item.name, c.id, l.providerLocation.id, l.kind, l.provider, l.contact, l.terms, c.quantity, l.collected, l.returned, c.assetIds.stream().map(id -> { var asset = orm.find(AssetInstance.class, UUID.fromString(id)); return asset == null ? id : asset.assetCode; }).toList(), c.availableFrom, c.availableUntil, c.returnDue, c.cancelled ? "cancelled" : l.returned == c.quantity ? "returned" : l.returned > 0 ? "partially_returned" : l.collected == c.quantity ? "collected" : l.collected > 0 ? "partially_collected" : "agreed", l.revision, l.history); }
+    private View view(LoanArrangement l) { return view(l, orm.assetCodes(l.commitment.assetIds)); }
+    private View view(LoanArrangement l, Map<String, String> codes) { var c = l.commitment; return new View(l.id, c.item.id, c.item.name, c.id, l.providerLocation.id, l.kind, l.provider, l.contact, l.terms, c.quantity, l.collected, l.returned, c.assetIds.stream().map(id -> codes.getOrDefault(id, id)).toList(), c.availableFrom, c.availableUntil, c.returnDue, c.cancelled ? "cancelled" : l.returned == c.quantity ? "returned" : l.returned > 0 ? "partially_returned" : l.collected == c.quantity ? "collected" : l.collected > 0 ? "partially_collected" : "agreed", l.revision, l.history); }
 }

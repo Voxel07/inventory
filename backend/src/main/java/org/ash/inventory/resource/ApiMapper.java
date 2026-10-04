@@ -40,6 +40,10 @@ public class ApiMapper {
     private final MediaService media;
     public ApiMapper(MediaService media) { this.media = media; }
 
+    public void prepareItems(List<Item> items) { accessPolicies.prepareItems(items); }
+    public void prepareLocations(java.util.Collection<StorageLocation> locations) { accessPolicies.prepareLocations(locations); }
+    private boolean canViewLocation(StorageLocation value) { return value != null && accessPolicies.projectionAllows(value.accessPolicy); }
+
     public ApiResponses.UserResponse user(UserAccount value) {
         return new ApiResponses.UserResponse(
                 value.id,
@@ -110,6 +114,10 @@ public class ApiMapper {
         );
     }
 
+    public List<ApiResponses.StorageLocationResponse> locations(List<StorageLocation> values) {
+        prepareLocations(values);
+        return values.stream().map(this::location).toList();
+    }
     public ApiResponses.StorageLocationResponse location(StorageLocation value) {
         return new ApiResponses.StorageLocationResponse(
                 value.id,
@@ -128,8 +136,8 @@ public class ApiMapper {
                 value.overlayBounds,
                 value.warehouse == null ? null : value.warehouse.id.toString(),
                 value.warehouse == null ? null : value.warehouse.name,
-                actors.canViewLocation(value.parent) ? value.parent.id.toString() : null,
-                value.active, accessPolicies.view(value.accessPolicy)
+                canViewLocation(value.parent) ? value.parent.id.toString() : null,
+                value.active, accessPolicies.projection(value.accessPolicy)
         );
     }
 
@@ -139,8 +147,8 @@ public class ApiMapper {
                 .map(image -> media.mediaReference(image.objectKey))
                 .toList();
         Map<String, Object> expand = new LinkedHashMap<>();
-        if (actors.canViewLocation(value.storageLocation)) expand.put("storageLocation", location(value.storageLocation));
-        if (actors.canViewLocation(value.returnLocation)) expand.put("returnLocation", location(value.returnLocation));
+        if (canViewLocation(value.storageLocation)) expand.put("storageLocation", location(value.storageLocation));
+        if (canViewLocation(value.returnLocation)) expand.put("returnLocation", location(value.returnLocation));
         if (value.assignedUser != null) expand.put("assignedUser", user(value.assignedUser));
 
         ApiResponses.StockDto stockDto = state == null ? null : new ApiResponses.StockDto(
@@ -175,12 +183,12 @@ public class ApiMapper {
                 value.consumable,
                 value.trackingMode.name(),
                 value.inventoryRole.name(),
-                actors.canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
-                actors.canViewLocation(value.returnLocation) ? value.returnLocation.id.toString() : null,
+                canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
+                canViewLocation(value.returnLocation) ? value.returnLocation.id.toString() : null,
                 value.active ? "available" : "retired",
                 imageReferences,
                 value.hint,
-                actors.canViewLocation(value.storageLocation) ? value.positionDetails : null,
+                canViewLocation(value.storageLocation) ? value.positionDetails : null,
                 value.containerSize,
                 value.containerCount,
                 value.containersOpened,
@@ -193,7 +201,7 @@ public class ApiMapper {
                 value.bestBeforeDate,
                 value.maintenanceStatus == null ? null : value.maintenanceStatus.name(),
                 stockDto,
-                expand, accessPolicies.view(value.accessPolicy), !actors.canViewLocation(value.storageLocation) && value.storageLocation != null
+                expand, accessPolicies.projection(value.accessPolicy), !canViewLocation(value.storageLocation) && value.storageLocation != null
         );
     }
 
@@ -547,8 +555,8 @@ public class ApiMapper {
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
                 value.serviceStatus == null ? null : value.serviceStatus.name(),
                 value.operatingHours,
-                actors.canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
-                actors.canViewLocation(value.currentLocation) ? value.currentLocation.name : null,
+                canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
+                canViewLocation(value.currentLocation) ? value.currentLocation.name : null,
                 value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
                 value.currentCustodian == null ? null : value.currentCustodian.name,
                 value.notes,
@@ -558,6 +566,7 @@ public class ApiMapper {
     }
 
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
+        prepareLocations(values.stream().map(a -> a.currentLocation).toList());
         return values.stream().map(this::asset).toList();
     }
 

@@ -17,6 +17,7 @@ public class CustodyBalanceService {
     private final ActorService actors;
     public CustodyBalanceService(CustodyOrm orm, ActorService actors) { this.orm = orm; this.actors = actors; }
 
+    @jakarta.inject.Inject InventoryAccessService accessViews;
     public boolean hasOutstandingAsset(UUID assetId) { return orm.hasOutstandingAsset(assetId); }
 
     @Transactional
@@ -24,10 +25,22 @@ public class CustodyBalanceService {
         var actor = actors.current();
         boolean all = !mine && List.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew,
                 DomainEnums.UserRole.marshal).contains(actor.role);
+        UUID recipient = all ? null : actor.id;
         var rows = new LinkedHashMap<String, Balance>();
-        for (var line : orm.factionLines()) {
+        var factionLines = orm.factionLines(recipient);
+        var generalOrders = orm.generalOrders(recipient);
+        var generalItems = orm.items(generalOrders.stream().flatMap(o -> o.handedOverQuantities.keySet().stream()).map(UUID::fromString).distinct().toList());
+        var direct = orm.directBalances(recipient);
+        var items = new ArrayList<Item>(generalItems.values());
+        factionLines.forEach(line -> items.add(line.item)); direct.forEach(tx -> items.add(tx.item()));
+        var policies = new ArrayList<InventoryAccessPolicy>();
+        for (var item : items) {
+            var location = item.returnLocation == null ? item.storageLocation : item.returnLocation;
+            if (location != null) policies.add(location.accessPolicy);
+        }
+        accessViews.prepare(policies);
+        for (var line : factionLines) {
             var order = line.order;
-            if (!all && !order.createdBy.id.equals(actor.id)) continue;
             int outstanding = CustodyQuantities.outstanding(line);
             if (outstanding > 0) {
                 var row = balance(line.item, order.createdBy, order.eventOccurrence, order.id, null, null, outstanding,
@@ -36,10 +49,9 @@ public class CustodyBalanceService {
                 rows.put(row.key(), copy(row, outstanding + (prior == null ? 0 : prior.checkedOut()), 0));
             }
         }
-        for (var order : orm.generalOrders()) {
-            if (!all && !order.createdBy.id.equals(actor.id)) continue;
+        for (var order : generalOrders) {
             for (var entry : order.handedOverQuantities.entrySet()) {
-                var id = entry.getKey(); var item = orm.item(id);
+                var id = entry.getKey(); var item = generalItems.get(UUID.fromString(id));
                 int outstanding = CustodyQuantities.outstanding(order, id);
                 if (outstanding <= 0) continue;
                 if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
@@ -54,26 +66,15 @@ public class CustodyBalanceService {
                 }
             }
         }
-        for (var tx : orm.directTransactions()) {
-            if (!all && !tx.user.id.equals(actor.id)) continue;
-            int change = switch (tx.type) {
-                case checkout -> tx.quantity;
-                case checkin, consumed -> -tx.quantity;
-                case written_off -> tx.custodyWriteOff ? -tx.quantity : 0;
-                default -> 0;
-            };
-            if (change == 0) continue;
-            var row = balance(tx.item, tx.user, tx.eventOccurrence, null, null,
-                    tx.assetInstance == null ? null : tx.assetInstance.id, change, null);
-            var prior = rows.get(row.key());
-            rows.put(row.key(), copy(row, change + (prior == null ? 0 : prior.checkedOut()), 0));
+        for (var tx : direct) {
+            var row = balance(tx.item(), tx.user(), tx.event(), null, null, tx.asset(), tx.quantity(), null);
+            rows.put(row.key(), row);
         }
-        for (var pending : orm.pending()) {
-            var key = key(pending.item.id, pending.returnedFor.id, pending.eventOccurrence == null ? null : pending.eventOccurrence.id,
-                    pending.factionOrder == null ? null : pending.factionOrder.id, pending.generalOrder == null ? null : pending.generalOrder.id,
-                    pending.factionOrder != null || pending.assetInstance == null ? null : pending.assetInstance.id);
+        for (var pending : orm.pending(recipient)) {
+            var key = key((UUID) pending[0], (UUID) pending[1], (UUID) pending[2], (UUID) pending[3], (UUID) pending[4],
+                    pending[3] != null ? null : (UUID) pending[5]);
             var row = rows.get(key);
-            if (row != null) rows.put(key, copy(row, row.checkedOut(), row.pendingQuantity() + pending.quantity));
+            if (row != null) rows.put(key, copy(row, row.checkedOut(), row.pendingQuantity() + Math.toIntExact(((Number) pending[6]).longValue())));
         }
         return rows.values().stream().filter(row -> row.checkedOut() > 0)
                 .sorted(Comparator.comparing(Balance::name).thenComparing(Balance::key)).toList();
@@ -82,7 +83,7 @@ public class CustodyBalanceService {
         var location = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         UUID eventId = event == null ? null : event.id;
         return new Balance(key(item.id, user.id, eventId, faction, general, asset), item.id, item.name, item.category,
-                actors.canViewLocation(location) ? location.name : "", amount, 0, user.id, person == null ? user.name : person,
+                location != null && accessViews.projectionAllows(location.accessPolicy) ? location.name : "", amount, 0, user.id, person == null ? user.name : person,
                 eventId == null ? "" : eventId.toString(), event == null ? "" : event.name,
                 faction, general, asset, eventId);
     }

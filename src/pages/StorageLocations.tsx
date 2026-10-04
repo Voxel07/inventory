@@ -259,7 +259,7 @@ export function StorageLocations() {
                                                     borderRadius: 2,
                                                     mb: 1,
                                                     border: '1px solid transparent',
-                                                    borderColor: selectedLocId === loc.id ? 'primary.main' : 'rgba(255, 255, 255, 0.04)',
+                                                    borderColor: selectedLocId === loc.id ? 'primary.main' : 'divider',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
@@ -398,7 +398,7 @@ export function StorageLocations() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.01)',
+                                    backgroundColor: 'background.paper',
                                 }}
                             >
                                 <Box sx={{ textAlign: 'center' }}>

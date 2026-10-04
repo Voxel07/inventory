@@ -33,16 +33,7 @@ public class PlanningStockService {
         items.forEach(item -> snapshots.put(item.id, new ItemStock(item, now)));
         for (var row : orm.snapshot(items.stream().map(item -> item.id).toList(), LocalDate.now())) {
             try {
-                if ("general_reservation".equals(row[0])) {
-                    // Read each general order's map once, rather than once per item.
-                    var quantities = json.readTree((String) row[15]);
-                    quantities.properties().forEach(entry -> {
-                        var snapshot = snapshots.get(UUID.fromString(entry.getKey()));
-                        if (snapshot != null) snapshot.reservations += entry.getValue().longValue();
-                    });
-                } else {
-                    snapshots.get((UUID) row[1]).read((String) row[0], row, json);
-                }
+                snapshots.get((UUID) row[1]).read((String) row[0], row, json);
             } catch (JsonProcessingException ex) {
                 throw new IllegalStateException("Could not read planning stock snapshot", ex);
             }

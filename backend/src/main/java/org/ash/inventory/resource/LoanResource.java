@@ -8,7 +8,7 @@ import java.util.*;
 @Path("/api/loans") @Produces(MediaType.APPLICATION_JSON) @Consumes(MediaType.APPLICATION_JSON)
 public class LoanResource {
     @Inject LoanService service;
-    @GET public List<LoanService.View> list() { return service.list(); }
+    @GET public List<LoanService.View> list(@QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) { return service.list(page, size); }
     @POST public LoanService.View create(@Valid LoanService.Input input) { return service.create(input); }
     @POST @Path("/{id}/collect") public LoanService.View collect(@PathParam("id") UUID id, @Valid LoanService.Movement input) { return service.move(id, input, false); }
     @POST @Path("/{id}/return") public LoanService.View giveBack(@PathParam("id") UUID id, @Valid LoanService.Movement input) { return service.move(id, input, true); }

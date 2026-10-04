@@ -183,9 +183,9 @@ export function EventDetail() {
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Positionen verwendet', 'Lines used')}</Typography><Typography variant="h5">{usedLines}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt geplant', 'Total planned')}</Typography><Typography variant="h5">{plannedTotal}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt verwendet', 'Total used')}</Typography><Typography variant="h5">{usedTotal}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Positionen verwendet', 'Lines used')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt geplant', 'Total planned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt verwendet', 'Total used')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
       </Box>
 
       {editing && (

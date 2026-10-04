@@ -94,7 +94,7 @@ public class OrderOrm {
     }
 
     public List<FactionOrderHistory> history(FactionOrder order) {
-        return entityManager.createQuery("from FactionOrderHistory history where history.order = :order order by history.occurredAt", FactionOrderHistory.class)
+        return entityManager.createQuery("from FactionOrderHistory history join fetch history.actor where history.order = :order order by history.occurredAt", FactionOrderHistory.class)
                 .setParameter("order", order).getResultList();
     }
 
@@ -112,7 +112,7 @@ public class OrderOrm {
         return entityManager.createQuery(
                 "select assignment from OrderLineAssetAssignment assignment "
                         + "join fetch assignment.assetInstance asset "
-                        + "join fetch asset.item "
+                        + "join fetch asset.item left join fetch asset.currentLocation left join fetch asset.currentCustodian "
                         + "where assignment.order = :order order by asset.assetCode",
                 OrderLineAssetAssignment.class)
                 .setParameter("order", order).getResultList();

@@ -3,7 +3,7 @@ import { Box, Paper, Tabs } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { GeneralOrders } from '../components/orders/GeneralOrders';
 import { FactionOrders } from './FactionOrders';
-import { translate, useLocalizedText } from '../utils/naming';
+import { useLocalizedText } from '../utils/naming';
 
 type OrderTab = 'general' | 'faction';
 
@@ -14,18 +14,21 @@ export function Orders() {
 
   return (
     <Box>
-      <Paper sx={{ mb: 3 }}>
+      <Paper sx={{ mb: 3, px: 1 }}>
         <Tabs
           value={tab}
           onChange={(_event, value: OrderTab) => setSearchParams({ tab: value })}
           variant="scrollable"
           allowScrollButtonsMobile
+          aria-label={t('Bestellarten', 'Order types')}
         >
-          <Tab title={translate('Allgemeine Bestellungen anzeigen', 'Display general orders')} value="general" label={t('Allgemeine Bestellungen', 'General orders')} />
-          <Tab title={translate('Fraktionsbestellungen anzeigen', 'Display faction orders')} value="faction" label={t('Fraktionsbestellungen', 'Faction orders')} />
+          <Tab value="general" label={t('Allgemeine Bestellungen', 'General orders')} id="orders-tab-general" aria-controls="orders-panel" />
+          <Tab value="faction" label={t('Fraktionsbestellungen', 'Faction orders')} id="orders-tab-faction" aria-controls="orders-panel" />
         </Tabs>
       </Paper>
-      {tab === 'general' ? <GeneralOrders /> : <FactionOrders />}
+      <Box id="orders-panel" role="tabpanel" aria-labelledby={`orders-tab-${tab}`}>
+        {tab === 'general' ? <GeneralOrders /> : <FactionOrders />}
+      </Box>
     </Box>
   );
 }

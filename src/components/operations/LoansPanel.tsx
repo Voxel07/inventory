@@ -39,6 +39,7 @@ export function LoansPanel() {
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {l.assetCodes.join(', ')}</Typography>}
       {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{new Date(h.at).toLocaleString()} · {h.actor} · {h.action} · {h.notes}</Typography>)}
     </OperationListEntry>)}
+    {loans.hasNextPage && <Button title={t("Weitere Vereinbarungen laden", "Load more arrangements")} disabled={loans.isFetchingNextPage} onClick={() => { void loans.fetchNextPage(); }}>{t("Mehr laden", "Load more")}</Button>}
     {create && <OperationForm title={t('Neue Vereinbarung', 'New arrangement')} onClose={() => setCreate(false)} initial={{ kind: 'borrow', provider: profile.data?.ownerName ?? '' }} fields={[
       { key: 'commitmentId', label: t('Zusage', 'Commitment'), required: true, options: (profile.data?.commitments ?? []).filter(c => ['active', 'scheduled'].includes(c.status)).map(c => ({ value: c.id, label: `${c.eventName ?? ''} · ${c.quantity} · ${c.availableFrom} – ${c.returnDue}` })) },
       { key: 'kind', label: t('Art', 'Kind'), required: true, options: [{ value: 'borrow', label: t('Leihe', 'Borrowing') }, { value: 'rental', label: t('Miete', 'Rental') }] },

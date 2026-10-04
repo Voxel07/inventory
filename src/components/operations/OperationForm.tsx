@@ -1,8 +1,7 @@
-import { Button } from '../shared/ActionButtons';
 import { useState, type ReactNode } from 'react';
-import { Alert, Autocomplete, Box, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, TextField } from '@mui/material';
+import { Autocomplete, Checkbox, FormControlLabel, Stack, TextField } from '@mui/material';
 import { useOperationCommand } from '../../hooks/useOperations';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { DialogForm, FormDialog } from '../shared/FormDialog';
 
 export type Values = Record<string, string | number | boolean>;
 export type Option = { value: string; label: string };
@@ -19,17 +18,13 @@ export function Fields({ fields, values, onChange }: { fields: Field[]; values: 
 }
 
 export function OperationForm({ title, fields, initial = {}, onSave, onClose, children, submitLabel }: { title: string; fields: Field[] | ((values: Values) => Field[]); initial?: Values; onSave: (values: Values) => Promise<unknown>; onClose: () => void; children?: ReactNode; submitLabel?: string }) {
-  const t = useLocalizedText();
   const [values, setValues] = useState(initial);
   const command = useOperationCommand();
-  return <Dialog open onClose={() => { if (!command.isPending) onClose(); }} fullWidth maxWidth="sm" slotProps={{ paper: { sx: { m: { xs: 1, sm: 4 }, width: { xs: 'calc(100% - 16px)', sm: undefined } } } }}>
-    <Box component="form" onSubmit={(event) => { event.preventDefault(); command.mutate(() => onSave(values), { onSuccess: onClose }); }}>
-      <DialogTitle>{title}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-        {command.error && <Alert severity="error">{command.error.message}</Alert>}
-        {children}<Fields fields={typeof fields === 'function' ? fields(values) : fields} values={values} onChange={setValues} />
-      </Stack></DialogContent>
-      <DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Die eingegebenen Angaben senden', 'Submit the entered details')} type="submit" variant="contained" disabled={command.isPending}>{submitLabel ?? t('Speichern', 'Save')}</Button></DialogActions>
-    </Box>
-  </Dialog>;
+  const close = () => { if (!command.isPending) onClose(); };
+  return <FormDialog open onClose={close}>
+    <DialogForm title={title} onCancel={close} submitLabel={submitLabel} pending={command.isPending} error={command.error?.message}
+      onSubmit={() => command.mutate(() => onSave(values), { onSuccess: onClose })}>
+      {children}<Fields fields={typeof fields === 'function' ? fields(values) : fields} values={values} onChange={setValues} />
+    </DialogForm>
+  </FormDialog>;
 }
-

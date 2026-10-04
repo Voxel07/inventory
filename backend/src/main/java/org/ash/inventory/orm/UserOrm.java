@@ -20,6 +20,7 @@ public class UserOrm {
     }
 
     public UserAccount find(UUID id) { return entityManager.find(UserAccount.class, id); }
+    public boolean isManaged(UserAccount user) { return entityManager.contains(user); }
     public List<UserAccount> users(int offset, int limit) {
         return entityManager.createQuery("from UserAccount user order by user.name, user.email", UserAccount.class)
                 .setFirstResult(offset).setMaxResults(limit).getResultList();

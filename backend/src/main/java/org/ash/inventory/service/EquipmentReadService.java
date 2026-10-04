@@ -20,9 +20,13 @@ public class EquipmentReadService {
 
     public Map<UUID, Facts> load(List<Item> items, Map<UUID, List<AssetInstance>> assets,
             Map<UUID, List<InventoryPosition>> positions) {
+        return load(items, assets, positions, new HashSet<>(equipment.openMemberDamage(items.stream().map(i -> i.id).toList())));
+    }
+
+    public Map<UUID, Facts> load(List<Item> items, Map<UUID, List<AssetInstance>> assets,
+            Map<UUID, List<InventoryPosition>> positions, Set<UUID> damaged) {
         if (items.isEmpty()) return Map.of();
         var ids = items.stream().map(i -> i.id).toList();
-        var damaged = new HashSet<>(equipment.openMemberDamage(ids));
         var schedules = operations.schedules(ids).stream().collect(Collectors.groupingBy(s -> s.item.id));
         var itemUses = new HashMap<UUID, Long>();
         var assetUses = new HashMap<UUID, Long>();

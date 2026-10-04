@@ -24,6 +24,24 @@ public class MaintenanceEvaluationService {
                 schedule.assetInstance == null ? 0 : uses);
     }
 
+    public java.util.Map<java.util.UUID, MaintenancePolicy.Status> statuses(java.util.List<MaintenanceSchedule> schedules, Instant now) {
+        var ids = schedules.stream().filter(s -> s.intervalType == DomainEnums.MaintenanceIntervalType.usage_count).map(s -> s.item.id).distinct().toList();
+        var itemUses = new java.util.HashMap<java.util.UUID, Long>();
+        var assetUses = new java.util.HashMap<java.util.UUID, Long>();
+        for (var row : operations.checkoutCounts(ids)) {
+            long uses = ((Number) row[2]).longValue();
+            itemUses.merge((java.util.UUID) row[0], uses, Long::sum);
+            if (row[1] != null) assetUses.put((java.util.UUID) row[1], uses);
+        }
+        var result = new java.util.HashMap<java.util.UUID, MaintenancePolicy.Status>();
+        for (var s : schedules) {
+            var counters = new MaintenancePolicy.Counters(s.item.currentOperatingHours, itemUses.getOrDefault(s.item.id, 0L),
+                    s.assetInstance == null ? null : s.assetInstance.operatingHours,
+                    s.assetInstance == null ? 0 : assetUses.getOrDefault(s.assetInstance.id, 0L));
+            result.put(s.id, MaintenancePolicy.status(MaintenancePolicy.facts(s), now, counters));
+        }
+        return result;
+    }
     public MaintenancePolicy.Status status(MaintenanceSchedule schedule, Instant now) {
         return MaintenancePolicy.status(MaintenancePolicy.facts(schedule), now, counters(schedule));
     }

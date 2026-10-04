@@ -1,13 +1,12 @@
-import { Chip, MenuItem, IconButton, Button } from './ActionButtons';
+import { Chip, IconButton, Button } from './ActionButtons';
 import { CameraScanner } from './CameraScanner';
-import { useActionInbox } from '../../hooks/useActionInbox';
+import { useInboxCount } from '../../hooks/useInbox';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { Dialog } from './ClosableDialog';
-import { AppBar, Toolbar, Typography, Box, Divider, ListItemText, Menu, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import DoneAllIcon from '@mui/icons-material/DoneAll';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
@@ -15,33 +14,24 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
 import { useUIStore } from '../../store/uiStore';
 import { translate, useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getNotifications, markNotificationRead, type AppNotification } from '../../services/notificationService';
 import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
 import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
 import { discardOfflineAction, discardSyncFailure, getOfflineActions, getSyncFailures, type OfflineAction, type SyncFailure } from '../../services/offlineQueue';
 import { resolveScannedCode } from '../../utils/codeResolver';
 
-function payloadText(notification: AppNotification, key: string): string | undefined {
-    const value = notification.payload[key];
-    return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
 export function Header() {
     const { openActionInbox } = useActionInboxDialog();
-    const inbox = useActionInbox();
-    const actionCount = (inbox.data ?? []).filter(a => !a.remindAt || Date.parse(a.remindAt) <= inbox.dataUpdatedAt).length;
+    const inboxCount = useInboxCount();
     const toggleSidebar = useUIStore((s) => s.toggleSidebar);
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const t = useT();
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
-    const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
     const [syncIssuesOpen, setSyncIssuesOpen] = useState(false);
     const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
     const [queuedActionsOpen, setQueuedActionsOpen] = useState(false);
@@ -49,45 +39,13 @@ export function Header() {
     const [discardingAction, setDiscardingAction] = useState(false);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isCompact = useMediaQuery(theme.breakpoints.down('md'));
     const { online, queued, syncIssues, cachedAt } = useOfflineStatus();
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
     const [quickScanOpen, setQuickScanOpen] = useState(false);
     const [quickScanInput, setQuickScanInput] = useState('');
-    const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: getNotifications, refetchInterval: 60_000 });
-    const unreadNotifications = notifications.filter((notification) => !notification.readAt);
-    const markRead = useMutation({
-        mutationFn: (ids: string[]) => Promise.all(ids.map(markNotificationRead)),
-        onMutate: async (ids) => {
-            await queryClient.cancelQueries({ queryKey: ['notifications'] });
-            const previous = queryClient.getQueryData<AppNotification[]>(['notifications']);
-            const readAt = new Date().toISOString();
-            queryClient.setQueryData<AppNotification[]>(['notifications'], (current = []) =>
-                current.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification),
-            );
-            return { previous };
-        },
-        onError: (_error, _ids, context) => {
-            if (context?.previous) queryClient.setQueryData(['notifications'], context.previous);
-            showSnackbar(t('header.dismissPickupNoticeFailed'), 'error');
-        },
-        onSettled: (_data, error) => { if (error) void queryClient.invalidateQueries({ queryKey: ['notifications'] }); },
-    });
-
-    function openNotifications(event: MouseEvent<HTMLElement>) {
-        setNotificationAnchor(event.currentTarget);
-    }
-
-    function openNotification(notification: AppNotification) {
-        setNotificationAnchor(null);
-        markRead.mutate([notification.id]);
-        if (notification.orderId) navigate(`/orders/faction/${notification.orderId}`);
-    }
-
-    function dismissAllNotifications() {
-        setNotificationAnchor(null);
-        markRead.mutate(unreadNotifications.map((notification) => notification.id));
-    }
+    const syncAttention = !online || queued > 0 || Boolean(cachedAt);
 
     function openSyncIssues() {
         setSyncIssuesOpen(true);
@@ -167,12 +125,10 @@ export function Header() {
                     <MenuIcon />
                 </IconButton>
                 <InventoryIcon sx={{ mr: 1, color: 'primary.main', display: { xs: 'none', sm: 'block' } }} />
-                <Typography variant="h6" noWrap component="div" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography variant="body1" noWrap component="div" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.125rem' } }}>
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
-                <IconButton title={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} color="inherit" aria-label={translate('Aufgaben und Erinnerungen öffnen', 'Open actions and reminders')} aria-haspopup="dialog" onClick={openActionInbox} sx={{ mr: 0.5 }}><Badge badgeContent={actionCount} color="warning"><NotificationsActiveIcon /></Badge></IconButton>
-
                 <IconButton title={translate('Den QR- und Barcode-Scanner öffnen', 'Open the QR code and barcode scanner')}
                     color="inherit"
                     onClick={() => setQuickScanOpen(true)}
@@ -181,76 +137,13 @@ export function Header() {
                 >
                     <QrCodeScannerIcon />
                 </IconButton>
-
-                {unreadNotifications.length > 0 && (
-                    <>
-                        {isMobile ? (
-                            <IconButton title={translate('Abholbenachrichtigungen anzeigen', 'Display pickup notifications')}
-                                id="pickup-notices-button"
-                                color="inherit"
-                                onClick={openNotifications}
-                                aria-controls={notificationAnchor ? 'pickup-notices-menu' : undefined}
-                                aria-haspopup="menu"
-                                aria-expanded={notificationAnchor ? 'true' : undefined}
-                                sx={{ mr: 0.5 }}
-                            >
-                                <Badge badgeContent={unreadNotifications.length} color="error">
-                                    <NotificationsActiveIcon />
-                                </Badge>
-                            </IconButton>
-                        ) : (
-                            <Chip title={translate('Abholbenachrichtigungen anzeigen', 'Display pickup notifications')}
-                                id="pickup-notices-button"
-                                size="small"
-                                color="primary"
-                                icon={<NotificationsActiveIcon />}
-                                label={t('header.pickupNotices', { count: unreadNotifications.length })}
-                                onClick={openNotifications}
-                                aria-controls={notificationAnchor ? 'pickup-notices-menu' : undefined}
-                                aria-haspopup="menu"
-                                aria-expanded={notificationAnchor ? 'true' : undefined}
-                                sx={{ mr: 1, color: 'white', '& .MuiChip-icon': { color: 'inherit' } }}
-                            />
-                        )}
-                        <Menu
-                            id="pickup-notices-menu"
-                            anchorEl={notificationAnchor}
-                            open={Boolean(notificationAnchor)}
-                            onClose={() => setNotificationAnchor(null)}
-                            slotProps={{
-                                list: { dense: true, 'aria-labelledby': 'pickup-notices-button', sx: { py: 0.5 } },
-                                paper: { sx: { width: 300, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(400px, calc(100dvh - 96px))' } },
-                            }}
-                        >
-                            {unreadNotifications.map((notification) => {
-                                const orderCode = payloadText(notification, 'orderCode');
-                                const faction = payloadText(notification, 'faction');
-                                const pickupLocation = payloadText(notification, 'pickupLocation');
-                                const details = [faction, pickupLocation].filter(Boolean).join(' · ');
-                                return (
-                                    <MenuItem title={translate('Die zugehörige abholbereite Bestellung öffnen', 'Open the related order ready for pickup')} key={notification.id} onClick={() => openNotification(notification)} sx={{ px: 1.5, py: 0.75, minHeight: { xs: 44, sm: 'auto' } }}>
-                                        <ListItemText
-                                            primary={orderCode
-                                                ? t('header.orderReady', { orderCode })
-                                                : t('header.orderReadyGeneric')}
-                                            secondary={details || t('header.openOrder')}
-                                            slotProps={{
-                                                primary: { variant: 'body2', sx: { lineHeight: 1.35 } },
-                                                secondary: { variant: 'caption', sx: { lineHeight: 1.35 } },
-                                            }}
-                                            sx={{ my: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
-                                        />
-                                    </MenuItem>
-                                );
-                            })}
-                            <Divider />
-                            <MenuItem title={translate('Alle Abholbenachrichtigungen als gelesen markieren', 'Mark all pickup notifications as read')} onClick={dismissAllNotifications} disabled={markRead.isPending} sx={{ px: 1.5, py: 0.75, fontSize: '0.8125rem', minHeight: { xs: 44, sm: 'auto' } }}>
-                                <DoneAllIcon fontSize="small" sx={{ mr: 1 }} />
-                                {t('header.markAllRead')}
-                            </MenuItem>
-                        </Menu>
-                    </>
-                )}
+                {/* On phones the inbox lives in the bottom navigation as "Tasks". */}
+                {!isCompact && <Button color="inherit" aria-haspopup="dialog" onClick={openActionInbox}
+                    aria-label={translate(`Posteingang öffnen, ${inboxCount} offen`, `Open inbox, ${inboxCount} open`)}
+                    startIcon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>}
+                    sx={{ mr: 0.5, px: 1.5 }}>
+                    {translate('Posteingang', 'Inbox')}
+                </Button>}
                 <IconButton title={translate('Zwischen hellem und dunklem Farbschema wechseln', 'Switch between light and dark mode')}
                     color="inherit"
                     onClick={toggleThemeMode}
@@ -289,36 +182,32 @@ export function Header() {
                             icon={<ErrorOutlineIcon />}
                             label={t('header.syncIssues', { count: syncIssues })}
                             onClick={openSyncIssues}
-                            sx={{ mr: 1, color: 'white', fontWeight: 700, '& .MuiChip-icon': { color: 'inherit' } }}
+                            sx={{ mr: 1 }}
                         />
                     )
                 )}
-                {(
-                    isMobile ? (
-
-                        <IconButton title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
-                            size="small"
-                            color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
-                            onClick={openQueuedActions}
-                            aria-label={t('header.viewQueuedActions')}
-                            sx={{ ml: 0.5 }}
-                        >
-                            <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}>
-                                {online ? <CloudUploadIcon /> : <CloudOffIcon />}
-                            </Badge>
-                        </IconButton>
-
-                    ) : (
-                        <Chip title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
-                            size="small"
-                            color={online ? (queued || cachedAt ? 'warning' : 'default') : 'error'}
-                            label={cachedAt ? t('header.cachedData', 'Cached data') : online
-                                ? (queued ? t('header.queuedActions', { count: queued }) : t('header.syncStatus', 'Sync / Offline'))
-                                : t('header.offlineQueued', { count: queued })}
-                            onClick={openQueuedActions}
-                            sx={{ color: 'white', fontWeight: 700 }}
-                        />
-                    )
+                {isMobile ? (
+                    <IconButton title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
+                        color={!online ? 'error' : syncAttention ? 'warning' : 'inherit'}
+                        onClick={openQueuedActions}
+                        aria-label={t('header.viewQueuedActions')}
+                        sx={{ ml: 0.5 }}
+                    >
+                        <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? 'warning' : 'error'}>
+                            {!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
+                        </Badge>
+                    </IconButton>
+                ) : (
+                    <Chip title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
+                        size="small"
+                        variant={syncAttention ? 'filled' : 'outlined'}
+                        color={!online ? 'error' : syncAttention ? 'warning' : 'default'}
+                        icon={!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
+                        label={cachedAt ? t('header.cachedData', 'Cached data') : online
+                            ? (queued ? t('header.queuedActions', { count: queued }) : translate('Synchronisiert', 'In sync'))
+                            : t('header.offlineQueued', { count: queued })}
+                        onClick={openQueuedActions}
+                    />
                 )}
             </Toolbar>
         </AppBar>
