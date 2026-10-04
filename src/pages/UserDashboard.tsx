@@ -1,7 +1,7 @@
 import { Box, Chip, LinearProgress, Paper, Stack, ToggleButtonGroup, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { PageHeader } from '../components/shared/PageHeader';
@@ -64,7 +64,7 @@ function PersonalOverview() {
             </FactList>
             <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mt: 2.5 }}>
                 {catalog && <Button variant="outlined" component={RouterLink} to="/items" startIcon={<Inventory2OutlinedIcon />}>{t('Katalog durchsuchen', 'Browse catalog')}</Button>}
-                {catalog && <Button variant="outlined" component={RouterLink} to="/items?scope=mine" startIcon={<PersonOutlineIcon />}>{t('Meine Artikel', 'My items')}</Button>}
+                {catalog && <Button variant="outlined" component={RouterLink} to="/items?scope=mine" startIcon={<PersonOutlinedIcon />}>{t('Meine Artikel', 'My items')}</Button>}
                 <Button variant="outlined" component={RouterLink} to="/orders" startIcon={<ReceiptLongOutlinedIcon />}>{t('Bestellungen', 'Orders')}</Button>
             </Stack>
         </Paper>
