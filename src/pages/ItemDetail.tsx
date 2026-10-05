@@ -1,12 +1,14 @@
-import { ItemOverview } from '../components/items/ItemOverview';
 import { formatMoney } from '../utils/money';
 import { useEquipmentProfile } from '../hooks/useEquipment';
 import { LotsPanel } from '../components/operations/StockOperations';
 import { ItemStockLocations } from '../components/items/ItemStockLocations';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { FormDialog } from '../components/shared/FormDialog';
-import { DetailSection, Fact, FactList } from '../components/items/DetailSection';
-import { Button } from '../components/shared/ActionButtons';
+import { DetailPanel, Field, FieldGrid, Metric, MetricList } from '../components/items/CompactDetail';
+import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
+import { InventorySharing } from '../components/items/InventorySharing';
+import { CodeManagement } from '../components/qr/CodeManagement';
+import { Button, IconButton } from '../components/shared/ActionButtons';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -14,7 +16,6 @@ import {
     Box,
     Typography,
     Paper,
-    Grid,
     Chip,
     Link,
     DialogTitle,
@@ -28,12 +29,14 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    Tooltip,
     useTheme,
     useMediaQuery,
 } from '@mui/material';
 import { StateMessage } from '../components/common/StateMessage';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import {
@@ -43,7 +46,7 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
+    Tooltip as ChartTooltip,
 } from 'recharts';
 import { useItem, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
@@ -75,6 +78,11 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> 
     damaged: 'error',
     retired: 'default',
 };
+
+/** Desktop controls are compact; phones keep the product's 44 px touch target. */
+const compactButton = { minHeight: { xs: 44, sm: 30 }, py: { sm: 0.25 }, fontSize: '0.8125rem' } as const;
+const tinyChip = { height: 20, fontSize: '0.75rem' } as const;
+const denseTable = { '& .MuiTableCell-root': { py: 0.25, px: 1, fontSize: '0.8125rem' } } as const;
 
 export function ItemDetail() {
     const { user } = useAuth();
@@ -235,208 +243,248 @@ export function ItemDetail() {
     ].filter(Boolean).join(' · ');
     const location = item.expand?.storageLocation;
     const locationText = location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : '';
+    const exactLocation = [location?.location, location?.position].filter(Boolean).join(' / ');
+    const profile = equipment.data;
     const sortedTransactions = [...itemTransactions].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const userName = (tx: typeof itemTransactions[number]) => tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—';
     const assetLabel = (tx: typeof itemTransactions[number]) => tx.expand?.assetInstanceId
         ? [tx.expand.assetInstanceId.assetCode, tx.expand.assetInstanceId.serialNumber && `SN ${tx.expand.assetInstanceId.serialNumber}`].filter(Boolean).join(' · ')
         : '';
+    const txColor = (type: string) => type === 'checkout' ? 'warning' : type === 'added' ? 'info' : 'success';
+
+    const historyChart = stockHistory.length <= 1 && itemTransactions.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">{t('Noch kein Transaktionsverlauf vorhanden.', 'No transaction history yet.')}</Typography>
+    ) : (
+        <Box role="img" aria-label={t('Diagramm des Bestandsverlaufs', 'Chart of stock over time')}>
+            <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                    <XAxis dataKey="date" stroke={theme.palette.text.secondary} fontSize={11} />
+                    <YAxis stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} />
+                    <ChartTooltip
+                        isAnimationActive={false}
+                        contentStyle={{ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 8 }}
+                        labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
+                        itemStyle={{ color: theme.palette.primary.main }}
+                    />
+                    <Line type="monotone" dataKey="stock" name={t('Bestand', 'Stock')} stroke={theme.palette.primary.main} strokeWidth={2}
+                        dot={{ fill: theme.palette.primary.main, r: 2 }} activeDot={{ r: 4, fill: theme.palette.primary.main }} />
+                </LineChart>
+            </ResponsiveContainer>
+        </Box>
+    );
+
+    const transactionList = itemTransactions.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
+    ) : isMobile ? (
+        <Stack component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
+            {sortedTransactions.map((tx) => (
+                <Box component="li" key={tx.id} sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={tinyChip} />
+                        <Typography variant="body2" className="tabular" sx={{ fontWeight: 600 }}>
+                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${tx.quantityChanged}` : tx.quantityChanged}
+                        </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                        {formatDateTime(tx.timestamp)} · {userName(tx)}
+                    </Typography>
+                    {assetLabel(tx) && <Typography variant="body2" className="mono">{assetLabel(tx)}</Typography>}
+                    {(tx.reason || tx.notes) && <Typography variant="body2">{[tx.reason, tx.notes].filter(Boolean).join(' — ')}</Typography>}
+                </Box>
+            ))}
+        </Stack>
+    ) : (
+        <TableContainer sx={{ maxHeight: 360 }}>
+            <Table size="small" stickyHeader aria-label={t('Transaktionen', 'Transactions')} sx={denseTable}>
+                <TableHead>
+                    <TableRow>
+                        <TableCell>{t('Datum', 'Date')}</TableCell>
+                        <TableCell>{t('Typ', 'Type')}</TableCell>
+                        <TableCell>{t('Benutzer', 'User')}</TableCell>
+                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
+                        <TableCell>{t('Grund', 'Reason')}</TableCell>
+                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {sortedTransactions.map((tx) => (
+                        <TableRow key={tx.id} hover>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(tx.timestamp)}</TableCell>
+                            <TableCell>
+                                <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={tinyChip} />
+                            </TableCell>
+                            <TableCell>{userName(tx)}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>{tx.quantityChanged}</TableCell>
+                            <TableCell>
+                                {tx.reason || '—'}
+                                {assetLabel(tx) && <Box component="span" className="mono" sx={{ display: 'block', color: 'text.secondary' }}>{assetLabel(tx)}</Box>}
+                            </TableCell>
+                            <TableCell>{tx.notes || '—'}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
 
     return (
         <Box>
-            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')} sx={{ mb: 1, ml: -1 }}>
+            <Button variant="text" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')} sx={{ ...compactButton, mb: 0.5, ml: -1 }}>
                 {t('Artikel', 'Items')}
             </Button>
 
             {/* What it is, whether it is available, where to find it, and what to do next. */}
-            <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
-                <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-                    <Typography variant="h4" component="h1" sx={{ overflowWrap: 'anywhere', mr: 0.5 }}>{item.name}</Typography>
-                    <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" />
-                    {equipment.data && <Chip size="small" variant="outlined" color={equipment.data.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[equipment.data.ownershipType]} · ${policyLabels[equipment.data.availabilityPolicy]}`} />}
-                </Stack>
-                <Typography variant="h6" component="p" className="tabular" sx={{ color: availabilityColor }}>{availabilityText}</Typography>
-                {secondaryStock && <Typography variant="body2" color="text.secondary" className="tabular">{secondaryStock}</Typography>}
-                <Typography sx={{ mt: 1 }}>
-                    <Box component="span" sx={{ color: 'text.secondary' }}>{t('Lagerort', 'Location')}: </Box>
-                    {item.storageLocation
-                        ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`}>{locationText || item.storageLocation}</Link>
-                        : t('Nicht zugewiesen', 'Not assigned')}
-                </Typography>
-                <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mt: 2 }}>
-                    {canTransact && <Button variant="contained" startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{t('Ausgabe / Rückgabe', 'Check out / return')}</Button>}
-                    {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
-                    <Button variant="outlined" startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Etikett drucken', 'Print label')}</Button>
-                </Stack>
-                {item.hint && <Alert severity="info" sx={{ mt: 2 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('Besonderer Hinweis', 'Special instruction')}</Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.hint}</Typography>
+            <Paper sx={{ p: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 1.5 }}>
+                    {!!item.images?.length && (
+                        <MediaImage src={itemImageUrl(item, item.images[0], '120x120')} alt={item.name} sx={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider', flexShrink: 0 }} />
+                    )}
+                    <Box sx={{ flex: '1 1 280px', minWidth: 0 }}>
+                        <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
+                            <Typography variant="h5" component="h1" sx={{ overflowWrap: 'anywhere', mr: 0.25 }}>{item.name}</Typography>
+                            <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
+                            {profile && <Chip size="small" variant="outlined" sx={tinyChip} color={profile.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
+                        </Stack>
+                        <Typography className="tabular" sx={{ fontSize: '0.8125rem', mt: 0.25 }}>
+                            <Box component="span" sx={{ color: availabilityColor, fontWeight: 600 }}>{availabilityText}</Box>
+                            {secondaryStock && <Box component="span" sx={{ color: 'text.secondary' }}> · {secondaryStock}</Box>}
+                            <Box component="span" sx={{ color: 'text.secondary' }}> · {t('Lagerort', 'Location')}: </Box>
+                            {item.storageLocation
+                                ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`}>{locationText || item.storageLocation}</Link>
+                                : t('Nicht zugewiesen', 'Not assigned')}
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+                        {canTransact && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{t('Ausgabe / Rückgabe', 'Check out / return')}</Button>}
+                        {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
+                        <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Etikett drucken', 'Print label')}</Button>
+                    </Stack>
+                </Box>
+                {item.hint && <Alert severity="info" icon={false} sx={{ mt: 1, py: 0, px: 1.5, '& .MuiAlert-message': { py: 0.5 } }}>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>
+                        <Box component="span" sx={{ fontWeight: 600 }}>{t('Besonderer Hinweis', 'Special instruction')}: </Box>{item.hint}
+                    </Typography>
                 </Alert>}
-                {item.locationRestricted && <Alert severity="info" sx={{ mt: 2 }}>{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert>}
+                {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0 }}>{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert>}
             </Paper>
 
-            <Stack spacing={3}>
-                <DetailSection title={t('Übersicht', 'Overview')} defaultExpanded>
-                    {item.description && <Typography sx={{ whiteSpace: 'pre-wrap', mb: 2, maxWidth: 760 }}>{item.description}</Typography>}
-                    {!!item.images?.length && (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5, mb: 2 }}>
-                            {item.images.map((filename) => (
-                                <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 220, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
-                            ))}
-                        </Box>
-                    )}
-                    <Grid container spacing={2}>
-                        <ItemOverview item={item} canEdit={canEdit} />
-                        {(isVehicle || isGenerator || isFood) && (
-                            <Grid size={12}>
-                                <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
-                                <FactList>
-                                    {isVehicle && <Fact label={t('Kraftstoffverbrauch', 'Fuel consumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Fact>}
-                                    {isVehicle && <Fact label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Fact>}
-                                    {isGenerator && <Fact label={t('Betriebsstunden', 'Running hours')}>{item.currentOperatingHours ?? 0}</Fact>}
-                                    {isGenerator && <Fact label={t('Nächste Wartung', 'Next maintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Fact>}
-                                    {isFood && <Fact label={t('Mindestens haltbar bis', 'Best before date')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Fact>}
-                                </FactList>
-                            </Grid>
-                        )}
-                    </Grid>
-                </DetailSection>
-
-                <DetailSection title={t('Bestand', 'Stock')} defaultExpanded={!isMobile}>
-                    <FactList>
-                        <Fact label={t('Verfügbar', 'Available')}>{remaining}</Fact>
-                        <Fact label={t('Gesamt', 'Total')}>{physicalTotal}</Fact>
-                        <Fact label={t('Ausgeliehen', 'Checked out')}>{checkedOut}</Fact>
-                        <Fact label={t('Im Transfer', 'In transit')}>{inTransit}</Fact>
-                        <Fact label={t('Defekt', 'Damaged')}>{damaged}</Fact>
-                        <Fact label={t('Bestellt', 'Ordered')}>{item.stock?.ordered ?? 0}</Fact>
-                        <Fact label={t('Mindestbestand', 'Minimum stock')}>{item.minStock ?? 5}</Fact>
-                        <Fact label={t('Einzelwert', 'Unit value')}>{formatMoney(item.value ?? 0)}</Fact>
-                        <Fact label={t('Gesamtwert', 'Total value')}>{formatMoney(totalValue)}</Fact>
+            <Stack spacing={1.5}>
+                <DetailPanel title={t('Bestand', 'Stock')}>
+                    <MetricList minWidth={170}>
+                        <Metric label={t('Verfügbar', 'Available')} color={availabilityColor}>{remaining}</Metric>
+                        <Metric label={t('Gesamt', 'Total')}>{physicalTotal}</Metric>
+                        <Metric label={t('Ausgeliehen', 'Checked out')}>{checkedOut}</Metric>
+                        <Metric label={t('Im Transfer', 'In transit')}>{inTransit}</Metric>
+                        <Metric label={t('Defekt', 'Damaged')} color={damaged > 0 ? 'error.main' : undefined}>{damaged}</Metric>
+                        <Metric label={t('Bestellt', 'Ordered')}>{item.stock?.ordered ?? 0}</Metric>
+                        <Metric label={t('Mindestbestand', 'Minimum stock')}>{item.minStock ?? 5}</Metric>
+                        <Metric label={t('Einzelwert', 'Unit value')}>{formatMoney(item.value ?? 0)}</Metric>
+                        <Metric label={t('Gesamtwert', 'Total value')}>{formatMoney(totalValue)}</Metric>
                         {(item.containerSize ?? 0) > 0 && <>
-                            <Fact label={t('Einheiten je Behälter', 'Units per container')}>{item.containerSize}</Fact>
-                            <Fact label={t('Behälter', 'Containers')}>{item.containerCount ?? 0}</Fact>
-                            <Fact label={t('Geöffnet', 'Opened')}>{item.containersOpened ?? 0}</Fact>
-                            <Fact label={t('Geöffneter Behälter', 'Opened container')}>{t(`${item.containerRemainingPercent ?? 100} % verbleibend`, `${item.containerRemainingPercent ?? 100}% remaining`)}</Fact>
+                            <Metric label={t('Einheiten je Behälter', 'Units per container')}>{item.containerSize}</Metric>
+                            <Metric label={t('Behälter', 'Containers')}>{item.containerCount ?? 0}</Metric>
+                            <Metric label={t('Geöffnet', 'Opened')}>{item.containersOpened ?? 0}</Metric>
+                            <Metric label={t('Geöffneter Behälter', 'Opened container')}>{t(`${item.containerRemainingPercent ?? 100} % verbleibend`, `${item.containerRemainingPercent ?? 100}% remaining`)}</Metric>
                         </>}
-                    </FactList>
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <ItemStockLocations key={item.id} item={item} />
-                        {item.trackingMode === 'serialized' && (
-                            <Grid size={12}>
-                                <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
-                            </Grid>
-                        )}
-                        {canEdit && item.trackingMode === 'lot_tracked' && <Grid size={12}><LotsPanel itemId={item.id} /></Grid>}
-                    </Grid>
-                </DetailSection>
-
-                <DetailSection title={t('Verlauf', 'History')} defaultExpanded={!isMobile}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Bestandsverlauf', 'Stock history')}</Typography>
-                    {stockHistory.length <= 1 && itemTransactions.length === 0 ? (
-                        <Typography color="text.secondary">{t('Noch kein Transaktionsverlauf vorhanden.', 'No transaction history yet.')}</Typography>
-                    ) : (
-                        <Box role="img" aria-label={t('Diagramm des Bestandsverlaufs', 'Chart of stock over time')}>
-                            <ResponsiveContainer width="100%" height={260}>
-                                <LineChart data={stockHistory}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                                    <XAxis dataKey="date" stroke={theme.palette.text.secondary} fontSize={12} />
-                                    <YAxis stroke={theme.palette.text.secondary} fontSize={12} allowDecimals={false} />
-                                    <Tooltip
-                                        isAnimationActive={false}
-                                        contentStyle={{ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 8 }}
-                                        labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
-                                        itemStyle={{ color: theme.palette.primary.main }}
-                                    />
-                                    <Line type="monotone" dataKey="stock" name={t('Bestand', 'Stock')} stroke={theme.palette.primary.main} strokeWidth={2}
-                                        dot={{ fill: theme.palette.primary.main, r: 3 }} activeDot={{ r: 5, fill: theme.palette.primary.main }} />
-                                </LineChart>
-                            </ResponsiveContainer>
+                    </MetricList>
+                    <ItemStockLocations key={item.id} item={item} />
+                    {item.trackingMode === 'serialized' && (
+                        <Box sx={{ mt: 1.5 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Einheiten', 'Units')}</Typography>
+                            <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
                         </Box>
                     )}
-
-                    <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>{t('Transaktionen', 'Transactions')}</Typography>
-                    {itemTransactions.length === 0 ? (
-                        <Typography color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
-                    ) : isMobile ? (
-                        <Stack component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
-                            {sortedTransactions.map((tx) => (
-                                <Box component="li" key={tx.id} sx={{ py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
-                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                        <Chip label={formatStatus(tx.transactionType)} color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'} size="small" variant="outlined" />
-                                        <Typography variant="body2" className="tabular" sx={{ fontWeight: 600 }}>
-                                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${tx.quantityChanged}` : tx.quantityChanged}
-                                        </Typography>
-                                    </Stack>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                        {formatDateTime(tx.timestamp)} · {userName(tx)}
-                                    </Typography>
-                                    {assetLabel(tx) && <Typography variant="body2" className="mono">{assetLabel(tx)}</Typography>}
-                                    {(tx.reason || tx.notes) && <Typography variant="body2">{[tx.reason, tx.notes].filter(Boolean).join(' — ')}</Typography>}
-                                </Box>
-                            ))}
-                        </Stack>
-                    ) : (
-                        <TableContainer>
-                            <Table size="small" aria-label={t('Transaktionen', 'Transactions')}>
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>{t('Datum', 'Date')}</TableCell>
-                                        <TableCell>{t('Typ', 'Type')}</TableCell>
-                                        <TableCell>{t('Benutzer', 'User')}</TableCell>
-                                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                                        <TableCell>{t('Grund', 'Reason')}</TableCell>
-                                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {sortedTransactions.map((tx) => (
-                                        <TableRow key={tx.id} hover>
-                                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(tx.timestamp)}</TableCell>
-                                            <TableCell>
-                                                <Chip label={formatStatus(tx.transactionType)} color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'} size="small" variant="outlined" />
-                                            </TableCell>
-                                            <TableCell>{userName(tx)}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 600 }}>{tx.quantityChanged}</TableCell>
-                                            <TableCell>
-                                                {tx.reason || '—'}
-                                                {assetLabel(tx) && <Box component="span" className="mono" sx={{ display: 'block', color: 'text.secondary' }}>{assetLabel(tx)}</Box>}
-                                            </TableCell>
-                                            <TableCell>{tx.notes || '—'}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+                    {canEdit && item.trackingMode === 'lot_tracked' && (
+                        <Box sx={{ mt: 1.5 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Chargen', 'Lots')}</Typography>
+                            <LotsPanel itemId={item.id} />
+                        </Box>
                     )}
+                </DetailPanel>
 
+            <Box sx={{ display: 'grid', gap: 1.5, alignItems: 'start', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' } }}>
+                <DetailPanel title={t('Übersicht', 'Overview')}>
+                    <FieldGrid>
+                        <Field label={t('Kategorie', 'Category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
+                        <Field label={t('Lagerort', 'Storage location')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location?.name || item.storageLocation}</Link> : '—'}</Field>
+                        <Field label={t('Genauer Ort', 'Exact location')}>{exactLocation || '—'}</Field>
+                        <Field label={t('Rückgabeort', 'Return location')}>{item.expand?.returnLocation?.name || item.returnLocation || '—'}</Field>
+                        <Field label={t('Eigentümer / Anbieter', 'Owner / provider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
+                        <Field label={t('Verwahrer / Kontakt', 'Keeper / contact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
+                        <Field label={item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}>{item.stock?.totalOwned ?? 0}</Field>
+                        <Field label={t('Bestandsführung', 'Tracking mode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
+                        {item.supplier && <Field label={t('Lieferant', 'Supplier')}>{item.supplier}</Field>}
+                        {item.assignedUserName && <Field label={t('Zugeordnete Person', 'Assigned person')}>{item.assignedUserName}</Field>}
+                        {item.assignedGroup && <Field label={t('Zugeordnete Gruppe', 'Assigned group')}>{item.assignedGroup}</Field>}
+                        <Field label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : item.visibilityScope || 'global'}</Field>
+                        <Field label={t('Erstellt', 'Created')}>{formatDate(item.created)}</Field>
+                        {isVehicle && <Field label={t('Kraftstoffverbrauch', 'Fuel consumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
+                        {isVehicle && <Field label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
+                        {isGenerator && <Field label={t('Betriebsstunden', 'Running hours')}>{item.currentOperatingHours ?? 0}</Field>}
+                        {isGenerator && <Field label={t('Nächste Wartung', 'Next maintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
+                        {isFood && <Field label={t('Mindestens haltbar bis', 'Best before date')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
+                        <Field label={t('Artikel-ID', 'Item ID')}><span className="mono">{item.id}</span></Field>
+                        <Field wide label={t('Freigegebene Event-Nutzung', 'Approved event use')}>
+                            <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                                {item.eventTypes?.length
+                                    ? item.eventTypes.map(event => <Chip key={event} size="small" variant="outlined" sx={tinyChip} label={event === 'LS' ? 'LightSim' : event} />)
+                                    : <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>— {t('keine', 'none')}</Box>}
+                                <Tooltip arrow enterTouchDelay={0} title={t('Die Event-Zuordnung beschreibt die Nutzung. Verfügbarkeit und erforderliche Zusagen werden getrennt geprüft.', 'Event assignments describe intended use. Availability and required commitments are checked separately.')}>
+                                    <IconButton size="small" sx={{ p: 0.25 }} aria-label={t('Information zur Event-Nutzung', 'About event use')}><InfoOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
+                                </Tooltip>
+                            </Stack>
+                        </Field>
+                        {item.description && <Field wide label={t('Beschreibung', 'Description')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{item.description}</Box></Field>}
+                    </FieldGrid>
+                </DetailPanel>
+
+                <Stack spacing={1.5}>
+                    <DetailPanel title={t('Eigentum & Verwahrung', 'Ownership & keeper')}>
+                        <EquipmentOwnership item={item} canEdit={canEdit} embedded showSummary={false} />
+                    </DetailPanel>
+                    <InventorySharing kind="items" id={item.id} access={item.access} />
+                    {canEdit && <CodeManagement targetId={item.id} targetType="product" embedded />}
+                </Stack>
+            </Box>
+
+                <DetailPanel title={`${t('Verlauf', 'History')} (${itemTransactions.length})`}>
+                    <Stack spacing={1.5}>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Bestandsverlauf', 'Stock history')}</Typography>
+                            {historyChart}
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Transaktionen', 'Transactions')}</Typography>
+                            {transactionList}
+                        </Box>
+                    </Stack>
                     {isGenerator && <>
-                        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>{t('Wartungsprotokoll', 'Maintenance log')}</Typography>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontSize: '0.8125rem' }}>{t('Wartungsprotokoll', 'Maintenance log')}</Typography>
                         {maintenanceRecords.length === 0 ? (
-                            <Typography color="text.secondary">{t('Noch keine Wartungseinträge.', 'No maintenance records yet.')}</Typography>
+                            <Typography variant="body2" color="text.secondary">{t('Noch keine Wartungseinträge.', 'No maintenance records yet.')}</Typography>
                         ) : (
-                            <Stack spacing={1}>
+                            <Stack>
                                 {maintenanceRecords.map((record) => (
-                                    <Box key={record.id} sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-                                        <Typography>{formatDate(record.performedAt)} · {record.type.replaceAll('_', ' ')}</Typography>
-                                        <Chip size="small" variant="outlined" label={record.result} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
+                                    <Box key={record.id} sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', py: 0.5 }}>
+                                        <Typography variant="body2">{formatDate(record.performedAt)} · {record.type.replaceAll('_', ' ')}</Typography>
+                                        <Chip size="small" variant="outlined" sx={tinyChip} label={record.result} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
                                     </Box>
                                 ))}
                             </Stack>
                         )}
                     </>}
-                </DetailSection>
+                </DetailPanel>
 
-                <DetailSection title={t('Details', 'Details')} defaultExpanded={false}>
-                    <FactList>
-                        <Fact label={t('Erstellt', 'Created')}>{formatDate(item.created)}</Fact>
-                        <Fact label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : item.visibilityScope || 'global'}</Fact>
-                        {item.assignedUserName && <Fact label={t('Zugeordnete Person', 'Assigned person')}>{item.assignedUserName}</Fact>}
-                        {item.assignedGroup && <Fact label={t('Zugeordnete Gruppe', 'Assigned group')}>{item.assignedGroup}</Fact>}
-                        {item.supplier && <Fact label={t('Lieferant', 'Supplier')}>{item.supplier}</Fact>}
-                        <Fact label={t('Bestandsführung', 'Tracking mode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Fact>
-                        <Fact label={t('Artikel-ID', 'Item ID')}><span className="mono">{item.id}</span></Fact>
-                    </FactList>
-                </DetailSection>
+                {!!item.images?.length && (
+                    <DetailPanel title={`${t('Bilder', 'Images')} (${item.images.length})`}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1 }}>
+                            {item.images.map((filename) => (
+                                <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 160, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
+                            ))}
+                        </Box>
+                    </DetailPanel>
+                )}
             </Stack>
 
             <FormDialog open={editOpen} onClose={() => setEditOpen(false)}>
