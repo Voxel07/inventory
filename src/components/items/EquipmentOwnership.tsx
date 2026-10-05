@@ -13,7 +13,8 @@ import { useEventReports } from '../../hooks/useEvents';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm, type Field } from '../operations/OperationForm';
 
-export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: Item; canEdit: boolean; embedded?: boolean }) {
+/** `showSummary` repeats owner, keeper and stock facts; hide it where the page already shows them. */
+export function EquipmentOwnership({ item, canEdit, embedded = false, showSummary = true }: { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean }) {
   const t = useLocalizedText();
   const profile = useEquipmentProfile(item.id);
   const { data: events = [] } = useEventReports();
@@ -35,12 +36,14 @@ export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: 
       {profile.isLoading && <Typography>{t('Wird geladen …', 'Loading…')}</Typography>}
       {profile.error && <Alert severity="error" action={<Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
       {data && <>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip size={embedded ? 'small' : 'medium'} label={ownership[data.ownershipType]} /><Chip size={embedded ? 'small' : 'medium'} label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: embedded ? { xs: '1fr', sm: '1fr 1fr' } : '1fr', gap: 1 }}>
-          <Box><Typography variant="subtitle2" color="text.secondary">{t('Eigentümer / Anbieter', 'Owner / provider')}</Typography><Typography variant="body2">{data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography></Box>
-          <Box><Typography variant="subtitle2" color="text.secondary">{t('Verwahrer / Kontakt', 'Keeper / contact')}</Typography><Typography variant="body2">{[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography></Box>
-        </Box>
-        <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
+        {showSummary && <>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Chip size={embedded ? 'small' : 'medium'} label={ownership[data.ownershipType]} /><Chip size={embedded ? 'small' : 'medium'} label={policy[data.availabilityPolicy]} color={data.availabilityPolicy === 'available' ? 'success' : 'warning'} /></Stack>
+          <Box sx={{ display: 'grid', gridTemplateColumns: embedded ? { xs: '1fr', sm: '1fr 1fr' } : '1fr', gap: 1 }}>
+            <Box><Typography variant="subtitle2" color="text.secondary">{t('Eigentümer / Anbieter', 'Owner / provider')}</Typography><Typography variant="body2">{data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography></Box>
+            <Box><Typography variant="subtitle2" color="text.secondary">{t('Verwahrer / Kontakt', 'Keeper / contact')}</Typography><Typography variant="body2">{[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography></Box>
+          </Box>
+          <Typography variant="body2">{t('Physisch geführt', 'Physical inventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}: {item.stock?.totalOwned ?? 0}</Typography>
+        </>}
         {data.availabilityPolicy !== 'available' && (embedded ? <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Typography variant="caption" color="text.secondary">{t('Zusagen-Richtlinie', 'Commitment policy')}</Typography><Tooltip arrow enterTouchDelay={0} title={t('Nur passende Zusagen zählen für Planung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgaben mit dem Eigentümer abstimmen.', 'Only matching commitments count toward planning and checkout. Storage movements do not change ownership or commitments. Coordinate returns with the owner.')}><IconButton size="small" aria-label={t('Information zur Zusagen-Richtlinie', 'About commitment policy')}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip></Stack> : <Alert severity="info">{t('Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.', 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.')}</Alert>)}
         {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           <Button title={translate('Eigentümer, Verwahrer und Verfügbarkeit bearbeiten', 'Edit the owner, keeper and availability')} onClick={() => setEditing(data)}>{t('Eigentum bearbeiten', 'Edit ownership')}</Button>

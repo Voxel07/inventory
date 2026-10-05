@@ -1,4 +1,5 @@
-import { Grid, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { DetailPanel } from './CompactDetail';
 import { Link as RouterLink } from 'react-router-dom';
 import type { Item } from '../../types';
 import { useOperationList } from '../../hooks/useOperations';
@@ -36,11 +37,10 @@ export function ItemStockLocations({ item }: { item: Item }) {
     const location = locations.data?.find(location => location.id === id);
     return { id, quantity: stock.quantity, name: location ? locationPath(location, locations.data ?? []) : stock.name ?? id };
   }).sort((a, b) => a.name.localeCompare(b.name));
-  return <Grid size={12}>
-    <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Bestand nach Lagerort', 'Stock by location')}</Typography>
+  return <DetailPanel title={t('Bestand nach Lagerort', 'Stock by location')}>
     <QueryFeedback error={error} />
     {ready && quantities.size > 1 && <TableContainer>
-      <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')}>
+      <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')} sx={{ '& .MuiTableCell-root': { py: 0.25, fontSize: '0.8125rem' } }}>
         <TableHead><TableRow><TableCell>{t('Lagerort', 'Storage location')}</TableCell><TableCell align="right">{t('Vor Ort', 'On hand')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map(row => <TableRow key={row.id}>
           <TableCell><Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(row.id)}`}>{row.name}</Link></TableCell>
@@ -48,5 +48,5 @@ export function ItemStockLocations({ item }: { item: Item }) {
         </TableRow>)}</TableBody>
       </Table>
     </TableContainer>}
-  </Grid>;
+  </DetailPanel>;
 }
