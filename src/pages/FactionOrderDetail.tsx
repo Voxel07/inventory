@@ -2,8 +2,6 @@ import { Button } from '../components/shared/ActionButtons';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 import { CustodyEvidence } from '../components/orders/CustodyEvidence';
 import { useEquipmentAvailability } from '../hooks/useEquipment';
-import { Fields } from '../components/operations/OperationForm';
-import { useSourceLocationOptions } from '../hooks/useStockLookups';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -46,7 +44,6 @@ type ConfirmAction = 'pickup' | 'cancel' | null;
 function preparationDraft(key: string, order?: FactionOrder) {
   return {
     key,
-    sources: { ...order?.sourceLocations },
     prepared: Object.fromEntries(Object.entries(order?.preparedQuantities ?? {}).map(([id, value]) => [id, String(value)])),
     preparedAssemblies: Object.fromEntries(Object.entries(order?.preparedAssemblyQuantities ?? {}).map(([id, value]) => [id, String(value)])),
     assetAssignments: Object.fromEntries(Object.entries(order?.assetAssignments ?? {}).map(([id, assets]) => [id, assets.map((asset) => asset.id)])),
@@ -81,18 +78,17 @@ export function FactionOrderDetail() {
   const returnOrderItems = useReturnFactionOrderItems();
   const cancelOrder = useCancelFactionOrder();
 
-  const sourceOptions = useSourceLocationOptions(order?.status === 'preparing');
   const preparationKey = JSON.stringify([
     generation, orderId, order?.id, order?.updated, order?.status,
     order?.requestedQuantities, order?.requestedAssemblyQuantities,
-    order?.sourceLocations, order?.preparedQuantities, order?.preparedAssemblyQuantities,
+    order?.preparedQuantities, order?.preparedAssemblyQuantities,
     Object.entries(order?.assetAssignments ?? {}).map(([id, assets]) => [id, assets.map((asset) => asset.id)]),
   ]);
   const [draft, setDraft] = useState(() => preparationDraft(preparationKey, order));
   // Keep edits on unchanged refetches and failed saves. A new order, saved
   // revision/preparation or permission generation replaces every field together.
   if (draft.key !== preparationKey) setDraft(preparationDraft(preparationKey, order));
-  const { sources, prepared, preparedAssemblies, assetAssignments } = draft;
+  const { prepared, preparedAssemblies, assetAssignments } = draft;
   function setPreparationField<K extends Exclude<keyof PreparationDraft, 'key'>>(field: K, value: SetStateAction<PreparationDraft[K]>) {
     setDraft((current) => ({
       ...current,
@@ -112,10 +108,13 @@ export function FactionOrderDetail() {
   const itemMap = new Map(items.map((item) => [item.id, item]));
   const assemblyMap = new Map(assemblies.map((assembly) => [assembly.id, assembly]));
 
-  const orderItems = (() => {
+  // Every item on an order line, including assembly components. Serialized pickers and returns work on these.
+  const lineItems = (() => {
     if (!order) return [];
     return (order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter(Boolean)) as Item[];
   })();
+  // Only items ordered on their own; assembly components are listed under their assembly.
+  const orderItems = lineItems.filter((item) => item.id in (order?.requestedQuantities ?? {}));
 
   const orderAssemblies = (() => {
     if (!order) return [];
@@ -153,7 +152,7 @@ export function FactionOrderDetail() {
         flattened[itemId] = (flattened[itemId] ?? 0) + count * componentQuantity;
       }
     }
-    for (const item of orderItems.filter((candidate) => candidate.trackingMode === 'serialized')) {
+    for (const item of lineItems.filter((candidate) => candidate.trackingMode === 'serialized')) {
       const required = flattened[item.id] ?? 0;
       const selected = assetAssignments[item.id]?.length ?? 0;
       if (selected !== required) {
@@ -165,7 +164,8 @@ export function FactionOrderDetail() {
       }
     }
     savePreparation.mutate(
-      { id: order.id, values, assemblyValues, assetAssignments, sourceLocations: Object.fromEntries(Object.entries(sources).filter(([, value]) => value)) },
+      // No source locations: the backend takes the item's default location, or the location with free stock.
+      { id: order.id, values, assemblyValues, assetAssignments },
       {
         onSuccess: () => success(t('Vorbereitung gespeichert', 'Preparation saved')),
         onError: handleError,
@@ -330,14 +330,10 @@ export function FactionOrderDetail() {
         isReopeningPreparation={reopenPreparation.isPending}
       />
 
-      {order.status === 'preparing' && ['hq_admin', 'warehouse_crew'].includes(currentUser?.role ?? '') && <Fields fields={orderItems.flatMap((item) => {
-        // Only items stored in several places need a source choice.
-        const options = item.trackingMode === 'serialized' ? undefined : sourceOptions(item.id, sources[item.id]);
-        return options ? [{ key: item.id, label: `${item.name} · ${t('Quelllager', 'Source location')}`, options, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }] : [];
-      })} values={sources} onChange={(values) => setPreparationField('sources', Object.fromEntries(Object.entries(values).map(([id, value]) => [id, String(value)])))} />}
       <OrderPickListTable
         order={order}
         orderItems={orderItems}
+        lineItems={lineItems}
         orderAssemblies={orderAssemblies}
         orderItemCategories={orderItemCategories}
         itemMap={itemMap}
@@ -372,6 +368,7 @@ export function FactionOrderDetail() {
             assemblies={assemblies}
             storageLocations={storageLocations}
             orders={allOrders}
+            submitLabel={t('Bestellliste aktualisieren', 'Update order list')}
             onSubmit={(data) => {
               updateOrder.mutate(
                 { id: order.id, data },
@@ -408,7 +405,7 @@ export function FactionOrderDetail() {
         <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
           <OrderReturnChecklist
             order={order}
-            items={orderItems}
+            items={lineItems}
             busy={returnOrderItems.isPending}
             onCancel={() => setReturnOpen(false)}
             onSubmit={(lines, assets) => {

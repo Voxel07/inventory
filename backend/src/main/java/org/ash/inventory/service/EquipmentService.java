@@ -229,9 +229,14 @@ public class EquipmentService {
     }
 
     public void assertSource(Item item, StorageLocation source) {
-        var loans = orm.openLoans(item);
-        if (!loans.isEmpty() && (source == null || loans.stream().anyMatch(l -> l.providerLocation.id.equals(source.id))))
+        if (!isInternalSource(item, source))
             throw ApiException.conflict("Choose an internal location; collect provider-held equipment before issuing it");
+    }
+
+    /** False for provider-held locations of an open loan, the only places stock may not be issued from. */
+    public boolean isInternalSource(Item item, StorageLocation source) {
+        var loans = orm.openLoans(item);
+        return loans.isEmpty() || (source != null && loans.stream().noneMatch(l -> l.providerLocation.id.equals(source.id)));
     }
     private LoanArrangement loan(EquipmentCommitment c) {
         return orm.commitmentLoans(c).findFirst().orElse(null);

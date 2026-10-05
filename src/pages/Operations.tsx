@@ -2,6 +2,7 @@ import { formatDateTime } from '../utils/dateFormat';
 import { OperationListEntry } from '../components/operations/OperationListEntry';
 import { Tab, Button } from '../components/shared/ActionButtons';
 import { LoansPanel } from '../components/operations/LoansPanel';
+import { OrderPreparationPanel } from '../components/operations/OrderPreparationPanel';
 import { useQuery } from '@tanstack/react-query';
 import { ReportsPanel } from '../components/operations/ReportsPanel';
 import { Alert, Box, Chip, LinearProgress, Stack, Tabs, Typography } from '@mui/material';
@@ -26,6 +27,9 @@ export function Operations() {
   const warehouse = canOperateWarehouse(user);
   const purchasing = canManagePurchasing(user);
   const groups: Group[] = ([
+    { key: 'picking', label: t('Kommissionierung', 'Picking'), sections: warehouse ? [
+      { key: 'order-preparation', label: t('Vorzubereitende Bestellungen', 'Orders to prepare'), component: <OrderPreparationPanel /> },
+    ] : [] },
     { key: 'stock', label: t('Bestand', 'Stock'), sections: warehouse ? [
       { key: 'transfers', label: t('Umlagerungen', 'Transfers'), component: <TransfersPanel /> },
       { key: 'counts', label: t('Inventur', 'Stock counts'), component: <CountsPanel /> },

@@ -57,6 +57,14 @@ public class PositionService {
                 .mapToInt(InventoryPosition::availableQuantity).sum() - orm.reserved(item, source, exceptFaction, exceptGeneral));
     }
 
+    /** Locations currently holding stock of the item, in FEFO position order. */
+    public List<StorageLocation> stockLocations(Item item) {
+        var result = new ArrayList<StorageLocation>();
+        for (var p : orm.positions(item))
+            if (p.quantityOnHand > 0 && result.stream().noneMatch(l -> l.id.equals(p.location.id))) result.add(p.location);
+        return result;
+    }
+
     public int reservedAt(InventoryPosition position) {
         int left = orm.reserved(position.item, position.location, null, null);
         for (var p : orm.positions(position.item)) {

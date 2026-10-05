@@ -599,14 +599,16 @@ export function FactionOrderForm({
           multiline
           minRows={2}
         />
-        <Button title={translate('Die Bestellliste mit den eingegebenen Mengen speichern', 'Save the order list with these quantities')}
+        <Button title={initialData
+          ? translate('Die Bestellliste mit den geänderten Mengen aktualisieren', 'Update the order list with the changed quantities')
+          : translate('Die Bestellliste mit den eingegebenen Mengen erstellen', 'Create the order list with these quantities')}
           type="submit"
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
           disabled={isLoading || !selectedEvent || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
         >
-          {submitLabel ?? t('Bestellliste erstellen', 'Create order list')}
+          {submitLabel ?? (initialData ? t('Bestellliste aktualisieren', 'Update order list') : t('Bestellliste erstellen', 'Create order list'))}
         </Button>
       </Stack>
       <Dialog open={Boolean(infoAssembly)} onClose={() => setInfoAssembly(null)} fullWidth maxWidth="sm">

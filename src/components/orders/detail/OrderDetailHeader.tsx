@@ -127,122 +127,113 @@ export function OrderDetailHeader({
     }
   }
 
+  const usedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status);
+  const workflowActions = <>
+    {canEditOrder && order.status === 'draft' && (
+      <Button title={translate('Den Bedarf als vollständig einreichen', 'Submit the request as complete')}
+        size="small" variant="contained" startIcon={<CheckCircleIcon />} onClick={onSubmit} disabled={isSubmitting}>
+        {t('Bedarf vollständig', 'Request complete')}
+      </Button>
+    )}
+    {warehouse && order.status === 'submitted' && (
+      <Button title={translate('Mit der Vorbereitung dieser Bestellliste beginnen', 'Start preparing this order list')}
+        size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={onStartPreparation} disabled={isStartingPreparation}>
+        {t('Vorbereitung starten', 'Start preparation')}
+      </Button>
+    )}
+    {warehouse && order.status === 'preparing' && (
+      <>
+        <Button title={translate('Vorbereitete Mengen mit verfügbarem Bestand auffüllen', 'Fill prepared quantities using available stock')}
+          size="small" variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
+          {t('Verfügbare füllen', 'Fill available')}
+        </Button>
+        <Button title={translate('Die vorbereiteten Mengen speichern', 'Save the prepared quantities')}
+          size="small" variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
+          {t('Speichern', 'Save')}
+        </Button>
+        <Button title={translate('Abholort wählen und die Liste abholbereit melden', 'Choose a pickup location and mark this list ready')}
+          size="small" variant="contained" color="success" startIcon={<CheckCircleIcon />} disabled={!preparationComplete} onClick={onMarkReady}>
+          {t('Abholbereit', 'Mark ready')}
+        </Button>
+      </>
+    )}
+    {(warehouse || custody) && order.status === 'ready' && (
+      <>
+        <Button title={translate('Die Liste erneut zur Vorbereitung öffnen', 'Reopen this list for preparation')}
+          size="small" variant="outlined" startIcon={<ReplayIcon />} onClick={onReopenPreparation} disabled={isReopeningPreparation || !warehouse}>
+          {t('Zurück in Vorbereitung', 'Back to preparation')}
+        </Button>
+        <Button title={translate('Die vollständige Liste als abgeholt buchen', 'Record pickup of the complete list')}
+          size="small" variant="contained" color="success" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
+          {t('Komplette Liste abholen', 'Pick up complete list')}
+        </Button>
+      </>
+    )}
+    {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
+      <Button title={translate('Die Rückgaben der einzelnen Komponenten prüfen', 'Review returns for each component')}
+        size="small" variant="contained" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
+        {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
+      </Button>
+    )}
+    {planner && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+      <Button title={translate('Die Stornierung dieser Bestellliste bestätigen', 'Review cancellation of this order list')}
+        size="small" color="error" startIcon={<CancelIcon />} onClick={onCancel}>
+        {t('Stornieren', 'Cancel')}
+      </Button>
+    )}
+  </>;
+
   return (
     <>
-      <Button title={translate('Zur Übersicht der Fraktionslisten zurückkehren', 'Return to the faction order list')} startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 1 }}>
+      <Button title={translate('Zur Übersicht der Fraktionslisten zurückkehren', 'Return to the faction order list')} size="small" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 0.5 }}>
         {t('Alle Fraktionslisten', 'All faction lists')}
       </Button>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
-        <Box>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: { md: 'flex-start' } }}>
+        <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h4">{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
-            <Chip color={statusColor(order.status)} label={statusLabel(order.status)} />
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
+            <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
           </Stack>
-          <Typography color="text.secondary">
-            {formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
+          <Typography variant="body2" color="text.secondary">
+            <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{order.orderCode}</Box>
+            {' · '}{formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
+            {order.requestedPickupDate && <> · <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}</Box></>}
+            {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('Abholort', 'Pickup location')}: {pickupLocationLabel}</>}
           </Typography>
-          {order.requestedPickupDate && (
-            <Typography sx={{ fontWeight: 700, mt: 0.5 }}>
-              {t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}
-            </Typography>
-          )}
-          <Typography sx={{ fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>
         </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: { xs: 'stretch', md: 'flex-start' } }}>
-          <Button title={translate('Den QR-Code dieser Bestellliste anzeigen', 'Display the QR code for this order list')} variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('Listen-QR', 'List QR')}</Button>
-          <Button title={translate('Den Kommissionierschein als PDF herunterladen', 'Download the packing slip as PDF')} variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('Kommissionierschein PDF', 'Packing slip PDF')}</Button>
-          {canEditOrderContents && <Button title={translate('Artikel und Mengen dieser Bestellliste bearbeiten', 'Edit the items and quantities in this order list')} variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('Bearbeiten', 'Edit')}</Button>}
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
+          <Button title={translate('Den QR-Code dieser Bestellliste anzeigen', 'Display the QR code for this order list')} size="small" variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('QR', 'QR')}</Button>
+          <Button title={translate('Den Kommissionierschein als PDF herunterladen', 'Download the packing slip as PDF')} size="small" variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('Kommissionierschein', 'Packing slip')}</Button>
+          {canEditOrderContents && <Button title={translate('Artikel und Mengen dieser Bestellliste bearbeiten', 'Edit the items and quantities in this order list')} size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('Bearbeiten', 'Edit')}</Button>}
         </Stack>
       </Stack>
 
-      {/* Action Buttons Panel */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {canEditOrder && order.status === 'draft' && (
-            <Button title={translate('Den Bedarf als vollständig einreichen', 'Submit the request as complete')}
-              variant="contained"
-              startIcon={<CheckCircleIcon />}
-              onClick={onSubmit}
-              disabled={isSubmitting}
-            >
-              {t('Bedarf vollständig', 'Request complete')}
-            </Button>
-          )}
-          {warehouse && order.status === 'submitted' && (
-            <Button title={translate('Mit der Vorbereitung dieser Bestellliste beginnen', 'Start preparing this order list')}
-              variant="contained"
-              startIcon={<PlayArrowIcon />}
-              onClick={onStartPreparation}
-              disabled={isStartingPreparation}
-            >
-              {t('Vorbereitung starten', 'Start preparation')}
-            </Button>
-          )}
-          {warehouse && order.status === 'preparing' && (
-            <>
-              <Button title={translate('Vorbereitete Mengen mit verfügbarem Bestand auffüllen', 'Fill prepared quantities using available stock')} variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
-                {t('Verfügbare Mengen füllen', 'Fill available amounts')}
-              </Button>
-              <Button title={translate('Die vorbereiteten Mengen speichern', 'Save the prepared quantities')} variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
-                {t('Fortschritt speichern', 'Save progress')}
-              </Button>
-              <Button title={translate('Abholort wählen und die Liste abholbereit melden', 'Choose a pickup location and mark this list ready')}
-                variant="contained"
-                color="success"
-                startIcon={<CheckCircleIcon />}
-                disabled={!preparationComplete}
-                onClick={onMarkReady}
-              >
-                {t('Abholbereit', 'Mark ready')}
-              </Button>
-            </>
-          )}
-          {(warehouse || custody) && order.status === 'ready' && (
-            <>
-              <Button title={translate('Die Liste erneut zur Vorbereitung öffnen', 'Reopen this list for preparation')}
-                variant="outlined"
-                startIcon={<ReplayIcon />}
-                onClick={onReopenPreparation}
-                disabled={isReopeningPreparation || !warehouse}
-              >
-                {t('Zurück in Vorbereitung', 'Back to preparation')}
-              </Button>
-              <Button title={translate('Die vollständige Liste als abgeholt buchen', 'Record pickup of the complete list')} variant="contained" color="success" size="large" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
-                {t('Komplette Liste abholen', 'Pick up complete list')}
-              </Button>
-            </>
-          )}
-          {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
-            <Button title={translate('Die Rückgaben der einzelnen Komponenten prüfen', 'Review returns for each component')} variant="contained" size="large" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
-              {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
-            </Button>
-          )}
-          {planner && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
-            <Button title={translate('Die Stornierung dieser Bestellliste bestätigen', 'Review cancellation of this order list')} color="error" startIcon={<CancelIcon />} onClick={onCancel} sx={{ ml: { sm: 'auto' } }}>
-              {t('Stornieren', 'Cancel')}
-            </Button>
-          )}
+      {/* Progress and the next workflow steps share one panel. */}
+      <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={{ xs: 1, md: 2 }} sx={{ alignItems: { md: 'center' } }}>
+          <Stack direction="row" spacing={1.5} sx={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+              {usedLabel ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')} {preparedTotal}/{requestedTotal}
+            </Typography>
+            <LinearProgress variant="determinate" value={progress} color={preparationComplete ? 'success' : 'primary'}
+              aria-label={t('Vorbereitungsfortschritt', 'Preparation progress')} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
+          </Stack>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>{workflowActions}</Stack>
         </Stack>
+        {order.notes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
       </Paper>
 
       {order.status === 'ready' && (
-        <Alert severity="success" icon={<LocationOnIcon />} sx={{ mb: 2 }}>
-          <Typography sx={{ fontWeight: 800 }}>{t('Diese Bestellung kann abgeholt werden.', 'This order is ready for pickup.')}</Typography>
-          <Typography variant="body2">{t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong></Typography>
+        <Alert severity="success" icon={<LocationOnIcon />} sx={{ mb: 1.5, py: 0.25 }}>
+          <strong>{t('Abholbereit', 'Ready for pickup')}</strong> · {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
         </Alert>
-      )}
-
-      {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && (
-        <Typography variant="body2" sx={{ mb: 1.5 }}>
-          {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
-        </Typography>
       )}
 
       {order.pickupLatitude != null && order.pickupLongitude != null && (
         <Paper sx={{ p: 1.5, mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
-            <Typography variant="h6">{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
             <Button title={translate('Den Abholort in Google Maps öffnen', 'Open the pickup location in Google Maps')}
               size="small"
               variant="outlined"
@@ -265,17 +256,6 @@ export function OrderDetailHeader({
           />
         </Paper>
       )}
-
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
-          <Typography sx={{ fontWeight: 700 }}>
-            {['picked_up', 'returned'].includes(order.status) ? t('Tatsächlich verwendet', 'Actually used') : t('Vorbereitung', 'Preparation')}
-          </Typography>
-          <Typography>{preparedTotal}/{requestedTotal}</Typography>
-        </Stack>
-        <LinearProgress variant="determinate" value={progress} color={preparationComplete ? 'success' : 'primary'} sx={{ height: 10, borderRadius: 5 }} />
-        {order.notes && <Typography sx={{ mt: 2 }}>{order.notes}</Typography>}
-      </Paper>
     </>
   );
 }

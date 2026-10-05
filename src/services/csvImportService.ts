@@ -365,7 +365,8 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             );
           }
           if (finalOrder.status === 'preparing') {
-            finalOrder = await markFactionOrderReady(finalOrder.id, 'Automatisch vorbereitet');
+            finalOrder = await markFactionOrderReady(finalOrder.id, 'Automatisch vorbereitet', undefined,
+              row.pickupPoint?.latitude, row.pickupPoint?.longitude);
           }
           if (['picked_up', 'returned', 'closed'].includes(row.targetStatus) && finalOrder.status === 'ready') {
             finalOrder = await pickUpFactionOrder(finalOrder.id);

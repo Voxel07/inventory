@@ -1,5 +1,4 @@
 import { formatDateTime } from '../../utils/dateFormat';
-import { useSourceLocationOptions } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +16,6 @@ import { canManageUsers } from '../../utils/access';
 /** `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. */
 export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; itemIds?: string[]; onClose: () => void }) {
   const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
-  const sourceOptions = useSourceLocationOptions(action === 'prepare');
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
   const t = useLocalizedText(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
@@ -28,10 +26,8 @@ export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }:
   const outstanding = (id: string) => (order.handedOverQuantities[id] ?? 0) - (order.returnedQuantities[id] ?? 0) - (order.consumedQuantities[id] ?? 0) - (order.damagedQuantities?.[id] ?? 0) - (order.writtenOffQuantities?.[id] ?? 0);
   const fields: Field[] = ids.flatMap((id): Field[] => {
     const item = items.find((value) => value.id === id); const name = order.itemNames?.[id] ?? item?.name ?? id;
-    // Only items stored in several places need a source choice.
-    const sources = action === 'prepare' && item?.trackingMode !== 'serialized' ? sourceOptions(id, order.sourceLocations?.[id]) : undefined;
+    // No source choice: the backend takes the item's default location, or the location with free stock.
     if (action === 'prepare') return [
-      ...(sources ? [{ key: `source:${id}`, label: `${name} · ${t('Quelllager', 'Source location')}`, options: sources, help: t('Leer = Standardlager des Artikels.', 'Empty = item default location.') }] : []),
       { key: `prepare:${id}`, label: `${name} · ${t('Vorbereitet', 'Prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('Angefragt', 'Requested')}: ${order.requestedQuantities[id]}` },
       ...(assets.data?.[id] ?? []).filter((asset) => (asset.availabilityStatus === 'available' && (!equipment.data?.[id] || equipment.data[id].assetIds.includes(asset.id))) || order.assetAssignments[id]?.includes(asset.id)).map((asset): Field => ({ key: `asset:${asset.id}`, label: `${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox' })),
     ];
@@ -47,7 +43,7 @@ export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }:
   });
   const initial: Values = {};
   if (action === 'prepare') {
-    ids.forEach((id) => { initial[`prepare:${id}`] = order.preparedQuantities?.[id] ?? 0; initial[`source:${id}`] = order.sourceLocations?.[id] ?? ''; });
+    ids.forEach((id) => { initial[`prepare:${id}`] = order.preparedQuantities?.[id] ?? 0; });
     Object.values(order.assetAssignments).flat().forEach((asset) => { initial[`asset:${asset}`] = true; });
   }
   return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : [...fields, { key: 'notes', label: t('Notiz / Begründung', 'Notes / reason'), multiline: true, required: action === 'return' }]} onClose={onClose} onSave={async (values) => {
@@ -55,7 +51,7 @@ export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }:
     if (action === 'prepare') {
       const preparedQuantities = Object.fromEntries(ids.map((id) => [id, Number(values[`prepare:${id}`] || 0)]));
       const assetAssignments = Object.fromEntries(ids.map((id) => [id, (assets.data?.[id] ?? []).filter((asset) => values[`asset:${asset.id}`]).map((asset) => asset.id)]));
-      return generalOrderCommand(order.id, action, { preparedQuantities, assetAssignments, sourceLocations: Object.fromEntries(ids.filter((id) => values[`source:${id}`]).map((id) => [id, String(values[`source:${id}`])])), notes: optionalText(values.notes), idempotencyKey: key });
+      return generalOrderCommand(order.id, action, { preparedQuantities, assetAssignments, notes: optionalText(values.notes), idempotencyKey: key });
     }
     if (action === 'return') {
       const data: GeneralOrderReturnInput = { idempotencyKey: key, notes: optionalText(values.notes) };

@@ -1,5 +1,5 @@
 import { formatDate } from '../utils/dateFormat';
-import { Button, ToggleButton } from '../components/shared/ActionButtons';
+import { Button } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -7,19 +7,15 @@ import {
   Alert,
   Box,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  MenuItem,
   DialogContent,
   DialogTitle,
-  Select,
   Stack,
   Tooltip,
-  ToggleButtonGroup,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { OrderEventFilter } from '../components/orders/OrderEventFilter';
 import AddIcon from '@mui/icons-material/Add';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
@@ -112,8 +108,7 @@ export function FactionOrders() {
     if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);
   }, [eventType, selectableEvents, setEventType]);
 
-  function selectEvent(value: EventType | null) {
-    if (!value) return;
+  function selectEvent(value: EventType) {
     setActivePage(1);
     setHistoryPage(1);
     setEventType(value);
@@ -198,23 +193,14 @@ export function FactionOrders() {
         </Button>
       </Stack>
 
-      {selectableEvents.length > 1 && <ToggleButtonGroup
-        exclusive
-        value={eventType}
-        onChange={(_event, value: EventType | null) => selectEvent(value)}
-        sx={{ mb: 3, flexWrap: 'wrap' }}
+      <OrderEventFilter
+        eventTypes={selectableEvents}
+        eventType={eventType}
+        onEventTypeChange={selectEvent}
+        eventOptions={eventOptions}
+        selectedEventId={selectedEventId}
+        onEventChange={(id) => { setSelectedEventId(id); setActivePage(1); setHistoryPage(1); }}
       >
-        {selectableEvents.map((type) => <ToggleButton title={translate('Bestelllisten nach diesem Eventtyp filtern', 'Filter order lists by this event type')} key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
-      </ToggleButtonGroup>}
-
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
-        <FormControl sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
-          <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
-          <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }}>
-            <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
-            {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
-          </Select>
-        </FormControl>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>
           <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
             {t('Bestellstatus der Fraktionen', 'Faction order status')}
@@ -237,7 +223,7 @@ export function FactionOrders() {
           )}
         </Box>
         {!isManager && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
-      </Stack>
+      </OrderEventFilter>
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
 

@@ -1,7 +1,7 @@
 import { type Item } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedFactionOrderRow, type ParsedAssemblyComponent, type FactionOrderImportStatus, type ParsedGeneralOrderRow } from '../../types/csvImport';
-import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_ALIASES, parseInlineComponents, ORDER_ITEMS_ALIASES, ORDER_STATUS_ALIASES, ORDER_RETURNED_ITEMS_ALIASES, HINT_ALIASES, GENERAL_ORDER_NAME_ALIASES, GENERAL_ORDER_PURPOSE_ALIASES, ORDER_CONSUMED_ITEMS_ALIASES } from './core';
+import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_ALIASES, parseInlineComponents, ORDER_ITEMS_ALIASES, ORDER_STATUS_ALIASES, ORDER_RETURNED_ITEMS_ALIASES, HINT_ALIASES, GENERAL_ORDER_NAME_ALIASES, GENERAL_ORDER_PURPOSE_ALIASES, ORDER_CONSUMED_ITEMS_ALIASES, ORDER_PICKUP_POINT_ALIASES } from './core';
 
 /** Parses draft/submitted faction-order rows from a combined CSV. */
 export function parseFactionOrdersFromCsv(
@@ -73,6 +73,10 @@ export function parseFactionOrdersFromCsv(
     }
 
     const unmatched = requestedItems.filter((component) => !component.matched);
+    const rawPickupPoint = getField(raw, ORDER_PICKUP_POINT_ALIASES) ?? '';
+    const pickupMatch = rawPickupPoint.match(/^(-?\d{1,3}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+    const pickupPoint = pickupMatch ? { latitude: Number(pickupMatch[1]), longitude: Number(pickupMatch[2]) } : undefined;
+    const needsPickupPoint = ['ready', 'picked_up', 'partially_returned', 'returned', 'closed'].includes(targetStatus);
 
     let validationStatus: ParsedFactionOrderRow['status'] = 'valid';
     let statusMessage: string | undefined;
@@ -91,6 +95,12 @@ export function parseFactionOrdersFromCsv(
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
+    } else if (rawPickupPoint && (!pickupPoint || Math.abs(pickupPoint.latitude) > 90 || Math.abs(pickupPoint.longitude) > 180)) {
+      validationStatus = 'error';
+      statusMessage = 'Abholpunkt muss als "Breite, Länge" angegeben werden, z. B. 50.5520, 9.6800';
+    } else if (needsPickupPoint && !pickupPoint) {
+      validationStatus = 'error';
+      statusMessage = 'Abholpunkt fehlt: ab Status „Bereit“ ist ein genauer Abholpunkt (Breite, Länge) erforderlich';
     }
 
     results.push({
@@ -108,6 +118,7 @@ export function parseFactionOrdersFromCsv(
       rawRow: raw,
       requestedItems,
       returnedItems: returnedItems.length > 0 ? returnedItems : undefined,
+      pickupPoint,
       targetStatus,
       status: validationStatus,
       statusMessage,

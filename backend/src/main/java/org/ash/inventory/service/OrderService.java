@@ -166,6 +166,7 @@ public class OrderService {
         releaseAssetAssignments(order);
         var requestedByItem = aggregate(lines, false);
         var assignedAssetIds = new HashSet<UUID>();
+        var sources = new LinkedHashMap<UUID, UUID>();
         for (var entry : requestedByItem.entrySet()) {
             var lockedItem = orm.findLocked(Item.class, entry.getKey().id);
             if (lockedItem == null) throw ApiException.notFound("Item not found");
@@ -182,7 +183,10 @@ public class OrderService {
                 throw ApiException.conflict("Only " + availableIncludingThisOrder + " units of " + entry.getKey().name
                         + " can be reserved");
             }
-            var source = input.sourceLocations() == null || input.sourceLocations().get(lockedItem.id) == null ? lockedItem.storageLocation : positions.location(input.sourceLocations().get(lockedItem.id));
+            var source = input.sourceLocations() == null || input.sourceLocations().get(lockedItem.id) == null
+                    ? allocation.defaultSource(lockedItem, prepared, order.id, null)
+                    : positions.location(input.sourceLocations().get(lockedItem.id));
+            if (source != null) sources.put(lockedItem.id, source.id);
             availableIncludingThisOrder = Math.min(availableIncludingThisOrder, allocation.sourceCapacity(lockedItem, source, order.id, null, prepared));
             if (prepared > availableIncludingThisOrder && !input.acknowledgeShortages()) throw ApiException.conflict("Insufficient stock at source for " + lockedItem.name);
             int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
@@ -196,7 +200,7 @@ public class OrderService {
                 throw ApiException.badRequest("Asset assignments can only be used with serialized items");
             }
         }
-        reconcileReservations(order, lines, actors.current(), input.sourceLocations());
+        reconcileReservations(order, lines, actors.current(), sources);
         order.preparedBy = actors.current();
         audit(order, actors.current(), "preparation_saved", order.status, order.status, input.idempotencyKey(),
                 input.notes(), lineSnapshot(order));

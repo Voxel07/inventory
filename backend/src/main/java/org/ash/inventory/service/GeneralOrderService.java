@@ -90,7 +90,9 @@ public class GeneralOrderService {
             var item = lockedItem(id); int quantity = prepared.get(id);
             if (quantity > order.requestedQuantities.getOrDefault(id, 0)) throw ApiException.badRequest("Preparation exceeds requested quantity");
             inventory.assertCheckoutAllowed(item);
-            var source = input.sourceLocations() == null || input.sourceLocations().get(item.id) == null ? item.storageLocation : positions.location(input.sourceLocations().get(item.id));
+            var source = input.sourceLocations() == null || input.sourceLocations().get(item.id) == null
+                    ? allocation.defaultSource(item, quantity, null, order.id)
+                    : positions.location(input.sourceLocations().get(item.id));
             int sourceCapacity = allocation.sourceCapacity(item, source, null, order.id, quantity);
             if (source != null) sources.put(id, source.id.toString());
             if (item.trackingMode != DomainEnums.TrackingMode.serialized && quantity > sourceCapacity) throw ApiException.conflict("Insufficient stock at source for " + item.name);

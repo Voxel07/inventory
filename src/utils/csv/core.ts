@@ -236,6 +236,9 @@ export const ORDER_ITEMS_ALIASES = ['ordereditems', 'requesteditems', 'bestellte
 
 export const ORDER_STATUS_ALIASES = ['orderstatus', 'bestellstatus'];
 
+/** "latitude, longitude" with dot decimals; required once a faction order becomes ready. */
+export const ORDER_PICKUP_POINT_ALIASES = ['pickuppoint', 'abholpunkt', 'abholkoordinaten'];
+
 export const ORDER_RETURNED_ITEMS_ALIASES = [
   'returneditems',
   'rueckgabeartikel',

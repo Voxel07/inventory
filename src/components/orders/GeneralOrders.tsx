@@ -38,6 +38,8 @@ import { catalogPage, filterCatalogItems } from '../../utils/orderCatalog';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
+import { useUIStore } from '../../store/uiStore';
+import { OrderEventFilter } from './OrderEventFilter';
 
 const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
   preparing: ['In Vorbereitung', 'Preparing'], draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -51,7 +53,9 @@ export function GeneralOrders() {
   const feedback = useMutationFeedback();
   const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
-  const { currentEvent, selectedEventId, setSelectedEventId } = useOrderEventSelection(events);
+  const eventType = useUIStore((state) => state.activeEventType);
+  const setEventType = useUIStore((state) => state.setActiveEventType);
+  const { currentEvent, selectedEventId, setSelectedEventId, eventOptions } = useOrderEventSelection(events);
   const { data: items = [] } = useItems();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -74,8 +78,12 @@ export function GeneralOrders() {
   const activeEvents = events;
   const visibleOrders = (() => {
     const term = search.trim().toLocaleLowerCase();
-    return orders.filter((order) => (!selectedEventId || order.eventOccurrenceId === selectedEventId)
-      && (!term || `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term)));
+    return orders.filter((order) => {
+      // Orders without an event stay visible under every event type until one is chosen.
+      const orderEvent = order.eventOccurrenceId ? eventMap.get(order.eventOccurrenceId) : undefined;
+      const matchesEvent = selectedEventId ? order.eventOccurrenceId === selectedEventId : !orderEvent || orderEvent.eventType === eventType;
+      return matchesEvent && (!term || `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
+    });
   })();
   const activeOrders = visibleOrders.filter((order) => !['returned', 'closed', 'cancelled'].includes(order.status));
   const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
@@ -105,7 +113,7 @@ export function GeneralOrders() {
     event.preventDefault();
     const requestedQuantities = toPositiveIntegerQuantities(quantities);
     const data = { name: name.trim(), purpose: purpose.trim(), eventOccurrenceId: eventId || undefined, requestedQuantities };
-    const callbacks = feedback.callbacks(t('Bestellung gespeichert', 'Order saved'), () => setEditing(null));
+    const callbacks = feedback.callbacks(editing === 'new' ? t('Bestellung erstellt', 'Order created') : t('Bestellung aktualisiert', 'Order updated'), () => setEditing(null));
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
@@ -159,16 +167,18 @@ export function GeneralOrders() {
         <Typography color="text.secondary">{t('Artikel für Catering, Sponsorenzelte, Bühnen und andere Zwecke.', 'Items for catering, sponsor tents, stages, and other purposes.')}</Typography></Box>
       <Button title={translate('Eine neue allgemeine Bestellung anlegen', 'Create a new general order')} disabled={effectiveAccess(user) === 'read_only'} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-      <TextField select size="small" label={t('Event auswählen', 'Select event')} value={selectedEventId}
-        onChange={(event) => { setSelectedEventId(event.target.value); setPage(1); setHistoryPage(1); }} sx={{ minWidth: { sm: 280 } }}>
-        <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
-        {events.map((event) => <MenuItem key={event.id} value={event.id}>{eventName(event.id)}</MenuItem>)}
-      </TextField>
+    <OrderEventFilter
+      eventTypes={eventTypes}
+      eventType={eventType}
+      onEventTypeChange={(value) => { setEventType(value); setPage(1); setHistoryPage(1); }}
+      eventOptions={eventOptions}
+      selectedEventId={selectedEventId}
+      onEventChange={(id) => { setSelectedEventId(id); setPage(1); setHistoryPage(1); }}
+    >
       <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
         onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoryPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
         sx={{ maxWidth: 520 }} />
-    </Stack>
+    </OrderEventFilter>
     {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
     <OrderListSection
       title={t('Aktive Bestellungen', 'Active orders')}
@@ -235,7 +245,12 @@ export function GeneralOrders() {
             </Stack>
           </Box>}
         </Stack></DialogContent><DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
-          <Button title={translate('Die Bestellung mit den eingegebenen Mengen speichern', 'Save this order with the entered quantities')} type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>{t('Speichern', 'Save')}</Button></DialogActions>
+          <Button title={editing === 'new'
+            ? translate('Die Bestellung mit den eingegebenen Mengen erstellen', 'Create this order with the entered quantities')
+            : translate('Die Bestellung mit den geänderten Mengen aktualisieren', 'Update this order with the changed quantities')}
+            type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>
+            {editing === 'new' ? t('Bestellung erstellen', 'Create order') : t('Bestellung aktualisieren', 'Update order')}
+          </Button></DialogActions>
       </Box>
     </Dialog>
 

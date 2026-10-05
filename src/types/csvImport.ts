@@ -56,6 +56,8 @@ export interface ParsedFactionOrderRow {
   rawRow: Record<string, string>;
   requestedItems: ParsedAssemblyComponent[];
   returnedItems?: ParsedAssemblyComponent[];
+  /** Exact pickup point; the ready transition requires one. */
+  pickupPoint?: { latitude: number; longitude: number };
   targetStatus: FactionOrderImportStatus;
   status: 'valid' | 'error';
   statusMessage?: string;
