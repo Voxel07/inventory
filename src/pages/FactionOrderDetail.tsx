@@ -10,7 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
-import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
+import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { OrderDetailHeader } from '../components/orders/detail/OrderDetailHeader';
 import { OrderPickListTable } from '../components/orders/detail/OrderPickListTable';
@@ -39,7 +39,7 @@ import { translate, useLocalizedText } from '../utils/naming';
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
-import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
+import { canAccessFaction, canManageInventory } from '../utils/access';
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 
@@ -243,7 +243,7 @@ export function FactionOrderDetail() {
   }
 
   const currentUser = user;
-  if (!canAccessFaction(currentUser, order.eventType, order.faction)) {
+  if (!canAccessFaction(currentUser, order.factionKey)) {
     return (
       <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}
@@ -260,7 +260,7 @@ export function FactionOrderDetail() {
     : pickupPoint ?? t('Nicht angegeben', 'Not specified');
 
   const isManager = canManageInventory(currentUser);
-  const canEditOrder = currentUser?.role !== 'read_only' && canAccessFaction(currentUser, order.eventType, order.faction);
+  const canEditOrder = currentUser?.role !== 'read_only' && canAccessFaction(currentUser, order.factionKey);
   const canEditOrderContents = canEditOrder && ['draft', 'submitted'].includes(order.status);
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
     + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
@@ -372,7 +372,6 @@ export function FactionOrderDetail() {
             assemblies={assemblies}
             storageLocations={storageLocations}
             orders={allOrders}
-            allowedFactionKeys={allowedFactionKeys(currentUser) ?? undefined}
             onSubmit={(data) => {
               updateOrder.mutate(
                 { id: order.id, data },
@@ -428,18 +427,9 @@ export function FactionOrderDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Code Dialog */}
-      <Dialog open={qrOpen} onClose={() => setQrOpen(false)}>
-        <DialogTitle>{order.orderCode}</DialogTitle>
-        <DialogContent>
-          <QRCodeGenerator
-            itemId={order.id}
-            itemName={`${order.eventType}-${order.faction}-${order.orderCode}`}
-            resourceType="faction-order"
-            textCode={order.orderCode}
-          />
-        </DialogContent>
-      </Dialog>
+      <QrLabelDialog
+        label={qrOpen ? { title: order.orderCode, itemId: order.id, itemName: `${order.eventType}-${order.faction}-${order.orderCode}`, resourceType: 'faction-order', textCode: order.orderCode } : null}
+        onClose={() => setQrOpen(false)} />
 
       {/* Action Confirmation Dialog */}
       <ConfirmDialog

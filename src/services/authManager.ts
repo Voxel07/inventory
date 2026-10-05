@@ -162,6 +162,21 @@ export async function clearAuth(error: string | null = null): Promise<void> {
   await persisted;
 }
 
+export function getRevocableTokens(): { accessToken: string; refreshToken: string } {
+  return { accessToken: session.accessToken, refreshToken: session.refreshToken };
+}
+
+// An explicit logout ends the session in every tab of this browser. Expiry stays per tab: refresh
+// tokens rotate, so one tab's rejected token must not sign out the others.
+const authChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('ash-inventory-auth');
+authChannel?.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
+  if (event.data?.type === 'logout' && (session.accessToken || session.refreshToken)) void clearAuth();
+});
+
+export function announceLogout(): void {
+  authChannel?.postMessage({ type: 'logout' });
+}
+
 export function getOidcIdToken(): string {
   return session.idToken;
 }

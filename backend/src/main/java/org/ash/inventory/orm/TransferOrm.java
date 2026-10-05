@@ -11,15 +11,9 @@ import java.util.Locale;
 import java.util.UUID;
 
 @ApplicationScoped
-public class TransferOrm {
+public class TransferOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
 
-    public TransferOrm(EntityManager entityManager) { this.entityManager = entityManager; }
-    public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T locked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<InventoryTransfer> transfers(String status, int offset, int limit) {
         var denied = privacyScopes.deniedReferences(accessActor.current());

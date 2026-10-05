@@ -12,20 +12,20 @@ import org.jboss.logging.Logger;
 
 
 /**
- * Caches API-ready catalog snapshots rather than managed Hibernate entities.
- * The JSON-compatible values are safe to serialize into the shared Valkey cache
- * and can be consumed by any API replica.
+ * Pre-serialized catalog responses. Factions are cached per node (Caffeine) under their
+ * commit-ordered source revision, so every replica switches to a new snapshot as soon as the
+ * change commits; no invalidation message is needed. Events are serialized on each request.
  */
 @ApplicationScoped
-public class CatalogResponseCache {
-    private static final Logger LOG = Logger.getLogger(CatalogResponseCache.class);
+public class CatalogResponses {
+    private static final Logger LOG = Logger.getLogger(CatalogResponses.class);
     private final CatalogService catalog;
     private final ApiMapper mapper;
     @jakarta.inject.Inject org.ash.inventory.service.ApiQueryService queries;
     private final ObjectMapper objectMapper;
     private final Cache cache;
 
-    public CatalogResponseCache(CatalogService catalog, ApiMapper mapper, ObjectMapper objectMapper,
+    public CatalogResponses(CatalogService catalog, ApiMapper mapper, ObjectMapper objectMapper,
             @CacheName("factions-cache") Cache cache) {
         this.catalog = catalog;
         this.mapper = mapper;
@@ -34,16 +34,18 @@ public class CatalogResponseCache {
     }
 
     @Transactional
-    public String locations() {
-        return json(mapper.locations(catalog.getLocations()));
-    }
-
-    @Transactional
     public String events(String eventType) {
         return json(queries.projectEvents(catalog.getEvents(eventType)));
     }
 
     @jakarta.inject.Inject org.ash.inventory.orm.SourceRevisionOrm revisions;
+
+    /** Weak ETag of the faction list derived from the committed revision; a match skips all catalog reads. */
+    @Transactional
+    public String factionsEtag(String eventType) {
+        return "W/\"" + revisions.factions() + "." + Integer.toHexString(eventType.trim().hashCode()) + "\"";
+    }
+
     @org.ash.inventory.helper.ConsistentRead
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public String factions(String eventType) {

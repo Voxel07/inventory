@@ -15,7 +15,8 @@ import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
-import { catalogGridSx, CatalogRow, CatalogSearchBar, type RowAction } from './CatalogParts';
+import { catalogGridSx } from './catalogGrid';
+import { CatalogRow, CatalogSearchBar, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { selectFilterColumn } from '../../utils/catalogFilters';
 

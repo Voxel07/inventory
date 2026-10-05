@@ -29,7 +29,4 @@ export const storageLocationApi = createCrudResourceApi<StorageLocation, Storage
 );
 
 export const getStorageLocations = storageLocationApi.getAll;
-export const getStorageLocation = storageLocationApi.getById;
 export const createStorageLocation = storageLocationApi.create;
-export const updateStorageLocation = storageLocationApi.update;
-export const deleteStorageLocation = storageLocationApi.delete;

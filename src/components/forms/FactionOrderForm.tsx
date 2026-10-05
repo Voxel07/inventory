@@ -32,7 +32,6 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Dialog } from '../shared/ClosableDialog';
 import { DialogContent, DialogTitle } from '@mui/material';
 import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item, StorageLocation } from '../../types';
-import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useEventReports } from '../../hooks/useEvents';
 import {
@@ -41,7 +40,9 @@ import {
   findPreviousFactionOrder,
 } from '../../utils/factionOrderHistory';
 import { useUIStore } from '../../store/uiStore';
-import { useFactions } from '../../hooks/useFactionOrders';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
+import { useAuth } from '../../hooks/useAuth';
+import { canAccessFaction, factionKeyOf } from '../../utils/access';
 import { getItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
@@ -65,7 +66,6 @@ interface Props {
   defaultFaction?: string;
   submitLabel?: string;
   isLoading?: boolean;
-  allowedFactionKeys?: string[];
   onSubmit: (data: FactionOrderFormData) => void;
 }
 
@@ -79,30 +79,22 @@ export function FactionOrderForm({
   defaultFaction,
   submitLabel,
   isLoading,
-  allowedFactionKeys,
   onSubmit,
 }: Props) {
   const t = useLocalizedText();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
-  const { data: dynamicFactions } = useFactions();
+  const catalog = useFactionCatalog();
+  const { user } = useAuth();
   const { data: events = [] } = useEventReports();
-  const factionsByEvent = (() => {
-    const result: Record<EventType, readonly string[]> = { ...FACTIONS_BY_EVENT };
-    if (dynamicFactions && dynamicFactions.length > 0) {
-      for (const type of EVENT_TYPES) {
-        const matching = dynamicFactions.filter((f) => f.eventType === type && f.active !== false).map((f) => f.name);
-        const inactive = new Set(dynamicFactions.filter((f) => f.eventType === type && f.active === false).map((f) => f.name));
-        result[type] = [...new Set([...(result[type] ?? []), ...matching])].filter((name) => !inactive.has(name));
-      }
-    }
-    return result;
-  })();
 
   const initialEventType = initialData?.eventType ?? defaultEventType;
-  const allowedEvents = EVENT_TYPES.filter((type) => !allowedFactionKeys || (factionsByEvent[type] ?? []).some((candidate) => allowedFactionKeys.includes(`${type}:${candidate}`)));
-  const allowedFactions = (type: EventType) => (factionsByEvent[type] ?? []).filter((candidate) => !allowedFactionKeys || allowedFactionKeys.includes(`${type}:${candidate}`));
+  // Faction leaders only see the factions of their identity-provider groups.
+  const allowedFactions = (type: EventType) => catalog.factionsFor(type)
+    .filter((candidate) => canAccessFaction(user, factionKeyOf(candidate)))
+    .map((candidate) => candidate.name);
+  const allowedEvents = catalog.eventTypes.filter((type) => allowedFactions(type).length > 0);
   const [chosenEventType, setEventType] = useState<EventType>(initialEventType);
   const eventType = allowedEvents.includes(chosenEventType) ? chosenEventType : allowedEvents[0] ?? chosenEventType;
   const [chosenFaction, setFaction] = useState(

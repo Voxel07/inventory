@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.PositionOrm;
@@ -27,7 +28,7 @@ public class PositionService {
         return value;
     }
     public static boolean usable(InventoryLot lot) {
-        return lot == null || lot.usableOn(LocalDate.now());
+        return lot == null || lot.usableOn(BusinessTime.today());
     }
 
     public int blocked(Item item) {

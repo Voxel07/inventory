@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -67,7 +68,7 @@ public class PlanningService {
         incoming.forEach(line -> incomingByItem.computeIfAbsent(line.item.id, ignored -> new ArrayList<>()).add(line));
         var dates = new TreeSet<LocalDate>(); scope.forEach(e -> { if (selected == null || !e.startDate.isBefore(selected.startDate)) dates.add(e.startDate); });
         if (selected != null) dates.add(selected.startDate);
-        if (dates.isEmpty()) dates.add(LocalDate.now());
+        if (dates.isEmpty()) dates.add(BusinessTime.today());
         var result = new ArrayList<ApiResponses.DeficitResponse>();
         for (var item : items) {
             var snapshot = stocks.get(item.id);

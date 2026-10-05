@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -60,7 +61,7 @@ public class CategoryMaintenanceService {
                     item.maintenanceStatus = DomainEnums.MaintenanceStatus.certified;
                 }
             }
-            else if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = LocalDate.now().plusDays(input.intervalDays());
+            else if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = BusinessTime.today().plusDays(input.intervalDays());
         }
         events.record("catalog.changed", "category-maintenance", policy == null ? UUID.randomUUID() : policy.id,
                 actors.current().id, null, Map.of("resource", "category-maintenance", "category", name));

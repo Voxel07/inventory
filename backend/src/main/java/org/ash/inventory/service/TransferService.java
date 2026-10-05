@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.PageBounds;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -36,7 +38,7 @@ public class TransferService {
     @Transactional
     public List<TransferDtos.TransferResponse> list(String status, int page, int size) {
         actors.requireWarehouse();
-        try { return responses(orm.transfers(status, offset(page, size), size)); }
+        try { return responses(orm.transfers(status, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown transfer status"); }
     }
 
@@ -47,8 +49,8 @@ public class TransferService {
         actors.requireWarehouse();
         var existing = orm.byIdempotencyKey(input.idempotencyKey());
         if (existing != null) return responses(List.of(existing)).getFirst();
-        var source = required(StorageLocation.class, input.sourceLocationId(), "Source location");
-        var destination = required(StorageLocation.class, input.destinationLocationId(), "Destination location");
+        var source = orm.require(StorageLocation.class, input.sourceLocationId(), "Source location");
+        var destination = orm.require(StorageLocation.class, input.destinationLocationId(), "Destination location");
         if (!source.active || !destination.active) throw ApiException.conflict("Transfer locations must be active");
         if (source.id.equals(destination.id)) throw ApiException.badRequest("Transfer locations must differ");
         var transfer = new InventoryTransfer();
@@ -65,9 +67,9 @@ public class TransferService {
         var requestedByItem = new LinkedHashMap<UUID, Long>();
         input.lines().stream().map(TransferDtos.TransferLineInput::itemId).distinct()
                 .sorted(java.util.Comparator.comparing(UUID::toString))
-                .forEach(itemId -> requiredLocked(Item.class, itemId, "Item"));
+                .forEach(itemId -> orm.requireLocked(Item.class, itemId, "Item"));
         for (var lineInput : input.lines()) {
-            var item = required(Item.class, lineInput.itemId(), "Item");
+            var item = orm.require(Item.class, lineInput.itemId(), "Item");
             if (!item.active) throw ApiException.conflict("Transfer item must be active");
             var line = new InventoryTransferLine();
             line.transfer = transfer;
@@ -78,7 +80,7 @@ public class TransferService {
                     throw ApiException.badRequest("Serialized transfer lines require exactly one asset");
                 }
                 if (!assets.add(lineInput.assetInstanceId())) throw ApiException.badRequest("An asset can occur only once per transfer");
-                line.assetInstance = requiredLocked(AssetInstance.class, lineInput.assetInstanceId(), "Asset");
+                line.assetInstance = orm.requireLocked(AssetInstance.class, lineInput.assetInstanceId(), "Asset");
                 if (!line.assetInstance.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to transfer item");
                 if (StockPolicy.classify(line.assetInstance).available() != 1
                         || line.assetInstance.currentLocation == null
@@ -90,7 +92,7 @@ public class TransferService {
                 if (lineInput.assetInstanceId() != null) throw ApiException.badRequest("Bulk transfer lines cannot reference assets");
                 if (item.trackingMode == DomainEnums.TrackingMode.lot_tracked) {
                     if (lineInput.lotId() == null) throw ApiException.badRequest("Lot is required for lot-tracked transfers");
-                    line.lot = required(InventoryLot.class, lineInput.lotId(), "Inventory lot");
+                    line.lot = orm.require(InventoryLot.class, lineInput.lotId(), "Inventory lot");
                     if (!line.lot.item.id.equals(item.id)) throw ApiException.badRequest("Lot does not belong to transfer item");
                 } else if (lineInput.lotId() != null) {
                     throw ApiException.badRequest("Bulk transfer lines cannot reference lots");
@@ -118,7 +120,7 @@ public class TransferService {
     public TransferDtos.TransferResponse dispatch(UUID id, TransferDtos.CommandInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var transfer = requiredLocked(InventoryTransfer.class, id, "Transfer");
+        var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
         if (orm.commandApplied(id, input.idempotencyKey())) {
             return response(transfer, orm.lockedLines(transfer));
         }
@@ -129,8 +131,8 @@ public class TransferService {
         var lines = orm.lockedLines(transfer);
         for (var line : lines) {
             if (line.assetInstance != null) {
-                requiredLocked(Item.class, line.item.id, "Item");
-                var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
+                orm.requireLocked(Item.class, line.item.id, "Item");
+                var asset = orm.requireLocked(AssetInstance.class, line.assetInstance.id, "Asset");
                 if (StockPolicy.classify(asset).available() != 1
                         || asset.currentLocation == null || !asset.currentLocation.id.equals(transfer.sourceLocation.id)) {
                     throw ApiException.conflict("Asset " + asset.assetCode + " is not available at the source location");
@@ -138,7 +140,7 @@ public class TransferService {
                 asset.availabilityStatus = DomainEnums.AssetState.in_transit;
                 asset.currentLocation = null;
             } else {
-                var lockedItem = requiredLocked(Item.class, line.item.id, "Item");
+                var lockedItem = orm.requireLocked(Item.class, line.item.id, "Item");
                 if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
                 if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null, null))) throw ApiException.conflict("Stock is reserved or unavailable");
                 var position = orm.lockedPosition(line.item, transfer.sourceLocation, line.lot);
@@ -166,7 +168,7 @@ public class TransferService {
     public TransferDtos.TransferResponse receive(UUID id, TransferDtos.ReceiveInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var transfer = requiredLocked(InventoryTransfer.class, id, "Transfer");
+        var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
         if (orm.commandApplied(id, input.idempotencyKey())) {
             return response(transfer, orm.lockedLines(transfer));
         }
@@ -206,7 +208,7 @@ public class TransferService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse cancel(UUID id, TransferDtos.CommandInput input) {
         actors.requireWarehouse();
-        var transfer = requiredLocked(InventoryTransfer.class, id, "Transfer");
+        var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
         if (transfer.status == DomainEnums.TransferStatus.cancelled) return response(transfer, orm.lockedLines(transfer));
         if (transfer.status != DomainEnums.TransferStatus.requested && transfer.status != DomainEnums.TransferStatus.picking) {
             throw ApiException.conflict("Only an undispatched transfer can be cancelled");
@@ -220,9 +222,9 @@ public class TransferService {
 
     private void receiveLine(InventoryTransfer transfer, InventoryTransferLine line,
             TransferDtos.ReceiveLineInput input, UserAccount actor, UUID commandId) {
-        requiredLocked(Item.class, line.item.id, "Item");
+        orm.requireLocked(Item.class, line.item.id, "Item");
         if (line.assetInstance != null) {
-            var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
+            var asset = orm.requireLocked(AssetInstance.class, line.assetInstance.id, "Asset");
             if (asset.availabilityStatus != DomainEnums.AssetState.in_transit) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not in transit");
             }
@@ -305,23 +307,12 @@ public class TransferService {
 
     private String uniqueNumber(String requested) {
         var value = requested == null || requested.isBlank()
-                ? "TR-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
+                ? "TR-" + BusinessTime.today().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
                 : requested.trim();
         if (orm.numberExists(value)) throw ApiException.conflict("Transfer number already exists");
         return value;
     }
     private UUID derivedKey(UUID base, String suffix) {
         return UUID.nameUUIDFromBytes((base + ":" + suffix).getBytes(StandardCharsets.UTF_8));
-    }
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try { return Math.multiplyExact(page, size); }
-        catch (ArithmeticException exception) { throw ApiException.badRequest("Page offset is too large"); }
-    }
-    private <T> T required(Class<T> type, UUID id, String label) {
-        var value = orm.find(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
-    }
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        var value = orm.locked(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
     }
 }

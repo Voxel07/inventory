@@ -26,18 +26,6 @@ services:
       retries: 20
     restart: unless-stopped
 
-  valkey:
-    image: valkey/valkey:8-alpine
-    command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
-    volumes:
-      - inventory-valkey:/data
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
   garage:
     image: dxflrs/garage:v2.3.0
     container_name: garage
@@ -81,9 +69,10 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/inventory
       DB_USER: inventory
       DB_PASSWORD: ${DB_PASSWORD:-inventory}
-      REDIS_URL: redis://valkey:6379
-      API_RATE_LIMIT_BACKEND: redis
-      EVENT_BACKEND: redis
+      # Single API node: in-process events and rate limiting. docker-compose.cluster.yml adds Valkey.
+      API_RATE_LIMIT_BACKEND: memory
+      EVENT_BACKEND: memory
+      INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
       # A single public Authentik client mirrors the working WRW setup. The
@@ -91,6 +80,7 @@ services:
       OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
       PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
       PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
@@ -105,11 +95,8 @@ services:
       S3_REGION: ${S3_REGION:-garage}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
     depends_on:
       postgres:
-        condition: service_healthy
-      valkey:
         condition: service_healthy
     volumes:
       - inventory-media:/data/media
@@ -127,6 +114,7 @@ services:
       VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3333/}
       VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-openid profile email offline_access}
+      VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
     depends_on:
       inventory-api:
         condition: service_started
@@ -134,7 +122,6 @@ services:
 
 volumes:
   inventory-postgres:
-  inventory-valkey:
   inventory-media:
   inventory-garage-meta:
   inventory-garage-data:

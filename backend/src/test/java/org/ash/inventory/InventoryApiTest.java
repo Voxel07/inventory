@@ -561,6 +561,23 @@ class InventoryApiTest {
     }
 
     @Test
+    void referenceFactionsAndEventTypesComeFromTheDatabase() {
+        request().get("/api/event-types").then().statusCode(200)
+                .body("$", org.hamcrest.Matchers.hasItems("ASD", "DE", "LS", "M24", "TNO"));
+        String etag = request().get("/api/factions?eventType=TNO").then().statusCode(200)
+                .body("slug", org.hamcrest.Matchers.hasItem("militar")).extract().header("ETag");
+        request().header("If-None-Match", etag).get("/api/factions?eventType=TNO").then().statusCode(304);
+    }
+
+    @Test
+    void accountsWithoutAnInventoryRoleAreRejected() {
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "no-inventory-role")
+                .header("X-Actor-Role", "admin")
+                .get("/api/items").then().statusCode(403);
+    }
+
+    @Test
     void canonicalRolesAreAuthorizedAndRemovedRoleNamesHaveNoPrivilege() {
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "canonical-event-planner")
@@ -788,6 +805,20 @@ class InventoryApiTest {
     }
 
     @Test
+    void uploadsAreRestrictedToSniffedImagesAndPdfDocuments() {
+        given().header("X-Actor-Id", "test-admin")
+                .multiPart("file", "page.png", "<html><script>alert(1)</script>".getBytes(java.nio.charset.StandardCharsets.UTF_8), "image/png")
+                .post("/api/media").then().statusCode(415);
+        String pdf = given().header("X-Actor-Id", "test-admin")
+                .multiPart("file", "invoice.html", "%PDF-1.7 test".getBytes(java.nio.charset.StandardCharsets.US_ASCII), "text/html")
+                .post("/api/media").then().statusCode(200).extract().path("key");
+        org.junit.jupiter.api.Assertions.assertTrue(pdf.endsWith("invoice.pdf"));
+        request().get("/api/media/" + pdf).then().statusCode(200).contentType("application/pdf")
+                .header("Content-Disposition", "attachment");
+        request().delete("/api/media/" + pdf).then().statusCode(204);
+    }
+
+    @Test
     void assemblyImageCanBeCreatedReplacedPreservedAndRemoved() {
         String component = request().body(Map.of("name", "Assembly image component", "category", "Equipment", "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
@@ -996,7 +1027,8 @@ class InventoryApiTest {
         return given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-assigned-faction-leader")
                 .header("X-Actor-Name", "Assigned Faction Leader")
-                .header("X-Actor-Role", "faction_leader");
+                .header("X-Actor-Role", "faction_leader")
+                .header("X-Actor-Factions", "DE:allowed-api-faction");
     }
 
     @Test
@@ -1022,14 +1054,15 @@ class InventoryApiTest {
 
     @Test
     void factionLeaderCannotUseTheApiForAnUnassignedFaction() {
-        String userId = assignedFactionLeaderRequest()
+        assignedFactionLeaderRequest()
                 .get("/api/auth/me")
                 .then().statusCode(200)
-                .extract().path("id");
+                .body("faction", equalTo(java.util.List.of("DE:allowed-api-faction")));
+        // Roles and factions come from the identity provider; the API has no permission editor.
         request()
-                .body(Map.of("role", "faction_leader", "faction", java.util.List.of("DE:Allowed API faction")))
-                .patch("/api/users/" + userId)
-                .then().statusCode(200);
+                .body(Map.of("role", "hq_admin", "faction", java.util.List.of()))
+                .patch("/api/users/" + java.util.UUID.randomUUID())
+                .then().statusCode(org.hamcrest.Matchers.anyOf(equalTo(404), equalTo(405)));
 
         String itemId = request()
                 .body(Map.of("sku", "FACTION-ACCESS-001", "name", "Faction access item", "category", "Equipment", "amount", 2, "value", 0))

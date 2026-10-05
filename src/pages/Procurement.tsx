@@ -1,4 +1,5 @@
 import { Button } from '../components/shared/ActionButtons';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { SupplierDraft } from '../components/procurement/SupplierDraft';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -38,7 +39,6 @@ import { getProcurementDeficits, type ProcurementDeficit } from '../services/pro
 import { PurchaseDraft } from '../components/operations/PurchasingOperations';
 import { PlanningDetails } from '../components/procurement/PlanningDetails';
 import { useEventReports } from '../hooks/useEvents';
-import { EVENT_TYPES } from '../types';
 import { translate, useLocalizedText } from '../utils/naming';
 import { formatDate } from '../utils/dateFormat';
 
@@ -46,6 +46,7 @@ const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.o
 
 export function Procurement() {
   const t = useLocalizedText();
+  const { eventTypes } = useFactionCatalog();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -281,7 +282,7 @@ export function Procurement() {
         <InputLabel>{t('Event-Umfang', 'Event scope')}</InputLabel>
         <Select value={eventId} label={t('Event-Umfang', 'Event scope')} onChange={(event) => setEventId(event.target.value)}>
           <MenuItem value="">{t('Alle geplanten Events', 'All planned events')}</MenuItem>
-          {EVENT_TYPES.flatMap((type) => {
+          {eventTypes.flatMap((type) => {
             const occurrences = events.filter((event) => event.eventType === type);
             return occurrences.length ? [
               <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,

@@ -1,4 +1,5 @@
 package org.ash.inventory.service;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -35,7 +36,7 @@ public class ActionInboxService {
         r.remindAt = input.remindAt();
     }
     private List<Action> live() {
-        var actor = actors.current(); var today = LocalDate.now(); var out = new ArrayList<Action>();
+        var actor = actors.current(); var today = BusinessTime.today(); var out = new ArrayList<Action>();
         boolean warehouse = Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew).contains(actor.role);
         boolean maintenance = actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.maintenance_crew;
         for (var o : orm.readyFactionOrders(warehouse ? null : actor.id))
@@ -49,7 +50,7 @@ public class ActionInboxService {
             if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : "/contributor");
         }
         for (var r : orm.pendingReturns(warehouse ? null : actor.id))
-            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, r.createdAt.atZone(ZoneId.systemDefault()).toLocalDate(), warehouse ? "/returns" : "/contributor");
+            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : "/contributor");
         if (warehouse || actor.role == DomainEnums.UserRole.event_planner)
             for (var p : orm.incomingPurchases())
                 add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=" + (warehouse ? "receipts" : "purchases"));
@@ -62,7 +63,7 @@ public class ActionInboxService {
         var statuses = maintenancePolicy.statuses(schedules, Instant.now());
         for (var s : schedules) {
             if (!maintenance && (s.responsiblePerson == null || !s.responsiblePerson.id.equals(actor.id))) continue;
-            LocalDate due = s.nextDueAt == null ? null : s.nextDueAt.atZone(ZoneId.systemDefault()).toLocalDate();
+            LocalDate due = s.nextDueAt == null ? null : BusinessTime.date(s.nextDueAt);
             if (statuses.get(s.id) != MaintenancePolicy.Status.healthy)
                 add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules" : "/contributor");
         }

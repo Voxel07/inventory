@@ -56,6 +56,12 @@ const stock = ['items', 'assemblies', 'transactions', 'damageReports', 'maintena
   'operations:counts', 'operations:lots', 'operations:transaction-lots', 'operations:stock-lot-labels', 'operations:schedules', 'operations:repairs'];
 const purchasing = ['purchase-orders', 'procurement-deficits', 'reports', 'action-inbox', 'operations:purchases', 'operations:receipts', 'operations:document-receipts'];
 
+/** Permission changes, and events possibly missed while the stream was disconnected, can revoke private views. */
+export function revokesAccess(detail?: ApiChangeDetail): boolean {
+  if (detail?.type === 'batch') return (detail.changes ?? []).some(revokesAccess);
+  return detail?.type === 'access.changed' || detail?.type === 'realtime.reconnected';
+}
+
 /** null means unknown: preserve conservative invalidation of every reader. */
 export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> | null {
   if (!detail?.type) return null;
@@ -74,8 +80,8 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
       case 'items': return new Set([...stock, 'member-assignments']);
       case 'assemblies': return new Set(['assemblies', 'faction-orders', 'procurement-deficits', 'action-inbox', 'reports']);
       case 'storage-locations': return new Set([...stock, 'storageLocations', 'member-assignments', 'operations:warehouses', 'operations:transfers']);
-      case 'events': return new Set(['event-reports', 'faction-orders', 'general-orders', 'procurement-deficits', 'items', 'action-inbox', 'reports', 'loans', ...custody]);
-      case 'factions': return new Set(['factions', 'faction-orders', 'event-reports', 'action-inbox', 'reports']);
+      case 'events': return new Set(['event-reports', 'event-types', 'faction-orders', 'general-orders', 'procurement-deficits', 'items', 'action-inbox', 'reports', 'loans', ...custody]);
+      case 'factions': return new Set(['factions', 'event-types', 'faction-orders', 'event-reports', 'action-inbox', 'reports']);
       case 'category-maintenance': return new Set([...stock, 'category-maintenance']);
       default: return null;
     }

@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -159,7 +160,7 @@ public class McpInventoryService {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) return List.of();
         var policy = inventory.readStock(List.of(item)).get(id).policy();
         var reserved = positions.reservedAt(List.of(item), policy.positions());
-        boolean usable = EquipmentService.freelyAvailable(item) && policy.itemUsable() && !policy.hasMemberDamage();
+        boolean usable = EquipmentService.freelyAvailable(item) && policy.eligible();
         return policy.positions().stream().filter(p -> actors.canViewLocation(p.location)).map(p -> new InventoryMcpDtos.StockPositionDto(p.id,
                 p.location.id.toString(), p.location.name, p.quantityOnHand,
                 p.quantityReserved + reserved.getOrDefault(p.id, 0),
@@ -185,7 +186,7 @@ public class McpInventoryService {
         return new InventoryMcpDtos.OperationalMetricsDto(items.size(),
                 stock.values().stream().mapToLong(s -> s.policy().assets().size()).sum(),
                 catalog.getLocations().size(), catalog.getEvents(null).stream()
-                        .filter(e -> !e.startDate.isBefore(LocalDate.now()) && !"cancelled".equalsIgnoreCase(e.status)).count(),
+                        .filter(e -> !e.startDate.isBefore(BusinessTime.today()) && !"cancelled".equalsIgnoreCase(e.status)).count(),
                 maintenanceAlerts(items, stock).size());
     }
 
@@ -197,7 +198,7 @@ public class McpInventoryService {
     private List<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts(List<Item> items,
             Map<UUID, InventoryOperationsService.ReadStock> stock) {
         var alerts = new ArrayList<InventoryMcpDtos.MaintenanceAlertDto>();
-        var today = LocalDate.now();
+        var today = BusinessTime.today();
         for (var item : items) {
             var policy = stock.get(item.id).policy();
             boolean itemScheduled = false;

@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.PageBounds;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -40,7 +41,7 @@ public class LifecycleService {
 
     public List<MaintenanceSchedule> schedules(UUID itemId, UUID assetId, int page, int size) {
         actors.current();
-        return orm.schedules(itemId, assetId, offset(page, size), size);
+        return orm.schedules(itemId, assetId, PageBounds.of(page, size).offset(), size);
     }
 
     @Transactional
@@ -59,7 +60,7 @@ public class LifecycleService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceSchedule updateSchedule(UUID id, LifecycleDtos.ScheduleInput input) {
         actors.requireMaintenance();
-        var schedule = requiredLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
+        var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
         apply(schedule, input);
         return schedule;
     }
@@ -68,12 +69,12 @@ public class LifecycleService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireSchedule(UUID id) {
         actors.requireMaintenance();
-        requiredLocked(MaintenanceSchedule.class, id, "Maintenance schedule").active = false;
+        orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule").active = false;
     }
 
     private void apply(MaintenanceSchedule schedule, LifecycleDtos.ScheduleInput input) {
-        schedule.item = required(Item.class, input.itemId(), "Item");
-        schedule.assetInstance = input.assetInstanceId() == null ? null : required(AssetInstance.class, input.assetInstanceId(), "Asset");
+        schedule.item = orm.require(Item.class, input.itemId(), "Item");
+        schedule.assetInstance = input.assetInstanceId() == null ? null : orm.require(AssetInstance.class, input.assetInstanceId(), "Asset");
         if (schedule.assetInstance != null && !schedule.assetInstance.item.id.equals(schedule.item.id)) {
             throw ApiException.badRequest("Maintenance asset does not belong to item");
         }
@@ -89,7 +90,7 @@ public class LifecycleService {
             throw ApiException.badRequest("nextDueValue is required for meter-based schedules");
         }
         schedule.warningWindow = input.warningWindow() == null ? BigDecimal.ZERO : input.warningWindow();
-        schedule.responsiblePerson = input.responsiblePersonId() == null ? null : required(UserAccount.class, input.responsiblePersonId(), "User");
+        schedule.responsiblePerson = input.responsiblePersonId() == null ? null : orm.require(UserAccount.class, input.responsiblePersonId(), "User");
         schedule.requiredChecklist = input.requiredChecklist();
         schedule.checkoutBlocking = input.checkoutBlocking();
         if (input.active() != null) schedule.active = input.active();
@@ -97,7 +98,7 @@ public class LifecycleService {
 
     public List<RepairCase> repairs(String status, int page, int size) {
         actors.current();
-        try { return orm.repairs(status, offset(page, size), size); }
+        try { return orm.repairs(status, PageBounds.of(page, size).offset(), size); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown repair status"); }
     }
 
@@ -106,7 +107,7 @@ public class LifecycleService {
     public RepairCase createRepair(LifecycleDtos.RepairInput input) {
         actors.requireMaintenance();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
-        var damage = required(DamageReport.class, input.damageReportId(), "Damage report");
+        var damage = orm.require(DamageReport.class, input.damageReportId(), "Damage report");
         var existing = orm.repairForDamage(damage.id);
         if (existing != null) return existing;
         if (occurredAt.isBefore(damage.createdAt)) throw ApiException.badRequest("Repair date precedes damage report");
@@ -116,8 +117,8 @@ public class LifecycleService {
         repair.assetInstance = damage.assetInstance;
         repair.handover = damage.handover;
         repair.safetyImpact = damage.safetyImpact;
-        repair.repairOwner = input.repairOwnerId() == null ? actors.current() : required(UserAccount.class, input.repairOwnerId(), "User");
-        repair.repairVendor = input.vendorId() == null ? null : required(Vendor.class, input.vendorId(), "Vendor");
+        repair.repairOwner = input.repairOwnerId() == null ? actors.current() : orm.require(UserAccount.class, input.repairOwnerId(), "User");
+        repair.repairVendor = input.vendorId() == null ? null : orm.require(Vendor.class, input.vendorId(), "Vendor");
         repair.partsAndCostNotes = input.partsAndCostNotes();
         repair.notes = input.notes();
         orm.persist(repair);
@@ -131,7 +132,7 @@ public class LifecycleService {
     public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
         actors.requireMaintenance();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
-        var repair = requiredLocked(RepairCase.class, id, "Repair case");
+        var repair = orm.requireLocked(RepairCase.class, id, "Repair case");
         if (occurredAt.isBefore(repair.createdAt)
                 || (repair.startedAt != null && occurredAt.isBefore(repair.startedAt))
                 || (repair.completedAt != null && occurredAt.isBefore(repair.completedAt))) {
@@ -141,8 +142,8 @@ public class LifecycleService {
             throw ApiException.conflict("Invalid repair transition: " + repair.status + " -> " + input.status());
         }
         if (input.status() == DomainEnums.RepairStatus.written_off) actors.requireAdmin();
-        if (input.repairOwnerId() != null) repair.repairOwner = required(UserAccount.class, input.repairOwnerId(), "User");
-        if (input.vendorId() != null) repair.repairVendor = required(Vendor.class, input.vendorId(), "Vendor");
+        if (input.repairOwnerId() != null) repair.repairOwner = orm.require(UserAccount.class, input.repairOwnerId(), "User");
+        if (input.vendorId() != null) repair.repairVendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         if (input.status() == DomainEnums.RepairStatus.in_repair && repair.startedAt == null) repair.startedAt = occurredAt;
         if (input.status() == DomainEnums.RepairStatus.repaired || input.status() == DomainEnums.RepairStatus.written_off) {
             int amount = input.amount() == null && repair.assetInstance != null ? 1
@@ -182,18 +183,4 @@ public class LifecycleService {
         return repair;
     }
 
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try {
-            return Math.multiplyExact(page, size);
-        } catch (ArithmeticException exception) {
-            throw ApiException.badRequest("Page offset is too large");
-        }
-    }
-    private <T> T required(Class<T> type, UUID id, String label) {
-        var value = orm.find(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
-    }
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        var value = orm.locked(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
-    }
 }

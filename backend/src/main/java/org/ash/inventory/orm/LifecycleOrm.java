@@ -10,13 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
-public class LifecycleOrm {
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
-    public LifecycleOrm(EntityManager entityManager) { this.entityManager = entityManager; }
-    public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T locked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
+public class LifecycleOrm extends EntityOrm {
 
     public List<MaintenanceSchedule> schedules(UUID itemId, UUID assetId, int offset, int limit) {
         var jpql = new StringBuilder("select schedule from MaintenanceSchedule schedule join fetch schedule.item left join fetch schedule.assetInstance left join fetch schedule.responsiblePerson where " + InventoryAccessOrm.visible("schedule.item.accessPolicy"));

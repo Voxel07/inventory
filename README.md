@@ -25,14 +25,13 @@ cd backend
 mvn -Ddev quarkus:dev
 ```
 
-Development currently uses PostgreSQL and Hibernate schema update. H2 is configured for tests. Production uses the single Flyway baseline with Hibernate validation; schema ownership is documented in
-[`REQUIREMENTS_ARCHITECTURE.md`](REQUIREMENTS_ARCHITECTURE.md#9-persistence-and-schema-state).
+Every profile (dev, test, prod) creates the schema from the single Flyway baseline `V1.0.0__init.sql`; Hibernate only validates it. Data is disposable: after a baseline change, recreate the database. Tests recreate the `TEST_DB_URL` database on every start. Architecture and schema rules: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
 
-The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required.
+The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required, keep the access-token lifetime short (≤ 5 minutes) and enable refresh-token rotation: the API validates JWTs locally, so the access-token lifetime bounds how long a revoked token is still accepted (or set `OIDC_REQUIRE_INTROSPECTION=true`).
 
-The sign-out button redirects to the provider's `end_session_endpoint` from OIDC discovery, including the ID token and configured redirect URI. To make this RP-initiated logout also end the user's main Authentik SSO session, configure the provider's invalidation flow with a **User Logout** stage. In Authentik, open **Flows and Stages → Flows → default-provider-invalidation-flow → Stage Bindings**, bind the existing `default-invalidation-logout` stage, and assign that flow to the provider. Without this Authentik setting, its default behavior ends only the Inventory application session.
+The sign-out button revokes the refresh and access tokens at the provider's `revocation_endpoint`, signs out every open tab, and then redirects to the provider's `end_session_endpoint` from OIDC discovery, including the ID token and configured redirect URI. To make this RP-initiated logout also end the user's main Authentik SSO session, configure the provider's invalidation flow with a **User Logout** stage. In Authentik, open **Flows and Stages → Flows → default-provider-invalidation-flow → Stage Bindings**, bind the existing `default-invalidation-logout` stage, and assign that flow to the provider. Without this Authentik setting, its default behavior ends only the Inventory application session.
 
 Authentik supplies application roles through its `groups` claim. Use these namespaced group names so they cannot be confused with roles belonging to another application:
 
@@ -46,7 +45,9 @@ Authentik supplies application roles through its `groups` claim. Use these names
 | `inventory_faction_leader` | `faction_leader` |
 | `inventory_read_only` | `read_only` |
 
-The Authentik group is authoritative at sign-in; the corresponding internal role is stored in `app_users`. A token without a recognized inventory group receives the least-privileged `faction_leader` role.
+Faction leaders additionally need one group per faction, named `inventory_faction_<EVENT>_<slug>` (for example `inventory_faction_DE_kgg`, `inventory_faction_TNO_militar`); the slug is shown by `GET /api/factions`.
+
+Authentik is the only source of roles and factions: they are read from the token's groups on every request and mirrored to `app_users` for display. The User management page is read-only. Accounts are bound to the token's issuer and immutable `sub`, never to the username. A token without a recognized inventory group is rejected with 403.
 
 ## Sample inventory import
 
@@ -86,7 +87,7 @@ On **Maintenance**, set a category's interval in days to schedule its items. An 
 
 OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Production initializes an empty database from the single `V1.0.0__init.sql` baseline and Hibernate validates it. Data is disposable: edit the baseline/entities directly and recreate databases after schema changes. Incremental migrations and legacy baselining procedures are removed.
 
-Roles are enforced by the backend using the seven canonical values listed above. Faction leaders can only access assigned factions; inventory lifecycle actions remain crew-only.
+Roles are enforced by the backend services (shared by REST, MCP and offline replay) using the seven canonical values listed above. Faction leaders can only access the factions of their `inventory_faction_*` groups; inventory lifecycle actions remain crew-only.
 
 The backend exposes explicit workflow APIs rather than generic entity CRUD:
 

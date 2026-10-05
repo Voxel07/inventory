@@ -1,5 +1,6 @@
 import { Chip, Button, Tab } from '../shared/ActionButtons';
 import { buildCsvImportPlan } from '../../utils/csv/importPlan';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
 import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
@@ -58,6 +59,7 @@ export function CsvImportDialog({
   const [autoCreateLocations, setAutoCreateLocations] = useState(true);
 
   // Import execution state
+  const { eventTypes, factions } = useFactionCatalog();
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStatusText, setImportStatusText] = useState('');
@@ -67,8 +69,8 @@ export function CsvImportDialog({
   const totalImported = Object.values(importedCounts).reduce((sum, count) => sum + count, 0);
 
   const { rows, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
-    () => buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems }),
-    [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems],
+    () => buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, reference: { eventTypes, factions } }),
+    [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, eventTypes, factions],
   );
 
   function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns' | 'checkouts' | 'operations', rows: { index: number; status: string }[]) {

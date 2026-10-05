@@ -12,37 +12,23 @@ import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
-public class ReturnSubmissionOrm {
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
+public class ReturnSubmissionOrm extends EntityOrm {
 
-    public ReturnSubmissionOrm(EntityManager entityManager) {
-        this.entityManager = entityManager;
-    }
 
     public void persist(ReturnSubmission value) {
         entityManager.persist(value);
     }
 
-    public void flush() { entityManager.flush(); }
 
     public boolean assignedToOrder(UUID assetId, UUID orderId) {
         return entityManager.createQuery("select count(a) from OrderLineAssetAssignment a where a.assetInstance.id = :asset and a.orderLine.order.id = :order", Long.class)
                 .setParameter("asset", assetId).setParameter("order", orderId).getSingleResult() > 0;
     }
 
-    public <T> T find(Class<T> type, UUID id) {
-        return accessActor.protect(entityManager.find(type, id), false);
-    }
 
-    public <T> T findLocked(Class<T> type, UUID id) {
-        var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
-        if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
-        return accessActor.protect(value, true);
-    }
 
     public ReturnSubmission findLocked(UUID id) {
-        return findLocked(ReturnSubmission.class, id);
+        return findLockedFresh(ReturnSubmission.class, id);
     }
 
     public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, UserAccount actor, boolean manager) {

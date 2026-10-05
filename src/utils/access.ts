@@ -1,5 +1,4 @@
-import type { AccessRole, EventType, User } from '../types';
-import { EVENT_TYPES, FACTIONS_BY_EVENT, factionKey } from '../types';
+import type { AccessRole, User } from '../types';
 
 export function effectiveAccess(user: User | null | undefined): AccessRole | 'none' {
   return user?.role ?? 'none';
@@ -37,19 +36,13 @@ export function canAccessProcurement(user: User | null | undefined): boolean {
   return ['hq_admin', 'event_planner'].includes(effectiveAccess(user));
 }
 
-export function canAccessFaction(
-  user: User | null | undefined,
-  eventType: EventType,
-  faction: string,
-): boolean {
-  if (canManageInventory(user) || effectiveAccess(user) === 'read_only') return true;
-  const key = factionKey(eventType, faction);
-  return Boolean(user?.faction?.some((assignment) => assignment === faction || assignment === key));
+/** Membership key of a faction; matches the backend's `EVENT:slug` keys and `FactionOrder.factionKey`. */
+export function factionKeyOf(faction: { eventType: string; slug: string }): string {
+  return `${faction.eventType.trim().toUpperCase()}:${faction.slug.trim().toLowerCase()}`;
 }
 
-export function allowedFactionKeys(user: User | null | undefined): string[] | null {
-  if (canManageInventory(user) || effectiveAccess(user) === 'read_only') return null;
-  return EVENT_TYPES.flatMap((eventType) => FACTIONS_BY_EVENT[eventType]
-    .filter((faction) => canAccessFaction(user, eventType, faction))
-    .map((faction) => factionKey(eventType, faction)));
+/** Only faction leaders are limited to the factions of their identity-provider groups (UX only; the API enforces it). */
+export function canAccessFaction(user: User | null | undefined, factionKey: string): boolean {
+  if (canManageInventory(user) || effectiveAccess(user) === 'read_only') return true;
+  return Boolean(user?.faction?.includes(factionKey));
 }

@@ -4,6 +4,8 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { useAuth } from '../hooks/useAuth';
 import { useT } from '../utils/naming';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
+import { factionKeyOf } from '../utils/access';
 
 const ROLE_KEYS: Record<string, string> = {
   warehouse_crew: 'profile.roles.warehouseCrew',
@@ -23,7 +25,12 @@ export function Profile() {
     ? t(ROLE_KEYS[role])
     : user?.role?.trim() || t('profile.roles.unknown');
   const displayName = user?.name?.trim() || user?.email || t('profile.unknownUser');
-  const assignedFactions = [...new Set(user?.faction ?? [])].sort((left, right) => left.localeCompare(right));
+  const { factions } = useFactionCatalog();
+  const factionLabel = (key: string) => {
+    const faction = factions.find((candidate) => factionKeyOf(candidate) === key);
+    return faction ? `${faction.eventType} · ${faction.name}` : key;
+  };
+  const assignedFactions = [...new Set(user?.faction ?? [])].map(factionLabel).sort((left, right) => left.localeCompare(right));
 
   return (
     <Box sx={{ maxWidth: 720, mx: 'auto' }}>

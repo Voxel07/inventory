@@ -90,7 +90,7 @@ class PrivateInventoryApiTest {
     @Test void mediaRequiresUploaderOwnershipAndCurrentItemAccessEvenWithKnownKeys() {
         String readerId = person("reader");
         String key = given().header("X-Actor-Id", "privacy-owner").header("X-Actor-Role", "read_only")
-                .multiPart("file", "private.png", new byte[]{1, 2, 3}, "image/png").post("/api/media").then().statusCode(200).extract().path("key");
+                .multiPart("file", "private.png", new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0}, "image/png").post("/api/media").then().statusCode(200).extract().path("key");
         reader().get("/api/media/" + key).then().statusCode(404);
         var input = itemInput(); input.put("images", List.of(key));
         String item = owner().body(input).post("/api/items").then().statusCode(200).extract().path("id");

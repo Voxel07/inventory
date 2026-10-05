@@ -24,7 +24,7 @@ host inventory inventory_replicator 10.0.0.20/32 scram-sha-256
 On the app VPS:
 
 ```powershell
-docker compose up -d postgres valkey
+docker compose up -d postgres
 ```
 
 On the storage VPS, set `REPLICA_DB_PASSWORD` and start the storage stack:

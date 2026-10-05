@@ -1,4 +1,5 @@
 package org.ash.inventory.service;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -32,7 +33,7 @@ public class LoanService {
         actors.requireWarehouse(); var c = orm.find(EquipmentCommitment.class, input.commitmentId());
         if (c == null) throw ApiException.notFound("Commitment not found");
         orm.refreshLocked(c.item); orm.refresh(c);
-        if (c.cancelled || c.returnDue == null || c.item.consumable || c.item.ownershipType == Item.Ownership.organization || c.availableUntil.isBefore(LocalDate.now())) throw ApiException.conflict("Use a current returnable private/external commitment");
+        if (c.cancelled || c.returnDue == null || c.item.consumable || c.item.ownershipType == Item.Ownership.organization || c.availableUntil.isBefore(BusinessTime.today())) throw ApiException.conflict("Use a current returnable private/external commitment");
         equipment.requireIdle(c.item);
         if (orm.commitmentCount(c) > 0) throw ApiException.conflict("Commitment already has an arrangement");
         if (!Set.of("borrow", "rental").contains(input.kind())) throw ApiException.badRequest("Choose borrow or rental");
@@ -55,7 +56,7 @@ public class LoanService {
         if (lines.isEmpty() || lines.stream().anyMatch(line -> !line.item.id.equals(c.item.id) || line.discrepancyQuantity > 0 || line.receivedQuantity != line.requestedQuantity)) throw ApiException.conflict("Transfer must contain only this item, fully received without discrepancies");
         int quantity = lines.stream().mapToInt(line -> line.receivedQuantity).sum();
         if (quantity < 1 || quantity > (returning ? l.collected - l.returned : c.quantity - l.collected)) throw ApiException.conflict("Transfer exceeds remaining agreement quantity");
-        if (!returning && (LocalDate.now().isBefore(c.availableFrom) || LocalDate.now().isAfter(c.availableUntil))) throw ApiException.conflict("Collection is outside the agreed dates");
+        if (!returning && (BusinessTime.today().isBefore(c.availableFrom) || BusinessTime.today().isAfter(c.availableUntil))) throw ApiException.conflict("Collection is outside the agreed dates");
         if (returning) equipment.requireIdle(c.item);
         var ids = lines.stream().filter(line -> line.assetInstance != null).map(line -> line.assetInstance.id.toString()).toList();
         if (ids.stream().anyMatch(a -> !c.assetIds.contains(a) || (returning ? !l.collectedAssets.contains(a) || l.returnedAssets.contains(a) : l.collectedAssets.contains(a)))) throw ApiException.conflict("Transfer assets do not match outstanding agreement identities");
@@ -67,7 +68,7 @@ public class LoanService {
     @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand public View extend(UUID id, Extension input) {
         var l = locked(id, input.revision()); var c = l.commitment;
         if (c.cancelled || l.returned == c.quantity || input.availableUntil().isBefore(c.availableUntil) || input.returnDue().isBefore(c.returnDue)
-                || input.returnDue().isBefore(input.availableUntil()) || input.availableUntil().isBefore(LocalDate.now())) throw ApiException.conflict("Extension must keep or lengthen both dates on an open arrangement");
+                || input.returnDue().isBefore(input.availableUntil()) || input.availableUntil().isBefore(BusinessTime.today())) throw ApiException.conflict("Extension must keep or lengthen both dates on an open arrangement");
         boolean overlap = orm.commitments(c.item)
                 .anyMatch(o -> !o.id.equals(c.id) && !o.cancelled && !o.availableFrom.isAfter(input.returnDue()) && !(o.returnDue == null ? o.availableUntil : o.returnDue).isBefore(c.availableFrom));
         if (overlap) throw ApiException.conflict("Extension overlaps another commitment");

@@ -35,11 +35,11 @@ class P2StorageRegressionTest {
     @Inject CatalogService catalog;
     @Inject ApiQueryService queries;
     @Inject OperationalReportService reports;
-    @Inject org.ash.inventory.resource.CatalogResponseCache factionCache;
+    @Inject org.ash.inventory.resource.CatalogResponses factionCache;
     @Inject com.fasterxml.jackson.databind.ObjectMapper json;
     private org.hibernate.stat.Statistics stats() { return em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics(); }
     private UserAccount person() {
-        var p = new UserAccount(); p.externalSubject = UUID.randomUUID().toString(); p.name = "P2 person";
+        var p = new UserAccount(); p.issuer = "test"; p.externalSubject = UUID.randomUUID().toString(); p.name = "P2 person";
         p.role = DomainEnums.UserRole.read_only; em.persist(p); return p;
     }
     private Item item() {

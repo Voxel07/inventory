@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.Inputs;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -46,9 +47,9 @@ public class ReturnSubmissionService {
     public ReturnSubmission create(ApiModels.ReturnSubmissionInput input) {
         var actor = actors.current();
         if (actor.role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
-        var item = requiredLocked(Item.class, input.itemId(), "Item");
+        var item = orm.requireLockedFresh(Item.class, input.itemId(), "Item");
         var returnedFor = input.returnedForUserId() == null ? actor
-                : required(UserAccount.class, input.returnedForUserId(), "Return user");
+                : orm.require(UserAccount.class, input.returnedForUserId(), "Return user");
         if (!actor.id.equals(returnedFor.id) && !canManageReturns(actor)) {
             throw ApiException.forbidden("Only warehouse workers can register a return for another person");
         }
@@ -69,7 +70,7 @@ public class ReturnSubmissionService {
             if (input.quantity() != 1 || input.assetInstanceId() == null) {
                 throw ApiException.badRequest("Serialized returns require exactly one asset instance");
             }
-            asset = requiredLocked(AssetInstance.class, input.assetInstanceId(), "Asset instance");
+            asset = orm.requireLockedFresh(AssetInstance.class, input.assetInstanceId(), "Asset instance");
             if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to this item");
             if (input.factionOrderId() != null && !orm.assignedToOrder(asset.id, input.factionOrderId())) {
                 throw ApiException.conflict("Asset is not assigned to this order");
@@ -91,14 +92,14 @@ public class ReturnSubmissionService {
         value.previousAssetState = valueAssetStateHolder;
         value.pendingAssetVersion = asset == null ? null : asset.version;
         value.factionOrder = input.factionOrderId() == null ? null
-                : required(FactionOrder.class, input.factionOrderId(), "Faction order");
+                : orm.require(FactionOrder.class, input.factionOrderId(), "Faction order");
         value.eventOccurrence = balance.eventOccurrenceId() == null ? null
-                : required(org.ash.inventory.model.EventOccurrence.class, balance.eventOccurrenceId(), "Event");
+                : orm.require(org.ash.inventory.model.EventOccurrence.class, balance.eventOccurrenceId(), "Event");
         value.returnedFor = returnedFor;
         value.submittedBy = actor;
         value.expectedReturnLocation = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         value.quantity = input.quantity();
-        value.notes = blankToNull(input.notes());
+        value.notes = Inputs.blankToNull(input.notes());
         value.status = DomainEnums.ReturnSubmissionStatus.pending;
         orm.persist(value);
         if (input.placementImage() != null && !input.placementImage().isBlank()) {
@@ -138,7 +139,7 @@ public class ReturnSubmissionService {
         value.status = DomainEnums.ReturnSubmissionStatus.accepted;
         value.acknowledgedBy = worker;
         value.acknowledgedAt = Instant.now();
-        value.acknowledgementNotes = input == null ? null : blankToNull(input.notes());
+        value.acknowledgementNotes = input == null ? null : Inputs.blankToNull(input.notes());
         events.record("return.accepted", "return_submission", value.id, worker.id, value.id,
                 Map.of("itemId", value.item.id.toString(), "quantity", value.quantity));
         return value;
@@ -151,7 +152,7 @@ public class ReturnSubmissionService {
         var value = pendingForDecision(id);
         var worker = actors.current();
         if (value.assetInstance != null && value.generalOrder == null) {
-            var asset = requiredLocked(AssetInstance.class, value.assetInstance.id, "Asset instance");
+            var asset = orm.requireLockedFresh(AssetInstance.class, value.assetInstance.id, "Asset instance");
             if (asset.active && asset.item.id.equals(value.item.id)
                     && asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check
                     && value.pendingAssetVersion != null && asset.version == value.pendingAssetVersion
@@ -164,7 +165,7 @@ public class ReturnSubmissionService {
         value.status = DomainEnums.ReturnSubmissionStatus.rejected;
         value.acknowledgedBy = worker;
         value.acknowledgedAt = Instant.now();
-        value.acknowledgementNotes = input == null ? null : blankToNull(input.notes());
+        value.acknowledgementNotes = input == null ? null : Inputs.blankToNull(input.notes());
         events.record("return.rejected", "return_submission", value.id, worker.id, value.id,
                 Map.of("itemId", value.item.id.toString(), "quantity", value.quantity));
         return value;
@@ -177,15 +178,15 @@ public class ReturnSubmissionService {
     }
 
     private ReturnSubmission pendingForDecision(UUID id) {
-        var submitted = required(ReturnSubmission.class, id, "Return submission");
+        var submitted = orm.require(ReturnSubmission.class, id, "Return submission");
         // Match order commands: order -> item -> asset. Serialize decisions last.
         if (submitted.generalOrder != null)
-            requiredLocked(org.ash.inventory.model.GeneralOrder.class, submitted.generalOrder.id, "General order");
+            orm.requireLockedFresh(org.ash.inventory.model.GeneralOrder.class, submitted.generalOrder.id, "General order");
         else if (submitted.factionOrder != null)
-            requiredLocked(FactionOrder.class, submitted.factionOrder.id, "Faction order");
-        requiredLocked(Item.class, submitted.item.id, "Item");
+            orm.requireLockedFresh(FactionOrder.class, submitted.factionOrder.id, "Faction order");
+        orm.requireLockedFresh(Item.class, submitted.item.id, "Item");
         if (submitted.assetInstance != null)
-            requiredLocked(AssetInstance.class, submitted.assetInstance.id, "Asset instance");
+            orm.requireLockedFresh(AssetInstance.class, submitted.assetInstance.id, "Asset instance");
         var value = orm.findLocked(id);
         if (value == null) throw ApiException.notFound("Return submission not found");
         if (value.status != DomainEnums.ReturnSubmissionStatus.pending) {
@@ -198,19 +199,6 @@ public class ReturnSubmissionService {
         return actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew;
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        T value = orm.find(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        T value = orm.findLocked(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 }

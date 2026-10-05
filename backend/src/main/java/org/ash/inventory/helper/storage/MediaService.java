@@ -257,6 +257,11 @@ public class MediaService {
         }
     }
 
+    /** Removes a stored object; used by the staged-upload purge. */
+    public void deleteObject(String key) {
+        delete(key);
+    }
+
     private void delete(String key) {
         validateKey(key);
         if (isS3()) {
@@ -312,12 +317,7 @@ public class MediaService {
     }
 
     private String contentType(String key) {
-        String lower = key.toLowerCase(java.util.Locale.ROOT);
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".gif")) return "image/gif";
-        return "application/octet-stream";
+        return MediaTypes.fromKey(key);
     }
 
     private boolean isS3() {

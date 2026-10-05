@@ -1,4 +1,5 @@
 import { ItemOverview } from '../components/items/ItemOverview';
+import { formatMoney } from '../utils/money';
 import { useEquipmentProfile } from '../hooks/useEquipment';
 import { LotsPanel } from '../components/operations/StockOperations';
 import { ItemStockLocations } from '../components/items/ItemStockLocations';
@@ -56,7 +57,7 @@ import { useAssignableUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
-import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
+import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import type { ItemFormData, TransactionFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
@@ -309,8 +310,8 @@ export function ItemDetail() {
                         <Fact label={t('Defekt', 'Damaged')}>{damaged}</Fact>
                         <Fact label={t('Bestellt', 'Ordered')}>{item.stock?.ordered ?? 0}</Fact>
                         <Fact label={t('Mindestbestand', 'Minimum stock')}>{item.minStock ?? 5}</Fact>
-                        <Fact label={t('Einzelwert', 'Unit value')}>{`${(item.value ?? 0).toFixed(2)} €`}</Fact>
-                        <Fact label={t('Gesamtwert', 'Total value')}>{`${totalValue.toFixed(2)} €`}</Fact>
+                        <Fact label={t('Einzelwert', 'Unit value')}>{formatMoney(item.value ?? 0)}</Fact>
+                        <Fact label={t('Gesamtwert', 'Total value')}>{formatMoney(totalValue)}</Fact>
                         {(item.containerSize ?? 0) > 0 && <>
                             <Fact label={t('Einheiten je Behälter', 'Units per container')}>{item.containerSize}</Fact>
                             <Fact label={t('Behälter', 'Containers')}>{item.containerCount ?? 0}</Fact>
@@ -451,12 +452,8 @@ export function ItemDetail() {
                 />
             </FormDialog>
 
-            <Dialog open={qrOpen} onClose={() => setQrOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('Etikett', 'Label')}</DialogTitle>
-                <DialogContent>
-                    <QRCodeGenerator itemId={item.id} itemName={item.name} />
-                </DialogContent>
-            </Dialog>
+            <QrLabelDialog label={qrOpen ? { title: t('Etikett', 'Label'), itemId: item.id, itemName: item.name } : null}
+                onClose={() => setQrOpen(false)} />
 
             <Dialog
                 open={checkoutOpen}

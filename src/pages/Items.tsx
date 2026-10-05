@@ -1,13 +1,12 @@
 import { FormDialog } from '../components/shared/FormDialog';
-import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Box, DialogTitle, DialogContent, ToggleButtonGroup } from '@mui/material';
+import { Box, ToggleButtonGroup } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
-import { QRCodeGenerator } from '../components/qr/QRCodeGenerator';
+import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { PageHeader } from '../components/shared/PageHeader';
@@ -100,12 +99,8 @@ export function Items() {
                 />
             </FormDialog>
 
-            <Dialog open={!!qrItem} onClose={() => setQrItem(undefined)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('QR-Code', 'QR code')}</DialogTitle>
-                <DialogContent>
-                    {qrItem && <QRCodeGenerator itemId={qrItem.id} itemName={qrItem.name} />}
-                </DialogContent>
-            </Dialog>
+            <QrLabelDialog label={qrItem ? { title: t('QR-Code', 'QR code'), itemId: qrItem.id, itemName: qrItem.name } : null}
+                onClose={() => setQrItem(undefined)} />
 
             <ConfirmDialog
                 open={crud.isDeleteOpen}

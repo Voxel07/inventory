@@ -20,7 +20,14 @@ import java.util.UUID;
 @ApplicationScoped
 public class DomainEventService {
     private static final int MAX_ATTEMPTS = 10;
+    private static final Object WAKEUP_REGISTERED = new Object();
     private final OutboxOrm orm;
+    @jakarta.inject.Inject org.ash.inventory.helper.security.ActorService actors;
+    @jakarta.inject.Inject jakarta.transaction.TransactionSynchronizationRegistry transactions;
+    @jakarta.inject.Inject jakarta.enterprise.event.Event<OutboxCommitted> committed;
+
+    /** Fired after a transaction that wrote outbox rows commits, so this node dispatches without waiting for the poll. */
+    public record OutboxCommitted() {}
 
     public DomainEventService(OutboxOrm orm) {
         this.orm = orm;
@@ -36,7 +43,19 @@ public class DomainEventService {
         event.idempotencyKey = idempotencyKey;
         event.payload = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
         orm.persist(event);
+        wakeDispatcherAfterCommit();
         return event;
+    }
+
+    private void wakeDispatcherAfterCommit() {
+        if (transactions.getResource(WAKEUP_REGISTERED) != null) return;
+        transactions.putResource(WAKEUP_REGISTERED, Boolean.TRUE);
+        transactions.registerInterposedSynchronization(new jakarta.transaction.Synchronization() {
+            public void beforeCompletion() {}
+            public void afterCompletion(int status) {
+                if (status == jakarta.transaction.Status.STATUS_COMMITTED) committed.fire(new OutboxCommitted());
+            }
+        });
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -78,6 +97,7 @@ public class DomainEventService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<DomainEvent> deadLetters(int page, int size) {
+        actors.requireAdmin();
         if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid outbox page bounds");
         try {
             return orm.deadLetters(Math.multiplyExact(page, size), size);
@@ -88,6 +108,7 @@ public class DomainEventService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public DomainEvent retryDeadLetter(UUID id) {
+        actors.requireAdmin();
         var event = orm.findLocked(id);
         if (event == null) return null;
         if (event.status != DomainEnums.OutboxStatus.dead_letter) {
@@ -103,6 +124,7 @@ public class DomainEventService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Map<DomainEnums.OutboxStatus, Long> statusCounts() {
+        actors.requireAdmin();
         return orm.statusCounts();
     }
 

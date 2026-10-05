@@ -14,5 +14,6 @@ export function useEventReports(eventType?: EventType) {
   return useQuery({
     queryKey: ['event-reports', eventType],
     queryFn: () => getEventReports(eventType),
+    networkMode: 'offlineFirst',
   });
 }

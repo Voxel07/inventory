@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,7 +12,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.*;
 
 /** Request-local stock snapshot. All access after load() is in memory. */
@@ -31,7 +31,7 @@ public class PlanningStockService {
         var snapshots = new HashMap<UUID, ItemStock>();
         var now = Instant.now();
         items.forEach(item -> snapshots.put(item.id, new ItemStock(item, now)));
-        for (var row : orm.snapshot(items.stream().map(item -> item.id).toList(), LocalDate.now())) {
+        for (var row : orm.snapshot(items.stream().map(item -> item.id).toList(), BusinessTime.today())) {
             try {
                 snapshots.get((UUID) row[1]).read((String) row[0], row, json);
             } catch (JsonProcessingException ex) {
@@ -113,7 +113,7 @@ public class PlanningStockService {
                 case "schedule" -> schedules.add(new MaintenancePolicy.Facts((UUID) row[2],
                         DomainEnums.MaintenanceIntervalType.valueOf((String) row[4]), instant(row[14]), (BigDecimal) row[11],
                         row[5] == null ? null : new BigDecimal((String) row[5])));
-                case "consumed" -> consumed.merge(instant(row[14]).atZone(ZoneId.systemDefault()).toLocalDate(),
+                case "consumed" -> consumed.merge(BusinessTime.date(instant(row[14])),
                         Math.toIntExact(number(row[7])), Integer::sum);
                 case "commitment" -> {
                     var commitment = new EquipmentCommitment(); commitment.id = (UUID) row[2]; commitment.item = item;
@@ -149,7 +149,7 @@ public class PlanningStockService {
 
         public boolean hasMemberDamage() { return memberDamage; }
         public boolean itemUsable() {
-            return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, now.atZone(ZoneId.systemDefault()).toLocalDate())
+            return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.date(now))
                     && schedules.stream().filter(s -> s.assetId() == null).noneMatch(s -> blocking(s, null));
         }
         public List<EquipmentCommitment> commitments() { return commitments; }

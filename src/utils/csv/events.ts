@@ -1,4 +1,5 @@
-import { type Item, EVENT_TYPES, type EventType, type EventReportStatus } from '../../types';
+import { type Item, type EventReportStatus } from '../../types';
+import { knownEventType, type CsvReference } from './reference';
 import { type ParsedEventReportRow, type ParsedAssemblyComponent } from '../../types/csvImport';
 import { parseInlineComponents, getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, EVENT_STATUS_ALIASES, EVENT_PLANNED_ALIASES, EVENT_USED_ALIASES, HINT_ALIASES } from './core';
 
@@ -9,6 +10,7 @@ import { parseInlineComponents, getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_
 export function parseEventReportsFromCsv(
   rows: Record<string, string>[],
   items: Item[],
+  reference: CsvReference,
 ): ParsedEventReportRow[] {
   const itemLookup = new Map<string, Item>();
   for (const item of items) {
@@ -39,8 +41,7 @@ export function parseEventReportsFromCsv(
     const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
     if (!rowType || !['event', 'ereignis', 'eventbericht', 'eventreport'].includes(rowType)) continue;
 
-    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
-    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventType = knownEventType(reference, getField(raw, EVENT_REPORT_TYPE_ALIASES));
     const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
     const rawStatus = getField(raw, EVENT_STATUS_ALIASES)?.toLowerCase().trim();
     const status: EventReportStatus = ['planned', 'geplant'].includes(rawStatus ?? '') ? 'planned' : 'completed';

@@ -6,44 +6,29 @@ import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.UserOrm;
-import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
 
-import java.util.ArrayList;
-import java.util.UUID;
-
+/** Accounts are provisioned from the identity provider; roles and factions are never edited here. */
 @ApplicationScoped
 public class UserService {
-    private final ActorService actors;
     private final UserOrm users;
 
-    public UserService(ActorService actors, UserOrm users) {
-        this.actors = actors;
+    public UserService(UserOrm users) {
         this.users = users;
     }
 
     @Transactional
     public UserAccount devLogin(ApiModels.DevLoginInput input) {
-        var user = users.findByExternalSubject(input.email());
+        var user = users.findByIdentity(ActorService.DEV_ISSUER, input.email());
         if (user == null) {
             user = new UserAccount();
+            user.issuer = ActorService.DEV_ISSUER;
             user.externalSubject = input.email();
             user.email = input.email();
             user.name = input.email().contains("@") ? input.email().substring(0, input.email().indexOf('@')) : input.email();
             user.role = DomainEnums.UserRole.hq_admin;
             users.persist(user);
         }
-        return user;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public UserAccount updatePermissions(UUID id, ApiModels.UserPermissionsInput input) {
-        actors.requireAdmin();
-        var user = users.find(id);
-        if (user == null) throw ApiException.notFound("User not found");
-        user.role = input.role();
-        user.factions = input.faction() == null ? new ArrayList<>() : new ArrayList<>(input.faction());
         return user;
     }
 }

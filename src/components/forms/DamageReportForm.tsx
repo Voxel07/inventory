@@ -6,7 +6,7 @@ import { useItemAssets } from '../../hooks/useItems';
 import { translate, nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
-interface Props {
+export interface DamageReportFormProps {
     items: Item[];
     assemblies?: Assembly[];
     preselectedItemId?: string;
@@ -31,7 +31,7 @@ const filterDamageTargets = createFilterOptions<DamageTarget>({
 export function DamageReportForm({
     items, assemblies = [], preselectedItemId, preselectedAssetId, preselectedAssemblyId,
     preselectedAsset, onSubmit, isLoading, maxAmount,
-}: Props) {
+}: DamageReportFormProps) {
     useAppLanguage();
     const t = useLocalizedText();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));

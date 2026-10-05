@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/dateFormat';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../shared/ActionButtons';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
@@ -18,7 +19,6 @@ import {
 import LogoutIcon from '@mui/icons-material/Logout';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import AddBoxIcon from '@mui/icons-material/AddBox';
-import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../../types';
 import type { EventType, FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
@@ -47,6 +47,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const names = useNames();
     const lookup = useStockLookups();
     const t = useLocalizedText();
+    const { eventTypes, factionNames } = useFactionCatalog();
     const { data: events = [] } = useEventReports();
     const transactionReasons = Object.values(names.reason);
     const [formData, setFormData] = useState<TransactionFormData>({
@@ -103,7 +104,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const assetSelectionRequired = Boolean(isSerialized
         && ['checkout', 'checkin'].includes(formData.transactionType));
     const assetSelectionMissing = assetSelectionRequired && !selectableAssets.some(asset => asset.id === formData.assetInstanceId);
-    const factionOptions = formData.eventType ? FACTIONS_BY_EVENT[formData.eventType] : [];
+    const factionOptions = factionNames(formData.eventType);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -195,7 +196,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             }))}
                             required
                         >
-                            {EVENT_TYPES.map((eventType) => (
+                            {eventTypes.map((eventType) => (
                                 <MenuItem key={eventType} value={eventType}>{eventType === 'LS' ? 'LightSim' : eventType}</MenuItem>
                             ))}
                         </TextField>

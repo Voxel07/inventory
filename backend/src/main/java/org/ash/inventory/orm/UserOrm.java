@@ -14,9 +14,9 @@ public class UserOrm {
 
     public UserOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public UserAccount findByExternalSubject(String subject) {
-        return entityManager.createQuery("from UserAccount user where user.externalSubject = :subject", UserAccount.class)
-                .setParameter("subject", subject).getResultStream().findFirst().orElse(null);
+    public UserAccount findByIdentity(String issuer, String subject) {
+        return entityManager.createQuery("from UserAccount user where user.issuer = :issuer and user.externalSubject = :subject", UserAccount.class)
+                .setParameter("issuer", issuer).setParameter("subject", subject).getResultStream().findFirst().orElse(null);
     }
 
     public UserAccount find(UUID id) { return entityManager.find(UserAccount.class, id); }

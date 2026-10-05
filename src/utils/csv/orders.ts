@@ -1,4 +1,5 @@
-import { type Item, EVENT_TYPES, type EventType, FACTIONS_BY_EVENT } from '../../types';
+import { type Item } from '../../types';
+import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedFactionOrderRow, type ParsedAssemblyComponent, type FactionOrderImportStatus, type ParsedGeneralOrderRow } from '../../types/csvImport';
 import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_ALIASES, parseInlineComponents, ORDER_ITEMS_ALIASES, ORDER_STATUS_ALIASES, ORDER_RETURNED_ITEMS_ALIASES, HINT_ALIASES, GENERAL_ORDER_NAME_ALIASES, GENERAL_ORDER_PURPOSE_ALIASES, ORDER_CONSUMED_ITEMS_ALIASES } from './core';
 
@@ -6,6 +7,7 @@ import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_
 export function parseFactionOrdersFromCsv(
   rows: Record<string, string>[],
   items: Item[],
+  reference: CsvReference,
 ): ParsedFactionOrderRow[] {
   const itemLookup = new Map<string, Item>();
   for (const item of items) {
@@ -20,12 +22,11 @@ export function parseFactionOrdersFromCsv(
     const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
     if (!rowType || !['order', 'bestellung', 'factionorder', 'fraktionsbestellung'].includes(rowType)) continue;
 
-    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
-    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventType = knownEventType(reference, getField(raw, EVENT_REPORT_TYPE_ALIASES));
     const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
     const rawFaction = getField(raw, ORDER_FACTION_ALIASES) ?? '';
     const faction = eventType
-      ? FACTIONS_BY_EVENT[eventType].find((candidate) => candidate.toLowerCase() === rawFaction.toLowerCase())
+      ? knownFaction(reference, eventType, rawFaction)
       : undefined;
     const requestedItems: ParsedAssemblyComponent[] = [];
     const requestedQuantities: Record<string, number> = {};
@@ -116,7 +117,7 @@ export function parseFactionOrdersFromCsv(
 }
 
 /** General order rows can simulate the same submit, pickup, and return flow as the UI. */
-export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items: Item[]): ParsedGeneralOrderRow[] {
+export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items: Item[], reference: CsvReference): ParsedGeneralOrderRow[] {
   const lookup = new Map<string, Item>();
   for (const item of items) {
     lookup.set(item.id.toLowerCase(), item);
@@ -130,8 +131,7 @@ export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items:
   return rows.flatMap((raw, index) => {
     const rowType = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().replace(/[^a-zäöü]/g, '');
     if (!['generalorder', 'allgemeinebestellung', 'allgemeinbestellung'].includes(rowType ?? '')) return [];
-    const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
-    const eventType = (EVENT_TYPES as readonly string[]).includes(rawEventType ?? '') ? rawEventType as EventType : undefined;
+    const eventType = knownEventType(reference, getField(raw, EVENT_REPORT_TYPE_ALIASES));
     const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
     const name = getField(raw, GENERAL_ORDER_NAME_ALIASES) ?? '';
     const purpose = getField(raw, GENERAL_ORDER_PURPOSE_ALIASES) ?? '';

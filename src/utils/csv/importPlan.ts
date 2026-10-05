@@ -6,11 +6,12 @@ import { parseFactionOrdersFromCsv, parseGeneralOrdersFromCsv } from './orders';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../../types/csvImport';
 import { parseReturnsFromCsv, parseCheckoutsFromCsv } from './custody';
 import type { Item, Assembly, StorageLocation } from '../../types';
+import type { CsvReference } from './reference';
 import { parseOperationsFromCsv } from '../csvOperations';
 
-interface Input { csvContent: string; tabType: CsvImportType; items: Item[]; assemblies: Assembly[]; storageLocations: StorageLocation[]; updateExistingItems: boolean }
+interface Input { csvContent: string; tabType: CsvImportType; items: Item[]; assemblies: Assembly[]; storageLocations: StorageLocation[]; updateExistingItems: boolean; reference: CsvReference }
 
-export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems }: Input) {
+export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, reference }: Input) {
   // Parse CSV
   const { rows } = (() => {
     if (!csvContent.trim()) return { rows: [] };
@@ -20,7 +21,7 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
   // Parsed Items and Assemblies
   const parsedItems: ParsedItemRow[] = (() => {
     if (tabType === 'assemblies' || rows.length === 0) return [];
-    return parseItemsFromCsv(rows, storageLocations, items);
+    return parseItemsFromCsv(rows, storageLocations, items, reference);
   })();
 
   const effectiveItemsForAssemblies = (() => {
@@ -49,30 +50,30 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
 
   const parsedAssemblies: ParsedAssemblyRow[] = (() => {
     if (tabType === 'items' || rows.length === 0) return [];
-    return parseAssembliesFromCsv(rows, effectiveItemsForAssemblies, assemblies);
+    return parseAssembliesFromCsv(rows, effectiveItemsForAssemblies, assemblies, reference);
   })();
 
   const parsedEvents: ParsedEventReportRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
-    return parseEventReportsFromCsv(rows, effectiveItemsForAssemblies);
+    return parseEventReportsFromCsv(rows, effectiveItemsForAssemblies, reference);
   })();
 
   const parsedOrders: ParsedFactionOrderRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
-    return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies);
+    return parseFactionOrdersFromCsv(rows, effectiveItemsForAssemblies, reference);
   })();
 
   const parsedGeneralOrders: ParsedGeneralOrderRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
-    return parseGeneralOrdersFromCsv(rows, effectiveItemsForAssemblies);
+    return parseGeneralOrdersFromCsv(rows, effectiveItemsForAssemblies, reference);
   })();
 
   const parsedReturns: ParsedReturnRow[] = (() => {
     if (tabType !== 'combined' || rows.length === 0) return [];
-    return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations);
+    return parseReturnsFromCsv(rows, effectiveItemsForAssemblies, storageLocations, reference);
   })();
   const parsedCheckouts = tabType === 'combined'
-    ? parseCheckoutsFromCsv(rows, effectiveItemsForAssemblies) : [];
+    ? parseCheckoutsFromCsv(rows, effectiveItemsForAssemblies, reference) : [];
   const parsedOperations = tabType === 'combined' ? parseOperationsFromCsv(rows, effectiveItemsForAssemblies) : [];
 
   // Statistics

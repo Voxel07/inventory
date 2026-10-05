@@ -1,5 +1,8 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.Inputs;
+import org.ash.inventory.helper.PageBounds;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -35,7 +38,7 @@ public class CountService {
     @Transactional
     public List<CountDtos.CountResponse> list(String status, int page, int size) {
         actors.requireWarehouse();
-        try { return responses(orm.sessions(status, offset(page, size), size)); }
+        try { return responses(orm.sessions(status, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown count status"); }
     }
 
@@ -44,9 +47,9 @@ public class CountService {
     public CountDtos.CountResponse create(CountDtos.CountInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var warehouse = input.warehouseId() == null ? null : required(Warehouse.class, input.warehouseId(), "Warehouse");
-        var location = input.locationId() == null ? null : required(StorageLocation.class, input.locationId(), "Location");
-        var item = input.itemId() == null ? null : required(Item.class, input.itemId(), "Item");
+        var warehouse = input.warehouseId() == null ? null : orm.require(Warehouse.class, input.warehouseId(), "Warehouse");
+        var location = input.locationId() == null ? null : orm.require(StorageLocation.class, input.locationId(), "Location");
+        var item = input.itemId() == null ? null : orm.require(Item.class, input.itemId(), "Item");
         if (warehouse != null && location != null
                 && (location.warehouse == null || !location.warehouse.id.equals(warehouse.id))) {
             throw ApiException.badRequest("Location does not belong to count warehouse");
@@ -55,7 +58,7 @@ public class CountService {
         session.sessionNumber = uniqueNumber(input.sessionNumber());
         session.warehouse = warehouse;
         session.location = location;
-        session.category = blankToNull(input.category());
+        session.category = Inputs.blankToNull(input.category());
         session.item = item;
         session.blindCount = input.blindCount();
         session.createdBy = actor;
@@ -98,7 +101,7 @@ public class CountService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse start(UUID id, CountDtos.CountCommandInput input) {
         actors.requireWarehouse();
-        var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
+        var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
         if (session.status == DomainEnums.CountStatus.counting) return response(session, orm.lockedLines(session));
         if (session.status != DomainEnums.CountStatus.draft) throw ApiException.conflict("Inventory count cannot be started");
         session.status = DomainEnums.CountStatus.counting;
@@ -112,7 +115,7 @@ public class CountService {
     public CountDtos.CountResponse submit(UUID id, CountDtos.CountSubmissionInput input, boolean recount) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
+        var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
         var expectedStatus = recount ? DomainEnums.CountStatus.awaiting_recount : DomainEnums.CountStatus.counting;
         if (session.status != expectedStatus) throw ApiException.conflict("Inventory count is not ready for this submission");
         var lines = orm.lockedLines(session);
@@ -153,7 +156,7 @@ public class CountService {
     public CountDtos.CountResponse approve(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
         actors.requireAdmin();
-        var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
+        var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
         if (session.status != DomainEnums.CountStatus.awaiting_approval) {
             throw ApiException.conflict("Inventory count is not awaiting approval");
         }
@@ -180,16 +183,16 @@ public class CountService {
     public CountDtos.CountResponse post(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
+        var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
         if (session.status == DomainEnums.CountStatus.posted) return response(session, orm.lockedLines(session));
         if (session.status != DomainEnums.CountStatus.approved) throw ApiException.conflict("Inventory count is not approved");
         var lines = orm.lockedLines(session);
         // All aggregate locks precede asset/position locks, in a stable order.
         lines.stream().map(line -> line.item.id).distinct().sorted(java.util.Comparator.comparing(UUID::toString))
-                .forEach(itemId -> requiredLocked(Item.class, itemId, "Item"));
+                .forEach(itemId -> orm.requireLockedFresh(Item.class, itemId, "Item"));
         for (var line : lines) {
             if (line.assetInstance != null) {
-                var asset = requiredLocked(AssetInstance.class, line.assetInstance.id, "Asset");
+                var asset = orm.requireLockedFresh(AssetInstance.class, line.assetInstance.id, "Asset");
                 if (!line.item.active || line.item.trackingMode != DomainEnums.TrackingMode.serialized
                         || !asset.active || !asset.item.id.equals(line.item.id)
                         || asset.currentLocation == null || !asset.currentLocation.id.equals(line.location.id)
@@ -234,7 +237,7 @@ public class CountService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public CountDtos.CountResponse cancel(UUID id, CountDtos.CountCommandInput input) {
         actors.requireWarehouse();
-        var session = requiredLocked(InventoryCountSession.class, id, "Inventory count");
+        var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
         if (session.status == DomainEnums.CountStatus.cancelled) return response(session, orm.lockedLines(session));
         if (session.status == DomainEnums.CountStatus.posted) throw ApiException.conflict("Posted counts cannot be cancelled");
         session.status = DomainEnums.CountStatus.cancelled;
@@ -286,21 +289,9 @@ public class CountService {
 
     private String uniqueNumber(String requested) {
         var value = requested == null || requested.isBlank()
-                ? "COUNT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
+                ? "COUNT-" + BusinessTime.today().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
                 : requested.trim();
         if (orm.numberExists(value)) throw ApiException.conflict("Count session number already exists");
         return value;
-    }
-    private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try { return Math.multiplyExact(page, size); }
-        catch (ArithmeticException exception) { throw ApiException.badRequest("Page offset is too large"); }
-    }
-    private <T> T required(Class<T> type, UUID id, String label) {
-        var value = orm.find(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
-    }
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        var value = orm.locked(type, id); if (value == null) throw ApiException.notFound(label + " not found"); return value;
     }
 }

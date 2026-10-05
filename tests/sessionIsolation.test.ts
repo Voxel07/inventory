@@ -26,11 +26,11 @@ let refresh: (token: string) => Promise<OidcTokenSet>;
 let loadSession: () => Promise<unknown> = async () => null;
 let fetchRequest: typeof fetch = async () => new Response('[]');
 globalThis.fetch = ((...args: Parameters<typeof fetch>) => fetchRequest(...args)) as typeof fetch;
-mock.module('../src/config/runtimeConfig', () => ({ API_URL: 'http://localhost:8080', OIDC_CONFIG: null }));
+mock.module('../src/config/runtimeConfig', () => ({ API_URL: 'http://localhost:8080', OIDC_CONFIG: null, DEV_LOGIN_AVAILABLE: true, AUTH_CONFIGURATION_ERROR: null }));
 mock.module('../src/services/oidcClient', () => ({
   refreshOidcTokens: (token: string) => refresh(token),
   isOidcSessionRejected: () => false,
-  beginOidcLogin: async () => {}, completeOidcLogin: async () => null, oidcLogoutUrl: async () => '',
+  beginOidcLogin: async () => {}, completeOidcLogin: async () => null, oidcLogoutUrl: async () => '', revokeOidcToken: async () => {},
 }));
 mock.module('../src/services/authStorage', () => ({
   loadStoredAuthSession: () => loadSession(), saveStoredAuthSession: async () => {}, clearStoredAuthSession: async () => {},

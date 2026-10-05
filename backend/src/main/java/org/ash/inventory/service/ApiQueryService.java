@@ -100,7 +100,7 @@ public class ApiQueryService {
     @Transactional
     public ApiResponses.StorageLocationResponse location(UUID id) {
         actors.current();
-        var location = required(StorageLocation.class, id, "Storage location");
+        var location = org.ash.inventory.orm.EntityOrm.found(catalog.find(StorageLocation.class, id), "Storage location");
         actors.requireLocationAccess(location, false);
         return mapper.location(location);
     }
@@ -117,26 +117,21 @@ public class ApiQueryService {
     @Transactional
     public ApiResponses.AssemblyResponse assembly(UUID id) {
         actors.current();
-        return projectAssembly(required(Assembly.class, id, "Assembly"));
+        return projectAssembly(org.ash.inventory.orm.EntityOrm.found(catalog.find(Assembly.class, id), "Assembly"));
     }
 
     @Transactional
     public ApiResponses.EventResponse event(UUID id) {
         actors.current();
-        return projectEvent(required(EventOccurrence.class, id, "Event occurrence"));
+        return projectEvent(org.ash.inventory.orm.EntityOrm.found(catalog.find(EventOccurrence.class, id), "Event occurrence"));
     }
 
     @Transactional
     public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode, int page, int size) {
         var actor = actors.current();
         var bounds = bounds(page, size);
-        List<String> factionNames = null;
-        List<String> factionKeys = null;
-        if (actor.role == DomainEnums.UserRole.faction_leader) {
-            factionNames = actor.factions.stream().filter(value -> !value.contains(":")).toList();
-            factionKeys = actor.factions.stream().filter(value -> value.contains(":")).toList();
-        }
-        var values = orders.orders(eventType, faction, orderCode, factionNames, factionKeys, bounds.offset(), bounds.limit());
+        List<String> factionKeys = actor.role == DomainEnums.UserRole.faction_leader ? List.copyOf(actor.factions) : null;
+        var values = orders.orders(eventType, faction, orderCode, factionKeys, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
         var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.FactionOrderLine>>();
@@ -191,6 +186,7 @@ public class ApiQueryService {
     }
 
     public List<ApiResponses.DeficitResponse> deficits(UUID eventOccurrenceId) {
+        actors.requirePlanner();
         return planning.deficits(eventOccurrenceId);
     }
 
@@ -318,11 +314,6 @@ public class ApiQueryService {
         return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        T value = catalog.find(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
     private PageBounds bounds(int page, int size) {
         if (page < 0) throw ApiException.badRequest("page must be zero or greater");

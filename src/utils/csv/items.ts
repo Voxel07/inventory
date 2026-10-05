@@ -1,5 +1,6 @@
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
+import type { CsvReference } from './reference';
 import { getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, MAINTENANCE_STATUS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
@@ -44,6 +45,7 @@ export function parseItemsFromCsv(
   rows: Record<string, string>[],
   storageLocations: StorageLocation[],
   existingItems: Item[],
+  reference: CsvReference,
 ): ParsedItemRow[] {
   const results: ParsedItemRow[] = [];
   const locMap = new Map<string, StorageLocation>();
@@ -90,7 +92,7 @@ export function parseItemsFromCsv(
     const subcategory = getField(raw, SUBCATEGORY_ALIASES);
     const supplier = getField(raw, SUPPLIER_ALIASES);
     const hint = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES);
-    const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES));
+    const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES), reference.eventTypes);
 
     const rawTrackingMode = parseTrackingMode(getField(raw, TRACKING_MODE_ALIASES));
     const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));

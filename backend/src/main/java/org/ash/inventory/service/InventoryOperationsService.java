@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.Inputs;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.resource.ApiException;
@@ -23,7 +25,6 @@ import org.ash.inventory.orm.PurchasingOrm;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +60,15 @@ public class InventoryOperationsService {
         public int totalOwned() {
             return onHand + checkedOut + inTransit;
         }
+    }
+
+    /** The interceptor authorizes every referenced private resource across the whole batch. */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<StockTransaction> transactBatch(List<ApiModels.TransactionInput> inputs) {
+        actors.requireWarehouse();
+        if (inputs == null || inputs.isEmpty() || inputs.size() > 200) throw ApiException.badRequest("Provide 1 to 200 transactions");
+        return inputs.stream().sorted(java.util.Comparator.comparing(ApiModels.TransactionInput::itemId)).map(this::transact).toList();
     }
 
     @Transactional
@@ -109,14 +119,14 @@ public class InventoryOperationsService {
         var transaction = new StockTransaction();
         transaction.occurredAt = occurredAt;
         transaction.item = item;
-        transaction.user = input.userId() == null ? actor : required(UserAccount.class, input.userId(), "User");
+        transaction.user = input.userId() == null ? actor : orm.require(UserAccount.class, input.userId(), "User");
         transaction.type = input.transactionType();
         transaction.quantity = input.quantityChanged();
         transaction.reason = input.reason();
         transaction.notes = input.notes();
-        transaction.eventType = blankToNull(input.eventType());
+        transaction.eventType = Inputs.blankToNull(input.eventType());
         transaction.eventOccurrence = transactionEvent(input);
-        transaction.faction = blankToNull(input.faction());
+        transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         switch (input.transactionType()) {
@@ -157,14 +167,14 @@ public class InventoryOperationsService {
         transaction.occurredAt = occurredAt;
         transaction.item = item;
         transaction.assetInstance = asset;
-        transaction.user = input.userId() == null ? actor : required(UserAccount.class, input.userId(), "User");
+        transaction.user = input.userId() == null ? actor : orm.require(UserAccount.class, input.userId(), "User");
         transaction.type = input.transactionType();
         transaction.quantity = 1;
         transaction.reason = input.reason();
         transaction.notes = input.notes();
-        transaction.eventType = blankToNull(input.eventType());
+        transaction.eventType = Inputs.blankToNull(input.eventType());
         transaction.eventOccurrence = transactionEvent(input);
-        transaction.faction = blankToNull(input.faction());
+        transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         transaction.availabilityBefore = before;
@@ -225,7 +235,7 @@ public class InventoryOperationsService {
 
     private org.ash.inventory.model.EventOccurrence transactionEvent(ApiModels.TransactionInput input) {
         if (input.eventOccurrenceId() == null) return null;
-        var event = required(org.ash.inventory.model.EventOccurrence.class, input.eventOccurrenceId(), "Event");
+        var event = orm.require(org.ash.inventory.model.EventOccurrence.class, input.eventOccurrenceId(), "Event");
         if (input.eventType() != null && !event.eventType.equals(input.eventType()))
             throw ApiException.badRequest("Event occurrence does not match event type");
         return event;
@@ -352,13 +362,21 @@ public class InventoryOperationsService {
     public void assertCheckoutAllowed(Item item) {
         if (equipment.hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
         refreshMaintenanceStatus(item);
-        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, LocalDate.now())) {
+        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.today())) {
             throw ApiException.conflict("Item " + item.name + " is blocked from checkout because maintenance status is "
                     + item.maintenanceStatus);
         }
         assertNoBlockingScheduleIsDue(item, null);
     }
 
+    /** Damage reported through REST or offline replay. */
+    @Transactional
+    public DamageReport reportDamage(ApiModels.DamageInput input) {
+        actors.requireMarshal();
+        return createDamage(input);
+    }
+
+    /** Also used by return workflows that record damage on behalf of their own authorized actor. */
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public DamageReport createDamage(ApiModels.DamageInput input) {
@@ -374,7 +392,7 @@ public class InventoryOperationsService {
         var report = new DamageReport();
         report.createdAt = occurredAt;
         if (input.itemId() != null) report.item = lockedItem(input.itemId());
-        else report.assembly = required(Assembly.class, input.assemblyId(), "Assembly");
+        else report.assembly = orm.require(Assembly.class, input.assemblyId(), "Assembly");
         report.reporter = actors.current();
         report.quantity = input.amount();
         report.description = input.description();
@@ -382,7 +400,7 @@ public class InventoryOperationsService {
         report.safetyImpact = input.safetyImpact();
         report.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null)
-            report.factionOrder = required(FactionOrder.class, input.factionOrderId(), "Faction order");
+            report.factionOrder = orm.require(FactionOrder.class, input.factionOrderId(), "Faction order");
         if (input.assetInstanceId() != null) {
             if (report.item == null) throw ApiException.badRequest("An asset can only be reported with its item");
             var asset = orm.findLockedAsset(input.assetInstanceId());
@@ -398,7 +416,7 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
         }
         if (input.handoverId() != null) {
-            report.handover = required(CustodyHandover.class, input.handoverId(), "Custody handover");
+            report.handover = orm.require(CustodyHandover.class, input.handoverId(), "Custody handover");
         }
         orm.persist(report);
         positions.reportDamage(report);
@@ -409,6 +427,13 @@ public class InventoryOperationsService {
         events.record("damage.reported", "damage_report", report.id, report.reporter.id, input.idempotencyKey(),
                 payload);
         return report;
+    }
+
+    /** Damage resolution by maintenance staff; the repair lifecycle calls {@link #resolveDamage} itself. */
+    @Transactional
+    public DamageReport resolveDamageReport(UUID id, ApiModels.DamageResolutionInput input) {
+        actors.requireMaintenance();
+        return resolveDamage(id, input);
     }
 
     @Transactional
@@ -534,6 +559,7 @@ public class InventoryOperationsService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceRecord recordMaintenance(ApiModels.MaintenanceInput input) {
+        actors.requireMaintenance();
         var item = lockedItem(input.itemId());
         actors.protect(item, true);
         var record = new MaintenanceRecord();
@@ -548,7 +574,7 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("assetInstanceId is required for serialized item maintenance");
         }
         if (input.scheduleId() != null) {
-            var schedule = required(MaintenanceSchedule.class, input.scheduleId(), "Maintenance schedule");
+            var schedule = orm.require(MaintenanceSchedule.class, input.scheduleId(), "Maintenance schedule");
             if (!schedule.item.id.equals(item.id)
                     || (schedule.assetInstance != null && (record.assetInstance == null
                             || !record.assetInstance.id.equals(schedule.assetInstance.id)))) {
@@ -577,7 +603,7 @@ public class InventoryOperationsService {
         if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
             item.currentOperatingHours = input.operatingHours();
         item.nextMaintenanceDue = record.nextDueAt == null ? null
-                : record.nextDueAt.atZone(ZoneOffset.UTC).toLocalDate();
+                : BusinessTime.date(record.nextDueAt);
         item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
                 ? DomainEnums.MaintenanceStatus.in_service
                 : deriveStatus(item.nextMaintenanceDue);
@@ -644,9 +670,9 @@ public class InventoryOperationsService {
     private DomainEnums.MaintenanceStatus deriveStatus(LocalDate due) {
         if (due == null)
             return DomainEnums.MaintenanceStatus.certified;
-        if (due.isBefore(LocalDate.now()))
+        if (due.isBefore(BusinessTime.today()))
             return DomainEnums.MaintenanceStatus.overdue;
-        if (!due.isAfter(LocalDate.now().plusDays(30)))
+        if (!due.isAfter(BusinessTime.today().plusDays(30)))
             return DomainEnums.MaintenanceStatus.due_soon;
         return DomainEnums.MaintenanceStatus.certified;
     }
@@ -659,12 +685,6 @@ public class InventoryOperationsService {
         return item;
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        T value = orm.find(type, id);
-        if (value == null)
-            throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
     private String requiredText(String value, String field) {
         if (value == null || value.isBlank())
@@ -672,7 +692,4 @@ public class InventoryOperationsService {
         return value.trim();
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 }

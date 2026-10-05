@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.*;
 import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
-class CatalogResponseCacheTest {
+class CatalogResponsesTest {
     static class Backend {
         final Map<Object, String> values = new HashMap<>();
         boolean failedLoad, failedEviction;
@@ -26,7 +26,7 @@ class CatalogResponseCacheTest {
             };
         });
     }
-    static class Replica extends CatalogResponseCache {
+    static class Replica extends CatalogResponses {
         final AtomicReference<String> database; int loads; RuntimeException databaseFailure;
         Replica(Backend backend, AtomicReference<String> database) { super(null, null, new ObjectMapper(), backend.cache); this.database = database; }
         @Override String loadFactions() { loads++; if (databaseFailure != null) throw databaseFailure; return database.get(); }

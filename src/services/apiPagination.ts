@@ -1,4 +1,5 @@
 import { assertAuthSession, captureAuthSession } from './authManager';
+import { isFullPage } from './pageCompleteness';
 
 export const LIST_PAGE_SIZE = 100;
 
@@ -10,6 +11,6 @@ export async function loadAllPages<T>(getPage: (page: number, size: number) => P
     const batch = await getPage(index, size);
     assertAuthSession(context);
     rows.push(...batch);
-    if (batch.length < size) return rows;
+    if (!isFullPage(batch, size)) return rows;
   }
 }

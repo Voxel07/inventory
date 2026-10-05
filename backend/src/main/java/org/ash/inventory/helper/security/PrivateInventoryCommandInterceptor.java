@@ -11,10 +11,10 @@ public class PrivateInventoryCommandInterceptor {
     @Inject ActorService actors;
     @Inject PrivacyProjectionService projections;
     @AroundInvoke public Object authorize(InvocationContext context) throws Exception {
-        actors.privateMutationDepth++;
+        actors.enterPrivateMutation();
         try {
             projections.requireEditableReferences(context.getParameters());
             return context.proceed();
-        } finally { actors.privateMutationDepth--; }
+        } finally { actors.exitPrivateMutation(); }
     }
 }

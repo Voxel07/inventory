@@ -67,9 +67,7 @@ public class OperationsResource {
 
     @POST @Path("/transactions/batch") @Transactional
     public List<ApiResponses.TransactionResponse> transactionBatch(List<ApiModels.@Valid TransactionInput> inputs) {
-        actor.requireWarehouse();
-        if (inputs == null || inputs.isEmpty() || inputs.size() > 200) throw ApiException.badRequest("Provide 1 to 200 transactions");
-        return inputs.stream().sorted(java.util.Comparator.comparing(ApiModels.TransactionInput::itemId)).map(service::transact).map(mapper::transaction).toList();
+        return service.transactBatch(inputs).stream().map(mapper::transaction).toList();
     }
 
     @POST
@@ -92,16 +90,14 @@ public class OperationsResource {
     @Path("/damage-reports")
     @Transactional
     public ApiResponses.DamageResponse createDamage(@Valid ApiModels.DamageInput input) {
-        actor.requireMarshal();
-        return mapper.damage(service.createDamage(input));
+        return mapper.damage(service.reportDamage(input));
     }
 
     @PATCH
     @Path("/damage-reports/{id}")
     @Transactional
     public ApiResponses.DamageResponse resolveDamage(@PathParam("id") UUID id, @Valid ApiModels.DamageResolutionInput input) {
-        actor.requireMaintenance();
-        return mapper.damage(service.resolveDamage(id, input));
+        return mapper.damage(service.resolveDamageReport(id, input));
     }
 
     @GET
@@ -116,21 +112,18 @@ public class OperationsResource {
     @Path("/maintenance")
     @Transactional
     public ApiResponses.MaintenanceResponse maintenance(@Valid ApiModels.MaintenanceInput input) {
-        actor.requireMaintenance();
         return mapper.maintenance(service.recordMaintenance(input));
     }
 
     @GET
     @Path("/procurement/deficits")
     public List<ApiResponses.DeficitResponse> deficits(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId) {
-        actor.requirePlanner();
         return queries.deficits(eventOccurrenceId);
     }
 
     @GET
     @Path("/outbox/status")
     public ApiResponses.OutboxStatusResponse outboxStatus() {
-        actor.requireAdmin();
         var counts = new java.util.LinkedHashMap<String, Long>();
         domainEvents.statusCounts().forEach((status, count) -> counts.put(status.name(), count));
         return new ApiResponses.OutboxStatusResponse(counts);
@@ -141,14 +134,12 @@ public class OperationsResource {
     public List<ApiResponses.OutboxEventResponse> deadLetters(
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        actor.requireAdmin();
         return domainEvents.deadLetters(page, size).stream().map(mapper::outboxEvent).toList();
     }
 
     @POST
     @Path("/outbox/dead-letters/{id}/retry")
     public ApiResponses.OutboxEventResponse retryDeadLetter(@PathParam("id") UUID id) {
-        actor.requireAdmin();
         try {
             var event = domainEvents.retryDeadLetter(id);
             if (event == null) throw ApiException.notFound("Outbox event not found");

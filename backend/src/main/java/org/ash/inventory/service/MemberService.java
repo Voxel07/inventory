@@ -40,7 +40,7 @@ public class MemberService {
             if (b.factionOrderId() == null || item.trackingMode != DomainEnums.TrackingMode.serialized) { result.add(b); continue; }
             for (var candidate : assets.getOrDefault(b.factionOrderId() + ":" + b.itemId(), List.of())) {
                 var asset = candidate.asset();
-                result.add(new CustodyBalanceService.Balance(b.key() + ":" + asset.id, b.itemId(), b.name() + " · " + asset.assetCode,
+                result.add(new CustodyBalanceService.Balance(b.key() + ":" + asset.id, b.itemId(), b.name() + " Â· " + asset.assetCode,
                         b.category(), b.storageLocation(), 1, candidate.pending(), b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), null, asset.id, b.eventOccurrenceId()));
             }
         }

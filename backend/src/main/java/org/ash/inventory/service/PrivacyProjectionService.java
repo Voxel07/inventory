@@ -23,6 +23,11 @@ public class PrivacyProjectionService {
     public Set<String> deniedIds() {
         return orm.deniedReferences(actors.current()).stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
     }
+    /** Whether one resource is (transitively) hidden from the actor; walks only that resource's ancestors. */
+    @Transactional
+    public boolean denied(UUID resourceId) {
+        return orm.referenceAccess(Set.of(resourceId), actors.current()).deniedIds().contains(resourceId);
+    }
     public boolean visible(Object value, Set<String> denied) { return visibleTree(json.valueToTree(value), denied); }
     public boolean visibleTree(JsonNode node, Set<String> denied) {
         if (denied.isEmpty() || node == null) return true;
@@ -35,7 +40,8 @@ public class PrivacyProjectionService {
         } else if (node.isArray()) for (var child : node) if (!visibleTree(child, denied)) return false;
         return true;
     }
-    public record Projection(JsonNode value, boolean containsPrivateReference) {}
+    /** {@code removedRows}: array rows dropped after pagination, so clients can tell a filtered page from the last page. */
+    public record Projection(JsonNode value, boolean containsPrivateReference, int removedRows) {}
 
     @Transactional
     public Projection filter(Object value) {
@@ -44,14 +50,16 @@ public class PrivacyProjectionService {
         catch (Exception e) { throw new IllegalStateException("Cannot authorize response projection", e); }
         var facts = orm.referenceAccess(references(tree), actors.current());
         var denied = strings(facts.deniedIds());
+        int removed = 0;
         if (tree.isArray()) {
             var result = json.createArrayNode();
             for (var row : tree) if (visibleTree(row, denied)) result.add(row);
+            removed = tree.size() - result.size();
             tree = result;
         } else {
             if (!visibleTree(tree, denied)) throw ApiException.notFound("Resource not found");
         }
-        return new Projection(tree, !visibleTree(tree, strings(facts.privateIds())));
+        return new Projection(tree, !visibleTree(tree, strings(facts.privateIds())), removed);
     }
     public void requireEditableReferences(Object value) {
         JsonNode tree = json.valueToTree(value); var actor = actors.current();

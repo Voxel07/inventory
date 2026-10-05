@@ -13,7 +13,6 @@ export const assemblyApi = createCrudResourceApi<Assembly, AssemblyFormData>('/a
   transformPayload: transformAssemblyPayload,
 });
 
-export const getAssemblies = assemblyApi.getAll;
 export const getAssembly = assemblyApi.getById;
 export const createAssembly = assemblyApi.create;
 export const updateAssembly = assemblyApi.update;

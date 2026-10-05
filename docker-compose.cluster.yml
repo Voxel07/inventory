@@ -3,8 +3,8 @@
 #   docker compose -f docker-compose.cluster.yml up -d
 # For deployment across distinct VPS nodes, run App services on VPS 1 & 2 pointing to:
 #   - DB_URL: Primary PostgreSQL on VPS 1 (with a logical replica on the storage VPS)
-#   - REDIS_URL: Shared Valkey (Redis protocol) for the catalog cache,
-#     distributed rate limiting, and live-event fan-out
+#   - REDIS_URL: Shared Valkey (Redis protocol) for distributed rate limiting and
+#     live-event fan-out (caches are per node, keyed by committed database revisions)
 #   - S3_ENDPOINT: Garage S3 cluster node on VPS 3
 
 services:
@@ -78,6 +78,9 @@ services:
       REDIS_URL: redis://valkey:6379
       API_RATE_LIMIT_BACKEND: redis
       EVENT_BACKEND: redis
+      REDIS_HEALTH_ENABLED: "true"
+      INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
+      OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
       API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
       API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
@@ -119,6 +122,9 @@ services:
       REDIS_URL: redis://valkey:6379
       API_RATE_LIMIT_BACKEND: redis
       EVENT_BACKEND: redis
+      REDIS_HEALTH_ENABLED: "true"
+      INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
+      OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
       API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
       API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}

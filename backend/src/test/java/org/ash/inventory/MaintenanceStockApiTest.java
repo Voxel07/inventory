@@ -166,4 +166,24 @@ class MaintenanceStockApiTest {
                 "receivedQuantity", received, "discrepancyQuantity", discrepancy, "discrepancyNotes", "Arrival check"))))
                 .post("/api/transfers/" + transfer + "/receive").then().statusCode(200);
     }
+
+    @Test void availabilityReportHonoursTheContributorDamageHold() {
+        String item = item(location(), false, 3);
+        String requester = admin().get("/api/auth/me").then().statusCode(200).extract().path("id");
+        QuarkusTransaction.requiringNew().run(() -> {
+            var request = new MemberRequest();
+            request.requester = em.find(UserAccount.class, UUID.fromString(requester));
+            request.item = em.find(Item.class, UUID.fromString(item));
+            request.kind = "damage";
+            request.quantity = 1;
+            request.notes = "Contributor reported damage";
+            request.commandId = UUID.randomUUID();
+            em.persist(request);
+        });
+        admin().get("/api/items/" + item).then().statusCode(200).body("stock.onHand", equalTo(3)).body("stock.available", equalTo(0));
+        admin().post("/api/reports/availability/rebuild").then().statusCode(204);
+        var rows = admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).extract().jsonPath();
+        assertEquals(3, rows.getInt("rows.sum { it.onHand ?: 0 }"));
+        assertEquals(0, rows.getInt("rows.sum { it.available ?: 0 }"));
+    }
 }

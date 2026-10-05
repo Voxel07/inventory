@@ -66,6 +66,7 @@ class InventoryMcpTest {
             em.persist(serialized);
             asset = asset(serialized);
             owner = new UserAccount();
+            owner.issuer = "dev";
             owner.externalSubject = "mcp-owner-" + UUID.randomUUID();
             owner.name = "MCP private owner";
             owner.role = DomainEnums.UserRole.faction_leader;

@@ -135,7 +135,6 @@ public final class ApiModels {
             String certificateNumber, String notes, UUID assetInstanceId, UUID scheduleId,
             String certificateObjectKey) {}
 
-    public record UserPermissionsInput(@NotNull DomainEnums.UserRole role, List<String> faction) {}
     public record DevLoginInput(@NotBlank String email, String password) {}
     public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type,
             @NotNull Map<String, Object> payload, Instant localTimestamp, String deviceId, Integer retryCount,

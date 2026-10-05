@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.PageBounds;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -37,7 +39,7 @@ public class PurchasingService {
     @Transactional
     public List<PurchasingDtos.VendorResponse> vendors(int page, int size) {
         if (actors.current().role != DomainEnums.UserRole.maintenance_crew) actors.requireProcurement();
-        return orm.vendors(offset(page, size), size).stream().map(this::vendor).toList();
+        return orm.vendors(PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
     }
 
     @Transactional
@@ -56,7 +58,7 @@ public class PurchasingService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorResponse updateVendor(UUID id, PurchasingDtos.VendorInput input) {
         actors.requireProcurement();
-        var value = requiredLocked(Vendor.class, id, "Vendor");
+        var value = orm.requireLocked(Vendor.class, id, "Vendor");
         if (orm.vendorNameExists(input.name(), id)) throw ApiException.conflict("Vendor name already exists");
         apply(value, input);
         events.record("vendor.updated", "vendor", value.id, actors.current().id, null, Map.of("name", value.name));
@@ -67,7 +69,7 @@ public class PurchasingService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireVendor(UUID id) {
         actors.requireProcurement();
-        var value = requiredLocked(Vendor.class, id, "Vendor");
+        var value = orm.requireLocked(Vendor.class, id, "Vendor");
         value.active = false;
         events.record("vendor.retired", "vendor", value.id, actors.current().id, null, Map.of("name", value.name));
     }
@@ -77,7 +79,7 @@ public class PurchasingService {
         actors.requireProcurement();
         List<PurchaseOrder> values;
         try {
-            values = orm.purchaseOrders(status, offset(page, size), size);
+            values = orm.purchaseOrders(status, PageBounds.of(page, size).offset(), size);
         } catch (IllegalArgumentException exception) {
             throw ApiException.badRequest("Unknown purchase order status");
         }
@@ -89,18 +91,18 @@ public class PurchasingService {
     public PurchasingDtos.PurchaseOrderResponse createPurchaseOrder(PurchasingDtos.PurchaseOrderInput input) {
         var actor = actors.current();
         actors.requireProcurement();
-        var vendor = required(Vendor.class, input.vendorId(), "Vendor");
+        var vendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         if (!vendor.active) throw ApiException.conflict("Vendor is inactive");
         var order = new PurchaseOrder();
         order.orderNumber = uniqueOrderNumber(input.orderNumber());
         order.vendor = vendor;
-        order.orderDate = input.orderDate() == null ? LocalDate.now() : input.orderDate();
+        order.orderDate = input.orderDate() == null ? BusinessTime.today() : input.orderDate();
         order.expectedDeliveryDate = input.expectedDeliveryDate();
         if (order.expectedDeliveryDate != null && order.expectedDeliveryDate.isBefore(order.orderDate)) {
             throw ApiException.badRequest("Expected delivery date cannot precede order date");
         }
         order.eventOccurrence = input.eventOccurrenceId() == null ? null
-                : required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
+                : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         order.createdBy = actor;
         order.notes = input.notes();
         orm.persist(order);
@@ -114,11 +116,11 @@ public class PurchasingService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse updatePurchaseOrder(UUID id, PurchasingDtos.PurchaseOrderInput input) {
         actors.requireProcurement();
-        var order = requiredLocked(PurchaseOrder.class, id, "Purchase order");
+        var order = orm.requireLocked(PurchaseOrder.class, id, "Purchase order");
         if (order.status != DomainEnums.PurchaseOrderStatus.draft) {
             throw ApiException.conflict("Only draft purchase orders can be edited");
         }
-        var vendor = required(Vendor.class, input.vendorId(), "Vendor");
+        var vendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         if (!vendor.active) throw ApiException.conflict("Vendor is inactive");
         order.vendor = vendor;
         if (input.orderDate() != null) order.orderDate = input.orderDate();
@@ -127,7 +129,7 @@ public class PurchasingService {
             throw ApiException.badRequest("Expected delivery date cannot precede order date");
         }
         order.eventOccurrence = input.eventOccurrenceId() == null ? null
-                : required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
+                : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         order.notes = input.notes();
         orm.removePurchaseOrderLines(order);
         var lines = replaceLines(order, input.lines());
@@ -141,7 +143,7 @@ public class PurchasingService {
     public PurchasingDtos.PurchaseOrderResponse transitionPurchaseOrder(UUID id,
             PurchasingDtos.PurchaseOrderTransitionInput input) {
         actors.requireProcurement();
-        var order = requiredLocked(PurchaseOrder.class, id, "Purchase order");
+        var order = orm.requireLocked(PurchaseOrder.class, id, "Purchase order");
         boolean allowed = switch (order.status) {
             case draft -> input.status() == DomainEnums.PurchaseOrderStatus.ordered
                     || input.status() == DomainEnums.PurchaseOrderStatus.cancelled;
@@ -160,7 +162,7 @@ public class PurchasingService {
     @Transactional
     public List<PurchasingDtos.GoodsReceiptResponse> receipts(UUID purchaseOrderId, int page, int size) {
         actors.requireWarehouse();
-        return receiptResponses(orm.receipts(purchaseOrderId, offset(page, size), size));
+        return receiptResponses(orm.receipts(purchaseOrderId, PageBounds.of(page, size).offset(), size));
     }
 
     @Transactional
@@ -171,12 +173,12 @@ public class PurchasingService {
         var existing = orm.receiptByIdempotencyKey(input.idempotencyKey());
         if (existing != null) return receiptResponses(List.of(existing)).getFirst();
 
-        var order = requiredLocked(PurchaseOrder.class, input.purchaseOrderId(), "Purchase order");
+        var order = orm.requireLocked(PurchaseOrder.class, input.purchaseOrderId(), "Purchase order");
         if (order.status != DomainEnums.PurchaseOrderStatus.ordered
                 && order.status != DomainEnums.PurchaseOrderStatus.partially_received) {
             throw ApiException.conflict("Purchase order is not open for receiving");
         }
-        var location = required(StorageLocation.class, input.receivingLocationId(), "Receiving location");
+        var location = orm.require(StorageLocation.class, input.receivingLocationId(), "Receiving location");
         if (!location.active) throw ApiException.conflict("Receiving location is inactive");
         var receipt = new GoodsReceipt();
         receipt.receiptNumber = uniqueReceiptNumber(input.receiptNumber());
@@ -251,7 +253,7 @@ public class PurchasingService {
     public List<PurchasingDtos.VendorDocumentResponse> documents(UUID vendorId, UUID purchaseOrderId,
             int page, int size) {
         actors.requireWarehouse();
-        return orm.documents(vendorId, purchaseOrderId, offset(page, size), size).stream()
+        return orm.documents(vendorId, purchaseOrderId, PageBounds.of(page, size).offset(), size).stream()
                 .map(this::document).toList();
     }
 
@@ -260,11 +262,11 @@ public class PurchasingService {
     public PurchasingDtos.VendorDocumentResponse attachDocument(PurchasingDtos.VendorDocumentInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var vendor = required(Vendor.class, input.vendorId(), "Vendor");
+        var vendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         var order = input.purchaseOrderId() == null ? null
-                : required(PurchaseOrder.class, input.purchaseOrderId(), "Purchase order");
+                : orm.require(PurchaseOrder.class, input.purchaseOrderId(), "Purchase order");
         var receipt = input.goodsReceiptId() == null ? null
-                : required(GoodsReceipt.class, input.goodsReceiptId(), "Goods receipt");
+                : orm.require(GoodsReceipt.class, input.goodsReceiptId(), "Goods receipt");
         if (order != null && !order.vendor.id.equals(vendor.id)) {
             throw ApiException.badRequest("Purchase order does not belong to vendor");
         }
@@ -322,7 +324,7 @@ public class PurchasingService {
         }
         if (item.trackingMode == DomainEnums.TrackingMode.lot_tracked) {
             if (input.lotId() == null) throw ApiException.badRequest("lotId is required for lot-tracked receipts");
-            var lot = required(InventoryLot.class, input.lotId(), "Inventory lot");
+            var lot = orm.require(InventoryLot.class, input.lotId(), "Inventory lot");
             if (!lot.item.id.equals(item.id)) throw ApiException.badRequest("Lot does not belong to receipt item");
             return lot;
         }
@@ -413,7 +415,7 @@ public class PurchasingService {
             if (!itemIds.add(input.itemId())) throw ApiException.badRequest("Each item may occur only once per purchase order");
             var line = new PurchaseOrderLine();
             line.purchaseOrder = order;
-            line.item = required(Item.class, input.itemId(), "Item");
+            line.item = orm.require(Item.class, input.itemId(), "Item");
             if (!line.item.active) throw ApiException.conflict("Purchase order item is inactive");
             line.orderedQuantity = input.orderedQuantity();
             line.unitPriceCents = input.unitPriceCents();
@@ -490,7 +492,7 @@ public class PurchasingService {
 
     private String uniqueOrderNumber(String requested) {
         var number = requested == null || requested.isBlank()
-                ? "PO-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
+                ? "PO-" + BusinessTime.today().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
                 : requested.trim();
         if (orm.orderNumberExists(number)) throw ApiException.conflict("Purchase order number already exists");
         return number;
@@ -498,7 +500,7 @@ public class PurchasingService {
 
     private String uniqueReceiptNumber(String requested) {
         var number = requested == null || requested.isBlank()
-                ? "GR-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
+                ? "GR-" + BusinessTime.today().getYear() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT)
                 : requested.trim();
         if (orm.receiptNumberExists(number)) throw ApiException.conflict("Receipt number already exists");
         return number;
@@ -508,25 +510,10 @@ public class PurchasingService {
         return UUID.nameUUIDFromBytes((base + ":" + suffix).getBytes(StandardCharsets.UTF_8));
     }
 
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try { return Math.multiplyExact(page, size); }
-        catch (ArithmeticException exception) { throw ApiException.badRequest("Page offset is too large"); }
-    }
 
     private String requiredText(String value, String field) {
         if (value == null || value.isBlank()) throw ApiException.badRequest(field + " is required");
         return value.trim();
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        var value = orm.find(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        var value = orm.locked(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 }

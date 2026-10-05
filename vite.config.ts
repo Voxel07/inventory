@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import type { Plugin } from 'vite'
 
 function getGitTag() {
   if (process.env.APP_VERSION && process.env.APP_VERSION.trim() !== '') {
@@ -27,6 +31,21 @@ function getGitTag() {
   }
 }
 
+/** Stamps public/sw.js with a per-build id so each deployment installs a new service worker and cache. */
+function serviceWorkerBuildId(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'service-worker-build-id',
+    apply: 'build',
+    configResolved(config) { outDir = resolve(config.root, config.build.outDir) },
+    closeBundle() {
+      const file = resolve(outDir, 'sw.js')
+      const buildId = `${getGitTag()}-${randomUUID()}`
+      writeFileSync(file, readFileSync(file, 'utf8').replaceAll('__BUILD_ID__', buildId))
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   define: {
@@ -34,7 +53,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    babel({ presets: [reactCompilerPreset()] })
+    babel({ presets: [reactCompilerPreset()] }),
+    serviceWorkerBuildId(),
   ],
   build: {
     rollupOptions: {

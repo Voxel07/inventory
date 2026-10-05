@@ -1,50 +1,32 @@
 import { Tab } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canPerformCustody } from '../utils/access';
-import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
-import { Box, Typography, DialogTitle, DialogContent, Tabs, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, Tabs } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { DamageReportForm } from '../components/forms/DamageReportForm';
+import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { DamageReportsList } from '../components/lists/DamageReportsList';
-import { useDamageReports, useCreateDamageReport, useUpdateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
+import { useDamageReports, useUpdateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
 import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
-import type { DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
+import type { DamageReportUpdateData, DamageStatus } from '../types';
 import { translate, useLocalizedText } from '../utils/naming';
-import { isOfflineQueuedError } from '../utils/offline';
 
 export function DamageReportsPage() {
     const t = useLocalizedText();
     const { user } = useAuth();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { data: reports, isLoading, isFetchingNextPage, hasNextPage, isError, refetch } = useDamageReports();
     const { data: items } = useItems();
     const { data: assemblies } = useAssemblies();
     const { data: users } = useUsers();
-    const createReport = useCreateDamageReport();
     const updateStatus = useUpdateDamageReportStatus();
     const updateReport = useUpdateDamageReport();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [formOpen, setFormOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
-
-    function handleSubmit(data: DamageReportFormData) {
-        createReport.mutate(data, {
-            onSuccess: () => {
-                setFormOpen(false);
-                showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
-            },
-            onError: (error) => {
-                if (isOfflineQueuedError(error)) return;
-                showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
-            },
-        });
-    }
 
     function handleStatusUpdate(id: string, status: DamageStatus, amount?: number, notes?: string, itemHint?: string) {
         updateStatus.mutate(
@@ -105,12 +87,8 @@ export function DamageReportsPage() {
                 onEdit={handleEdit}
             />
 
-            <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
-                <DialogTitle>{t('Schaden melden', 'Report damage')}</DialogTitle>
-                <DialogContent sx={{ pt: '24px !important' }}>
-                    <DamageReportForm items={items ?? []} assemblies={assemblies ?? []} onSubmit={handleSubmit} isLoading={createReport.isPending} />
-                </DialogContent>
-            </Dialog>
+            <DamageReportDialog open={formOpen} onClose={() => setFormOpen(false)} title={t('Schaden melden', 'Report damage')}
+                items={items ?? []} assemblies={assemblies ?? []} />
         </Box>
     );
 }

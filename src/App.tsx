@@ -8,12 +8,12 @@ import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
-import { useAuth, useCurrentUserRefresh } from './hooks/useAuth';
+import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useAppLanguage, translate, useLocalizedText } from './utils/naming';
 import { subscribeToApiChanges } from './services/apiClient';
 import { getSessionQueryClient, subscribeSessionQueryClient } from './services/sessionQueryClient';
-import { invalidateForApiChange } from './utils/realtimeInvalidation';
+import { createApiChangeCoalescer } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { LoginPage } from './pages/LoginPage';
 import { buildTheme } from './theme';
@@ -51,7 +51,6 @@ function RouteLoadingFallback() {
 
 function AppContent() {
   useAppLanguage();
-  useCurrentUserRefresh();
   const { isAuthenticated } = useAuth();
   useBarcodeScanner(isAuthenticated);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -64,7 +63,11 @@ function AppContent() {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile, setSidebarOpen]);
 
-  useEffect(() => subscribeToApiChanges((detail) => invalidateForApiChange(queryClient, detail)), [queryClient]);
+  useEffect(() => {
+    const coalescer = createApiChangeCoalescer(queryClient);
+    const unsubscribe = subscribeToApiChanges((detail) => coalescer.push(detail));
+    return () => { unsubscribe(); coalescer.dispose(); };
+  }, [queryClient]);
 
   useEffect(() => {
     const onRateLimited = (event: Event) => {

@@ -1,4 +1,5 @@
-import { type Item, type StorageLocation, EVENT_TYPES, type EventType, FACTIONS_BY_EVENT } from '../../types';
+import { type Item, type StorageLocation } from '../../types';
+import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedReturnRow, type ParsedCheckoutRow } from '../../types/csvImport';
 import { getField, ITEM_NAME_ALIASES, AMOUNT_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, ASSET_CODE_ALIASES, LOCATION_ALIASES, EVENT_REPORT_TYPE_ALIASES, EVENT_TYPES_ALIASES, ORDER_FACTION_ALIASES, RETURN_PERSON_ALIASES, EVENT_DATE_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES } from './core';
 import { parseAssetCodes } from './items';
@@ -8,6 +9,7 @@ export function parseReturnsFromCsv(
   rows: Record<string, string>[],
   items: Item[],
   storageLocations: StorageLocation[],
+  reference: CsvReference,
 ): ParsedReturnRow[] {
   const itemLookup = new Map<string, Item>();
   for (const item of items) {
@@ -44,8 +46,7 @@ export function parseReturnsFromCsv(
     const loc = rawLoc ? locMap.get(rawLoc.toLowerCase().trim()) : undefined;
 
     const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES) || getField(raw, EVENT_TYPES_ALIASES);
-    const normEventType = rawEventType?.toUpperCase().trim();
-    const eventType = (EVENT_TYPES as readonly string[]).includes(normEventType ?? '') ? (normEventType as EventType) : undefined;
+    const eventType = knownEventType(reference, rawEventType);
 
     const faction = getField(raw, ORDER_FACTION_ALIASES);
     const person = getField(raw, RETURN_PERSON_ALIASES);
@@ -101,7 +102,7 @@ export function parseReturnsFromCsv(
 }
 
 /** Explicit checkout rows make imported sample stock usable for return flows. */
-export function parseCheckoutsFromCsv(rows: Record<string, string>[], items: Item[]): ParsedCheckoutRow[] {
+export function parseCheckoutsFromCsv(rows: Record<string, string>[], items: Item[], reference: CsvReference): ParsedCheckoutRow[] {
   const names = new Set(items.map((item) => item.name.toLowerCase().trim()));
   return rows.flatMap((raw, index) => {
     const type = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
@@ -110,13 +111,13 @@ export function parseCheckoutsFromCsv(rows: Record<string, string>[], items: Ite
     const quantity = Math.round(parseNumber(getField(raw, AMOUNT_ALIASES), 1));
     const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
     const event = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
-    const eventType = (EVENT_TYPES as readonly string[]).includes(event ?? '') ? event as EventType : undefined;
+    const eventType = knownEventType(reference, event);
     const faction = getField(raw, ORDER_FACTION_ALIASES);
     const notes = getField(raw, HINT_ALIASES) ?? '';
     const statusMessage = !names.has(itemName.toLowerCase().trim()) ? `Artikel "${itemName}" nicht gefunden`
       : quantity < 1 ? 'Menge muss mindestens 1 sein'
       : !eventType || !faction ? 'Eventtyp und Fraktion sind erforderlich'
-      : !FACTIONS_BY_EVENT[eventType].some((value) => value.toLowerCase() === faction.toLowerCase()) ? `Fraktion "${faction}" gehört nicht zum Eventtyp ${eventType}`
+      : !knownFaction(reference, eventType, faction) ? `Fraktion "${faction}" gehört nicht zum Eventtyp ${eventType}`
       : assetCodes.length > 0 && assetCodes.length !== quantity ? 'AssetCodes müssen der Menge entsprechen'
       : undefined;
     return [{ index: index + 1, itemName, quantity, assetCodes, eventType, faction, notes,

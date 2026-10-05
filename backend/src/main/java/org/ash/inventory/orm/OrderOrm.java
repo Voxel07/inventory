@@ -20,50 +20,32 @@ import java.util.UUID;
 
 /** Database access for faction orders and their related models. */
 @ApplicationScoped
-public class OrderOrm {
+public class OrderOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
 
-    public OrderOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<FactionOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionNames,
-            Collection<String> factionKeys, int offset, int limit) {
-        if (factionNames != null && factionNames.isEmpty() && factionKeys != null && factionKeys.isEmpty()) {
-            return List.of();
-        }
+    /** {@code factionKeys} ({@code EVENT:slug}) restricts the result to those factions; {@code null} means unrestricted. */
+    public List<FactionOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
+            int offset, int limit) {
+        if (factionKeys != null && factionKeys.isEmpty()) return List.of();
         var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = new StringBuilder("select o from FactionOrder o "
                 + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where 1 = 1");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
         if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
-        if (factionNames != null || factionKeys != null) {
-            jpql.append(" and (");
-            if (factionNames != null && !factionNames.isEmpty()) jpql.append("o.faction.name in :factionNames");
-            if (factionNames != null && !factionNames.isEmpty() && factionKeys != null && !factionKeys.isEmpty()) {
-                jpql.append(" or ");
-            }
-            if (factionKeys != null && !factionKeys.isEmpty()) {
-                jpql.append("concat(o.eventOccurrence.eventType, concat(':', o.faction.name)) in :factionKeys");
-            }
-            jpql.append(')');
-        }
+        if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
         jpql.append(InventoryAccessOrm.excluding("o", denied)).append(" order by o.eventOccurrence.startDate desc");
         var query = entityManager.createQuery(jpql.toString(), FactionOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
-        if (factionNames != null && !factionNames.isEmpty()) query.setParameter("factionNames", factionNames);
-        if (factionKeys != null && !factionKeys.isEmpty()) query.setParameter("factionKeys", factionKeys);
+        if (factionKeys != null) query.setParameter("factionKeys", factionKeys);
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public FactionOrder findOrder(UUID id) { return entityManager.find(FactionOrder.class, id); }
     public FactionOrder findLockedOrder(UUID id) { return entityManager.find(FactionOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
-    public void persist(Object entity) { entityManager.persist(entity); }
 
     public List<FactionOrderLine> lines(FactionOrder order) {
         return entityManager.createQuery("from FactionOrderLine line where line.order = :order", FactionOrderLine.class)

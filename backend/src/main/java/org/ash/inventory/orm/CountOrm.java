@@ -11,19 +11,9 @@ import java.util.Locale;
 import java.util.UUID;
 
 @ApplicationScoped
-public class CountOrm {
+public class CountOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
 
-    public CountOrm(EntityManager entityManager) { this.entityManager = entityManager; }
-    public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T locked(Class<T> type, UUID id) {
-        var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
-        if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
-        return accessActor.protect(value, true);
-    }
 
     public List<InventoryCountSession> sessions(String status, int offset, int limit) {
         var denied = privacyScopes.deniedReferences(accessActor.current());

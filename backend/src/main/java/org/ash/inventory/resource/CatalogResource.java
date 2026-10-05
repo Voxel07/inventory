@@ -28,12 +28,12 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 public class CatalogResource {
     private final CatalogService service;
-    private final CatalogResponseCache responses;
+    private final CatalogResponses responses;
     private final ApiMapper mapper;
     private final ActorService actor;
     private final ApiQueryService queries;
 
-    public CatalogResource(CatalogService service, CatalogResponseCache responses, ApiMapper mapper,
+    public CatalogResource(CatalogService service, CatalogResponses responses, ApiMapper mapper,
             ActorService actor, ApiQueryService queries) {
         this.service = service;
         this.responses = responses;
@@ -68,35 +68,28 @@ public class CatalogResource {
 
     @POST @Path("/items/{id}/assets") @Transactional
     public List<ApiResponses.AssetInstanceResponse> createAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
-        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.assets(service.createAssets(id, input));
     }
 
     @PATCH @Path("/items/{id}/assets/{assetId}") @Transactional
     public ApiResponses.AssetInstanceResponse updateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId, @Valid ApiModels.AssetInstanceInput input) {
-        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.asset(service.updateAsset(id, assetId, input));
     }
 
     @POST @Path("/items/{id}/assets/{assetId}/relocate") @Transactional
     public ApiResponses.AssetInstanceResponse relocateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
             @Valid ApiModels.AssetRelocationInput input) {
-        actor.requireItemEdit(service.getVisibleItem(id));
         return mapper.asset(service.relocateAsset(id, assetId, input));
     }
 
     @POST @Path("/items/{id}/assets/{assetId}/condition") @Transactional
     public ApiResponses.AssetInstanceResponse updateAssetCondition(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
             @Valid ApiModels.AssetConditionInput input) {
-        var item = service.getVisibleItem(id);
-        if (item.accessPolicy == null) actor.requireMaintenance(); else actor.requireItemEdit(item);
         return mapper.asset(service.updateAssetCondition(id, assetId, input));
     }
 
     @DELETE @Path("/items/{id}/assets/{assetId}") @Transactional
     public Response deleteAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId) {
-        var item = service.getVisibleItem(id);
-        if (item.accessPolicy == null) actor.requireAdmin(); else actor.requireItemEdit(item);
         service.deleteAsset(id, assetId);
         return Response.noContent().build();
     }
@@ -128,16 +121,22 @@ public class CatalogResource {
     }
     @GET @Path("/events/{id}")
     public ApiResponses.EventResponse event(@PathParam("id") UUID id) { return queries.event(id); }
-    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { actor.requirePlanner(); return queries.projectEvent(service.createEvent(input)); }
-    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { actor.requirePlanner(); return queries.projectEvent(service.updateEvent(id, input)); }
-    @DELETE @Path("/events/{id}") @Transactional public Response deleteEvent(@PathParam("id") UUID id) { actor.requirePlanner(); service.deleteEvent(id); return Response.noContent().build(); }
+    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { return queries.projectEvent(service.createEvent(input)); }
+    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { return queries.projectEvent(service.updateEvent(id, input)); }
+    @DELETE @Path("/events/{id}") @Transactional public Response deleteEvent(@PathParam("id") UUID id) { service.deleteEvent(id); return Response.noContent().build(); }
+
+    @GET @Path("/event-types")
+    public List<String> eventTypes() { return service.eventTypes(); }
 
     @GET @Path("/factions")
-    public Response factions(@QueryParam("eventType") String eventType) {
+    public Response factions(@QueryParam("eventType") String eventType,
+            @jakarta.ws.rs.HeaderParam("If-None-Match") String ifNoneMatch) {
         actor.current();
-        return catalogResponse(responses.factions(cacheKey(eventType)));
+        String etag = responses.factionsEtag(cacheKey(eventType));
+        if (etag.equals(ifNoneMatch)) return Response.notModified().header("ETag", etag).build();
+        return Response.ok(responses.factions(cacheKey(eventType)), MediaType.APPLICATION_JSON_TYPE).header("ETag", etag).build();
     }
-    @POST @Path("/factions") @Transactional public ApiResponses.FactionResponse createFaction(@Valid ApiModels.FactionInput input) { actor.requirePlanner(); return mapper.faction(service.createFaction(input)); }
+    @POST @Path("/factions") @Transactional public ApiResponses.FactionResponse createFaction(@Valid ApiModels.FactionInput input) { return mapper.faction(service.createFaction(input)); }
 
     private String cacheKey(String value) {
         return value == null ? "" : value;

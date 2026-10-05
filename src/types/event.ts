@@ -1,8 +1,7 @@
 import type { Item } from './item';
 
-export const EVENT_TYPES = ['DE', 'TNO', 'LS', 'M24', 'ASD'] as const;
-
-export type EventType = typeof EVENT_TYPES[number];
+/** Event type code (e.g. DE, LS); the list comes from GET /api/event-types. */
+export type EventType = string;
 export type EventReportStatus = 'planned' | 'completed';
 
 export interface EventReport {

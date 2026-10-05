@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.MaintenanceSchedule;
@@ -7,7 +8,6 @@ import org.ash.inventory.model.Item;
 import org.ash.inventory.orm.OperationsOrm;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.ZoneId;
 
 /** Supplies live counters at the schedule's item or asset scope. */
 @ApplicationScoped
@@ -50,7 +50,7 @@ public class MaintenanceEvaluationService {
     }
 
     public boolean itemUsable(Item item, Instant now) {
-        return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, now.atZone(ZoneId.systemDefault()).toLocalDate())
+        return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.date(now))
                 && operations.blockingSchedules(item, null).stream().noneMatch(s -> MaintenancePolicy.blocksCheckout(status(s, now)));
     }
 }

@@ -21,11 +21,8 @@ import java.util.UUID;
 
 /** Database access for the catalogue aggregate. */
 @ApplicationScoped
-public class CatalogOrm {
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
+public class CatalogOrm extends EntityOrm {
 
-    public CatalogOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
     public List<Item> items(String search, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
         return items(search, null, actorId, actorGroups, manager, offset, limit);
@@ -120,6 +117,14 @@ public class CatalogOrm {
                 .getResultStream().findFirst().orElse(null);
     }
 
+    /** Event types that have an active faction or an event occurrence. */
+    public java.util.SortedSet<String> eventTypes() {
+        var result = new java.util.TreeSet<String>(entityManager.createQuery(
+                "select distinct f.eventType from Faction f where f.active = true", String.class).getResultList());
+        result.addAll(entityManager.createQuery("select distinct e.eventType from EventOccurrence e", String.class).getResultList());
+        return result;
+    }
+
     public Faction findFaction(String eventType, String lowerCaseName) {
         return entityManager.createQuery("from Faction f where f.eventType = :eventType and lower(f.name) = :name", Faction.class)
                 .setParameter("eventType", eventType)
@@ -167,10 +172,6 @@ public class CatalogOrm {
         return images.stream().collect(java.util.stream.Collectors.groupingBy(img -> img.item.id));
     }
 
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
-    public void persist(Object entity) { entityManager.persist(entity); }
-    public void remove(Object entity) { entityManager.remove(entity); }
 
     public void deleteItemImages(Item item) {
         entityManager.createQuery("delete from ItemImage image where image.item = :item")

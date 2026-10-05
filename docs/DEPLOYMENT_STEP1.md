@@ -18,9 +18,7 @@ flowchart LR
         FE[nginx + React SPA]
         API[Quarkus API]
         PG[(PostgreSQL 18 primary)]
-        VK[Valkey]
         FE --> API --> PG
-        API --> VK
     end
     A -->|S3 API| B[VPS B — Storage node]
     A -->|logical replication| B
@@ -50,8 +48,8 @@ Copy `.env.example` to `.env` on the app VPS and set the public URLs, then:
 docker compose up -d --build
 ```
 
-`docker-compose.yml` starts `postgres`, `valkey`, `garage` (optional in step 1),
-`inventory-api`, and `inventory-app` behind nginx.
+`docker-compose.yml` starts `postgres`, `garage` (optional in step 1),
+`inventory-api` (one node, in-process events and rate limiting), and `inventory-app` behind nginx.
 
 ## Node B — storage & backup
 

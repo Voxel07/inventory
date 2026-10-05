@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.Inputs;
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.inject.Inject;
@@ -124,6 +126,12 @@ public class CatalogService {
         return orm.factions(eventType);
     }
 
+    @Transactional
+    public List<String> eventTypes() {
+        actorService.current();
+        return List.copyOf(orm.eventTypes());
+    }
+
     public <T> T find(Class<T> type, UUID id) {
         return orm.find(type, id);
     }
@@ -135,7 +143,7 @@ public class CatalogService {
         var item = new Item();
         boolean privateItem = Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current());
         if (input.storageLocation() != null) {
-            var location = required(StorageLocation.class, input.storageLocation(), "Location");
+            var location = orm.require(StorageLocation.class, input.storageLocation(), "Location");
             privateItem |= location.accessPolicy != null;
         }
         if (privateItem) {
@@ -182,7 +190,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
-        var item = locked(Item.class, id, "Item");
+        var item = orm.requireLocked(Item.class, id, "Item");
         actorService.requireItemEdit(item);
         if (input.amount() != null && input.amount() != item.baseAmount) {
             throw ApiException.badRequest("Existing stock cannot be edited on the item; create a stock adjustment instead");
@@ -212,7 +220,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireItem(UUID id) {
-        var item = locked(Item.class, id, "Item");
+        var item = orm.requireLocked(Item.class, id, "Item");
         actorService.requireItemEdit(item);
         item.active = false;
         catalogChanged("items", item.id);
@@ -230,8 +238,8 @@ public class CatalogService {
         item.visibilityScope = input.visibilityScope() == null
                 ? DomainEnums.ItemVisibilityScope.global : input.visibilityScope();
         item.assignedUser = input.assignedUserId() == null ? null
-                : required(UserAccount.class, input.assignedUserId(), "Assigned user");
-        item.assignedGroup = blankToNull(input.assignedGroup());
+                : orm.require(UserAccount.class, input.assignedUserId(), "Assigned user");
+        item.assignedGroup = Inputs.blankToNull(input.assignedGroup());
         if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person && item.assignedUser == null) {
             throw ApiException.badRequest("Person-scoped items require an assigned user");
         }
@@ -259,9 +267,9 @@ public class CatalogService {
         if (input.amount() != null) item.baseAmount = input.amount();
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
-        item.storageLocation = input.storageLocation() == null ? null : required(StorageLocation.class, input.storageLocation(), "Storage location");
+        item.storageLocation = input.storageLocation() == null ? null : orm.require(StorageLocation.class, input.storageLocation(), "Storage location");
         item.returnLocation = input.returnLocation() == null ? item.storageLocation
-                : required(StorageLocation.class, input.returnLocation(), "Return location");
+                : orm.require(StorageLocation.class, input.returnLocation(), "Return location");
         item.positionDetails = input.positionDetails();
         item.hint = input.hint();
         item.containerSize = input.containerSize();
@@ -274,7 +282,7 @@ public class CatalogService {
         // The category interval is a default; an interval set on the item itself wins.
         if (categoryPolicy != null && item.maintenanceIntervalDays == null) {
             item.maintenanceIntervalDays = categoryPolicy.intervalDays;
-            if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = LocalDate.now().plusDays(item.maintenanceIntervalDays);
+            if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = BusinessTime.today().plusDays(item.maintenanceIntervalDays);
         }
         if (input.currentOperatingHours() != null) item.currentOperatingHours = input.currentOperatingHours();
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
@@ -291,9 +299,6 @@ public class CatalogService {
         return actorService.canViewItem(item, actor);
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
@@ -314,7 +319,7 @@ public class CatalogService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation updateLocation(UUID id, ApiModels.StorageLocationInput input) {
         hierarchy.lockHierarchy();
-        var location = locked(StorageLocation.class, id, "Storage location");
+        var location = orm.requireLocked(StorageLocation.class, id, "Storage location");
         actorService.requireLocationEdit(location);
         apply(location, input);
         catalogChanged("storage-locations", location.id);
@@ -325,7 +330,7 @@ public class CatalogService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteLocation(UUID id) {
         hierarchy.lockHierarchy();
-        var location = locked(StorageLocation.class, id, "Storage location");
+        var location = orm.requireLocked(StorageLocation.class, id, "Storage location");
         actorService.requireLocationEdit(location);
         if (!location.active) throw ApiException.notFound("Storage location not found");
         hierarchy.deactivate(location);
@@ -369,7 +374,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
-        var assembly = locked(Assembly.class, id, "Assembly");
+        var assembly = orm.requireLocked(Assembly.class, id, "Assembly");
         getVisibleAssemblyComponents(assembly);
         actorService.requireAssemblyEdit(assembly);
         apply(assembly, input);
@@ -383,7 +388,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteAssembly(UUID id) {
-        var assembly = locked(Assembly.class, id, "Assembly");
+        var assembly = orm.requireLocked(Assembly.class, id, "Assembly");
         getVisibleAssemblyComponents(assembly);
         actorService.requireAssemblyEdit(assembly);
         if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);
@@ -420,7 +425,7 @@ public class CatalogService {
             if (entry.getValue() == null || entry.getValue() < 1) throw ApiException.badRequest("Assembly component quantities must be positive");
             var component = new AssemblyItem();
             component.assembly = assembly;
-            component.item = required(Item.class, entry.getKey(), "Item");
+            component.item = orm.require(Item.class, entry.getKey(), "Item");
             component.id = new AssemblyItemId(assembly.id, component.item.id);
             component.quantity = entry.getValue();
             orm.persist(component);
@@ -430,6 +435,12 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence createEvent(ApiModels.EventInput input) {
+        actorService.requirePlanner();
+        return newEvent(input);
+    }
+
+    /** Also used when an order implicitly creates its event occurrence; callers authorize. */
+    private EventOccurrence newEvent(ApiModels.EventInput input) {
         var event = new EventOccurrence();
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
         event.name = input.name() == null || input.name().isBlank() ? event.eventType + " " + input.startDate().getYear() : input.name();
@@ -448,7 +459,8 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence updateEvent(UUID id, ApiModels.EventInput input) {
-        var event = locked(EventOccurrence.class, id, "Event occurrence");
+        actorService.requirePlanner();
+        var event = orm.requireLocked(EventOccurrence.class, id, "Event occurrence");
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
         event.name = input.name() == null ? event.name : input.name();
         event.startDate = input.startDate();
@@ -465,7 +477,8 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteEvent(UUID id) {
-        var event = locked(EventOccurrence.class, id, "Event occurrence");
+        actorService.requirePlanner();
+        var event = orm.requireLocked(EventOccurrence.class, id, "Event occurrence");
         if (orm.hasLinkedOrders(id)) {
             throw ApiException.conflict("Event cannot be deleted while it has linked orders");
         }
@@ -476,6 +489,12 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Faction createFaction(ApiModels.FactionInput input) {
+        actorService.requirePlanner();
+        return newFaction(input);
+    }
+
+    /** Also used when an order names a new faction; callers authorize. */
+    private Faction newFaction(ApiModels.FactionInput input) {
         var faction = new Faction();
         faction.eventType = input.eventType().toUpperCase(Locale.ROOT);
         faction.name = input.name().trim();
@@ -489,7 +508,7 @@ public class CatalogService {
     public EventOccurrence findOrCreateEvent(String eventType, LocalDate date) {
         var event = orm.findEvent(eventType.toUpperCase(Locale.ROOT), date);
         if (event != null) return event;
-        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
+        return newEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
     }
 
     private Map<String, Integer> eventQuantities(Map<UUID, Integer> quantities) {
@@ -500,7 +519,7 @@ public class CatalogService {
                 throw ApiException.badRequest("Event quantities must be non-negative");
             }
             if (quantity == 0) return;
-            required(Item.class, itemId, "Item");
+            orm.require(Item.class, itemId, "Item");
             result.put(itemId.toString(), quantity);
         });
         return result;
@@ -509,7 +528,7 @@ public class CatalogService {
     public Faction findOrCreateFaction(String eventType, String name) {
         var faction = orm.findFaction(eventType.toUpperCase(Locale.ROOT), name.toLowerCase(Locale.ROOT));
         if (faction != null) return faction;
-        return createFaction(new ApiModels.FactionInput(eventType, name, slug(name), true));
+        return newFaction(new ApiModels.FactionInput(eventType, name, slug(name), true));
     }
 
     private void persistImages(Item item, List<String> images) {
@@ -549,7 +568,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public List<AssetInstance> createAssets(UUID itemId, ApiModels.AssetInstanceInput input) {
-        var item = locked(Item.class, itemId, "Item");
+        var item = orm.requireLocked(Item.class, itemId, "Item");
         actorService.requireItemEdit(item);
         if (item.trackingMode != DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("Asset instances can only be registered for serialized items");
@@ -579,7 +598,7 @@ public class CatalogService {
                 asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
                 asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
                 asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
-                asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : required(StorageLocation.class, input.currentLocationId(), "Storage location");
+                asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
                 asset.active = true;
                 orm.persist(asset);
                 created.add(asset);
@@ -604,9 +623,9 @@ public class CatalogService {
             asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
             asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
             asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
-            asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : required(StorageLocation.class, input.currentLocationId(), "Storage location");
+            asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
             if (input.currentCustodianId() != null) {
-                asset.currentCustodian = required(UserAccount.class, input.currentCustodianId(), "User");
+                asset.currentCustodian = orm.require(UserAccount.class, input.currentCustodianId(), "User");
             }
             if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
             asset.notes = input.notes();
@@ -635,9 +654,9 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance updateAsset(UUID itemId, UUID assetId, ApiModels.AssetInstanceInput input) {
-        var item = locked(Item.class, itemId, "Item");
+        var item = orm.requireLocked(Item.class, itemId, "Item");
         actorService.requireItemEdit(item);
-        var asset = locked(AssetInstance.class, assetId, "Asset");
+        var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         assertExpectedVersion(asset, input.expectedVersion());
         if (input.availabilityStatus() != null && input.availabilityStatus() != asset.availabilityStatus) {
@@ -670,9 +689,9 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteAsset(UUID itemId, UUID assetId) {
-        var item = locked(Item.class, itemId, "Item");
-        actorService.requireItemEdit(item);
-        var asset = locked(AssetInstance.class, assetId, "Asset");
+        var item = orm.requireLocked(Item.class, itemId, "Item");
+        if (item.accessPolicy == null) actorService.requireAdmin(); else actorService.requireItemEdit(item);
+        var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         if (!asset.active) return;
         if (asset.availabilityStatus == DomainEnums.AssetState.reserved
@@ -703,9 +722,9 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance relocateAsset(UUID itemId, UUID assetId, ApiModels.AssetRelocationInput input) {
-        var item = locked(Item.class, itemId, "Item");
+        var item = orm.requireLocked(Item.class, itemId, "Item");
         actorService.requireItemEdit(item);
-        var asset = locked(AssetInstance.class, assetId, "Asset");
+        var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         assertOwnedActiveAsset(item, asset);
         assertExpectedVersion(asset, input.expectedVersion());
         if (asset.availabilityStatus != DomainEnums.AssetState.available
@@ -714,7 +733,7 @@ public class CatalogService {
                 && asset.availabilityStatus != DomainEnums.AssetState.in_maintenance) {
             throw ApiException.conflict("Asset cannot be relocated while it is " + asset.availabilityStatus);
         }
-        var destination = required(StorageLocation.class, input.locationId(), "Storage location");
+        var destination = orm.require(StorageLocation.class, input.locationId(), "Storage location");
         if (asset.currentLocation != null && asset.currentLocation.id.equals(destination.id)) return asset;
         var actor = actorService.current();
         var transaction = new StockTransaction();
@@ -738,9 +757,9 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance updateAssetCondition(UUID itemId, UUID assetId, ApiModels.AssetConditionInput input) {
-        var item = locked(Item.class, itemId, "Item");
+        var item = orm.requireLocked(Item.class, itemId, "Item");
         if (item.accessPolicy == null) actorService.requireMaintenance(); else actorService.requireItemEdit(item);
-        var asset = locked(AssetInstance.class, assetId, "Asset");
+        var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         assertOwnedActiveAsset(item, asset);
         assertExpectedVersion(asset, input.expectedVersion());
         if (input.conditionStatus() == DomainEnums.ConditionStatus.lost) {
@@ -788,15 +807,5 @@ public class CatalogService {
                 .replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        T value = orm.find(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
-    private <T> T locked(Class<T> type, UUID id, String label) {
-        T value = orm.findLocked(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 }

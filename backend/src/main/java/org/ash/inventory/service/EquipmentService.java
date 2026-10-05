@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -50,7 +51,7 @@ public class EquipmentService {
         for (var item : items) {
             var read = stock.get(item.id);
             var c = matching(item, event, read.policy().commitments());
-            boolean pickupAllowed = c != null && !LocalDate.now().isBefore(c.availableFrom) && !LocalDate.now().isAfter(c.availableUntil);
+            boolean pickupAllowed = c != null && !BusinessTime.today().isBefore(c.availableFrom) && !BusinessTime.today().isAfter(c.availableUntil);
             var loan = c == null ? null : read.policy().loan(c);
             var eligible = c == null ? List.<String>of() : loan == null ? c.assetIds
                     : loan.collectedAssets.stream().filter(id -> !loan.returnedAssets.contains(id)).toList();
@@ -70,7 +71,7 @@ public class EquipmentService {
                 || item.availabilityPolicy != input.availabilityPolicy();
         if (policyChange) {
             requireIdle(item);
-            if (commitments(item).stream().anyMatch(c -> !c.cancelled && !c.availableUntil.isBefore(LocalDate.now())))
+            if (commitments(item).stream().anyMatch(c -> !c.cancelled && !c.availableUntil.isBefore(BusinessTime.today())))
                 throw ApiException.conflict("Cancel current and future commitments before changing ownership or availability policy");
         }
         var before = view(item);
@@ -87,7 +88,7 @@ public class EquipmentService {
         var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required)
             throw ApiException.conflict("Select commitment required before recording an offer");
-        if (input.availableUntil().isBefore(input.availableFrom()) || input.availableUntil().isBefore(LocalDate.now()))
+        if (input.availableUntil().isBefore(input.availableFrom()) || input.availableUntil().isBefore(BusinessTime.today()))
             throw ApiException.badRequest("Commitment needs an ordered, current or future date range");
         var event = input.eventId() == null ? null : orm.find(EventOccurrence.class, input.eventId());
         if (input.eventId() != null && event == null) throw ApiException.notFound("Event not found");
@@ -164,6 +165,8 @@ public class EquipmentService {
     public interface AvailabilityData {
         boolean hasMemberDamage();
         boolean itemUsable();
+        /** Item-level eligibility (contributor-damage hold, maintenance) shared by commands, planning, reports and MCP. */
+        default boolean eligible() { return !hasMemberDamage() && itemUsable(); }
         List<EquipmentCommitment> commitments();
         LoanArrangement loan(EquipmentCommitment commitment);
         List<AssetInstance> assets();
@@ -174,7 +177,7 @@ public class EquipmentService {
 
     public int available(Item item, EventOccurrence event, InventoryOperationsService.StockState state,
             int ownReservation, AvailabilityData data) {
-        if (data.hasMemberDamage() || !data.itemUsable()) return 0;
+        if (!data.eligible()) return 0;
         if (freelyAvailable(item)) {
             if (item.trackingMode != DomainEnums.TrackingMode.serialized) return state.available() + ownReservation;
             var eligible = data.assets().stream().filter(data::usable).toList();
@@ -212,7 +215,7 @@ public class EquipmentService {
         if (hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
         if (freelyAvailable(item)) return;
         var c = matching(item, event);
-        var today = LocalDate.now();
+        var today = BusinessTime.today();
         if (c == null || eligibleQuantity(c) == 0 || today.isBefore(c.availableFrom) || today.isAfter(c.availableUntil))
             throw ApiException.conflict("No equipment commitment permits pickup today for this event/date range");
     }
@@ -242,7 +245,7 @@ public class EquipmentService {
     }
 
     private EquipmentCommitment matching(Item item, EventOccurrence event, List<EquipmentCommitment> commitments) {
-        LocalDate from = event == null ? LocalDate.now() : event.startDate;
+        LocalDate from = event == null ? BusinessTime.today() : event.startDate;
         LocalDate until = event == null ? from : event.endDate;
         return commitments.stream().filter(c -> !c.cancelled && (c.event == null || (event != null && c.event.id.equals(event.id)))
                 && !c.availableFrom.isAfter(from) && !c.availableUntil.isBefore(until)).findFirst().orElse(null);
@@ -250,7 +253,7 @@ public class EquipmentService {
 
     private int consumedDuring(Item item, EquipmentCommitment c) {
         return orm.consumption(item)
-                .filter(t -> !t.createdAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate().isBefore(c.availableFrom))
+                .filter(t -> !BusinessTime.date(t.createdAt).isBefore(c.availableFrom))
                 .mapToInt(t -> t.quantity).sum();
     }
 
@@ -279,7 +282,7 @@ public class EquipmentService {
     }
     private void revision(Item item, Long expected) { if (expected == null || expected != item.equipmentRevision) throw ApiException.conflict("Equipment agreement changed; reload before saving"); }
     private Profile view(Item item) { return new Profile(item.id, item.ownershipType, item.ownerName, item.keeperName, item.keeperContact, item.availabilityPolicy, item.equipmentRevision, commitments(item).stream().map(this::commitmentView).toList()); }
-    private CommitmentView commitmentView(EquipmentCommitment c) { return new CommitmentView(c.id, c.event == null ? null : c.event.id, c.event == null ? null : c.event.name, c.quantity, c.assetIds, c.availableFrom, c.availableUntil, c.pickupDetails, c.returnDue, c.returnDetails, c.notes, c.cancelled ? "cancelled" : c.availableUntil.isBefore(LocalDate.now()) ? "expired" : c.availableFrom.isAfter(LocalDate.now()) ? "scheduled" : "active", c.cancellationReason, c.recordedBy.name); }
+    private CommitmentView commitmentView(EquipmentCommitment c) { return new CommitmentView(c.id, c.event == null ? null : c.event.id, c.event == null ? null : c.event.name, c.quantity, c.assetIds, c.availableFrom, c.availableUntil, c.pickupDetails, c.returnDue, c.returnDetails, c.notes, c.cancelled ? "cancelled" : c.availableUntil.isBefore(BusinessTime.today()) ? "expired" : c.availableFrom.isAfter(BusinessTime.today()) ? "scheduled" : "active", c.cancellationReason, c.recordedBy.name); }
     private void audit(Item item, String action, Map<String, Object> detail) { events.record("equipment." + action, "item", item.id, actors.current().id, null, detail); }
     private static LocalDate end(EquipmentCommitment c) { return c.returnDue == null ? c.availableUntil : c.returnDue; }
     private static boolean blank(String value) { return value == null || value.isBlank(); }

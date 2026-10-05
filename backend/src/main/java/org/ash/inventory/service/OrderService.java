@@ -88,11 +88,11 @@ public class OrderService {
             }
         }
         var event = input.eventOccurrenceId() != null
-                ? required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence")
+                ? orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence")
                 : catalog.findOrCreateEvent(requiredText(input.eventType(), "eventType"),
                         requiredDate(input.eventDate()));
         var faction = input.factionId() != null
-                ? required(Faction.class, input.factionId(), "Faction")
+                ? orm.require(Faction.class, input.factionId(), "Faction")
                 : catalog.findOrCreateFaction(event.eventType, requiredText(input.faction(), "faction"));
         assertFactionAccess(actor, faction);
         var order = new FactionOrder();
@@ -124,9 +124,9 @@ public class OrderService {
         var previousFactionId = order.faction.id;
         var event = input.eventOccurrenceId() == null
                 ? order.eventOccurrence
-                : required(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
+                : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         var faction = input.factionId() != null
-                ? required(Faction.class, input.factionId(), "Faction")
+                ? orm.require(Faction.class, input.factionId(), "Faction")
                 : input.faction() == null ? order.faction : catalog.findOrCreateFaction(event.eventType, input.faction());
         if (!faction.eventType.equals(event.eventType))
             throw ApiException.badRequest("Faction must belong to the selected event type");
@@ -207,6 +207,7 @@ public class OrderService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder transition(UUID id, DomainEnums.OrderStatus target, ApiModels.TransitionInput input) {
+        requireTransitionRole(target);
         requireWritable();
         var order = lockedOrder(id);
         var actor = actors.current();
@@ -226,7 +227,7 @@ public class OrderService {
             if (nonePrepared)
                 throw ApiException.conflict("An order cannot be ready before any items are prepared");
             order.pickupLocation = input.pickupLocation() == null ? order.pickupLocation
-                    : required(StorageLocation.class, input.pickupLocation(), "Pickup location");
+                    : orm.require(StorageLocation.class, input.pickupLocation(), "Pickup location");
             applyPickupPoint(order, input.pickupLatitude(), input.pickupLongitude());
             order.readyBy = actor;
         }
@@ -329,6 +330,7 @@ public class OrderService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
+        actors.requireMarshal();
         var order = lockedOrder(id);
         var lines = orm.lines(order);
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
@@ -398,7 +400,7 @@ public class OrderService {
             for (var entry : input.requestedQuantities().entrySet()) {
                 if (entry.getValue() == null || entry.getValue() < 1)
                     continue;
-                addLine(order, required(Item.class, entry.getKey(), "Item"), null, entry.getValue());
+                addLine(order, orm.require(Item.class, entry.getKey(), "Item"), null, entry.getValue());
                 count++;
             }
         }
@@ -406,7 +408,7 @@ public class OrderService {
             for (var entry : input.requestedAssemblyQuantities().entrySet()) {
                 if (entry.getValue() == null || entry.getValue() < 1)
                     continue;
-                var assembly = required(Assembly.class, entry.getKey(), "Assembly");
+                var assembly = orm.require(Assembly.class, entry.getKey(), "Assembly");
                 for (var component : orm.assemblyItems(assembly)) {
                     addLine(order, component.item, assembly, component.quantity * entry.getValue());
                     count++;
@@ -1045,12 +1047,22 @@ public class OrderService {
         order.pickupLongitude = longitude;
     }
 
+    /** Shared by REST, MCP and offline replay. */
+    private void requireTransitionRole(DomainEnums.OrderStatus target) {
+        switch (target) {
+            case submitted, draft -> actors.current();
+            case picked_up, closed -> actors.requireMarshal();
+            case ready, preparing -> actors.requireWarehouse();
+            default -> actors.requirePlanner();
+        }
+    }
+
     private void requireWritable() {
         if (actors.current().role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
     }
 
     private void assertFactionAccess(UserAccount actor, Faction faction) {
-        actors.requireFactionAccess(actor, faction.eventType, faction.name);
+        actors.requireFactionAccess(actor, faction);
     }
 
     private void createReadyNotification(FactionOrder order) {
@@ -1087,12 +1099,6 @@ public class OrderService {
         return order;
     }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        T value = orm.find(type, id);
-        if (value == null)
-            throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
     private String requiredText(String value, String field) {
         if (value == null || value.isBlank())

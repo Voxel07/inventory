@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/dateFormat';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { Button } from '../shared/ActionButtons';
 import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
@@ -25,7 +26,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { useItems } from '../../hooks/useItems';
-import { EVENT_TYPES, type GeneralOrderSummary, type Item } from '../../types';
+import { type GeneralOrderSummary, type Item } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
@@ -46,6 +47,7 @@ const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
 
 export function GeneralOrders() {
   const t = useLocalizedText();
+  const { eventTypes } = useFactionCatalog();
   const feedback = useMutationFeedback();
   const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
@@ -202,7 +204,7 @@ export function GeneralOrders() {
           <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
           <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => { setEventId(event.target.value); setItemPage(1); }}>
             <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
-            {EVENT_TYPES.flatMap((type) => {
+            {eventTypes.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
               return occurrences.length ? [
                 <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,

@@ -24,11 +24,8 @@ import java.util.UUID;
 
 /** Database access for stock, damage, maintenance, and procurement views. */
 @ApplicationScoped
-public class OperationsOrm {
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
+public class OperationsOrm extends EntityOrm {
 
-    public OperationsOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
     public List<Item> minStockItems() {
         return entityManager.createQuery("from Item i where i.active = true and i.minStock > 0", Item.class).getResultList();
@@ -268,8 +265,6 @@ public class OperationsOrm {
 
     public Item findLockedItem(UUID id) { return accessActor.protect(entityManager.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE), true); }
     public DamageReport findLockedDamage(UUID id) { return accessActor.protect(entityManager.find(DamageReport.class, id, LockModeType.PESSIMISTIC_WRITE), true); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public void persist(Object entity) { entityManager.persist(entity); }
 
     public List<AssetInstance> assetsForItem(Item item) {
         return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true", AssetInstance.class)

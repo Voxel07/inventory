@@ -12,7 +12,7 @@ import java.time.Instant;
 public class OperationalReportResource {
     @Inject OperationalReportService reports;
     @Inject ActorService actors;
-    @GET public Map<String, String> definitions() { actors.requireWarehouse(); return OperationalReportService.DEFINITIONS; }
+    @GET public Map<String, String> definitions() { return reports.definitions(); }
     @POST @Path("/{name}/rebuild") public void rebuild(@PathParam("name") String name) { reports.rebuild(name); }
     @GET @Path("/{name}/export") public OperationalReportService.View export(@PathParam("name") String name,
             @QueryParam("generation") Instant generation, @jakarta.ws.rs.core.Context jakarta.ws.rs.core.UriInfo uri) {

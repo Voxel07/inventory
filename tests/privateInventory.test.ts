@@ -25,13 +25,23 @@ test('operational projections inherit protection and resetting the account clear
   expect(containsPrivateInventory(projection)).toBe(true);
 });
 
-test('revocation events remove cached snapshots instead of leaving stale private data visible', async () => {
+test('revocation events remove cached private snapshots and refetch public data in place', async () => {
   const client = new QueryClient();
-  client.setQueryData(['items'], [{ id: 'previously-shared' }]);
+  client.setQueryData(['items'], [{ id: 'previously-shared', access: { privateResource: true } }]);
   client.setQueryData(['reports'], { total: 1 });
-  invalidateForApiChange(client, { type: 'access.invalidated' });
+  invalidateForApiChange(client, { type: 'access.changed' });
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(client.getQueryData(['items'])).toBeUndefined();
-  expect(client.getQueryData(['reports'])).toBeUndefined();
+  expect(client.getQueryData(['reports'])).toEqual({ total: 1 });
+  expect(client.getQueryState(['reports'])?.isInvalidated).toBe(true);
+  client.clear();
+});
+
+test('a reconnect inside a batch is treated as a possible revocation', async () => {
+  const client = new QueryClient();
+  client.setQueryData(['items'], [{ id: 'shared', privateResource: true }]);
+  invalidateForApiChange(client, { type: 'batch', changes: [{ type: 'stock.changed' }, { type: 'realtime.reconnected' }] });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(client.getQueryData(['items'])).toBeUndefined();
   client.clear();
 });

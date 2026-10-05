@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/dateFormat';
+import { formatMoney } from '../../utils/money';
 import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
 import { type CsvImportCounts, type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow, type FactionOrderImportStatus } from '../../types/csvImport';
@@ -114,7 +115,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           <TableCell>{row.data.category || '—'}</TableCell>
                           <TableCell align="right">{row.data.amount ?? 0}</TableCell>
                           <TableCell align="right">{row.data.minStock ?? 5}</TableCell>
-                          <TableCell align="right">{(row.data.value ?? 0).toFixed(2)} €</TableCell>
+                          <TableCell align="right">{formatMoney(row.data.value ?? 0)}</TableCell>
                           <TableCell>{row.storageLocationName || '—'}</TableCell>
                         </TableRow>
                       ))}

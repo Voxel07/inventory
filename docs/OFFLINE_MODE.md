@@ -4,7 +4,7 @@ Updated 1 October 2026 against `offlineQueue.ts`, `resourceFactory.ts`, `apiClie
 
 ## Supported scope
 
-The PWA service worker caches the application shell. IndexedDB stores account-scoped catalog reads and a durable command queue. Items, assemblies, storage locations and events can fall back to saved query-specific results on eligible network/server failures. Cache timestamps indicate the last successful download; cached quantities are not a current availability promise.
+The PWA service worker caches the application shell. Its cache is versioned per build; navigations are network-first (the cached shell serves offline starts), hashed bundles cache-first, and it never caches `/api` or third-party resources. IndexedDB stores account-scoped catalog reads and a durable command queue. Items, assemblies, storage locations and events can fall back to saved query-specific results on eligible network/server failures. Cache timestamps indicate the last successful download; cached quantities are not a current availability promise.
 
 Current limitation: collection hooks still use the default online query scheduling, so a cold offline start can pause before their service-level IndexedDB fallback runs. Warm in-memory lists can conceal this. Exact item detail queries explicitly allow a first offline attempt; collection scheduling remains R04 in the [current review](REPOSITORY_REVIEW.md).
 

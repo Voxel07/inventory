@@ -20,12 +20,6 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
 type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; page?: number; size?: number };
 export const getTransactions = (filters?: Filters): Promise<StockTransaction[]> => transactionApi.getAll(filters);
 export const createTransaction = transactionApi.create;
-export async function bulkCheckout(itemIds: string[], reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string) {
-  return Promise.all(itemIds.map((itemId) => createTransaction({ itemId, transactionType: 'checkout', quantityChanged: 1, reason, notes, eventType, faction })));
-}
-export async function bulkCheckin(itemIds: string[], reason: string, notes: string) {
-  return Promise.all(itemIds.map((itemId) => createTransaction({ itemId, transactionType: 'checkin', quantityChanged: 1, reason, notes })));
-}
 export async function assemblyCheckout(itemQuantities: Record<string, number>, assemblyName: string, reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string, eventOccurrenceId: string) {
   const body = Object.entries(itemQuantities).filter(([, quantity]) => quantity > 0).map(([itemId, quantityChanged]) => ({ itemId, transactionType: 'checkout', quantityChanged, reason: reason || `Assembly checkout: ${assemblyName}`, notes, eventType, faction, eventOccurrenceId, idempotencyKey: crypto.randomUUID() }));
   return apiRequest<StockTransaction[]>('/api/transactions/batch', { method: 'POST', body });

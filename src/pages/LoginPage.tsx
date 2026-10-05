@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
 import { translate, useLocalizedText } from '../utils/naming';
+import { AUTH_CONFIGURATION_ERROR } from '../config/runtimeConfig';
 
 export function LoginPage() {
     const t = useLocalizedText();
@@ -77,6 +78,7 @@ export function LoginPage() {
                         {t('Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.', 'Sign in with your organization account to manage and check out items.')}
                     </Typography>
 
+                    {AUTH_CONFIGURATION_ERROR && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{AUTH_CONFIGURATION_ERROR}</Alert>}
                     {authError && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{authError}</Alert>}
 
                     <Button title={translate('Über Authentik anmelden', 'Sign in through Authentik')}
@@ -85,7 +87,7 @@ export function LoginPage() {
                         size="large"
                         startIcon={<LoginIcon />}
                         onClick={handleAuthentikLogin}
-                        disabled={isLoading}
+                        disabled={isLoading || Boolean(AUTH_CONFIGURATION_ERROR)}
                         sx={{
                             py: 1.5,
                             fontWeight: 600,

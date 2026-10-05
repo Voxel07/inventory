@@ -16,17 +16,9 @@ import java.util.Locale;
 import java.util.UUID;
 
 @ApplicationScoped
-public class StockManagementOrm {
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
+public class StockManagementOrm extends EntityOrm {
 
-    public StockManagementOrm(EntityManager entityManager) {
-        this.entityManager = entityManager;
-    }
 
-    public void persist(Object entity) { entityManager.persist(entity); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T findLocked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<Warehouse> warehouses(int offset, int limit) {
         return entityManager.createQuery("from Warehouse warehouse order by warehouse.active desc, warehouse.name", Warehouse.class)
@@ -45,11 +37,11 @@ public class StockManagementOrm {
 
     public List<InventoryCode> codes(UUID targetId, int offset, int limit, java.util.Set<UUID> denied) {
         var query = new StringBuilder("from InventoryCode code where 1=1");
-        if (!denied.isEmpty()) query.append(" and code.id not in :denied and code.targetId not in :denied");
+        if (!denied.isEmpty()) query.append(" and not array_contains(:denied, code.id) and not array_contains(:denied, code.targetId)");
         if (targetId != null) query.append(" and code.targetId = :targetId");
         query.append(" order by code.active desc, code.code");
         var typed = entityManager.createQuery(query.toString(), InventoryCode.class);
-        if (!denied.isEmpty()) typed.setParameter("denied", denied);
+        if (!denied.isEmpty()) typed.setParameter("denied", denied.toArray(UUID[]::new));
         if (targetId != null) typed.setParameter("targetId", targetId);
         return typed.setFirstResult(offset).setMaxResults(limit).getResultList();
     }

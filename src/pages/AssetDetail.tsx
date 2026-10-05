@@ -1,22 +1,17 @@
 import { Button } from '../components/shared/ActionButtons';
 import { CodeManagement } from '../components/qr/CodeManagement';
 import { canOperateWarehouse } from '../utils/access';
-import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     Alert,
     Box,
     Chip,
-    DialogContent,
-    DialogTitle,
     Divider,
     Paper,
     Skeleton,
     Stack,
     Typography,
-    useMediaQuery,
-    useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -25,14 +20,11 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import { useItem, useItemAssets } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
-import { useCreateDamageReport, useDamageReports } from '../hooks/useDamageReports';
-import { DamageReportForm } from '../components/forms/DamageReportForm';
-import { useUIStore } from '../store/uiStore';
-import type { DamageReportFormData } from '../types';
+import { useDamageReports } from '../hooks/useDamageReports';
+import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { formatStatus } from '../utils/formatters';
 import { formatDateTime } from '../utils/dateFormat';
 import { translate, useLocalizedText } from '../utils/naming';
-import { isOfflineQueuedError } from '../utils/offline';
 import { useAuth } from '../hooks/useAuth';
 import { canPerformCustody } from '../utils/access';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
@@ -49,8 +41,6 @@ export function AssetDetail() {
     const { user } = useAuth();
     const canReportDamage = canPerformCustody(user);
     const t = useLocalizedText();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const navigate = useNavigate();
     const { itemId, assetId } = useParams<{ itemId: string; assetId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -62,8 +52,6 @@ export function AssetDetail() {
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
     const { data: transactions, isLoading: transactionsLoading } = useTransactions({ assetInstanceId: assetId, size: 200 });
     const { data: reports, isLoading: reportsLoading } = useDamageReports(undefined, { assetInstanceId: assetId, size: 200 });
-    const createDamage = useCreateDamageReport();
-    const showSnackbar = useUIStore((state) => state.showSnackbar);
     const asset = assets?.find((candidate) => candidate.id === assetId);
 
     const activity = (() => {
@@ -101,19 +89,6 @@ export function AssetDetail() {
             next.delete('reportDamage');
             setSearchParams(next, { replace: true });
         }
-    }
-
-    function submitDamage(data: DamageReportFormData) {
-        createDamage.mutate(data, {
-            onSuccess: () => {
-                closeDamageDialog();
-                showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
-            },
-            onError: (error) => {
-                if (isOfflineQueuedError(error)) return;
-                showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
-            },
-        });
     }
 
     if (itemLoading || assetsLoading) return <Box><Skeleton height={70} /><Skeleton height={240} /><Skeleton height={240} /></Box>;
@@ -185,21 +160,17 @@ export function AssetDetail() {
                     ? [{ key: 'locationId', label: t('Lagerort', 'Location'), required: true, options: locations.filter(l => l.active).map(l => ({ value: l.id, label: l.name })) }]
                     : [{ key: 'conditionStatus', label: t('Zustand', 'Condition'), required: true, options: ['new_condition', 'good', 'fair', 'damaged', 'unsafe'].map(value => ({ value, label: formatStatus(value) })) }]}
                 onSave={values => apiRequest(`/api/items/${item.id}/assets/${asset.id}/${privateAction}`, { method: 'POST', body: { expectedVersion: asset.version, ...(privateAction === 'relocate' ? { locationId: values.locationId } : { conditionStatus: values.conditionStatus }) } })} />}
-            <Dialog open={damageOpen} onClose={closeDamageDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
-                <DialogTitle>{t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}</DialogTitle>
-                <DialogContent sx={{ pt: '24px !important' }}>
-                    <DamageReportForm
-                        key={asset.id}
-                        items={[item]}
-                        preselectedItemId={item.id}
-                        preselectedAssetId={asset.id}
-                        preselectedAsset={asset}
-                        onSubmit={submitDamage}
-                        isLoading={createDamage.isPending}
-                        maxAmount={1}
-                    />
-                </DialogContent>
-            </Dialog>
+            <DamageReportDialog
+                key={asset.id}
+                open={damageOpen}
+                onClose={closeDamageDialog}
+                title={t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}
+                items={[item]}
+                preselectedItemId={item.id}
+                preselectedAssetId={asset.id}
+                preselectedAsset={asset}
+                maxAmount={1}
+            />
         </Box>
     );
 }

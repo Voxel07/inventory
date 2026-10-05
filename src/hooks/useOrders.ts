@@ -1,5 +1,5 @@
 import type { GeneralOrderSummary, GeneralOrderFormData } from '../types';
-import { generalOrderApi, returnOrder, transitionOrder } from '../services/orderService';
+import { generalOrderApi, transitionOrder } from '../services/orderService';
 import { createMutableResourceHooks } from './useResourceApi';
 import { useMutation } from '@tanstack/react-query';
 import { useProgressiveList } from './useProgressiveList';
@@ -19,8 +19,3 @@ export function useTransitionOrder() {
   });
 }
 
-export function useReturnOrder() {
-  return useMutation({
-    mutationFn: ({ id, returnedQuantities, consumedQuantities }: { id: string; returnedQuantities: Record<string, number>; consumedQuantities: Record<string, number> }) => returnOrder(id, returnedQuantities, consumedQuantities),
-  });
-}

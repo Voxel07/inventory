@@ -1,5 +1,6 @@
 package org.ash.inventory.orm;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.TypedQuery;
 import org.ash.inventory.model.*;
@@ -71,7 +72,7 @@ public class InventoryAccessOrm extends EntityOrm {
     }
     public boolean currentCommitments(Item item) {
         return !entityManager.createQuery("select c.id from EquipmentCommitment c where c.item = :item and c.cancelled = false and c.availableUntil >= :today", UUID.class)
-                .setParameter("item", item).setParameter("today", java.time.LocalDate.now()).setMaxResults(1).getResultList().isEmpty();
+                .setParameter("item", item).setParameter("today", BusinessTime.today()).setMaxResults(1).getResultList().isEmpty();
     }
     public List<UserAccount> people() {
         return entityManager.createQuery("from UserAccount order by name, id", UserAccount.class).getResultList();
@@ -92,9 +93,15 @@ public class InventoryAccessOrm extends EntityOrm {
         }
         return roots;
     }
-    public static String excluding(String alias, Set<UUID> denied) { return denied.isEmpty() ? "" : " and " + alias + ".id not in :privateDenied"; }
+    /**
+     * The denied set grows with the ledger. It is bound as one {@code uuid[]} parameter; an IN list would
+     * expand to one bind parameter per ID and hit PostgreSQL's 65,535-parameter limit.
+     */
+    public static String excluding(String alias, Set<UUID> denied) {
+        return denied.isEmpty() ? "" : " and not array_contains(:privateDenied, " + alias + ".id)";
+    }
     public static <T> TypedQuery<T> bindDenied(TypedQuery<T> query, Set<UUID> denied) {
-        return denied.isEmpty() ? query : query.setParameter("privateDenied", denied);
+        return denied.isEmpty() ? query : query.setParameter("privateDenied", denied.toArray(UUID[]::new));
     }
     // Both traversal directions share the same evidence graph, including JSON
     // order references. UNION in the recursion also terminates cycles.

@@ -38,7 +38,7 @@ import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAss
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useClientPagination } from '../../hooks/useClientPagination';
-import { QRCodeGenerator } from '../qr/QRCodeGenerator';
+import { QrLabelDialog } from '../qr/QrLabelDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
 
@@ -619,22 +619,9 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </DialogActions>
             </Dialog>
 
-            {/* Dialog: QR Code Generator */}
-            <Dialog open={!!qrAsset} onClose={() => setQrAsset(null)} maxWidth="xs" fullWidth>
-                <DialogTitle>QR-Code: {qrAsset?.assetCode}</DialogTitle>
-                <DialogContent>
-                    {qrAsset && (
-                        <QRCodeGenerator
-                            itemId={item.id}
-                            itemName={`${item.name} (${qrAsset.assetCode})`}
-                            textCode={qrAsset.assetCode}
-                        />
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setQrAsset(null)}>{t('Schließen', 'Close')}</Button>
-                </DialogActions>
-            </Dialog>
+            <QrLabelDialog
+                label={qrAsset ? { title: `QR-Code: ${qrAsset.assetCode}`, itemId: item.id, itemName: `${item.name} (${qrAsset.assetCode})`, textCode: qrAsset.assetCode } : null}
+                onClose={() => setQrAsset(null)} />
 
             {/* Delete / Retire Confirmation */}
             <ConfirmDialog

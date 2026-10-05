@@ -13,6 +13,6 @@ export const {
 
 export function useAssemblies() {
   // This endpoint returns the whole assembly catalog and has no paging parameters.
-  const query = useQuery({ queryKey: ['assemblies'], queryFn: () => assemblyApi.getAll() });
+  const query = useQuery({ queryKey: ['assemblies'], queryFn: () => assemblyApi.getAll(), networkMode: 'offlineFirst' });
   return { ...query, hasNextPage: false, isFetchingNextPage: false, isComplete: !query.isLoading && !query.isError };
 }

@@ -1,4 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { AccordionSummary, Button } from '../shared/ActionButtons';
 import { DialogForm, FormDialog, FormSection } from '../shared/FormDialog';
@@ -22,7 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
-import { EVENT_TYPES, type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
+import { type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
@@ -49,6 +50,7 @@ export function ItemForm({
     isLoading,
 }: Props) {
     const t = useLocalizedText();
+    const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
     const canCreatePublic = canEditCatalog(user);
     const [formData, setFormData] = useState<ItemFormData>({
@@ -64,7 +66,7 @@ export function ItemForm({
         visibilityScope: initialData?.visibilityScope ?? 'global',
         assignedUserId: initialData?.assignedUserId ?? '',
         assignedGroup: initialData?.assignedGroup ?? '',
-        eventTypes: initialData ? (initialData.eventTypes ?? []) : [...EVENT_TYPES],
+        eventTypes: initialData ? (initialData.eventTypes ?? []) : [...eventTypes],
         storageLocation: initialData?.storageLocation ?? '',
         returnLocation: initialData?.returnLocation ?? initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
@@ -436,7 +438,7 @@ export function ItemForm({
                         <Stack spacing={2}>
                             <Autocomplete
                                 multiple
-                                options={[...EVENT_TYPES]}
+                                options={eventTypes}
                                 value={formData.eventTypes ?? []}
                                 onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
                                 renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}

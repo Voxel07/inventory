@@ -1,5 +1,5 @@
 import { type CsvImportType } from '../../types/csvImport';
-import { type EventType, EVENT_TYPES } from '../../types';
+import type { EventType } from '../../types';
 
 /**
  * Robust CSV tokenizer handling quotes, escaped quotes, newlines within quotes,
@@ -292,10 +292,10 @@ export function parseNumber(val: string | undefined, defaultValue: number): numb
   return isNaN(num) ? defaultValue : num;
 }
 
-export function parseEventTypes(val: string | undefined): EventType[] {
+export function parseEventTypes(val: string | undefined, known: readonly EventType[]): EventType[] {
   if (!val) return [];
   const parts = val.split(/[,;|/]+/).map((p) => p.trim().toUpperCase());
-  return parts.filter((p): p is EventType => (EVENT_TYPES as readonly string[]).includes(p));
+  return parts.filter((p) => known.includes(p));
 }
 
 /**

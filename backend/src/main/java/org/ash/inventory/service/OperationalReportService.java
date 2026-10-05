@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -28,13 +29,17 @@ public class OperationalReportService {
     public static final Map<String, String> DEFINITIONS = new LinkedHashMap<>();
     static {
         DEFINITIONS.put("events", "One row per event/item, including planned-only items. Planned is total forecast; requested is active order demand. Handed over is historical deployment and survives returns. Outstanding = handed over minus good/damaged returns, consumption and write-offs. Missing remains outstanding. Date filter uses event start date.");
-        DEFINITIONS.put("availability", "Current bulk/lot positions and individual serialized assets by actual location. Available is unrestricted organization stock; private/external or commitment-required stock needs event-specific planning and is zero here. Ownership is separate from physical on-hand. Available excludes reservations, damage, quarantine, unusable lots and blocked maintenance. Transit and custody (including pending checks) are separate from on-hand. Unlocated legacy quantities are shown as unassigned with zero location availability until reconciled. Inactive locations remain traceable. Date is snapshot date, not historical stock.");
+        DEFINITIONS.put("availability", "Current bulk/lot positions and individual serialized assets by actual location. Available is unrestricted organization stock; private/external or commitment-required stock needs event-specific planning and is zero here. Ownership is separate from physical on-hand. Available excludes reservations, damage, quarantine, unusable lots, blocked maintenance and items held by an open contributor damage report. Transit and custody (including pending checks) are separate from on-hand. Unlocated legacy quantities are shown as unassigned with zero location availability until reconciled. Inactive locations remain traceable. Date is snapshot date, not historical stock.");
         DEFINITIONS.put("returns", "Unresolved custody by item/person/order/asset. Pending acknowledgement is a subset of outstanding, never subtracted twice. Missing is still outstanding. Date is event end date where attributable; otherwise unknown. This is an unresolved worklist, not historical custody at a selected date.");
         DEFINITIONS.put("repairs", "Open repair cases, excluding returned-to-service and written-off cases, plus unresolved damage incidents not yet assigned a repair case. Repaired and verified cases remain in backlog until release. Quantity is the originating damage quantity for cases and unresolved quantity for incidents. Date is case/incident creation date.");
         DEFINITIONS.put("maintenance", "Active schedules with due/warning/healthy status at generation, plus legacy item calendar dates when no active item schedule exists. Calendar warning windows are days; meter windows use hours or checkout count. Missing meter evidence is unknown, not zero. Date is next calendar due date; meter schedules have no calendar date.");
         DEFINITIONS.put("purchases", "One row per supplier purchase line, including drafts and cancelled orders. Ordered is recorded line quantity; received is delivered quantity. Open delivery excludes draft/cancelled/closed purchases. Value cents = ordered quantity × unit price cents, not paid cost. Filter status before comparing committed spend. Date is order date.");
         DEFINITIONS.put("counts", "Completed counts only (posted/cancelled), so reports cannot reveal expected quantities during a blind count. Original count, recount, approved count and signed variance are retained separately. Date is completion date, or last update for cancelled sessions. Only posted variances changed stock.");
-        DEFINITIONS.put("movements", "Immutable consumed and written-off transactions, one row per ledger record. Quantities are positive outcome amounts; they are not summed with event summaries. Unassigned historical events are not guessed. Date is transaction occurrence in UTC. Group by month and type for trends.");
+        DEFINITIONS.put("movements", "Immutable consumed and written-off transactions, one row per ledger record. Quantities are positive outcome amounts; they are not summed with event summaries. Unassigned historical events are not guessed. Date is the transaction occurrence date in the business time zone. Group by month and type for trends.");
+    }
+    public Map<String, String> definitions() {
+        actors.requireWarehouse();
+        return DEFINITIONS;
     }
     public record View(String name, String definition, Instant startedAt, Instant generatedAt, boolean stale,
             int total, List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals) {}
@@ -179,25 +184,25 @@ public class OperationalReportService {
             if (p.item.trackingMode == DomainEnums.TrackingMode.serialized) continue;
             located.merge(p.item.id, p.quantityOnHand, Integer::sum);
             int reserved = reservations.getOrDefault(p.id, 0);
-            var row = row("id", p.id, "date", LocalDate.now(ZoneOffset.UTC), "tracking", p.item.trackingMode, "lot", p.lot == null ? null : p.lot.lotNumber,
+            var row = row("id", p.id, "date", BusinessTime.today(), "tracking", p.item.trackingMode, "lot", p.lot == null ? null : p.lot.lotNumber,
                     "onHand", p.quantityOnHand, "reserved", reserved, "damaged", p.quantityDamaged, "quarantined", p.quantityQuarantined,
                     "inTransit", p.quantityInTransit, "ownership", p.item.ownershipType, "owner", p.item.ownerName,
-                    "available", !EquipmentService.freelyAvailable(p.item) || !stock.get(p.item.id).policy().itemUsable() ? 0 : Math.max(0, p.availableQuantity() - reserved));
+                    "available", !EquipmentService.freelyAvailable(p.item) || !stock.get(p.item.id).policy().eligible() ? 0 : Math.max(0, p.availableQuantity() - reserved));
             item(row, p.item); location(row, p.location); rows.add(row);
         }
         for (var item : items) {
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) continue;
             int unlocated = Math.max(0, stock.get(item.id).physical().onHand() - located.getOrDefault(item.id, 0));
             if (unlocated == 0) continue;
-            var row = row("id", item.id + ":unlocated", "date", LocalDate.now(ZoneOffset.UTC), "tracking", item.trackingMode,
+            var row = row("id", item.id + ":unlocated", "date", BusinessTime.today(), "tracking", item.trackingMode,
                     "status", "location_reconciliation_required", "ownership", item.ownershipType, "owner", item.ownerName, "onHand", unlocated, "available", 0);
             item(row, item); location(row, null); rows.add(row);
         }
         for (var a : all(AssetInstance.class)) {
             var state = StockPolicy.classify(a);
             var policy = stock.get(a.item.id).policy();
-            boolean available = state.available() > 0 && a.currentLocation != null && EquipmentService.freelyAvailable(a.item) && policy.itemUsable() && policy.usable(a);
-            var row = row("id", a.id, "date", LocalDate.now(ZoneOffset.UTC), "tracking", "serialized", "asset", a.assetCode, "status", a.availabilityStatus,
+            boolean available = state.available() > 0 && a.currentLocation != null && EquipmentService.freelyAvailable(a.item) && policy.eligible() && policy.usable(a);
+            var row = row("id", a.id, "date", BusinessTime.today(), "tracking", "serialized", "asset", a.assetCode, "status", a.availabilityStatus,
                     "ownership", a.item.ownershipType, "owner", a.item.ownerName,
                     "onHand", state.onHand(), "available", available ? 1 : 0, "reserved", state.reserved(),
                     "damaged", state.damaged(), "inTransit", state.inTransit(), "outstanding", state.checkedOut());
@@ -224,7 +229,7 @@ public class OperationalReportService {
         for (var r : all(RepairCase.class)) {
             assigned.add(r.damageReport.id);
             if (Set.of(DomainEnums.RepairStatus.returned_to_service, DomainEnums.RepairStatus.written_off).contains(r.status)) continue;
-            var row = row("id", r.id, "date", r.createdAt.atOffset(ZoneOffset.UTC).toLocalDate(), "status", r.status, "quantity", r.damageReport.quantity,
+            var row = row("id", r.id, "date", BusinessTime.date(r.createdAt), "status", r.status, "quantity", r.damageReport.quantity,
                     "owner", r.repairOwner == null ? null : r.repairOwner.name, "vendor", r.repairVendor == null ? null : r.repairVendor.name,
                     "asset", r.assetInstance == null ? null : r.assetInstance.assetCode, "safetyImpact", r.safetyImpact, "partsAndCostNotes", r.partsAndCostNotes, "verification", r.verificationResult);
             item(row, r.damageReport.item); if (r.assetInstance != null) location(row, r.assetInstance.currentLocation); rows.add(row);
@@ -233,7 +238,7 @@ public class OperationalReportService {
             if (assigned.contains(damage.id) || Set.of(DomainEnums.DamageStatus.resolved, DomainEnums.DamageStatus.returned_to_service, DomainEnums.DamageStatus.written_off).contains(damage.status)) continue;
             int outstanding = Math.max(0, damage.quantity - damage.repairedQuantity - damage.writtenOffQuantity);
             if (outstanding == 0) continue;
-            var row = row("id", damage.id, "date", damage.createdAt.atOffset(ZoneOffset.UTC).toLocalDate(), "status", "awaiting_triage", "quantity", outstanding,
+            var row = row("id", damage.id, "date", BusinessTime.date(damage.createdAt), "status", "awaiting_triage", "quantity", outstanding,
                     "assembly", damage.assembly == null ? null : damage.assembly.name, "safetyImpact", damage.safetyImpact, "notes", damage.description);
             item(row, damage.item); if (damage.assetInstance != null) location(row, damage.assetInstance.currentLocation); rows.add(row);
         }
@@ -248,7 +253,7 @@ public class OperationalReportService {
             if (!s.active) continue;
             if (s.assetInstance == null) scheduledItems.add(s.item.id);
             var policy = facts.get(s.item.id).policy();
-            var row = row("id", s.id, "date", s.nextDueAt == null ? null : s.nextDueAt.atOffset(ZoneOffset.UTC).toLocalDate(), "status", policy.status(s),
+            var row = row("id", s.id, "date", s.nextDueAt == null ? null : BusinessTime.date(s.nextDueAt), "status", policy.status(s),
                     "type", s.maintenanceType, "interval", s.intervalType, "nextDue", s.nextDueValue, "meter", s.intervalType == DomainEnums.MaintenanceIntervalType.date ? null : MaintenancePolicy.meter(MaintenancePolicy.facts(s), policy.counters(s)),
                     "warningWindow", s.warningWindow, "blocking", s.checkoutBlocking, "asset", s.assetInstance == null ? null : s.assetInstance.assetCode,
                     "responsible", s.responsiblePerson == null ? null : s.responsiblePerson.name);
@@ -257,7 +262,7 @@ public class OperationalReportService {
         for (var item : items) {
             if (!item.active || scheduledItems.contains(item.id) || (item.nextMaintenanceDue == null && item.maintenanceStatus != DomainEnums.MaintenanceStatus.in_service)) continue;
             String status = item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service ? "in_service"
-                    : item.nextMaintenanceDue.isBefore(LocalDate.now()) ? "due" : !item.nextMaintenanceDue.isAfter(LocalDate.now().plusDays(30)) ? "warning" : "healthy";
+                    : item.nextMaintenanceDue.isBefore(BusinessTime.today()) ? "due" : !item.nextMaintenanceDue.isAfter(BusinessTime.today().plusDays(30)) ? "warning" : "healthy";
             var row = row("id", item.id + ":calendar", "date", item.nextMaintenanceDue, "status", status, "type", "item_calendar", "interval", "date", "warningWindow", 30, "blocking", true);
             item(row, item); location(row, item.storageLocation); rows.add(row);
         }
@@ -281,7 +286,7 @@ public class OperationalReportService {
         for (var line : all(InventoryCountLine.class)) {
             if (!Set.of(DomainEnums.CountStatus.posted, DomainEnums.CountStatus.cancelled).contains(line.session.status)) continue;
             var date = line.session.completedAt == null ? line.session.updatedAt : line.session.completedAt;
-            var row = row("id", line.id, "date", date.atOffset(ZoneOffset.UTC).toLocalDate(), "session", line.session.sessionNumber, "status", line.session.status,
+            var row = row("id", line.id, "date", BusinessTime.date(date), "session", line.session.sessionNumber, "status", line.session.status,
                     "expected", line.expectedQuantity, "counted", line.countedQuantity, "recounted", line.recountedQuantity, "approved", line.approvedQuantity, "variance", line.varianceQuantity);
             item(row, line.item); location(row, line.location); rows.add(row);
         }
@@ -290,7 +295,7 @@ public class OperationalReportService {
     private List<Map<String, Object>> movements() {
         var rows = new ArrayList<Map<String, Object>>();
         for (var tx : orm.outcomeMovements()) {
-            var row = row("id", tx.id, "date", tx.occurredAt.atOffset(ZoneOffset.UTC).toLocalDate(), "month", tx.occurredAt.toString().substring(0, 7),
+            var row = row("id", tx.id, "date", BusinessTime.date(tx.occurredAt), "month", BusinessTime.date(tx.occurredAt).toString().substring(0, 7),
                     "status", tx.type, "quantity", tx.quantity, "eventId", tx.eventOccurrence == null ? null : tx.eventOccurrence.id,
                     "event", tx.eventOccurrence == null ? "Unassigned historical movement" : tx.eventOccurrence.name, "reason", tx.reason, "actor", tx.user.name);
             item(row, tx.item); location(row, tx.sourceLocation); rows.add(row);

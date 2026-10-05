@@ -1,4 +1,6 @@
 import { formatDate, formatDateTime } from '../../utils/dateFormat';
+import { Dialog } from '../shared/ClosableDialog';
+import { formatCents } from '../../utils/money';
 import { OperationLines } from './OperationLines';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
@@ -7,7 +9,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useRef, useState } from 'react';
-import { Alert, Box, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useEventReports } from '../../hooks/useEvents';
@@ -37,7 +39,7 @@ export function PurchasingPanel() {
         </>}
        </>} title={<>{order.orderNumber} · {order.vendorName}</>} status={order.status}><Typography>{t('Bestelldatum', 'Order date')}: {formatDate(order.orderDate)} · {t('Erwartet', 'Expected')}: {formatDate(order.expectedDeliveryDate)}</Typography>
       <Typography>{t('Erstellt von', 'Created by')}: {order.createdByName}</Typography>
-      <OperationLines label={t('Bestellpositionen', 'Purchase lines')} headers={[t('Artikel', 'Item'), t('Bestellt', 'Ordered'), t('Erhalten', 'Received'), t('Offen', 'Remaining'), t('Einzelpreis', 'Unit price')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, line.orderedQuantity, line.receivedQuantity, line.remainingQuantity, `${(line.unitPriceCents / 100).toFixed(2)} €`] }))} />
+      <OperationLines label={t('Bestellpositionen', 'Purchase lines')} headers={[t('Artikel', 'Item'), t('Bestellt', 'Ordered'), t('Erhalten', 'Received'), t('Offen', 'Remaining'), t('Einzelpreis', 'Unit price')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, line.orderedQuantity, line.receivedQuantity, line.remainingQuantity, formatCents(line.unitPriceCents)] }))} />
       {order.notes && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
 
       {history === order.id && <><ReceiptsPanel purchaseOrderId={order.id} /><DocumentsPanel order={order} /></>}
@@ -168,7 +170,7 @@ export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
   const receipts = useOperationList(`document-receipts:${order.id}`, operationsApi.receipts(order.id));
   const [attach, setAttach] = useState(false); const [file, setFile] = useState<File | null>(null);
   return <Stack spacing={1}><Typography variant="h6">{t('Belege', 'Documents')}</Typography><Button title={translate('Einen Beleg zu dieser Bestellung hinzufügen', 'Attach a document to this order')} onClick={() => setAttach(true)}>{t('Beleg anhängen', 'Attach document')}</Button>{(documents.error || command.error) && <Alert severity="error">{(documents.error || command.error)?.message}</Alert>}
-    {documents.data?.map((document) => <OperationListEntry key={document.id} actions={<Button title={translate('Den ausgewählten Beleg herunterladen', 'Download the selected document')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.downloadDocument(document))}>{t('Herunterladen', 'Download')}</Button>} title={<>{document.originalFilename} · {document.documentType} · {document.referenceNumber}</>}><Typography>{formatDate(document.documentDate)} {document.totalAmountCents != null ? `${document.totalAmountCents / 100} ${document.currency}` : ''}</Typography></OperationListEntry>)}
+    {documents.data?.map((document) => <OperationListEntry key={document.id} actions={<Button title={translate('Den ausgewählten Beleg herunterladen', 'Download the selected document')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.downloadDocument(document))}>{t('Herunterladen', 'Download')}</Button>} title={<>{document.originalFilename} · {document.documentType} · {document.referenceNumber}</>}><Typography>{formatDate(document.documentDate)} {document.totalAmountCents != null ? formatCents(document.totalAmountCents, document.currency || 'EUR') : ''}</Typography></OperationListEntry>)}
     {attach && <OperationForm title={t('Beleg anhängen', 'Attach document')} initial={{ documentType: 'invoice', currency: 'EUR' }} onClose={() => { setAttach(false); setFile(null); }} fields={[
       { key: 'goodsReceiptId', label: t('Wareneingang (optional)', 'Goods receipt (optional)'), options: (receipts.data ?? []).map((receipt) => ({ value: receipt.id, label: `${receipt.receiptNumber} · ${formatDate(receipt.receivedAt)}` })) },
       { key: 'documentType', label: t('Belegart', 'Document type'), required: true, options: ['invoice', 'delivery_note', 'quote', 'warranty', 'certificate', 'other'].map((value) => ({ value, label: value })) }, { key: 'documentDate', label: t('Datum', 'Date'), type: 'date' }, { key: 'referenceNumber', label: t('Referenz', 'Reference') }, { key: 'amount', label: t('Gesamtbetrag', 'Total amount'), type: 'number', min: 0, step: 0.01 }, { key: 'currency', label: t('Währung', 'Currency') }, { key: 'retentionUntil', label: t('Aufbewahren bis', 'Retain until'), type: 'date' }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },

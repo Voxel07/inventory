@@ -39,6 +39,7 @@ class StorageQueryRegressionTest {
 
     private UserAccount person() {
         var user = new UserAccount();
+        user.issuer = "test";
         user.externalSubject = UUID.randomUUID().toString();
         user.name = "Storage query regression";
         user.role = DomainEnums.UserRole.read_only;

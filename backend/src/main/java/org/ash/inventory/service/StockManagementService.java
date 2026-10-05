@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.PageBounds;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
@@ -31,7 +32,7 @@ public class StockManagementService {
 
     public List<Warehouse> warehouses(int page, int size) {
         actors.current();
-        return orm.warehouses(offset(page, size), size);
+        return orm.warehouses(PageBounds.of(page, size).offset(), size);
     }
 
     @Transactional
@@ -51,7 +52,7 @@ public class StockManagementService {
     public Warehouse updateWarehouse(UUID id, StockDtos.WarehouseInput input) {
         actors.requireWarehouse();
         hierarchy.lockHierarchy();
-        var warehouse = requiredLocked(Warehouse.class, id, "Warehouse");
+        var warehouse = orm.requireLocked(Warehouse.class, id, "Warehouse");
         if (orm.warehouseCodeExists(input.code(), id)) throw ApiException.conflict("Warehouse code already exists");
         apply(warehouse, input);
         events.record("warehouse.updated", "warehouse", id, actors.current().id, null, Map.of("code", warehouse.code));
@@ -63,7 +64,7 @@ public class StockManagementService {
     public void retireWarehouse(UUID id) {
         actors.requireWarehouse();
         hierarchy.lockHierarchy();
-        var warehouse = requiredLocked(Warehouse.class, id, "Warehouse");
+        var warehouse = orm.requireLocked(Warehouse.class, id, "Warehouse");
         hierarchy.validateWarehouseState(warehouse, false);
         warehouse.active = false;
         events.record("warehouse.retired", "warehouse", id, actors.current().id, null, Map.of("code", warehouse.code));
@@ -92,7 +93,7 @@ public class StockManagementService {
             if (!privateTarget) actors.requireWarehouse();
         }
         var denied = privacy.deniedIds().stream().map(UUID::fromString).collect(java.util.stream.Collectors.toSet());
-        return orm.codes(targetId, offset(page, size), size, denied);
+        return orm.codes(targetId, PageBounds.of(page, size).offset(), size, denied);
     }
 
     @Transactional
@@ -149,10 +150,10 @@ public class StockManagementService {
     }
 
     private InventoryCode lockCode(UUID id) {
-        var code = required(InventoryCode.class, id, "Inventory code");
+        var code = orm.require(InventoryCode.class, id, "Inventory code");
         requireCodeEdit(code.targetType, code.targetId);
         orm.findLocked(targetClass(code.targetType), code.targetId);
-        return requiredLocked(InventoryCode.class, id, "Inventory code");
+        return orm.requireLocked(InventoryCode.class, id, "Inventory code");
     }
     public Item codeItem(InventoryCode code) {
         if (orm.find(targetClass(code.targetType), code.targetId) == null) throw ApiException.notFound("Code target no longer exists");
@@ -174,7 +175,7 @@ public class StockManagementService {
         return replacement;
     }
     private void requireCodeEdit(DomainEnums.CodeTargetType type, UUID id) {
-        var target = required(targetClass(type), id, "Code target");
+        var target = orm.require(targetClass(type), id, "Code target");
         Item item = target instanceof Item i ? i : target instanceof AssetInstance a ? a.item : target instanceof InventoryLot l ? l.item : null;
         if (item != null) actors.requireItemEdit(item);
         else if (target instanceof StorageLocation l) actors.requireLocationEdit(l);
@@ -207,7 +208,7 @@ public class StockManagementService {
 
     public List<InventoryLot> lots(UUID itemId, int page, int size) {
         actors.current();
-        return orm.lots(itemId, offset(page, size), size, actors.current());
+        return orm.lots(itemId, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
     @Transactional
@@ -226,14 +227,14 @@ public class StockManagementService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryLot updateLot(UUID id, StockDtos.LotInput input) {
 
-        var lot = requiredLocked(InventoryLot.class, id, "Inventory lot");
+        var lot = orm.requireLocked(InventoryLot.class, id, "Inventory lot");
         actors.requireItemEdit(lot.item);
         apply(lot, input, id);
         return lot;
     }
 
     private void apply(InventoryLot lot, StockDtos.LotInput input, UUID excluding) {
-        var item = requiredLocked(Item.class, input.itemId(), "Item");
+        var item = orm.requireLocked(Item.class, input.itemId(), "Item");
         actors.requireItemEdit(item);
         if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked) {
             throw ApiException.badRequest("Inventory lots require an item with lot_tracked tracking mode");
@@ -251,31 +252,16 @@ public class StockManagementService {
     }
 
     public List<AssetInstance> assets(UUID itemId, UUID locationId, int page, int size) {
-        if (locationId != null) actors.requireLocationAccess(required(StorageLocation.class, locationId, "Location"), false);
-        return orm.assets(itemId, locationId, offset(page, size), size, actors.current());
+        if (locationId != null) actors.requireLocationAccess(orm.require(StorageLocation.class, locationId, "Location"), false);
+        return orm.assets(itemId, locationId, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
     public List<InventoryPosition> positions(UUID itemId, UUID locationId, int page, int size) {
         actors.current();
-        if (locationId != null) actors.requireLocationAccess(required(StorageLocation.class, locationId, "Location"), false);
-        return orm.positions(itemId, locationId, offset(page, size), size, actors.current());
+        if (locationId != null) actors.requireLocationAccess(orm.require(StorageLocation.class, locationId, "Location"), false);
+        return orm.positions(itemId, locationId, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try { return Math.multiplyExact(page, size); }
-        catch (ArithmeticException exception) { throw ApiException.badRequest("page is too large"); }
-    }
 
-    private <T> T required(Class<T> type, UUID id, String label) {
-        var value = orm.find(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 
-    private <T> T requiredLocked(Class<T> type, UUID id, String label) {
-        var value = orm.findLocked(type, id);
-        if (value == null) throw ApiException.notFound(label + " not found");
-        return value;
-    }
 }

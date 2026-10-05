@@ -4,13 +4,14 @@ import type { EventType } from './event';
 import type { User } from './user';
 import type { StorageLocation } from './item';
 
-export const FACTIONS_BY_EVENT: Record<EventType, readonly string[]> = {
-  DE: ['KGG', 'GOF', 'Enklave', 'Miliz'],
-  LS: ['UCRF', 'TERA'],
-  TNO: ['Militär', 'Freiheit', 'Stalker', 'Banditen', 'Wissenschaftler'],
-  ASD: ['Delta', 'Ghost'],
-  M24: ['Hondra', 'Militär', 'Kartell'],
-};
+/** Reference data from GET /api/factions. Memberships are `EVENT:slug` keys (see {@link FactionOrder.factionKey}). */
+export interface Faction {
+  id: string;
+  eventType: EventType;
+  name: string;
+  slug: string;
+  active?: boolean;
+}
 
 export type FactionOrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picked_up' | 'partially_returned' | 'returned' | 'closed' | 'cancelled';
 export type FactionOrderHistoryAction =
@@ -113,10 +114,3 @@ export interface FactionOrderFormData {
   notes?: string;
 }
 
-export function factionKey(eventType: EventType, faction: string): string {
-  return `${eventType}:${faction}`;
-}
-
-export function isFactionForEvent(eventType: EventType, faction: string): boolean {
-  return FACTIONS_BY_EVENT[eventType].includes(faction);
-}

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EVENT_TYPES, type EventType } from '../types';
+import type { EventType } from '../types';
 
 const ACTIVE_EVENT_STORAGE_KEY = 'inventory-active-event';
 const THEME_MODE_STORAGE_KEY = 'inventory-theme-mode';
@@ -24,7 +24,7 @@ function storedThemeMode(): ThemeMode {
 function storedActiveEvent(): EventType {
   try {
     const value = localStorage.getItem(ACTIVE_EVENT_STORAGE_KEY);
-    if (EVENT_TYPES.includes(value as EventType)) return value as EventType;
+    if (value?.trim()) return value.trim();
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }

@@ -33,7 +33,8 @@ import type { Item } from '../types';
 import type { Schedule } from '../types/operations';
 import { useOperationList } from '../hooks/useOperations';
 import { operationsApi } from '../services/operationsService';
-import { IndividualSchedules, isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel, type MaintenanceType } from '../components/maintenance/IndividualSchedules';
+import { IndividualSchedules } from '../components/maintenance/IndividualSchedules';
+import { isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel, type MaintenanceType } from '../components/maintenance/maintenanceSchedules';
 
 function dateInputValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

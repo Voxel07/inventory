@@ -27,7 +27,7 @@ This follows the extension's [HTTP security guidance](https://docs.quarkiverse.i
 | Event reads | Authenticated actor; item IDs, names and all per-item quantity maps are filtered to visible active items |
 | Locations, static overview and prompts | Authenticated actor; locations and event metadata are shared catalog information |
 
-Actor identity and role are resolved for each invocation. Authenticated OIDC identity takes precedence over development headers. With explicitly enabled development authentication, REST and MCP use the same `X-Actor-Id`, `X-Actor-Name` and `X-Actor-Role` headers; direct CDI calls use the existing development default. `ActorService` reads the shared Vert.x request rather than a JAX-RS-only header context.
+Actor identity and role are resolved for each invocation. Authenticated OIDC identity takes precedence over development headers. With explicitly enabled development authentication, REST and MCP use the same `X-Actor-Id`, `X-Actor-Name`, `X-Actor-Role` and optional `X-Actor-Factions` (`EVENT:slug,…`) headers; direct CDI calls use the existing development default. Callers without an inventory role get 403. Role checks run in the services, so MCP tools and REST share them. `ActorService` reads the shared Vert.x request rather than a JAX-RS-only header context.
 
 CORS accepts only configured `CORS_ORIGINS`. The allowed headers include `Authorization`, `Mcp-Session-Id`, `MCP-Protocol-Version` and `Last-Event-ID`; `Mcp-Session-Id` is exposed to browser clients. Configure the actual trusted browser origin when using an inspector. Publish the backend `/mcp` route through your API reverse proxy; the frontend static nginx server does not proxy API routes.
 

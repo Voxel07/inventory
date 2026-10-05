@@ -5,7 +5,7 @@ import type { CreateResourceApi, CrudResourceApi, MutableResourceApi } from '../
 export function createCreateResourceHooks<T extends { id: string }, TForm>(api: CreateResourceApi<T, TForm>, queryKey: string) {
   return {
     useList(query?: Record<string, string | number | boolean | undefined>) {
-      return useQuery({ queryKey: [queryKey, query], queryFn: () => api.getAll(query) });
+      return useQuery({ queryKey: [queryKey, query], queryFn: () => api.getAll(query), networkMode: 'offlineFirst' });
     },
     useCreate() { return useMutation({ mutationFn: (data: TForm) => api.create(data) }); },
   };

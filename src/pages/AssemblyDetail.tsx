@@ -1,4 +1,6 @@
 import { formatDate } from '../utils/dateFormat';
+import { formatMoney } from '../utils/money';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { Button } from '../components/shared/ActionButtons';
 import { useEventReports } from '../hooks/useEvents';
 import { Dialog } from '../components/shared/ClosableDialog';
@@ -34,13 +36,11 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
 import { useItems } from '../hooks/useItems';
 import { useAssemblyCheckout } from '../hooks/useTransactions';
-import { useCreateDamageReport } from '../hooks/useDamageReports';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { FormDialog } from '../components/shared/FormDialog';
-import { DamageReportForm } from '../components/forms/DamageReportForm';
+import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { useUIStore } from '../store/uiStore';
-import { EVENT_TYPES, FACTIONS_BY_EVENT } from '../types';
-import type { AssemblyFormData, DamageReportFormData, EventType, Item } from '../types';
+import type { AssemblyFormData, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { ItemsList } from '../components/lists/ItemsList';
 import { useLocalizedText } from '../utils/naming';
@@ -54,6 +54,7 @@ export function AssemblyDetail() {
     const canTransact = canOperateWarehouse(user);
 
     const t = useLocalizedText();
+    const { eventTypes, factionNames } = useFactionCatalog();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { assemblyId } = useParams<{ assemblyId: string }>();
@@ -63,7 +64,6 @@ export function AssemblyDetail() {
     const itemsQuery = useItems();
     const items = itemsQuery.data;
     const updateAssembly = useUpdateAssembly();
-    const createDamageReport = useCreateDamageReport();
     const checkoutAssembly = useAssemblyCheckout();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [editOpen, setEditOpen] = useState(false);
@@ -126,19 +126,6 @@ export function AssemblyDetail() {
                 },
             },
         );
-    }
-
-    function handleDamage(data: DamageReportFormData) {
-        createDamageReport.mutate(data, {
-            onSuccess: () => {
-                setDamageOpen(false);
-                showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
-            },
-            onError: (error) => {
-                if (isOfflineQueuedError(error)) return;
-                showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
-            },
-        });
     }
 
     function handleAddItem(itemId: string) {
@@ -340,7 +327,7 @@ export function AssemblyDetail() {
                         }}>
                             {[
                                 [t('Komponenten', 'Components'), String(assemblyItems.length), 'text.primary'],
-                                [t('Gesamtwert', 'Total value'), `${totalValue.toFixed(2)} €`, 'text.primary'],
+                                [t('Gesamtwert', 'Total value'), formatMoney(totalValue), 'text.primary'],
                                 [t('Verfügbar', 'Available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
                                 [t('Erstellt', 'Created'), formatDate(assembly.created), 'text.primary'],
                             ].map(([label, value, color]) => (
@@ -409,7 +396,7 @@ export function AssemblyDetail() {
                         fullWidth
                         sx={{ mb: 2 }}
                     >
-                        {EVENT_TYPES.map((eventType) => (
+                        {eventTypes.map((eventType) => (
                             <MenuItem key={eventType} value={eventType}>{eventType === 'LS' ? 'LightSim' : eventType}</MenuItem>
                         ))}
                     </TextField>
@@ -423,7 +410,7 @@ export function AssemblyDetail() {
                         fullWidth
                         sx={{ mb: 2 }}
                     >
-                        {(checkoutEventType ? FACTIONS_BY_EVENT[checkoutEventType] : []).map((faction) => (
+                        {factionNames(checkoutEventType).map((faction) => (
                             <MenuItem key={faction} value={faction}>{faction}</MenuItem>
                         ))}
                     </TextField>
@@ -480,19 +467,15 @@ export function AssemblyDetail() {
                     isLoading={updateAssembly.isPending}
                 />
             </FormDialog>
-            <Dialog open={damageOpen} fullScreen={isMobile} onClose={() => setDamageOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}</DialogTitle>
-                <DialogContent sx={{ pt: '24px !important' }}>
-                    <DamageReportForm
-                        key={assembly.id}
-                        items={items ?? []}
-                        assemblies={[assembly]}
-                        preselectedAssemblyId={assembly.id}
-                        onSubmit={handleDamage}
-                        isLoading={createDamageReport.isPending}
-                    />
-                </DialogContent>
-            </Dialog>
+            <DamageReportDialog
+                key={assembly.id}
+                open={damageOpen}
+                onClose={() => setDamageOpen(false)}
+                title={t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}
+                items={items ?? []}
+                assemblies={[assembly]}
+                preselectedAssemblyId={assembly.id}
+            />
         </Box>
     );
 }

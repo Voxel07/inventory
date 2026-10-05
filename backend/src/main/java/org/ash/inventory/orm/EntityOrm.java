@@ -17,4 +17,18 @@ public abstract class EntityOrm {
     public void persist(Object value) { entityManager.persist(value); }
     public void remove(Object value) { entityManager.remove(value); }
     public void flush() { entityManager.flush(); }
+
+    /** Locked lookup that also reloads state committed by a transaction this one waited for. */
+    public <T> T findLockedFresh(Class<T> type, Object id) {
+        var value = entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE);
+        if (value != null) entityManager.refresh(value, LockModeType.PESSIMISTIC_WRITE);
+        return accessActor.protect(value, true);
+    }
+    public <T> T require(Class<T> type, Object id, String label) { return found(find(type, id), label); }
+    public <T> T requireLocked(Class<T> type, Object id, String label) { return found(findLocked(type, id), label); }
+    public <T> T requireLockedFresh(Class<T> type, Object id, String label) { return found(findLockedFresh(type, id), label); }
+    public static <T> T found(T value, String label) {
+        if (value == null) throw org.ash.inventory.resource.ApiException.notFound(label + " not found");
+        return value;
+    }
 }

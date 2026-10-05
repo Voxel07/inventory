@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "factions")
+@Table(name = "factions", uniqueConstraints = @jakarta.persistence.UniqueConstraint(name = "uq_faction_event_slug", columnNames = {"event_type", "slug"}))
 public class Faction extends BaseEntity {
     @Column(name = "event_type", nullable = false) public String eventType;
     @Column(nullable = false) public String name;

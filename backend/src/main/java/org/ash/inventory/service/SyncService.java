@@ -151,12 +151,6 @@ public class SyncService {
                 } catch (IllegalArgumentException e) {
                     throw ApiException.badRequest("Invalid order status: " + statusObj);
                 }
-                if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft) actors.current();
-                else if (target == DomainEnums.OrderStatus.picked_up || target == DomainEnums.OrderStatus.closed)
-                    actors.requireMarshal();
-                else if (target == DomainEnums.OrderStatus.ready || target == DomainEnums.OrderStatus.preparing)
-                    actors.requireWarehouse();
-                else actors.requirePlanner();
                 var value = validated(action.payload(), ApiModels.TransitionInput.class);
                 yield queries.projectOrder(orders.transition(orderId, target, new ApiModels.TransitionInput(
                         action.idempotencyKey(), value.notes(), value.collectorName(), value.pickupLocation(),
@@ -174,9 +168,8 @@ public class SyncService {
                         new ApiModels.ReturnInput(value.lines(), value.assets(), action.idempotencyKey(), value.notes())));
             }
             case "damage.create" -> {
-                actors.requireMarshal();
                 var value = validated(action.payload(), ApiModels.DamageInput.class);
-                yield mapper.damage(inventory.createDamage(new ApiModels.DamageInput(
+                yield mapper.damage(inventory.reportDamage(new ApiModels.DamageInput(
                         value.itemId(), value.amount(), value.description(), value.severity(), value.factionOrderId(),
                         action.idempotencyKey(), value.assetInstanceId(), value.handoverId(), value.safetyImpact(), value.assemblyId(), value.occurredAt())));
             }

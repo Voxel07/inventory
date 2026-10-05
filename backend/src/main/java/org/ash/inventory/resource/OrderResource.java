@@ -70,7 +70,6 @@ public class OrderResource {
     @Path("/{id}/prepare")
     @Transactional
     public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
-        actor.requireWarehouse();
         return queries.projectOrder(service.prepare(id, input));
     }
 
@@ -79,14 +78,6 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
             ApiModels.TransitionInput input) {
-        if (status == DomainEnums.OrderStatus.submitted || status == DomainEnums.OrderStatus.draft)
-            actor.current();
-        else if (status == DomainEnums.OrderStatus.picked_up || status == DomainEnums.OrderStatus.closed)
-            actor.requireMarshal();
-        else if (status == DomainEnums.OrderStatus.ready || status == DomainEnums.OrderStatus.preparing)
-            actor.requireWarehouse();
-        else
-            actor.requirePlanner();
         var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return queries.projectOrder(service.transition(id, status, safeInput));
     }
@@ -95,7 +86,6 @@ public class OrderResource {
     @Path("/{id}/return")
     @Transactional
     public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
-        actor.requireMarshal();
         return queries.projectOrder(service.returnItems(id, input));
     }
 
@@ -103,7 +93,6 @@ public class OrderResource {
     @Path("/{id}/return-all")
     @Transactional
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
-        actor.requireMarshal();
         return queries.projectOrder(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }
 }

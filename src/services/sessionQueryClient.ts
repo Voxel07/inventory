@@ -46,6 +46,7 @@ export function subscribeSessionQueryClient(listener: () => void): () => void {
 }
 
 // Refresh active private snapshots in place; purge failed/inactive reads and lost connectivity.
+// Access changes arrive as access.changed / realtime.reconnected events; these handlers cover lost connectivity.
 const evictPrivateQueries = () => {
   const predicate = (query: { state: { data: unknown } }) => containsPrivateInventory(query.state.data);
   void client.cancelQueries({ predicate }).then(() => client.resetQueries({ predicate }));
@@ -65,7 +66,6 @@ const refreshPrivateQueries = () => {
     }
   }
 };
-window.setInterval(refreshPrivateQueries, 60_000);
 window.addEventListener('offline', evictPrivateQueries);
 window.addEventListener('online', refreshPrivateQueries);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPrivateQueries(); });

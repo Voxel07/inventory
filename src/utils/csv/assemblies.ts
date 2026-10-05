@@ -1,5 +1,6 @@
 import { type Item, type Assembly, type EventType } from '../../types';
 import { type ParsedAssemblyRow, type ParsedAssemblyComponent } from '../../types/csvImport';
+import type { CsvReference } from './reference';
 import { getField, ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_NAME_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, DESCRIPTION_ALIASES, HINT_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, parseInlineComponents } from './core';
 
 /**
@@ -9,6 +10,7 @@ export function parseAssembliesFromCsv(
   rows: Record<string, string>[],
   items: Item[],
   existingAssemblies: Assembly[],
+  reference: CsvReference,
 ): ParsedAssemblyRow[] {
   const itemLookup = new Map<string, Item>();
   for (const item of items) {
@@ -59,7 +61,7 @@ export function parseAssembliesFromCsv(
           index: i + 1,
           description: getField(raw, DESCRIPTION_ALIASES) || '',
           hint: getField(raw, HINT_ALIASES) || '',
-          eventTypes: parseEventTypes(getField(raw, EVENT_TYPES_ALIASES)),
+          eventTypes: parseEventTypes(getField(raw, EVENT_TYPES_ALIASES), reference.eventTypes),
           rawRow: raw,
           components: [],
         });
@@ -150,7 +152,7 @@ export function parseAssembliesFromCsv(
 
     const description = getField(raw, DESCRIPTION_ALIASES) || '';
     const hint = getField(raw, HINT_ALIASES) || '';
-    const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES));
+    const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES), reference.eventTypes);
 
     const componentsStr = getField(raw, ASSEMBLY_COMPONENTS_ALIASES) || '';
     const rawComps = parseInlineComponents(componentsStr);

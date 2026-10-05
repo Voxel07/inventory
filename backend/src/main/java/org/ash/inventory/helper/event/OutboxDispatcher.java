@@ -8,6 +8,9 @@ import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** At-least-once dispatcher. Consumers must deduplicate by eventId. */
 @ApplicationScoped
@@ -17,6 +20,12 @@ public class OutboxDispatcher {
     private final DomainEventService events;
     private final EventBroadcaster broadcaster;
     private final java.time.Duration retention;
+    private final AtomicBoolean wakeupQueued = new AtomicBoolean();
+    private final ExecutorService wakeups = Executors.newSingleThreadExecutor(task -> {
+        var thread = new Thread(task, "outbox-wakeup");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public OutboxDispatcher(DomainEventService events, EventBroadcaster broadcaster,
             @ConfigProperty(name = "inventory.events.outbox.retention", defaultValue = "P30D") java.time.Duration retention) {
@@ -32,9 +41,25 @@ public class OutboxDispatcher {
         if (deleted > 0) LOG.infov("Purged {0} published outbox events older than {1}", deleted, retention);
     }
 
-    @Scheduled(every = "${inventory.events.outbox.dispatch-every:1s}",
+    /** Local commits dispatch immediately; the poll only covers other nodes' leftovers, retries and crashes. */
+    void wake(@jakarta.enterprise.event.Observes DomainEventService.OutboxCommitted ignored) {
+        if (!wakeupQueued.compareAndSet(false, true)) return;
+        wakeups.execute(() -> {
+            wakeupQueued.set(false);
+            try { dispatch(); }
+            catch (RuntimeException exception) { LOG.warnv("Outbox wake-up dispatch failed: {0}", exception.getMessage()); }
+        });
+    }
+
+    @jakarta.annotation.PreDestroy
+    void shutdown() {
+        wakeups.shutdownNow();
+    }
+
+    // Serialized: the broadcaster's processor must not receive concurrent onNext calls.
+    @Scheduled(every = "${inventory.events.outbox.dispatch-every:5s}",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
-    void dispatch() {
+    synchronized void dispatch() {
         var published = new ArrayList<java.util.UUID>();
         for (var event : events.claim(50)) {
             try {

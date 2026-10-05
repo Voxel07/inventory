@@ -1,4 +1,5 @@
 import { Button } from '../components/shared/ActionButtons';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
@@ -27,7 +28,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
 import { useItems } from '../hooks/useItems';
-import { EVENT_TYPES, type EventReportStatus, type EventType } from '../types';
+import type { EventReportStatus, EventType } from '../types';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
@@ -38,6 +39,7 @@ export function EventDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const t = useLocalizedText();
+  const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
   const canEdit = canAccessProcurement(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
@@ -202,7 +204,7 @@ export function EventDetail() {
             <TextField fullWidth label={t('Eventname', 'Event name')} value={name} onChange={(event) => setName(event.target.value)} required />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField select fullWidth label={t('Event', 'Event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
-                {EVENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
+                {eventTypes.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
               </TextField>
               <TextField fullWidth type="date" label={t('Startdatum', 'Start date')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
               <TextField fullWidth type="date" label={t('Enddatum', 'End date')} value={endDate} onChange={(event) => setEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(endDate && endDate < eventDate)} required />

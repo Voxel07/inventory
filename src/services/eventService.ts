@@ -20,7 +20,5 @@ export const eventApi = createCrudResourceApi<EventReport, EventReportFormData>(
 });
 
 export const getEventReports = (eventType?: EventType) => eventApi.getAll(eventType ? { eventType } : undefined);
-export const getEventReport = eventApi.getById;
 export const createEventReport = eventApi.create;
 export const updateEventReport = eventApi.update;
-export const deleteEventReport = eventApi.delete;

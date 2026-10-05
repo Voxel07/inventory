@@ -9,21 +9,34 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.UserOrm;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 
+/**
+ * Resolves the calling account. The identity provider is the only source of roles and faction
+ * memberships: accounts are keyed by {@code (issuer, sub)} and role/factions are mirrored from the
+ * token's {@code inventory_*} groups on every request. Name and e-mail are display data only.
+ */
 @RequestScoped
 public class ActorService {
+    /** Issuer recorded for header-based development accounts. */
+    public static final String DEV_ISSUER = "dev";
+    static final String FACTION_GROUP_PREFIX = "inventory_faction_";
+
     @jakarta.inject.Inject InventoryAccess privateAccess;
-    public int privateMutationDepth;
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
     private final boolean devAuthEnabled;
 
     private UserAccount cached;
+    private int privateMutationDepth;
 
     public ActorService(SecurityIdentity identity, CurrentVertxRequest request, UserOrm users,
             @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled) {
@@ -45,50 +58,60 @@ public class ActorService {
                 return cached;
             }
         }
+        String issuer;
         String subject;
         String name;
-        String email = null;
+        String email;
         DomainEnums.UserRole role;
-        Set<String> factions = Set.of();
+        Set<String> factions;
 
-        if (identity != null && !identity.isAnonymous()) {
-            subject = identity.getPrincipal().getName();
-            name = stringAttribute("name", subject);
-            email = stringAttribute("email", null);
+        if (identity != null && !identity.isAnonymous() && identity.getPrincipal() instanceof JsonWebToken token) {
+            issuer = token.getIssuer();
+            subject = token.getSubject();
+            if (issuer == null || issuer.isBlank() || subject == null || subject.isBlank())
+                throw new ApiException(401, "Token has no issuer or subject");
+            name = firstClaim(token, subject, "name", "preferred_username");
+            email = firstClaim(token, null, "email");
             role = roleFrom(identity.getRoles());
-            Object groups = identity.getAttribute("factions");
-            if (groups instanceof Set<?> values) factions = values.stream().map(Object::toString).collect(java.util.stream.Collectors.toSet());
+            factions = factionsFrom(identity.getRoles());
+        } else if (identity != null && !identity.isAnonymous()) {
+            throw new ApiException(401, "Unsupported identity");
         } else if (devAuthEnabled) {
+            issuer = DEV_ISSUER;
             subject = header("X-Actor-Id", "dev-hq-admin");
             name = header("X-Actor-Name", "Development HQ Admin");
             email = subject.contains("@") ? subject : "dev@localhost";
             role = parseRole(header("X-Actor-Role", "hq_admin"));
+            String factionHeader = header("X-Actor-Factions", null);
+            // Development headers stand in for the token; without the header the stored set stays.
+            factions = factionHeader == null ? null : parseFactions(factionHeader);
         } else {
             throw new ApiException(401, "Authentication required");
         }
+        if (role == null) throw ApiException.forbidden("No inventory role is assigned to this account");
 
-        cached = users.findByExternalSubject(subject);
+        cached = users.findByIdentity(issuer, subject);
         if (cached == null) {
             cached = new UserAccount();
+            cached.issuer = issuer;
             cached.externalSubject = subject;
             cached.name = name;
             cached.email = email;
             cached.role = role;
-            cached.factions = new ArrayList<>(factions);
+            cached.factions = factions == null ? new ArrayList<>() : new ArrayList<>(factions);
             users.persist(cached);
         } else {
             if (!Objects.equals(cached.name, name)) cached.name = name;
             if (email != null && !Objects.equals(cached.email, email)) cached.email = email;
-            if ((devAuthEnabled || (identity != null && !identity.isAnonymous())) && cached.role != role) {
-                cached.role = role;
-            }
-            if (identity != null && !identity.isAnonymous()
-                    && !Set.copyOf(cached.factions).equals(factions)) {
-                cached.factions = new ArrayList<>(factions);
-            }
+            if (cached.role != role) cached.role = role;
+            if (factions != null && !new TreeSet<>(cached.factions).equals(factions)) cached.factions = new ArrayList<>(factions);
         }
         return cached;
     }
+
+    /** Marks a private-inventory command; reference lookups inside it require edit rights. */
+    public void enterPrivateMutation() { privateMutationDepth++; }
+    public void exitPrivateMutation() { privateMutationDepth--; }
 
     public void requireManager() {
         requireAny("Inventory management access required", DomainEnums.UserRole.hq_admin,
@@ -192,16 +215,20 @@ public class ActorService {
                 DomainEnums.UserRole.event_planner, DomainEnums.UserRole.warehouse_crew);
     }
 
-    public boolean canAccessFaction(UserAccount actor, String eventType, String faction) {
+    /** Faction memberships are {@code EVENT:slug} keys; only faction leaders are restricted to them. */
+    public boolean canAccessFaction(UserAccount actor, org.ash.inventory.model.Faction faction) {
         if (actor.role != DomainEnums.UserRole.faction_leader) return true;
-        String key = eventType + ":" + faction;
-        return actor.factions.contains(faction) || actor.factions.contains(key);
+        return actor.factions.contains(factionKey(faction.eventType, faction.slug));
     }
 
-    public void requireFactionAccess(UserAccount actor, String eventType, String faction) {
-        if (!canAccessFaction(actor, eventType, faction)) {
+    public void requireFactionAccess(UserAccount actor, org.ash.inventory.model.Faction faction) {
+        if (!canAccessFaction(actor, faction)) {
             throw ApiException.forbidden("You do not have access to this faction");
         }
+    }
+
+    public static String factionKey(String eventType, String slug) {
+        return eventType.trim().toUpperCase(Locale.ROOT) + ":" + slug.trim().toLowerCase(Locale.ROOT);
     }
 
     private String header(String name, String fallback) {
@@ -212,11 +239,15 @@ public class ActorService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private String stringAttribute(String name, String fallback) {
-        Object value = identity.getAttribute(name);
-        return value == null ? fallback : value.toString();
+    private static String firstClaim(JsonWebToken token, String fallback, String... names) {
+        for (var name : names) {
+            Object value = token.getClaim(name);
+            if (value != null && !value.toString().isBlank()) return value.toString();
+        }
+        return fallback;
     }
 
+    /** Most privileged {@code inventory_<role>} group; {@code null} when the account has none. */
     static DomainEnums.UserRole roleFrom(Set<String> roles) {
         if (roles.contains("inventory_hq_admin")) return DomainEnums.UserRole.hq_admin;
         if (roles.contains("inventory_warehouse_crew")) return DomainEnums.UserRole.warehouse_crew;
@@ -225,7 +256,27 @@ public class ActorService {
         if (roles.contains("inventory_maintenance_crew")) return DomainEnums.UserRole.maintenance_crew;
         if (roles.contains("inventory_read_only")) return DomainEnums.UserRole.read_only;
         if (roles.contains("inventory_faction_leader")) return DomainEnums.UserRole.faction_leader;
-        return DomainEnums.UserRole.faction_leader;
+        return null;
+    }
+
+    /** Maps {@code inventory_faction_<EVENT>_<slug>} groups to {@code EVENT:slug} membership keys. */
+    static Set<String> factionsFrom(Set<String> roles) {
+        var result = new TreeSet<String>();
+        for (var role : roles) {
+            if (!role.startsWith(FACTION_GROUP_PREFIX)) continue;
+            String rest = role.substring(FACTION_GROUP_PREFIX.length());
+            int separator = rest.indexOf('_');
+            if (separator <= 0 || separator == rest.length() - 1) continue;
+            result.add(factionKey(rest.substring(0, separator), rest.substring(separator + 1)));
+        }
+        return result;
+    }
+
+    static Set<String> parseFactions(String header) {
+        var result = new TreeSet<String>();
+        Arrays.stream(header.split(",")).map(String::trim).filter(value -> value.contains(":"))
+                .forEach(value -> result.add(factionKey(value.substring(0, value.indexOf(':')), value.substring(value.indexOf(':') + 1))));
+        return result;
     }
 
     private void requireAny(String message, DomainEnums.UserRole... allowed) {
@@ -234,8 +285,8 @@ public class ActorService {
         throw ApiException.forbidden(message);
     }
 
-    private DomainEnums.UserRole parseRole(String value) {
-        try { return DomainEnums.UserRole.valueOf(value.trim().toLowerCase()); }
-        catch (IllegalArgumentException ignored) { return DomainEnums.UserRole.faction_leader; }
+    private static DomainEnums.UserRole parseRole(String value) {
+        try { return DomainEnums.UserRole.valueOf(value.trim().toLowerCase(Locale.ROOT)); }
+        catch (IllegalArgumentException ignored) { return null; }
     }
 }

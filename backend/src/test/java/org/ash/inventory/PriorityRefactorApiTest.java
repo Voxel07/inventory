@@ -86,7 +86,7 @@ class PriorityRefactorApiTest {
     @Test void privateAssembliesAreScopedOnRepeatedListsDetailsAndCommands() {
         String ownerId = actor("priority-owner", "faction_leader").get("/api/auth/me")
                 .then().statusCode(200).extract().path("id");
-        QuarkusTransaction.requiringNew().run(() -> em.find(UserAccount.class, UUID.fromString(ownerId)).factions = List.of("Priority", "Secret"));
+        QuarkusTransaction.requiringNew().run(() -> em.find(UserAccount.class, UUID.fromString(ownerId)).factions = List.of("DE:priority", "Secret"));
         String person = admin().body(Map.of("sku", "PERSON-" + UUID.randomUUID(), "name", "Private component",
                 "category", "Priority", "amount", 1, "visibilityScope", "person", "assignedUserId", ownerId))
                 .post("/api/items").then().statusCode(200).extract().path("id");

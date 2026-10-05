@@ -84,6 +84,3 @@ export function useNames() {
   return getNames();
 }
 
-export function namingOptions<G extends NamingGroup>(group: G) {
-  return GROUP_VALUES[group].map((value) => ({ value, label: nameFor(group, value) }));
-}

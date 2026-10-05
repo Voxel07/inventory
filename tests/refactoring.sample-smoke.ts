@@ -51,7 +51,8 @@ async function allItems(): Promise<Item[]> {
   }
 }
 let items = await allItems();
-const parsed = parseItemsFromCsv(rows, locations, items);
+const reference = { eventTypes: ['ASD', 'DE', 'LS', 'M24', 'TNO'], factions: [] };
+const parsed = parseItemsFromCsv(rows, locations, items, reference);
 for (const row of parsed) {
   if (row.isExisting) continue;
   assert.notEqual(row.status, 'error', row.statusMessage);
@@ -62,7 +63,7 @@ for (const row of parsed) {
 // Read through REST again to verify the MCP writes use the same stock projections.
 items = await allItems();
 const existingAssemblies = await api('/assemblies');
-const parsedAssemblies = parseAssembliesFromCsv(rows, items, existingAssemblies);
+const parsedAssemblies = parseAssembliesFromCsv(rows, items, existingAssemblies, reference);
 for (const row of parsedAssemblies) {
   if (row.status === 'duplicate') continue;
   assert.equal(row.status, 'valid', row.statusMessage);

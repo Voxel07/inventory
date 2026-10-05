@@ -1,11 +1,12 @@
 import { Chip, IconButton, ListItemButton } from '../shared/ActionButtons';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { DialogForm, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete, FormControlLabel, FormHelperText, Switch } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
-import { EVENT_TYPES, type AssemblyFormData, type Assembly, type Item } from '../../types';
+import { type AssemblyFormData, type Assembly, type Item } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
@@ -21,6 +22,7 @@ interface Props {
 
 export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, isLoading }: Props) {
     const t = useLocalizedText();
+    const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
     const canCreatePublic = canEditCatalog(user);
     const [formData, setFormData] = useState<AssemblyFormData>({
@@ -183,7 +185,7 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
                 />
                 <Autocomplete
                     multiple
-                    options={[...EVENT_TYPES]}
+                    options={eventTypes}
                     value={formData.eventTypes ?? []}
                     onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
                     renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}

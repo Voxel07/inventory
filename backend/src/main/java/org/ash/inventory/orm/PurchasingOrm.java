@@ -13,18 +13,10 @@ import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @ApplicationScoped
-public class PurchasingOrm {
+public class PurchasingOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
-    @jakarta.inject.Inject protected org.ash.inventory.helper.security.ActorService accessActor;
-    private final EntityManager entityManager;
 
-    public PurchasingOrm(EntityManager entityManager) {
-        this.entityManager = entityManager;
-    }
 
-    public void persist(Object value) { entityManager.persist(value); }
-    public <T> T find(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id), false); }
-    public <T> T locked(Class<T> type, UUID id) { return accessActor.protect(entityManager.find(type, id, LockModeType.PESSIMISTIC_WRITE), true); }
 
     public List<Vendor> vendors(int offset, int limit) {
         return entityManager.createQuery("from Vendor vendor order by vendor.active desc, vendor.preferredVendor desc, vendor.name", Vendor.class)

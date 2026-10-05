@@ -15,9 +15,20 @@ public class InventoryMediaService {
     @Inject ActorService actors;
     @Inject CatalogService catalog;
     @Inject PrivacyProjectionService privacy;
+    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "inventory.media.max-staged-per-user", defaultValue = "50")
+    int maxStagedPerUser;
+
     public void register(String key) {
         var value = new InventoryMediaObject(); value.objectKey = key; value.uploader = actors.current(); orm.persist(value);
     }
+    /** Per-user quota for uploads that are not attached to a resource yet. */
+    public void requireUploadQuota() {
+        if (orm.stagedCount(actors.current()) >= maxStagedPerUser)
+            throw new ApiException(429, "Too many pending uploads; attach or delete existing uploads first");
+    }
+    /** Abandoned staged uploads older than the cutoff (no actor context; used by the purge job). */
+    public List<String> abandonedStaged(java.time.Instant cutoff, int limit) { return orm.stagedKeysBefore(cutoff, limit); }
+    public void forgetStaged(String key) { orm.deleteStagedRecord(key); }
     public void requireStaged(String key) {
         var value = object(key);
         orm.lock(value); orm.refresh(value);
@@ -35,7 +46,7 @@ public class InventoryMediaService {
     public void requireRead(String key) {
         var value = object(key);
         if (value.resourceType == null) { requireStaged(key); return; }
-        if (privacy.deniedIds().contains(value.resourceId.toString())) throw ApiException.notFound("Media not found");
+        if (privacy.denied(value.resourceId)) throw ApiException.notFound("Media not found");
         switch (value.resourceType) {
             case "items" -> actors.requireItemAccess(orm.find(Item.class, value.resourceId));
             case "locations" -> actors.requireLocationAccess(orm.find(StorageLocation.class, value.resourceId), false);

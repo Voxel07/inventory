@@ -1,4 +1,5 @@
 import { formatDate } from '../utils/dateFormat';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
@@ -34,7 +35,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useItems } from '../hooks/useItems';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
-import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
+import type { EventReportStatus, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
@@ -43,6 +44,7 @@ import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '
 export function Events() {
   const navigate = useNavigate();
   const t = useLocalizedText();
+  const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
   const canEdit = canAccessProcurement(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
@@ -191,7 +193,7 @@ export function Events() {
         onChange={(_event, value: EventType | null) => value && setEventType(value)}
         sx={{ mb: 3, flexWrap: 'wrap' }}
       >
-        {EVENT_TYPES.map((type) => <ToggleButton title={translate('Events nach diesem Eventtyp filtern', 'Filter events by this event type')} key={type} value={type}>{type}</ToggleButton>)}
+        {eventTypes.map((type) => <ToggleButton title={translate('Events nach diesem Eventtyp filtern', 'Filter events by this event type')} key={type} value={type}>{type}</ToggleButton>)}
       </ToggleButtonGroup>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>

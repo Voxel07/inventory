@@ -1,4 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
 import { useState } from 'react';
@@ -12,14 +13,15 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock, type StockCalculation } from '../../utils/stock';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
-import { EVENT_TYPES, type EventType } from '../../types';
+import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
-import { catalogGridSx, CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
+import { catalogGridSx } from './catalogGrid';
+import { CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { selectFilterColumn } from '../../utils/catalogFilters';
 
@@ -64,6 +66,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
     const t = useLocalizedText();
+    const { eventTypes } = useFactionCatalog();
     const language = useAppLanguage();
     const theme = useTheme();
     const compact = useCompactCatalog();
@@ -195,7 +198,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         <TextField select label={t('Event', 'Event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
             onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
             <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
-            {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            {eventTypes.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
         {!locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
             <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>

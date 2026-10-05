@@ -1,5 +1,6 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.PageBounds;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.orm.CustodyOrm;
@@ -27,7 +28,7 @@ public class CustodyQueryService {
     @Transactional
     public List<CustodyDtos.HandoverResponse> handovers(UUID orderId, int page, int size) {
         authorize(orderId);
-        var values = custody.handovers(orderId, offset(page, size), size);
+        var values = custody.handovers(orderId, PageBounds.of(page, size).offset(), size);
         var linesByHandover = new LinkedHashMap<UUID, List<CustodyDtos.HandoverLineResponse>>();
         for (var line : custody.lines(values)) {
             linesByHandover.computeIfAbsent(line.handover.id, ignored -> new ArrayList<>()).add(
@@ -47,7 +48,7 @@ public class CustodyQueryService {
     @Transactional
     public List<CustodyDtos.ReconciliationResponse> reconciliations(UUID orderId, int page, int size) {
         authorize(orderId);
-        return custody.reconciliations(orderId, offset(page, size), size).stream().map(value ->
+        return custody.reconciliations(orderId, PageBounds.of(page, size).offset(), size).stream().map(value ->
                 new CustodyDtos.ReconciliationResponse(value.id, value.order.id, value.orderLine.id,
                         value.item.id, value.item.name,
                         value.assetInstance == null ? null : value.assetInstance.id,
@@ -64,12 +65,4 @@ public class CustodyQueryService {
         orderService.assertCanView(order);
     }
 
-    private int offset(int page, int size) {
-        if (page < 0 || size < 1 || size > 200) throw ApiException.badRequest("Invalid page bounds");
-        try {
-            return Math.multiplyExact(page, size);
-        } catch (ArithmeticException exception) {
-            throw ApiException.badRequest("Page offset is too large");
-        }
-    }
 }

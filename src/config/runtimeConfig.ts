@@ -52,3 +52,14 @@ export const OIDC_CONFIG: OidcRuntimeConfig | null = oidcAuthorityValue && oidcC
       scope: value('OIDC_SCOPE', import.meta.env.VITE_OIDC_SCOPE) || 'openid profile email offline_access',
     }
   : null;
+
+/**
+ * Header-based development login is offered only by the Vite dev server, or by a build whose runtime
+ * config explicitly sets DEV_LOGIN=true (local Docker development). Production builds require OIDC.
+ */
+export const DEV_LOGIN_AVAILABLE = !OIDC_CONFIG
+  && (import.meta.env.DEV || value('DEV_LOGIN', import.meta.env.VITE_DEV_LOGIN).toLowerCase() === 'true');
+
+export const AUTH_CONFIGURATION_ERROR = OIDC_CONFIG || DEV_LOGIN_AVAILABLE
+  ? null
+  : 'Sign-in is not configured: set OIDC_AUTHORITY and OIDC_CLIENT_ID.';

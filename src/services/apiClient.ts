@@ -1,11 +1,13 @@
 import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
 import type { User } from '../types';
-import { API_URL, OIDC_CONFIG } from '../config/runtimeConfig';
+import { API_URL, AUTH_CONFIGURATION_ERROR, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
-import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl } from './oidcClient';
+import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
 import { localWriteChange, type ApiChangeDetail } from './apiChanges';
+import { recordFilteredRows } from './pageCompleteness';
 export type { ApiChangeDetail } from './apiChanges';
 import {
+  announceLogout,
   assertAuthSession,
   captureAuthSession,
   type AuthSessionContext,
@@ -14,6 +16,7 @@ import {
   getAuthorizationHeaders,
   getAuthSnapshot,
   getOidcIdToken,
+  getRevocableTokens,
   getValidAccessToken,
   restorePersistedSession,
   setAuthError,
@@ -53,6 +56,7 @@ export async function login(): Promise<void> {
     await beginOidcLogin();
     return;
   }
+  if (AUTH_CONFIGURATION_ERROR) throw new Error(AUTH_CONFIGURATION_ERROR);
   const response = await apiRequest<{ token: string; user: User }>('/api/auth/dev-login', {
     method: 'POST', body: { email: 'admin@localhost', password: '' }, anonymous: true,
   });
@@ -65,6 +69,7 @@ export async function login(): Promise<void> {
 export async function logout(): Promise<boolean> {
   const context = captureAuthSession();
   stopRealtimeEvents();
+  announceLogout();
   if (!OIDC_CONFIG) {
     await clearAuth();
     return false;
@@ -72,6 +77,11 @@ export async function logout(): Promise<boolean> {
 
   let providerLogoutUrl: string;
   try {
+    // Revoke first: end_session alone leaves the (offline_access) refresh token valid. Best effort;
+    // the provider may be unreachable, and the logout redirect must still happen.
+    const { accessToken, refreshToken } = getRevocableTokens();
+    await Promise.allSettled([revokeOidcToken(refreshToken, 'refresh_token'), revokeOidcToken(accessToken, 'access_token')]);
+    assertAuthSession(context);
     providerLogoutUrl = await oidcLogoutUrl(getOidcIdToken());
   } catch (error) {
     assertAuthSession(context);
@@ -229,6 +239,7 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
     }
     const result = response.status === 204 ? undefined as T : await response.json() as T;
     if (response.headers.get('X-Private-Inventory') === 'true') markPrivateInventoryResponse(result);
+    recordFilteredRows(result, Number(response.headers.get('X-Filtered-Rows') ?? 0));
     assertAuthSession(context);
     if (method === 'GET') {
       const etag = response.headers.get('ETag');
@@ -447,12 +458,13 @@ export async function startRealtimeEvents(): Promise<void> {
     });
     assertAuthSession(context);
     if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
-    // Permission changes may have committed while the event stream was disconnected.
-    conditionalGetCache.clear();
-    publishApiChange({ type: 'access.invalidated' }, context);
     if (controller.signal.aborted) return;
-    // The stream has no replay cursor; reconnects must recover changes missed while disconnected.
-    if (realtimeGeneration === context.generation) publishApiChange({ type: 'realtime.reconnected' }, context);
+    // The stream has no replay cursor; a reconnect must recover changes (including permission changes)
+    // missed while disconnected. The first connection of a session has nothing to recover.
+    if (realtimeGeneration === context.generation) {
+      conditionalGetCache.clear();
+      publishApiChange({ type: 'realtime.reconnected' }, context);
+    }
     realtimeGeneration = context.generation;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -497,6 +509,8 @@ async function precacheCatalogForOfflineUse(): Promise<void> {
     { key: 'assemblies', path: '/api/assemblies' },
     { key: 'storageLocations', path: '/api/storage-locations' },
     { key: 'events', path: '/api/events' },
+    { key: 'factions', path: '/api/factions' },
+    { key: 'eventTypes', path: '/api/event-types' },
   ];
   await Promise.allSettled(catalogs.map(async ({ key, path }) => {
     const data = await apiRequest<unknown[]>(path, { session: context });
@@ -513,8 +527,16 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', stopRealtimeEvents);
 
 let requestGeneration = getAuthSnapshot().generation;
+let currentToken = getAuthSnapshot().token;
 subscribeAuth(() => {
-  if (requestGeneration === getAuthSnapshot().generation) return;
+  const rotated = getAuthSnapshot().token !== currentToken;
+  currentToken = getAuthSnapshot().token;
+  if (requestGeneration === getAuthSnapshot().generation) {
+    // Roles and factions come from the token's groups: re-read the account only when a refreshed
+    // token arrives instead of polling /api/auth/me.
+    if (rotated && currentToken && getAuthSnapshot().user) void refreshCurrentUser();
+    return;
+  }
   requestGeneration = getAuthSnapshot().generation;
   activeRequests.forEach((controller) => controller.abort());
   conditionalGetCache.clear();

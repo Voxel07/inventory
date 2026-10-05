@@ -1,11 +1,11 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.EquipmentOrm;
 import org.ash.inventory.orm.OperationsOrm;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -60,7 +60,7 @@ public class EquipmentReadService {
             implements EquipmentService.AvailabilityData {
         public boolean itemUsable() {
             return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue,
-                    now.atZone(ZoneId.systemDefault()).toLocalDate()) && !scheduleBlocked(null);
+                    BusinessTime.date(now)) && !scheduleBlocked(null);
         }
         public boolean usable(AssetInstance asset) {
             return asset.active && asset.conditionStatus != DomainEnums.ConditionStatus.damaged
@@ -83,7 +83,7 @@ public class EquipmentReadService {
         }
         public LoanArrangement loan(EquipmentCommitment commitment) { return loans.get(commitment.id); }
         public int consumedDuring(EquipmentCommitment commitment) {
-            return consumption.stream().filter(t -> !t.createdAt.atZone(ZoneId.systemDefault()).toLocalDate().isBefore(commitment.availableFrom))
+            return consumption.stream().filter(t -> !BusinessTime.date(t.createdAt).isBefore(commitment.availableFrom))
                     .mapToInt(t -> t.quantity).sum();
         }
         public int internalQuantity(UUID providerId) {

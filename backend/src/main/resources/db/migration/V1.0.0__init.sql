@@ -1,16 +1,21 @@
 -- Canonical PostgreSQL schema for a fresh disposable database.
 -- Edit this baseline and the entity definitions directly; no upgrade/backfill steps.
 
+-- Trigram indexes serve the catalog's substring search (lower(name|sku|category) like '%term%').
+create extension if not exists pg_trgm;
+
 create table app_users (
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
     id uuid not null,
     email varchar(255),
-    external_subject varchar(255) not null unique,
+    issuer varchar(255) not null,
+    external_subject varchar(255) not null,
     name varchar(255) not null,
     role varchar(255) not null check ((role in ('hq_admin','warehouse_crew','marshal','event_planner','maintenance_crew','faction_leader','read_only'))),
     factions jsonb not null,
-    primary key (id)
+    primary key (id),
+    constraint uq_app_users_identity unique (issuer, external_subject)
 );
 
 create table assemblies (
@@ -216,7 +221,9 @@ create table factions (
     event_type varchar(255) not null,
     name varchar(255) not null,
     slug varchar(255) not null,
-    primary key (id)
+    primary key (id),
+    -- Faction memberships from the identity provider are EVENT:slug keys.
+    constraint uq_faction_event_slug unique (event_type, slug)
 );
 
 create table general_orders (
@@ -1011,6 +1018,19 @@ create index idx_location_parent on storage_locations(parent_location_id);
 create index idx_sync_resolution_root on sync_command_audit(resolution_root);
 create index equipment_commitments_item_dates on equipment_commitments(item_id, available_from, available_until);
 create index ix_overrides_latest on planning_overrides (event_id, item_id, created_at desc, id desc);
+-- Foreign keys used by location/stock reads (PostgreSQL does not index referencing columns itself).
+create index ix_positions_location on inventory_positions (location_id);
+create index ix_tx_source_location on stock_transactions (source_location_id) where source_location_id is not null;
+create index ix_tx_destination_location on stock_transactions (destination_location_id) where destination_location_id is not null;
+create index ix_asset_current_location on asset_instances (current_location_id) where current_location_id is not null;
+create index ix_reservation_location on stock_reservations (location_id) where location_id is not null;
+create index ix_handover_lines_item on custody_handover_lines (item_id);
+-- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
+create index ix_asset_code_lower on asset_instances (lower(asset_code));
+create index ix_inventory_code_lower on inventory_codes (lower(code));
+create index ix_items_name_trgm on items using gin (lower(name) gin_trgm_ops);
+create index ix_items_sku_trgm on items using gin (lower(sku) gin_trgm_ops);
+create index ix_items_category_trgm on items using gin (lower(category) gin_trgm_ops);
 alter table general_orders add constraint general_orders_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_general_order_id_fkey foreign key (general_order_id) references general_orders(id);
@@ -1069,69 +1089,101 @@ create table inventory_media_objects (
     resource_type varchar(255), resource_id uuid,
     check ((resource_type is null) = (resource_id is null))
 );
+-- Upload quota and abandoned-upload purge read only staged (unattached) objects.
+create index ix_media_staged on inventory_media_objects (uploader_id, created_at) where resource_type is null;
+create index ix_media_staged_age on inventory_media_objects (created_at) where resource_type is null;
 
--- Commit-ordered revisions: row updates roll back with source writes.
-CREATE TABLE IF NOT EXISTS source_revisions (name varchar(100) PRIMARY KEY, revision bigint NOT NULL DEFAULT 0, epoch uuid NOT NULL DEFAULT gen_random_uuid());
+-- Commit-ordered revisions: counter updates commit or roll back with the source writes.
+-- Each table has 16 counter shards; a writer increments the shard of its backend connection,
+-- so concurrent writers to one table do not serialize on a single hot row. Readers sum the shards.
+CREATE TABLE source_revisions (
+    name varchar(100) NOT NULL,
+    shard smallint NOT NULL,
+    revision bigint NOT NULL DEFAULT 0,
+    epoch uuid NOT NULL DEFAULT gen_random_uuid(),
+    PRIMARY KEY (name, shard)
+);
 CREATE OR REPLACE FUNCTION advance_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE touched bigint;
 BEGIN
-    EXECUTE format('UPDATE %I.source_revisions SET revision = revision + 1 WHERE name = $1', TG_TABLE_SCHEMA) USING TG_TABLE_NAME;
+    EXECUTE format('UPDATE %I.source_revisions SET revision = revision + 1 WHERE name = $1 AND shard = pg_backend_pid() %% 16', TG_TABLE_SCHEMA) USING TG_TABLE_NAME;
     GET DIAGNOSTICS touched = ROW_COUNT;
     IF touched = 0 THEN RAISE EXCEPTION 'Missing source revision for %', TG_TABLE_NAME; END IF;
     RETURN NULL;
 END;
 $$;
-INSERT INTO source_revisions (name, revision) VALUES ('items', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('storage_locations', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON storage_locations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('warehouses', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON warehouses FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('event_occurrences', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON event_occurrences FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('faction_orders', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('faction_order_lines', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('general_orders', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON general_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('app_users', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON app_users FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('vendors', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON vendors FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('stock_reservations', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_reservations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('inventory_positions', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_positions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('inventory_lots', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_lots FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('asset_instances', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON asset_instances FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('return_submissions', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON return_submissions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('damage_reports', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON damage_reports FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('repair_cases', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON repair_cases FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('maintenance_schedules', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_schedules FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('maintenance_records', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_records FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('purchase_orders', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('purchase_order_lines', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('inventory_count_sessions', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_sessions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('inventory_count_lines', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('stock_transactions', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_transactions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('equipment_commitments', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON equipment_commitments FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('loan_arrangements', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON loan_arrangements FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('member_requests', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON member_requests FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, revision) VALUES ('factions', 0) ON CONFLICT (name) DO NOTHING;
-CREATE OR REPLACE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON factions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'items', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'storage_locations', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON storage_locations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'warehouses', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON warehouses FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'event_occurrences', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON event_occurrences FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'faction_orders', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'faction_order_lines', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'general_orders', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON general_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'app_users', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON app_users FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'vendors', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON vendors FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'stock_reservations', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_reservations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'inventory_positions', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_positions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'inventory_lots', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_lots FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'asset_instances', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON asset_instances FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'return_submissions', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON return_submissions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'damage_reports', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON damage_reports FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'repair_cases', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON repair_cases FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'maintenance_schedules', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_schedules FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'maintenance_records', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_records FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'purchase_orders', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'purchase_order_lines', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON purchase_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'inventory_count_sessions', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_sessions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'inventory_count_lines', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON inventory_count_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'stock_transactions', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON stock_transactions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'equipment_commitments', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON equipment_commitments FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'loan_arrangements', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON loan_arrangements FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'member_requests', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON member_requests FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'factions', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON factions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+
+-- Reference data: event types and their factions. Planners add more through /api/factions.
+INSERT INTO factions (id, created_at, updated_at, is_active, event_type, name, slug)
+SELECT gen_random_uuid(), now(), now(), true, event_type, name, slug FROM (VALUES
+    ('DE', 'KGG', 'kgg'),
+    ('DE', 'GOF', 'gof'),
+    ('DE', 'Enklave', 'enklave'),
+    ('DE', 'Miliz', 'miliz'),
+    ('LS', 'UCRF', 'ucrf'),
+    ('LS', 'TERA', 'tera'),
+    ('TNO', 'Militär', 'militar'),
+    ('TNO', 'Freiheit', 'freiheit'),
+    ('TNO', 'Stalker', 'stalker'),
+    ('TNO', 'Banditen', 'banditen'),
+    ('TNO', 'Wissenschaftler', 'wissenschaftler'),
+    ('ASD', 'Delta', 'delta'),
+    ('ASD', 'Ghost', 'ghost'),
+    ('M24', 'Hondra', 'hondra'),
+    ('M24', 'Militär', 'militar'),
+    ('M24', 'Kartell', 'kartell')
+) AS seed(event_type, name, slug);

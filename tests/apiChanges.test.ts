@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 import { localWriteChange } from '../src/services/apiChanges';
-import { invalidateForApiChange } from '../src/utils/realtimeInvalidation';
+import { createApiChangeCoalescer, invalidateForApiChange } from '../src/utils/realtimeInvalidation';
 
 test('a reminder write invalidates inbox queries without refetching stock or reports', () => {
   const client = new QueryClient();
@@ -41,3 +41,30 @@ test('an unknown event within a batch conservatively invalidates every reader', 
   expect(client.getQueryState(['operations', 'vendors'])?.isInvalidated).toBe(true);
   client.clear();
 });
+
+test('server events carry only the family and map to the same domains as local writes', () => {
+  const client = new QueryClient();
+  for (const key of [['items'], ['operations', 'vendors'], ['action-inbox']]) client.setQueryData(key, []);
+  invalidateForApiChange(client, { type: 'vendor.changed' });
+  expect(client.getQueryState(['operations', 'vendors'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['items'])?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+test('bursts of changes are coalesced into one invalidation', async () => {
+  const client = new QueryClient();
+  client.setQueryData(['items'], []);
+  let calls = 0;
+  const invalidate = client.invalidateQueries.bind(client);
+  client.invalidateQueries = (...args: Parameters<typeof invalidate>) => { calls++; return invalidate(...args); };
+  const coalescer = createApiChangeCoalescer(client, 5);
+  coalescer.push({ type: 'stock.changed' });
+  coalescer.push({ type: 'order.changed' });
+  coalescer.push({ type: 'catalog.changed', resource: 'items' });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(calls).toBe(1);
+  expect(client.getQueryState(['items'])?.isInvalidated).toBe(true);
+  coalescer.dispose();
+  client.clear();
+});
+

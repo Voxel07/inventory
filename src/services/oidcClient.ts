@@ -8,6 +8,7 @@ type OidcMetadata = {
   authorization_endpoint: string;
   token_endpoint: string;
   end_session_endpoint?: string;
+  revocation_endpoint?: string;
 };
 
 type OidcTransaction = {
@@ -248,6 +249,19 @@ export async function refreshOidcTokens(refreshToken: string): Promise<OidcToken
     refresh_token: refreshToken,
   }));
   return toTokenSet(response, refreshToken);
+}
+
+/** RFC 7009: revoke a token at the provider so it cannot outlive the logout. */
+export async function revokeOidcToken(token: string, hint: 'refresh_token' | 'access_token'): Promise<void> {
+  if (!OIDC_CONFIG || !token) return;
+  const provider = await metadata();
+  if (!provider.revocation_endpoint) return;
+  const response = await fetch(provider.revocation_endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token, token_type_hint: hint, client_id: OIDC_CONFIG.clientId }),
+  });
+  if (!response.ok) throw new Error(`Token revocation failed (${response.status})`);
 }
 
 export async function oidcLogoutUrl(idToken: string): Promise<string> {

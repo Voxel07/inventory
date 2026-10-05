@@ -27,11 +27,12 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
+import type { EventType, FactionOrder, FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
+import { canAccessFaction, canManageInventory, factionKeyOf } from '../utils/access';
+import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
@@ -64,17 +65,18 @@ export function FactionOrders() {
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
-  const [chosenFaction, setSelectedFaction] = useState(FACTIONS_BY_EVENT[eventType][0]);
+  const catalog = useFactionCatalog();
+  const [chosenFaction, setSelectedFaction] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogReady, setDialogReady] = useState(false);
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
-  const allowedKeys = allowedFactionKeys(currentUser);
-  const selectableEvents = EVENT_TYPES.filter((type) => FACTIONS_BY_EVENT[type]
-    .some((faction) => canAccessFaction(currentUser, type, faction)));
-  const visibleFactions = FACTIONS_BY_EVENT[eventType]
-    .filter((faction) => canAccessFaction(currentUser, eventType, faction));
+  const accessibleFactions = (type: EventType) => catalog.factionsFor(type)
+    .filter((faction) => canAccessFaction(currentUser, factionKeyOf(faction)))
+    .map((faction) => faction.name);
+  const selectableEvents = catalog.eventTypes.filter((type) => accessibleFactions(type).length > 0);
+  const visibleFactions = accessibleFactions(eventType);
   const selectedFaction = visibleFactions.includes(chosenFaction) ? chosenFaction : visibleFactions[0] ?? '';
   const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
@@ -85,7 +87,7 @@ export function FactionOrders() {
   const createOrder = useCreateFactionOrder();
   const orders = allOrders.filter((order) => order.eventType === eventType
     && (!selectedEventId || order.eventOccurrenceId === selectedEventId)
-    && canAccessFaction(currentUser, order.eventType, order.faction));
+    && canAccessFaction(currentUser, order.factionKey));
 
   const activeOrders = orders.filter((order) => !isHistoricalOrder(order));
   const factionOverview = visibleFactions.map((faction) => {
@@ -115,8 +117,7 @@ export function FactionOrders() {
     setActivePage(1);
     setHistoryPage(1);
     setEventType(value);
-    const firstFaction = FACTIONS_BY_EVENT[value]
-      .find((candidate) => canAccessFaction(currentUser, value, candidate));
+    const firstFaction = accessibleFactions(value)[0];
     if (firstFaction) setSelectedFaction(firstFaction);
   }
 
@@ -283,7 +284,6 @@ export function FactionOrders() {
             defaultEventType={eventType}
             defaultEventOccurrenceId={selectedEventId}
             defaultFaction={selectedFaction}
-            allowedFactionKeys={allowedKeys ?? undefined}
             isLoading={createOrder.isPending}
             onSubmit={(data) => createOrder.mutate(data, {
               onSuccess: (order) => {
