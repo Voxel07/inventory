@@ -90,6 +90,7 @@ public class LifecycleResource {
     private LifecycleDtos.ScheduleResponse schedule(MaintenanceSchedule value) {
         return new LifecycleDtos.ScheduleResponse(value.id, value.item.id,
                 value.assetInstance == null ? null : value.assetInstance.id,
+                value.assetInstance == null ? null : value.assetInstance.assetCode,
                 value.maintenanceType.name(), value.intervalType.name(), value.intervalValue,
                 value.nextDueAt, value.nextDueValue, value.warningWindow,
                 value.responsiblePerson == null ? null : value.responsiblePerson.id,

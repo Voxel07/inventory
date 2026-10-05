@@ -34,7 +34,7 @@ import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { Assembly, FactionOrder, Item } from '../types';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
@@ -59,7 +59,6 @@ export function FactionOrderDetail() {
   const { orderId = '' } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const t = useLocalizedText();
-  const language = useAppLanguage();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { success, error: handleError } = useMutationFeedback();
@@ -295,7 +294,6 @@ export function FactionOrderDetail() {
             orderAssemblies,
             itemMap,
             pickupLocationLabel,
-            language,
             t,
           })
         }

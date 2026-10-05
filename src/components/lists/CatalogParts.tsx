@@ -8,6 +8,13 @@ import { useLocalizedText } from '../../utils/naming';
 
 export type RowAction = { label: string; icon: ReactNode; onClick: () => void; destructive?: boolean };
 
+/** Desktop catalog tables: auto-height rows sized by text, not by the default 38 px checkbox/icon hit areas. */
+export const catalogGridSx = {
+  '& .MuiDataGrid-row': { cursor: 'pointer' },
+  '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 },
+  '& .MuiDataGrid-cellCheckbox .MuiCheckbox-root, & .MuiDataGrid-columnHeaderCheckbox .MuiCheckbox-root, & .MuiDataGrid-cell .MuiIconButton-root': { p: 0.5 },
+} as const;
+
 /**
  * A compact catalog record for phones and tablets: the name wraps freely,
  * availability stays on its own line, and explicit actions live behind "More".

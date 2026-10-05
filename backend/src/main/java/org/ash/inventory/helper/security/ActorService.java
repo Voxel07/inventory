@@ -121,6 +121,12 @@ public class ActorService {
         if (item.accessPolicy == null) requireManager();
         else privateAccess.require(item.accessPolicy, current(), true);
     }
+    /** Private assemblies follow their own policy; public ones are catalog data managed by inventory staff. */
+    public void requireAssemblyEdit(org.ash.inventory.model.Assembly assembly) {
+        if (assembly == null) throw ApiException.notFound("Assembly not found");
+        if (assembly.accessPolicy == null) requireManager();
+        else privateAccess.require(assembly.accessPolicy, current(), true);
+    }
     public void requireLocationEdit(org.ash.inventory.model.StorageLocation location) {
         requireLocationAccess(location, true);
         if (location.accessPolicy == null) requireManager();
@@ -141,6 +147,8 @@ public class ActorService {
             if (item.accessPolicy != null) privateAccess.require(item.accessPolicy, current(), edit);
         } else if (value instanceof org.ash.inventory.model.StorageLocation location) {
             if (location.accessPolicy != null) requireLocationAccess(location, edit);
+        } else if (value instanceof org.ash.inventory.model.Assembly assembly) {
+            if (assembly.accessPolicy != null) privateAccess.require(assembly.accessPolicy, current(), edit);
         } else if (!(value instanceof UserAccount)
                 && !(value instanceof org.ash.inventory.model.InventoryAccessPolicy)
                 && !(value instanceof org.ash.inventory.model.InventoryAccessGroup)

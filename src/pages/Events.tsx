@@ -1,3 +1,4 @@
+import { formatDate } from '../utils/dateFormat';
 import { ToggleButton, Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessProcurement } from '../utils/access';
@@ -35,7 +36,7 @@ import { useItems } from '../hooks/useItems';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
 import { EVENT_TYPES, type EventReportStatus, type EventType, type Item } from '../types';
 import { getItemStock } from '../utils/stock';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 
@@ -44,7 +45,6 @@ export function Events() {
   const t = useLocalizedText();
   const { user } = useAuth();
   const canEdit = canAccessProcurement(user);
-  const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
@@ -198,7 +198,7 @@ export function Events() {
         <TextField select label={t('Event auswählen', 'Select event')} value={selectedEvent?.id ?? ''}
           onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: 260 }}>
           {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
-            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {report.startDate}{report.endDate !== report.startDate ? ` – ${report.endDate}` : ''}
+            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}
           </MenuItem>)}
         </TextField>
         <Button title={translate('Ein neues Event anlegen', 'Create a new event')} variant="contained" disabled={!canEdit} onClick={() => {
@@ -216,7 +216,7 @@ export function Events() {
           {lastCompleted ? (
             <>
               <Typography variant="h6">
-                {new Date(lastCompleted.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                {formatDate(lastCompleted.eventDate)}
               </Typography>
               <Typography color="text.secondary">
                 {t('Verwendete Artikel', 'Items used')}: {Object.values(lastCompleted.usedQuantities ?? {}).filter((value) => value > 0).length}
@@ -311,7 +311,7 @@ export function Events() {
                   <TableCell>{t('Artikel', 'Item')}</TableCell>
                   {usageReports.map((report) => (
                     <TableCell key={report.id} align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      {new Date(report.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+                      {formatDate(report.eventDate)}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -346,7 +346,7 @@ export function Events() {
           <TableBody>
             {reports?.map((report) => (
               <TableRow key={report.id}>
-                <TableCell>{report.name || report.eventType} · {report.startDate}{report.endDate !== report.startDate ? ` – ${report.endDate}` : ''}</TableCell>
+                <TableCell>{report.name || report.eventType} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}</TableCell>
                 <TableCell>
                   <Chip
                     size="small"

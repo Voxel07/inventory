@@ -50,6 +50,7 @@ import { useFactionOrders } from '../hooks/useFactionOrders';
 import { getItemStock } from '../utils/stock';
 import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useAssignableUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
@@ -289,10 +290,10 @@ export function ItemDetail() {
                                 <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Kategoriespezifische Angaben', 'Category-specific details')}</Typography>
                                 <FactList>
                                     {isVehicle && <Fact label={t('Kraftstoffverbrauch', 'Fuel consumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Fact>}
-                                    {isVehicle && <Fact label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? new Date(item.batteryReplacementDue).toLocaleDateString() : '—'}</Fact>}
+                                    {isVehicle && <Fact label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Fact>}
                                     {isGenerator && <Fact label={t('Betriebsstunden', 'Running hours')}>{item.currentOperatingHours ?? 0}</Fact>}
-                                    {isGenerator && <Fact label={t('Nächste Wartung', 'Next maintenance')}>{item.nextMaintenanceDue ? new Date(item.nextMaintenanceDue).toLocaleDateString() : '—'}</Fact>}
-                                    {isFood && <Fact label={t('Mindestens haltbar bis', 'Best before date')}>{item.bestBeforeDate ? new Date(item.bestBeforeDate).toLocaleDateString() : '—'}</Fact>}
+                                    {isGenerator && <Fact label={t('Nächste Wartung', 'Next maintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Fact>}
+                                    {isFood && <Fact label={t('Mindestens haltbar bis', 'Best before date')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Fact>}
                                 </FactList>
                             </Grid>
                         )}
@@ -366,7 +367,7 @@ export function ItemDetail() {
                                         </Typography>
                                     </Stack>
                                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                        {new Date(tx.timestamp).toLocaleString()} · {userName(tx)}
+                                        {formatDateTime(tx.timestamp)} · {userName(tx)}
                                     </Typography>
                                     {assetLabel(tx) && <Typography variant="body2" className="mono">{assetLabel(tx)}</Typography>}
                                     {(tx.reason || tx.notes) && <Typography variant="body2">{[tx.reason, tx.notes].filter(Boolean).join(' — ')}</Typography>}
@@ -389,7 +390,7 @@ export function ItemDetail() {
                                 <TableBody>
                                     {sortedTransactions.map((tx) => (
                                         <TableRow key={tx.id} hover>
-                                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(tx.timestamp).toLocaleString()}</TableCell>
+                                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(tx.timestamp)}</TableCell>
                                             <TableCell>
                                                 <Chip label={formatStatus(tx.transactionType)} color={tx.transactionType === 'checkout' ? 'warning' : tx.transactionType === 'added' ? 'info' : 'success'} size="small" variant="outlined" />
                                             </TableCell>
@@ -415,7 +416,7 @@ export function ItemDetail() {
                             <Stack spacing={1}>
                                 {maintenanceRecords.map((record) => (
                                     <Box key={record.id} sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-                                        <Typography>{new Date(record.performedAt).toLocaleDateString()} · {record.type.replaceAll('_', ' ')}</Typography>
+                                        <Typography>{formatDate(record.performedAt)} · {record.type.replaceAll('_', ' ')}</Typography>
                                         <Chip size="small" variant="outlined" label={record.result} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
                                     </Box>
                                 ))}
@@ -426,7 +427,7 @@ export function ItemDetail() {
 
                 <DetailSection title={t('Details', 'Details')} defaultExpanded={false}>
                     <FactList>
-                        <Fact label={t('Erstellt', 'Created')}>{new Date(item.created).toLocaleDateString()}</Fact>
+                        <Fact label={t('Erstellt', 'Created')}>{formatDate(item.created)}</Fact>
                         <Fact label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : item.visibilityScope || 'global'}</Fact>
                         {item.assignedUserName && <Fact label={t('Zugeordnete Person', 'Assigned person')}>{item.assignedUserName}</Fact>}
                         {item.assignedGroup && <Fact label={t('Zugeordnete Gruppe', 'Assigned group')}>{item.assignedGroup}</Fact>}

@@ -1,3 +1,4 @@
+import { formatDate } from '../../../utils/dateFormat';
 import { generateQRCodeDataURL } from '../../../utils/qrCode';
 import type { Assembly, FactionOrder, Item } from '../../../types';
 
@@ -7,7 +8,6 @@ export interface GeneratePdfSlipOptions {
   orderAssemblies: Assembly[];
   itemMap: Map<string, Item>;
   pickupLocationLabel: string;
-  language: string;
   t: (de: string, en: string) => string;
 }
 
@@ -17,7 +17,6 @@ export async function generateOrderPdfSlip({
   orderAssemblies,
   itemMap,
   pickupLocationLabel,
-  language,
   t,
 }: GeneratePdfSlipOptions): Promise<void> {
   // Loaded on demand: jspdf is ~630 kB with its transitive html2canvas/dompurify
@@ -103,7 +102,7 @@ export async function generateOrderPdfSlip({
     doc.setFontSize(9);
     if (firstPage) {
       doc.text(
-        `${order.orderCode} · ${new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}`,
+        `${order.orderCode} · ${formatDate(order.eventDate)}`,
         14,
         25,
       );

@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import type { StockTransaction, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/dateFormat';
 import { useLocalizedText } from '../../utils/naming';
 import { Link } from 'react-router-dom';
 
@@ -123,7 +124,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{getItemName(tx.itemId)}</Typography>
                             {assetChip(tx)}
                             <Typography variant="caption" color="text.secondary">
-                                {new Date(tx.timestamp).toLocaleString()} · {getUserName(tx)}
+                                {formatDateTime(tx.timestamp)} · {getUserName(tx)}
                             </Typography>
                         </Box>
                         <Chip label={formatStatus(tx.transactionType)} color={transactionColor(tx.transactionType)} size="small" />
@@ -155,7 +156,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                 <TableBody>
                     {transactions.map((tx) => (
                         <TableRow key={tx.id} hover>
-                            <TableCell>{new Date(tx.timestamp).toLocaleString()}</TableCell>
+                            <TableCell>{formatDateTime(tx.timestamp)}</TableCell>
                             <TableCell>
                                 <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
                                     <span>{getItemName(tx.itemId)}</span>

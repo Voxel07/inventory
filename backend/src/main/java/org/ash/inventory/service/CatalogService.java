@@ -81,7 +81,8 @@ public class CatalogService {
         var actor = actorService.current();
         var values = orm.assemblies();
         var components = orm.assemblyItems(values);
-        var visible = values.stream().filter(value -> canViewAssemblyComponents(
+        accessPolicies.prepare(values.stream().map(value -> value.accessPolicy).toList());
+        var visible = values.stream().filter(value -> canViewAssembly(value,
                 components.getOrDefault(value.id, List.of()), actor)).toList();
         var visibleComponents = new LinkedHashMap<UUID, List<AssemblyItem>>();
         visible.forEach(value -> visibleComponents.put(value.id, components.getOrDefault(value.id, List.of())));
@@ -100,14 +101,19 @@ public class CatalogService {
         return components.stream().allMatch(component -> component.item.active && canView(component.item, actor));
     }
 
+    /** A private assembly needs its own grant in addition to visible components. */
+    public boolean canViewAssembly(Assembly assembly, List<AssemblyItem> components, org.ash.inventory.model.UserAccount actor) {
+        return accessPolicies.projectionAllows(assembly.accessPolicy) && canViewAssemblyComponents(components, actor);
+    }
+
     public List<AssemblyItem> getVisibleAssemblyComponents(Assembly assembly) {
         var components = orm.assemblyItems(assembly);
-        if (!canViewAssemblyComponents(components)) throw ApiException.notFound("Assembly not found");
+        if (!canViewAssembly(assembly, components, actorService.current())) throw ApiException.notFound("Assembly not found");
         return components;
     }
 
     public boolean canViewAssembly(Assembly assembly) {
-        return canViewAssemblyComponents(orm.assemblyItems(assembly));
+        return assembly != null && canViewAssembly(assembly, orm.assemblyItems(assembly), actorService.current());
     }
 
     public List<EventOccurrence> getEvents(String eventType) {
@@ -265,7 +271,8 @@ public class CatalogService {
         item.maintenanceIntervalDays = input.maintenanceIntervalDays();
         item.nextMaintenanceDue = input.nextMaintenanceDue();
         var categoryPolicy = categoryMaintenance.find(item.category);
-        if (categoryPolicy != null) {
+        // The category interval is a default; an interval set on the item itself wins.
+        if (categoryPolicy != null && item.maintenanceIntervalDays == null) {
             item.maintenanceIntervalDays = categoryPolicy.intervalDays;
             if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = LocalDate.now().plusDays(item.maintenanceIntervalDays);
         }
@@ -345,7 +352,12 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
         var assembly = new Assembly();
+        // Like items: members without inventory management create personal assemblies.
+        if (Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current()))
+            assembly.accessPolicy = accessPolicies.create();
+        else actorService.requireManager();
         apply(assembly, input);
         orm.persist(assembly);
         replaceComponents(assembly, input);
@@ -358,6 +370,8 @@ public class CatalogService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly updateAssembly(UUID id, ApiModels.AssemblyInput input) {
         var assembly = locked(Assembly.class, id, "Assembly");
+        getVisibleAssemblyComponents(assembly);
+        actorService.requireAssemblyEdit(assembly);
         apply(assembly, input);
         orm.deleteAssemblyItems(assembly);
         replaceComponents(assembly, input);
@@ -370,13 +384,19 @@ public class CatalogService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteAssembly(UUID id) {
         var assembly = locked(Assembly.class, id, "Assembly");
+        getVisibleAssemblyComponents(assembly);
+        actorService.requireAssemblyEdit(assembly);
         if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);
         orm.deleteAssemblyItems(assembly);
+        var policy = assembly.accessPolicy;
         orm.remove(assembly);
+        accessPolicies.delete(policy);
         catalogChanged("assemblies", assembly.id);
     }
 
     private void apply(Assembly target, ApiModels.AssemblyInput input) {
+        if (target.id != null && input.privateResource() != null && input.privateResource() != (target.accessPolicy != null))
+            throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
         target.name = input.name().trim();
         target.description = input.description();
         target.hint = input.hint();

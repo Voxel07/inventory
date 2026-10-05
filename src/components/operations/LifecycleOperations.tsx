@@ -1,4 +1,5 @@
 import { formatStatus } from '../../utils/formatters';
+import { formatDate } from '../../utils/dateFormat';
 import { OperationDetail, OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
@@ -41,7 +42,7 @@ export function SchedulesPanel() {
         {schedule.active && <Button title={translate('Diesen Wartungsplan stilllegen', 'Retire this maintenance schedule')} onClick={() => setRetire(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
        </>} title={lookup.items.find((item) => item.id === schedule.itemId)?.name} status={schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')}>
       <Typography color="text.secondary">{formatStatus(schedule.maintenanceType)}</Typography>
-      <Typography>{schedule.intervalType} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? new Date(schedule.nextDueAt).toLocaleDateString() : schedule.nextDueValue}</Typography>
+      <Typography>{schedule.intervalType} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}</Typography>
       <Typography>{schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')} · {schedule.checkoutBlocking ? t('Sperrt Ausgabe bei Fälligkeit', 'Blocks checkout when due') : t('Hinweis', 'Advisory')}</Typography>
       {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
 

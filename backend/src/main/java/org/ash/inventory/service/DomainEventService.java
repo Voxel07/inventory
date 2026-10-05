@@ -63,6 +63,11 @@ public class DomainEventService {
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public int purgePublished(java.time.Duration retention) {
+        return orm.deletePublishedBefore(Instant.now().minus(retention));
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void failed(UUID id, String message) {
         var event = orm.findLocked(id);
         if (event == null) return;

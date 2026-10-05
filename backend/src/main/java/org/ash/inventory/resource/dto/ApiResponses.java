@@ -192,7 +192,8 @@ public final class ApiResponses {
             List<String> eventTypes,
             Set<String> itemIds,
             Map<String, Integer> itemQuantities,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand,
+            org.ash.inventory.service.InventoryAccessService.View access
     ) {}
 
     public record EventResponse(

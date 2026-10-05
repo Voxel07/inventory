@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { OfflineStatusPanel } from '../operations/OfflineStatusPanel';
 import { useState } from 'react';
@@ -40,7 +41,7 @@ export function QueuedActionsDialog({ open, actions, onClose, onDiscard, discard
                 disableTypography
                 primary={`${actionName(action)} · ${t('Wartet auf Serverbestätigung', 'Awaiting server confirmation')}`}
                 secondary={<>
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>{new Date(action.localTimestamp).toLocaleString()}</Typography>
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>{formatDateTime(action.localTimestamp)}</Typography>
                   <Box component="pre" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.75rem', m: 0, mt: 0.5 }}>{JSON.stringify(action.payload, null, 2)}</Box>
                 </>}
                 sx={{ minWidth: 0, m: 0 }}

@@ -1,3 +1,4 @@
+import { formatDate } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
@@ -25,7 +26,7 @@ import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '.
 import { useEventReports } from '../../hooks/useEvents';
 import { useItems } from '../../hooks/useItems';
 import { EVENT_TYPES, type GeneralOrderSummary, type Item } from '../../types';
-import { translate, useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, useLocalizedText } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
@@ -45,7 +46,6 @@ const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
 
 export function GeneralOrders() {
   const t = useLocalizedText();
-  const language = useAppLanguage();
   const feedback = useMutationFeedback();
   const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
@@ -87,7 +87,7 @@ export function GeneralOrders() {
   function itemName(id: string) { return itemMap.get(id)?.name ?? id; }
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
-    return event ? `${event.name || event.eventType} · ${new Date(event.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}` : t('Kein Event', 'No event');
+    return event ? `${event.name || event.eventType} · ${formatDate(event.eventDate)}` : t('Kein Event', 'No event');
   }
   function startEditing(order?: GeneralOrderSummary) {
     setEditing(order ?? 'new');
@@ -206,7 +206,7 @@ export function GeneralOrders() {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
               return occurrences.length ? [
                 <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,
-                ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}{event.endDate !== event.startDate ? ` – ${event.endDate}` : ''}</MenuItem>),
+                ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}{event.endDate !== event.startDate ? ` – ${formatDate(event.endDate)}` : ''}</MenuItem>),
               ] : [];
             })}
           </TextField>

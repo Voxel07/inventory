@@ -1,3 +1,4 @@
+import { formatDateTime } from '../utils/dateFormat';
 import { Button, IconButton, Tab } from '../components/shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Stack, Tabs, Tooltip, Typography, useMediaQuery } from '@mui/material';
@@ -58,7 +59,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   })) : section === 'requests' ? (requests.data ?? []).map(row => ({
     id: row.id, name: row.item, quantity: row.quantity, status: row.status,
     kind: row.kind === 'damage' ? t('Schaden', 'Damage') : t('Abholung', 'Pickup'), requester: row.requester,
-    created: new Date(row.createdAt).toLocaleString(), notes: [row.notes, row.response].filter(Boolean).join(' — '),
+    created: formatDateTime(row.createdAt), notes: [row.notes, row.response].filter(Boolean).join(' — '),
     source: { kind: 'requests', data: row },
   })) : myReturns.map(row => ({
     id: row.id, name: row.itemName, quantity: row.quantity, status: row.status, notes: row.acknowledgementNotes,

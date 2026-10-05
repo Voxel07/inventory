@@ -1,4 +1,5 @@
 import type { StockTransaction } from '../types';
+import { formatDateTime } from './dateFormat';
 
 /** Physical on-hand movements, matching the stock ledger rather than availability policy. */
 export function stockDelta(transaction: StockTransaction): number {
@@ -18,6 +19,6 @@ export function buildStockHistory(transactions: StockTransaction[], currentOnHan
   let stock = currentOnHand - sorted.reduce((sum, transaction) => sum + stockDelta(transaction), 0);
   return sorted.map(transaction => {
     stock += stockDelta(transaction);
-    return { date: new Date(transaction.timestamp).toLocaleString(), stock };
+    return { date: formatDateTime(transaction.timestamp), stock };
   });
 }

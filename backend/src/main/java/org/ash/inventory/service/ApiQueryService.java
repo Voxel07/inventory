@@ -47,6 +47,7 @@ public class ApiQueryService {
     @jakarta.inject.Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
     @jakarta.inject.Inject org.ash.inventory.orm.PurchasingOrm purchasing;
     @jakarta.inject.Inject EventMetricsService eventMetrics;
+    @jakarta.inject.Inject InventoryAccessService accessPolicies;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -227,6 +228,7 @@ public class ApiQueryService {
 
     public List<ApiResponses.AssemblyResponse> projectAssemblies(List<Assembly> values,
             Map<UUID, List<org.ash.inventory.model.AssemblyItem>> components) {
+        accessPolicies.prepare(values.stream().map(a -> a.accessPolicy).toList());
         var items = components.values().stream().flatMap(List::stream).map(c -> c.item).distinct().toList();
         mapper.prepareItems(items);
         var images = catalogOrm.itemImages(items);
@@ -269,7 +271,8 @@ public class ApiQueryService {
         var components = catalogOrm.assemblyItems(assemblies);
         var quantities = new LinkedHashMap<AssemblyItemId, Integer>();
         components.values().stream().flatMap(List::stream).forEach(c -> quantities.put(c.id, c.quantity));
-        var visibleAssemblies = assemblies.stream().filter(a -> catalog.canViewAssemblyComponents(components.getOrDefault(a.id, List.of()), actor)).toList();
+        accessPolicies.prepare(assemblies.stream().map(a -> a.accessPolicy).toList());
+        var visibleAssemblies = assemblies.stream().filter(a -> catalog.canViewAssembly(a, components.getOrDefault(a.id, List.of()), actor)).toList();
         var visibleComponents = new LinkedHashMap<UUID, List<org.ash.inventory.model.AssemblyItem>>();
         visibleAssemblies.forEach(a -> visibleComponents.put(a.id, components.getOrDefault(a.id, List.of())));
         var items = lines.stream().map(l -> l.item).distinct().filter(i -> catalog.canViewItem(i, actor)).toList();

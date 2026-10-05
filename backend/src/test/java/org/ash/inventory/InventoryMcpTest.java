@@ -164,13 +164,13 @@ class InventoryMcpTest {
     @Test
     void assemblyAndEventCommandsUseSharedContractsAndGuards() {
         var input = new ApiModels.AssemblyInput("MCP kit " + UUID.randomUUID(), "Comms kit", null,
-                List.of("MILSIM"), Map.of(bulk.id, 2), null, false);
+                List.of("MILSIM"), Map.of(bulk.id, 2), null, false, null);
         var created = tools.create_assembly(input);
         assertEquals(2, created.itemQuantities().get(bulk.id.toString()));
         assertEquals(created.id(), tools.get_assembly_details(created.id()).id());
         assertTrue(tools.list_assemblies("MILSIM").stream().anyMatch(a -> a.id().equals(created.id())));
         var updated = tools.update_assembly(created.id(), new ApiModels.AssemblyInput(input.name(), "Updated", null,
-                input.eventTypes(), Map.of(bulk.id, 4), null, false));
+                input.eventTypes(), Map.of(bulk.id, 4), null, false, null));
         assertEquals(4, updated.itemQuantities().get(bulk.id.toString()));
         assertTrue(tools.delete_assembly(created.id()).success());
         var eventInput = new ApiModels.EventInput("MILSIM", "MCP planned " + UUID.randomUUID(),
@@ -188,7 +188,7 @@ class InventoryMcpTest {
         assertTrue(assertThrows(ToolCallException.class, () -> tools.create_item(itemInput("Negative", -1, "bulk")))
                 .getMessage().startsWith("400:"));
         assertThrows(ToolCallException.class, () -> tools.create_assembly(new ApiModels.AssemblyInput("Invalid kit", null,
-                null, List.of(), Map.of(bulk.id, 0), null, false)));
+                null, List.of(), Map.of(bulk.id, 0), null, false, null)));
         assertThrows(ToolCallException.class, () -> tools.update_item(bulk.id, itemInput(bulk.name, 11, "bulk")));
         assertEquals(10, tools.get_item_details(bulk.id).stock().onHand());
         assertThrows(ToolCallException.class, () -> tools.check_low_stock_items(-1));

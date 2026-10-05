@@ -28,6 +28,7 @@ import { useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/dateFormat';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { translate, nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
@@ -95,7 +96,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
         const entries = report.statusHistory?.length
             ? report.statusHistory
             : [{ status: 'reported' as DamageStatus, userId: report.reportedBy, timestamp: report.timestamp }];
-        return entries.map((entry) => `${formatStatus(entry.status)}${entry.amount ? ` (${entry.amount} ×)` : ''} · ${getUserName(entry.userId)} · ${new Date(entry.timestamp).toLocaleString()}`).join('\n');
+        return entries.map((entry) => `${formatStatus(entry.status)}${entry.amount ? ` (${entry.amount} ×)` : ''} · ${getUserName(entry.userId)} · ${formatDateTime(entry.timestamp)}`).join('\n');
     };
     const getRepairedAmount = (report: DamageReport) => {
         const repaired = report.repairedAmount ?? 0;
@@ -205,7 +206,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
             {pageReports.map((report) => (
                 <Paper key={report.id} sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
-                        <Box><Typography sx={{ fontWeight: 700 }}>{getTargetName(report)}</Typography><Typography variant="caption" color="text.secondary">{new Date(report.timestamp).toLocaleString()}</Typography></Box>
+                        <Box><Typography sx={{ fontWeight: 700 }}>{getTargetName(report)}</Typography><Typography variant="caption" color="text.secondary">{formatDateTime(report.timestamp)}</Typography></Box>
                         <Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" />
                     </Box>
                     <Typography variant="body2" sx={{ my: 1.5 }}>{report.description}</Typography>
@@ -243,13 +244,13 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </TableRow></TableHead>
                 <TableBody>{pageReports.map((report) => (
                     <TableRow key={report.id} hover>
-                        <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell><TableCell>{getTargetName(report)}</TableCell><TableCell align="right">
+                        <TableCell>{formatDateTime(report.timestamp)}</TableCell><TableCell>{getTargetName(report)}</TableCell><TableCell align="right">
                             <Typography>{getUnresolvedAmount(report)} {t('offen', 'remaining')}</Typography>
                             <Typography variant="caption" color="text.secondary">{report.amount} {t('gesamt', 'total')} · {getRepairedAmount(report)} {t('repariert', 'repaired')} · {getWrittenOffAmount(report)} {t('abgeschrieben', 'written off')}</Typography>
                         </TableCell>
                         <TableCell><Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" /></TableCell>
                         <TableCell>{report.description}{report.resolutionNotes && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
-                        <TableCell>{getUserName(report.handledBy, report.expand?.handledBy)}{report.handledAt && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{new Date(report.handledAt).toLocaleString()}</Typography>}</TableCell>
+                        <TableCell>{getUserName(report.handledBy, report.expand?.handledBy)}{report.handledAt && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{formatDateTime(report.handledAt)}</Typography>}</TableCell>
                         {view === 'history' && <TableCell><Typography variant="caption" sx={{ whiteSpace: 'pre-line' }}>{getActivity(report)}</Typography></TableCell>}
                         <TableCell>
                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

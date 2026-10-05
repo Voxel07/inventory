@@ -1062,6 +1062,7 @@ create index inventory_access_grants_user on inventory_access_grants(user_id, po
 create index inventory_access_grants_group on inventory_access_grants(group_id, policy_id);
 alter table items add column access_policy_id uuid unique references inventory_access_policies(id);
 alter table storage_locations add column access_policy_id uuid unique references inventory_access_policies(id);
+alter table assemblies add column access_policy_id uuid unique references inventory_access_policies(id);
 create table inventory_media_objects (
     id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
     object_key varchar(1024) not null unique, uploader_id uuid not null references app_users(id),

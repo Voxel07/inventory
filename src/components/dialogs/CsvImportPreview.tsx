@@ -1,4 +1,4 @@
-
+import { formatDate } from '../../utils/dateFormat';
 import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
 import { type CsvImportCounts, type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow, type FactionOrderImportStatus } from '../../types/csvImport';
@@ -216,7 +216,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                             )}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 500 }}>{row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType}</TableCell>
-                          <TableCell>{row.data.eventDate}</TableCell>
+                          <TableCell>{formatDate(row.data.eventDate)}</TableCell>
                           <TableCell>{row.plannedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                           <TableCell>{row.usedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                         </TableRow>
@@ -258,7 +258,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                             )}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 500 }}>{row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType}</TableCell>
-                          <TableCell>{row.data.eventDate}</TableCell>
+                          <TableCell>{formatDate(row.data.eventDate)}</TableCell>
                           <TableCell>{row.data.faction}</TableCell>
                           <TableCell>{row.requestedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                         </TableRow>
@@ -283,7 +283,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                       <TableCell>{row.index}</TableCell>
                       <TableCell>{row.status === 'valid' ? getOrderStatusChip(row.targetStatus, t)
                         : <Tooltip title={row.statusMessage || ''} arrow><Chip size="small" color="error" label={t('Fehler', 'Error')} /></Tooltip>}</TableCell>
-                      <TableCell>{row.data.name}</TableCell><TableCell>{row.eventType} · {row.eventDate}</TableCell>
+                      <TableCell>{row.data.name}</TableCell><TableCell>{row.eventType} · {formatDate(row.eventDate)}</TableCell>
                       <TableCell>{row.requestedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ')}</TableCell>
                     </TableRow>)}</TableBody>
                   </Table>

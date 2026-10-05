@@ -3,6 +3,7 @@ package org.ash.inventory.helper.event;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.service.DomainEventService;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -15,10 +16,20 @@ public class OutboxDispatcher {
 
     private final DomainEventService events;
     private final EventBroadcaster broadcaster;
+    private final java.time.Duration retention;
 
-    public OutboxDispatcher(DomainEventService events, EventBroadcaster broadcaster) {
+    public OutboxDispatcher(DomainEventService events, EventBroadcaster broadcaster,
+            @ConfigProperty(name = "inventory.events.outbox.retention", defaultValue = "P30D") java.time.Duration retention) {
         this.events = events;
         this.broadcaster = broadcaster;
+        this.retention = retention;
+    }
+
+    /** Without this the outbox grows forever and every event leaves two dead tuples behind. */
+    @Scheduled(every = "1h", delayed = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    void purge() {
+        int deleted = events.purgePublished(retention);
+        if (deleted > 0) LOG.infov("Purged {0} published outbox events older than {1}", deleted, retention);
     }
 
     @Scheduled(every = "${inventory.events.outbox.dispatch-every:1s}",

@@ -1,3 +1,4 @@
+import type { InventoryAccess } from './inventoryAccess';
 import type { Item } from './item';
 import type { EventType } from './event';
 
@@ -15,9 +16,11 @@ export interface Assembly {
   expand?: {
     itemIds?: Item[];
   };
+  access?: InventoryAccess;
 }
 
 export interface AssemblyFormData {
+  privateResource?: boolean;
   imageFile?: File;
   removeImage?: boolean;
   name: string;

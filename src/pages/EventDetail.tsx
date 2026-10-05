@@ -28,9 +28,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
 import { useItems } from '../hooks/useItems';
 import { EVENT_TYPES, type EventReportStatus, type EventType } from '../types';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
+import { formatDate } from '../utils/dateFormat';
 
 export function EventDetail() {
   const { reportId = '' } = useParams<{ reportId: string }>();
@@ -39,7 +40,6 @@ export function EventDetail() {
   const t = useLocalizedText();
   const { user } = useAuth();
   const canEdit = canAccessProcurement(user);
-  const language = useAppLanguage();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
   const { data: items = [] } = useItems();
@@ -148,7 +148,6 @@ export function EventDetail() {
     );
   }
 
-  const locale = language === 'de' ? 'de-DE' : 'en-US';
 
   return (
     <Box>
@@ -166,7 +165,7 @@ export function EventDetail() {
               label={report.status === 'completed' ? t('Abgeschlossen', 'Completed') : t('Geplant', 'Planned')}
             />
           </Stack>
-          <Typography color="text.secondary">{new Date(report.eventDate).toLocaleDateString(locale)}{report.endDate !== report.startDate ? ` – ${new Date(report.endDate).toLocaleDateString(locale)}` : ''}</Typography>
+          <Typography color="text.secondary">{formatDate(report.eventDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}</Typography>
         </Box>
         {!editing ? (
           <Button title={translate('Die Daten dieses Events bearbeiten', 'Edit this event\'s details')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>

@@ -19,7 +19,7 @@ import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
-import { CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
+import { catalogGridSx, CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { selectFilterColumn } from '../../utils/catalogFilters';
 
@@ -57,7 +57,6 @@ type ItemRow = {
 };
 
 const PAGE_STEP = 30;
-const eventLabel = (event: EventType) => event === 'LS' ? 'LightSim' : event;
 
 export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint }: Props) {
     const { user } = useAuth();
@@ -114,7 +113,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 damaged: stock.damaged,
                 availability: stock.remaining <= 0 ? 'none' : !locationStock && stock.remaining <= (item.minStock ?? 5) ? 'low' : 'ok',
                 location: location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
-                events: item.eventTypes?.map(eventLabel).join(', ') || '—',
+                events: item.eventTypes?.join(', ') || '—',
             };
         });
     // Search applies everywhere; the compact layout's filter sheet adds category, event and location filters.
@@ -163,7 +162,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 {availabilityText(row)}
             </Typography> },
         ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.location === '—' ? undefined : row.location]) } satisfies GridColDef<ItemRow>] : []),
-        { field: 'events', headerName: t('Events', 'Events'), width: 130, ...selectFilterColumn(allRows, (row) => (row.item.eventTypes ?? []).map(eventLabel)) },
+        { field: 'events', headerName: t('Events', 'Events'), width: 130, ...selectFilterColumn(allRows, (row) => row.item.eventTypes ?? []) },
         ...(canManage || onRemoveItem ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: canManage ? 104 : 72, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
                 {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>}
@@ -196,7 +195,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         <TextField select label={t('Event', 'Event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
             onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
             <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
-            {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{eventLabel(value)}</MenuItem>)}
+            {EVENT_TYPES.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
         {!locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
             <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>
@@ -253,8 +252,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             rowSelectionModel={{ type: 'include', ids: selectedIds }} onRowSelectionModelChange={updateSelection}
             initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } } }}
             pageSizeOptions={[25, 50, 100]} localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
-            sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' },
-                '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 0.5 } }} />;
+            sx={catalogGridSx} />;
     })();
 
     return <Box>

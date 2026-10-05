@@ -1,8 +1,9 @@
 import { FormDialog } from '../components/shared/FormDialog';
 import { PageHeader } from '../components/shared/PageHeader';
-import { Button } from '../components/shared/ActionButtons';
+import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { useState } from 'react';
-import { Box } from '@mui/material';
+import { Box, ToggleButtonGroup } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
@@ -17,27 +18,18 @@ import type { Assembly, AssemblyFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog } from '../utils/access';
+import { personalAssemblies } from '../utils/personalItems';
 
 export function Assemblies() {
     const { user } = useAuth();
-    return canEditCatalog(user) ? <ManagedAssemblies /> : <ReadOnlyAssemblies />;
-}
-
-function ReadOnlyAssemblies() {
+    const catalogManager = canEditCatalog(user);
     const t = useLocalizedText();
-    const { data: assemblies = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useAssemblies();
-    const { data: items = [], isLoading: itemsLoading } = useItems();
-    return <Box>
-        <PageHeader title={t('Baugruppen', 'Assemblies')} />
-        <AssembliesList assemblies={assemblies} items={items} isLoading={isLoading || itemsLoading} loadError={isError} loadingMore={hasNextPage || isFetchingNextPage} onRetry={() => { void refetch(); }} />
-    </Box>;
-}
-
-function ManagedAssemblies() {
-    const t = useLocalizedText();
+    const [params, setParams] = useSearchParams();
+    const mine = params.get('scope') === 'mine';
     const { data: assemblies, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: assembliesComplete } = useAssemblies();
     const { data: items, isComplete: itemsComplete, isError: itemsError } = useItems();
     const { data: storageLocations } = useStorageLocations();
+    const visibleAssemblies = mine && assemblies ? personalAssemblies(assemblies, user?.id) : assemblies;
 
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
@@ -56,13 +48,18 @@ function ManagedAssemblies() {
             <PageHeader
                 title={t('Baugruppen', 'Assemblies')}
                 actions={<>
-                    <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('CSV-Import', 'Import CSV')}</Button>
+                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('CSV-Import', 'Import CSV')}</Button>}
                     <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>
                 </>}
             />
+            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
+                onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
+                <ToggleButton value="all">{t('Alle Baugruppen', 'All assemblies')}</ToggleButton>
+                <ToggleButton value="mine">{t('Meine Baugruppen', 'My assemblies')}</ToggleButton>
+            </ToggleButtonGroup>
 
             <AssembliesList
-                assemblies={assemblies}
+                assemblies={visibleAssemblies}
                 items={items}
                 isLoading={isLoading}
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
@@ -72,6 +69,7 @@ function ManagedAssemblies() {
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
+                emptyHint={mine ? t('Du hast noch keine eigenen Baugruppen.', 'You do not own any assemblies yet.') : undefined}
             />
 
             <FormDialog open={crud.formOpen} onClose={crud.closeForm}>

@@ -2,11 +2,13 @@ import { Chip, IconButton, ListItemButton } from '../shared/ActionButtons';
 import { DialogForm, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
-import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete } from '@mui/material';
+import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete, FormControlLabel, FormHelperText, Switch } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import { EVENT_TYPES, type AssemblyFormData, type Assembly, type Item } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
+import { useAuth } from '../../hooks/useAuth';
+import { canEditCatalog } from '../../utils/access';
 
 interface Props {
     title: string;
@@ -19,7 +21,10 @@ interface Props {
 
 export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, isLoading }: Props) {
     const t = useLocalizedText();
+    const { user } = useAuth();
+    const canCreatePublic = canEditCatalog(user);
     const [formData, setFormData] = useState<AssemblyFormData>({
+        privateResource: initialData ? Boolean(initialData.access?.privateResource) : true,
         name: initialData?.name ?? '',
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
         itemQuantities: initialData?.itemQuantities ?? {},
@@ -89,6 +94,21 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
                     minRows={2}
                     fullWidth
                 />
+            </FormSection>
+
+            <FormSection title={t('Sichtbarkeit', 'Visibility')}>
+                <Box>
+                    <FormControlLabel
+                        control={<Switch checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
+                            onChange={(_, checked) => setFormData((prev) => ({ ...prev, privateResource: checked }))} />}
+                        label={formData.privateResource ? t('Private Baugruppe', 'Private assembly') : t('Im gemeinsamen Katalog', 'In the shared catalog')} />
+                    <FormHelperText sx={{ mt: 0 }}>
+                        {formData.privateResource
+                            ? t('Nur du, HQ-Admins und Personen, für die du sie freigibst, sehen diese Baugruppe.', 'Only you, HQ admins and people you share it with can see this assembly.')
+                            : t('Alle mit Katalogzugriff sehen diese Baugruppe.', 'Everyone with catalog access can see this assembly.')}
+                        {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
+                    </FormHelperText>
+                </Box>
             </FormSection>
 
             <FormSection title={t('Bestandteile', 'Components')} description={t(`${selectedItems.length} Artikel ausgewählt`, `${selectedItems.length} items selected`)}>

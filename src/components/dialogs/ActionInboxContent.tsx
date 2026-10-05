@@ -13,6 +13,7 @@ import { useOperationCommand } from '../../hooks/useOperations';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm } from '../operations/OperationForm';
 import { StateMessage } from '../common/StateMessage';
+import { formatDateTime } from '../../utils/dateFormat';
 
 type Category = 'all' | 'notices' | 'tasks' | 'later';
 
@@ -47,7 +48,7 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
         {a.due && <Typography variant="caption" color="text.secondary">{t('Fällig', 'Due')}: {a.due}</Typography>}
       </Stack>
       {a.detail && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.25 }}>{a.detail}</Typography>}
-      {a.remindAt && <Typography variant="caption" color="text.secondary">{t('Erinnerung', 'Reminder')}: {new Date(a.remindAt).toLocaleString()}</Typography>}
+      {a.remindAt && <Typography variant="caption" color="text.secondary">{t('Erinnerung', 'Reminder')}: {formatDateTime(a.remindAt)}</Typography>}
     </Box>
     <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>
       <Button size="small" variant="outlined" component={Link} to={a.path} onClick={onOpenTask}>{t('Öffnen', 'Open')}</Button>

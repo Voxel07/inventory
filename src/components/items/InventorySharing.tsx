@@ -53,7 +53,7 @@ function SharingEditor({ kind, id, access, onClose }: { kind: string; id: string
   </Dialog>;
 }
 
-export function InventorySharing({ kind, id, access }: { kind: 'items' | 'storage-locations'; id: string; access?: InventoryAccess }) {
+export function InventorySharing({ kind, id, access }: { kind: 'items' | 'storage-locations' | 'assemblies'; id: string; access?: InventoryAccess }) {
   const t = useLocalizedText();
   const [open, setOpen] = useState(false);
   if (!access?.privateResource) return null;

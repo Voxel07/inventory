@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import type { Item } from '../src/types';
+import type { Assembly, Item } from '../src/types';
 import type { MemberCustody } from '../src/types/member';
-import { personalItems } from '../src/utils/personalItems';
+import { personalAssemblies, personalItems } from '../src/utils/personalItems';
 
 const catalog = [
   { id: 'org', assignedUserId: 'me', access: { privateResource: false, ownerId: 'me' } },
@@ -27,4 +27,15 @@ test('custody loading does not expose the global catalog and account switching c
   expect(personalItems(catalog, 'me', []).map(item => item.id)).toEqual(['mine']);
   expect(personalItems(catalog, 'someone-else', []).map(item => item.id)).toEqual(['shared']);
   expect(personalItems(catalog, undefined, [])).toEqual([]);
+});
+
+test('my assemblies are the private assemblies the user owns', () => {
+  const assemblies = [
+    { id: 'shared-kit', access: { privateResource: false } },
+    { id: 'my-kit', access: { privateResource: true, ownerId: 'me' } },
+    { id: 'their-kit', access: { privateResource: true, ownerId: 'someone-else', canEdit: true } },
+    { id: 'legacy-kit' },
+  ] as Assembly[];
+  expect(personalAssemblies(assemblies, 'me').map(assembly => assembly.id)).toEqual(['my-kit']);
+  expect(personalAssemblies(assemblies, undefined)).toEqual([]);
 });

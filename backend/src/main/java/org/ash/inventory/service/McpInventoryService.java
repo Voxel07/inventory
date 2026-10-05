@@ -58,19 +58,16 @@ public class McpInventoryService {
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.AssemblyResponse createAssembly(ApiModels.AssemblyInput input) {
-        actors.requireManager();
         return queries.projectAssembly(catalog.createAssembly(valid(input)));
     }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.AssemblyResponse updateAssembly(UUID id, ApiModels.AssemblyInput input) {
-        actors.requireManager();
         return queries.projectAssembly(catalog.updateAssembly(id, valid(input)));
     }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto deleteAssembly(UUID id) {
-        actors.requireManager();
         catalog.deleteAssembly(id);
         return new InventoryMcpDtos.DeleteResultDto(true, "Assembly", id, "Assembly deleted");
     }

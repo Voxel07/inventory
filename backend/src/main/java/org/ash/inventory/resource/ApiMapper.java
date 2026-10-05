@@ -252,7 +252,8 @@ public class ApiMapper {
                 value.eventTags == null ? List.of() : value.eventTags,
                 quantities.keySet(),
                 quantities,
-                Map.of("itemIds", items)
+                Map.of("itemIds", items),
+                accessPolicies.projection(value.accessPolicy)
         );
     }
 

@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Checkbox, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
@@ -73,7 +74,7 @@ export function SyncIssuesDialog({ open, failures, onClose, onDiscard, discardin
         <Button title={translate('Zur Konfliktübersicht zurückkehren', 'Return to the conflict list')} disabled={busy} onClick={() => setSelected(null)}>{t('Zurück', 'Back')}</Button>
       </> : <>
         {failures.filter((f) => !resolved.includes(f.idempotencyKey)).map((failure) => <Stack key={failure.idempotencyKey} spacing={1}>
-          <Typography>{failure.type} · {failure.status} · {new Date(failure.timestamp).toLocaleString()}</Typography>
+          <Typography>{failure.type} · {failure.status} · {formatDateTime(failure.timestamp)}</Typography>
           <Alert severity="warning">{failure.error}</Alert>
           <Button title={translate('Konflikt öffnen und Korrektur prüfen', 'Open the conflict to review a correction')} onClick={() => { void inspect(failure); }}>{t('Prüfen und korrigieren', 'Inspect and correct')}</Button>
           <Button title={translate('Den Konflikt ohne erneutes Senden archivieren', 'Archive this conflict without resubmitting')} disabled={discarding} onClick={() => onDiscard(failure.idempotencyKey)}>{t('Ohne Wiederholung archivieren', 'Archive without retry')}</Button>

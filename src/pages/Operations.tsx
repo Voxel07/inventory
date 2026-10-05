@@ -1,3 +1,4 @@
+import { formatDateTime } from '../utils/dateFormat';
 import { OperationListEntry } from '../components/operations/OperationListEntry';
 import { Tab, Button } from '../components/shared/ActionButtons';
 import { LoansPanel } from '../components/operations/LoansPanel';
@@ -86,12 +87,12 @@ function SystemPanel() {
     {(status.isLoading || dead.isLoading || sync.isLoading) && <LinearProgress />}
     {(status.error || dead.error || sync.error || command.error) && <Alert severity="error">{(status.error || dead.error || sync.error || command.error)?.message}</Alert>}
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{Object.entries(status.data?.counts ?? {}).map(([key, value]) => <Chip key={key} label={`${key}: ${value}`} />)}</Stack>
-    <Typography variant="body2">{t('Aktualisiert', 'Updated')}: {status.dataUpdatedAt ? new Date(status.dataUpdatedAt).toLocaleString() : '—'}</Typography>
+    <Typography variant="body2">{t('Aktualisiert', 'Updated')}: {status.dataUpdatedAt ? formatDateTime(status.dataUpdatedAt) : '—'}</Typography>
     <Button title={translate('Systemstatus und fehlgeschlagene Zustellungen aktualisieren', 'Refresh system status and failed deliveries')} onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('Aktualisieren', 'Refresh')}</Button>
     {dead.data?.map((event) => <OperationListEntry key={event.id} actions={<Button title={translate('Dieses fehlgeschlagene Ereignis erneut zustellen', 'Retry delivery of this failed event')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.retryEvent(event.id))}>{t('Erneut zustellen', 'Retry delivery')}</Button>} title={<>{event.eventType}</>}><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('Versuche', 'attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography></OperationListEntry>)}
     {!dead.isLoading && !dead.data?.length && <Alert severity="success">{t('Keine dauerhaft fehlgeschlagenen Ereignisse.', 'No dead-letter events.')}</Alert>}
     <Typography variant="h6">{t('Synchronisationsprotokoll', 'Sync audit')}</Typography>
-    {sync.data?.map((entry) => <OperationListEntry key={entry.id} status={entry.syncStatus} title={<>{entry.operationType} · {new Date(entry.createdAt).toLocaleString()}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
+    {sync.data?.map((entry) => <OperationListEntry key={entry.id} status={entry.syncStatus} title={<>{entry.operationType} · {formatDateTime(entry.createdAt)}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
   </Stack>;
 }
 

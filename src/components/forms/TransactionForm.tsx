@@ -1,3 +1,4 @@
+import { formatDate } from '../../utils/dateFormat';
 import { ToggleButton, Button } from '../shared/ActionButtons';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
@@ -128,7 +129,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     setFormData((previous) => ({ ...previous, eventOccurrenceId: occurrence?.id, eventType: occurrence?.eventType, faction: previous.eventType === occurrence?.eventType ? previous.faction : '' }));
                 }}>
                     <MenuItem value="">{t('Ohne Zuordnung (alte Rückgabe)', 'Unassigned (legacy return)')}</MenuItem>
-                    {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}</MenuItem>)}
+                    {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                 </TextField>}
                 {!preselectedItemId && <TextField
                     select

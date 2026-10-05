@@ -59,6 +59,17 @@ public class OutboxOrm {
         return result;
     }
 
+    /** Delivered events are only needed for at-least-once dispatch; drop them after retention. */
+    public int deletePublishedBefore(Instant cutoff) {
+        return entityManager.createQuery("""
+                delete from DomainEvent event
+                where event.status = :published and event.publishedAt < :cutoff
+                """)
+                .setParameter("published", DomainEnums.OutboxStatus.published)
+                .setParameter("cutoff", cutoff)
+                .executeUpdate();
+    }
+
     public int markPublished(List<UUID> ids, Instant publishedAt) {
         if (ids.isEmpty()) return 0;
         return entityManager.createQuery("""

@@ -61,7 +61,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Create a kit using the REST AssemblyInput contract. Manager access required; component quantities must be positive.")
+    @Tool(description = "Create a kit using the REST AssemblyInput contract. Managers create shared kits; privateResource=true (or a non-manager caller) creates a personal kit. Component quantities must be positive.")
     public ApiResponses.AssemblyResponse create_assembly(
             @ToolArg(description = "AssemblyInput: name and itemQuantities (item UUID to quantity) required", required = true) ApiModels.AssemblyInput input) {
         return call(() -> service.createAssembly(input));
@@ -82,7 +82,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Replace assembly metadata and composition using REST AssemblyInput. Manager access required.")
+    @Tool(description = "Replace assembly metadata and composition using REST AssemblyInput. Managers edit shared kits; owners and editors edit personal kits.")
     public ApiResponses.AssemblyResponse update_assembly(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId,
             @ToolArg(description = "AssemblyInput: name and complete itemQuantities required", required = true) ApiModels.AssemblyInput input) {
@@ -90,7 +90,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Delete an assembly through the shared catalog command. Manager access required.")
+    @Tool(description = "Delete an assembly through the shared catalog command. Managers delete shared kits; owners and editors delete personal kits.")
     public InventoryMcpDtos.DeleteResultDto delete_assembly(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId) {
         return call(() -> service.deleteAssembly(assemblyId));

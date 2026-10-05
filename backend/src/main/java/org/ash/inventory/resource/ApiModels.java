@@ -47,7 +47,7 @@ public final class ApiModels {
 
     public record AssemblyInput(
             @NotBlank String name, String description, String hint, List<String> eventTypes,
-            @NotEmpty Map<UUID, Integer> itemQuantities, String image, boolean removeImage) {}
+            @NotEmpty Map<UUID, Integer> itemQuantities, String image, boolean removeImage, Boolean privateResource) {}
 
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,

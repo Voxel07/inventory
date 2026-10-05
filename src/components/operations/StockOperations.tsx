@@ -1,3 +1,4 @@
+import { formatDate } from '../../utils/dateFormat';
 import { CollapsibleOperationLines, OperationLines } from './OperationLines';
 import { OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
@@ -199,7 +200,7 @@ export function LotsPanel({ itemId }: { itemId?: string } = {}) {
     <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
     <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('Noch keine Chargen.', 'No lots yet.')} />
     {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={<Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>} title={<>{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</>}>
-      <Typography>{t('Ablauf', 'Expiry')}: {lot.expiryDate ?? '—'} · {t('MHD', 'Best before')}: {lot.bestBeforeDate ?? '—'}</Typography>
+      <Typography>{t('Ablauf', 'Expiry')}: {formatDate(lot.expiryDate)} · {t('MHD', 'Best before')}: {formatDate(lot.bestBeforeDate)}</Typography>
       <Typography>{lot.storageRequirements} {lot.notes}</Typography>
     </OperationListEntry>)}
     {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available', itemId: itemId ?? '' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[

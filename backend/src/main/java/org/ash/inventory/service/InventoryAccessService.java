@@ -18,6 +18,7 @@ public class InventoryAccessService {
     @Inject InventoryAccess access;
     @Inject DomainEventService events;
     @Inject InventoryOperationsService inventory;
+    @Inject CatalogService catalog;
     public record Grant(UUID userId, UUID groupId, boolean canEdit) {}
     public record Input(@NotNull Long revision, @NotNull List<Grant> grants, UUID ownerId,
                         @NotBlank @Size(max=1000) String reason) {}
@@ -31,6 +32,11 @@ public class InventoryAccessService {
 
     public InventoryAccessPolicy create() {
         var policy = new InventoryAccessPolicy(); policy.owner = actors.current(); orm.persist(policy); return policy;
+    }
+    /** Removes the policy of a hard-deleted resource together with its shares. */
+    public void delete(InventoryAccessPolicy policy) {
+        if (policy == null) return;
+        orm.deleteGrants(policy); orm.remove(policy);
     }
     public View view(InventoryAccessPolicy policy) {
         if (policy == null) return publicView();
@@ -119,7 +125,7 @@ public class InventoryAccessService {
                 var item = orm.findLocked(Item.class, id); var stock = inventory.physicalStock(item);
                 if (stock.checkedOut() > 0 || stock.reserved() > 0 || stock.inTransit() > 0 || orm.currentCommitments(item))
                     throw ApiException.conflict("Resolve custody, reservations, transfers and commitments before transferring ownership");
-            } else if (orm.locationOccupied(orm.findLocked(StorageLocation.class, id)))
+            } else if (kind.equals("storage-locations") && orm.locationOccupied(orm.findLocked(StorageLocation.class, id)))
                 throw ApiException.conflict("Empty the location before transferring ownership");
             policy.owner = person(input.ownerId());
         }
@@ -170,6 +176,7 @@ public class InventoryAccessService {
         return switch (kind) {
             case "items" -> { var i = orm.findLocked(Item.class, id); if (i == null) throw ApiException.notFound("Item not found"); yield i.accessPolicy; }
             case "storage-locations" -> { var l = orm.findLocked(StorageLocation.class, id); if (l == null) throw ApiException.notFound("Location not found"); yield l.accessPolicy; }
+            case "assemblies" -> { var a = orm.findLocked(Assembly.class, id); if (a == null) throw ApiException.notFound("Assembly not found"); yield a.accessPolicy; }
             default -> throw ApiException.notFound("Resource not found");
         };
     }
@@ -177,6 +184,7 @@ public class InventoryAccessService {
         return switch (kind) {
             case "items" -> { var i = orm.find(Item.class, id); if (i == null) throw ApiException.notFound("Item not found"); actors.requireItemAccess(i); yield i.accessPolicy; }
             case "storage-locations" -> { var l = orm.find(StorageLocation.class, id); if (l == null) throw ApiException.notFound("Location not found"); actors.requireLocationAccess(l, false); yield l.accessPolicy; }
+            case "assemblies" -> { var a = orm.find(Assembly.class, id); if (a == null || !catalog.canViewAssembly(a)) throw ApiException.notFound("Assembly not found"); yield a.accessPolicy; }
             default -> throw ApiException.notFound("Resource not found");
         };
     }

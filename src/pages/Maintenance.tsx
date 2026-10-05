@@ -1,3 +1,4 @@
+import { formatDate } from '../utils/dateFormat';
 import { Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
@@ -29,6 +30,10 @@ import { getCategoryMaintenancePolicies, saveCategoryMaintenancePolicy } from '.
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
 import type { Item } from '../types';
+import type { Schedule } from '../types/operations';
+import { useOperationList } from '../hooks/useOperations';
+import { operationsApi } from '../services/operationsService';
+import { IndividualSchedules, isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel, type MaintenanceType } from '../components/maintenance/IndividualSchedules';
 
 function dateInputValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -66,7 +71,10 @@ export function Maintenance() {
   const [policyCategory, setPolicyCategory] = useState('');
   const [policyInterval, setPolicyInterval] = useState('');
   const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort();
-  const maintenanceItems = items.filter((item) => (item.maintenanceIntervalDays ?? 0) > 0);
+  const schedules = useOperationList<Schedule>('schedules', operationsApi.schedules);
+  const dateSchedules = (schedules.data ?? []).filter(isDateSchedule);
+  const scheduledItemIds = new Set(dateSchedules.map((schedule) => schedule.itemId));
+  const maintenanceItems = items.filter((item) => (item.maintenanceIntervalDays ?? 0) > 0 || scheduledItemIds.has(item.id));
   const maintenanceItemIds = new Set(maintenanceItems.map((item) => item.id));
   const policyMutation = useMutation({
     mutationFn: () => saveCategoryMaintenancePolicy(policyCategory, Number(policyInterval) || 0),
@@ -75,7 +83,7 @@ export function Maintenance() {
     },
     onError: (err) => showSnackbar(err instanceof Error ? err.message : t('Fehler beim Speichern', 'Failed to save'), 'error'),
   });
-  const [type, setType] = useState<'dguv_v3' | 'generator_service' | 'battery_test' | 'chrono_fps'>('dguv_v3');
+  const [type, setType] = useState<MaintenanceType>('dguv_v3');
   const [result, setResult] = useState<'passed' | 'failed' | 'advisory'>('passed');
   const [nextDueAt, setNextDueAt] = useState('');
   const [certificateNumber, setCertificateNumber] = useState('');
@@ -87,6 +95,7 @@ export function Maintenance() {
       createMaintenanceRecord({
         itemId,
         assetInstanceId: serialized ? assetId : undefined,
+        scheduleId: matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type)?.id,
         type,
         result,
         performedAt: new Date().toISOString(),
@@ -111,8 +120,25 @@ export function Maintenance() {
   const warningDate = new Date();
   warningDate.setDate(warningDate.getDate() + 30);
   const today = dateInputValue(new Date());
-  const attention = maintenanceItems.filter((item) => item.maintenanceStatus === 'in_service'
-    || !item.nextMaintenanceDue || item.nextMaintenanceDue <= dateInputValue(warningDate));
+  const attention = maintenanceItems.filter((item) => (item.maintenanceIntervalDays ?? 0) > 0 && (item.maintenanceStatus === 'in_service'
+    || !item.nextMaintenanceDue || item.nextMaintenanceDue <= dateInputValue(warningDate)));
+  const attentionSchedules = dateSchedules.filter((schedule) => !schedule.nextDueAt || new Date(schedule.nextDueAt) <= warningDate);
+  const attentionCount = attention.length + attentionSchedules.length;
+  const activeSchedule = itemId ? matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type) : undefined;
+
+  function scheduleDue(schedule: Schedule) {
+    const due = new Date();
+    due.setDate(due.getDate() + (Number(schedule.intervalValue) || 0));
+    return dateInputValue(due);
+  }
+
+  function prefillSchedule(schedule: Schedule) {
+    setItemId(schedule.itemId);
+    setAssetId(schedule.assetInstanceId ?? '');
+    setType(schedule.maintenanceType as MaintenanceType);
+    setNextDueAt(scheduleDue(schedule));
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   function prefillInspection(item: Item) {
     setItemId(item.id);
@@ -163,13 +189,15 @@ export function Maintenance() {
         </Stack>
       </Paper>
 
+      <IndividualSchedules items={items} schedules={schedules.data ?? []} canEdit={canPerformMaintenance(user)} onInspect={prefillSchedule} />
+
       {/* Attention / Overdue Section */}
-      {!!attention.length && (
+      {!!attentionCount && (
         <Paper sx={{ p: 2, mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
             <WarningAmberIcon color="warning" />
             <Typography variant="h6">
-              {t('Fällige & überfällige Prüfungen', 'Due & overdue inspections')} ({attention.length})
+              {t('Fällige & überfällige Prüfungen', 'Due & overdue inspections')} ({attentionCount})
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -202,7 +230,7 @@ export function Maintenance() {
                       <Typography variant="caption" color="text.secondary">
                         {item.category ? `${item.category} · ` : ''}
                         {item.expand?.storageLocation?.name || item.storageLocation || t('Kein Lagerort', 'No location')}
-                        {item.nextMaintenanceDue ? ` · ${t('Fällig am', 'Due on')}: ${new Date(item.nextMaintenanceDue).toLocaleDateString()}` : ''}
+                        {item.nextMaintenanceDue ? ` · ${t('Fällig am', 'Due on')}: ${formatDate(item.nextMaintenanceDue)}` : ''}
                       </Typography>
                     </Box>
                     <Button title={translate('Das Prüfformular für diesen Artikel ausfüllen', 'Fill in the inspection form for this item')}
@@ -219,10 +247,35 @@ export function Maintenance() {
                 </CardContent>
               </Card>
             ))}
+            {attentionSchedules.map((schedule) => (
+              <Card key={schedule.id} variant="outlined">
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
+                        <Typography sx={{ fontWeight: 700 }}>{items.find((item) => item.id === schedule.itemId)?.name ?? schedule.itemId}</Typography>
+                        {schedule.assetCode && <Chip size="small" variant="outlined" label={schedule.assetCode} />}
+                        <Chip size="small" icon={scheduleIsOverdue(schedule) ? <ErrorIcon /> : <WarningAmberIcon />}
+                          color={scheduleIsOverdue(schedule) ? 'error' : 'warning'}
+                          label={scheduleIsOverdue(schedule) ? t('Überfällig', 'Overdue') : t('Bald fällig', 'Due soon')} />
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        {maintenanceTypeLabel(schedule.maintenanceType)} · {t('Fällig am', 'Due on')}: {formatDate(schedule.nextDueAt)}
+                      </Typography>
+                    </Box>
+                    <Button title={translate('Das Prüfformular für dieses Gerät ausfüllen', 'Fill in the inspection form for this device')}
+                      size="small" variant="contained" color="primary" endIcon={<ArrowForwardIcon fontSize="small" />}
+                      onClick={() => prefillSchedule(schedule)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {t('Jetzt prüfen', 'Inspect now')}
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
           </Stack>
         </Paper>
       )}
-      {!attention.length && <Alert severity="success" sx={{ mb: 3 }}>{t('Keine Wartung fällig.', 'No maintenance due.')}</Alert>}
+      {!attentionCount && <Alert severity="success" sx={{ mb: 3 }}>{t('Keine Wartung fällig.', 'No maintenance due.')}</Alert>}
 
       {/* Record Inspection Form */}
       <Paper ref={formRef} sx={{ p: 2.5, mb: 3 }}>
@@ -238,7 +291,11 @@ export function Maintenance() {
             onChange={(_, item) => {
               setItemId(item?.id || '');
               setAssetId('');
-              if (item?.maintenanceIntervalDays) {
+              const schedule = item && dateSchedules.find((candidate) => candidate.itemId === item.id);
+              if (schedule) {
+                setType(schedule.maintenanceType as MaintenanceType);
+                setNextDueAt(scheduleDue(schedule));
+              } else if (item?.maintenanceIntervalDays) {
                 const due = new Date();
                 due.setDate(due.getDate() + item.maintenanceIntervalDays);
                 setNextDueAt(dateInputValue(due));
@@ -246,7 +303,11 @@ export function Maintenance() {
             }}
             renderInput={(params) => <TextField {...params} label={t('Artikel auswählen', 'Select item')} required />}
           />
-          {serialized && <TextField select label={t('Gerät', 'Asset')} value={assetId} onChange={(event) => setAssetId(event.target.value)} required>
+          {serialized && <TextField select label={t('Gerät', 'Asset')} value={assetId} onChange={(event) => {
+            setAssetId(event.target.value);
+            const schedule = dateSchedules.find((candidate) => candidate.itemId === itemId && candidate.assetInstanceId === event.target.value);
+            if (schedule) { setType(schedule.maintenanceType as MaintenanceType); setNextDueAt(scheduleDue(schedule)); }
+          }} required>
             {assets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
           </TextField>}
           {canPerformMaintenance(user) && <Button title={translate('Wartungspläne und Checklisten anzeigen', 'Display maintenance schedules and checklists')} component={Link} to="/operations?tab=schedules">{t('Wartungspläne und Checklisten öffnen', 'Open schedules and checklists')}</Button>}
@@ -276,6 +337,10 @@ export function Maintenance() {
             </TextField>
           </Stack>
 
+          {activeSchedule && <Alert severity="info">
+            {t(`Diese Prüfung schreibt den Wartungsplan fort (alle ${activeSchedule.intervalValue} Tage).`, `This inspection advances the maintenance schedule (every ${activeSchedule.intervalValue} days).`)}
+            {activeSchedule.requiredChecklist ? ` ${t('Pflichtprüfliste in den Notizen dokumentieren:', 'Document the required checklist in the notes:')} ${activeSchedule.requiredChecklist}` : ''}
+          </Alert>}
           <Box>
             <TextField
               fullWidth
@@ -384,8 +449,8 @@ export function Maintenance() {
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {t('Geprüft am', 'Inspected on')}: {new Date(record.performedAt).toLocaleDateString()}
-                        {record.nextDueAt ? ` · ${t('Nächste Fälligkeit', 'Next due')}: ${new Date(record.nextDueAt).toLocaleDateString()}` : ''}
+                        {t('Geprüft am', 'Inspected on')}: {formatDate(record.performedAt)}
+                        {record.nextDueAt ? ` · ${t('Nächste Fälligkeit', 'Next due')}: ${formatDate(record.nextDueAt)}` : ''}
                         {record.certificateNumber ? ` · Nr: ${record.certificateNumber}` : ''}
                         {record.operatingHours ? ` · ${record.operatingHours}h` : ''}
                       </Typography>

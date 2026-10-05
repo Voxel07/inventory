@@ -18,7 +18,7 @@ public final class LifecycleDtos {
             @NotNull @DecimalMin("0.01") BigDecimal intervalValue,
             Instant nextDueAt, BigDecimal nextDueValue, BigDecimal warningWindow,
             UUID responsiblePersonId, String requiredChecklist, boolean checkoutBlocking, Boolean active) {}
-    public record ScheduleResponse(UUID id, UUID itemId, UUID assetInstanceId, String maintenanceType,
+    public record ScheduleResponse(UUID id, UUID itemId, UUID assetInstanceId, String assetCode, String maintenanceType,
             String intervalType, BigDecimal intervalValue, Instant nextDueAt, BigDecimal nextDueValue,
             BigDecimal warningWindow, UUID responsiblePersonId, String requiredChecklist,
             boolean checkoutBlocking, boolean active) {}

@@ -1385,7 +1385,7 @@ class InventoryApiTest {
     }
 
     @Test
-    void factionLeaderCanReadCatalogButCannotChangeItemsOrAssemblies() {
+    void factionLeaderCanReadCatalogButCannotChangeSharedItemsOrAssemblies() {
         String itemId = request().body(Map.of("sku", "LEADER-CATALOG-001", "name", "Leader catalog item",
                         "category", "Test", "amount", 12, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
@@ -1406,9 +1406,15 @@ class InventoryApiTest {
         factionLeaderRequest().body(itemInput).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true));
         factionLeaderRequest().body(itemInput).patch("/api/items/" + itemId).then().statusCode(403);
         factionLeaderRequest().delete("/api/items/" + itemId).then().statusCode(403);
-        factionLeaderRequest().body(assemblyInput).post("/api/assemblies").then().statusCode(403);
+        // Like items, members without catalog rights create personal assemblies instead of shared ones.
+        String personal = factionLeaderRequest().body(assemblyInput).post("/api/assemblies").then().statusCode(200)
+                .body("access.privateResource", equalTo(true)).extract().path("id");
         factionLeaderRequest().body(assemblyInput).patch("/api/assemblies/" + assemblyId).then().statusCode(403);
         factionLeaderRequest().delete("/api/assemblies/" + assemblyId).then().statusCode(403);
+        factionLeaderRequest().body(Map.of("name", "Renamed personal assembly", "itemQuantities", Map.of(itemId, 1)))
+                .patch("/api/assemblies/" + personal).then().statusCode(200).body("name", equalTo("Renamed personal assembly"));
+        request().get("/api/assemblies/" + personal).then().statusCode(200).body("access.ownerId", notNullValue());
+        factionLeaderRequest().delete("/api/assemblies/" + personal).then().statusCode(204);
     }
 
     @Test

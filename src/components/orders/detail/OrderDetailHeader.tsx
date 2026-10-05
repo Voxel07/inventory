@@ -1,3 +1,4 @@
+import { formatDate } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useAuth } from '../../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, canAccessProcurement } from '../../../utils/access';
@@ -25,7 +26,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import SaveIcon from '@mui/icons-material/Save';
 import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { FactionOrder, FactionOrderStatus, StorageLocation } from '../../../types';
-import { translate, useAppLanguage, useLocalizedText } from '../../../utils/naming';
+import { translate, useLocalizedText } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
 export interface OrderDetailHeaderProps {
@@ -110,7 +111,6 @@ export function OrderDetailHeader({
   const custody = canPerformCustody(user);
   const planner = canAccessProcurement(user);
   const t = useLocalizedText();
-  const language = useAppLanguage();
 
   function statusLabel(status: FactionOrderStatus) {
     switch (status) {
@@ -140,11 +140,11 @@ export function OrderDetailHeader({
             <Chip color={statusColor(order.status)} label={statusLabel(order.status)} />
           </Stack>
           <Typography color="text.secondary">
-            {new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')} · {orderItemsCount + orderAssembliesCount} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
+            {formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
           </Typography>
           {order.requestedPickupDate && (
             <Typography sx={{ fontWeight: 700, mt: 0.5 }}>
-              {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+              {t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}
             </Typography>
           )}
           <Typography sx={{ fontWeight: 700, mt: 0.5 }}>{order.orderCode}</Typography>

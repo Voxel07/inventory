@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../utils/dateFormat';
 import { useSourceLocationOptions } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useState } from 'react';
@@ -77,6 +78,6 @@ export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }:
     {history.isLoading && <Typography>{t('Verlauf wird geladen…', 'Loading history…')}</Typography>}
     {assets.error && <Alert severity="error">{assets.error.message}</Alert>}
     {action === 'pickup' && <Alert severity="info">{t('Reservierte Artikel werden jetzt übergeben.', 'The reserved items will now be handed over.')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}
-    {action === 'history' && <Stack spacing={2}>{history.data?.history.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.actorName} · {new Date(entry.timestamp).toLocaleString()}</Typography><Typography>{entry.notes}</Typography></Stack>)}</Stack>}
+    {action === 'history' && <Stack spacing={2}>{history.data?.history.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.actorName} · {formatDateTime(entry.timestamp)}</Typography><Typography>{entry.notes}</Typography></Stack>)}</Stack>}
   </OperationForm>;
 }

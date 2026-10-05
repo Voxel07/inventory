@@ -83,7 +83,7 @@ public class InventoryAccessOrm extends EntityOrm {
     private Set<UUID> deniedRoots(UserAccount actor, Set<UUID> candidates) {
         if (actor.role == DomainEnums.UserRole.hq_admin || candidates != null && candidates.isEmpty()) return Set.of();
         var roots = new HashSet<UUID>();
-        for (String type : List.of("Item", "StorageLocation")) {
+        for (String type : List.of("Item", "StorageLocation", "Assembly")) {
             var query = entityManager.createQuery("select r.id from " + type + " r where r.accessPolicy is not null"
                     + " and not " + visible("r.accessPolicy")
                     + (candidates == null ? "" : " and r.id in :candidates"), UUID.class);
@@ -137,6 +137,8 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select damage_report_id as source, id as target from repair_cases where damage_report_id is not null
                 union all select commitment_id as source, id as target from loan_arrangements where commitment_id is not null
                 union all select item_id as source, assembly_id as target from assembly_items where item_id is not null
+                union all select assembly_id as source, id as target from damage_reports where assembly_id is not null
+                union all select source_assembly_id as source, id as target from faction_order_lines where source_assembly_id is not null
                 union all select id as source, faction_order_id as target from faction_order_lines where id is not null
                 union all select id as source, count_session_id as target from inventory_count_lines where id is not null
                 union all select id as source, transfer_id as target from inventory_transfer_lines where id is not null
@@ -163,6 +165,7 @@ public class InventoryAccessOrm extends EntityOrm {
             protected(root, id) as (
                 select id, id from items where id in (:roots)
                 union select id, id from storage_locations where id in (:roots)
+                union select id, id from assemblies where id in (:roots)
                 union select p.root, e.target from edges e join protected p on e.source = p.id
             ) select root, id from protected
             """;
@@ -181,11 +184,12 @@ public class InventoryAccessOrm extends EntityOrm {
 
     /** Walk only the ancestors of IDs present in a response or command. */
     public Map<UUID, Set<UUID>> privateReferenceOrigins(Set<UUID> references) {
-        if (references.isEmpty()) return Map.of();
+        if (references.isEmpty() || !privateRootsExist()) return Map.of();
         String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), " + """
             roots(id) as not materialized (
                 select id from items where access_policy_id is not null
                 union select id from storage_locations where access_policy_id is not null
+                union select id from assemblies where access_policy_id is not null
             ), ancestors(reference, id) as (
                 select id, id from roots where id in (:references)
                 union select target, source from edges where target in (:references)
@@ -200,6 +204,15 @@ public class InventoryAccessOrm extends EntityOrm {
                     .add(UUID.fromString(row[1].toString()));
         }
         return result;
+    }
+
+    /** Every response is filtered; skip the graph walk while nothing is private. */
+    private boolean privateRootsExist() {
+        return !entityManager.createNativeQuery("""
+                select 1 where exists (select 1 from items where access_policy_id is not null)
+                    or exists (select 1 from storage_locations where access_policy_id is not null)
+                    or exists (select 1 from assemblies where access_policy_id is not null)
+                """).getResultList().isEmpty();
     }
 
     public record ReferenceAccess(Set<UUID> privateIds, Set<UUID> deniedIds) {}
@@ -223,6 +236,7 @@ public class InventoryAccessOrm extends EntityOrm {
                 select p from InventoryAccessPolicy p join fetch p.owner where
                     exists (select i.id from Item i where i.accessPolicy = p and i.id in :roots)
                     or exists (select l.id from StorageLocation l where l.accessPolicy = p and l.id in :roots)
+                    or exists (select a.id from Assembly a where a.accessPolicy = p and a.id in :roots)
                 order by p.id
                 """, InventoryAccessPolicy.class).setParameter("roots", roots).getResultList();
     }

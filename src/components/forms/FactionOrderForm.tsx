@@ -1,3 +1,4 @@
+import { formatDate } from '../../utils/dateFormat';
 import { Button, ToggleButton, IconButton } from '../shared/ActionButtons';
 import { MediaImage } from '../common/MediaImage';
 import { useState } from 'react';
@@ -296,11 +297,11 @@ export function FactionOrderForm({
           <FormControl fullWidth required>
             <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
             <Select label={t('Jährliches Event', 'Yearly event')} value={selectedEvent?.id ?? ''} onChange={(event) => setEventOccurrenceId(event.target.value)}>
-              {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate} {entry.endDate !== entry.startDate ? `– ${entry.endDate}` : ''}</MenuItem>)}
+              {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)} {entry.endDate !== entry.startDate ? `– ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
             </Select>
           </FormControl>
           {!eventOptions.length && <Alert severity="info" action={<Button title={translate('Die Eventübersicht öffnen', 'Open the event overview')} component={RouterLink} to="/events">{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event für diesen Eventtyp an.', 'Create an event for this event type first.')}</Alert>}
-          <TextField fullWidth label={t('Eventzeitraum', 'Event dates')} value={selectedEvent ? `${selectedEvent.startDate} – ${selectedEvent.endDate}` : ''} slotProps={{ input: { readOnly: true } }} />
+          <TextField fullWidth label={t('Eventzeitraum', 'Event dates')} value={selectedEvent ? `${formatDate(selectedEvent.startDate)} – ${formatDate(selectedEvent.endDate)}` : ''} slotProps={{ input: { readOnly: true } }} />
           <TextField
             fullWidth
             type="date"
@@ -328,7 +329,7 @@ export function FactionOrderForm({
               {['picked_up', 'returned'].includes(previousOrder.status)
                 ? t('Tatsächlich verwendete Mengen vom', 'Actual quantities used on')
                 : t('Geplante Mengen vom', 'Planned quantities from')}{' '}
-              {new Date(previousOrder.eventDate).toLocaleDateString()}
+              {formatDate(previousOrder.eventDate)}
             </Typography>
           )}
         </Stack>

@@ -1,3 +1,4 @@
+import { formatDate } from '../utils/dateFormat';
 import { Button } from '../components/shared/ActionButtons';
 import { useEventReports } from '../hooks/useEvents';
 import { Dialog } from '../components/shared/ClosableDialog';
@@ -45,11 +46,11 @@ import { ItemsList } from '../components/lists/ItemsList';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canOperateWarehouse } from '../utils/access';
+import { InventorySharing } from '../components/items/InventorySharing';
 import { isOfflineQueuedError } from '../utils/offline';
 
 export function AssemblyDetail() {
     const { user } = useAuth();
-    const canEdit = canEditCatalog(user);
     const canTransact = canOperateWarehouse(user);
 
     const t = useLocalizedText();
@@ -58,6 +59,7 @@ export function AssemblyDetail() {
     const { assemblyId } = useParams<{ assemblyId: string }>();
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
+    const canEdit = assembly?.access?.privateResource ? assembly.access.canEdit : canEditCatalog(user);
     const itemsQuery = useItems();
     const items = itemsQuery.data;
     const updateAssembly = useUpdateAssembly();
@@ -328,6 +330,8 @@ export function AssemblyDetail() {
                             </Alert>
                         )}
 
+                        <InventorySharing kind="assemblies" id={assembly.id} access={assembly.access} />
+
                         <Box sx={{
                             display: 'grid',
                             gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
@@ -338,7 +342,7 @@ export function AssemblyDetail() {
                                 [t('Komponenten', 'Components'), String(assemblyItems.length), 'text.primary'],
                                 [t('Gesamtwert', 'Total value'), `${totalValue.toFixed(2)} €`, 'text.primary'],
                                 [t('Verfügbar', 'Available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
-                                [t('Erstellt', 'Created'), new Date(assembly.created).toLocaleDateString(), 'text.primary'],
+                                [t('Erstellt', 'Created'), formatDate(assembly.created), 'text.primary'],
                             ].map(([label, value, color]) => (
                                 <Box key={label} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
@@ -391,7 +395,7 @@ export function AssemblyDetail() {
                         {t(`Dies leiht alle Artikel in „${assembly.name}“ mit den angegebenen Mengen aus.`, `This checks out every item in “${assembly.name}” in the specified quantities.`)}
                     </DialogContentText>
                     <TextField select fullWidth required label={t('Eventtermin', 'Event occurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
-                        {checkoutEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}</MenuItem>)}
+                        {checkoutEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                     </TextField>
                     <TextField
                         select

@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../utils/dateFormat';
 import { AccordionSummary } from '../shared/ActionButtons';
 import { Accordion, AccordionDetails, Alert, Card, CardContent, Stack, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -14,8 +15,8 @@ export function CustodyEvidence({ orderId }: { orderId: string }) {
   const returns = useOperationList(`reconciliations:${orderId}`, (page, size) => apiRequest<Reconciliation[]>(`/api/orders/${orderId}/reconciliations`, { query: { page, size } }));
   return <Accordion><AccordionSummary title={translate('Übergabe- und Rückgabenachweise ein- oder ausblenden', 'Show or hide handover and return evidence')} expandIcon={<ExpandMoreIcon />}>{t('Übergabe- und Rückgabenachweise', 'Handover and return evidence')}</AccordionSummary><AccordionDetails><Stack spacing={2}>
     {(handovers.error || returns.error) && <Alert severity="error">{(handovers.error || returns.error)?.message}</Alert>}
-    {handovers.data?.map((entry) => <Card key={entry.id}><CardContent><Typography variant="subtitle1">{entry.handoverCode} · {entry.type} · {new Date(entry.occurredAt).toLocaleString()}</Typography><Typography>{entry.collectorName} · {entry.notes}</Typography>{entry.lines.map((line) => <Typography key={line.id}>{line.itemName} · {line.assetCode} · {line.quantity} · {line.conditionNotes}</Typography>)}</CardContent></Card>)}
-    {returns.data?.map((entry) => <Typography key={entry.id}>{new Date(entry.createdAt).toLocaleString()} · {entry.itemName} {entry.assetCode} · {entry.outcome}: {entry.quantity} · {entry.notes}</Typography>)}
+    {handovers.data?.map((entry) => <Card key={entry.id}><CardContent><Typography variant="subtitle1">{entry.handoverCode} · {entry.type} · {formatDateTime(entry.occurredAt)}</Typography><Typography>{entry.collectorName} · {entry.notes}</Typography>{entry.lines.map((line) => <Typography key={line.id}>{line.itemName} · {line.assetCode} · {line.quantity} · {line.conditionNotes}</Typography>)}</CardContent></Card>)}
+    {returns.data?.map((entry) => <Typography key={entry.id}>{formatDateTime(entry.createdAt)} · {entry.itemName} {entry.assetCode} · {entry.outcome}: {entry.quantity} · {entry.notes}</Typography>)}
     {!handovers.isLoading && !returns.isLoading && !handovers.data?.length && !returns.data?.length && <Typography>{t('Noch keine Übergaben.', 'No handovers recorded yet.')}</Typography>}
   </Stack></AccordionDetails></Accordion>;
 }

@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from '../../utils/dateFormat';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
@@ -35,13 +36,13 @@ export function LoansPanel() {
       </Stack>}
  </>} status={l.status} title={<>{l.item} · {l.provider} · {l.kind === 'rental' ? t('Miete', 'Rental') : t('Leihe', 'Borrowing')}</>}><Typography color="text.secondary">{l.contact}</Typography><Typography>{l.terms}</Typography>
       <Typography>{t('Zugesagt / abgeholt / zurückgegeben', 'Committed / collected / returned')}: {l.quantity} / {l.collected} / {l.returned}</Typography>
-      <Typography>{t('Abholung / verfügbar bis / Rückgabe fällig', 'Collection / available through / return due')}: {l.collectionDate} / {l.availableUntil} / {l.returnDue}</Typography>
+      <Typography>{t('Abholung / verfügbar bis / Rückgabe fällig', 'Collection / available through / return due')}: {formatDate(l.collectionDate)} / {formatDate(l.availableUntil)} / {formatDate(l.returnDue)}</Typography>
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {l.assetCodes.join(', ')}</Typography>}
-      {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{new Date(h.at).toLocaleString()} · {h.actor} · {h.action} · {h.notes}</Typography>)}
+      {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{formatDateTime(h.at)} · {h.actor} · {h.action} · {h.notes}</Typography>)}
     </OperationListEntry>)}
     {loans.hasNextPage && <Button title={t("Weitere Vereinbarungen laden", "Load more arrangements")} disabled={loans.isFetchingNextPage} onClick={() => { void loans.fetchNextPage(); }}>{t("Mehr laden", "Load more")}</Button>}
     {create && <OperationForm title={t('Neue Vereinbarung', 'New arrangement')} onClose={() => setCreate(false)} initial={{ kind: 'borrow', provider: profile.data?.ownerName ?? '' }} fields={[
-      { key: 'commitmentId', label: t('Zusage', 'Commitment'), required: true, options: (profile.data?.commitments ?? []).filter(c => ['active', 'scheduled'].includes(c.status)).map(c => ({ value: c.id, label: `${c.eventName ?? ''} · ${c.quantity} · ${c.availableFrom} – ${c.returnDue}` })) },
+      { key: 'commitmentId', label: t('Zusage', 'Commitment'), required: true, options: (profile.data?.commitments ?? []).filter(c => ['active', 'scheduled'].includes(c.status)).map(c => ({ value: c.id, label: `${c.eventName ?? ''} · ${c.quantity} · ${formatDate(c.availableFrom)} – ${formatDate(c.returnDue)}` })) },
       { key: 'kind', label: t('Art', 'Kind'), required: true, options: [{ value: 'borrow', label: t('Leihe', 'Borrowing') }, { value: 'rental', label: t('Miete', 'Rental') }] },
       { key: 'provider', label: t('Anbieter', 'Provider'), required: true }, { key: 'contact', label: t('Kontakt', 'Contact'), required: true },
       { key: 'providerLocationId', label: t('Lagerort beim Anbieter', 'Provider location'), required: true, options: lookup.locationOptions },

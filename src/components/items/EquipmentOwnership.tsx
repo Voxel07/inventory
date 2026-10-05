@@ -1,3 +1,4 @@
+import { formatDate } from '../../utils/dateFormat';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Button, IconButton } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
@@ -48,9 +49,9 @@ export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: 
         {data.availabilityPolicy === 'commitment_required' && data.commitments.length === 0 && <Typography variant="body2" color="text.secondary">{t('Keine Zusagen erfasst.', 'No commitments recorded.')}</Typography>}
         {data.commitments.map(c => <Card key={c.id} variant="outlined"><CardContent><Stack spacing={1}>
           <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('Datumsgebundene Zusage ohne Eventbindung', 'Date range without event restriction')} · {c.quantity} · {statuses[c.status]}</Typography>
-          <Typography>{c.availableFrom} – {c.availableUntil}</Typography>
+          <Typography>{formatDate(c.availableFrom)} – {formatDate(c.availableUntil)}</Typography>
           <Typography variant="body2">{t('Abholung', 'Pickup')}: {c.pickupDetails}</Typography>
-          {c.returnDue && <Typography variant="body2">{t('Rückgabe fällig', 'Return due')}: {c.returnDue} · {c.returnDetails}</Typography>}
+          {c.returnDue && <Typography variant="body2">{t('Rückgabe fällig', 'Return due')}: {formatDate(c.returnDue)} · {c.returnDetails}</Typography>}
           {c.assetIds.length > 0 && <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{t('Geräte', 'Assets')}: {c.assetIds.map(id => assets.find(a => a.id === id)?.assetCode ?? id).join(', ')}</Typography>}
           <Typography variant="body2">{c.recordedBy}: {c.notes}</Typography>
           {c.cancellationReason && <Typography variant="body2">{t('Stornogrund', 'Cancellation reason')}: {c.cancellationReason}</Typography>}
@@ -68,7 +69,7 @@ export function EquipmentOwnership({ item, canEdit, embedded = false }: { item: 
       <Alert severity="info">{t('Änderungen an Eigentum und Verfügbarkeit erfordern freigegebene Reservierungen, geklärte Ausleihen und stornierte laufende Zusagen. Kontaktänderungen bleiben möglich.', 'Ownership and availability changes require released reservations, reconciled custody and cancelled current commitments. Contact details can still be updated.')}</Alert>
     </OperationForm>}
     {offering && <OperationForm title={t('Zusage erfassen', 'Record commitment')} onClose={() => setOffering(null)} initial={{ quantity: 1 }} fields={[
-      { key: 'eventId', label: t('Event (optional)', 'Event (optional)'), options: events.map(e => ({ value: e.id, label: `${e.name} · ${e.startDate} – ${e.endDate}` })) },
+      { key: 'eventId', label: t('Event (optional)', 'Event (optional)'), options: events.map(e => ({ value: e.id, label: `${e.name} · ${formatDate(e.startDate)} – ${formatDate(e.endDate)}` })) },
       { key: 'quantity', label: t('Zugesagte Menge', 'Committed quantity'), type: 'number', min: 1, required: true },
       ...readyAssets.map((a): Field => ({ key: `asset:${a.id}`, label: a.assetCode, type: 'checkbox' })),
       { key: 'availableFrom', label: t('Abholung möglich ab', 'Pickup available from'), type: 'date', required: true },

@@ -35,17 +35,17 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
 import { getProcurementDeficits, type ProcurementDeficit } from '../services/procurementService';
-import { ProcurementOrders } from '../components/procurement/ProcurementOrders';
+import { PurchaseDraft } from '../components/operations/PurchasingOperations';
 import { PlanningDetails } from '../components/procurement/PlanningDetails';
 import { useEventReports } from '../hooks/useEvents';
 import { EVENT_TYPES } from '../types';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
+import { formatDate } from '../utils/dateFormat';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
 
 export function Procurement() {
   const t = useLocalizedText();
-  const language = useAppLanguage();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -119,7 +119,7 @@ export function Procurement() {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const selectedEvent = events.find((e) => e.id === eventId);
     const scopeLabel = selectedEvent
-      ? `${selectedEvent.name || selectedEvent.eventType} (${new Date(selectedEvent.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')})`
+      ? `${selectedEvent.name || selectedEvent.eventType} (${formatDate(selectedEvent.eventDate)})`
       : t('Alle geplanten Events', 'All planned events');
 
     let y = 18;
@@ -131,7 +131,7 @@ export function Procurement() {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `${t('Umfang', 'Scope')}: ${scopeLabel} · ${t('Stand', 'Date')}: ${new Date().toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}`,
+      `${t('Umfang', 'Scope')}: ${scopeLabel} · ${t('Stand', 'Date')}: ${formatDate(new Date())}`,
       14,
       y
     );
@@ -285,7 +285,7 @@ export function Procurement() {
             const occurrences = events.filter((event) => event.eventType === type);
             return occurrences.length ? [
               <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,
-              ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {event.startDate}{event.endDate !== event.startDate ? ` – ${event.endDate}` : ''}</MenuItem>),
+              ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}{event.endDate !== event.startDate ? ` – ${formatDate(event.endDate)}` : ''}</MenuItem>),
             ] : [];
           })}
         </Select>
@@ -478,7 +478,7 @@ export function Procurement() {
         ))}
       </Stack>
       {!isPending && <PlanningDetails rows={deficits} eventId={eventId} />}
-      <ProcurementOrders selected={orderItem} eventId={eventId} onClose={() => setOrderItem(null)} />
+      {orderItem && <PurchaseDraft key={orderItem.itemId} selected={orderItem} eventId={eventId} onClose={() => setOrderItem(null)} />}
     </Box>
   );
 }

@@ -1,3 +1,4 @@
+import { formatDate } from '../utils/dateFormat';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
@@ -28,7 +29,7 @@ import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { EVENT_TYPES, FACTIONS_BY_EVENT, type EventType, type FactionOrder, type FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { translate, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { allowedFactionKeys, canAccessFaction, canManageInventory } from '../utils/access';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
@@ -57,7 +58,6 @@ function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning'
 
 export function FactionOrders() {
   const t = useLocalizedText();
-  const language = useAppLanguage();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -161,14 +161,14 @@ export function FactionOrders() {
 
   function orderEntry(order: FactionOrder, history = false): OrderListEntry {
     const totals = progress(order);
-    const date = new Date(order.eventDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US');
+    const date = formatDate(order.eventDate);
     return {
       id: order.id,
       title: history ? `${order.faction} · ${order.orderCode}` : order.orderCode,
       subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}`,
       details: <>
         {order.requestedPickupDate && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-          {t('Gewünschte Abholung', 'Requested pickup')}: {new Date(order.requestedPickupDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')}
+          {t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}
         </Typography>}
         <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>
           {t('Abholort', 'Pickup location')}: {pickupLabel(order)}
@@ -211,7 +211,7 @@ export function FactionOrders() {
           <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
           <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => { setSelectedEventId(event.target.value); setActivePage(1); setHistoryPage(1); }}>
             <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
-            {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ''}</MenuItem>)}
+            {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
           </Select>
         </FormControl>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>

@@ -1,7 +1,8 @@
+import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
-import { translate, useAppLanguage, useLocalizedText } from '../../../utils/naming';
+import { translate, useLocalizedText } from '../../../utils/naming';
 import { factionOrderAssemblyBaseline, factionOrderItemBaseline, findPreviousFactionOrder } from '../../../utils/factionOrderHistory';
 
 interface OrderTraceabilityProps {
@@ -18,8 +19,6 @@ function relationName(value: { name?: string; username?: string; email?: string 
 
 export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
   const t = useLocalizedText();
-  const language = useAppLanguage();
-  const locale = language === 'de' ? 'de-DE' : 'en-US';
   const previousOrder = findPreviousFactionOrder(allOrders, {
     eventType: order.eventType,
     faction: order.faction,
@@ -113,7 +112,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
           <Paper key={label} variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">{label}</Typography>
             <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', overflowWrap: 'anywhere' }}>{actor}</Typography>
-            <Typography variant="caption">{timestamp ? new Date(timestamp).toLocaleString(locale) : '—'}</Typography>
+            <Typography variant="caption">{timestamp ? formatDateTime(timestamp) : '—'}</Typography>
           </Paper>
         ))}
       </Box>
@@ -122,7 +121,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Änderungen zur vorherigen Liste', 'Changes from the previous list')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {t('Vergleichsbasis', 'Comparison baseline')}: {previousOrder.orderCode} · {new Date(previousOrder.eventDate).toLocaleDateString(locale)}
+            {t('Vergleichsbasis', 'Comparison baseline')}: {previousOrder.orderCode} · {formatDate(previousOrder.eventDate)}
           </Typography>
           {comparison.length ? (
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -142,7 +141,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
                 <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: index === 0 ? 'primary.main' : 'text.disabled', mt: 0.75, flexShrink: 0 }} />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700 }}>{labels[entry.action]}</Typography>
-                  <Typography variant="body2" color="text.secondary">{entry.userName} · {new Date(entry.timestamp).toLocaleString(locale)}</Typography>
+                  <Typography variant="body2" color="text.secondary">{entry.userName} · {formatDateTime(entry.timestamp)}</Typography>
                   {entry.note && <Typography variant="body2">{entry.note}</Typography>}
                   {deltaChips(entry)}
                 </Box>

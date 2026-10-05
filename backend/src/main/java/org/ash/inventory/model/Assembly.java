@@ -2,6 +2,9 @@ package org.ash.inventory.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -12,6 +15,9 @@ import java.util.List;
 @Entity
 @Table(name = "assemblies")
 public class Assembly extends BaseEntity {
+    /** A non-null policy makes the assembly private, like items. */
+    @OneToOne(fetch = FetchType.LAZY) @JoinColumn(name = "access_policy_id", unique = true)
+    public InventoryAccessPolicy accessPolicy;
     @Column(nullable = false) public String name;
     public String description;
     public String hint;

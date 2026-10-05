@@ -30,6 +30,7 @@ import { DamageReportForm } from '../components/forms/DamageReportForm';
 import { useUIStore } from '../store/uiStore';
 import type { DamageReportFormData } from '../types';
 import { formatStatus } from '../utils/formatters';
+import { formatDateTime } from '../utils/dateFormat';
 import { translate, useLocalizedText } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 import { useAuth } from '../hooks/useAuth';
@@ -147,7 +148,7 @@ export function AssetDetail() {
                         <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('Aktueller Ort', 'Current location')} value={asset.currentLocationName || '—'} />
                         <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('Aktueller Entleiher', 'Current custodian')} value={asset.currentCustodianName || '—'} />
                         <InfoRow label={t('Notizen', 'Notes')} value={asset.notes || '—'} />
-                        <InfoRow label={t('Registriert', 'Registered')} value={new Date(asset.createdAt).toLocaleString()} />
+                        <InfoRow label={t('Registriert', 'Registered')} value={formatDateTime(asset.createdAt)} />
                     </Stack>
                 </Paper>
 
@@ -163,7 +164,7 @@ export function AssetDetail() {
                             {activity.map((entry) => (
                                 <Box key={entry.id} sx={{ position: 'relative', pl: 3, pb: 2.5, borderLeft: 2, borderColor: 'divider', '&::before': { content: '""', position: 'absolute', left: -6, top: 4, width: 10, height: 10, borderRadius: '50%', bgcolor: entry.color } }}>
                                     <Typography sx={{ fontWeight: 700 }}>{entry.title}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{new Date(entry.timestamp).toLocaleString()}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{formatDateTime(entry.timestamp)}</Typography>
                                     {entry.detail && <Typography variant="body2" sx={{ mt: 0.5 }}>{entry.detail}</Typography>}
                                 </Box>
                             ))}

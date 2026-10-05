@@ -33,6 +33,7 @@ import {
 import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import type { ReturnSubmission, ReturnSubmissionStatus } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { formatDateTime } from '../utils/dateFormat';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -64,7 +65,7 @@ export function ReturnedItemsPage() {
     { field: 'quantity', headerName: t('Menge', 'Quantity'), type: 'number', width: 90 },
     { field: 'returnedForUserName', headerName: t('Für', 'For'), minWidth: 140, flex: 0.8, valueGetter: (_, row) => person(row) },
     { field: 'expectedReturnLocationName', headerName: t('Rückgabeort', 'Return location'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
-    { field: 'created', headerName: t('Gemeldet', 'Submitted'), width: 170, valueFormatter: (value: string) => new Date(value).toLocaleString() },
+    { field: 'created', headerName: t('Gemeldet', 'Submitted'), width: 170, valueFormatter: (value: string) => formatDateTime(value) },
     { field: 'status', headerName: t('Status', 'Status'), width: 160, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
     { field: 'actions', headerName: '', sortable: false, filterable: false, width: 120,
       renderCell: ({ row }) => <Button variant={row.status === 'pending' ? 'contained' : 'outlined'} size="small" aria-haspopup="dialog"
@@ -97,7 +98,7 @@ export function ReturnedItemsPage() {
             {t('Für', 'For')} {person(row)} · {row.expectedReturnLocationName || t('kein Rückgabeort', 'no return location')}
           </Typography>
           <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
-            {new Date(row.created).toLocaleString()}{row.assetCode ? ' · ' : ''}{row.assetCode && <span className="mono">{row.assetCode}</span>}
+            {formatDateTime(row.created)}{row.assetCode ? ' · ' : ''}{row.assetCode && <span className="mono">{row.assetCode}</span>}
           </Typography>
         </ButtonBase>
       </Box>)}
@@ -159,7 +160,7 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
           <Fact label={t('Zurückgegeben für', 'Returned for')}>{submission.returnedForUserName || submission.returnedForUserId}</Fact>
           <Fact label={t('Gemeldet von', 'Submitted by')}>{submission.submittedByName || '—'}</Fact>
           <Fact label={t('Rückgabeort', 'Return location')}>{submission.expectedReturnLocationName || '—'}</Fact>
-          <Fact label={t('Gemeldet am', 'Submitted')}>{new Date(submission.created).toLocaleString()}</Fact>
+          <Fact label={t('Gemeldet am', 'Submitted')}>{formatDateTime(submission.created)}</Fact>
           {submission.assetCode && <Fact label={t('Gerät', 'Asset')}><span className="mono">{submission.assetCode}</span></Fact>}
         </FactList>
         {submission.notes && <Box>
