@@ -168,7 +168,7 @@ public class MediaService {
         return attachToRecord(reference, maintenanceId, "maintenance");
     }
 
-    public StoredDocument attachToVendorDocument(String reference, UUID documentId, String originalFilename) {
+    public StoredDocument inspectVendorDocument(String reference) {
         String source = mediaReference(reference);
         permissions.requireStaged(source);
         if (!STAGED_UPLOAD.matcher(source).matches()) {
@@ -183,6 +183,12 @@ public class MediaService {
         } catch (IOException | NoSuchAlgorithmException exception) {
             throw new ApiException(500, "Could not inspect vendor document");
         }
+        return new StoredDocument(source, content.contentType(), content.contentLength(), checksum);
+    }
+
+    public StoredDocument attachToVendorDocument(StoredDocument inspected, UUID documentId, String originalFilename) {
+        String source = inspected.key();
+        permissions.requireStaged(source);
         String safeName = (originalFilename == null ? "document" : originalFilename)
                 .replaceAll("[^a-zA-Z0-9._-]", "_");
         String destination = "vendor-documents/" + documentId + "/" + safeName;
@@ -195,7 +201,7 @@ public class MediaService {
                 catch (RuntimeException exception) { LOG.warn("Could not clean up vendor document object", exception); }
             }
         });
-        return new StoredDocument(destination, content.contentType(), content.contentLength(), checksum);
+        return new StoredDocument(destination, inspected.contentType(), inspected.contentLength(), inspected.checksum());
     }
 
     public void deleteStaged(String reference) {

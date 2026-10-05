@@ -91,7 +91,7 @@ class StorageQueryRegressionTest {
         statistics().clear();
 
         var facts = access.referenceAccess(ids, reader);
-        assertEquals(3, statistics().getPrepareStatementCount(), "One provenance query and two permission queries, regardless of policy count");
+        assertEquals(5, statistics().getPrepareStatementCount(), "Root existence, provenance and three resource permission queries, regardless of policy count");
         assertEquals(ids, facts.privateIds());
         assertEquals(0, statistics().getEntityLoadCount(), "Privacy classification must not hydrate policies or inventory");
         assertEquals(30, facts.deniedIds().size());
@@ -100,7 +100,7 @@ class StorageQueryRegressionTest {
         assertTrue(access.referenceAccess(ids, owner).deniedIds().isEmpty());
         statistics().clear();
         assertTrue(access.deniedReferences(reader).containsAll(facts.deniedIds()));
-        assertEquals(3, statistics().getPrepareStatementCount(), "Pre-pagination exclusions also use a constant query budget");
+        assertEquals(4, statistics().getPrepareStatementCount(), "Three resource permission queries and one forward traversal");
 
         em.remove(em.find(InventoryAccessGrant.class, personalGrant.id));
         em.find(InventoryAccessGroup.class, group.id).members.clear();
@@ -108,7 +108,7 @@ class StorageQueryRegressionTest {
         em.clear();
         statistics().clear();
         assertEquals(ids, access.referenceAccess(ids, reader).deniedIds());
-        assertEquals(3, statistics().getPrepareStatementCount(), "Revocation must be checked afresh without per-policy reads");
+        assertEquals(5, statistics().getPrepareStatementCount(), "Revocation must be checked afresh without per-policy reads");
     }
 
     @Test @TestTransaction
@@ -155,8 +155,14 @@ class StorageQueryRegressionTest {
 
     private ActorService actor() {
         String subject = "actor-regression-" + UUID.randomUUID();
+        var claims = Map.<String, Object>of("iss", "https://identity.example.test", "sub", subject);
+        var token = new org.eclipse.microprofile.jwt.JsonWebToken() {
+            public String getName() { return subject; }
+            public Set<String> getClaimNames() { return claims.keySet(); }
+            @SuppressWarnings("unchecked") public <T> T getClaim(String name) { return (T) claims.get(name); }
+        };
         var identity = QuarkusSecurityIdentity.builder()
-                .setPrincipal(() -> subject)
+                .setPrincipal(token)
                 .addRole("inventory_read_only").build();
         // The authenticated identity path does not need an HTTP request.
         return new ActorService(identity, null, users, false);

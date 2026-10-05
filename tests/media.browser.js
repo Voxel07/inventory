@@ -44,7 +44,7 @@ try {
   const png = await makeBlob(canvas, 'image/png');
   const converted = await prepareItemImage(new File([png], 'private-original-name.png', { type: 'image/png' }));
   const bitmap = await createImageBitmap(converted);
-  check(bitmap.width === 2048 && bitmap.height === 512, 'Large PNG is resized proportionally to 2048 pixels');
+  check(bitmap.width === 512 && bitmap.height === 128, 'Large PNG is resized proportionally to 512 pixels');
   bitmap.close();
   check(converted.type === 'image/webp' && converted.name === 'image.webp', 'Original filename is removed before upload');
   check(converted.size < png.size, `WebP saves space on generated fixture (${png.size} → ${converted.size} bytes)`);
@@ -135,16 +135,16 @@ try {
       throw new Error('Unexpected network request during media test');
     };
     URL.revokeObjectURL = (url) => { revoked.push(url); originalRevoke.call(URL, url); };
-    setDevelopmentSession('media-test-token', { id: 'test', name: 'Image Test', role: 'admin' });
+    setDevelopmentSession('media-test-token', { id: 'test', name: 'Image Test', role: 'hq_admin' });
     root.render(React.createElement(MediaImage, { src: apiFileUrl('items/version/item-id.webp'), alt: 'Converted inventory image', sx: { width: 256 } }));
     await waitUntil(() => document.querySelector('#image img')?.naturalWidth > 0);
     check(authorization === 'Bearer media-test-token', 'Image requests include the bearer token');
-    check(document.querySelector('#image img').naturalWidth === 2048, 'Authenticated media renders as an actual image');
+    check(document.querySelector('#image img').naturalWidth === 512, 'Authenticated media renders as an actual image');
     const before = requests;
     rejected = false;
     try { await fetchMedia('https://external.example/image.webp'); } catch { rejected = true; }
     check(rejected && requests === before, 'Credentials are never sent to external image URLs');
-    clearAuth();
+    await clearAuth();
     await waitUntil(() => !document.querySelector('#image img'));
     check(revoked.length > 0, 'Logout removes the image and releases its blob URL');
   } finally {

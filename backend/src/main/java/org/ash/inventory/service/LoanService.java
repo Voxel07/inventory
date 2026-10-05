@@ -40,7 +40,7 @@ public class LoanService {
         var location = orm.find(StorageLocation.class, input.providerLocationId());
         if (location == null || !location.active) throw ApiException.badRequest("Active provider location required");
         var l = new LoanArrangement(); l.commitment = c; l.providerLocation = location; l.kind = input.kind(); l.provider = input.provider().trim(); l.contact = input.contact().trim(); l.terms = input.terms().trim();
-        orm.persist(l); history(l, "agreed", l.terms); c.item.equipmentRevision++; return view(l);
+        orm.persist(l); history(l, "agreed", l.terms); c.item.equipmentRevision++; orm.flush(); return view(l);
     }
     @Transactional @org.ash.inventory.helper.security.PrivateInventoryCommand
     public View move(UUID id, Movement input, boolean returning) {

@@ -288,6 +288,11 @@ class InventoryApiTest {
                 .post("/api/maintenance").then().statusCode(200)
                 .body("nextDueAt", equalTo("2030-01-31T00:00:00Z"));
 
+        request().queryParam("itemId", itemId).get("/api/maintenance").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].type", equalTo("generator_service"))
+                .body("[0].result", equalTo("passed"))
+                .body("[0].nextDueAt", equalTo("2030-01-31T00:00:00Z"));
+
         request().body(Map.of(
                         "itemId", itemId, "assetInstanceId", assetId,
                         "transactionType", "checkout", "quantityChanged", 1,
@@ -908,7 +913,7 @@ class InventoryApiTest {
     @Test
     void failedImageAttachmentKeepsTheUploadForRetry() {
         String staged = given().header("X-Actor-Id", "test-admin")
-                .multiPart("file", "image.webp", new byte[]{1, 2, 3}, "image/webp")
+                .multiPart("file", "image.png", new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0}, "image/png")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         String missing = "2026-00000000-0000-0000-0000-000000000000-image.webp";
         request().body(Map.of("name", "Failed images", "category", "Equipment", "value", 0,

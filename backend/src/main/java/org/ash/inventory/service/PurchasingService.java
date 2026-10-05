@@ -294,8 +294,15 @@ public class PurchasingService {
         value.uploadedAt = Instant.now();
         value.retentionUntil = input.retentionUntil();
         value.notes = input.notes();
+        var inspected = media.inspectVendorDocument(input.stagedObjectKey());
+        // Queries in attachment authorization can flush pending inserts.
+        // Persist a complete row before attaching the upload to its generated ID.
+        value.objectStorageKey = inspected.key();
+        value.mimeType = inspected.contentType();
+        value.fileSize = inspected.contentLength();
+        value.checksum = inspected.checksum();
         orm.persist(value);
-        var stored = media.attachToVendorDocument(input.stagedObjectKey(), value.id, value.originalFilename);
+        var stored = media.attachToVendorDocument(inspected, value.id, value.originalFilename);
         value.objectStorageKey = stored.key();
         value.mimeType = stored.contentType();
         value.fileSize = stored.contentLength();

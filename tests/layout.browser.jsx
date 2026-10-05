@@ -17,6 +17,7 @@ const items = componentNames.map((name, index) => ({
   name,
   category: 'Infrastruktur',
   amount: [40, 20, 20, 20][index],
+  stock: { onHand: [40, 20, 20, 20][index], available: [40, 20, 20, 20][index], totalOwned: [40, 20, 20, 20][index], checkedOut: 0, inTransit: 0, damaged: 0, reserved: 0, ordered: 0 },
   minStock: 2,
   value: 12.5,
   storageLocation: 'Palettenlager',
@@ -46,18 +47,6 @@ const rows = items.map((item, index) => ({
   event: 'LS · UCRF · LS26-UCRF-01',
   factionOrderId: 'order-1',
 }));
-const transactions = items.map((item) => ({
-  id: `stock-${item.id}`,
-  itemId: item.id,
-  transactionType: 'added',
-  quantityChanged: item.amount,
-  userId: 'person-1',
-  reason: 'Initial stock',
-  notes: '',
-  timestamp: now,
-  created: now,
-  updated: now,
-}));
 const theme = createTheme({
   components: {
     MuiTableCell: {
@@ -79,8 +68,6 @@ createRoot(document.getElementById('root')).render(
         <AssembliesList
           assemblies={[assembly]}
           items={items}
-          transactions={transactions}
-          damageReports={[]}
           isLoading={false}
           onEdit={() => {}}
           onDelete={() => {}}

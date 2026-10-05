@@ -51,7 +51,7 @@ async function allItems(): Promise<Item[]> {
   }
 }
 let items = await allItems();
-const reference = { eventTypes: ['ASD', 'DE', 'LS', 'M24', 'TNO'], factions: [] };
+const reference = { eventTypes: await api('/event-types'), factions: await api('/factions') };
 const parsed = parseItemsFromCsv(rows, locations, items, reference);
 for (const row of parsed) {
   if (row.isExisting) continue;
@@ -102,11 +102,21 @@ assert.equal(resumed.status, 'counting');
 assert.equal(resumed.lines.find((entry: { id: string }) => entry.id === first.id).countedQuantity, first.expectedQuantity);
 assert.ok(resumed.lines.some((entry: { countedQuantity: number | null }) => entry.countedQuantity == null));
 await api(`/inventory-counts/${count.id}/submit`, { lines: count.lines.slice(1).map((line: { id: string; expectedQuantity: number }) => ({ lineId: line.id, quantity: line.expectedQuantity })) }, 200);
+await api(`/inventory-counts/${count.id}/approve`, {}, 200);
+await api(`/inventory-counts/${count.id}/post`, {}, 200);
 const after = await tool('get_item_details', { itemId: target.id });
 assert.equal(after.stock.onHand, received.stock.onHand);
 const lotItem = items.find(item => item.name === 'Sample receipt with new lot') ?? await tool('create_item', { input: { name: 'Sample receipt with new lot', category: 'Sample regressions', trackingMode: 'lot_tracked', amount: 0, storageLocation: target.storageLocation } });
 const lotOrderNumber = `PO-SAMPLE-LOT-${crypto.randomUUID().slice(0, 8)}`;
 const lotOrder = await api('/purchase-orders', { orderNumber: lotOrderNumber, vendorId: vendor.id, lines: [{ itemId: lotItem.id, orderedQuantity: 4, unitPriceCents: 100 }] });
 await api(`/purchase-orders/${lotOrder.id}/transitions`, { status: 'ordered' }, 200);
-console.log(JSON.stringify({ mcpTools: discovery.tools.length, sampleItems: parsed.length, sampleAssemblies: parsedAssemblies.length, receiptAdded: 5, transferred: 2, countResumed: true, itemId: target.id, locationId: target.storageLocation }, null, 2));
-console.log(`Browser new-lot receipt: ${lotOrderNumber}`);
+const lotBefore = await tool('get_item_details', { itemId: lotItem.id });
+const lot = await api('/inventory-lots', { itemId: lotItem.id, lotNumber: `SAMPLE-${crypto.randomUUID().slice(0, 8)}`, status: 'available' });
+const lotReceipt = { purchaseOrderId: lotOrder.id, receivingLocationId: target.storageLocation, idempotencyKey: crypto.randomUUID(),
+  lines: [{ purchaseOrderLineId: lotOrder.lines[0].id, lotId: lot.id, acceptedQuantity: 4, damagedQuantity: 0, rejectedQuantity: 0 }] };
+await api('/goods-receipts', lotReceipt);
+await api('/goods-receipts', lotReceipt);
+const lotAfter = await tool('get_item_details', { itemId: lotItem.id });
+assert.equal(lotAfter.stock.onHand, lotBefore.stock.onHand + 4);
+console.log(JSON.stringify({ mcpTools: discovery.tools.length, sampleItems: parsed.length, sampleAssemblies: parsedAssemblies.length, receiptAdded: 5,
+  lotReceiptAdded: 4, transferred: 2, countResumedAndPosted: true, itemId: target.id, locationId: target.storageLocation }, null, 2));

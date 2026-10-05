@@ -342,5 +342,6 @@ Rules:
 
 - Backend tests run on PostgreSQL (Dev Services or `TEST_DB_URL`). The baseline test runs Flyway plus Hibernate validation.
 - Frontend: `bun run typecheck` (TS 7), `bun test`, `bun run lint` (ESLint on TS 6).
-- **Pending acceptance:** browser/mobile UI, S3 integration, load and lock contention, token revocation and multi-tab logout against the real Authentik, and the PostgreSQL `@QuarkusTest` suites for the October 2026 fixes.
+- **Verified locally (5 October 2026):** 163 backend tests on PostgreSQL 18, 52 Bun tests, all 157 REST handlers (156 response-filter dispatches plus a real HTTP SSE test), MCP tools/resources/prompts, 21 browser media assertions, frontend/backend builds, typecheck and lint. The live REST/MCP sample smoke also passed with 340 item rows and 50 assembly rows. See [test inventory and requirement mapping](../tests/README.md) and [review findings](TEST_REVIEW_2026-10-05.md).
+- **Pending acceptance:** integrated browser/mobile and physical camera workflows, real S3, load and lock contention, token revocation and multi-tab logout against the real Authentik, cross-browser CSV/PDF rendering and clustered outbox delivery.
 - Builds and tests run only on explicit request (see `agent.md`).

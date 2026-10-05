@@ -80,7 +80,7 @@ public class InventoryAccessOrm extends EntityOrm {
     public Set<UUID> deniedReferences(UserAccount actor) {
         return relatedReferences(deniedRoots(actor, null));
     }
-    /** Two set-based authorization reads, independent of the number of policies. */
+    /** One set-based authorization read per resource kind, independent of the number of policies. */
     private Set<UUID> deniedRoots(UserAccount actor, Set<UUID> candidates) {
         if (actor.role == DomainEnums.UserRole.hq_admin || candidates != null && candidates.isEmpty()) return Set.of();
         var roots = new HashSet<UUID>();

@@ -378,7 +378,6 @@ public class CatalogService {
         getVisibleAssemblyComponents(assembly);
         actorService.requireAssemblyEdit(assembly);
         apply(assembly, input);
-        orm.deleteAssemblyItems(assembly);
         replaceComponents(assembly, input);
         applyAssemblyImage(assembly, input);
         catalogChanged("assemblies", assembly.id);
@@ -421,15 +420,21 @@ public class CatalogService {
     }
 
     private void replaceComponents(Assembly assembly, ApiModels.AssemblyInput input) {
+        var existing = orm.assemblyItems(assembly).stream().collect(
+                java.util.stream.Collectors.toMap(component -> component.item.id, component -> component));
         for (var entry : input.itemQuantities().entrySet()) {
             if (entry.getValue() == null || entry.getValue() < 1) throw ApiException.badRequest("Assembly component quantities must be positive");
-            var component = new AssemblyItem();
-            component.assembly = assembly;
-            component.item = orm.require(Item.class, entry.getKey(), "Item");
-            component.id = new AssemblyItemId(assembly.id, component.item.id);
+            var component = existing.remove(entry.getKey());
+            if (component == null) {
+                component = new AssemblyItem();
+                component.assembly = assembly;
+                component.item = orm.require(Item.class, entry.getKey(), "Item");
+                component.id = new AssemblyItemId(assembly.id, component.item.id);
+                orm.persist(component);
+            }
             component.quantity = entry.getValue();
-            orm.persist(component);
         }
+        existing.values().forEach(orm::remove);
     }
 
     @Transactional
@@ -683,6 +688,7 @@ public class CatalogService {
         catalogChanged("items", item.id);
         events.record("asset.updated", "asset", asset.id, actorService.current().id, null,
                 Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
+        orm.flush();
         return asset;
     }
 
@@ -751,6 +757,7 @@ public class CatalogService {
         asset.currentLocation = destination;
         events.record("asset.relocated", "asset", asset.id, actor.id, transaction.idempotencyKey,
                 Map.of("itemId", item.id.toString(), "locationId", destination.id.toString()));
+        orm.flush();
         return asset;
     }
 
@@ -776,6 +783,7 @@ public class CatalogService {
         }
         events.record("asset.condition_changed", "asset", asset.id, actor.id, null,
                 Map.of("itemId", item.id.toString(), "from", previous.name(), "to", input.conditionStatus().name()));
+        orm.flush();
         return asset;
     }
 

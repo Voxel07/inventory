@@ -84,6 +84,9 @@ const offline = await import('../src/services/offlineQueue');
 const resources = await import('../src/services/resourceFactory');
 const queries = await import('../src/services/sessionQueryClient');
 const privacy = await import('../src/services/privateInventoryCache');
+const pagination = await import('../src/services/apiPagination');
+const codes = await import('../src/utils/codeResolver');
+const reports = await import('../src/services/reportService');
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
@@ -324,4 +327,95 @@ test('a queue write committed during account switching keeps its original owner 
   expect(await offline.getOfflineHistory()).toMatchObject([{ idempotencyKey: 'A-command', ownerId: 'A', status: 'discarded' }]);
   signIn('B');
   expect(await offline.getOfflineHistory()).toEqual([]);
+});
+
+test('pagination preserves filtered-page ordering and stops fetching after an account switch', async () => {
+  signIn('A');
+  const calls: number[] = [];
+  const first = [{ id: 'one' }];
+  const completeness = await import('../src/services/pageCompleteness');
+  completeness.recordFilteredRows(first, 1);
+  const rows = await pagination.loadAllPages(async page => { calls.push(page); return page === 0 ? first : [{ id: 'two' }]; }, 2);
+  expect(rows).toEqual([{ id: 'one' }, { id: 'two' }]);
+  expect(calls).toEqual([0, 1]);
+  await expect(pagination.loadAllPages(async () => { signIn('B'); return first; }, 2)).rejects.toBeInstanceOf(auth.SessionChangedError);
+});
+
+test('QR links resolve exact assets and locations without making a request or changing stock', async () => {
+  let sent = 0;
+  fetchRequest = async () => { sent++; throw new Error('Unexpected scan request'); };
+  expect(await codes.resolveScannedCode('  ')).toEqual({ found: false, code: '' });
+  expect(await codes.resolveScannedCode('https://inventory.example/items/radio/assets/unit')).toMatchObject({ path: '/items/radio/assets/unit' });
+  expect(await codes.resolveScannedCode('https://inventory.example/locations/shelf')).toMatchObject({ type: 'location', path: '/locations/shelf' });
+  expect(await codes.resolveScannedCode('/orders/faction/order')).toMatchObject({ type: 'order', path: '/orders/faction/order' });
+  expect(await codes.resolveScannedCode('/assemblies/kit')).toMatchObject({ type: 'assembly', path: '/assemblies/kit' });
+  expect(sent).toBe(0);
+});
+
+test('a retired label terminates scanning without falling back to item or order searches', async () => {
+  signIn('A');
+  const paths: string[] = [];
+  fetchRequest = async input => {
+    paths.push(new URL(String(input)).pathname);
+    return Response.json({ error: 'This label has been retired' }, { status: 410 });
+  };
+  await expect(codes.resolveScannedCode('OLD-LABEL')).rejects.toMatchObject({ status: 410 });
+  expect(paths).toEqual(['/api/inventory-codes/resolve/OLD-LABEL']);
+});
+
+test('SKU and order fallback searches are targeted, exact and read-only', async () => {
+  signIn('A');
+  const calls: URL[] = [];
+  fetchRequest = async (input, options) => {
+    expect(options?.method ?? 'GET').toBe('GET');
+    const url = new URL(String(input)); calls.push(url);
+    if (url.pathname === '/api/items') return Response.json([{ id: 'wrong', sku: 'SKU-PARTIAL', name: 'Wrong match' }, { id: 'item', sku: 'SKU', name: 'Exact item' }]);
+    return Response.json({ error: 'Missing' }, { status: 404 });
+  };
+  expect(await codes.resolveScannedCode('sku')).toMatchObject({ found: true, path: '/items/item?transaction=1' });
+  expect(calls.find(url => url.pathname === '/api/items')?.searchParams.get('search')).toBe('sku');
+  calls.length = 0;
+  fetchRequest = async input => {
+    const url = new URL(String(input)); calls.push(url);
+    if (url.pathname === '/api/items') return Response.json([]);
+    if (url.pathname === '/api/orders') return Response.json([{ id: 'order', orderCode: 'DE26-KGG-01' }]);
+    return Response.json({ error: 'Missing' }, { status: 404 });
+  };
+  expect(await codes.resolveScannedCode('DE26-KGG-01')).toMatchObject({ found: true, path: '/orders/faction/order' });
+  expect(calls.find(url => url.pathname === '/api/orders')?.searchParams.get('orderCode')).toBe('DE26-KGG-01');
+});
+
+test('report exports retain the initial generation and filters across the export request', async () => {
+  signIn('A');
+  const calls: URL[] = [];
+  fetchRequest = async input => {
+    const url = new URL(String(input)); calls.push(url);
+    return Response.json({ generatedAt: 'snapshot', total: 2, rows: url.pathname.endsWith('/export') ? [{ id: 'one' }, { id: 'two' }] : [{ id: 'one' }] });
+  };
+  expect(await reports.reportApi.exportRows('movements', { itemId: 'item', from: '2026-01-01' }, 'Generation changed'))
+    .toEqual({ generation: 'snapshot', rows: [{ id: 'one' }, { id: 'two' }] });
+  expect(calls[1].searchParams.get('generation')).toBe('snapshot');
+  expect(calls[1].searchParams.get('itemId')).toBe('item');
+  expect(calls[1].searchParams.get('from')).toBe('2026-01-01');
+  fetchRequest = async input => Response.json({ generatedAt: String(input).includes('/export') ? 'new-snapshot' : 'snapshot', total: 2, rows: [{ id: 'one' }] });
+  await expect(reports.reportApi.exportRows('movements', {}, 'Generation changed')).rejects.toThrow('Generation changed');
+});
+
+test('offline replay archives each outcome without requeueing applied or conflicting commands', async () => {
+  signIn('A');
+  for (const key of ['applied', 'conflict', 'rejected']) await offline.enqueueOfflineAction({ idempotencyKey: key, type: 'transaction', payload: { itemId: 'public-item' }, localTimestamp: key });
+  let sent = 0;
+  fetchRequest = async (_input, options) => {
+    sent++;
+    const body = JSON.parse(String(options?.body));
+    expect(body.actions).toHaveLength(3);
+    return Response.json({ results: ['applied', 'conflict', 'rejected'].map(status => ({ idempotencyKey: status, status, error: status === 'applied' ? undefined : 'Review current stock' })) });
+  };
+  connectivity.onLine = true;
+  await offline.flushOfflineQueue();
+  expect(await offline.getOfflineActions()).toEqual([]);
+  expect((await offline.getOfflineHistory()).map(row => row.status).sort()).toEqual(['applied', 'conflict', 'rejected']);
+  expect((await offline.getSyncFailures()).map(row => row.status).sort()).toEqual(['conflict', 'rejected']);
+  await offline.flushOfflineQueue();
+  expect(sent).toBe(1);
 });

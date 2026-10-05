@@ -8,7 +8,7 @@ const { AssemblyForm } = await import('/src/components/forms/AssemblyForm.tsx');
 const { ItemForm } = await import('/src/components/forms/ItemForm.tsx');
 const { updateAssembly } = await import('/src/services/assemblyService.ts');
 const { updateItem } = await import('/src/services/inventoryService.ts');
-setDevelopmentSession('editor-test-token', { id: 'editor-test', name: 'Editor Test', role: 'admin' });
+setDevelopmentSession('editor-test-token', { id: 'editor-test', name: 'Editor Test', role: 'hq_admin' });
 
 const canvas = document.createElement('canvas');
 canvas.width = 1600;

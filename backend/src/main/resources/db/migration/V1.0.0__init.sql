@@ -2,7 +2,8 @@
 -- Edit this baseline and the entity definitions directly; no upgrade/backfill steps.
 
 -- Trigram indexes serve the catalog's substring search (lower(name|sku|category) like '%term%').
-create extension if not exists pg_trgm;
+-- Keep extension operators in the same schema across Flyway test profiles.
+create extension if not exists pg_trgm with schema public;
 
 create table app_users (
     created_at timestamp(6) with time zone not null,
@@ -1028,9 +1029,9 @@ create index ix_handover_lines_item on custody_handover_lines (item_id);
 -- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
 create index ix_asset_code_lower on asset_instances (lower(asset_code));
 create index ix_inventory_code_lower on inventory_codes (lower(code));
-create index ix_items_name_trgm on items using gin (lower(name) gin_trgm_ops);
-create index ix_items_sku_trgm on items using gin (lower(sku) gin_trgm_ops);
-create index ix_items_category_trgm on items using gin (lower(category) gin_trgm_ops);
+create index ix_items_name_trgm on items using gin (lower(name) public.gin_trgm_ops);
+create index ix_items_sku_trgm on items using gin (lower(sku) public.gin_trgm_ops);
+create index ix_items_category_trgm on items using gin (lower(category) public.gin_trgm_ops);
 alter table general_orders add constraint general_orders_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_general_order_id_fkey foreign key (general_order_id) references general_orders(id);

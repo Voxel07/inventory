@@ -179,8 +179,9 @@ public class CatalogOrm extends EntityOrm {
     }
 
     public void deleteAssemblyItems(Assembly assembly) {
-        entityManager.createQuery("delete from AssemblyItem item where item.assembly = :assembly")
-                .setParameter("assembly", assembly).executeUpdate();
+        // Component rows may already be managed by the visibility check.
+        // Bulk deletion leaves those rows pointing at the subsequently removed assembly.
+        assemblyItems(assembly).forEach(this::remove);
     }
 
     public void clearActiveLocationAssignments(StorageLocation location) {

@@ -376,6 +376,39 @@ class InventoryMcpTest {
                 .post("/mcp").then().statusCode(200).body("result.tools.size()", greaterThan(10));
     }
 
+    @Test
+    void remainingReadToolsResourcesAndPromptsKeepTransportAndPrivacyContracts() throws Exception {
+        String actorId = "mcp-summary-" + UUID.randomUUID();
+        String session = session(actorId, "read_only");
+        var events = call(session, actorId, "read_only", "list_events", Map.of());
+        assertFalse(events.path("result").path("isError").asBoolean(), events.toString());
+        assertTrue(events.toString().contains(event.id.toString()));
+        assertFalse(events.toString().contains(privateItem.id.toString()));
+        var locations = call(session, actorId, "read_only", "list_storage_locations", Map.of());
+        assertFalse(locations.path("result").path("isError").asBoolean(), locations.toString());
+        assertTrue(locations.toString().contains(location.id.toString()));
+        var summary = call(session, actorId, "read_only", "get_operational_summary", Map.of());
+        assertFalse(summary.path("result").path("isError").asBoolean(), summary.toString());
+        var publicMetrics = mapper.readTree(summary.path("result").path("content").get(0).path("text").asText());
+        String ownerSession = session(owner.externalSubject, "faction_leader");
+        var ownerSummary = call(ownerSession, owner.externalSubject, "faction_leader", "get_operational_summary", Map.of());
+        assertFalse(ownerSummary.path("result").path("isError").asBoolean(), ownerSummary.toString());
+        var ownerMetrics = mapper.readTree(ownerSummary.path("result").path("content").get(0).path("text").asText());
+        assertEquals(publicMetrics.path("totalActiveItems").asLong() + 2, ownerMetrics.path("totalActiveItems").asLong());
+        assertEquals(publicMetrics.path("totalSerializedAssets").asLong() + 2, ownerMetrics.path("totalSerializedAssets").asLong());
+        for (String uri : List.of("inventory://system/overview", "inventory://locations", "inventory://categories")) {
+            var resource = rpc(session, actorId, "read_only", "resources/read", Map.of("uri", uri));
+            assertTrue(resource.path("result").path("contents").size() > 0, resource.toString());
+            assertFalse(resource.toString().contains(privateItem.category));
+        }
+        for (var prompt : List.of(Map.of("name", "event_readiness_audit", "arguments", Map.of("eventName", "Review event", "focusArea", "Comms")),
+                Map.of("name", "procurement_restock_plan", "arguments", Map.of("supplierPreference", "Review supplier")))) {
+            var result = rpc(session, actorId, "read_only", "prompts/get", prompt);
+            assertTrue(result.path("result").path("messages").size() > 0, result.toString());
+            assertTrue(result.toString().contains("Review"));
+        }
+    }
+
     private String session(String actorId, String role) {
         String session = given().header("Accept", "application/json, text/event-stream")
                 .header("X-Actor-Id", actorId).header("X-Actor-Role", role).contentType(ContentType.JSON)
