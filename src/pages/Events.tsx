@@ -212,6 +212,11 @@ export function Events() {
         {canEdit && selectedEvent?.status === 'planned' && <Button title={translate('Die geplanten Artikelmengen bearbeiten', 'Edit the planned item quantities')} variant="outlined" onClick={() => setPlanOpen(true)}>{t('Plan bearbeiten', 'Edit plan')}</Button>}
       </Stack>
 
+      {selectedEvent && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
+        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${selectedEvent.id}`)}>{t('Teilnehmer & Essensmarken', 'Attendees & food stamps')}</Button>
+        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${selectedEvent.id}`)}>{t('Eventzeitplan', 'Event timeline')}</Button>
+      </Stack>}
+
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Paper sx={{ p: 2, flex: 1 }}>
           <Typography variant="overline" color="text.secondary">{t('Letztes abgeschlossenes Event', 'Last completed event')}</Typography>

@@ -106,6 +106,8 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
 | PRC-02 | Purchase orders: supplier, dates, buyer, quantity, unit price, reference; partial goods receipts; vendor documents restricted to authorized purchasing roles | Implemented | `PurchasingService`, `PurchasingOperations` |
 | PRC-03 | Unreceived purchase quantity is shown separately as ordered supply and excluded from owned/available until received | Implemented | `PurchasingService`, item stock DTO |
+| EVT-01 | Per-event attendee list with names, event roles, optional arrival/departure times, four main-meal stamps plus one breakfast stamp per person, total/remaining issuance and notes | Implemented | `EventAttendees`, `EventLogisticsService`, `event_attendees`; staff reads and planner/admin writes |
+| EVT-02 | Event timeline with in-game and setup/preparation tabs, chronological day groups, start/optional end, owner/team, area, progress and notes; preparation can extend beyond event dates | Implemented | `EventTimeline`, `EventLogisticsService`, `event_timeline_entries`; event-local times, online writes and SSE invalidation |
 
 **Ownership, members and operations**
 

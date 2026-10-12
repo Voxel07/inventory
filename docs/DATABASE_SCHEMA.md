@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **55 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **57 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway initializes the same editable baseline in dev/test/prod; Hibernate validates. Current data is disposable. Schema/entity changes update this baseline directly; do not add incremental migrations or compatibility readers. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -96,7 +96,7 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 
 Location services enforce no cycles and same-warehouse parentage. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
-**Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them.
+**Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them, and their attendee and timeline rows cascade on deletion.
 
 ### Stock and warehouse operations (9 tables)
 
@@ -114,11 +114,13 @@ Location services enforce no cycles and same-warehouse parentage. Item tracking 
 
 The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses PostgreSQL's ordinary nullable-key semantics; it does **not** by itself enforce a single null-lot row. Operational uniqueness and locking must also be assessed in the services/ORM, rather than inferred from this constraint.
 
-### Events, orders and custody (10 tables)
+### Events, orders and custody (12 tables)
 
 | Table | Key data and relationships |
 |---|---|
 | `event_occurrences` | UUID; event type/name/status, start/end dates, planned/used JSON quantities |
+| `event_attendees` | UUID; event FK with deletion cascade; name, event role, optional local arrival/departure times, food-stamp-issued flag and notes; fixed 4 main + 1 breakfast entitlement projected by the API |
+| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
 | `factions` | UUID; unique `(event_type, slug)`, name and active flag |
 | `faction_orders` | UUID; event/faction/creator FKs; unique order code; status, pickup location/coordinates/date, collector and lifecycle actors |
 | `faction_order_lines` | UUID; order/item/source assembly FKs; requested, allocated, reserved, prepared, handed-over and reconciliation quantities |
@@ -181,7 +183,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
 | `source_revisions` | Composite `(name, shard)` PK; revision/epoch; 16 shards per tracked source table |
 
-All 55 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
+All 57 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
 
 ## 5. Stock authority and invariants
 

@@ -41,6 +41,8 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/orders` | Faction tab by default; `?tab=general` selects general orders | Signed-in app shell; list/action scopes inside workflow |
 | `/orders/faction/:orderId` | Faction order detail and lifecycle | Signed-in app shell; faction policy in services |
 | `/events`, `/events/:reportId` | Event planning and occurrence detail | InventoryManagerGuard |
+| `/events/attendees?eventId=…` | Attendee names, event roles, arrival/departure and food-stamp issuance | InventoryManagerGuard; HQ admin / event planner edits |
+| `/events/timeline?eventId=…&tab=preparation` | Day-grouped schedule; in-game default tab and setup/preparation tab | InventoryManagerGuard; HQ admin / event planner edits |
 | `/checked-out` | Outstanding custody | InventoryManagerGuard |
 | `/returns` | Pending return acceptance and history | InventoryManagerGuard |
 | `/transactions` | Movement history | InventoryManagerGuard |
@@ -63,9 +65,13 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 5. Open QR labels or the camera/manual scanner. Resolve the exact item, asset, location or order; show details or prefill a form.
 6. A separate user action submits checkout/check-in. Scanning itself makes no stock change. Direct checkout requires event and faction, and serialized checkout requires an exact asset.
 
-Items, locations and assemblies are retired, never deleted: they leave the catalog and cannot be ordered, while codes and history stay. An event occurrence can be deleted only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides go with it.
+Items, locations and assemblies are retired, never deleted: they leave the catalog and cannot be ordered, while codes and history stay. An event occurrence can be deleted only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides, attendees and timeline entries go with it.
 
 ## 4. Event planning and purchasing
+
+From Event planning or an event detail, open **Attendees & food stamps** or **Event timeline** for the selected occurrence. Both pages also appear in navigation and offer a dated event selector. Attendees have a free-text event role, optional arrival/departure times, notes and a stamp-issued flag. Each person receives four main-meal stamps and one breakfast stamp; totals and remaining issuance always use the full attendee list, independently of search.
+
+The timeline defaults to **In game**; **Setup & preparation** covers construction, preparation and teardown, including dates outside the event itself. Add/edit entries with start, optional end, responsible person/team, location/area, status and description. Entries appear chronologically, grouped by day. Times on both pages are wall-clock times at the event. Reads are staff-only; writes require HQ admin or event planner, are online-only and refresh other sessions through `event_logistics.changed`.
 
 1. A planner maintains event occurrences, factions and demand; compares demand with usable supply and expected receipts.
 2. The planner records reasoned overrides where needed and prepares supplier quantities.

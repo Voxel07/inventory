@@ -26,6 +26,8 @@ import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
+import PeopleOutlineIcon from '@mui/icons-material/PeopleOutlined';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
@@ -70,6 +72,8 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
             { label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> },
             ...(manager ? [
                 { label: text('Eventplanung', 'Event planning'), path: '/events', icon: <EventOutlinedIcon /> },
+                { label: text('Eventteilnehmer', 'Event attendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
+                { label: text('Eventzeitplan', 'Event timeline'), path: '/events/timeline', icon: <TimelineIcon /> },
                 { label: text('Ausgegeben', 'Checked out'), path: '/checked-out', icon: <OutputIcon /> },
                 { label: text('Rückgaben prüfen', 'Review returns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
             ] : []),
@@ -91,6 +95,7 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
 }
 
 function isActivePath(pathname: string, path: string) {
+    if (path === '/events' && (pathname === '/events/attendees' || pathname === '/events/timeline')) return false;
     return path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`);
 }
 

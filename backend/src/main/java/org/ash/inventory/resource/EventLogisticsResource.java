@@ -1,0 +1,64 @@
+package org.ash.inventory.resource;
+
+import jakarta.validation.Valid;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import org.ash.inventory.resource.dto.EventLogisticsDtos.*;
+import org.ash.inventory.service.EventLogisticsService;
+import java.util.List;
+import java.util.UUID;
+
+@Path("/api")
+@Consumes(MediaType.APPLICATION_JSON)
+@Produces(MediaType.APPLICATION_JSON)
+public class EventLogisticsResource {
+    private final EventLogisticsService service;
+
+    public EventLogisticsResource(EventLogisticsService service) { this.service = service; }
+
+    @GET @Path("/events/{eventId}/attendees")
+    public List<AttendeeResponse> attendees(@PathParam("eventId") UUID eventId) { return service.attendees(eventId); }
+
+    @POST @Path("/events/{eventId}/attendees")
+    public AttendeeResponse createAttendee(@PathParam("eventId") UUID eventId, @Valid AttendeeInput input) {
+        return service.saveAttendee(eventId, null, input);
+    }
+
+    @PUT @Path("/events/{eventId}/attendees/{id}")
+    public AttendeeResponse updateAttendee(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @Valid AttendeeInput input) {
+        return service.saveAttendee(eventId, id, input);
+    }
+
+    @DELETE @Path("/events/{eventId}/attendees/{id}")
+    public Response deleteAttendee(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id) {
+        service.deleteAttendee(eventId, id);
+        return Response.noContent().build();
+    }
+
+    @GET @Path("/events/{eventId}/timeline")
+    public List<TimelineResponse> timeline(@PathParam("eventId") UUID eventId) { return service.timeline(eventId); }
+
+    @POST @Path("/events/{eventId}/timeline")
+    public TimelineResponse createTimeline(@PathParam("eventId") UUID eventId, @Valid TimelineInput input) {
+        return service.saveTimeline(eventId, null, input);
+    }
+
+    @PUT @Path("/events/{eventId}/timeline/{id}")
+    public TimelineResponse updateTimeline(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @Valid TimelineInput input) {
+        return service.saveTimeline(eventId, id, input);
+    }
+
+    @DELETE @Path("/events/{eventId}/timeline/{id}")
+    public Response deleteTimeline(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id) {
+        service.deleteTimeline(eventId, id);
+        return Response.noContent().build();
+    }
+}
