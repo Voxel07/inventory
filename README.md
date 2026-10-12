@@ -6,7 +6,7 @@ Responsive inventory and custody management for event logistics. The repository 
 
 F01–F23 are present: catalog, event planning/results, purchasing/receiving, stock movement/counting, orders/custody, maintenance, offline recovery, reports, ownership/commitments, member self-service, reminders, scanning and borrowing/rental. Runtime and desktop/mobile acceptance remain pending. Earlier F19 build/test results apply to that revision only.
 
-See the [repository review and refactoring plan](docs/REPOSITORY_REVIEW.md) for feature ownership, operational semantics, source-confirmed defects, consolidation status and remaining acceptance work.
+Start with the [architecture overview](docs/ARCHITECTURE.md) for product requirements, technical requirements, app flow, styling and data storage. The [implementation plan and progress](docs/IMPLEMENTATION_PLAN.md) records source-confirmed gaps, target refactors and pending acceptance.
 
 ## Development
 

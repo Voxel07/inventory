@@ -2,7 +2,7 @@
 
 The Quarkus backend exposes 21 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
 
-The 1 October 2026 implementation replaces the direct MCP database writers and readers identified as R01/R02 in the [repository review](REPOSITORY_REVIEW.md). `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
+Reviewed 12 October 2026. The current implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
 
 ## Authentication and authorization
 
@@ -20,12 +20,13 @@ This follows the extension's [HTTP security guidance](https://docs.quarkiverse.i
 
 | Capability | Required access |
 |---|---|
-| Item and assembly create/update/delete | HQ administrator or warehouse crew, using `ActorService.requireManager()` |
+| Shared item and assembly create/update/delete | HQ administrator or warehouse crew; private resource creation/editing follows owner/editor rights through canonical services |
 | Event create/update/delete | HQ administrator or event planner, using `ActorService.requirePlanner()` |
-| Item, stock, asset, category and operational reads | Authenticated actor; active item visibility follows manager/global/event/person/group rules |
+| Item, stock, asset, category and operational reads | Authenticated actor; active item visibility combines current catalog scope and private owner/HQ/grantee policies; other staff do not implicitly bypass a private policy |
 | Assembly reads | Every component must be active and visible; otherwise the assembly is omitted or returns not found |
 | Event reads | Authenticated actor; item IDs, names and all per-item quantity maps are filtered to visible active items |
-| Locations, static overview and prompts | Authenticated actor; locations and event metadata are shared catalog information |
+| Locations | Authenticated actor; canonical location policy scopes/redacts private location data |
+| Static overview and prompts | Authenticated actor; static capability/template content does not grant access to private inventory |
 
 Actor identity and role are resolved for each invocation. Authenticated OIDC identity takes precedence over development headers. With explicitly enabled development authentication, REST and MCP use the same `X-Actor-Id`, `X-Actor-Name`, `X-Actor-Role` and optional `X-Actor-Factions` (`EVENT:slug,…`) headers; direct CDI calls use the existing development default. Callers without an inventory role get 403. Role checks run in the services, so MCP tools and REST share them. `ActorService` reads the shared Vert.x request rather than a JAX-RS-only header context.
 
@@ -104,7 +105,7 @@ Low-stock and maintenance/summary datasets use batch stock/policy facts, includi
 | Resource | Content |
 |---|---|
 | `inventory://system/overview` | Static system capabilities, after actor authentication |
-| `inventory://locations` | Active shared location DTOs as JSON |
+| `inventory://locations` | Active location DTOs as JSON, scoped by canonical access policy |
 | `inventory://categories` | Distinct categories of active items visible to the caller |
 
 | Prompt | Arguments |
@@ -118,4 +119,4 @@ Prompt templates authenticate the actor and contain no implicit write authorizat
 
 The existing `InventoryMcpTest` was updated for the shared payloads and targeted regression cases: role changes on the same session, person/group and private item/asset/position/assembly/category/event reads, actual actor/outbox evidence, serialized and unlocated stock, purchase-linked deletion, prepared/partially released reservations, contributor holds, validation rollback and schedule holds. `InventoryMcpAuthenticationTest` enables the production-equivalent MCP path policy with development authentication disabled and covers anonymous root/subpath requests and spoofed actor headers.
 
-Only static verification was performed for this change: Java source parsing, local extension API inspection, contract/call-site checks, MCP persistence-boundary checks and whitespace/document-link checks. Per [agent.md](../agent.md), no compilation, builds or test suites were run. The regression cases are authored, not passing evidence. Production OIDC token/audience validation, expired-token denial, SSE authorization, connected SSE/ETag refresh and measured SQL counts remain runtime acceptance work.
+The 1 October change originally reported static verification only: Java source parsing, local extension API inspection, contract/call-site checks, MCP persistence-boundary checks and whitespace/document-link checks. Per [agent.md](../agent.md), no compilation, builds or test suites were run. That statement describes the original change, not a current test result. The former architecture later reported a 5 October test run; [tests/README.md](../tests/README.md) retains its inventory. No tests were rerun on 12 October; historical claims and open acceptance are distinguished in [Implementation Plan](IMPLEMENTATION_PLAN.md). Production OIDC token/audience validation, expired-token denial, SSE authorization, connected SSE/ETag refresh and measured SQL counts remain runtime acceptance work.

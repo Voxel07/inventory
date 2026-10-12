@@ -1,0 +1,154 @@
+# App Flow
+
+Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
+
+This document owns navigation, user journeys and workflow states. Feature requirements are in [Product Requirements](PRODUCT_REQUIREMENTS.md), UI presentation in [Design Brief](DESIGN_BRIEF.md), and transport/security details in [Technical Requirements](TECHNICAL_REQUIREMENTS.md). Screen availability is described from source; integrated browser acceptance is still pending.
+
+## 1. Entry and navigation
+
+```mermaid
+flowchart TD
+    Start[Open PWA] --> Session{Session restored?}
+    Session -->|No| Login[Login screen]
+    Login --> OIDC[Authentik sign-in and callback]
+    OIDC --> Home[Overview]
+    Session -->|Yes| Home
+    Home --> Personal[My equipment, custody and requests]
+    Home --> Inbox[Action inbox]
+    Home --> Catalog[Items, assemblies and locations]
+    Home --> Orders[Orders]
+    Home -->|Staff rights| Team[Team overview]
+    Team --> Ops[Warehouse tasks]
+    Team --> Planning[Events and procurement]
+```
+
+There is no standalone `/login` route: unauthenticated App content renders `LoginPage`. Initial sign-in needs connectivity. A stored account session allows cached offline use; online API access still needs a valid token. Signed-in users land on `/`, initially the personal overview. Staff can select team scope using `/?scope=team`.
+
+The desktop shell uses grouped drawer navigation. Mobile uses Home, Inventory (when available), Orders, Tasks and More. Tasks opens the inbox dialog; More opens the drawer. The header provides global context, session controls and sync status. Logout clears the active session/cache context and coordinates other tabs.
+
+## 2. Route inventory
+
+Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/AccessGuard.tsx), [access helpers](../src/utils/access.ts), [navigation](../src/components/shared/Navigation.tsx).
+
+| Route | Screen / purpose | Current route-level access |
+|---|---|---|
+| `/` | Overview, personal equipment/custody/tasks; optional team scope | Any signed-in user; team toggle requires staff |
+| `/global-dashboard` | Redirect to `/?scope=team` | Redirect; destination restricts team scope |
+| `/items` | Item catalog, search, filters and editor entry points | Catalog guard: any signed-in user |
+| `/items/:itemId` | Item details, stock, media, assets, ownership and sharing | Catalog guard; backend resource policy |
+| `/items/:itemId/assets/:assetId` | Exact serialized asset detail | Catalog guard; backend resource policy |
+| `/assemblies`, `/assemblies/:assemblyId` | Kit catalog and composition | Catalog guard; all components must be visible |
+| `/storage-locations` | Hierarchical location catalog and map | Catalog guard; backend policy/redaction |
+| `/locations/:locationId` | Location scan destination | Signed-in app shell; backend resource policy |
+| `/orders` | Faction tab by default; `?tab=general` selects general orders | Signed-in app shell; list/action scopes inside workflow |
+| `/orders/faction/:orderId` | Faction order detail and lifecycle | Signed-in app shell; faction policy in services |
+| `/events`, `/events/:reportId` | Event planning and occurrence detail | InventoryManagerGuard |
+| `/checked-out` | Outstanding custody | InventoryManagerGuard |
+| `/returns` | Pending return acceptance and history | InventoryManagerGuard |
+| `/transactions` | Movement history | InventoryManagerGuard |
+| `/print-qr` | Label/QR printing | InventoryManagerGuard |
+| `/damage-reports`, `/maintenance` | Damage and maintenance work | InventoryManagerGuard; finer action permissions |
+| `/procurement` | Demand/supply deficits and purchasing preparation | HQ admin / event planner |
+| `/operations` | Grouped warehouse, purchasing, maintenance and system tasks | InventoryManagerGuard; permitted tabs only |
+| `/users` | Read-only provider-managed account directory | HQ admin |
+| `/profile` | Own profile | Any signed-in user |
+| Unmatched path | Redirect to `/` | Signed-in app shell |
+
+`InventoryManagerGuard` currently admits HQ admin, warehouse crew, marshal, event planner and maintenance crew. It is broader than permission to run each action. General order detail is composed within the general orders workflow; the router declares no separate general-order detail URL. Inbox, sync and sharing administration are dialogs/panels rather than independent routes.
+
+## 3. Catalog, private inventory and scanning
+
+1. Open Items, Assemblies or Locations and choose search/filter context.
+2. Open details to inspect API stock, exact assets, images, history, keeper, return location or kit components.
+3. Authorized staff maintain shared catalog records. Any recognized user can maintain their own private resources; editors need explicit grants.
+4. Owners/HQ manage view/edit grants and owner transfer. Sharing a location does not reveal its private items. An item can show restricted whereabouts when the location policy is not granted.
+5. Open QR labels or the camera/manual scanner. Resolve the exact item, asset, location or order; show details or prefill a form.
+6. A separate user action submits checkout/check-in. Scanning itself makes no stock change. Direct checkout requires event and faction, and serialized checkout requires an exact asset.
+
+Current deletion behavior differs by record: items/locations are retired, while assembly deletion removes the record and event deletion is allowed only without linked orders. The broader retirement requirement is unresolved (GAP-01).
+
+## 4. Event planning and purchasing
+
+1. A planner maintains event occurrences, factions and demand; compares demand with usable supply and expected receipts.
+2. The planner records reasoned overrides where needed and prepares supplier quantities.
+3. Purchasing staff create a purchase order with supplier, expected date, line quantities and prices.
+4. Warehouse staff post full or partial goods receipts into a receiving location, including lot/asset information where required.
+5. Receipt posting increases actual stock. Unreceived purchase quantities remain ordered supply and do not become owned or available stock.
+6. Authorized staff attach vendor documents and review the purchase/receipt history.
+
+The procurement screen is narrower than access to purchasing tabs: HQ/planners access procurement, while warehouse crew also work on purchase orders and receiving through Operations.
+
+## 5. Orders, preparation, handover and reconciliation
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft
+    draft --> submitted
+    submitted --> preparing
+    preparing --> ready
+    ready --> picked_up
+    picked_up --> partially_returned
+    partially_returned --> returned
+    picked_up --> returned
+    returned --> closed
+    draft --> cancelled
+    submitted --> cancelled
+    preparing --> cancelled
+    ready --> cancelled
+```
+
+This is the main business lifecycle. Specialized edits, preparation reopening and repeated partial reconciliation remain service-controlled actions; this diagram is not an exhaustive endpoint transition table.
+
+1. A faction leader selects an authorized event/faction and builds an order from items and assemblies. General orders capture purpose and requested quantities for broader needs.
+2. Submission places the order into staff preparation work. Warehouse staff use `/operations?tab=order-preparation` or order details.
+3. Preparation chooses source locations, usable quantities and exact serialized assets. It reserves stock without checking it out. Edits can credit back only that order's reservation.
+4. Mark ready after preparation, record pickup details, and notify the recipient.
+5. At pickup, staff confirm collector/condition/evidence. The command converts reservations into custody and writes checkout/history atomically.
+6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
+7. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times, deltas and previous event-year comparison.
+
+Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
+
+## 6. Member self-service and two-stage returns
+
+```mermaid
+flowchart LR
+    Custody[Personal custody] --> Submission[Submit return with placement details/photo]
+    Submission --> Pending[Pending warehouse check]
+    Pending --> Decision{Warehouse decision}
+    Decision -->|Accept| Checkin[Check-in or order reconciliation]
+    Decision -->|Reject| Rejected[Record rejection and retain custody]
+    Checkin --> Stock[Update stock and custody]
+```
+
+Members reach self-service from the personal overview (`Contributor` is embedded there). They see equipment/custody/keeper assignments, create requests, and submit returns. A placement photo is optional evidence; uploading it requires connectivity. A pending submission remains custody, including `returned_pending_check` for assets. Stock increases only when the warehouse accepts the submission. Rejection records a reason without manufacturing a stock receipt.
+
+The inbox collects recipient-scoped pickup, return, damage and other required actions. Users can act or set reminders. Staff decisions are authorized in the same services as the corresponding operation.
+
+## 7. Warehouse and lifecycle tasks
+
+`/operations?tab=<key>` selects a task; absent/unauthorized selections fall back to the first permitted section.
+
+| Group | Tab keys | Typical workflow |
+|---|---|---|
+| Picking | `order-preparation` | Review submitted orders → prepare → ready |
+| Stock | `transfers`, `counts`, `lots`, `loans` | Dispatch/receive; blind count/recount/approve/post; expiry/quarantine; collect/return loans |
+| Purchasing | `purchases`, `receipts`, `vendors` | Order → receive → attach/review supplier evidence |
+| Maintenance | `repairs`, `schedules` | Triage → repair → verify → release; maintain date/hour/usage schedules |
+| Reporting | `reports` | Choose snapshot → rebuild → inspect freshness/filter → CSV/PDF |
+| System | `system` | Inspect outbox/dead letters/sync audit → authorized retry |
+
+Transfers keep goods in transit until receipt, including partial receipt/discrepancy handling; they are not custody handovers. Material count variance requires approval by a different admin before ledger adjustment. Lot selection follows usable FEFO supply. Maintenance or damage holds block allocation/checkout; repair changes condition, while authorized write-off reduces stock.
+
+Private/external equipment lending starts with owner consent and a commitment window, then a loan/rental agreement, collection evidence, optional extensions and return evidence. Possession, legal ownership, privacy owner and keeper are separate concepts.
+
+## 8. Offline and recovery journey
+
+1. Download organizational catalog data while online. Offline reads can only show data previously cached for this access context; freshness and incomplete lists must remain visible.
+2. While disconnected, supported stock transactions, media-free damage reports and faction-order create/prepare/transition/reconcile commands are saved with a UUID and account owner.
+3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, general orders and other operations need connectivity.
+4. Reconnect under the original account and replay `/api/sync` batches. Each command rechecks rights and current stock.
+5. Applied entries leave the queue and enter history. Rejected/conflicting entries open Sync Issues with preserved evidence.
+6. Correct online using an edited payload, note and new command ID linked to the original; archive keeps history. Do not overwrite the failed command or use last-write-wins.
+
+See [Offline Mode](OFFLINE_MODE.md) for command names and [Implementation Plan](IMPLEMENTATION_PLAN.md) for cold-start, account-switch and field acceptance.

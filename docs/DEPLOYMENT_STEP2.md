@@ -1,8 +1,11 @@
 # Step 2 — Multi-node deployment topology
 
-Build on **Step 1** once the single-node limit is reached. Step 2 adds a second
-application node, health-checked routing, and off-box redundancy for the API,
-so a node failure no longer takes the system offline.
+This proposed topology builds on **Step 1** with a second application node,
+health-checked routing and API redundancy. Both API nodes still depend on the
+shared primary database: losing that database can take the system offline.
+The checked-in Compose network is not a verified multi-host or automatic
+database failover deployment. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md)
+and [acceptance progress](IMPLEMENTATION_PLAN.md).
 
 ```mermaid
 flowchart TD
@@ -107,14 +110,14 @@ Current databases are disposable. An empty production database runs the single
 databases after baseline changes; the old pre-Flyway baselining and incremental
 upgrade procedure is removed. No database reset is performed by this guide.
 
-1. **Streaming replication** — PostgreSQL primary on VPS 1 streams to the replica
+1. **Logical replication** — PostgreSQL primary on VPS 1 publishes table changes to the replica
    on VPS 3 (`wal_level=logical` is already set in the compose files).
-2. **WAL archiving** — `wal-g` / `pgbackrest` pushes WAL to the Storage Box
-   (RPO < 5 minutes).
+2. **WAL archiving (proposed)** — configure `wal-g` / `pgbackrest` to push WAL to the Storage Box.
+   RPO < 5 minutes is an unverified target, not a supplied backup job.
 3. **Daily dumps** — encrypted `pg_dump` stored off-site.
 4. **Garage S3 sync** — nightly sync of the media bucket to the Storage Box.
 
-**Recovery (RTO < 30 min):** bring up a fresh node from the checked-in compose
+**Recovery target (unverified RTO < 30 min):** bring up a fresh node from the checked-in compose
 files, initialize the canonical schema, restore the latest dump/WAL, re-point the Worker.
 
 ## Validation limits

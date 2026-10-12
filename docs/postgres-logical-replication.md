@@ -40,8 +40,8 @@ named volumes and contain no upgrade compatibility paths.
 
 Start `inventory-api` with the production profile against an empty disposable
 primary so Flyway runs the canonical `V1.0.0__init.sql` baseline and Hibernate
-validates it. The development profile uses Hibernate update and is not the
-production schema initialization procedure. Logical replication does not copy
+validates it. Every profile uses this Flyway baseline and Hibernate validation; development
+does not use Hibernate update. Logical replication does not copy
 schema definitions, so copy only the matching schema to the storage database
 before creating the subscription:
 

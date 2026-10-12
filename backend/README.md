@@ -47,16 +47,16 @@ resource -> service -> orm -> model
 
 - `model` contains JPA table/relationship descriptions, defaults, lifecycle callbacks, and simple entity accessors. Models do not query or persist themselves.
 - `orm` is the only persistence boundary. It owns `EntityManager`, JPQL, locking, CRUD operations, and queries that join or coordinate models.
-- `resource` defines the public REST API, DTOs, response mapping, exception mapping, RBAC checks, and rate limiting.
+- `resource` defines the public REST API, DTOs, response mapping, exception mapping and transport rate limiting.
 - `service` owns transactional use cases and business rules. Services use ORM classes rather than accessing Hibernate directly.
-- `helper/security` resolves the authenticated actor and implements the reusable RBAC checks used by resources.
+- `helper/security` resolves the authenticated actor and implements the reusable RBAC checks enforced by business services across REST, MCP and replay.
 - `helper/storage` contains local and S3-compatible media storage infrastructure.
 
-The domain and event contract is documented in [`../docs/DOMAIN_ARCHITECTURE.md`](../docs/DOMAIN_ARCHITECTURE.md). Business services append events to `domain_event_outbox` in the same transaction as aggregate changes. The outbox dispatcher provides at-least-once SSE/Redis delivery, so consumers deduplicate on `eventId`.
+The domain and event contract is documented in [`../docs/TECHNICAL_REQUIREMENTS.md`](../docs/TECHNICAL_REQUIREMENTS.md). Business services append events to `domain_event_outbox` in the same transaction as aggregate changes. The outbox dispatcher provides at-least-once SSE/Redis delivery, so consumers deduplicate on `eventId`.
 
-Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` consumes stock/event projections and transaction-scoped access views prepared in bounded batches. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/REFACTOR_PROGRESS.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
+Focused ORM classes own direct persistence, and `SyncService` owns replay orchestration. `ApiQueryService` assembles response data in batches; `ApiMapper` consumes stock/event projections and transaction-scoped access views prepared in bounded batches. Equipment read facts, event metrics and planning readers retain their domain policies; see the [refactoring progress](../docs/IMPLEMENTATION_PLAN.md) for validation and remaining acceptance work. Category maintenance follows all three layers.
 
-MCP tools/resources/prompts delegate through the transactional `McpInventoryService` and the existing catalog/query/stock owners. Production `/mcp` and `/mcp/*` require OIDC authentication; manager/planner mutations, item/component visibility, real actor attribution and catalog outbox publication use canonical rules. The [MCP guide](../docs/MCP_SUPPORT.md) documents the shared typed inputs and scoped outputs. R01/R02 are implemented in source; the new regression cases have not been run, so production transport and domain acceptance remain open.
+MCP tools/resources/prompts delegate through the transactional `McpInventoryService` and the existing catalog/query/stock owners. Production `/mcp` and `/mcp/*` require OIDC authentication; manager/planner mutations, item/component visibility, real actor attribution and catalog outbox publication use canonical rules. The [MCP guide](../docs/MCP_SUPPORT.md) documents the shared typed inputs and scoped outputs. Shared MCP service delegation is implemented in source; historical regression evidence and pending production transport/domain acceptance are tracked in the implementation plan.
 
 API throttling defaults to 300 requests per caller per 60-second window and can be configured with `API_RATE_LIMIT_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`.
 

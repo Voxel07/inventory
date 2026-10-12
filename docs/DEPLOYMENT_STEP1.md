@@ -1,6 +1,6 @@
 # Step 1 — Single app VPS + S3/backup storage node
 
-This is the **recommended starting deployment**. It keeps the transactional stack
+This guide describes the **intended starting deployment**. Provisioning, replication, backup jobs and restore acceptance remain operator work; see [Implementation Plan](IMPLEMENTATION_PLAN.md). It keeps the transactional stack
 (API + PostgreSQL) on one VPS and moves two things off-box for durability:
 
 1. **Media storage** → Garage S3 on a separate storage VPS.
@@ -98,5 +98,6 @@ storage box on VPS B (or a Hetzner Storage Box), giving point-in-time recovery.
 - Failover is **manual** (restore from replica/backup, re-point DNS).
 - Garage runs as a single node — media is backed up, but not highly available.
 
-Move to [Step 2](DEPLOYMENT_STEP2.md) when you need automatic failover, a second
-app node, or horizontal scaling across multiple event teams.
+Move to [Step 2](DEPLOYMENT_STEP2.md) when planning a second app node,
+health-checked API routing or horizontal scaling. Its API redundancy does not
+provide automatic database failover.
