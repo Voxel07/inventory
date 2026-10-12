@@ -1,0 +1,77 @@
+package org.ash.inventory.resource.dto;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import org.ash.inventory.model.EventAttendee;
+import org.ash.inventory.model.EventPerson;
+import org.ash.inventory.model.EventTimelineEntry;
+import org.ash.inventory.model.Faction;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/** Times are wall-clock times at the event, with no browser timezone conversion. */
+public final class EventLogisticsDtos {
+    private EventLogisticsDtos() {}
+
+    public static final int MAIN_MEAL_STAMPS = 4;
+    public static final int BREAKFAST_STAMPS = 1;
+
+    /** Faction roles require one of the event type's factions; only event crew carries an assignment. */
+    public record RoleInput(
+            @NotNull @Pattern(regexp = "faction_leader|faction_deputy|faction_hq_crew|as_held|event_crew") String role,
+            UUID factionId, @Size(max = 255) String assignment) {}
+
+    /**
+     * Without {@code personId} a new person named {@code personName} is created. With it, the person is
+     * renamed and (un)linked in place, which applies to every event they attend.
+     */
+    public record AttendeeInput(UUID personId, @NotBlank @Size(max = 255) String personName, UUID personUserId,
+            LocalDateTime arrivesAt, LocalDateTime leavesAt, boolean foodStampsIssued, @Size(max = 2000) String notes,
+            @NotNull @Size(min = 1, max = 20) List<@NotNull @Valid RoleInput> roles) {}
+
+    public record PersonSummary(UUID id, String name, UUID userId, String userName) {
+        public static PersonSummary from(EventPerson person) {
+            return new PersonSummary(person.id, person.name,
+                    person.user == null ? null : person.user.id, person.user == null ? null : person.user.name);
+        }
+    }
+
+    public record PersonResponse(UUID id, String name, UUID userId, String userName, long attendances) {}
+
+    public record AccountOption(UUID id, String name, UUID linkedPersonId) {}
+
+    public record RoleResponse(String role, UUID factionId, String factionName, String assignment) {}
+
+    public record AttendeeResponse(UUID id, UUID eventId, PersonSummary person, List<RoleResponse> roles,
+            LocalDateTime arrivesAt, LocalDateTime leavesAt, int mainMealStamps, int breakfastStamps,
+            boolean foodStampsIssued, String notes) {
+        public static AttendeeResponse from(EventAttendee attendee, Map<UUID, Faction> factions) {
+            var roles = attendee.roles.stream().map(role -> new RoleResponse(role.role, role.factionId,
+                    role.factionId == null || !factions.containsKey(role.factionId) ? null : factions.get(role.factionId).name,
+                    role.assignment)).toList();
+            return new AttendeeResponse(attendee.id, attendee.event.id, PersonSummary.from(attendee.person), roles,
+                    attendee.arrivesAt, attendee.leavesAt, MAIN_MEAL_STAMPS, BREAKFAST_STAMPS,
+                    attendee.foodStampsIssued, attendee.notes);
+        }
+    }
+
+    public record TimelineInput(@NotNull @Pattern(regexp = "in_game|preparation") String category,
+            @NotBlank @Size(max = 255) String title, @NotNull LocalDateTime startsAt, LocalDateTime endsAt,
+            @Size(max = 255) String owner, @Size(max = 255) String location,
+            @NotNull @Pattern(regexp = "planned|in_progress|completed") String status,
+            @Size(max = 2000) String description) {}
+
+    public record TimelineResponse(UUID id, UUID eventId, String category, String title,
+            LocalDateTime startsAt, LocalDateTime endsAt, String owner, String location,
+            String status, String description) {
+        public static TimelineResponse from(EventTimelineEntry entry) {
+            return new TimelineResponse(entry.id, entry.event.id, entry.category, entry.title,
+                    entry.startsAt, entry.endsAt, entry.owner, entry.location, entry.status, entry.description);
+        }
+    }
+}

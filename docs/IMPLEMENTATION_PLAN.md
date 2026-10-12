@@ -27,6 +27,7 @@ Priorities: P1 stock/history/security and release acceptance, P2 architectural c
 | Two-stage returns and member self-service | Implemented | ReturnSubmissionService, MemberService; ReturnedItems/Contributor | Real device/photo/custody acceptance |
 | Damage, repair, maintenance blocking | Partial | LifecycleService, MaintenanceEvaluationService, MaintenancePolicy | Duplicate item/schedule maintenance PLAN-10 |
 | Event planning, purchasing, receipts and supplier evidence | Implemented | PlanningService, PurchasingService; Procurement/PurchasingOperations | Environment export/media acceptance |
+| Event attendees, people registry, predefined roles, food stamps and two-tab event timeline | Implemented | EventAttendees, EventTimeline, EventLogisticsService; baseline logistics tables | EventLogisticsApiTest and BaselineSchemaTest written, compile; not yet run (need PostgreSQL). Typecheck, changed-file lint and `tests/apiChanges.test.ts` pass; browser acceptance pending |
 | Ownership, consent and loan/rental evidence | Implemented | EquipmentService, LoanService; EquipmentOwnership/LoansPanel | Integrated privacy/collection/return acceptance |
 | Action inbox and reminders | Partial | ActionInboxService; ActionInboxContent | In-app only; no delivery channel FEAT-01 |
 | Eight reports, CSV/PDF and imports | Implemented | OperationalReportService; ReportsPanel/CsvImportDialog | Export acceptance ACC-03; large lists PLAN-03; manual rebuild FEAT-06 |

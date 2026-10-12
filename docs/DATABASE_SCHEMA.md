@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **55 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **59 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway initializes the same editable baseline in dev/test/prod; Hibernate validates. Current data is disposable. Schema/entity changes update this baseline directly; do not add incremental migrations or compatibility readers. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -96,7 +96,7 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 
 Location services enforce no cycles and same-warehouse parentage. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
-**Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them.
+**Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them, and their attendance (with roles) and timeline rows cascade on deletion; `event_people` rows are kept for other events.
 
 ### Stock and warehouse operations (9 tables)
 
@@ -114,11 +114,15 @@ Location services enforce no cycles and same-warehouse parentage. Item tracking 
 
 The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses PostgreSQL's ordinary nullable-key semantics; it does **not** by itself enforce a single null-lot row. Operational uniqueness and locking must also be assessed in the services/ORM, rather than inferred from this constraint.
 
-### Events, orders and custody (10 tables)
+### Events, orders and custody (14 tables)
 
 | Table | Key data and relationships |
 |---|---|
 | `event_occurrences` | UUID; event type/name/status, start/end dates, planned/used JSON quantities |
+| `event_people` | UUID; shared people registry: name and optional unique `app_users` link (`on delete set null`); event crew usually has no account. A rename applies at every event |
+| `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; fixed 4 main + 1 breakfast entitlement per person projected by the API |
+| `event_attendee_roles` | Element collection of an attendance (cascade): `faction_leader`/`faction_deputy`/`faction_hq_crew` with a required faction FK of the event type, `as_held`, or `event_crew` with optional assigned work; unique `(attendee, role, faction)` with nulls not distinct |
+| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
 | `factions` | UUID; unique `(event_type, slug)`, name and active flag |
 | `faction_orders` | UUID; event/faction/creator FKs; unique order code; status, pickup location/coordinates/date, collector and lifecycle actors |
 | `faction_order_lines` | UUID; order/item/source assembly FKs; requested, allocated, reserved, prepared, handed-over and reconciliation quantities |
@@ -181,7 +185,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
 | `source_revisions` | Composite `(name, shard)` PK; revision/epoch; 16 shards per tracked source table |
 
-All 55 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
+All 59 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
 
 ## 5. Stock authority and invariants
 
@@ -243,6 +247,7 @@ Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still 
 | Private location address fields and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |
 | Loan contact and terms, pickup/return details, consent evidence | `loan_arrangements`, `equipment_commitments` | Owner/staff input | Permanent |
 | Requests, reminders, notifications | `member_requests`, `action_reminders`, `notifications` | Member actions | Indefinite |
+| Event attendee names, optional account link, roles, arrival/departure times, notes | `event_people`, `event_attendees`, `event_attendee_roles` | Planner input; event crew often has no app account | People kept indefinitely for reuse; attendances until the event occurrence is deleted |
 | Access grants and group membership | `inventory_access_grants`, `inventory_access_group_members` | Owner/admin | Until revoked |
 | Offline command payloads | `sync_command_audit` | Device replay | Indefinite |
 | Actor and payload of domain events | `domain_event_outbox` | Every command | Purged 30 days after publication |
@@ -265,6 +270,7 @@ Personal data of other members is visible according to role and resource policy 
 | PD-02 | No erasure path | History is append-only and actor FKs are required. An erasure request needs pseudonymization of `app_users` (name/email → placeholder, keep the UUID) plus scrubbing free-text fields (collector names, keeper contact, loan contact, notes) and removing photos/acknowledgements that are no longer needed as evidence |
 | PD-03 | No export of one person's data | Article 15 access requests currently require manual SQL across the tables above |
 | PD-04 | No retention periods | Decide how long custody evidence, photos, sync audit and notifications must be kept (e.g. until the order is closed plus N years) and add purge jobs like the existing outbox/staged-media purges |
+| PD-05 | Event people registry has no deletion | `event_people` rows survive attendance and event deletion so they can be reused; an erasure request needs a delete or pseudonymize action for unused people |
 
 They are tracked as FEAT-02/03 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) and need a decision on retention periods before implementation.
 

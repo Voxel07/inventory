@@ -183,6 +183,11 @@ export function EventDetail() {
         )}
       </Stack>
 
+      {!editing && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
+        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('Teilnehmer & Essensmarken', 'Attendees & food stamps')}</Button>
+        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('Eventzeitplan', 'Event timeline')}</Button>
+      </Stack>}
+
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
         <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Positionen verwendet', 'Lines used')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
         <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt geplant', 'Total planned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>

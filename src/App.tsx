@@ -31,6 +31,8 @@ const UserDashboard = lazy(() => import('./pages/UserDashboard').then((m) => ({ 
 const StorageLocations = lazy(() => import('./pages/StorageLocations').then((m) => ({ default: m.StorageLocations })));
 const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
 const EventDetail = lazy(() => import('./pages/EventDetail').then((m) => ({ default: m.EventDetail })));
+const EventAttendees = lazy(() => import('./pages/EventAttendees').then((m) => ({ default: m.EventAttendees })));
+const EventTimeline = lazy(() => import('./pages/EventTimeline').then((m) => ({ default: m.EventTimeline })));
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })));
 const FactionOrderDetail = lazy(() => import('./pages/FactionOrderDetail').then((m) => ({ default: m.FactionOrderDetail })));
 const UserManagement = lazy(() => import('./pages/UserManagement').then((m) => ({ default: m.UserManagement })));
@@ -127,6 +129,8 @@ function AppContent() {
               <Route path="/assemblies" element={<CatalogAccessGuard><Assemblies /></CatalogAccessGuard>} />
               <Route path="/assemblies/:assemblyId" element={<CatalogAccessGuard><AssemblyDetail /></CatalogAccessGuard>} />
               <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
+              <Route path="/events/attendees" element={<InventoryManagerGuard><EventAttendees /></InventoryManagerGuard>} />
+              <Route path="/events/timeline" element={<InventoryManagerGuard><EventTimeline /></InventoryManagerGuard>} />
               <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
