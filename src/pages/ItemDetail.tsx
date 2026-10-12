@@ -467,8 +467,8 @@ export function ItemDetail() {
                             <Stack>
                                 {maintenanceRecords.map((record) => (
                                     <Box key={record.id} sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', py: 0.5 }}>
-                                        <Typography variant="body2">{formatDate(record.performedAt)} · {record.type.replaceAll('_', ' ')}</Typography>
-                                        <Chip size="small" variant="outlined" sx={tinyChip} label={record.result} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
+                                        <Typography variant="body2">{formatDate(record.performedAt)} · {formatStatus(record.type)}</Typography>
+                                        <Chip size="small" variant="outlined" sx={tinyChip} label={formatStatus(record.result)} color={record.result === 'passed' ? 'success' : record.result === 'failed' ? 'error' : 'warning'} />
                                     </Box>
                                 ))}
                             </Stack>

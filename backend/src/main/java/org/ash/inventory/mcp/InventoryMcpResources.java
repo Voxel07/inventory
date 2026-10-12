@@ -37,7 +37,7 @@ public class InventoryMcpResources {
     @Resource(uri = "inventory://locations", name = "Storage Locations", description = "Current list of active storage locations and warehouses")
     @Transactional
     public TextResourceContents locations() throws Exception {
-        var data = service.locations(null);
+        var data = service.locations(null, null, null);
         return TextResourceContents.create("inventory://locations", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(data));
     }
 

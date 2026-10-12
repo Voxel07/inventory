@@ -51,6 +51,7 @@ All 21 test classes remain useful. The two support classes belong to the suite.
 | `ArchitectureApiCoverageTest.java` | Added: previously missing REST workflows, policy denials, version/retry checks and real HTTP SSE payload privacy |
 | `BaselineSchemaTest.java` | Keep: canonical PostgreSQL baseline, Hibernate validation, indexes and schema-local revision triggers |
 | `EquipmentApiTest.java` | Keep: ownership, consent, commitments, exact assets and transfers |
+| `OrderPickupApiTest.java` | Pickup-group persistence, multiple points, responsible-person notification fan-out, scoped reads, submission retries, assembly totals and permission/input denials |
 | `InventoryApiTest.java` | Update invalid image fixture; keep catalog, orders, stock, returns, procurement, sync, media, lifecycle and outbox regressions |
 | `InventoryMcpTest.java` | Extend remaining read tools and HTTP resource/prompt checks; keep shared command contracts and caller privacy/authentication |
 | `InventoryMcpAuthenticationTest.java` | Keep: unauthenticated and spoofed transport requests |

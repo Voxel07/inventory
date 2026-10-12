@@ -12,6 +12,7 @@ import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm, type Field } from '../operations/OperationForm';
+import { ItemResponsiblePerson } from './ItemResponsiblePerson';
 
 /** `showSummary` repeats owner, keeper and stock facts; hide it where the page already shows them. */
 export function EquipmentOwnership({ item, canEdit, embedded = false, showSummary = true }: { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean }) {
@@ -33,6 +34,7 @@ export function EquipmentOwnership({ item, canEdit, embedded = false, showSummar
         <Typography variant="h6">{t('Eigentum, Verwahrung & Zusagen', 'Ownership, keeper & commitments')}</Typography>
         <Typography variant="body2" color="text.secondary">{t('Eigentum und Verwahrung gelten für alle Einheiten dieses Artikels. Für unterschiedliche Eigentümer separate Artikel anlegen. Sichtbarkeit, Lagerort und aktuelle Ausleihe sind unabhängig davon.', 'Ownership and keeper apply to every unit of this item. Use separate items for different owners. Catalog visibility, physical location and current custody are independent.')}</Typography>
       </>}
+      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit} />
       {profile.isLoading && <Typography>{t('Wird geladen …', 'Loading…')}</Typography>}
       {profile.error && <Alert severity="error" action={<Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => void profile.refetch()}>{t('Erneut laden', 'Retry')}</Button>}>{profile.error.message}</Alert>}
       {data && <>

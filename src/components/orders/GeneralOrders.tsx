@@ -33,6 +33,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityControl } from './QuantityControl';
+import { OrderPickupGroups } from './OrderPickupGroups';
 import { CatalogSearchField } from './CatalogSearchField';
 import { catalogPage, filterCatalogItems } from '../../utils/orderCatalog';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
@@ -62,6 +63,7 @@ export function GeneralOrders() {
   const transitionOrder = useTransitionOrder();
   const { user } = useAuth();
   const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'} | null>(null);
+  const [pickupOrder, setPickupOrder] = useState<string | null>(null);
   const [editing, setEditing] = useState<GeneralOrderSummary | null | 'new'>(null);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -72,7 +74,6 @@ export function GeneralOrders() {
   const [catalogReady, setCatalogReady] = useState(false);
   const [search, setSearch] = useState('');
 
-  const itemMap = new Map(items.map((item) => [item.id, item]));
   const sortedItems = catalogReady ? [...items].sort((a, b) => a.name.localeCompare(b.name)) : [];
   const eventMap = new Map(events.map((event) => [event.id, event]));
   const activeEvents = events;
@@ -94,7 +95,6 @@ export function GeneralOrders() {
     || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0);
   const { page: currentItemPage, entries: pageItems } = catalogPage(catalogItems, itemPage, ORDER_CATALOG_PAGE_SIZE);
 
-  function itemName(id: string) { return itemMap.get(id)?.name ?? id; }
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
     return event ? `${event.name || event.eventType} · ${formatDate(event.eventDate)}` : t('Kein Event', 'No event');
@@ -144,11 +144,12 @@ export function GeneralOrders() {
       title: order.name,
       subtitle: <>{order.purpose} · {eventName(order.eventOccurrenceId)}</>,
       details: <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {t('Artikel', 'Items')}: {itemCount} · {Object.entries(order.requestedQuantities ?? {}).map(([id, quantity]) => `${order.itemNames?.[id] ?? itemName(id)} × ${quantity}`).join(', ')}
+        {t('Bestellt', 'Ordered')}: {itemCount} · {t('Vorbereitet', 'Prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
       </Typography>,
       status: t(...statusLabels[order.status ?? 'draft']),
       statusColor,
       actions: <>
+        <Button title={t('Verantwortliche und Abholgruppen anzeigen', 'Show responsible people and pickup groups')} onClick={() => setPickupOrder(order.id)}>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</Button>
         <Button title={translate('Den Verlauf dieser Bestellung anzeigen', 'Display the history of this order')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('Verlauf', 'History')}</Button>
         {order.status === 'draft' && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <><Button title={translate('Artikel und Mengen dieser Bestellung bearbeiten', 'Edit this order\'s items and quantities')} size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button title={translate('Diese Bestellung zur Bearbeitung einreichen', 'Submit this order for processing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
         {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('Vorbereitete Mengen und Gerätezuordnungen erfassen', 'Enter prepared quantities and asset assignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('Vorbereiten', 'Prepare')}</Button>}
@@ -254,6 +255,7 @@ export function GeneralOrders() {
       </Box>
     </Dialog>
 
+    {pickupOrder && <Dialog open onClose={() => setPickupOrder(null)} fullWidth maxWidth="lg"><DialogTitle>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</DialogTitle><DialogContent><OrderPickupGroups kind="general" orderId={pickupOrder} /></DialogContent></Dialog>}
     {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} items={items} onClose={() => setWorkflow(null)} />}
   </Box>;
 }

@@ -14,6 +14,9 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "faction_orders")
 public class FactionOrder extends BaseEntity {
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "pickup_assignments", columnDefinition = "jsonb", nullable = false)
+    public java.util.Map<String, PickupAssignment> pickupAssignments = new java.util.LinkedHashMap<>();
     @Column(name = "order_code", nullable = false, unique = true) public String orderCode;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "event_occurrence_id") public EventOccurrence eventOccurrence;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_id") public Faction faction;

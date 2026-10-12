@@ -42,6 +42,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
+    @jakarta.inject.Inject OrderPickupService pickupGroups;
     @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
@@ -249,8 +250,10 @@ public class OrderService {
         if (target == DomainEnums.OrderStatus.closed && hasOutstanding(order))
             throw ApiException.conflict("Order still has outstanding units");
         transition(order, target, input.idempotencyKey(), actionFor(target), input.notes(), lineSnapshot(order));
-        if (target == DomainEnums.OrderStatus.ready)
+        if (target == DomainEnums.OrderStatus.ready && !pickupGroups.alreadyNotified(order.createdBy, "order_ready", "faction", order.id))
             createReadyNotification(order);
+        if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.ready)
+            pickupGroups.notifyResponsible("faction", order.id, target == DomainEnums.OrderStatus.ready ? "order_group_ready" : "order_items_assigned");
         return order;
     }
 
@@ -1067,6 +1070,7 @@ public class OrderService {
     }
 
     private void applyPickupPoint(FactionOrder order, Double requestedLatitude, Double requestedLongitude) {
+        if (requestedLatitude == null && requestedLongitude == null && pickupGroups.hasPickupPoints("faction", order.id)) return;
         Double latitude = requestedLatitude != null
                 ? requestedLatitude
                 : order.pickupLatitude != null ? order.pickupLatitude
@@ -1111,6 +1115,9 @@ public class OrderService {
         payload.put("orderCode", order.orderCode);
         payload.put("event", order.eventOccurrence.name);
         payload.put("faction", order.faction.name);
+        var plan = pickupGroups.get("faction", order.id);
+        payload.put("groupCount", plan.groups().size());
+        payload.put("path", OrderPickupService.path("faction", order.id));
         if (order.collectorName != null)
             payload.put("collectorName", order.collectorName);
         if (order.pickupLocation != null) {
@@ -1120,6 +1127,7 @@ public class OrderService {
             if (order.pickupLocation.longitude != null)
                 payload.put("longitude", order.pickupLocation.longitude);
         }
+        if (plan.pickupPointsComplete()) payload.remove("pickupLocation");
         notification.payload = payload;
         orm.persist(notification);
     }

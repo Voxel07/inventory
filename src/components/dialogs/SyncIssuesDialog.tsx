@@ -7,6 +7,7 @@ import { useStockLookups } from '../../hooks/useStockLookups';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { apiRequest } from '../../services/apiClient';
 import { correctSyncFailure, type SyncFailure } from '../../services/offlineQueue';
+import { formatStatus } from '../../utils/formatters';
 
 /** Values are edited against the failed command; the target and command type stay fixed. */
 function CommandFields({ value, onChange, path = '', names = {}, assetOptions = [] }: { value: unknown; onChange: (value: unknown) => void; path?: string; names?: Record<string, string>; assetOptions?: [string, string][] }) {
@@ -21,8 +22,8 @@ function CommandFields({ value, onChange, path = '', names = {}, assetOptions = 
   if (typeof value === 'boolean') return <FormControlLabel label={label} control={<Checkbox checked={value} onChange={(e) => onChange(e.target.checked)} />} />;
   const fixed = /(^|\.)(itemId|orderId|assemblyId|factionOrderId|userId|idempotencyKey|transactionType)$/.test(path);
   if ((path.includes('assetAssignments.') || path.endsWith('assetInstanceId')) && assetOptions.length) return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}><MenuItem value="">{t('Exemplar wählen', 'Select asset')}</MenuItem>{[...assetOptions.filter(([id]) => id !== value), ...(value ? [[String(value), names[String(value)] ?? String(value)]] : [])].map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}</TextField>;
-  if (path.endsWith('.outcome')) return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['returned_good', 'consumed', 'returned_damaged', 'missing', 'returned_late', 'written_off'].map((outcome) => <MenuItem key={outcome} value={outcome}>{outcome.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
-  if (path === 'status') return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'closed', 'cancelled'].map((status) => <MenuItem key={status} value={status}>{status.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
+  if (path.endsWith('.outcome')) return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['returned_good', 'consumed', 'returned_damaged', 'missing', 'returned_late', 'written_off'].map((outcome) => <MenuItem key={outcome} value={outcome}>{formatStatus(outcome)}</MenuItem>)}</TextField>;
+  if (path === 'status') return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'closed', 'cancelled'].map((status) => <MenuItem key={status} value={status}>{formatStatus(status)}</MenuItem>)}</TextField>;
   return <TextField fullWidth label={label} type={typeof value === 'number' ? 'number' : 'text'} value={value} disabled={fixed} onChange={(e) => onChange(typeof value === 'number' ? Number(e.target.value) : e.target.value)} />;
 }
 
@@ -36,7 +37,7 @@ export function SyncIssuesDialog({ open, failures, onClose, onDiscard, discardin
   function collectAssets(value: unknown) {
     if (!value || typeof value !== 'object') return;
     const entry = value as Record<string, unknown>;
-    if (typeof entry.id === 'string' && typeof entry.assetCode === 'string') assets.set(entry.id, `${entry.assetCode} · ${entry.availabilityStatus ?? ''}`);
+    if (typeof entry.id === 'string' && typeof entry.assetCode === 'string') assets.set(entry.id, `${entry.assetCode} · ${entry.availabilityStatus ? formatStatus(String(entry.availabilityStatus)) : ''}`);
     Object.values(value).forEach(collectAssets);
   }
   collectAssets(context);
@@ -74,7 +75,7 @@ export function SyncIssuesDialog({ open, failures, onClose, onDiscard, discardin
         <Button title={translate('Zur Konfliktübersicht zurückkehren', 'Return to the conflict list')} disabled={busy} onClick={() => setSelected(null)}>{t('Zurück', 'Back')}</Button>
       </> : <>
         {failures.filter((f) => !resolved.includes(f.idempotencyKey)).map((failure) => <Stack key={failure.idempotencyKey} spacing={1}>
-          <Typography>{failure.type} · {failure.status} · {formatDateTime(failure.timestamp)}</Typography>
+          <Typography>{failure.type} · {formatStatus(failure.status)} · {formatDateTime(failure.timestamp)}</Typography>
           <Alert severity="warning">{failure.error}</Alert>
           <Button title={translate('Konflikt öffnen und Korrektur prüfen', 'Open the conflict to review a correction')} onClick={() => { void inspect(failure); }}>{t('Prüfen und korrigieren', 'Inspect and correct')}</Button>
           <Button title={translate('Den Konflikt ohne erneutes Senden archivieren', 'Archive this conflict without resubmitting')} disabled={discarding} onClick={() => onDiscard(failure.idempotencyKey)}>{t('Ohne Wiederholung archivieren', 'Archive without retry')}</Button>

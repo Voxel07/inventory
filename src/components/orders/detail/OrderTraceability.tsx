@@ -1,5 +1,6 @@
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
+import { useState } from 'react';
 import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
 import { translate, useLocalizedText } from '../../../utils/naming';
@@ -19,6 +20,7 @@ function relationName(value: { name?: string; username?: string; email?: string 
 
 export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
   const t = useLocalizedText();
+  const [comparePrevious, setComparePrevious] = useState(false);
   const previousOrder = findPreviousFactionOrder(allOrders, {
     eventType: order.eventType,
     faction: order.faction,
@@ -117,7 +119,10 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
         ))}
       </Box>
 
-      {previousOrder && (
+      {previousOrder && <Button size="small" aria-pressed={comparePrevious} sx={{ mb: 2 }} onClick={() => setComparePrevious(value => !value)}>
+        {comparePrevious ? t('Vergleich ausblenden', 'Hide comparison') : t('Mit vorheriger Liste vergleichen', 'Compare with previous list')}
+      </Button>}
+      {comparePrevious && previousOrder && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Änderungen zur vorherigen Liste', 'Changes from the previous list')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>

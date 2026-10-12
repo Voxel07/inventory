@@ -5,6 +5,7 @@ import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './of
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
 import { localWriteChange, type ApiChangeDetail } from './apiChanges';
 import { recordFilteredRows } from './pageCompleteness';
+import { translate } from '../utils/naming';
 export type { ApiChangeDetail } from './apiChanges';
 import {
   announceLogout,
@@ -45,7 +46,7 @@ export async function initializeAuth(): Promise<void> {
   } catch (error) {
     if (context.generation !== getAuthSnapshot().generation) return;
     console.error('OIDC login failed', error);
-    clearAuth(error instanceof Error ? error.message : 'OIDC sign-in failed');
+    clearAuth(error instanceof Error ? error.message : translate('OIDC-Anmeldung fehlgeschlagen', 'OIDC sign-in failed'));
   }
 }
 
@@ -277,7 +278,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const offlineAction = options.offline && !referencesPrivateInventory([path, options.body, options.offline.payload])
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
-  if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error('This action requires an online connection. It has not been queued.');
+  if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error(translate('Diese Aktion erfordert eine Online-Verbindung. Sie wurde nicht vorgemerkt.', 'This action requires an online connection. It has not been queued.'));
   if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction, context);
   try {
     for (let attempt = 0; ; attempt++) {
@@ -327,7 +328,7 @@ export function isApiMediaUrl(value: string): boolean {
 }
 
 export async function fetchMedia(url: string, signal?: AbortSignal, retried = false, context = captureAuthSession()): Promise<Blob> {
-  if (!isApiMediaUrl(url)) throw new Error('Invalid media URL');
+  if (!isApiMediaUrl(url)) throw new Error(translate('Ungültige Medien-URL', 'Invalid media URL'));
   return withSessionRequest(context, async (sessionSignal) => {
     const headers = await getAuthorizationHeaders();
     assertAuthSession(context);
@@ -369,7 +370,7 @@ export function uploadMedia(file: File, context = captureAuthSession()): Promise
 
 async function deleteMediaAttempt(key: string, retried: boolean, context: AuthSessionContext): Promise<void> {
   const url = apiFileUrl(key);
-  if (!url || !isApiMediaUrl(url)) throw new Error('Invalid media key');
+  if (!url || !isApiMediaUrl(url)) throw new Error(translate('Ungültiger Medien-Schlüssel', 'Invalid media key'));
   return withSessionRequest(context, async (signal) => {
     const headers = await getAuthorizationHeaders();
     assertAuthSession(context);

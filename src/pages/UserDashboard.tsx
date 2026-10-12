@@ -14,7 +14,7 @@ import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
 import { useActionInbox } from '../hooks/useActionInbox';
 import { useActionInboxDialog } from '../hooks/useActionInboxDialog';
-import { noticeText, usePickupNotifications } from '../hooks/useInbox';
+import { noticeText, notificationPath, notificationTitle, usePickupNotifications } from '../hooks/useInbox';
 import { canManageInventory, canViewCatalog } from '../utils/access';
 import { useLocalizedText } from '../utils/naming';
 import { Contributor } from './Contributor';
@@ -90,10 +90,10 @@ function WorkQueue() {
     const work = [
         ...notices.unread.map((notification) => ({
             key: notification.id,
-            title: noticeText(notification, 'orderCode') ? t(`Bestellung ${noticeText(notification, 'orderCode')} ist abholbereit`, `Order ${noticeText(notification, 'orderCode')} is ready for pickup`) : t('Bestellung ist abholbereit', 'Order is ready for pickup'),
-            detail: [noticeText(notification, 'faction'), noticeText(notification, 'pickupLocation')].filter(Boolean).join(' · '),
+            title: notificationTitle(notification),
+            detail: [noticeText(notification, 'faction'), noticeText(notification, 'groupNames'), noticeText(notification, 'pickupLocation')].filter(Boolean).join(' · '),
             label: labels.pickup, urgent: false,
-            path: notification.orderId ? `/orders/faction/${notification.orderId}` : undefined,
+            path: notificationPath(notification),
         })),
         ...due.map((action) => ({ key: action.key, title: action.title, detail: [action.detail, action.due && `${t('Fällig', 'Due')}: ${action.due}`].filter(Boolean).join(' · '), label: labels[action.kind] ?? action.kind, urgent: action.kind === 'overdue_return', path: action.path })),
     ].sort((a, b) => Number(b.urgent) - Number(a.urgent));

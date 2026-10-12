@@ -12,6 +12,9 @@ import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { OrderDetailHeader } from '../components/orders/detail/OrderDetailHeader';
 import { OrderPickListTable } from '../components/orders/detail/OrderPickListTable';
+import { OrderPickupGroups } from '../components/orders/OrderPickupGroups';
+import { useQuery } from '@tanstack/react-query';
+import { orderPickupApi } from '../services/orderPickupService';
 import { OrderTraceability } from '../components/orders/detail/OrderTraceability';
 import { OrderPickupMapDialog } from '../components/orders/detail/OrderPickupMapDialog';
 import { generateOrderPdfSlip } from '../components/orders/detail/OrderPdfSlip';
@@ -62,6 +65,7 @@ export function FactionOrderDetail() {
   const { user, generation } = useAuth();
 
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
+  const pickupGroups = useQuery({ queryKey: ['order-pickup-groups', 'faction', orderId], queryFn: () => orderPickupApi.get('faction', orderId), enabled: Boolean(orderId) });
   const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
   const { data: allOrders = [] } = useFactionOrders();
   const { data: items = [] } = useItems();
@@ -135,10 +139,6 @@ export function FactionOrderDetail() {
 
   function availableFor(item: Item) {
     return availableForItemId(item.id);
-  }
-
-  function availableAssemblies(assembly: Assembly) {
-    return assemblyAvailability(assembly, availableForItemId);
   }
 
   function savePrepared() {
@@ -255,7 +255,9 @@ export function FactionOrderDetail() {
   const pickupPoint = order.pickupLatitude != null && order.pickupLongitude != null
     ? `${order.pickupLatitude.toFixed(6)}, ${order.pickupLongitude.toFixed(6)}`
     : undefined;
-  const pickupLocationLabel = pickupLocation
+  const pickupLocationLabel = pickupGroups.data?.pickupPointsComplete
+    ? pickupGroups.data.groups.map(group => `${group.name}: ${group.pickupLocationName}`).join(' · ')
+    : pickupLocation
     ? [...[pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean), pickupPoint].filter(Boolean).join(' · ')
     : pickupPoint ?? t('Nicht angegeben', 'Not specified');
 
@@ -311,7 +313,10 @@ export function FactionOrderDetail() {
         }
         onFillAvailable={fillAvailable}
         onSavePrepared={savePrepared}
-        onMarkReady={() => setPickupMapOpen(true)}
+        onMarkReady={() => {
+          if (pickupGroups.data?.pickupPointsComplete) handleTransitionReady({ pickupLocation: '' });
+          else setPickupMapOpen(true);
+        }}
         onReopenPreparation={() =>
           reopenPreparation.mutate(
             { id: order.id },
@@ -330,7 +335,9 @@ export function FactionOrderDetail() {
         isReopeningPreparation={reopenPreparation.isPending}
       />
 
-      <OrderPickListTable
+      <OrderPickupGroups kind="faction" orderId={order.id} />
+      {/* From preparation on, staff need the kit breakdown and reserved serial numbers; it is read-only after preparing. */}
+      {!['draft', 'submitted'].includes(order.status) && <OrderPickListTable
         order={order}
         orderItems={orderItems}
         lineItems={lineItems}
@@ -343,13 +350,11 @@ export function FactionOrderDetail() {
         onSetPrepared={setPrepared}
         onSetPreparedAssemblies={setPreparedAssemblies}
         onSetAssetAssignments={setAssetAssignments}
-        availableFor={availableFor}
-        availableAssemblies={availableAssemblies}
-        availableForItemId={availableForItemId}
-      />
+      />}
 
       <CustodyEvidence orderId={order.id} />
       <OrderTraceability
+        key={order.id}
         order={order}
         allOrders={allOrders}
         itemMap={itemMap}

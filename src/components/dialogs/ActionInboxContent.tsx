@@ -8,7 +8,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { actionInboxApi } from '../../services/actionInboxService';
 import type { InboxAction } from '../../types/actionInbox';
 import { useActionInbox } from '../../hooks/useActionInbox';
-import { noticeText, usePickupNotifications } from '../../hooks/useInbox';
+import { noticeText, notificationPath, notificationTitle, usePickupNotifications } from '../../hooks/useInbox';
 import { useOperationCommand } from '../../hooks/useOperations';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { OperationForm } from '../operations/OperationForm';
@@ -73,19 +73,17 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
     {!loading && !failed && visibleCount === 0 && <StateMessage kind="done" title={t('Alles erledigt', 'All caught up')}
       description={t('Erledigte Aufgaben verschwinden automatisch.', 'Completed tasks disappear automatically.')} />}
 
-    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('Abholhinweise', 'Pickup notices')} count={notices.unread.length}>
+    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('Bestellhinweise', 'Order notices')} count={notices.unread.length}>
       {notices.unread.map((notification) => {
-        const orderCode = noticeText(notification, 'orderCode');
-        const details = [noticeText(notification, 'faction'), noticeText(notification, 'pickupLocation')].filter(Boolean).join(' · ');
+        const path = notificationPath(notification);
+        const details = [noticeText(notification, 'faction'), noticeText(notification, 'groupNames'), noticeText(notification, 'pickupLocation')].filter(Boolean).join(' · ');
         return <ListItem key={notification.id} disableGutters sx={rowSx}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>{orderCode
-              ? t(`Bestellung ${orderCode} ist abholbereit`, `Order ${orderCode} is ready for pickup`)
-              : t('Bestellung ist abholbereit', 'Order is ready for pickup')}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{notificationTitle(notification)}</Typography>
             {details && <Typography variant="body2" color="text.secondary">{details}</Typography>}
           </Box>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>
-            {notification.orderId && <Button size="small" variant="outlined" onClick={() => { notices.markRead.mutate([notification.id]); onOpenTask(); navigate(`/orders/faction/${notification.orderId}`); }}>{t('Öffnen', 'Open')}</Button>}
+            {path && <Button size="small" variant="outlined" onClick={() => { notices.markRead.mutate([notification.id]); onOpenTask(); navigate(path); }}>{t('Öffnen', 'Open')}</Button>}
             <IconButton title={translate('Als gelesen markieren', 'Mark as read')} disabled={notices.markRead.isPending} onClick={() => notices.markRead.mutate([notification.id])}><DoneAllIcon fontSize="small" /></IconButton>
           </Stack>
         </ListItem>;

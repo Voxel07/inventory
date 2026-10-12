@@ -52,6 +52,7 @@ export function localWriteChange(path: string): LocalWriteChange {
 
 const custody = ['custody-balances', 'member-custody', 'member-storage', 'member-requests', 'return-submissions'];
 const stock = ['items', 'assemblies', 'transactions', 'damageReports', 'maintenance', 'faction-orders', 'general-orders',
+  'order-pickup-groups', 'item-responsibility',
   'event-reports', 'procurement-deficits', 'loans', 'action-inbox', 'reports', 'notifications', ...custody,
   'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets',
   'operations:counts', 'operations:lots', 'operations:transaction-lots', 'operations:stock-lot-labels', 'operations:schedules', 'operations:repairs'];

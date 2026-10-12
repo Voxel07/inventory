@@ -15,6 +15,8 @@ import java.util.List;
 @Entity
 @Table(name = "general_orders")
 public class GeneralOrder extends BaseEntity {
+    @JdbcTypeCode(SqlTypes.JSON) @Column(name = "pickup_assignments", columnDefinition = "jsonb", nullable = false)
+    public Map<String, PickupAssignment> pickupAssignments = new LinkedHashMap<>();
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "source_locations", columnDefinition = "jsonb") public Map<String, String> sourceLocations = new LinkedHashMap<>();
     @Column(nullable = false, length = 160) public String name;
     @Column(nullable = false, length = 4000) public String purpose;

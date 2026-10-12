@@ -24,15 +24,20 @@ export type NamingGroup =
   | 'severity'
   | 'transactionType'
   | 'action'
-  | 'reason';
+  | 'reason'
+  | 'value';
 
 const GROUP_VALUES: Record<NamingGroup, readonly string[]> = {
   itemStatus: ['available', 'checked_out', 'damaged', 'retired'],
   damageStatus: ['reported', 'in_review', 'repaired', 'written_off', 'resolved'],
-  severity: ['low', 'medium', 'high', 'critical'],
-  transactionType: ['checkout', 'checkin', 'added', 'repaired', 'written_off', 'consumed'],
+  severity: ['low', 'medium', 'high', 'critical', 'total_loss'],
+  transactionType: [
+    'checkout', 'checkin', 'added', 'repaired', 'written_off', 'consumed', 'received', 'adjusted', 'reserved',
+    'reservation_released', 'transfer_out', 'transfer_in', 'staged', 'damaged', 'missing',
+  ],
   action: ['checkout', 'checkin', 'scanAgain', 'reset'],
   reason: ['project', 'maintenance', 'testing', 'returnAfterUse', 'restock', 'correction', 'other'],
+  value: [],
 };
 
 /**

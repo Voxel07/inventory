@@ -8,6 +8,7 @@ import { useOperationList } from '../../hooks/useOperations';
 import { apiRequest } from '../../services/apiClient';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { translate, useLocalizedText } from '../../utils/naming';
+import { formatStatus } from '../../utils/formatters';
 
 interface Audit { commandId: string; operationType: string; syncStatus: string; conflictMessage?: string; createdAt: string; supersedes?: string; resolutionNote?: string }
 const auditPage = (page: number, size: number) => apiRequest<Audit[]>('/api/sync/audit/mine', { query: { page, size } });
@@ -28,12 +29,12 @@ export function OfflineStatusPanel() {
       {!cache.data?.length && <Typography>{t('Keine gespeicherten Daten für dieses Konto.', 'No cached data for this account.')}</Typography>}
     </AccordionDetails></Accordion>
     <Accordion><AccordionSummary title={translate('Den lokalen Aktionsverlauf ein- oder ausblenden', 'Show or hide local action history')}>{t('Lokaler Aktionsverlauf', 'Local action history')}</AccordionSummary><AccordionDetails>
-      {history.map((entry) => <Stack key={entry.idempotencyKey} sx={{ mb: 2 }}><Typography>{entry.type} · {formatDateTime(entry.timestamp)}</Typography><Chip size="small" label={entry.status} /><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{entry.idempotencyKey}</Typography>{entry.error && <Typography>{entry.error}</Typography>}{entry.resolutionNote && <Typography>{entry.resolutionNote}</Typography>}</Stack>)}
+      {history.map((entry) => <Stack key={entry.idempotencyKey} sx={{ mb: 2 }}><Typography>{entry.type} · {formatDateTime(entry.timestamp)}</Typography><Chip size="small" label={formatStatus(entry.status)} /><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{entry.idempotencyKey}</Typography>{entry.error && <Typography>{entry.error}</Typography>}{entry.resolutionNote && <Typography>{entry.resolutionNote}</Typography>}</Stack>)}
       {!history.length && <Typography>{t('Noch kein Verlauf.', 'No history yet.')}</Typography>}
     </AccordionDetails></Accordion>
     <Accordion><AccordionSummary title={translate('Das eigene Synchronisationsprotokoll ein- oder ausblenden', 'Show or hide your synchronization audit')}>{t('Mein Server-Synchronisationsprotokoll', 'My server sync audit')}</AccordionSummary><AccordionDetails>
       {audit.error && <Alert severity="warning">{audit.error.message}</Alert>}
-      {audit.data?.map((entry) => <Stack key={entry.commandId} sx={{ mb: 2 }}><Typography>{entry.operationType} · {entry.syncStatus} · {formatDateTime(entry.createdAt)}</Typography><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Typography>{entry.conflictMessage}</Typography>}{entry.supersedes && <Typography>{t('Korrigiert', 'Corrects')}: {entry.supersedes} · {entry.resolutionNote}</Typography>}</Stack>)}
+      {audit.data?.map((entry) => <Stack key={entry.commandId} sx={{ mb: 2 }}><Typography>{entry.operationType} · {formatStatus(entry.syncStatus)} · {formatDateTime(entry.createdAt)}</Typography><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Typography>{entry.conflictMessage}</Typography>}{entry.supersedes && <Typography>{t('Korrigiert', 'Corrects')}: {entry.supersedes} · {entry.resolutionNote}</Typography>}</Stack>)}
     </AccordionDetails></Accordion>
   </Stack>;
 }
