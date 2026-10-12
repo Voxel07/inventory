@@ -158,7 +158,7 @@ function SkipLink() {
   return (
     <Link href="#main-content" className="no-print" sx={{
       position: 'fixed', left: 8, top: 8, zIndex: (theme) => theme.zIndex.tooltip + 1,
-      px: 2, py: 1.25, borderRadius: 1, bgcolor: 'background.paper', color: 'primary.main', fontWeight: 600,
+      px: 2, py: 1.25, borderRadius: 1, bgcolor: 'background.paper', color: 'primary.dark', fontWeight: 600,
       boxShadow: 3, transform: 'translateY(-200%)', '&:focus': { transform: 'none' },
     }}>
       {t('Zum Inhalt springen', 'Skip to content')}
