@@ -45,7 +45,8 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
         images.push(replacement ? await stageImage(replacement, context) : image);
       }
       images.push(...uploaded);
-      return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), images }, session: context });
+      // Stock is never edited through the item; `amount` only seeds stock on creation.
+      return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), amount: undefined, images }, session: context });
     },
   },
 );

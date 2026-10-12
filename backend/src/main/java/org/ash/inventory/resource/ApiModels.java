@@ -103,9 +103,10 @@ public final class ApiModels {
             this(quantities, assets, acknowledge, key, notes, null);
         }
     }
+    /** {@code missing} is the unresolved total after this command; the other quantities are reconciled now. */
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
-            BigDecimal operatingHours, String notes) {}
+            @Min(0) int writtenOff, BigDecimal operatingHours, String notes) {}
     public record AssetReturnLine(
             @NotNull DomainEnums.ReconciliationOutcome outcome,
             BigDecimal operatingHours,

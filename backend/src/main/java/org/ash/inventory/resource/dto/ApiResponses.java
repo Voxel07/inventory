@@ -120,7 +120,6 @@ public final class ApiResponses {
             String sku,
             String name,
             String description,
-            Integer amount,
             Integer minStock,
             BigDecimal value,
             String category,

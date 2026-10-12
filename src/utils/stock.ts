@@ -18,12 +18,5 @@ export function getItemStock(item: Item | null | undefined): StockCalculation {
       remaining: item.stock.available,
     };
   }
-  const base = item?.amount ?? 0;
-  return {
-    totalStock: base,
-    checkedOut: 0,
-    inTransit: 0,
-    damaged: 0,
-    remaining: base,
-  };
+  return { totalStock: 0, checkedOut: 0, inTransit: 0, damaged: 0, remaining: 0 };
 }

@@ -20,6 +20,7 @@ create table app_users (
 );
 
 create table assemblies (
+    active boolean not null,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
     id uuid not null,
@@ -420,7 +421,6 @@ create table items (
     owner_name varchar(255),
     ownership_type varchar(255) not null default 'organization',
     active boolean not null,
-    base_amount integer not null,
     battery_replacement_due date,
     best_before_date date,
     container_count integer,

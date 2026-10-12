@@ -169,7 +169,6 @@ public class ApiMapper {
                 value.sku,
                 value.name,
                 value.description,
-                value.baseAmount,
                 value.minStock,
                 BigDecimal.valueOf(value.unitValueCents, 2),
                 value.category,

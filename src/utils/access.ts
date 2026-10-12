@@ -22,6 +22,10 @@ export function canManageUsers(user: User | null | undefined): boolean {
 }
 
 export const canOperateWarehouse = canEditCatalog;
+/** Write-offs permanently reduce owned stock and are reserved to HQ administrators. */
+export function canWriteOff(user: User | null | undefined): boolean {
+  return effectiveAccess(user) === 'hq_admin';
+}
 export function canPerformMaintenance(user: User | null | undefined): boolean {
   return ['hq_admin', 'maintenance_crew'].includes(effectiveAccess(user));
 }

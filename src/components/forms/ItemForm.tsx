@@ -114,7 +114,7 @@ export function ItemForm({
 
     const createLoc = useCreateStorageLocation();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
-    const hasStock = Boolean(initialData && ((initialData.stock?.totalOwned ?? initialData.amount ?? 0) > 0));
+    const hasStock = Boolean(initialData && ((initialData.stock?.totalOwned ?? 0) > 0));
 
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,7 +162,7 @@ export function ItemForm({
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
             containerCount: isBulkPackage
-                ? (initialData ? (initialData.containerCount ?? initialData.amount) : parseOptional(numericInputs.amount))
+                ? (initialData ? initialData.containerCount : parseOptional(numericInputs.amount))
                 : undefined,
             containersOpened: isBulkPackage ? parseOptional(numericInputs.containersOpened) : undefined,
             containerRemainingPercent: isBulkPackage ? parseOptional(numericInputs.containerRemainingPercent) : undefined,

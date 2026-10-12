@@ -1,8 +1,6 @@
 # App Flow
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
-This document owns navigation, user journeys and workflow states. Feature requirements are in [Product Requirements](PRODUCT_REQUIREMENTS.md), UI presentation in [Design Brief](DESIGN_BRIEF.md), and transport/security details in [Technical Requirements](TECHNICAL_REQUIREMENTS.md). Screen availability is described from source; integrated browser acceptance is still pending.
+This document owns navigation, user journeys and workflow states. Feature requirements are in [Product Requirements](PRODUCT_REQUIREMENTS.md), UI presentation in [Design Brief](DESIGN_BRIEF.md), and transport/security details in [Technical Requirements](TECHNICAL_REQUIREMENTS.md).
 
 ## 1. Entry and navigation
 
@@ -65,7 +63,7 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 5. Open QR labels or the camera/manual scanner. Resolve the exact item, asset, location or order; show details or prefill a form.
 6. A separate user action submits checkout/check-in. Scanning itself makes no stock change. Direct checkout requires event and faction, and serialized checkout requires an exact asset.
 
-Current deletion behavior differs by record: items/locations are retired, while assembly deletion removes the record and event deletion is allowed only without linked orders. The broader retirement requirement is unresolved (GAP-01).
+Items, locations and assemblies are retired, never deleted: they leave the catalog and cannot be ordered, while codes and history stay. An event occurrence can be deleted only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides go with it.
 
 ## 4. Event planning and purchasing
 
@@ -105,7 +103,7 @@ This is the main business lifecycle. Specialized edits, preparation reopening an
 4. Mark ready after preparation, record pickup details, and notify the recipient.
 5. At pickup, staff confirm collector/condition/evidence. The command converts reservations into custody and writes checkout/history atomically.
 6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
-7. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times, deltas and previous event-year comparison.
+7. Units that will not come back are written off by an HQ admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times, deltas and previous event-year comparison.
 
 Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
 

@@ -26,6 +26,10 @@ class PrivateInventoryApiTest {
     private Map<String, Object> itemInput() {
         return new HashMap<>(Map.of("sku", "PRIV-" + UUID.randomUUID(), "name", "Private radio", "category", "Secret-" + UUID.randomUUID(), "amount", 2, "minStock", 0, "value", 0));
     }
+    /** Item edits never carry stock; the opening amount is create-only. */
+    private Map<String, Object> editInput() {
+        var input = itemInput(); input.remove("amount"); return input;
+    }
     private String item() { return owner().body(itemInput()).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true)).extract().path("id"); }
     private Map<String, Object> shares(int revision, List<?> grants) { return Map.of("revision", revision, "grants", grants, "reason", "Regression sharing change"); }
     private String policy(String kind, String id) { return "/api/access/" + kind + "/" + id; }
@@ -48,15 +52,15 @@ class PrivateInventoryApiTest {
         String readerId = person("reader"), item = item();
         owner().body(shares(0, List.of(Map.of("userId", readerId, "canEdit", false)))).put(policy("items", item)).then().statusCode(200).body("revision", equalTo(1));
         reader().get("/api/items/" + item).then().statusCode(200).body("access.canEdit", equalTo(false)).body("access.canManage", equalTo(false)).body("access.grants", empty());
-        reader().body(itemInput()).patch("/api/items/" + item).then().statusCode(404);
+        reader().body(editInput()).patch("/api/items/" + item).then().statusCode(404);
         reader().body(shares(1, List.of())).put(policy("items", item)).then().statusCode(anyOf(is(403), is(404)));
         owner().body(shares(0, List.of())).put(policy("items", item)).then().statusCode(409);
         owner().body(shares(1, List.of(Map.of("userId", readerId, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
-        reader().body(itemInput()).patch("/api/items/" + item).then().statusCode(200);
+        reader().body(editInput()).patch("/api/items/" + item).then().statusCode(200);
         reader().body(shares(2, List.of())).put(policy("items", item)).then().statusCode(403);
         owner().body(shares(2, List.of())).put(policy("items", item)).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(404);
-        reader().body(itemInput()).patch("/api/items/" + item).then().statusCode(404);
+        reader().body(editInput()).patch("/api/items/" + item).then().statusCode(404);
     }
 
     @Test void groupMembershipRevocationAndRevisionChecksApplyWithoutRoleEscalation() {
@@ -70,7 +74,7 @@ class PrivateInventoryApiTest {
         admin().body(Map.of("name", name, "revision", 0, "memberIds", List.of(), "reason", "Stale edit")).patch("/api/access/groups/" + group).then().statusCode(409);
         admin().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Remove membership")).patch("/api/access/groups/" + group).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(404);
-        reader().body(itemInput()).patch("/api/items/" + item).then().statusCode(404);
+        reader().body(editInput()).patch("/api/items/" + item).then().statusCode(404);
     }
 
     @Test void sharingAnItemDoesNotShareItsPrivateWhereaboutsAndLocationSharesCanBeRevoked() {
@@ -136,13 +140,13 @@ class PrivateInventoryApiTest {
         owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
         var start = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var edit = executor.submit(() -> { start.await(); return reader().body(itemInput()).patch("/api/items/" + item).statusCode(); });
+            var edit = executor.submit(() -> { start.await(); return reader().body(editInput()).patch("/api/items/" + item).statusCode(); });
             var revoke = executor.submit(() -> { start.await(); return admin().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Concurrent revocation")).patch("/api/access/groups/" + group).statusCode(); });
             start.countDown();
             assertEquals(200, revoke.get(15, TimeUnit.SECONDS));
             assertTrue(Set.of(200, 404).contains(edit.get(15, TimeUnit.SECONDS)), "An edit may finish before revocation or be denied after it");
         }
-        reader().body(itemInput()).patch("/api/items/" + item).then().statusCode(404);
+        reader().body(editInput()).patch("/api/items/" + item).then().statusCode(404);
         reader().header("If-None-Match", "*").get("/api/items/" + item).then().statusCode(404);
     }
 }

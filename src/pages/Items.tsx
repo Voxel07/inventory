@@ -104,13 +104,13 @@ export function Items() {
 
             <ConfirmDialog
                 open={crud.isDeleteOpen}
-                title={t('Artikel löschen', crud.deletingIds.length > 1 ? 'Delete items' : 'Delete item')}
+                title={t('Artikel stilllegen', crud.deletingIds.length > 1 ? 'Retire items' : 'Retire item')}
                 message={t(
-                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} Artikel einschließlich des zugehörigen Transaktionsverlaufs löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
-                    `Are you sure you want to delete ${crud.deletingIds.length} item(s), including their transaction history? This cannot be undone.`,
+                    `${crud.deletingIds.length} Artikel stilllegen? Sie verschwinden aus dem Katalog; Codes und Verlauf bleiben erhalten.`,
+                    `Retire ${crud.deletingIds.length} item(s)? They leave the catalog; their codes and history are kept.`,
                 )}
-                actionLabel={t('Löschen', 'Delete')}
-                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionLabel={t('Stilllegen', 'Retire')}
+                actionTooltip={t('Aus dem Katalog entfernen, Verlauf behalten', 'Remove from the catalog and keep history')}
                 actionColor="error"
                 onClose={crud.closeDelete}
                 onConfirm={crud.handleDeleteConfirm}

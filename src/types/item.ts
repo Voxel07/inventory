@@ -62,7 +62,6 @@ export interface Item {
   barcode?: string;
   name: string;
   description?: string;
-  amount?: number;
   minStock?: number;
   value: number;
   category: string;

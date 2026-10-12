@@ -1,6 +1,6 @@
 # Offline operation and sync
 
-Reviewed 12 October 2026 against `offlineQueue.ts`, `resourceFactory.ts`, `useProgressiveList.ts`, `useResourceApi.ts`, `referenceDataService.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI. See [App Flow](APP_FLOW.md) for journeys and [Implementation Plan](IMPLEMENTATION_PLAN.md) for acceptance status.
+Source: `offlineQueue.ts`, `resourceFactory.ts`, `useProgressiveList.ts`, `useResourceApi.ts`, `referenceDataService.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI. See [App Flow](APP_FLOW.md) for journeys and [Implementation Plan](IMPLEMENTATION_PLAN.md) for acceptance status.
 
 ## Supported scope
 
@@ -39,4 +39,4 @@ The server remains authoritative. Cached data and pending commands never bypass 
 
 ## Verification limits
 
-Current account switching, cold starts, replay/correction concurrency and browser IndexedDB behavior still require interactive acceptance. Source/static checks alone do not establish field resilience. No browser storage was changed during cleanup.
+Current account switching, cold starts, replay/correction concurrency and browser IndexedDB behavior still require interactive acceptance.

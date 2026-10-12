@@ -378,7 +378,7 @@ export function Events() {
       <ConfirmDialog
         open={Boolean(deletingEventId)}
         title={t('Event löschen', 'Delete event')}
-        message={t('Dieses Event dauerhaft löschen? Events mit verknüpften Bestellungen können nicht gelöscht werden.', 'Permanently delete this event? Events with linked orders cannot be deleted.')}
+        message={t('Dieses Event dauerhaft löschen? Das geht nur, solange keine Bestellungen, Buchungen, Rückgaben oder Zusagen darauf verweisen.', 'Permanently delete this event? This is only possible while no orders, stock movements, returns or commitments refer to it.')}
         actionLabel={t('Löschen', 'Delete')}
         actionColor="error"
         pending={deleteReport.isPending}

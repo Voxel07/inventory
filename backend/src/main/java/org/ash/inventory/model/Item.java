@@ -59,8 +59,6 @@ public class Item extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "inventory_role", nullable = false)
     public DomainEnums.InventoryRole inventoryRole = DomainEnums.InventoryRole.returnable;
-    @Column(name = "base_amount", nullable = false)
-    public int baseAmount;
     @Column(name = "min_stock", nullable = false)
     public int minStock;
     @Column(name = "unit_value_cents", nullable = false)

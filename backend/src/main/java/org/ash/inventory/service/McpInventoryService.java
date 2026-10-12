@@ -69,8 +69,8 @@ public class McpInventoryService {
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto deleteAssembly(UUID id) {
-        catalog.deleteAssembly(id);
-        return new InventoryMcpDtos.DeleteResultDto(true, "Assembly", id, "Assembly deleted");
+        catalog.retireAssembly(id);
+        return new InventoryMcpDtos.DeleteResultDto(true, "Assembly", id, "Assembly retired");
     }
 
     public ApiResponses.AssemblyResponse assembly(UUID id) { return queries.assembly(id); }
@@ -107,11 +107,13 @@ public class McpInventoryService {
         return visibleEvents(List.of(queries.event(id))).getFirst();
     }
 
-    public List<ApiResponses.EventResponse> events(String status) {
+    public List<ApiResponses.EventResponse> events(String status, Integer page, Integer limit) {
         actors.current();
+        var bounds = bounds(page, limit);
         var values = catalog.getEvents(null).stream()
                 .filter(e -> status == null || status.isBlank() || status.trim().equalsIgnoreCase(e.status))
-                .sorted(Comparator.comparing(e -> e.startDate)).limit(50).toList();
+                .sorted(Comparator.comparing((org.ash.inventory.model.EventOccurrence e) -> e.startDate).thenComparing(e -> e.id))
+                .skip(bounds.offset()).limit(bounds.limit()).toList();
         return visibleEvents(queries.projectEvents(values));
     }
 
@@ -141,10 +143,12 @@ public class McpInventoryService {
         return result;
     }
 
-    public List<ApiResponses.StorageLocationResponse> locations(UUID warehouseId) {
+    public List<ApiResponses.StorageLocationResponse> locations(UUID warehouseId, Integer page, Integer limit) {
         actors.current();
+        var bounds = bounds(page, limit);
         return mapper.locations(catalog.getLocations().stream().filter(l -> warehouseId == null
-                || (l.warehouse != null && warehouseId.equals(l.warehouse.id))).toList());
+                || (l.warehouse != null && warehouseId.equals(l.warehouse.id)))
+                .skip(bounds.offset()).limit(bounds.limit()).toList());
     }
 
     public List<String> categories() { return catalog.getVisibleCategories(); }

@@ -105,7 +105,7 @@ public class CatalogService {
 
     /** A private assembly needs its own grant in addition to visible components. */
     public boolean canViewAssembly(Assembly assembly, List<AssemblyItem> components, org.ash.inventory.model.UserAccount actor) {
-        return accessPolicies.projectionAllows(assembly.accessPolicy) && canViewAssemblyComponents(components, actor);
+        return assembly.active && accessPolicies.projectionAllows(assembly.accessPolicy) && canViewAssemblyComponents(components, actor);
     }
 
     public List<AssemblyItem> getVisibleAssemblyComponents(Assembly assembly) {
@@ -154,8 +154,9 @@ public class CatalogService {
         apply(item, input);
         orm.persist(item);
         persistImages(item, input.images());
-        if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.baseAmount > 0) {
-            for (int i = 1; i <= item.baseAmount; i++) {
+        int initialAmount = input.amount() == null ? 0 : input.amount();
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized && initialAmount > 0) {
+            for (int i = 1; i <= initialAmount; i++) {
                 var asset = new AssetInstance();
                 asset.item = item;
                 asset.assetCode = String.format("%s-%03d", item.sku, i);
@@ -167,19 +168,19 @@ public class CatalogService {
                 orm.persist(asset);
             }
         }
-        if (item.baseAmount > 0) {
+        if (initialAmount > 0) {
             var tx = new StockTransaction();
             tx.item = item;
             tx.user = actorService.current();
             tx.type = DomainEnums.TransactionType.added;
-            tx.quantity = item.baseAmount;
+            tx.quantity = initialAmount;
             tx.reason = "Initial stock";
             tx.notes = "Initial stock on item creation";
             tx.idempotencyKey = UUID.randomUUID();
             tx.occurredAt = Instant.now();
             tx.destinationLocation = item.storageLocation;
             tx.availabilityBefore = 0;
-            tx.availabilityAfter = item.baseAmount;
+            tx.availabilityAfter = initialAmount;
             positions.apply(tx);
             orm.persist(tx);
         }
@@ -192,14 +193,14 @@ public class CatalogService {
     public Item updateItem(UUID id, ApiModels.ItemInput input) {
         var item = orm.requireLocked(Item.class, id, "Item");
         actorService.requireItemEdit(item);
-        if (input.amount() != null && input.amount() != item.baseAmount) {
-            throw ApiException.badRequest("Existing stock cannot be edited on the item; create a stock adjustment instead");
+        if (input.amount() != null) {
+            throw ApiException.badRequest("Stock cannot be edited on the item; create a stock adjustment instead");
         }
         var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
         if (targetTrackingMode != item.trackingMode) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
-            if (item.baseAmount > 0 || assetCount > 0 || txCount > 0) {
+            if (assetCount > 0 || txCount > 0) {
                 throw ApiException.badRequest("Cannot change tracking mode for an item with existing stock or transaction history");
             }
         }
@@ -264,7 +265,6 @@ public class CatalogService {
                 && item.inventoryRole == DomainEnums.InventoryRole.consumable) {
             throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
         }
-        if (input.amount() != null) item.baseAmount = input.amount();
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
         item.storageLocation = input.storageLocation() == null ? null : orm.require(StorageLocation.class, input.storageLocation(), "Storage location");
@@ -386,15 +386,11 @@ public class CatalogService {
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public void deleteAssembly(UUID id) {
+    public void retireAssembly(UUID id) {
         var assembly = orm.requireLocked(Assembly.class, id, "Assembly");
         getVisibleAssemblyComponents(assembly);
         actorService.requireAssemblyEdit(assembly);
-        if (assembly.imageObjectKey != null) media.deleteAfterCommit(assembly.imageObjectKey);
-        orm.deleteAssemblyItems(assembly);
-        var policy = assembly.accessPolicy;
-        orm.remove(assembly);
-        accessPolicies.delete(policy);
+        assembly.active = false;
         catalogChanged("assemblies", assembly.id);
     }
 
@@ -484,9 +480,10 @@ public class CatalogService {
     public void deleteEvent(UUID id) {
         actorService.requirePlanner();
         var event = orm.requireLocked(EventOccurrence.class, id, "Event occurrence");
-        if (orm.hasLinkedOrders(id)) {
-            throw ApiException.conflict("Event cannot be deleted while it has linked orders");
+        if (orm.hasEventHistory(id)) {
+            throw ApiException.conflict("Event cannot be deleted once orders, movements, returns or commitments reference it");
         }
+        orm.deletePlanningOverrides(id);
         orm.remove(event);
         catalogChanged("events", id);
     }

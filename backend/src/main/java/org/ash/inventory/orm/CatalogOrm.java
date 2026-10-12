@@ -80,16 +80,29 @@ public class CatalogOrm extends EntityOrm {
         return InventoryAccessOrm.bind(entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.name, l.id", StorageLocation.class), accessActor.current()).getResultList();
     }
 
-    public boolean hasLinkedOrders(UUID eventId) {
-        for (String type : List.of("FactionOrder", "GeneralOrder", "PurchaseOrder")) {
-            if (!entityManager.createQuery("select o.id from " + type + " o where o.eventOccurrence.id = :id", UUID.class)
+    /** Orders, movements, returns and owner commitments are history that must keep their event. */
+    public boolean hasEventHistory(UUID eventId) {
+        for (String query : List.of(
+                "select o.id from FactionOrder o where o.eventOccurrence.id = :id",
+                "select o.id from GeneralOrder o where o.eventOccurrence.id = :id",
+                "select o.id from PurchaseOrder o where o.eventOccurrence.id = :id",
+                "select t.id from StockTransaction t where t.eventOccurrence.id = :id",
+                "select r.id from ReturnSubmission r where r.eventOccurrence.id = :id",
+                "select c.id from EquipmentCommitment c where c.event.id = :id")) {
+            if (!entityManager.createQuery(query, UUID.class)
                     .setParameter("id", eventId).setMaxResults(1).getResultList().isEmpty()) return true;
         }
         return false;
     }
 
+    /** Planning overrides belong to the event's plan and go with it. */
+    public void deletePlanningOverrides(UUID eventId) {
+        entityManager.createQuery("delete from PlanningOverride p where p.event.id = :id")
+                .setParameter("id", eventId).executeUpdate();
+    }
+
     public List<Assembly> assemblies() {
-        return entityManager.createQuery("from Assembly a order by a.createdAt desc", Assembly.class).getResultList();
+        return entityManager.createQuery("from Assembly a where a.active order by a.createdAt desc", Assembly.class).getResultList();
     }
 
     public List<EventOccurrence> events(String eventType) {
@@ -176,12 +189,6 @@ public class CatalogOrm extends EntityOrm {
     public void deleteItemImages(Item item) {
         entityManager.createQuery("delete from ItemImage image where image.item = :item")
                 .setParameter("item", item).executeUpdate();
-    }
-
-    public void deleteAssemblyItems(Assembly assembly) {
-        // Component rows may already be managed by the visibility check.
-        // Bulk deletion leaves those rows pointing at the subsequently removed assembly.
-        assemblyItems(assembly).forEach(this::remove);
     }
 
     public void clearActiveLocationAssignments(StorageLocation location) {

@@ -37,7 +37,7 @@ import { translate, useLocalizedText } from '../utils/naming';
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessFaction, canManageInventory } from '../utils/access';
+import { canAccessFaction, canManageInventory, canWriteOff } from '../utils/access';
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 
@@ -407,6 +407,7 @@ export function FactionOrderDetail() {
             order={order}
             items={lineItems}
             busy={returnOrderItems.isPending}
+            canWriteOff={canWriteOff(currentUser)}
             onCancel={() => setReturnOpen(false)}
             onSubmit={(lines, assets) => {
               returnOrderItems.mutate(

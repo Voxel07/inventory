@@ -52,7 +52,6 @@ class InventoryMcpTest {
             location.locationType = DomainEnums.LocationType.warehouse;
             em.persist(location);
             bulk = item("MCP Bulk", DomainEnums.TrackingMode.bulk);
-            bulk.baseAmount = 10;
             bulk.minStock = 5;
             em.persist(bulk);
             var position = new InventoryPosition();
@@ -72,6 +71,18 @@ class InventoryMcpTest {
             owner.role = DomainEnums.UserRole.faction_leader;
             owner.factions = List.of("mcp-group-" + UUID.randomUUID());
             em.persist(owner);
+            // Stock comes only from the ledger: seed the bulk opening balance as an `added` movement.
+            var opening = new StockTransaction();
+            opening.item = bulk;
+            opening.user = owner;
+            opening.type = DomainEnums.TransactionType.added;
+            opening.quantity = 10;
+            opening.reason = "Initial stock";
+            opening.idempotencyKey = UUID.randomUUID();
+            opening.occurredAt = java.time.Instant.now();
+            opening.destinationLocation = location;
+            opening.availabilityAfter = 10;
+            em.persist(opening);
             privateItem = item("MCP private radio", DomainEnums.TrackingMode.serialized);
             privateItem.category = "MCP private category " + UUID.randomUUID();
             privateItem.visibilityScope = DomainEnums.ItemVisibilityScope.person;
@@ -147,7 +158,9 @@ class InventoryMcpTest {
                     .setParameter("id", created.id()).getSingleResult());
         });
         assertTrue(tools.search_items(created.name(), "Optics", 10, 0).stream().anyMatch(i -> i.id().equals(created.id())));
-        var updated = tools.update_item(created.id(), itemInput(created.name() + " updated", 4, "serialized"));
+        var updated = tools.update_item(created.id(), mapper.convertValue(Map.of("name", created.name() + " updated",
+                "category", "Optics", "trackingMode", "serialized", "storageLocation", location.id.toString()),
+                ApiModels.ItemInput.class));
         assertEquals(created.name() + " updated", updated.name());
         assertTrue(tools.delete_item(created.id()).success());
         assertTrue(assertThrows(ToolCallException.class, () -> tools.get_item_details(created.id())).getMessage().startsWith("404:"));

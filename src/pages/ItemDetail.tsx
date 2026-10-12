@@ -141,7 +141,7 @@ export function ItemDetail() {
 
     const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
-    const stockHistory = buildStockHistory(itemTransactions, item?.stock?.onHand ?? item?.amount ?? 0);
+    const stockHistory = buildStockHistory(itemTransactions, item?.stock?.onHand ?? 0);
 
     function handleUpdate(data: ItemFormData) {
         if (!itemId) return;

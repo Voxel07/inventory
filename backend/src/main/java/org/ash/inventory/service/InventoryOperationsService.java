@@ -259,7 +259,7 @@ public class InventoryOperationsService {
             var assets = orm.assetsForItem(item);
             return calculateAssetStock(assets);
         }
-        return stock(item, orm.transactionTotals(item), orm.unresolvedDamageQuantity(item),
+        return ledgerStock(orm.transactionTotals(item), orm.unresolvedDamageQuantity(item),
                 orm.activeReservationQuantity(item), positions.blocked(item), positions.inTransit(item));
     }
 
@@ -299,8 +299,7 @@ public class InventoryOperationsService {
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 result.put(item.id, calculateAssetStock(assetsByItem.getOrDefault(item.id, List.of())));
             } else {
-                result.put(item.id, stock(
-                        item,
+                result.put(item.id, ledgerStock(
                         transactionTotals.getOrDefault(item.id, Map.of()),
                         Math.toIntExact(damageQuantities.getOrDefault(item.id, 0L)),
                         Math.toIntExact(reservationQuantities.getOrDefault(item.id, 0L)),
@@ -319,7 +318,7 @@ public class InventoryOperationsService {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             return calculateAssetStock(assets);
         }
-        return stock(item, totals, damaged, reserved, blocked, inTransit);
+        return ledgerStock(totals, damaged, reserved, blocked, inTransit);
     }
 
     private StockState calculateAssetStock(List<org.ash.inventory.model.AssetInstance> assets) {
@@ -337,7 +336,7 @@ public class InventoryOperationsService {
         return new StockState(onHand, checkedOut, inTransit, damaged, reserved, available);
     }
 
-    private StockState stock(Item item, Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked, int inTransit) {
+    private StockState ledgerStock(Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked, int inTransit) {
         int onHand = quantity(totals, DomainEnums.TransactionType.added)
                 + quantity(totals, DomainEnums.TransactionType.received)
                 + quantity(totals, DomainEnums.TransactionType.adjusted)
@@ -346,7 +345,6 @@ public class InventoryOperationsService {
                 - quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.written_off)
                 - quantity(totals, DomainEnums.TransactionType.transfer_out);
-        if (!totals.containsKey(DomainEnums.TransactionType.added)) onHand += item.baseAmount;
         int checkedOut = quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.checkin)
                 - quantity(totals, DomainEnums.TransactionType.consumed)
@@ -392,7 +390,10 @@ public class InventoryOperationsService {
         var report = new DamageReport();
         report.createdAt = occurredAt;
         if (input.itemId() != null) report.item = lockedItem(input.itemId());
-        else report.assembly = orm.require(Assembly.class, input.assemblyId(), "Assembly");
+        else {
+            report.assembly = orm.require(Assembly.class, input.assemblyId(), "Assembly");
+            if (!report.assembly.active) throw ApiException.notFound("Assembly not found");
+        }
         report.reporter = actors.current();
         report.quantity = input.amount();
         report.description = input.description();

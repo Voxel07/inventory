@@ -23,13 +23,13 @@ host inventory inventory_replicator 10.0.0.20/32 scram-sha-256
 
 On the app VPS:
 
-```powershell
+```bash
 docker compose up -d postgres
 ```
 
 On the storage VPS, set `REPLICA_DB_PASSWORD` and start the storage stack:
 
-```powershell
+```bash
 docker compose -f docker-compose.storage.yml up -d
 ```
 
@@ -45,21 +45,20 @@ does not use Hibernate update. Logical replication does not copy
 schema definitions, so copy only the matching schema to the storage database
 before creating the subscription:
 
-```powershell
-pg_dump --schema-only --no-owner --no-privileges `
-  --dbname="postgresql://inventory:PRIMARY_PASSWORD@PRIMARY_PRIVATE_IP:5432/inventory" `
+```bash
+pg_dump --schema-only --no-owner --no-privileges \
+  --dbname="postgresql://inventory:PRIMARY_PASSWORD@PRIMARY_PRIVATE_IP:5432/inventory" \
   --file=inventory-schema.sql
 
-psql `
-  --dbname="postgresql://inventory:REPLICA_PASSWORD@127.0.0.1:5433/inventory" `
+psql \
+  --dbname="postgresql://inventory:REPLICA_PASSWORD@127.0.0.1:5433/inventory" \
   --file=inventory-schema.sql
 ```
 
 DDL and sequence values are not replicated. Current application data is
 disposable: after editing the baseline/entities, recreate empty primary and
 subscriber databases and repeat initialization and subscription setup. This
-repository does not provide incremental upgrades for existing data. These
-instructions are an operator procedure; no database was changed by the review.
+repository does not provide incremental upgrades for existing data.
 
 ## 4. Create the publication
 
@@ -88,15 +87,17 @@ following outside a transaction. Replace the connection values first:
 
 ```sql
 CREATE SUBSCRIPTION inventory_subscription
-  CONNECTION 'host=PRIMARY_PRIVATE_IP port=5432 dbname=inventory user=inventory_replicator password=REPLICATION_PASSWORD sslmode=prefer'
+  CONNECTION 'host=PRIMARY_PRIVATE_IP port=5432 dbname=inventory user=inventory_replicator password=REPLICATION_PASSWORD sslmode=disable'
   PUBLICATION inventory_publication
   WITH (copy_data = true, create_slot = true, enabled = true);
 ```
 
-The supplied Compose configuration does not provision PostgreSQL TLS. Keep this
-route restricted by firewall or VPN, or configure server certificates and change
-the connection to `sslmode=require`. The subscription creates and owns its
-logical replication slot on the primary.
+The supplied Compose configuration does not provision PostgreSQL TLS, so the
+example uses `sslmode=disable` and relies on the WireGuard/private network from
+step 1 for encryption. Do not use `sslmode=prefer`: it silently falls back to
+plaintext. If the route leaves a private network, configure server certificates
+on the primary and use `sslmode=verify-full` (or at least `require`). The
+subscription creates and owns its logical replication slot on the primary.
 
 ## 6. Verify and operate it
 
@@ -116,7 +117,15 @@ FROM pg_stat_subscription;
 
 Treat the replica tables as read-only to avoid replication conflicts. This is an
 asynchronous data copy, not a physical hot standby. Before using it for failover,
-synchronize sequences, disable or drop the subscription, and point the app at the
-storage database explicitly. Monitor retained WAL on the primary;
+disable or drop the subscription, synchronize sequences and point the app at the
+storage database explicitly. Most keys are UUIDs; the identity column of
+`faction_order_history` is the sequence that matters. On the promoted database:
+
+```sql
+SELECT setval(pg_get_serial_sequence('faction_order_history', 'id'),
+              COALESCE((SELECT max(id) FROM faction_order_history), 0) + 1, false);
+```
+
+Monitor retained WAL on the primary;
 `POSTGRES_MAX_SLOT_WAL_KEEP_SIZE` caps how much a disconnected logical slot may
 retain before the subscriber must be resynchronized.

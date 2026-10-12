@@ -24,6 +24,9 @@ services:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
       POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
+    ports:
+      # Private/VPN address only: the second API node and the storage replica connect here.
+      - "${DB_REPLICATION_BIND_ADDRESS:-127.0.0.1}:${DB_REPLICATION_PORT:-5432}:5432"
     volumes:
       - inventory-postgres:/var/lib/postgresql
     healthcheck:
@@ -37,7 +40,8 @@ services:
     image: valkey/valkey:8-alpine
     command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
     ports:
-      - "127.0.0.1:6379:6379"
+      # Valkey has no password here: bind only to loopback or a firewalled private address.
+      - "${VALKEY_BIND_ADDRESS:-127.0.0.1}:6379:6379"
     volumes:
       - inventory-valkey:/data
     healthcheck:
@@ -72,10 +76,10 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
-      DB_URL: jdbc:postgresql://postgres:5432/inventory
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/inventory}
       DB_USER: inventory
       DB_PASSWORD: ${DB_PASSWORD:-inventory}
-      REDIS_URL: redis://valkey:6379
+      REDIS_URL: ${REDIS_URL:-redis://valkey:6379}
       API_RATE_LIMIT_BACKEND: redis
       EVENT_BACKEND: redis
       REDIS_HEALTH_ENABLED: "true"
@@ -85,12 +89,20 @@ services:
       API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-inventory}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
+      OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
+      PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
+      PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
+      PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
+      OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
+      OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
       MEDIA_MODE: s3
-      S3_ENDPOINT: http://garage:3900
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
       S3_BUCKET: ${S3_BUCKET:-inventory}
       S3_REGION: ${S3_REGION:-garage}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
@@ -116,10 +128,10 @@ services:
       - "127.0.0.1:8081:8080"
     environment:
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
-      DB_URL: jdbc:postgresql://postgres:5432/inventory
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/inventory}
       DB_USER: inventory
       DB_PASSWORD: ${DB_PASSWORD:-inventory}
-      REDIS_URL: redis://valkey:6379
+      REDIS_URL: ${REDIS_URL:-redis://valkey:6379}
       API_RATE_LIMIT_BACKEND: redis
       EVENT_BACKEND: redis
       REDIS_HEALTH_ENABLED: "true"
@@ -129,12 +141,20 @@ services:
       API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-inventory}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
+      OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
+      PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
+      PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
+      PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
+      OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
+      OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
       MEDIA_MODE: s3
-      S3_ENDPOINT: http://garage:3900
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
       S3_BUCKET: ${S3_BUCKET:-inventory}
       S3_REGION: ${S3_REGION:-garage}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
@@ -164,7 +184,7 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
       VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY-}
-      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-inventory}
+      VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3333/}
       VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-openid profile email offline_access}
     depends_on:

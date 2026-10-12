@@ -14,7 +14,7 @@ import {
   updateFactionOrder,
 } from '../services/factionOrderService';
 import type { EventType, FactionOrder, FactionOrderFormData } from '../types';
-import type { AssetReturnOutcome } from '../services/factionOrderService';
+import type { AssetReturnOutcome, ReturnLineInput } from '../services/factionOrderService';
 import { useProgressiveList } from './useProgressiveList';
 
 
@@ -98,7 +98,7 @@ export function usePickUpFactionOrder() {
 export function useReturnFactionOrderItems() {
   return useOrderMutation(({ id, lines, assets }: {
     id: string;
-    lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }>;
+    lines: Record<string, ReturnLineInput>;
     assets?: Record<string, AssetReturnOutcome>;
   }) => returnFactionOrderItems(id, lines, assets));
 }

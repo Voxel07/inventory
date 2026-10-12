@@ -2,7 +2,7 @@
 
 The Quarkus backend exposes 21 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
 
-Reviewed 12 October 2026. The current implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
+The implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
 
 ## Authentication and authorization
 
@@ -61,13 +61,13 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `get_assembly_details` | `assemblyId` | Authorized detail including component projection |
 | `list_assemblies` | Optional `eventTag` | Scoped assemblies filtered by event tag; components projected in a batch |
 | `update_assembly` | `assemblyId`, `input: AssemblyInput` | Replaces metadata/composition with REST semantics |
-| `delete_assembly` | `assemblyId` | Shared catalog deletion command |
+| `delete_assembly` | `assemblyId` | Retires the assembly; it leaves the catalog and can no longer be ordered, while codes and order history are kept |
 | `create_event` | `input: EventInput` | Requires eventType/startDate; supplied item quota IDs must be visible |
 | `get_event_details` | `eventId` | Canonical historical deployment metrics with scoped item maps |
-| `list_events` | Optional `status` | First 50 matching events in start-date order; scoped item maps |
+| `list_events` | Optional `status`, `page`, `limit` | Matching events in start-date order; page defaults to 0, limit to 20, maximum 100; scoped item maps |
 | `update_event` | `eventId`, `input: EventInput` | Requires eventType/startDate; null quota maps retain existing values, supplied maps replace them |
-| `delete_event` | `eventId` | Shared guard rejects linked faction, general or purchase orders |
-| `list_storage_locations` | Optional `warehouseId` | Active locations with warehouse metadata |
+| `delete_event` | `eventId` | Rejected (409) once orders, stock movements, return submissions or owner commitments reference the event; planning overrides are removed with it |
+| `list_storage_locations` | Optional `warehouseId`, `page`, `limit` | Active locations with warehouse metadata; same paging bounds |
 | `get_inventory_positions` | `itemId` | Bulk/lot positions with FEFO command reservations, damage/quarantine and policy holds; serialized items return an empty list |
 | `list_asset_instances` | `itemId`; optional `status`, `page`, `limit` | Visible item's active assets; typed availability-state filter applied before pagination; default limit 20, maximum 100 |
 | `check_low_stock_items` | Optional nonnegative `threshold` | Visible items with availability ≤ minStock + buffer; deficit = max(0, minStock − available) |
@@ -119,4 +119,4 @@ Prompt templates authenticate the actor and contain no implicit write authorizat
 
 The existing `InventoryMcpTest` was updated for the shared payloads and targeted regression cases: role changes on the same session, person/group and private item/asset/position/assembly/category/event reads, actual actor/outbox evidence, serialized and unlocated stock, purchase-linked deletion, prepared/partially released reservations, contributor holds, validation rollback and schedule holds. `InventoryMcpAuthenticationTest` enables the production-equivalent MCP path policy with development authentication disabled and covers anonymous root/subpath requests and spoofed actor headers.
 
-The 1 October change originally reported static verification only: Java source parsing, local extension API inspection, contract/call-site checks, MCP persistence-boundary checks and whitespace/document-link checks. Per [agent.md](../agent.md), no compilation, builds or test suites were run. That statement describes the original change, not a current test result. The former architecture later reported a 5 October test run; [tests/README.md](../tests/README.md) retains its inventory. No tests were rerun on 12 October; historical claims and open acceptance are distinguished in [Implementation Plan](IMPLEMENTATION_PLAN.md). Production OIDC token/audience validation, expired-token denial, SSE authorization, connected SSE/ETag refresh and measured SQL counts remain runtime acceptance work.
+These suites need PostgreSQL; see [tests/README.md](../tests/README.md). Production OIDC token/audience validation, expired-token denial, SSE authorization, connected SSE/ETag refresh and measured SQL counts remain runtime acceptance work.

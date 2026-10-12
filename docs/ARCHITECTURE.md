@@ -1,18 +1,16 @@
 # ASH Inventory — Architecture Overview
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
-The architecture is now split into six focused documents. This page is the entry point. Current source behavior, architectural targets and runtime acceptance are kept distinct; the previous architecture's detailed requirement IDs are preserved in the product register.
+This page is the entry point to the architecture documentation. Current source behavior, architectural targets and runtime acceptance are kept distinct throughout.
 
 ## Document map
 
 | Document | Owns | Read it for |
 |---|---|---|
-| [Product Requirements Document](PRODUCT_REQUIREMENTS.md) | Features, functions, business rules and requirement IDs | What users need and what the product currently supports |
-| [Technical Requirements](TECHNICAL_REQUIREMENTS.md) | Frameworks, dependencies, boundaries, security and runtime constraints | What the app is built with and how components cooperate |
+| [Product Requirements Document](PRODUCT_REQUIREMENTS.md) | Features, functions, business rules, requirement IDs and glossary | What users need and what the product currently supports |
+| [Technical Requirements](TECHNICAL_REQUIREMENTS.md) | Frameworks, dependencies, boundaries, security, runtime constraints and observability | What the app is built with and how components cooperate |
 | [App Flow](APP_FLOW.md) | Routes, navigation, user journeys and lifecycle states | How users reach and complete tasks |
 | [Design Brief](DESIGN_BRIEF.md) | Theme tokens, typography, layout, component patterns and accessibility goals | How screens should look and behave |
-| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 55 tables, relationships, stock authority, media, caches and recovery | Where data lives and which store is authoritative |
+| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 55 tables, relationships, stock authority, media, caches, personal data and recovery | Where data lives and which store is authoritative |
 | [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) | Prioritized gaps, target refactors, progress and acceptance evidence | What is complete, partial, planned or still unverified |
 
 Each subject has one owner above. Keep detailed requirements in the PRD, stack decisions in Technical Requirements and unfinished work in the progress register rather than duplicating their full tables here.
@@ -50,12 +48,13 @@ The source still contains exceptions and unfinished consolidation: guarded maste
 |---|---|
 | [Offline Mode](OFFLINE_MODE.md) | Supported queue commands, cached reads, review and correction |
 | [MCP Support](MCP_SUPPORT.md) | Tool/resource/prompt contracts and authenticated client connection |
+| [Authentik setup](AUTHENTIK_SETUP.md) | Provider, group naming, token lifetimes and audience mapping |
 | [Deployment Step 1](DEPLOYMENT_STEP1.md) | Single application node with separate storage/recovery plan |
 | [Deployment Step 2](DEPLOYMENT_STEP2.md) | Proposed replicated API/multi-host topology and its limits |
 | [PostgreSQL logical replication](postgres-logical-replication.md) | Operator publication/subscription procedure |
 | [Test inventory](../tests/README.md) | Existing regression ownership and historical test procedures |
 | [Agent guidelines](../agent.md) | Repository rules for builds/tests, contracts and schema edits |
 
-## Review boundary
+## Verification status
 
-This documentation review inspected source, configuration, schema and the prior docs. It ran documentation/link checks, not app builds, tests, browser sessions or infrastructure validation. Historical 5 October results are identified as historical in the progress register. Authentik, device/camera/offline, rendered accessibility/export, real S3/restore, load and cluster acceptance remain pending.
+Feature presence in source is tracked separately from runtime acceptance. Authentik, device/camera/offline, rendered accessibility/export, real S3/restore, load and cluster acceptance are open; see ACC-01..05 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).

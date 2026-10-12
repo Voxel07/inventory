@@ -19,6 +19,8 @@ public class Assembly extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY) @JoinColumn(name = "access_policy_id", unique = true)
     public InventoryAccessPolicy accessPolicy;
     @Column(nullable = false) public String name;
+    /** Retired assemblies keep their codes, composition and history but leave the catalog. */
+    @Column(nullable = false) public boolean active = true;
     public String description;
     public String hint;
     @Column(name = "image_object_key", length = 1024)

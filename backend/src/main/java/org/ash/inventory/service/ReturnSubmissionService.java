@@ -122,7 +122,7 @@ public class ReturnSubmissionService {
                     value.assetInstance == null ? null : Map.of(value.item.id, List.of(value.assetInstance.id)),
                     null, null, value.id, value.notes, null));
         } else if (value.factionOrder != null) {
-            var line = new ApiModels.ReturnLine(value.quantity, 0, 0, 0, null, value.notes);
+            var line = new ApiModels.ReturnLine(value.quantity, 0, 0, 0, 0, null, value.notes);
             Map<UUID, ApiModels.AssetReturnLine> assets = value.assetInstance == null ? Map.of()
                     : Map.of(value.assetInstance.id, new ApiModels.AssetReturnLine(
                             DomainEnums.ReconciliationOutcome.returned_good, null, value.notes));

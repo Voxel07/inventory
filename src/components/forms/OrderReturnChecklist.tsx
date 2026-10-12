@@ -2,15 +2,17 @@ import { Button } from '../shared/ActionButtons';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { Alert, Box, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import type { AssetInstance, FactionOrder, Item } from '../../types';
-import type { AssetReturnOutcome } from '../../services/factionOrderService';
+import type { AssetReturnOutcome, ReturnLineInput } from '../../services/factionOrderService';
 import { translate, useLocalizedText } from '../../utils/naming';
 
-type Outcome = { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string };
+type Outcome = ReturnLineInput;
 
-export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }: {
+export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, onCancel, onSubmit }: {
   order: FactionOrder;
   items: Item[];
   busy?: boolean;
+  /** HQ admins may write off units that will not come back, which lets the order close. */
+  canWriteOff?: boolean;
   onCancel: () => void;
   onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;
 }) {
@@ -39,6 +41,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
           consumed: 0,
           missing: assets.filter((asset) => asset.availabilityStatus === 'lost').length,
           damaged: 0,
+          writtenOff: 0,
         }];
       }
       const existingMissing = Math.min(Number(quantity), order.missingQuantities?.[itemId] ?? 0);
@@ -47,6 +50,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
         consumed: 0,
         missing: existingMissing,
         damaged: 0,
+        writtenOff: 0,
       }];
     }),
   ));
@@ -60,6 +64,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       returned: assets.filter((asset) => next[asset.id]?.outcome === 'returned_good').length,
       consumed: 0,
       damaged: assets.filter((asset) => next[asset.id]?.outcome === 'returned_damaged').length,
+      writtenOff: assets.filter((asset) => next[asset.id]?.outcome === 'written_off').length,
       missing: assets.filter((asset) => next[asset.id]?.outcome === 'missing'
         || (asset.availabilityStatus === 'lost' && !next[asset.id])).length,
     };
@@ -73,9 +78,11 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
       return next;
     });
   };
-  const invalid = Object.entries(lines).some(([itemId, value]) =>
-    value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0
-    || value.returned + value.consumed + value.missing + value.damaged > Number(outstanding[itemId]));
+  const exceedsOutstanding = Object.entries(lines).some(([itemId, value]) =>
+    value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0 || value.writtenOff < 0
+    || value.returned + value.consumed + value.missing + value.damaged + value.writtenOff > Number(outstanding[itemId]));
+  const writeOffWithoutReason = Object.values(lines).some((value) => value.writtenOff > 0 && !value.notes?.trim());
+  const invalid = exceedsOutstanding || writeOffWithoutReason;
 
   function markAllReturned() {
     setAssetOutcomes(Object.fromEntries(Object.values(outstandingAssets).flatMap((assets) =>
@@ -88,6 +95,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
           consumed: 0,
           missing: 0,
           damaged: 0,
+          writtenOff: 0,
         },
       ])
     ));
@@ -104,6 +112,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
             consumed: Number(quantity),
             missing: 0,
             damaged: 0,
+            writtenOff: 0,
             notes: current[itemId]?.notes,
           };
         }
@@ -127,6 +136,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
         consumed: isConsumable ? quantity : 0,
         missing: 0,
         damaged: 0,
+        writtenOff: 0,
       },
     }));
   }
@@ -160,7 +170,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
         e.preventDefault();
         const max = outstanding[matchedItem.id];
         setLines((prev) => {
-          const currentLine = prev[matchedItem.id] || { returned: 0, consumed: 0, missing: 0, damaged: 0 };
+          const currentLine = prev[matchedItem.id] || { returned: 0, consumed: 0, missing: 0, damaged: 0, writtenOff: 0 };
           if (currentLine.returned < max) {
             return {
               ...prev,
@@ -261,6 +271,7 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                           <MenuItem value="returned_good">{t('Intakt zurück', 'Returned good')}</MenuItem>
                           <MenuItem value="returned_damaged">{t('Beschädigt zurück', 'Returned damaged')}</MenuItem>
                           {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('Fehlend', 'Missing')}</MenuItem>}
+                          {canWriteOff && <MenuItem value="written_off">{t('Abschreiben', 'Write off')}</MenuItem>}
                         </TextField>
                       </Stack>
                     ))}
@@ -271,16 +282,18 @@ export function OrderReturnChecklist({ order, items, busy, onCancel, onSubmit }:
                     {item?.isConsumable && <TextField size="small" type="number" label={t('Verbraucht', 'Consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
                     <TextField size="small" type="number" label={t('Fehlt', 'Missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     <TextField size="small" type="number" label={t('Beschädigt', 'Damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    {canWriteOff && <TextField size="small" type="number" label={t('Abschreiben', 'Write off')} value={value.writtenOff} onChange={(e) => setValue(itemId, 'writtenOff', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} helperText={t('Fehlende zuerst', 'Missing units first')} />}
                     {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('Betriebsstunden', 'Operating hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
                   </>
                 )}
               </Stack>
-              {(value.damaged > 0 || value.missing > 0) && <TextField fullWidth size="small" sx={{ mt: 1 }} label={t('Notiz zu Schaden/Fehlteil', 'Damage/missing note')} value={value.notes ?? ''} onChange={(e) => setValue(itemId, 'notes', e.target.value)} />}
+              {(value.damaged > 0 || value.missing > 0 || value.writtenOff > 0) && <TextField fullWidth size="small" sx={{ mt: 1 }} required={value.writtenOff > 0} error={value.writtenOff > 0 && !value.notes?.trim()} label={value.writtenOff > 0 ? t('Begründung der Abschreibung', 'Write-off reason') : t('Notiz zu Schaden/Fehlteil', 'Damage/missing note')} value={value.notes ?? ''} onChange={(e) => setValue(itemId, 'notes', e.target.value)} />}
             </Box>
           );
         })}
       </Stack>
-      {invalid && <Alert severity="error" sx={{ mt: 2 }}>{t('Die Summe darf die offene Menge nicht überschreiten.', 'The outcome total cannot exceed the outstanding quantity.')}</Alert>}
+      {exceedsOutstanding && <Alert severity="error" sx={{ mt: 2 }}>{t('Die Summe darf die offene Menge nicht überschreiten. Abgeschriebene Fehlteile zählen nicht mehr als fehlend.', 'The outcome total cannot exceed the outstanding quantity. Written-off missing units no longer count as missing.')}</Alert>}
+      {writeOffWithoutReason && <Alert severity="error" sx={{ mt: 2 }}>{t('Für Abschreibungen ist eine Begründung erforderlich.', 'A reason is required for write-offs.')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
         <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={onCancel}>{t('Abbrechen', 'Cancel')}</Button>
         <Button title={translate('Die geprüften Rückgabemengen buchen', 'Record the reviewed return quantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('Rückgabe buchen', 'Record return')}</Button>

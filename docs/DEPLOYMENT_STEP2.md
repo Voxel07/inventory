@@ -51,10 +51,14 @@ flowchart TD
 
 | Node | Hardware | Services | Role |
 | --- | --- | --- | --- |
-| VPS 1 | 4 vCPU, 8–16 GB | Traefik, React SPA, Quarkus API, PostgreSQL primary, OpenObserver | Primary writes |
-| VPS 2 | 4 vCPU, 8–16 GB | Traefik, React SPA, Quarkus API | Reads / failover |
+| VPS 1 | 4 vCPU, 8–16 GB | Traefik, React SPA, Quarkus API, PostgreSQL primary, Valkey, OpenObserve (optional, see [Observability](TECHNICAL_REQUIREMENTS.md#7-observability)) | Primary node; owns all writes |
+| VPS 2 | 4 vCPU, 8–16 GB | Traefik, React SPA, Quarkus API | Second API node; reads and writes through the VPS 1 database and Valkey |
 | VPS 3 | 2 vCPU, 4 GB | Garage S3, PostgreSQL replica, backup target | Storage & DR |
 | Edge | Cloudflare | DNS, WAF, Worker load balancer | Routing |
+
+VPS 2 has no database of its own. If VPS 1 or its PostgreSQL fails, VPS 2 cannot
+serve requests either; the second node protects against API process/host
+failures on VPS 2 and adds API capacity, not database availability.
 
 ## Running the cluster
 
@@ -67,39 +71,80 @@ nodes** (`API_RATE_LIMIT_BACKEND=redis`, `EVENT_BACKEND=redis`).
 ```bash
 # On VPS 1 (primary)
 docker compose -f docker-compose.cluster.yml up -d postgres valkey garage inventory-api-1 inventory-app
-
-# On VPS 2 (secondary)
-docker compose -f docker-compose.cluster.yml up -d inventory-api-2 inventory-app
 ```
+
+On VPS 2, point the API at VPS 1 over the private network and start it **without
+dependencies**; otherwise Compose also starts an empty local `postgres`, `valkey`
+and `garage`, and the node silently uses them. In VPS 2's `.env`:
+
+```dotenv
+DB_URL=jdbc:postgresql://10.0.0.10:5432/inventory
+REDIS_URL=redis://10.0.0.10:6379
+S3_ENDPOINT=https://s3.example.com
+```
+
+```bash
+# On VPS 2 (secondary)
+docker compose -f docker-compose.cluster.yml up -d --no-deps inventory-api-2 inventory-app
+```
+
+On VPS 1, publish PostgreSQL and Valkey only on the private address
+(`DB_REPLICATION_BIND_ADDRESS=10.0.0.10`, `VALKEY_BIND_ADDRESS=10.0.0.10`) and
+firewall them to VPS 2/VPS 3. Valkey has no password in the checked-in
+configuration, so never bind it to a public interface.
 
 Keep the storage node from Step 1 (`docker-compose.storage.yml`) running on VPS 3
 for Garage S3 and the logical replica.
 
 ## Health-checked routing (Cloudflare Worker)
 
-The Worker polls `/q/health/live` on both app nodes and routes traffic:
+The Worker checks `/q/health/ready` (which includes the database connection) and
+sends traffic to the first healthy node:
 
 ```text
-VPS1 healthy → VPS1
-VPS1 down    → VPS2 (failover in < a few seconds)
+VPS1 ready → VPS1
+VPS1 not ready → VPS2
 ```
 
-A minimal Worker:
+A minimal Worker. `PRIMARY_ORIGIN` and `SECONDARY_ORIGIN` are Worker environment
+variables holding each node's direct origin, e.g. `https://node1.example.com`:
 
 ```js
+const HEALTH_TTL_MS = 10_000;
+let cached = { origin: null, checkedAt: 0 };
+
+async function pickOrigin(env) {
+  if (cached.origin && Date.now() - cached.checkedAt < HEALTH_TTL_MS) return cached.origin;
+  for (const origin of [env.PRIMARY_ORIGIN, env.SECONDARY_ORIGIN]) {
+    try {
+      const health = await fetch(`${origin}/q/health/ready`, { signal: AbortSignal.timeout(2000) });
+      if (health.ok) {
+        cached = { origin, checkedAt: Date.now() };
+        return origin;
+      }
+    } catch { /* try next origin */ }
+  }
+  cached = { origin: null, checkedAt: 0 };
+  return null;
+}
+
 export default {
-  async fetch(request) {
-    const upstreams = [PRIMARY_ORIGIN, SECONDARY_ORIGIN];
-    for (const origin of upstreams) {
-      try {
-        const health = await fetch(`${origin}/q/health/live`);
-        if (health.ok) return fetch(request, { redirect: 'manual' }).then(res => fetch(new URL(request.url, origin), request));
-      } catch { /* try next origin */ }
-    }
-    return new Response('Service unavailable', { status: 503 });
+  async fetch(request, env) {
+    const origin = await pickOrigin(env);
+    if (!origin) return new Response('Service unavailable', { status: 503 });
+    const url = new URL(request.url);
+    return fetch(new Request(`${origin}${url.pathname}${url.search}`, request));
   },
 };
 ```
+
+The health result is cached per Worker isolate for 10 seconds, so a node failure
+is noticed after at most that interval plus the 2-second timeout; this is not a
+measured failover time. A request already sent to a failing node is **not**
+retried on the other node, because request bodies cannot be replayed safely. The
+PWA's offline queue and command UUIDs cover retries of supported commands.
+Cloudflare's paid Load Balancing product provides the same health-checked
+routing without custom code.
 
 ## Backup & disaster recovery
 
@@ -118,7 +163,8 @@ upgrade procedure is removed. No database reset is performed by this guide.
 4. **Garage S3 sync** — nightly sync of the media bucket to the Storage Box.
 
 **Recovery target (unverified RTO < 30 min):** bring up a fresh node from the checked-in compose
-files, initialize the canonical schema, restore the latest dump/WAL, re-point the Worker.
+files, initialize the canonical schema, restore the latest dump/WAL, update `PRIMARY_ORIGIN` /
+`DB_URL` to the new node.
 
 ## Validation limits
 

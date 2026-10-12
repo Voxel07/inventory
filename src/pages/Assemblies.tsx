@@ -88,14 +88,14 @@ export function Assemblies() {
             <ConfirmDialog
                 open={crud.isDeleteOpen}
                 title={crud.deletingIds.length > 1
-                    ? t('Baugruppen löschen', 'Delete assemblies')
-                    : t('Baugruppe löschen', 'Delete assembly')}
+                    ? t('Baugruppen stilllegen', 'Retire assemblies')
+                    : t('Baugruppe stilllegen', 'Retire assembly')}
                 message={t(
-                    `Sind Sie sicher, dass Sie ${crud.deletingIds.length} ${crud.deletingIds.length === 1 ? 'Baugruppe' : 'Baugruppen'} löschen möchten? Dies kann nicht rückgängig gemacht werden.`,
-                    `Are you sure you want to delete ${crud.deletingIds.length} assembl${crud.deletingIds.length === 1 ? 'y' : 'ies'}? This cannot be undone.`,
+                    `${crud.deletingIds.length} ${crud.deletingIds.length === 1 ? 'Baugruppe' : 'Baugruppen'} stilllegen? Sie verschwinden aus dem Katalog und können nicht mehr bestellt werden; Codes und Bestellverlauf bleiben erhalten.`,
+                    `Retire ${crud.deletingIds.length} assembl${crud.deletingIds.length === 1 ? 'y' : 'ies'}? They leave the catalog and can no longer be ordered; codes and order history are kept.`,
                 )}
-                actionLabel={t('Löschen', 'Delete')}
-                actionTooltip={t('Dauerhaft löschen', 'Permanently delete')}
+                actionLabel={t('Stilllegen', 'Retire')}
+                actionTooltip={t('Aus dem Katalog entfernen, Verlauf behalten', 'Remove from the catalog and keep history')}
                 actionColor="error"
                 onClose={crud.closeDelete}
                 onConfirm={crud.handleDeleteConfirm}

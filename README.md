@@ -99,8 +99,10 @@ The backend exposes explicit workflow APIs rather than generic entity CRUD:
 
 ## Deployment
 
+- [Authentik setup](docs/AUTHENTIK_SETUP.md)
 - [Step 1 — Single VPS + S3/backup storage node](docs/DEPLOYMENT_STEP1.md)
-- [Step 2 — Multi-node HA](docs/DEPLOYMENT_STEP2.md)
+- [Step 2 — Multi-node API (shared database)](docs/DEPLOYMENT_STEP2.md)
+- [Observability (OpenObserve)](docs/TECHNICAL_REQUIREMENTS.md#7-observability)
 
 ## Offline field operation
 

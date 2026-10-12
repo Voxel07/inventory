@@ -1,8 +1,6 @@
 # Design Brief
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
-This brief captures the existing UI system and styling requirements for future work. It was derived from [theme.ts](../src/theme.ts), [global CSS](../src/index.css), [UI preferences](../src/store/uiStore.ts) and the shared components. It is a source-based brief; no current browser render or accessibility audit was performed. Navigation and journeys belong in [App Flow](APP_FLOW.md).
+This brief captures the existing UI system and styling requirements for future work. It was derived from [theme.ts](../src/theme.ts), [global CSS](../src/index.css), [UI preferences](../src/store/uiStore.ts) and the shared components. No rendered accessibility audit has been done yet (ACC-02). Navigation and journeys belong in [App Flow](APP_FLOW.md).
 
 ## 1. Product character
 
@@ -105,4 +103,4 @@ Print CSS hides headers, drawers, navigation and `.no-print` elements, and remov
 - [ ] Verify stale/offline/conflict/restricted states with realistic data.
 - [ ] Inspect printed labels, order PDFs and report exports across supported browsers.
 
-These are pending acceptance tasks, not work completed by this documentation review. Their tracking lives in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+These are pending acceptance tasks, tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).

@@ -287,7 +287,12 @@ public class OrderService {
             var outcome = entry.getValue();
             if (!item.consumable && outcome.consumed() > 0)
                 throw ApiException.badRequest("Only consumable items can be recorded as consumed");
-            int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged();
+            if (outcome.writtenOff() > 0) {
+                actors.requireAdmin();
+                if (outcome.notes() == null || outcome.notes().isBlank())
+                    throw ApiException.badRequest("Write-off reason is required for " + item.name);
+            }
+            int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged() + outcome.writtenOff();
             if (reconciled + outcome.missing() > outstanding)
                 throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
@@ -295,7 +300,8 @@ public class OrderService {
                         assignmentsByAsset, handoverDetails);
             } else {
                 distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
-                        outcome.damaged(), outcome.missing(), input.idempotencyKey(), outcome.notes(), handoverDetails);
+                        outcome.damaged(), outcome.writtenOff(), outcome.missing(), input.idempotencyKey(),
+                        outcome.notes(), handoverDetails);
                 if (outcome.returned() > 0)
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
@@ -305,6 +311,9 @@ public class OrderService {
                 if (outcome.damaged() > 0)
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
+                if (outcome.writtenOff() > 0)
+                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.written_off,
+                            outcome.writtenOff(), input.idempotencyKey(), "written_off", outcome.notes());
             }
             if (item.trackingMode != DomainEnums.TrackingMode.serialized && outcome.damaged() > 0) {
                 var damage = new DamageReport();
@@ -341,7 +350,7 @@ public class OrderService {
         var assetOutcomes = new LinkedHashMap<UUID, ApiModels.AssetReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet())
             outcomes.put(entry.getKey().id,
-                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, null, "Full order return"));
+                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, 0, null, "Full order return"));
         for (var assignment : orm.assetAssignments(order)) {
             var asset = assignment.assetInstance;
             if (asset.availabilityStatus == DomainEnums.AssetState.in_field
@@ -413,6 +422,7 @@ public class OrderService {
                 if (entry.getValue() == null || entry.getValue() < 1)
                     continue;
                 var assembly = orm.require(Assembly.class, entry.getKey(), "Assembly");
+                if (!assembly.active) throw ApiException.notFound("Assembly not found");
                 for (var component : orm.assemblyItems(assembly)) {
                     addLine(order, component.item, assembly, component.quantity * entry.getValue());
                     count++;
@@ -517,9 +527,14 @@ public class OrderService {
     }
 
     private void distributeReturn(FactionOrder order, List<FactionOrderLine> lines, Item item, UserAccount actor,
-            int returned, int consumed, int damaged, int missing, UUID idempotencyKey, String notes,
+            int returned, int consumed, int damaged, int writtenOff, int missing, UUID idempotencyKey, String notes,
             List<ReturnHandoverDetail> handoverDetails) {
-        int undistributed = distributeOutcome(order, lines, item, actor, returned,
+        // Write-offs settle units already reported missing before any still-unchecked units.
+        int unwritten = distributeOutcomePass(order, lines, item, actor, writtenOff,
+                DomainEnums.ReconciliationOutcome.written_off, true, idempotencyKey, notes, handoverDetails);
+        int undistributed = distributeOutcomePass(order, lines, item, actor, unwritten,
+                DomainEnums.ReconciliationOutcome.written_off, false, idempotencyKey, notes, handoverDetails);
+        undistributed += distributeOutcome(order, lines, item, actor, returned,
                 DomainEnums.ReconciliationOutcome.returned_good, idempotencyKey, notes, handoverDetails);
         undistributed += distributeOutcome(order, lines, item, actor, consumed,
                 DomainEnums.ReconciliationOutcome.consumed, idempotencyKey, notes, handoverDetails);
@@ -568,6 +583,7 @@ public class OrderService {
                 case returned_good -> line.returnedQuantity += take;
                 case consumed -> line.consumedQuantity += take;
                 case returned_damaged -> line.damagedQuantity += take;
+                case written_off -> line.writtenOffQuantity += take;
                 default -> throw new IllegalArgumentException("Unsupported reconciliation outcome " + outcome);
             }
             if (resolveMissing) line.missingQuantity -= take;
@@ -762,6 +778,7 @@ public class OrderService {
         transaction.idempotencyKey = transactionKey(clientCommandId, order, item, operation);
         transaction.clientCommandId = clientCommandId;
         transaction.sourceLocation = order.pickupLocation;
+        transaction.custodyWriteOff = type == DomainEnums.TransactionType.written_off;
         if (type == DomainEnums.TransactionType.checkin)
             transaction.destinationLocation = item.storageLocation;
         transaction.availabilityBefore = inventory.stock(item).available();
@@ -777,6 +794,7 @@ public class OrderService {
         if (summary.consumed() > 0) throw ApiException.badRequest("Serialized assets cannot be consumed");
         int returned = 0;
         int damaged = 0;
+        int writtenOff = 0;
         for (var entry : outcomes.entrySet()) {
             var assignment = assignmentsByAsset.get(entry.getKey());
             if (assignment == null || !assignment.assetInstance.item.id.equals(item.id)) continue;
@@ -833,6 +851,19 @@ public class OrderService {
                     createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.missing,
                             DomainEnums.AssetState.lost, clientCommandId, "missing", notes);
                 }
+                case written_off -> {
+                    actors.requireAdmin();
+                    if (notes == null || notes.isBlank())
+                        throw ApiException.badRequest("Write-off reason is required for asset " + asset.assetCode);
+                    if (wasMissing) line.missingQuantity--;
+                    line.writtenOffQuantity++;
+                    recordReconciliation(order, line, item, asset, actor,
+                            DomainEnums.ReconciliationOutcome.written_off, 1, clientCommandId, notes);
+                    createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.written_off,
+                            DomainEnums.AssetState.written_off, clientCommandId, "written_off", notes);
+                    asset.active = false;
+                    writtenOff++;
+                }
                 default -> throw ApiException.badRequest("Unsupported serialized asset return outcome " + assetOutcome.outcome());
             }
             if (assetOutcome.operatingHours() != null) asset.operatingHours = assetOutcome.operatingHours();
@@ -843,7 +874,8 @@ public class OrderService {
                 .map(asset -> orm.findLocked(AssetInstance.class, asset.id))
                 .mapToInt(asset -> asset.availabilityStatus == DomainEnums.AssetState.lost ? 1 : 0)
                 .sum();
-        if (returned != summary.returned() || damaged != summary.damaged() || remainingMissing != summary.missing()) {
+        if (returned != summary.returned() || damaged != summary.damaged() || writtenOff != summary.writtenOff()
+                || remainingMissing != summary.missing()) {
             throw ApiException.badRequest("Serialized return quantities must match the submitted per-asset outcomes for " + item.name);
         }
     }
@@ -868,6 +900,7 @@ public class OrderService {
         transaction.idempotencyKey = transactionKey(clientCommandId, order, item, operation + ":" + asset.id);
         transaction.clientCommandId = clientCommandId;
         transaction.sourceLocation = asset.currentLocation == null ? order.pickupLocation : asset.currentLocation;
+        transaction.custodyWriteOff = type == DomainEnums.TransactionType.written_off;
         asset.availabilityStatus = targetState;
         asset.currentLocation = targetState == DomainEnums.AssetState.available
                 || targetState == DomainEnums.AssetState.damaged ? item.storageLocation : null;

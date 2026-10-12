@@ -1,7 +1,5 @@
 # Technical Requirements
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
 This document owns the runtime stack, component boundaries and engineering constraints. Product behavior belongs in [Product Requirements](PRODUCT_REQUIREMENTS.md), persistence in [Database Schema and Data Storage](DATABASE_SCHEMA.md), and remaining work in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md). Versions below are declarations in this repository, not claims about the latest upstream releases.
 
 ## 1. System structure
@@ -120,7 +118,7 @@ Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `gen
 
 [Service worker](../public/sw.js) caches the app shell and same-origin assets. Navigation/config use network first; hashed bundles use cache first. `/api/` and third-party resources are excluded. Vite stamps a build-specific cache version. Maps and media are not promised offline; previously downloaded organizational catalog data is available through the IndexedDB reader.
 
-Runtime browser settings are supplied through `config.js`; server settings use environment variables. Business calendar dates use `INVENTORY_TIMEZONE`, default Europe/Berlin. Telemetry export is disabled by default and enabled through `OTEL_SDK_DISABLED=false`.
+Runtime browser settings are supplied through `config.js`; server settings use environment variables. Business calendar dates use `INVENTORY_TIMEZONE`, default Europe/Berlin. Telemetry (traces) export is disabled by default and enabled through `OTEL_SDK_DISABLED=false`; see §7.
 
 | Deployment | Checked-in composition | Acceptance boundary |
 |---|---|---|
@@ -132,8 +130,82 @@ Compose files are templates, not proof of provisioned infrastructure. Multiple A
 
 nginx generates CSP connect origins from configured API/OIDC URLs and enables same-origin camera use. Proxy forwarding trusts explicitly configured proxies. PostgreSQL and media must be backed up as one recovery unit. Details: [Step 1](DEPLOYMENT_STEP1.md), [Step 2](DEPLOYMENT_STEP2.md), [logical replication](postgres-logical-replication.md).
 
-## 7. Engineering acceptance
+## 7. Observability
+
+The API can export OpenTelemetry **traces** to [OpenObserve](https://openobserve.ai/). Export is off by default (`OTEL_SDK_DISABLED=true`).
+
+### What is exported
+
+| Signal | Status | Notes |
+|---|---|---|
+| Traces | Exported when enabled | HTTP server spans and instrumented outgoing calls; `service.name=ash-inventory-api`. JDBC spans would need `quarkus.datasource.jdbc.telemetry=true` (build time, not set) |
+| Metrics | Not exported | `quarkus.otel.metrics.enabled` is a build-time property and is not set; the metrics exporter protocol in `application.properties` is prepared but inactive |
+| Logs | Not exported | Container stdout only (`docker compose logs inventory-api`) |
+| Browser RUM | Not used | The PWA does not ship the OpenObserve RUM SDK, and its CSP `connect-src` only allows the API and OIDC origins |
+
+Both API nodes in the cluster template use the same `service.name`; distinguish them by host attributes in OpenObserve.
+
+### OpenObserve container
+
+OpenObserve runs outside this repository's Compose files, on a shared external Docker network that the reverse proxy also uses:
+
+```yaml
+openobserve:
+  image: public.ecr.aws/zinclabs/openobserve-enterprise:v1.0.4
+  container_name: openobserve
+  restart: unless-stopped
+  environment:
+    - ZO_ROOT_USER_EMAIL=${ZO_ROOT_USER_EMAIL}
+    - ZO_ROOT_USER_PASSWORD=${ZO_ROOT_USER_PASSWORD}
+    - ZO_RUM_ENABLED=true
+    - ZO_RUM_CLIENT_TOKEN=${ZO_RUM_CLIENT_TOKEN}
+    - ZO_CORS_ALLOWED_ORIGINS=https://inventory.example.com
+  volumes:
+    - /home/docker/data/openobserve_data:/data
+  networks:
+    - proxy_network
+```
+
+No port is published; the UI and ingestion API (port 5080) are reached through the reverse proxy or from containers on `proxy_network`. The RUM and CORS settings serve other web apps using the same instance; this API sends OTLP from the server and needs neither.
+
+### Connecting the API
+
+1. In OpenObserve, open **Ingestion → OpenTelemetry** for the target organization (default: `default`) and copy the Basic-auth token. It is `base64("email:password")` of an ingestion user.
+2. Pick one route to OpenObserve.
+
+   **Same host, shared Docker network.** Add a `docker-compose.override.yml` next to `docker-compose.yml` so the API joins `proxy_network`:
+
+   ```yaml
+   services:
+     inventory-api:
+       networks: [default, proxy_network]
+   networks:
+     proxy_network:
+       external: true
+   ```
+
+   The default endpoint `http://openobserve:5080/api/default` then resolves by container name. For the cluster template, add the same `networks` entry to `inventory-api-1` (and to `inventory-api-2` if it runs on the same host).
+
+   **Other host.** Use OpenObserve's public URL through the reverse proxy, e.g. `OTEL_EXPORTER_OTLP_ENDPOINT=https://observe.example.com/api/default`.
+
+3. Set in `.env`:
+
+   ```dotenv
+   OTEL_SDK_DISABLED=false
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://openobserve:5080/api/default
+   OTEL_EXPORTER_OTLP_TOKEN=<base64 email:password>
+   ```
+
+4. Restart the API. Traces appear under **Traces** with service `ash-inventory-api`.
+
+The exporter uses OTLP over HTTP/protobuf (`/v1/traces` is appended to the endpoint); OpenObserve's gRPC port is not used. If nothing arrives, set `OTEL_LOG_LEVEL=DEBUG` and check the API log for exporter `401` (wrong token) or `404` (wrong organization path).
+
+### Not yet covered
+
+No alerts are configured for outbox dead letters, sync conflicts, replication lag or retained WAL on the logical replication slot. These are visible only in the app's System tab and with the SQL queries in [PostgreSQL logical replication](postgres-logical-replication.md). Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+
+## 8. Engineering acceptance
 
 The repository requires direct changes to current contracts and the editable schema baseline: disposable data, no compatibility adapters or incremental migration files. Builds and application tests run only when explicitly authorized by [agent.md](../agent.md).
 
-This review used source/configuration inspection and document checks. It ran no builds, app tests or live deployment checks. Historical evidence and the pending Authentik, browser/mobile, S3, load, restore and cluster checks are tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+The pending Authentik, browser/mobile, S3, load, restore and cluster checks are tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).

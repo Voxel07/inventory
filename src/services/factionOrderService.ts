@@ -81,14 +81,17 @@ export function returnFactionOrder(id: string): Promise<FactionOrder> {
   return apiRequest(`/api/orders/${id}/return-all`, { method: 'POST', body });
 }
 export type AssetReturnOutcome = {
-  outcome: 'returned_good' | 'returned_damaged' | 'missing';
+  outcome: 'returned_good' | 'returned_damaged' | 'missing' | 'written_off';
   operatingHours?: number;
   notes?: string;
 };
 
+/** `missing` is the unresolved total after the command; the other quantities are reconciled now. Write-offs are HQ-admin only. */
+export type ReturnLineInput = { returned: number; consumed: number; missing: number; damaged: number; writtenOff: number; operatingHours?: number; notes?: string };
+
 export function returnFactionOrderItems(
   id: string,
-  lines: Record<string, { returned: number; consumed: number; missing: number; damaged: number; operatingHours?: number; notes?: string }>,
+  lines: Record<string, ReturnLineInput>,
   assets?: Record<string, AssetReturnOutcome>,
 ): Promise<FactionOrder> {
   const input = { lines, assets, idempotencyKey: crypto.randomUUID() };

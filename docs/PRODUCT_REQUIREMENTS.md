@@ -1,8 +1,6 @@
 # Product Requirements Document
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
-This document owns product features, business rules and functional acceptance. It preserves the detailed requirement IDs from the former architecture, with source-confirmed discrepancies corrected. Frameworks belong in [Technical Requirements](TECHNICAL_REQUIREMENTS.md), journeys in [App Flow](APP_FLOW.md), and open work in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+This document owns product features, business rules and functional acceptance. Frameworks belong in [Technical Requirements](TECHNICAL_REQUIREMENTS.md), journeys in [App Flow](APP_FLOW.md), and open work in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
 
 ## 1. Purpose and outcomes
 
@@ -49,11 +47,11 @@ Any recognized account can use permitted self-service and private ownership work
 | Operations | Snapshot reports, CSV/PDF, CSV import, outbox/dead-letter recovery and offline correction | OPS, OFF |
 | Access and interfaces | Identity/role/faction mapping, privacy, media policy, REST/MCP contracts and bounded reads | SEC, API |
 
-The earlier docs also used F01–F23 labels. Where the former architecture identified them: F01 events; F02 planning; F03/F04/F14 purchasing/receiving/vendor documents; F06 transfers; F08 return submissions; F10 counts; F11 lots; F12/F13 maintenance/lifecycle; F15 locations; F16 offline recovery; F17 reports; F18 outbox; F19 ownership/consent; F20 self-service; F21 reminders; F22 labels; F23 loans/rental. Unspecified legacy F-label meanings are not reconstructed. The detailed IDs below are the maintained product traceability set.
+Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing/receiving/vendor documents; F06 transfers; F08 return submissions; F10 counts; F11 lots; F12/F13 maintenance/lifecycle; F15 locations; F16 offline recovery; F17 reports; F18 outbox; F19 ownership/consent; F20 self-service; F21 reminders; F22 labels; F23 loans/rental. The detailed IDs below are the maintained traceability set.
 
 ## 4. Functional requirement register
 
-**Implemented** means the feature exists in source, not that current browser, concurrency or production acceptance has passed. **Partial** records an architectural target or explicit requirement gap. **Planned** is a future implementation. The register was carried forward from the 5 October architecture and checked against current source for representative workflows, configuration and named gaps; it is not a fresh exhaustive test certification.
+**Implemented** means the feature exists in source, not that current browser, concurrency or production acceptance has passed. **Partial** records an architectural target or explicit requirement gap. **Planned** is a future implementation.
 
 **Catalog and locations**
 
@@ -66,7 +64,7 @@ The earlier docs also used F01–F23 labels. Where the former architecture ident
 | CAT-05 | Shared/event catalog plus private items visible to owner, `hq_admin` and grantees | Partial | `InventoryAccessPolicy`, scoped `CatalogOrm`. Legacy `visibilityScope` runs in parallel [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
-| CAT-08 | Unique SKU/asset/label codes; aliases are retired, never reused; master data is retired, not deleted | Partial | Codes and item/location retirement are present. `CatalogService.deleteAssembly` and `deleteEvent` remove records: [GAP-01](IMPLEMENTATION_PLAN.md) |
+| CAT-08 | Unique SKU/asset/label codes; aliases are retired, never reused; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
 | LOC-01 | Warehouses and a hierarchical, georeferenced location tree with pickup points; no cycles, same-warehouse parent | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
 | LOC-02 | Private locations protect address, coordinates, overlays, hierarchy and contents | Implemented | `StorageLocation.accessPolicy`, `ApiMapper` redaction, `InventorySharing` |
 
@@ -89,7 +87,7 @@ The earlier docs also used F01–F23 labels. Where the former architecture ident
 | ORD-01 | Order lifecycle in [App Flow](APP_FLOW.md), including cancellation; transitions under an order lock | Partial | `OrderService`, `GeneralOrderService`. Two separate order models [PLAN-02](IMPLEMENTATION_PLAN.md) |
 | ORD-02 | Commission items, assemblies and exact assets on desktop and mobile | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` |
 | ORD-03 | Preparation reserves; pickup atomically converts reservations to custody | Implemented | `OrderService`, `OrderAllocationService` |
-| ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units | Implemented | `OrderReturnChecklist`, `CustodyBalanceService` |
+| ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `hq_admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
 | ORD-05 | Compare with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve SKU/QR, asset code and order code with targeted queries; returns show the quantity out and can link the originating order | Implemented | `codeResolver.ts`, `TransactionForm` |
 | ORD-07 | Camera and manual code scanning; scanning never changes stock | Implemented | `CameraScanner`, `useBarcodeScanner`; nginx allows `camera=(self)` |
@@ -149,7 +147,7 @@ The earlier docs also used F01–F23 labels. Where the former architecture ident
 - Maintenance, unsafe/damaged condition, quarantine/expiry, contributor damage review and owner-consent windows can block supply. Repair changes condition; write-off reduces owned stock under the required permission.
 - A submitted return is still custody until warehouse acceptance. Order outcomes reconcile against actual handover; missing units are tracked within outstanding custody.
 - Private account ownership differs from display owner name, keeper, location and custodian. Grants are resource-specific; an item grant does not reveal a private location or another private component.
-- History must preserve actor, UTC/server time, movement/transition and command evidence. Current broad master-data retirement is incomplete (GAP-01), and an old opening quantity fallback remains (GAP-02).
+- History must preserve actor, UTC/server time, movement/transition and command evidence. Items, locations and assemblies are retired, never deleted; event occurrences can be deleted only while nothing references them. Stock quantities come only from the ledger; the opening amount on item creation is an `added` movement.
 - Scanning resolves identity and never posts stock by itself. Client caches and report snapshots cannot authorize server operations.
 - Roles/factions come from identity-provider groups. Logout's actual server revocation bound depends on token lifetime/introspection (ACC-01).
 
@@ -176,10 +174,59 @@ Previously downloaded organizational catalogs can be read offline within the sav
 | Restart offline and reconnect under another account | Correct cached account context; original-owner queue isolation; commands replay once or expose conflict correction | OFF-01/02, SEC-08 |
 | Review report or scan an alias | Report freshness/filter/export explicit; retired code never reused; scan does not mutate stock | OPS-01, CAT-08, ORD-06/07 |
 
-These scenarios define acceptance; no such acceptance run was performed in this documentation pass. Refer to [tests/README.md](../tests/README.md) for existing regression ownership and [Implementation Plan](IMPLEMENTATION_PLAN.md) for ACC-01..05.
+These scenarios define acceptance; the runs are still open. Refer to [tests/README.md](../tests/README.md) for existing regression ownership and [Implementation Plan](IMPLEMENTATION_PLAN.md) for ACC-01..05.
 
 ## 8. Review measures and open decisions
 
 Acceptance should measure correct final stock/custody, absence of duplicate application, preserved audit evidence, permitted/denied visibility, successful field recovery and time to complete common pickup/return tasks. No numeric performance SLA, throughput target, RPO or RTO is established by current source inspection.
 
-Resolve broad retirement versus guarded deletion (GAP-01), ledger-only opening balances (GAP-02), and the intended logout revocation bound (GAP-03/ACC-01). Keep future framework replacements out of feature completion claims. The [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) is the single open-work register.
+Verify the logout revocation bound (GAP-03/ACC-01) and decide the deferred workflows (notification channel, offboarding, personal-data retention) listed as FEAT-01..03. Keep future framework replacements out of feature completion claims. The [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) is the single open-work register.
+
+## 9. Glossary
+
+Domain terms with their German UI label (where the UI has one) and the identifier used in code. Note that the UI follows the legal distinction *Eigentümer* (owner) versus *Besitzer* (current holder/custodian). Several terms describe *who is related to equipment* and are deliberately separate; mixing them up is the most common source of wrong assumptions.
+
+### People and responsibility
+
+| Term | German | Code | Meaning |
+|---|---|---|---|
+| Account owner | Eigentümer (Konto) | `InventoryAccessPolicy.owner` | The user account that owns a **private** item, location or assembly and controls who may see/edit it. Organization equipment has no account owner. |
+| Display owner | Eigentümer (Anzeige) | `Item.ownerName` | Free-text name shown for externally or privately owned equipment. Grants no rights. |
+| Keeper | Verwahrer | `Item.keeperName`, `StorageLocation.keeperUser` | Person who stores equipment between events (e.g. at home). Not the account owner and not a custodian. |
+| Custodian | Besitzer | `AssetInstance.currentCustodian`, custody handover | Person who currently holds checked-out equipment, from pickup until accepted return. |
+| Collector | Abholer | `collectorName` on orders/handovers | Person who physically picked up an order; may differ from the faction leader who ordered it. |
+| Grantee | Freigabe-Empfänger | `inventory_access_grants` | User or access group given view or edit access to a private resource. |
+| Marshal | Marshal | `marshal` role | Staff member who performs pickup handovers and return checks at the event. |
+| Faction | Fraktion | `factions`, `EVENT:slug` | A team within an event type. Faction leaders order for their factions. |
+
+### Equipment and stock
+
+| Term | German | Code | Meaning |
+|---|---|---|---|
+| Item | Artikel | `Item` | Catalog entry. Tracking mode is bulk, serialized or lot-tracked. |
+| Asset | Gerät | `AssetInstance` | One physical serialized unit with its own code and state. |
+| Assembly | Baugruppe | `Assembly` | Kit with fixed component quantities (e.g. radio set). |
+| Lot | Charge | `InventoryLot` | Batch of a lot-tracked item with expiry; picked FEFO (first expired, first out). |
+| Position | Bestandsposition | `InventoryPosition` | Quantity of an item (and lot) at one location. |
+| Retire | Stilllegen | `active = false` | Remove from use while keeping codes and history. Items, locations and assemblies are retired, never deleted. |
+| On hand / available / reserved | Vor Ort / Verfügbar / Reserviert | `StockState` | See [stock semantics](DATABASE_SCHEMA.md#5-stock-authority-and-invariants). |
+| In transit | Unterwegs | transfer | Moving between locations; not custody. |
+| Ordered | Bestellt | purchase order | Supplier quantity not yet received; not stock. |
+| Quarantine | Quarantäne | lot/position status | Blocked from allocation pending a decision. |
+
+### Workflows
+
+| Term | German | Meaning |
+|---|---|---|
+| Event occurrence | Event | One dated run of an event type (e.g. LS 2026). |
+| Faction order | Fraktionsbestellung | Equipment request of a faction for an event; follows the [order lifecycle](APP_FLOW.md#5-orders-preparation-handover-and-reconciliation). |
+| General order | Allgemeine Bestellung | Equipment request not tied to a faction (e.g. HQ, logistics). |
+| Preparation | Vorbereiten | Picking and reserving stock for an order. |
+| Handover / pickup | Übergabe / Abholung | Turns reservations into custody. |
+| Return submission | Rückgabemeldung | Member reports a return; stock changes only after warehouse acceptance. |
+| Reconciliation | Rückgabeabgleich | Accounting of returned, consumed, damaged, missing and written-off units against handed-over units. |
+| Write-off | Abschreibung | Permanent reduction of owned stock (HQ admin only). |
+| Commitment | Zusage | Owner's consent to lend private equipment for a time window. |
+| Loan / rental | Leihe / Miete | Agreement for lending a commitment, with collection and return evidence. |
+| Blind count | Blindzählung | Stock count without showing expected quantities. |
+| Sync issue | Sync-Problem | Offline command the server rejected; corrected with a new linked command. |

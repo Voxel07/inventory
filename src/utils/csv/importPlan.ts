@@ -36,7 +36,6 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
           id: `csv-new-${p.index}`,
           name: p.data.name,
           category: p.data.category,
-          amount: p.data.amount ?? 0,
           minStock: p.data.minStock,
           value: p.data.value,
           storageLocation: p.storageLocationId || '',

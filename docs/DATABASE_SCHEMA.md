@@ -1,8 +1,6 @@
 # Database Schema and Data Storage
 
-Reviewed: 12 October 2026 · source baseline: `82863bd` plus the working tree.
-
-This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql); JPA mappings are in [model/](../backend/src/main/java/org/ash/inventory/model). This is a source review, not an inspection of a deployed database. Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
+This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql); JPA mappings are in [model/](../backend/src/main/java/org/ash/inventory/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
 
 ## 1. Persistence boundaries
 
@@ -22,7 +20,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 The baseline declares **55 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, money generally uses integer cents and meters use decimal numeric values.
 
-Flyway initializes the same editable baseline in dev/test/prod; Hibernate validates. Current data is disposable. Schema/entity changes update this baseline directly; do not add incremental migrations or compatibility readers. The test profile cleans its configured PostgreSQL test database at startup. No database reset or schema change was performed for this review.
+Flyway initializes the same editable baseline in dev/test/prod; Hibernate validates. Current data is disposable. Schema/entity changes update this baseline directly; do not add incremental migrations or compatibility readers. The test profile cleans its configured PostgreSQL test database at startup.
 
 Some columns and foreign keys are added later inside the same baseline, so the complete SQL file, not just the opening CREATE TABLE blocks, defines the schema. A non-null UUID inside JSON or a polymorphic target does not automatically have a foreign key.
 
@@ -91,14 +89,14 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 |---|---|
 | `items` | UUID, unique SKU, category/subcategory, description/hint, event tags, active flag, tracking mode, inventory role, minimum stock, value cents, ownership/consent metadata; storage/return locations; category meters/dates |
 | `item_images` | UUID; item FK, object key and display order |
-| `assemblies` | UUID; name/description/hint, image object key, event tags and optional access policy |
+| `assemblies` | UUID; name/description/hint, image object key, event tags, active flag and optional access policy |
 | `assembly_items` | Composite `(assembly_id, item_id)` PK; component quantity |
 | `warehouses` | UUID; unique code, name/description and active flag |
 | `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type, address-like fields, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
 
 Location services enforce no cycles and same-warehouse parentage. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
-**Current retirement gap:** items and locations are deactivated, but assemblies have no active flag and `CatalogService.deleteAssembly` removes composition/policy/entity. Unlinked events are removed by `deleteEvent`. FKs from order lines/damage may constrain deletion; this is not general retirement support (GAP-01).
+**Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them.
 
 ### Stock and warehouse operations (9 tables)
 
@@ -198,11 +196,11 @@ ordered    = unreceived purchase quantity, displayed separately
 
 These are conceptual aggregates, not SQL to apply indiscriminately to each tracking mode. Bulk uses ledger totals and lockable positions; serialized stock is classified from exact asset states. Eligibility then blocks unavailable stock according to maintenance, contributor damage, usable lots and equipment consent. A pending return is still checked out. Repairs never create units; write-off is authorized separately.
 
-`InventoryOperationsService.stock` still uses `items.base_amount` if no `added` movement exists. Documenting the ledger as the **sole** persisted quantity origin would therefore overstate current behavior (GAP-02). New stock must use canonical commands; simplification of the old opening-quantity path is pending.
+The ledger is the only origin of bulk quantities: an item's opening amount is posted as an `added` movement on creation, and items store no quantity column. Later changes use stock commands.
 
-Order reconciliation must satisfy `handedOver = returned + consumed + damaged + writtenOff + outstanding`, with missing accounted within outstanding. Reservations can only use eligible availability; an order edit credits its own allocation, not other orders' stock. Position/asset changes, movement evidence and outbox writes commit together under locks.
+Order reconciliation must satisfy `handedOver = returned + consumed + damaged + writtenOff + outstanding`, with missing accounted within outstanding. A custody write-off is a `written_off` movement with `custody_write_off = true`; stock totals treat it like consumption of checked-out units. Reservations can only use eligible availability; an order edit credits its own allocation, not other orders' stock. Position/asset changes, movement evidence and outbox writes commit together under locks.
 
-Stock/order history is append-only by application contract. This baseline does not supply general UPDATE/DELETE-denial triggers for ledger/history tables; do not claim database-enforced immutability. Outbox rows are delivery records with finite retention, so they do not replace permanent movement/order history.
+Stock/order history is append-only by application contract. This baseline does not supply UPDATE/DELETE-denial triggers for ledger/history tables; do not claim database-enforced immutability. Stock commands currently set `availability_after` with an UPDATE right after inserting the movement, so a plain deny-UPDATE trigger would break them (FEAT-09). Outbox rows are delivery records with finite retention, so they do not replace permanent movement/order history.
 
 ## 6. Query, indexing and snapshot behavior
 
@@ -229,7 +227,48 @@ Catalog keys include account/role/faction context and normalized query. Private 
 
 The PWA shell cache is versioned per build. Published outbox events default to 30-day purge. Staged media defaults to 24 hours. Permanent stock/order/access evidence and downloaded exports have different lifetimes; exported files cannot be recalled by revoking an app grant.
 
-## 8. Deployment and recovery
+## 8. Personal data
+
+Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still missing for data-subject requests. Table details are in §4. This is a technical inventory, not legal advice; purposes and legal bases need the association's decision.
+
+### Where personal data lives
+
+| Data | Stored in | Source | Retention today |
+|---|---|---|---|
+| Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Authentik claims, refreshed at sign-in | Indefinite; no deactivation or deletion |
+| Actor references on every movement and transition | `stock_transactions`, `faction_order_history`, `general_order_history`, `return_reconciliations`, `custody_handovers`, damage/repair/maintenance records, `inventory_count_*`, `goods_receipts` | App actions | Permanent (append-only evidence) |
+| Collector name, pickup coordinates, notes | `faction_orders`, `custody_handovers` | Staff input | Permanent |
+| Handover acknowledgements, placement photos, certificates | Media store (local disk or Garage S3) referenced from `custody_handovers`, `return_submissions`, `maintenance_records` | Uploads | Permanent once attached; staged uploads purged after 24 h |
+| Display owner, keeper name/contact | `items` | Staff/owner input | Until edited; items are retired, not deleted |
+| Private location address fields and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |
+| Loan contact and terms, pickup/return details, consent evidence | `loan_arrangements`, `equipment_commitments` | Owner/staff input | Permanent |
+| Requests, reminders, notifications | `member_requests`, `action_reminders`, `notifications` | Member actions | Indefinite |
+| Access grants and group membership | `inventory_access_grants`, `inventory_access_group_members` | Owner/admin | Until revoked |
+| Offline command payloads | `sync_command_audit` | Device replay | Indefinite |
+| Actor and payload of domain events | `domain_event_outbox` | Every command | Purged 30 days after publication |
+| Uploader of media and vendor documents | `inventory_media_objects`, `vendor_documents` | Uploads | Permanent once attached |
+| Tokens incl. ID token (name, email), cached catalog, queued commands | Browser IndexedDB `ash-auth`, `ash-inventory` | Device | Until logout (auth) or browser eviction (cache/queue) |
+| Request traces | OpenObserve, if enabled ([Observability](TECHNICAL_REQUIREMENTS.md#7-observability)) | API | OpenObserve retention setting |
+| Logical replica and backups | Storage VPS | Replication/backup jobs | Mirrors primary; backup retention per operator |
+
+Vendor contact data in `vendors` concerns businesses, but may name individual contact persons.
+
+### Access
+
+Personal data of other members is visible according to role and resource policy ([Technical Requirements §5](TECHNICAL_REQUIREMENTS.md)). Exported CSV/PDF reports leave the app's control and cannot be recalled.
+
+### Gaps for data-subject requests
+
+| ID | Gap | Notes |
+|---|---|---|
+| PD-01 | No account deactivation/offboarding | A user removed from Authentik keeps owned private resources, custody, keeper assignments and grants (FEAT-02 in the [plan](IMPLEMENTATION_PLAN.md)) |
+| PD-02 | No erasure path | History is append-only and actor FKs are required. An erasure request needs pseudonymization of `app_users` (name/email → placeholder, keep the UUID) plus scrubbing free-text fields (collector names, keeper contact, loan contact, notes) and removing photos/acknowledgements that are no longer needed as evidence |
+| PD-03 | No export of one person's data | Article 15 access requests currently require manual SQL across the tables above |
+| PD-04 | No retention periods | Decide how long custody evidence, photos, sync audit and notifications must be kept (e.g. until the order is closed plus N years) and add purge jobs like the existing outbox/staged-media purges |
+
+They are tracked as FEAT-02/03 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) and need a decision on retention periods before implementation.
+
+## 9. Deployment and recovery
 
 Default Compose uses PostgreSQL 18; cluster replicas share the primary database. The storage Compose hosts a separate PostgreSQL instance for logical replication. Publication/subscription, schema copying and backup jobs require operator setup; the replica service alone does not establish replication.
 

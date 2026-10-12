@@ -46,7 +46,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Replace item metadata using the REST ItemInput contract. Manager access required; name/category and current visibility assignments must be supplied. Stock changes require a stock command.")
+    @Tool(description = "Replace item metadata using the REST ItemInput contract. Manager access required; name/category and current visibility assignments must be supplied. Omit amount: stock changes require a stock command.")
     public ApiResponses.ItemResponse update_item(
             @ToolArg(description = "Item UUID", required = true) UUID itemId,
             @ToolArg(description = "Complete ItemInput metadata, with REST update semantics", required = true) ApiModels.ItemInput input) {
@@ -90,7 +90,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Delete an assembly through the shared catalog command. Managers delete shared kits; owners and editors delete personal kits.")
+    @Tool(description = "Retire an assembly: it leaves the catalog and can no longer be ordered, while codes and order history are kept. Managers retire shared kits; owners and editors retire personal kits.")
     public InventoryMcpDtos.DeleteResultDto delete_assembly(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId) {
         return call(() -> service.deleteAssembly(assemblyId));
@@ -111,10 +111,12 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "List up to 50 events in start-date order, with scoped item metrics")
+    @Tool(description = "List events in start-date order with bounded pagination and scoped item metrics")
     public List<ApiResponses.EventResponse> list_events(
-            @ToolArg(description = "Optional event status", required = false) String status) {
-        return call(() -> service.events(status));
+            @ToolArg(description = "Optional event status", required = false) String status,
+            @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
+            @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
+        return call(() -> service.events(status, page, limit));
     }
 
     @Blocking
@@ -126,17 +128,19 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Delete an event only when no faction, general or purchase orders are linked. Planner access required.")
+    @Tool(description = "Delete an event only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides are removed with it. Planner access required.")
     public InventoryMcpDtos.DeleteResultDto delete_event(
             @ToolArg(description = "Event UUID", required = true) UUID eventId) {
         return call(() -> service.deleteEvent(eventId));
     }
 
     @Blocking
-    @Tool(description = "List active storage locations and warehouses")
+    @Tool(description = "List active storage locations and warehouses with bounded pagination")
     public List<ApiResponses.StorageLocationResponse> list_storage_locations(
-            @ToolArg(description = "Optional warehouse UUID", required = false) UUID warehouseId) {
-        return call(() -> service.locations(warehouseId));
+            @ToolArg(description = "Optional warehouse UUID", required = false) UUID warehouseId,
+            @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
+            @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
+        return call(() -> service.locations(warehouseId, page, limit));
     }
 
     @Blocking
