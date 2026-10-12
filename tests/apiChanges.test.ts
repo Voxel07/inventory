@@ -68,3 +68,31 @@ test('bursts of changes are coalesced into one invalidation', async () => {
   client.clear();
 });
 
+
+test('attendee and timeline writes refresh event logistics of every event and the people registry only', () => {
+  const client = new QueryClient();
+  const keys = [['event-logistics', 'event-a', 'attendees'], ['event-logistics', 'event-b', 'attendees'], ['event-logistics', 'people'],
+    ['event-reports', undefined], ['items']];
+  keys.forEach(key => client.setQueryData(key, []));
+  const change = localWriteChange('/api/events/event-a/attendees/attendee-1');
+  expect(change.type).toBe('event_logistics.changed');
+  invalidateForApiChange(client, change);
+  // A rename of a shared person shows at other events, so all logistics readers refresh.
+  keys.slice(0, 3).forEach(key => expect(client.getQueryState(key)?.isInvalidated).toBe(true));
+  expect(client.getQueryState(['event-reports', undefined])?.isInvalidated).toBe(false);
+  expect(client.getQueryState(['items'])?.isInvalidated).toBe(false);
+  expect(localWriteChange('/api/events/event-a/timeline').type).toBe('event_logistics.changed');
+  client.clear();
+});
+
+test('server logistics events and event deletion both refresh logistics readers', () => {
+  const client = new QueryClient();
+  client.setQueryData(['event-logistics', 'event-a', 'timeline'], []);
+  invalidateForApiChange(client, { type: 'event_logistics.changed' });
+  expect(client.getQueryState(['event-logistics', 'event-a', 'timeline'])?.isInvalidated).toBe(true);
+
+  client.setQueryData(['event-logistics', 'event-a', 'timeline'], []);
+  invalidateForApiChange(client, localWriteChange('/api/events/event-a'));
+  expect(client.getQueryState(['event-logistics', 'event-a', 'timeline'])?.isInvalidated).toBe(true);
+  client.clear();
+});

@@ -158,20 +158,42 @@ create table event_occurrences (
     primary key (id)
 );
 
-create table event_attendees (
+-- People attending events; an Authentik account link is optional (event crew usually has none).
+create table event_people (
     id uuid primary key,
-    event_id uuid not null references event_occurrences(id) on delete cascade,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
     name varchar(255) not null check (length(trim(name)) > 0),
-    role varchar(255) not null check (length(trim(role)) > 0),
+    user_id uuid unique references app_users(id) on delete set null
+);
+create index idx_event_people_name on event_people(lower(name));
+
+create table event_attendees (
+    id uuid primary key,
+    event_id uuid not null references event_occurrences(id) on delete cascade,
+    person_id uuid not null references event_people(id),
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone not null,
     arrives_at timestamp(6),
     leaves_at timestamp(6),
     food_stamps_issued boolean not null default false,
     notes varchar(2000),
+    constraint uq_event_attendees_person unique (event_id, person_id),
     check (leaves_at is null or arrives_at is null or leaves_at >= arrives_at)
 );
-create index idx_event_attendees_event on event_attendees(event_id);
+create index idx_event_attendees_person on event_attendees(person_id);
+
+-- Faction roles name one of the event type's factions; only event crew carries a work assignment.
+create table event_attendee_roles (
+    attendee_id uuid not null references event_attendees(id) on delete cascade,
+    role varchar(255) not null check (role in ('faction_leader', 'faction_deputy', 'faction_hq_crew', 'as_held', 'event_crew')),
+    faction_id uuid,
+    assignment varchar(255),
+    check ((role in ('faction_leader', 'faction_deputy', 'faction_hq_crew')) = (faction_id is not null)),
+    check (role = 'event_crew' or assignment is null),
+    constraint uq_event_attendee_role unique nulls not distinct (attendee_id, role, faction_id)
+);
+create index idx_event_attendee_roles_faction on event_attendee_roles(faction_id);
 
 create table event_timeline_entries (
     id uuid primary key,
@@ -1043,6 +1065,7 @@ alter table if exists vendor_documents add constraint FKeuhya1ea21gyq5odbrci7n1b
 alter table if exists vendor_documents add constraint FKsyyhv6b9ypn90u5s3sm6iyomf foreign key (purchase_order_id) references purchase_orders;
 alter table if exists vendor_documents add constraint FK9j7d2x57qgg7s6saes8n93fps foreign key (uploaded_by) references app_users;
 alter table if exists vendor_documents add constraint FKhjvyn99g3h3tuvfyh96d3erxx foreign key (vendor_id) references vendors;
+alter table if exists event_attendee_roles add constraint fk_event_attendee_roles_faction foreign key (faction_id) references factions;
 create index member_requests_item_state on member_requests(item_id, kind, status);
 alter table damage_reports add constraint fk_damage_reports_assembly foreign key (assembly_id) references assemblies;
 create index ix_transaction_event_occurrence on stock_transactions(event_occurrence_id);

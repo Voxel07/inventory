@@ -24,6 +24,12 @@ public class EventLogisticsResource {
 
     public EventLogisticsResource(EventLogisticsService service) { this.service = service; }
 
+    @GET @Path("/event-people")
+    public List<PersonResponse> people() { return service.people(); }
+
+    @GET @Path("/event-people/accounts")
+    public List<AccountOption> accounts() { return service.accounts(); }
+
     @GET @Path("/events/{eventId}/attendees")
     public List<AttendeeResponse> attendees(@PathParam("eventId") UUID eventId) { return service.attendees(eventId); }
 

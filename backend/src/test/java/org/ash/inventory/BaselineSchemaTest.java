@@ -25,7 +25,7 @@ class BaselineSchemaTest {
     }
     @Inject EntityManager entityManager;
     @Test @Transactional void canonicalBaselineContainsAllPrivacyTablesAndMatchesEntities() {
-        assertEquals(57L, ((Number) entityManager.createNativeQuery("select count(*) from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getSingleResult()).longValue());
+        assertEquals(59L, ((Number) entityManager.createNativeQuery("select count(*) from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getSingleResult()).longValue());
         assertEquals(0L, ((Number) entityManager.createQuery("select count(p) from InventoryAccessPolicy p").getSingleResult()).longValue());
     }
     @Test @Transactional void revisionTriggersUseTheirOwnSchema() {
