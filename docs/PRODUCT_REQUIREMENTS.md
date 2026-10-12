@@ -88,9 +88,10 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ORD-02 | Commission items, assemblies and exact assets on desktop and mobile | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` |
 | ORD-03 | Preparation reserves; pickup atomically converts reservations to custody | Implemented | `OrderService`, `OrderAllocationService` |
 | ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `hq_admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
-| ORD-05 | Compare with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
+| ORD-05 | Opt-in comparison with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve SKU/QR, asset code and order code with targeted queries; returns show the quantity out and can link the originating order | Implemented | `codeResolver.ts`, `TransactionForm` |
 | ORD-07 | Camera and manual code scanning; scanning never changes stock | Implemented | `CameraScanner`, `useBarcodeScanner`; nginx allows `camera=(self)` |
+| ORD-08 | Group ordered/prepared items by responsible person; separate pickup points per group and recipient-scoped in-app notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components |
 | RET-01 | Expected return location per item; the returner can attach a placement photo | Implemented | `Item.returnLocation`, `ReturnSubmissionForm` |
 | RET-02 | A submitted return isn't stock until a warehouse worker accepts it; pending/history view with accept/reject | Implemented | `ReturnSubmissionService`, `ReturnedItems` |
 | AUD-01 | Append-only order and stock history: actor, UTC time, action, from/to, delta, note, idempotency key | Implemented | `FactionOrderHistory`, `GeneralOrderHistory`, `StockTransaction` |

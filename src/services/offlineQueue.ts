@@ -1,6 +1,7 @@
 import { API_URL } from '../config/runtimeConfig';
 import { containsPrivateInventory, referencesPrivateInventory } from './privateInventoryCache';
 import { assertAuthSession, captureAuthSession, getAuthSnapshot, getAuthorizationHeaders, type AuthSessionContext } from './authManager';
+import { translate } from '../utils/naming';
 
 export type OfflineAction = {
   idempotencyKey: string;
@@ -39,7 +40,7 @@ function openDatabase(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Close older inventory tabs and reload to upgrade offline storage.'));
+    request.onblocked = () => reject(new Error(translate('Schließen Sie ältere Inventar-Tabs und laden Sie neu, um den Offline-Speicher zu aktualisieren.', 'Close older inventory tabs and reload to upgrade offline storage.')));
   });
 }
 
@@ -110,12 +111,12 @@ export async function getOfflineCatalog<T>(key: string, context = captureAuthSes
 }
 
 export async function enqueueOfflineAction(action: OfflineAction, context: AuthSessionContext = captureAuthSession()): Promise<void> {
-  if (referencesPrivateInventory(action.payload)) throw new Error('Private inventory actions require an online connection.');
+  if (referencesPrivateInventory(action.payload)) throw new Error(translate('Aktionen für privates Inventar erfordern eine Online-Verbindung.', 'Private inventory actions require an online connection.'));
   assertAuthSession(context);
   const actionOwner = context.accountId;
   const db = await openDatabase();
   assertAuthSession(context);
-  if (!actionOwner) throw new Error('Sign in before saving an offline action');
+  if (!actionOwner) throw new Error(translate('Melden Sie sich an, bevor Sie eine Offline-Aktion speichern.', 'Sign in before saving an offline action'));
   await transactionPromise(db, STORE, 'readwrite', (store) => store.put({ ...action, ownerId: actionOwner }));
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -147,7 +148,7 @@ export async function discardOfflineAction(idempotencyKey: string): Promise<void
   const db = await openDatabase();
   const action = (await getOfflineActions()).find((entry) => entry.idempotencyKey === idempotencyKey);
   assertAuthSession(context);
-  if (!action) throw new Error('Queued action not found');
+  if (!action) throw new Error(translate('Vorgemerkte Aktion nicht gefunden', 'Queued action not found'));
   await archiveAndDelete(db, STORE, action, 'discarded');
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -184,7 +185,7 @@ export async function discardSyncFailure(idempotencyKey: string): Promise<void> 
   const db = await openDatabase();
   const failure = (await getSyncFailures()).find((entry) => entry.idempotencyKey === idempotencyKey);
   assertAuthSession(context);
-  if (!failure) throw new Error('Sync failure not found');
+  if (!failure) throw new Error(translate('Synchronisierungsfehler nicht gefunden', 'Sync failure not found'));
   await archiveAndDelete(db, FAILURES_STORE, failure, 'archived');
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -223,7 +224,7 @@ export async function flushOfflineQueue(): Promise<void> {
   try {
     authorizationHeaders = await getAuthorizationHeaders();
     assertAuthSession(context);
-    if (!context.accountId || actions.some((action) => action.ownerId !== context.accountId)) throw new Error('Account changed during sync');
+    if (!context.accountId || actions.some((action) => action.ownerId !== context.accountId)) throw new Error(translate('Das Konto hat sich während der Synchronisierung geändert', 'Account changed during sync'));
   } catch {
     flushInFlight = false;
     scheduleFlush(10_000);
@@ -335,13 +336,13 @@ async function archiveAndDelete(db: IDBDatabase, source: string, entry: OfflineA
 }
 export async function correctSyncFailure(failure: SyncFailure, payload: Record<string, unknown>, resolutionNote: string): Promise<void> {
   const context = captureAuthSession();
-  if (!context.accountId || failure.ownerId !== context.accountId) throw new Error('Failure belongs to another account');
-  if (!navigator.onLine) throw new Error('Reconnect and review current server state before correcting');
-  if (!resolutionNote.trim()) throw new Error('Explain the correction');
-  if (flushInFlight) throw new Error('Wait for synchronization to finish');
+  if (!context.accountId || failure.ownerId !== context.accountId) throw new Error(translate('Der Fehler gehört zu einem anderen Konto', 'Failure belongs to another account'));
+  if (!navigator.onLine) throw new Error(translate('Stellen Sie die Verbindung wieder her und prüfen Sie den aktuellen Serverstand, bevor Sie korrigieren', 'Reconnect and review current server state before correcting'));
+  if (!resolutionNote.trim()) throw new Error(translate('Bitte erläutern Sie die Korrektur', 'Explain the correction'));
+  if (flushInFlight) throw new Error(translate('Warten Sie, bis die Synchronisierung abgeschlossen ist', 'Wait for synchronization to finish'));
   const stored = (await getSyncFailures()).find((entry) => entry.idempotencyKey === failure.idempotencyKey);
   assertAuthSession(context);
-  if (!stored) throw new Error('Failure has already been resolved');
+  if (!stored) throw new Error(translate('Der Fehler wurde bereits behoben', 'Failure has already been resolved'));
   const db = await openDatabase();
   assertAuthSession(context);
   await new Promise<void>((resolve, reject) => {

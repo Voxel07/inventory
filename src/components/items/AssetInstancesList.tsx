@@ -41,6 +41,7 @@ import { useClientPagination } from '../../hooks/useClientPagination';
 import { QrLabelDialog } from '../qr/QrLabelDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
+import { formatStatus } from '../../utils/formatters';
 
 interface Props {
     item: Item;
@@ -338,12 +339,12 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     </Box>
                                     <Chip
                                         size="small"
-                                        label={asset.availabilityStatus}
+                                        label={formatStatus(asset.availabilityStatus)}
                                         color={statusColorMap[asset.availabilityStatus] || 'default'}
                                     />
                                 </Box>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
-                                    <div>{t('Zustand', 'Condition')}: <strong>{asset.conditionStatus}</strong></div>
+                                    <div>{t('Zustand', 'Condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
                                     <div>{t('Lagerort', 'Location')}: <strong>{asset.currentLocationName || '—'}</strong></div>
                                     {asset.operatingHours != null && (
                                         <div>{t('Stunden', 'Hours')}: <strong>{asset.operatingHours} h</strong></div>
@@ -406,11 +407,11 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     <TableCell>
                                         <Chip
                                             size="small"
-                                            label={asset.availabilityStatus}
+                                            label={formatStatus(asset.availabilityStatus)}
                                             color={statusColorMap[asset.availabilityStatus] || 'default'}
                                         />
                                     </TableCell>
-                                    <TableCell>{asset.conditionStatus}</TableCell>
+                                    <TableCell>{formatStatus(asset.conditionStatus)}</TableCell>
                                     <TableCell>{asset.currentLocationName || '—'}</TableCell>
                                     <TableCell>{asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}</TableCell>
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>

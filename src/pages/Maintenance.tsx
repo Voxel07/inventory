@@ -35,6 +35,7 @@ import { useOperationList } from '../hooks/useOperations';
 import { operationsApi } from '../services/operationsService';
 import { IndividualSchedules } from '../components/maintenance/IndividualSchedules';
 import { isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel, type MaintenanceType } from '../components/maintenance/maintenanceSchedules';
+import { formatStatus } from '../utils/formatters';
 
 function dateInputValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -287,7 +288,7 @@ export function Maintenance() {
         <Stack spacing={2}>
           <Autocomplete
             options={maintenanceItems}
-            getOptionLabel={(item) => `${item.name} (${item.maintenanceStatus || 'certified'})`}
+            getOptionLabel={(item) => `${item.name} (${formatStatus(item.maintenanceStatus || 'certified')})`}
             value={maintenanceItems.find((item) => item.id === itemId) || null}
             onChange={(_, item) => {
               setItemId(item?.id || '');
@@ -435,7 +436,7 @@ export function Maintenance() {
                     <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
                         <Typography sx={{ fontWeight: 700 }}>{item?.name || record.itemId}</Typography>
-                        <Chip size="small" variant="outlined" label={record.type} />
+                        <Chip size="small" variant="outlined" label={formatStatus(record.type)} />
                         <Chip
                           size="small"
                           icon={record.result === 'passed' ? <CheckCircleIcon /> : <ErrorIcon />}

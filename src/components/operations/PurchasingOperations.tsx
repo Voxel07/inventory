@@ -19,6 +19,7 @@ import { translate, useLocalizedText } from '../../utils/naming';
 import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type ProcurementDeficit, type PurchaseOrder, type Vendor } from '../../services/procurementService';
 import { operationsApi } from '../../services/operationsService';
 import { Fields, OperationForm, type Field, type Values } from './OperationForm';
+import { formatStatus } from '../../utils/formatters';
 
 export function PurchasingPanel() {
   const t = useLocalizedText(); const { user } = useAuth();
@@ -46,7 +47,7 @@ export function PurchasingPanel() {
     </OperationListEntry>)}
     {edit && <PurchaseDraft key={edit === 'new' ? 'new' : edit.id} order={edit === 'new' ? undefined : edit} eventId="" onClose={() => setEdit(null)} />}
     {receive && <ReceiveForm order={receive} onClose={() => setReceive(null)} />}
-    {transition && <OperationForm title={`${transition.order.orderNumber} · ${transition.status}`} fields={[]} onClose={() => setTransition(null)} onSave={() => transitionPurchaseOrder(transition.order.id, transition.status)}><Alert severity="info">{transition.status === 'cancelled' ? t('Bereits angenommene Ware bleibt im Bestand. Nur die offene Lieferung wird storniert.', 'Received stock remains in inventory. Only the outstanding delivery is cancelled.') : t('Die Bestellung wird als unterwegs angezeigt. Verfügbarer Bestand entsteht erst beim Wareneingang.', 'The order will appear as incoming. Stock becomes available through receiving.')}</Alert></OperationForm>}
+    {transition && <OperationForm title={`${transition.order.orderNumber} · ${formatStatus(transition.status)}`} fields={[]} onClose={() => setTransition(null)} onSave={() => transitionPurchaseOrder(transition.order.id, transition.status)}><Alert severity="info">{transition.status === 'cancelled' ? t('Bereits angenommene Ware bleibt im Bestand. Nur die offene Lieferung wird storniert.', 'Received stock remains in inventory. Only the outstanding delivery is cancelled.') : t('Die Bestellung wird als unterwegs angezeigt. Verfügbarer Bestand entsteht erst beim Wareneingang.', 'The order will appear as incoming. Stock becomes available through receiving.')}</Alert></OperationForm>}
   </Stack>;
 }
 

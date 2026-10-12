@@ -24,6 +24,7 @@ import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
 import { translate, useNames, useLocalizedText } from '../../utils/naming';
+import { formatStatus } from '../../utils/formatters';
 
 interface Props {
     items: Item[];
@@ -123,7 +124,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                 </TextField>}
                 {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('Charge', 'Lot')} value={formData.lotId ?? ''} required={formData.transactionType !== 'checkout'} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
                     <MenuItem value="">{t('Automatisch: frühestes Ablaufdatum', 'Automatic: earliest expiry first')}</MenuItem>
-                    {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status}</MenuItem>)}
+                    {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status ? formatStatus(lot.status) : ''}</MenuItem>)}
                 </TextField>}
                 {['checkout', 'checkin'].includes(formData.transactionType) && <TextField select label={t('Eventtermin', 'Event occurrence')} value={formData.eventOccurrenceId ?? ''} required={formData.transactionType === 'checkout'} onChange={(event) => {
                     const occurrence = events.find((value) => value.id === event.target.value);

@@ -5,5 +5,5 @@ export function formatStatus(status: string): string {
   for (const group of ['itemStatus', 'damageStatus', 'severity', 'transactionType'] as const) {
     if (value in getNames()[group]) return nameFor(group, value);
   }
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return nameFor('value', value);
 }

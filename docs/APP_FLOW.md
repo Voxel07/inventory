@@ -98,12 +98,12 @@ stateDiagram-v2
 This is the main business lifecycle. Specialized edits, preparation reopening and repeated partial reconciliation remain service-controlled actions; this diagram is not an exhaustive endpoint transition table.
 
 1. A faction leader selects an authorized event/faction and builds an order from items and assemblies. General orders capture purpose and requested quantities for broader needs.
-2. Submission places the order into staff preparation work. Warehouse staff use `/operations?tab=order-preparation` or order details.
+2. Submission places the order into staff preparation work and creates an in-app notice for each assigned responsible person. Warehouse staff use `/operations?tab=order-preparation` or order details.
 3. Preparation chooses source locations, usable quantities and exact serialized assets. It reserves stock without checking it out. Edits can credit back only that order's reservation.
-4. Mark ready after preparation, record pickup details, and notify the recipient.
+4. Mark ready after preparation, record pickup details, and notify the recipient and responsible people. Order details group items (including assembly components) by responsible person, subgroup and pickup location. Item defaults are set in the ownership panel; the order owner or staff can override the person, group name and pickup point per item and manually notify responsible people. Automatic submission/ready notices go to each person once per order; later group or order changes only show on the order page, and the manual button re-sends on request. Fully configured group pickup points replace the single map point requirement. Notices link to the recipient-scoped groups on the orders page; email/push delivery remains deferred.
 5. At pickup, staff confirm collector/condition/evidence. The command converts reservations into custody and writes checkout/history atomically.
 6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
-7. Units that will not come back are written off by an HQ admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times, deltas and previous event-year comparison.
+7. Units that will not come back are written off by an HQ admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
 
 Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
 

@@ -11,6 +11,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class GeneralOrderService {
+    @jakarta.inject.Inject OrderPickupService pickupGroups;
     @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject PositionService positions;
     private final ActorService actors;
@@ -78,7 +79,11 @@ public class GeneralOrderService {
             }
             default -> throw ApiException.badRequest("Unknown order action: " + action);
         }
-        audit(order, action, key, input == null ? null : input.notes()); return order;
+        audit(order, action, key, input == null ? null : input.notes());
+        if (action.equals("submit") || action.equals("ready"))
+            pickupGroups.notifyResponsible("general", order.id, action.equals("ready") ? "order_group_ready" : "order_items_assigned");
+        if (action.equals("ready")) pickupGroups.notifyCreatorReady("general", order.id);
+        return order;
     }
 
     private void prepare(GeneralOrder order, ApiModels.GeneralOrderPickupInput input) {

@@ -39,7 +39,11 @@ const factionOrder = (id, faction, status, extra = {}) => ({
   // The API expands every line item, including assembly components (generator, fuel).
   expand: { itemIds: items.filter((entry) => ['seal', 'fence', 'generator', 'fuel'].includes(entry.id)), assemblyIds: assemblies }, ...extra,
 });
-const factionOrders = [factionOrder('order-tera', 'TERA', 'preparing', { preparedQuantities: { seal: 2 } }), factionOrder('order-ucrf', 'UCRF', 'submitted')];
+const factionOrders = [
+  factionOrder('order-tera', 'TERA', 'preparing', { preparedQuantities: { seal: 2 } }),
+  factionOrder('order-ucrf', 'UCRF', 'submitted'),
+  factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: '2026-06-13', requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, preparedAssemblyQuantities: { power: 1 } }),
+];
 const generalOrders = [
   { id: 'general-1', name: 'Technikzelt LightSim 2027', purpose: 'Strom und Licht im Technikzelt', eventOccurrenceId: 'ls-2027', status: 'submitted', requestedQuantities: { table: 2 }, preparedQuantities: {},
     handedOverQuantities: {}, returnedQuantities: {}, consumedQuantities: {}, damagedQuantities: {}, missingQuantities: {}, writtenOffQuantities: {}, reconciledAssets: {}, assetAssignments: {}, itemNames: { table: 'Biertisch' }, createdBy: 'preview', created: now, updated: now },
@@ -47,13 +51,40 @@ const generalOrders = [
     handedOverQuantities: { table: 3 }, returnedQuantities: { table: 3 }, consumedQuantities: {}, damagedQuantities: {}, missingQuantities: {}, writtenOffQuantities: {}, reconciledAssets: {}, assetAssignments: {}, itemNames: { table: 'Biertisch' }, createdBy: 'preview', created: now, updated: now },
 ];
 const originalFetch = window.fetch.bind(window);
+const pickupAssignments = {};
+function pickupPlan(kind, order) {
+  const requested = { ...order.requestedQuantities };
+  const prepared = { ...order.preparedQuantities };
+  for (const assembly of assemblies) for (const [id, quantity] of Object.entries(assembly.itemQuantities)) {
+    if (!(order.requestedAssemblyQuantities?.[assembly.id] > 0)) continue;
+    requested[id] = (requested[id] ?? 0) + (order.requestedAssemblyQuantities?.[assembly.id] ?? 0) * quantity;
+    prepared[id] = (prepared[id] ?? 0) + (order.preparedAssemblyQuantities?.[assembly.id] ?? 0) * quantity;
+  }
+  const groups = new Map();
+  for (const [id, quantity] of Object.entries(requested)) {
+    const item = items.find(item => item.id === id);
+    const assignment = pickupAssignments[order.id]?.[id] ?? { responsiblePersonId: ['generator', 'fuel'].includes(id) ? 'alex' : 'sam', groupName: item.category, pickupLocationId: item.storageLocation };
+    const key = `${assignment.responsiblePersonId}:${assignment.groupName}:${assignment.pickupLocationId}`;
+    if (!groups.has(key)) groups.set(key, { key, name: assignment.groupName, responsiblePersonId: assignment.responsiblePersonId, responsiblePersonName: assignment.responsiblePersonId === 'alex' ? 'Alex · Lighting' : 'Sam · Event equipment', pickupLocationId: assignment.pickupLocationId, pickupLocationName: locations.find(l => l.id === assignment.pickupLocationId)?.name, items: [] });
+    groups.get(key).items.push({ itemId: id, name: item.name, ordered: quantity, prepared: prepared[id] ?? 0 });
+  }
+  return { orderName: order.orderCode || order.name, status: order.status, canEdit: !['closed', 'cancelled'].includes(order.status), pickupPointsComplete: Boolean(pickupAssignments[order.id]), groups: [...groups.values()].sort((a,b) => a.responsiblePersonName.localeCompare(b.responsiblePersonName)) };
+}
 window.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (url.hostname !== 'fixture.invalid') return originalFetch(input, init);
   const path = url.pathname;
   if (path === '/api/events/stream') return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"type":"heartbeat"}\n\n')); } }), { headers: { 'Content-Type': 'text/event-stream' } });
   let data = [];
-  if (path === '/api/items') data = items;
+  if (/^\/api\/(orders|general-orders)\/[^/]+\/pickup-groups$/.test(path)) {
+    const kind = path.includes('/general-orders/') ? 'general' : 'faction';
+    const order = (kind === 'general' ? generalOrders : factionOrders).find(order => order.id === path.split('/')[3]);
+    if (init.method === 'PATCH') pickupAssignments[order.id] = JSON.parse(init.body).assignments;
+    data = pickupPlan(kind, order);
+  }
+  else if (path.endsWith('/pickup-groups/notify')) data = 2;
+  else if (path === '/api/users/assignable') data = [{ id: 'alex', name: 'Alex · Lighting' }, { id: 'sam', name: 'Sam · Event equipment' }];
+  else if (path === '/api/items') data = items;
   else if (path.startsWith('/api/items/') && path.endsWith('/assets')) data = [];
   else if (path === '/api/assemblies') data = assemblies;
   else if (path === '/api/storage-locations') data = locations;

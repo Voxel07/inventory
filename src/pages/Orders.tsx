@@ -1,5 +1,7 @@
 import { Tab } from '../components/shared/ActionButtons';
 import { Box, Paper, Tabs } from '@mui/material';
+import { Button } from '../components/shared/ActionButtons';
+import { OrderPickupGroups } from '../components/orders/OrderPickupGroups';
 import { useSearchParams } from 'react-router-dom';
 import { GeneralOrders } from '../components/orders/GeneralOrders';
 import { FactionOrders } from './FactionOrders';
@@ -11,9 +13,15 @@ export function Orders() {
   const t = useLocalizedText();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: OrderTab = searchParams.get('tab') === 'general' ? 'general' : 'faction';
+  const pickupOrder = searchParams.get('pickupOrder');
+  const pickupKind = searchParams.get('pickupKind') === 'general' ? 'general' : 'faction';
 
   return (
     <Box>
+      {pickupOrder && <Paper sx={{ p: 2, mb: 3 }}>
+        <OrderPickupGroups key={`${pickupKind}:${pickupOrder}`} kind={pickupKind} orderId={pickupOrder} />
+        <Button onClick={() => setSearchParams({ tab: pickupKind })}>{t('Zur Bestellübersicht', 'Back to order overview')}</Button>
+      </Paper>}
       <Paper sx={{ mb: 3, px: 1 }}>
         <Tabs
           value={tab}

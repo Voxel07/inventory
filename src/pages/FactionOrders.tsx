@@ -173,6 +173,7 @@ export function FactionOrders() {
       status: statusLabel(order.status),
       statusColor: statusColor(order.status),
       onOpen: () => navigate(`/orders/faction/${order.id}`),
+      actions: <Button onClick={() => navigate(`/orders?pickupOrder=${order.id}&pickupKind=faction`)}>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</Button>,
     };
   }
 

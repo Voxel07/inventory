@@ -17,7 +17,7 @@ function initialLanguage(): AppLanguage {
 }
 
 let activeLanguage: AppLanguage = initialLanguage();
-document.documentElement.lang = activeLanguage;
+if (typeof document !== 'undefined') document.documentElement.lang = activeLanguage;
 
 void i18next.init({
   resources: {
@@ -32,7 +32,7 @@ void i18next.init({
 
 i18next.on('languageChanged', (lng) => {
   activeLanguage = lng === 'en' ? 'en' : 'de';
-  document.documentElement.lang = lng;
+  if (typeof document !== 'undefined') document.documentElement.lang = lng;
   listeners.forEach((listener) => listener());
 });
 

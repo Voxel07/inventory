@@ -45,3 +45,20 @@ export function noticeText(notification: AppNotification, key: string): string |
   const value = notification.payload[key];
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
+
+export function notificationPath(notification: AppNotification): string | undefined {
+  const path = noticeText(notification, 'path');
+  return path?.startsWith('/orders?') ? path : notification.orderId ? `/orders/faction/${notification.orderId}` : undefined;
+}
+
+export function notificationTitle(notification: AppNotification): string {
+  const name = noticeText(notification, 'orderCode');
+  if (notification.type === 'order_items_assigned') return name
+    ? translate(`Artikel für Bestellung ${name} vorbereiten`, `Prepare items for order ${name}`)
+    : translate('Bestellte Artikel vorbereiten', 'Prepare ordered items');
+  if (notification.type === 'order_group_ready') return name
+    ? translate(`Ihre Artikel für Bestellung ${name} sind abholbereit`, `Your items for order ${name} are ready for pickup`)
+    : translate('Ihre Artikel sind abholbereit', 'Your items are ready for pickup');
+  return name ? translate(`Bestellung ${name} ist abholbereit`, `Order ${name} is ready for pickup`)
+    : translate('Bestellung ist abholbereit', 'Order is ready for pickup');
+}

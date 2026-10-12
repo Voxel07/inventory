@@ -42,9 +42,6 @@ export interface OrderPickListTableProps {
   onSetPrepared: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSetPreparedAssemblies: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSetAssetAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
-  availableFor: (item: Item) => number;
-  availableAssemblies: (assembly: Assembly) => number;
-  availableForItemId: (itemId: string) => number;
 }
 
 function assetLabel(asset: AssetInstance) {
@@ -133,7 +130,6 @@ function PickRow({
   title,
   caption,
   requested,
-  available,
   stored,
   storedLabel,
   editing,
@@ -148,7 +144,6 @@ function PickRow({
   title: string;
   caption: ReactNode;
   requested: number;
-  available: number;
   stored: number;
   storedLabel: string;
   editing: boolean;
@@ -171,9 +166,7 @@ function PickRow({
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 'auto', flexShrink: 0 }}>
           <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-            {t('Bedarf', 'Req.')} <strong>{requested}</strong>
-            {' · '}
-            <Box component="span" sx={{ color: available >= requested ? 'success.main' : 'warning.main' }}>{t('Verf.', 'Avail.')} <strong>{available}</strong></Box>
+            {t('Bestellt', 'Ordered')} <strong>{requested}</strong>
             {!editing && <> · {storedLabel} <Box component="strong" sx={{ color: stored === requested ? 'success.main' : undefined }}>{stored}</Box></>}
           </Typography>
           {editing && <>
@@ -213,9 +206,6 @@ export function OrderPickListTable({
   onSetPrepared,
   onSetPreparedAssemblies,
   onSetAssetAssignments,
-  availableFor,
-  availableAssemblies,
-  availableForItemId,
 }: OrderPickListTableProps) {
   const t = useLocalizedText();
   const [itemSearch, setItemSearch] = useState('');
@@ -320,7 +310,6 @@ export function OrderPickListTable({
                   {componentEntries.length > 0 && <> · <Box component="span" sx={{ color: allChecked ? 'success.main' : undefined }}>{checkedCount}/{componentEntries.length} {t('abgehakt', 'checked')}</Box></>}
                 </>}
                 requested={requested}
-                available={availableAssemblies(assembly)}
                 stored={order.preparedAssemblyQuantities?.[assembly.id] ?? 0}
                 storedLabel={storedLabel}
                 editing={editing}
@@ -335,7 +324,6 @@ export function OrderPickListTable({
                     {componentEntries.map(([itemId, perAssembly]) => {
                       const component = itemMap.get(itemId);
                       const totalNeeded = requested * perAssembly;
-                      const componentAvailable = availableForItemId(itemId);
                       const isChecked = Boolean(checked[itemId]);
                       return (
                         <Stack key={itemId} component="li" direction="row" spacing={1} sx={{ alignItems: 'center', pr: 1 }}>
@@ -348,7 +336,7 @@ export function OrderPickListTable({
                             </Typography>
                           </Typography>
                           <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-                            <strong>{totalNeeded}×</strong> ({perAssembly}/{t('Satz', 'kit')}) · <Box component="span" sx={{ color: componentAvailable >= totalNeeded ? 'success.main' : 'warning.main' }}>{t('Verf.', 'Avail.')} {componentAvailable}</Box>
+                            <strong>{totalNeeded}×</strong> ({perAssembly}/{t('Satz', 'kit')})
                           </Typography>
                         </Stack>
                       );
@@ -373,7 +361,6 @@ export function OrderPickListTable({
                 title={item.name}
                 caption={[locationName(item) || t('Kein Lagerort', 'No storage location'), item.category].filter(Boolean).join(' · ')}
                 requested={requested}
-                available={availableFor(item)}
                 stored={order.preparedQuantities[item.id] ?? 0}
                 storedLabel={storedLabel}
                 editing={editing}

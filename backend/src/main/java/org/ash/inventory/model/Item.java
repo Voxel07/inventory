@@ -21,6 +21,8 @@ import java.util.List;
 public class Item extends BaseEntity {
     @jakarta.persistence.OneToOne(fetch = FetchType.LAZY) @JoinColumn(name = "access_policy_id", unique = true)
     public InventoryAccessPolicy accessPolicy;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "responsible_person_id")
+    public UserAccount responsiblePerson;
     public enum Ownership { organization, private_owner, external }
     public enum AvailabilityPolicy { available, commitment_required, unavailable }
     @Enumerated(EnumType.STRING) @Column(name = "ownership_type", nullable = false)

@@ -15,6 +15,7 @@ import { getItemStock } from '../utils/stock';
 import { createCsvOperationImporter } from './csvOperationImport';
 import type { ParsedCheckoutRow } from '../types/csvImport';
 import type { ParsedOperationRow } from '../utils/csvOperations';
+import { translate } from '../utils/naming';
 
 export interface CsvImportResult { successItems: number; updatedItems: number; successAssemblies: number; successEvents: number; successOrders: number; successGeneralOrders: number; successReturns: number; successCheckouts: number; successOperations: number; errors: string[] }
 
@@ -254,7 +255,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const item = (!isTempId && component.itemId)
             ? items.find((candidate) => candidate.id === component.itemId)
             : createdItemsMap.get(component.itemName.toLowerCase().trim());
-          if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+          if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
           quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
         }
         return quantities;
@@ -322,7 +323,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const item = (!isTempId && component.itemId)
             ? items.find((candidate) => candidate.id === component.itemId)
             : createdItemsMap.get(component.itemName.toLowerCase().trim());
-          if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+          if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
           requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
         }
         const data = {
@@ -354,7 +355,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
               if (item?.trackingMode !== 'serialized') continue;
               const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
                 .filter((asset) => asset.availabilityStatus === 'available');
-              if (available.length < quantity) throw new Error(`Nicht genügend Assets für ${item.name}`);
+              if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
             finalOrder = await saveFactionOrderPreparation(
@@ -379,7 +380,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           }
         }
         if (finalOrder.status !== row.targetStatus) {
-          throw new Error(`Status ${finalOrder.status} statt ${row.targetStatus}`);
+          throw new Error(translate(`Status ${finalOrder.status} statt ${row.targetStatus}`, `Status ${finalOrder.status} instead of ${row.targetStatus}`));
         }
         if (existing) existingOrders.splice(existingOrders.findIndex((order) => order.id === existing.id), 1, finalOrder);
         else existingOrders.push(finalOrder);
@@ -403,7 +404,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           for (const component of components) {
             const item = items.find((candidate) => candidate.id === component.itemId)
               ?? createdItemsMap.get(component.itemName.toLowerCase().trim());
-            if (!item) throw new Error(`Artikel "${component.itemName}" konnte nicht gefunden werden`);
+            if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
             quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
           }
           return quantities;
@@ -432,7 +433,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             if (item?.trackingMode === 'serialized') {
               const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
                 .filter((asset) => asset.availabilityStatus === 'available');
-              if (available.length < quantity) throw new Error(`Nicht genügend Assets für ${item.name}`);
+              if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
           }
@@ -462,25 +463,25 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
       try {
         const item = items.find((candidate) => candidate.id === ret.itemId) || createdItemsMap.get(ret.itemName.toLowerCase().trim());
-        if (!item) throw new Error(`Artikel "${ret.itemName}" nicht gefunden`);
+        if (!item) throw new Error(translate(`Artikel "${ret.itemName}" nicht gefunden`, `Item "${ret.itemName}" not found`));
 
         if (ret.generalOrderName) {
           const order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === ret.generalOrderName?.toLowerCase()
             && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
-          if (!order) throw new Error(`Allgemeine Bestellung "${ret.generalOrderName}" nicht gefunden`);
+          if (!order) throw new Error(translate(`Allgemeine Bestellung "${ret.generalOrderName}" nicht gefunden`, `General order "${ret.generalOrderName}" not found`));
           if (['returned', 'closed'].includes(order.status)) continue;
           const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
           existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
         } else if (item.trackingMode === 'serialized') {
           const assets = await loadAllPages((page, size) => getItemAssets(item.id, { page, size }));
-          if (ret.assetCodes.length !== ret.quantity) throw new Error('AssetCodes müssen der Menge entsprechen');
+          if (ret.assetCodes.length !== ret.quantity) throw new Error(translate('AssetCodes müssen der Menge entsprechen', 'AssetCodes must match the quantity'));
           let recorded = false;
           for (const code of ret.assetCodes) {
             const asset = assets.find((candidate) => candidate.assetCode.toLowerCase() === code.toLowerCase());
-            if (!asset) throw new Error(`Asset "${code}" nicht gefunden`);
+            if (!asset) throw new Error(translate(`Asset "${code}" nicht gefunden`, `Asset "${code}" not found`));
             if (asset.availabilityStatus === 'available') continue;
             if (!['in_field', 'in_custody', 'returned_pending_check'].includes(asset.availabilityStatus)) {
-              throw new Error(`Asset "${code}" kann im Status ${asset.availabilityStatus} nicht zurückgegeben werden`);
+              throw new Error(translate(`Asset "${code}" kann im Status ${asset.availabilityStatus} nicht zurückgegeben werden`, `Asset "${code}" cannot be returned in status ${asset.availabilityStatus}`));
             }
             await createTransaction({
               itemId: item.id,
@@ -501,7 +502,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           if (previous.some((tx) => tx.transactionType === 'checkin' && tx.notes?.includes(marker))) continue;
           const current = await getItem(item.id);
           if (getItemStock(current).checkedOut === 0) continue;
-          if (getItemStock(current).checkedOut < ret.quantity) throw new Error('Rückgabemenge übersteigt den ausgeliehenen Bestand');
+          if (getItemStock(current).checkedOut < ret.quantity) throw new Error(translate('Rückgabemenge übersteigt den ausgeliehenen Bestand', 'Return quantity exceeds the checked-out stock'));
           await createTransaction({
             itemId: item.id,
             transactionType: 'checkin',
@@ -526,7 +527,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
       setImportStatusText(t(`Importiere Ausleihe für ${row.itemName}...`, `Importing checkout for ${row.itemName}...`));
       try {
         const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
-        if (!item) throw new Error(`Artikel "${row.itemName}" nicht gefunden`);
+        if (!item) throw new Error(translate(`Artikel "${row.itemName}" nicht gefunden`, `Item "${row.itemName}" not found`));
         const marker = `CSV checkout row ${row.index}`;
         const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id, page, size }));
         const imported = previous.filter((tx) => tx.transactionType === 'checkout' && tx.notes?.includes(marker));
@@ -537,7 +538,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             : assets.filter((asset) => asset.availabilityStatus === 'available').slice(0, row.quantity - imported.length);
           if ((row.assetCodes.length ? selected.length !== row.quantity : selected.length !== row.quantity - imported.length)
             || selected.some((asset) => !asset || (asset.availabilityStatus !== 'available' && !imported.some((tx) => tx.assetInstanceId === asset.id)))) {
-            throw new Error('Nicht genügend passende Seriengeräte verfügbar');
+            throw new Error(translate('Nicht genügend passende Seriengeräte verfügbar', 'Not enough matching serialised assets available'));
           }
           for (const asset of selected) {
             if (imported.some((tx) => tx.assetInstanceId === asset!.id)) continue;

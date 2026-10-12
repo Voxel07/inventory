@@ -20,6 +20,7 @@ import { Fields, OperationForm, type Field, type Values } from './OperationForm'
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
+import { formatStatus } from '../../utils/formatters';
 
 export function StockPositions({ itemId, locationId }: { itemId?: string; locationId?: string }) {
   const t = useLocalizedText();
@@ -61,7 +62,7 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
     </TableContainer>}
     {assets.data?.filter((asset) => !selectedLocation || asset.currentLocationId === selectedLocation).map((asset) => <Card key={asset.id}><CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
       <Link component={RouterLink} to={`/items/${asset.itemId}/assets/${asset.id}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{asset.assetCode}</Link>
-      <Typography variant="body2" color="text.secondary">{asset.currentLocationName ?? t('Ohne Lagerort', 'Unassigned location')} · {asset.availabilityStatus} · {asset.conditionStatus}{asset.currentCustodianName && ` · ${t('Bei', 'Held by')}: ${asset.currentCustodianName}`}</Typography>
+      <Typography variant="body2" color="text.secondary">{asset.currentLocationName ?? t('Ohne Lagerort', 'Unassigned location')} · {formatStatus(asset.availabilityStatus)} · {formatStatus(asset.conditionStatus)}{asset.currentCustodianName && ` · ${t('Bei', 'Held by')}: ${asset.currentCustodianName}`}</Typography>
     </CardContent></Card>)}
   </Stack>;
 }

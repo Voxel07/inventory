@@ -1,4 +1,5 @@
 import type { Item } from '../types';
+import { translate } from './naming';
 
 export const CSV_OPERATIONS = {
   stock: ['Bestandsänderung', 'Stock change', ['itemId', 'transactionType', 'quantityChanged', 'reason']],
@@ -42,45 +43,45 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
     let statusMessage: string | undefined;
     try {
       const parsed: unknown = JSON.parse(raw.Daten ?? raw.Data ?? '');
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Daten müssen ein JSON-Objekt sein');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(translate('Daten müssen ein JSON-Objekt sein', 'Data must be a JSON object'));
       data = parsed as Record<string, unknown>;
-      if (!Object.hasOwn(CSV_OPERATIONS, operation)) throw new Error(`Unbekannte Aktion: ${operation}`);
-      if (!name || names.has(name)) throw new Error('Ein eindeutiger Name für die Aktion fehlt');
+      if (!Object.hasOwn(CSV_OPERATIONS, operation)) throw new Error(translate(`Unbekannte Aktion: ${operation}`, `Unknown action: ${operation}`));
+      if (!name || names.has(name)) throw new Error(translate('Ein eindeutiger Name für die Aktion fehlt', 'A unique name for the action is missing'));
       for (const key of CSV_OPERATIONS[operation][2]) {
-        if (data[key] == null || data[key] === '' || (Array.isArray(data[key]) && !data[key].length)) throw new Error(`Pflichtfeld fehlt: ${key}`);
+        if (data[key] == null || data[key] === '' || (Array.isArray(data[key]) && !data[key].length)) throw new Error(translate(`Pflichtfeld fehlt: ${key}`, `Required field missing: ${key}`));
       }
       if (['stock', 'damage', 'repair', 'repair_transition'].includes(operation)) {
         const quantity = operation === 'stock' ? data.quantityChanged : data.amount;
         if (quantity != null && (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1)) {
-          throw new Error('Die Menge muss eine positive ganze Zahl sein');
+          throw new Error(translate('Die Menge muss eine positive ganze Zahl sein', 'The quantity must be a positive whole number'));
         }
         if (operation === 'stock' && !['adjusted', 'checkout', 'checkin'].includes(String(data.transactionType))) {
-          throw new Error('Bestandsänderungen verwenden adjusted, checkout oder checkin; Abschreibungen erfolgen über Reparaturen');
+          throw new Error(translate('Bestandsänderungen verwenden adjusted, checkout oder checkin; Abschreibungen erfolgen über Reparaturen', 'Stock changes use adjusted, checkout or checkin; write-offs are done through repairs'));
         }
         if (operation === 'stock' && data.transactionType === 'checkout' && (!data.eventType || !data.faction)) {
-          throw new Error('Eventtyp und Fraktion sind für Ausleihen erforderlich');
+          throw new Error(translate('Eventtyp und Fraktion sind für Ausleihen erforderlich', 'Event type and faction are required for loans'));
         }
         if (operation === 'damage' && !['low', 'medium', 'high', 'critical', 'total_loss'].includes(String(data.severity))) {
-          throw new Error('Ungültiger Schweregrad');
+          throw new Error(translate('Ungültiger Schweregrad', 'Invalid severity'));
         }
         if (operation === 'repair_transition') {
           if (!['triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service', 'written_off'].includes(String(data.status))) {
-            throw new Error('Ungültiger Reparaturstatus');
+            throw new Error(translate('Ungültiger Reparaturstatus', 'Invalid repair status'));
           }
-          if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error('Die Reparatur-/Abschreibungsmenge fehlt');
-          if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error('Das Prüfergebnis fehlt');
+          if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error(translate('Die Reparatur-/Abschreibungsmenge fehlt', 'The repair/write-off quantity is missing'));
+          if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error(translate('Das Prüfergebnis fehlt', 'The inspection result is missing'));
         }
         if (data.occurredAt != null && (typeof data.occurredAt !== 'string'
           || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.occurredAt)
           || !Number.isFinite(Date.parse(data.occurredAt)) || Date.parse(data.occurredAt) > Date.now())) {
-          throw new Error('occurredAt muss ein gültiger ISO-Zeitstempel mit Zeitzone in der Vergangenheit sein');
+          throw new Error(translate('occurredAt muss ein gültiger ISO-Zeitstempel mit Zeitzone in der Vergangenheit sein', 'occurredAt must be a valid ISO timestamp with time zone in the past'));
         }
       }
       function check(value: unknown): void {
         if (typeof value === 'string') {
-          if (value.startsWith('@row:') && !names.has(value.slice(5))) throw new Error(`Aktion muss vorher stehen: ${value.slice(5)}`);
-          if (value.startsWith('@item:') && !itemNames.has(value.slice(6).toLowerCase().trim())) throw new Error(`Unbekannter Artikel: ${value.slice(6)}`);
-          if (/^@(date|datetime):/.test(value) && !/^@(date|datetime):[+-]?\d+$/.test(value)) throw new Error(`Ungültiger relativer Termin: ${value}`);
+          if (value.startsWith('@row:') && !names.has(value.slice(5))) throw new Error(translate(`Aktion muss vorher stehen: ${value.slice(5)}`, `Action must come first: ${value.slice(5)}`));
+          if (value.startsWith('@item:') && !itemNames.has(value.slice(6).toLowerCase().trim())) throw new Error(translate(`Unbekannter Artikel: ${value.slice(6)}`, `Unknown item: ${value.slice(6)}`));
+          if (/^@(date|datetime):/.test(value) && !/^@(date|datetime):[+-]?\d+$/.test(value)) throw new Error(translate(`Ungültiger relativer Termin: ${value}`, `Invalid relative date: ${value}`));
         } else if (Array.isArray(value)) value.forEach(check);
         else if (value && typeof value === 'object') Object.values(value).forEach(check);
       }

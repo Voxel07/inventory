@@ -33,6 +33,7 @@ import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { ListPagination } from '../components/shared/ListPagination';
 import { useClientPagination } from '../hooks/useClientPagination';
+import { formatStatus } from '../utils/formatters';
 
 export function StorageLocations() {
     const t = useLocalizedText();
@@ -286,7 +287,7 @@ export function StorageLocations() {
                                                 />
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                                                     <Chip
-                                                        label={loc.active ? loc.locationType : t('Inaktiv', 'Inactive')}
+                                                        label={loc.active ? formatStatus(loc.locationType ?? 'bin') : t('Inaktiv', 'Inactive')}
                                                         size="small"
                                                         variant="outlined"
                                                     />
@@ -424,7 +425,7 @@ export function StorageLocations() {
                                 onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('Privater Lagerort — nur Eigentümer, HQ-Admins und Freigaben', 'Private storage location — owner, HQ admins and explicit shares only')} />
                             <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>
                             <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => setFormData({ ...formData, parentLocationId: e.target.value || null })}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
-                            <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{type.replaceAll('_', ' ')}</MenuItem>)}</TextField>
+                            <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
                             <FormControlLabel label={t('Aktiv', 'Active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
                             <Alert severity="info">{t('Inaktive Lagerorte bleiben für Bestand und Historie sichtbar. Unterorte müssen zuerst deaktiviert werden.', 'Inactive locations remain visible for stock and history. Deactivate child locations first.')}</Alert>
                             <TextField

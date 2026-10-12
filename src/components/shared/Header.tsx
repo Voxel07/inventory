@@ -203,7 +203,7 @@ export function Header() {
                         variant={syncAttention ? 'filled' : 'outlined'}
                         color={!online ? 'error' : syncAttention ? 'warning' : 'default'}
                         icon={!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
-                        label={cachedAt ? t('header.cachedData', 'Cached data') : online
+                        label={cachedAt ? t('header.cachedData') : online
                             ? (queued ? t('header.queuedActions', { count: queued }) : translate('Synchronisiert', 'In sync'))
                             : t('header.offlineQueued', { count: queued })}
                         onClick={openQueuedActions}
@@ -231,7 +231,7 @@ export function Header() {
                         label={t('header.quickScanPlaceholder', 'Code / SKU / URL eingeben')}
                         value={quickScanInput}
                         onChange={(e) => setQuickScanInput(e.target.value)}
-                        placeholder="z.B. DE26-KGG-01 oder QR-Link"
+                        placeholder={t('header.quickScanExample')}
                         sx={{ mb: 2 }}
                     />
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
