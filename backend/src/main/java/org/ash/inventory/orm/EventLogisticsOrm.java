@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 public class EventLogisticsOrm extends EntityOrm {
     public List<EventAttendee> attendees(UUID eventId) {
         return entityManager.createQuery("""
-                select distinct a from EventAttendee a join fetch a.person p left join fetch p.user left join fetch a.roles
+                select a from EventAttendee a join fetch a.person p left join fetch p.user left join fetch a.roles
                 where a.event.id = :eventId order by lower(p.name), a.id""", EventAttendee.class)
                 .setParameter("eventId", eventId).getResultList();
     }
