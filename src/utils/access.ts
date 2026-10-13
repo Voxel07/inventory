@@ -26,6 +26,11 @@ export function canViewCatalog(user: User | null | undefined): boolean {
   return Boolean(user);
 }
 
+/** Adding items, assemblies and storage locations: everyone except read-only members (tenants add private ones). */
+export function canCreateInventory(user: User | null | undefined): boolean {
+  return Boolean(user) && effectiveAccess(user) !== 'read_only';
+}
+
 export function canEditCatalog(user: User | null | undefined): boolean {
   return atLeast(user, 'warehouse_crew');
 }

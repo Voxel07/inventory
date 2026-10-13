@@ -15,7 +15,7 @@ class PrivateInventoryApiTest {
     private RequestSpecification actor(String name, String role) {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", "privacy-" + name).header("X-Actor-Name", "privacy-" + name).header("X-Actor-Role", role);
     }
-    private RequestSpecification owner() { return actor("owner", "read_only"); }
+    private RequestSpecification owner() { return actor("owner", "faction_leader"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
     private RequestSpecification admin() { return actor("admin", "admin"); }
     private String person(String name) {
@@ -46,6 +46,14 @@ class PrivateInventoryApiTest {
         reader().get(policy("items", item)).then().statusCode(404);
         owner().get("/api/items/" + item).then().statusCode(200).header("Cache-Control", containsString("no-store")).header("X-Private-Inventory", equalTo("true"));
         admin().get("/api/items/" + item).then().statusCode(200).body("access.canManage", equalTo(true));
+    }
+
+    @Test void readOnlyMembersCannotAddItemsAssembliesOrLocationsEvenPrivately() {
+        String component = item();
+        reader().body(itemInput()).post("/api/items").then().statusCode(403);
+        reader().body(Map.of("name", "Read-only shed " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(403);
+        reader().body(Map.of("name", "Read-only kit " + UUID.randomUUID(), "itemQuantities", Map.of(component, 1))).post("/api/assemblies").then().statusCode(403);
+        tenant("creator").body(Map.of("name", "Tenant shed " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(200).body("access.privateResource", equalTo(true));
     }
 
     @Test void personSharingDistinguishesViewEditAndManagementAndRevokesImmediately() {
@@ -94,7 +102,7 @@ class PrivateInventoryApiTest {
 
     @Test void mediaRequiresUploaderOwnershipAndCurrentItemAccessEvenWithKnownKeys() {
         String readerId = person("reader");
-        String key = given().header("X-Actor-Id", "privacy-owner").header("X-Actor-Role", "read_only")
+        String key = given().header("X-Actor-Id", "privacy-owner").header("X-Actor-Role", "faction_leader")
                 .multiPart("file", "private.png", new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0}, "image/png").post("/api/media").then().statusCode(200).extract().path("key");
         reader().get("/api/media/" + key).then().statusCode(404);
         var input = itemInput(); input.put("images", List.of(key));
@@ -194,7 +202,7 @@ class PrivateInventoryApiTest {
         String hall = building(tenant("host"), null);
         tenant("host").body(shares(0, List.of(Map.of("userId", lodgerId, "canEdit", true)))).put(policy("storage-locations", hall)).then().statusCode(200);
         var input = itemInput(); input.put("storageLocation", hall);
-        String lodgerItem = actor("lodger", "read_only").body(input).post("/api/items").then().statusCode(200).extract().path("id");
+        String lodgerItem = actor("lodger", "faction_leader").body(input).post("/api/items").then().statusCode(200).extract().path("id");
         tenant("host").get("/api/items/" + lodgerItem).then().statusCode(200).body("access.canEdit", equalTo(true)).body("access.canManage", equalTo(false));
         var edit = editInput(); edit.put("storageLocation", hall);
         tenant("host").body(edit).patch("/api/items/" + lodgerItem).then().statusCode(200);

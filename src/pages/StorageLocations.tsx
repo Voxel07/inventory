@@ -7,7 +7,7 @@ import { WarehousesPanel } from '../components/operations/WarehousesPanel';
 import { getWarehouses } from '../services/warehouseService';
 import { locationPath, isDescendant } from '../utils/locationHierarchy';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canViewOrganization } from '../utils/access';
+import { canCreateInventory, canEditCatalog, canViewOrganization } from '../utils/access';
 import { ItemsList } from '../components/lists/ItemsList';
 import { getLocationInventory } from '../utils/locationStock';
 import { useOperationList } from '../hooks/useOperations';
@@ -39,6 +39,7 @@ export function StorageLocations() {
     const t = useLocalizedText();
     const { user } = useAuth();
     const canEdit = canEditCatalog(user);
+    const canCreate = canCreateInventory(user);
     // Tenants keep their buildings outside of the organization's warehouses.
     const organization = canViewOrganization(user);
     const navigate = useNavigate();
@@ -196,13 +197,13 @@ export function StorageLocations() {
                     <Typography variant="h4">
                         {t('Lagerorte', 'Storage locations')}
                     </Typography>
-                    <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
+                    {canCreate && <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
                         variant="contained"
                         startIcon={<AddIcon />}
                         onClick={handleOpenCreate}
                     >
                         {t('Lagerort hinzufügen', 'Add storage location')}
-                    </Button>
+                    </Button>}
                 </Box>
             )}
 

@@ -43,13 +43,13 @@ Roles form a **ladder**: each role includes every right of the roles above it in
 | App role | Adds to the role above |
 |---|---|
 | Tenant (`tenant`) | Own private inventory only: private items, assemblies and storage locations (e.g. the rented building), own share groups, "offer for use" with request notifications. Never sees company data. |
-| Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only |
+| Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only. Adds no items, assemblies or storage locations, not even private ones |
 | Faction leader (`faction_leader`) | Create and edit faction order lists for the user's own factions; return and report items in their own custody |
 | ASH crew (`ash`) | General (non-faction) orders and item takeout, including pickup of prepared faction and general orders. Preparation, returns and closing remain with the warehouse |
 | Warehouse crew (`warehouse_crew`) | All catalog work, all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs, reports), preparing and handing out orders (pickup, returns, close), damage reports, custody overview, history; order lists for every faction |
 | Inventory admin (`admin`) | Everything: user roles and factions, events, participants and timing, procurement planning, write-offs, count approval, audit and recovery, ownership transfer, every private resource |
 
-Every role except the tenant also has the tenant's private-inventory rights: anyone can own private items, share them and offer them for use.
+Every role from faction leader up also has the tenant's private-inventory rights: they can add private items, assemblies and storage locations, share them and offer them for use. Read-only members add nothing; they only use what is shared with them.
 
 **Factions.** On the same Users page the admin assigns factions (event type and faction, stored as `EVENT:slug`). Every organization member *reads* all factions' order lists; faction leaders and ASH crew only *create and change* lists of the factions assigned to them. Warehouse crew and the inventory admin change every list.
 
@@ -58,7 +58,8 @@ Every role except the tenant also has the tenant's private-inventory rights: any
 
 | Capability | Tenant | Read only | Faction leader | ASH crew | Warehouse crew | Inventory admin |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| Own private items, locations, assemblies; share groups; offer for use | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Add own private items, locations, assemblies; offer for use | ✓ | | ✓ | ✓ | ✓ | ✓ |
+| Share groups; use resources shared with them | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | See company items, assemblies and public locations | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | See participants and event timing | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | See faction and general orders | | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -95,7 +96,7 @@ Private resources are never visible through a role alone (except to the inventor
 | Leader of two factions | Faction leader, factions DE · KGG and LS · Red | Edits both factions' lists; reads every other list. |
 | Building tenant who stores own equipment | Tenant (explicitly assigned) | Creates a private location for the building, adds items, creates a share group "Hall crew" and shares the building with it; the group sees everything stored there. Sees nothing of the company inventory. |
 | Tenant lends a generator for an event | Tenant | Offers the generator for use and records a commitment for the event dates; faction leaders order it; the tenant gets a notice per order. Warehouse staff need a share of the building (or the item is brought in) to collect it. |
-| Read-only participant | Read only | Reads catalog, orders, participants and timing; keeps own private items. |
+| Read-only participant | Read only | Reads catalog, orders, participants and timing; cannot add items, assemblies or storage locations. |
 
 ### 3.6 Changes take effect
 

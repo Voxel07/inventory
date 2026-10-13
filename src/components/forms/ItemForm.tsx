@@ -1,6 +1,6 @@
 import { useAuth } from '../../hooks/useAuth';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
-import { canEditCatalog } from '../../utils/access';
+import { canCreateInventory, canEditCatalog } from '../../utils/access';
 import { AccordionSummary, Button } from '../shared/ActionButtons';
 import { DialogForm, FormDialog, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
@@ -53,6 +53,7 @@ export function ItemForm({
     const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
     const canCreatePublic = canEditCatalog(user);
+    const canCreateLocation = canCreateInventory(user);
     const [formData, setFormData] = useState<ItemFormData>({
         privateResource: initialData ? Boolean(initialData.access?.privateResource) : true,
         name: initialData?.name ?? '',
@@ -410,10 +411,10 @@ export function ItemForm({
                             renderInput={(params) => <TextField {...params} label={t('Lagerort', 'Storage location')} fullWidth />}
                             sx={{ flexGrow: 1, minWidth: 0 }}
                         />
-                        <Button variant="outlined" startIcon={<AddLocationAltOutlinedIcon />} onClick={() => setAddLocationOpen(true)}
+                        {canCreateLocation && <Button variant="outlined" startIcon={<AddLocationAltOutlinedIcon />} onClick={() => setAddLocationOpen(true)}
                             aria-label={t('Neuen Lagerort anlegen', 'Create a new storage location')} sx={{ height: 56, flexShrink: 0 }}>
                             {t('Neu', 'New')}
-                        </Button>
+                        </Button>}
                     </Box>
                     <Autocomplete
                         options={storageLocations}

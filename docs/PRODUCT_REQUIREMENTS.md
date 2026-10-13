@@ -23,7 +23,7 @@ Roles form a ladder, listed from least to most privileged; each role includes th
 | Persona / role | Primary product work |
 |---|---|
 | Tenant (`tenant`) | Only own private inventory: private items, assemblies and storage locations (e.g. a rented building), own share groups, offering items for use and answering requests. No company data. |
-| Read-only participant (`read_only`) | Reads company catalog, participants, event timing and all orders |
+| Read-only participant (`read_only`) | Reads company catalog, participants, event timing and all orders; adds no items, assemblies or storage locations (not even private ones) |
 | Faction leader (`faction_leader`) | Faction orders for provider-assigned factions; returns and reports for items in own custody |
 | ASH crew (`ash`) | Crew members who create general orders, take out items and pick up prepared orders |
 | Warehouse crew (`warehouse_crew`) | Company catalog and storage, preparation, handing out and taking back (pickup, returns, damage reports, custody overview), all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs), history and reports |

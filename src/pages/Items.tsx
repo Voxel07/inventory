@@ -21,11 +21,12 @@ import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { personalItems } from '../utils/personalItems';
-import { canEditCatalog } from '../utils/access';
+import { canCreateInventory, canEditCatalog } from '../utils/access';
 
 export function Items() {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
+    const canCreate = canCreateInventory(user);
     const t = useLocalizedText();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
@@ -60,9 +61,9 @@ export function Items() {
                     {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>
                         {t('CSV-Import', 'Import CSV')}
                     </Button>}
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
+                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
                         {t('Artikel hinzufügen', 'Add item')}
-                    </Button>
+                    </Button>}
                 </>}
             />
             <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
@@ -77,7 +78,7 @@ export function Items() {
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
                 loadError={isError}
                 onRetry={() => { void refetch(); }}
-                onCreate={crud.openCreate}
+                onCreate={canCreate ? crud.openCreate : undefined}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}

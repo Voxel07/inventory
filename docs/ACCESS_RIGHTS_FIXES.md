@@ -8,3 +8,5 @@
 - [x] Restore PostgreSQL tests and remove an accidental diff header, as requested.
 - [x] Verification: typecheck and focused lint pass; 54 frontend regressions and 8 Java role regressions pass; clean backend compilation passes; single baseline contains 60 tables and the required columns.
 - [ ] PostgreSQL API/baseline tests: not run because `TEST_DB_URL` is unset and Docker is not running. API regressions for ASH checkout/pickup and removing ASH while retaining faction leadership are added.
+- [x] P1: Read-only members could add private storage locations, items and assemblies and saw the add buttons. `CatalogService` create paths (REST, MCP, sync) now reject `read_only` with 403; add buttons (items, assemblies, locations, inline location in the item form) are hidden via `canCreateInventory`. Tenants and faction leader+ keep private creation.
+- [x] Regression tests: `tests/access.test.ts`, `PrivateInventoryApiTest.readOnlyMembersCannotAddItemsAssembliesOrLocationsEvenPrivately`; private-owner fixtures moved from `read_only` to `faction_leader`.

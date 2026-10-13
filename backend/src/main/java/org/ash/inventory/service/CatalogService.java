@@ -142,6 +142,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item createItem(ApiModels.ItemInput input) {
+        actorService.requireInventoryCreation();
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         var item = new Item();
         boolean privateItem = Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current());
@@ -308,6 +309,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
+        actorService.requireInventoryCreation();
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         hierarchy.lockHierarchy();
         var location = new StorageLocation();
@@ -370,6 +372,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
+        actorService.requireInventoryCreation();
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         var assembly = new Assembly();
         // Like items: members without inventory management create personal assemblies.

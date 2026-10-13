@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ROLE_LADDER, type User, type UserRole } from '../src/types';
 import {
-  atLeast, canAccessProcurement, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
+  atLeast, canAccessProcurement, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
   canOrder, canPerformCustody, canPerformMaintenance, canTakeOut, canUseGeneralOrders, canViewCatalog, canViewFaction,
   canViewOrganization, canWriteFaction, canWriteOff,
 } from '../src/utils/access';
@@ -44,6 +44,11 @@ describe('role ladder', () => {
   test('signed-out users have no rights', () => {
     expect(atLeast(null, 'tenant')).toBe(false);
     expect(canViewCatalog(null)).toBe(false);
+  });
+
+  test('everyone but read-only members adds inventory', () => {
+    for (const role of ROLE_LADDER) expect({ role, allowed: canCreateInventory(user(role)) }).toEqual({ role, allowed: role !== 'read_only' });
+    expect(canCreateInventory(null)).toBe(false);
   });
 
   test('faction leaders write only their own factions; warehouse writes all; read-only none', () => {

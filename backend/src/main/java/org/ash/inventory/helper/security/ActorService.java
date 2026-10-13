@@ -166,6 +166,16 @@ public class ActorService {
         return actor.role.atLeast(DomainEnums.UserRole.read_only);
     }
 
+    /** Read-only members only read; tenants and every role from faction leader up own private inventory. */
+    public static boolean createsInventory(UserAccount actor) {
+        return actor.role != DomainEnums.UserRole.read_only;
+    }
+
+    /** Items, assemblies and storage locations: read-only accounts cannot add any, not even private ones. */
+    public void requireInventoryCreation() {
+        if (!createsInventory(current())) throw ApiException.forbidden("Read-only accounts cannot add inventory");
+    }
+
     public boolean canViewItem(org.ash.inventory.model.Item item, UserAccount actor) {
         if (item.accessPolicy != null) return privateAccess.allows(item.accessPolicy, actor, false);
         if (!seesOrganization(actor)) return false;

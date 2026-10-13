@@ -17,12 +17,13 @@ import { useCrudManager } from '../hooks/useCrudManager';
 import type { Assembly, AssemblyFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog } from '../utils/access';
+import { canCreateInventory, canEditCatalog } from '../utils/access';
 import { personalAssemblies } from '../utils/personalItems';
 
 export function Assemblies() {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
+    const canCreate = canCreateInventory(user);
     const t = useLocalizedText();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
@@ -49,7 +50,7 @@ export function Assemblies() {
                 title={t('Baugruppen', 'Assemblies')}
                 actions={<>
                     {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('CSV-Import', 'Import CSV')}</Button>}
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>
+                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>}
                 </>}
             />
             <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
@@ -65,7 +66,7 @@ export function Assemblies() {
                 loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
                 loadError={isError}
                 onRetry={() => { void refetch(); }}
-                onCreate={crud.openCreate}
+                onCreate={canCreate ? crud.openCreate : undefined}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
