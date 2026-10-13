@@ -37,6 +37,7 @@ import java.util.UUID;
 public class ApiMapper {
     @jakarta.inject.Inject org.ash.inventory.helper.security.ActorService actors;
     @jakarta.inject.Inject org.ash.inventory.service.InventoryAccessService accessPolicies;
+    @jakarta.inject.Inject org.ash.inventory.orm.AssetReservationOrm assetReservations;
     private final MediaService media;
     public ApiMapper(MediaService media) { this.media = media; }
 
@@ -541,7 +542,9 @@ public class ApiMapper {
         return result;
     }
 
-    public ApiResponses.AssetInstanceResponse asset(AssetInstance value) {
+    public ApiResponses.AssetInstanceResponse asset(AssetInstance value) { return asset(value, null); }
+
+    private ApiResponses.AssetInstanceResponse asset(AssetInstance value, org.ash.inventory.orm.AssetReservationOrm.Holder holder) {
         return new ApiResponses.AssetInstanceResponse(
                 value.id,
                 value.createdAt,
@@ -561,13 +564,18 @@ public class ApiMapper {
                 value.currentCustodian == null ? null : value.currentCustodian.name,
                 value.notes,
                 value.active,
-                value.version
+                value.version,
+                holder == null ? null : new ApiResponses.AssetReservationResponse(holder.kind(), holder.orderId(), holder.label())
         );
     }
 
+    /** List projections also say which order holds each reserved or staged asset. */
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
         prepareLocations(values.stream().map(a -> a.currentLocation).toList());
-        return values.stream().map(this::asset).toList();
+        var holders = assetReservations.holders(values.stream()
+                .filter(a -> a.availabilityStatus == DomainEnums.AssetState.reserved || a.availabilityStatus == DomainEnums.AssetState.staged)
+                .map(a -> a.id).toList());
+        return values.stream().map(a -> asset(a, holders.get(a.id))).toList();
     }
 
     public ApiResponses.OutboxEventResponse outboxEvent(DomainEvent value) {

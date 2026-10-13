@@ -200,6 +200,8 @@ export interface AssetInstance {
   notes?: string;
   active: boolean;
   version: number;
+  /** The open order holding a reserved or staged asset. */
+  reservedFor?: { kind: 'faction_order' | 'general_order'; orderId: string; label: string };
 }
 
 export interface AssetInstanceInput {

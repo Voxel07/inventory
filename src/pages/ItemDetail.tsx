@@ -142,6 +142,7 @@ export function ItemDetail() {
     const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
     const stockHistory = buildStockHistory(itemTransactions, item?.stock?.onHand ?? 0);
+    const historyDates = new Map(stockHistory.map((point) => [point.id, point.date]));
 
     function handleUpdate(data: ItemFormData) {
         if (!itemId) return;
@@ -239,7 +240,6 @@ export function ItemDetail() {
     const secondaryStock = [
         checkedOut > 0 && t(`${checkedOut} ausgeliehen`, `${checkedOut} checked out`),
         inTransit > 0 && t(`${inTransit} im Transfer`, `${inTransit} in transit`),
-        damaged > 0 && t(`${damaged} defekt`, `${damaged} damaged`),
     ].filter(Boolean).join(' · ');
     const location = item.expand?.storageLocation;
     const locationText = location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : '';
@@ -259,10 +259,11 @@ export function ItemDetail() {
             <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="date" stroke={theme.palette.text.secondary} fontSize={11} />
+                    <XAxis dataKey="id" tickFormatter={(id: string) => historyDates.get(id) ?? ''} stroke={theme.palette.text.secondary} fontSize={11} />
                     <YAxis stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} />
                     <ChartTooltip
                         isAnimationActive={false}
+                        labelFormatter={(id) => historyDates.get(String(id)) ?? ''}
                         contentStyle={{ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 8 }}
                         labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
                         itemStyle={{ color: theme.palette.primary.main }}
@@ -349,6 +350,7 @@ export function ItemDetail() {
                         <Typography className="tabular" sx={{ fontSize: '0.8125rem', mt: 0.25 }}>
                             <Box component="span" sx={{ color: availabilityColor, fontWeight: 600 }}>{availabilityText}</Box>
                             {secondaryStock && <Box component="span" sx={{ color: 'text.secondary' }}> · {secondaryStock}</Box>}
+                            {damaged > 0 && <Box component="span" sx={{ color: 'error.main', fontWeight: 600 }}> · {t(`${damaged} defekt`, `${damaged} damaged`)}</Box>}
                             <Box component="span" sx={{ color: 'text.secondary' }}> · {t('Lagerort', 'Location')}: </Box>
                             {item.storageLocation
                                 ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`}>{locationText || item.storageLocation}</Link>

@@ -34,3 +34,13 @@ test('signed adjustments, transfers and write-offs reconcile to current on-hand 
   expect(stockDelta(transaction('consumed', 2, '2026-10-02T15:00:00Z'))).toBe(0);
   expect(stockDelta(transaction('repaired', 2, '2026-10-02T15:00:00Z'))).toBe(0);
 });
+
+test('transactions within the same minute stay separate chart points', () => {
+  const history = buildStockHistory([
+    transaction('received', 5, '2026-10-02T10:00:05Z'),
+    transaction('checkout', 2, '2026-10-02T10:00:40Z'),
+  ], 3);
+  expect(history[0].date).toBe(history[1].date);
+  expect(new Set(history.map(point => point.id)).size).toBe(2);
+  expect(history.map(point => point.stock)).toEqual([5, 3]);
+});

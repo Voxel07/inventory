@@ -163,8 +163,6 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('Baugruppen', 'Assemblies')}>
                 {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id} to={`/assemblies/${row.id}`} title={row.name}
                     primary={<Box component="span" sx={{ color: availabilityColor(row), fontWeight: 600 }}>{availabilityText(row)}</Box>}
-                    primarySuffix={row.location !== '—' ? row.location : undefined}
-                    secondary={[row.category !== '—' ? row.category : '', row.events !== '—' ? row.events : ''].filter(Boolean).join(' · ')}
                     selectable={selecting && canEditAssembly(row.assembly)} selected={selectedIds.has(row.id)} onToggleSelected={() => toggleSelected(row.id)}
                     onOpenMenu={(anchor) => setMenu({ anchor, row })} />)}
             </Paper>

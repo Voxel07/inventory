@@ -13,6 +13,7 @@ import { createOrder, generalOrderCommand, getOrders, returnOrder, transitionOrd
 import { createStorageLocation } from './storageLocationService';
 import { getItemStock } from '../utils/stock';
 import { createCsvOperationImporter } from './csvOperationImport';
+import { createCsvEventLogisticsImporter } from './csvEventLogisticsImport';
 import type { ParsedCheckoutRow } from '../types/csvImport';
 import type { ParsedOperationRow } from '../utils/csvOperations';
 import { translate } from '../utils/naming';
@@ -242,6 +243,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     // Step 4: Import event history after all referenced items exist. Matching
     // type/date records are updated so retrying a sample import is safe.
     const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 || parsedOperations.length > 0 ? await getEventReports() : [];
+    const importEventLogistics = createCsvEventLogisticsImporter();
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
       setImportStatusText(t(
         `Erstelle ${row.data.eventType}-Event vom ${row.data.eventDate}...`,
@@ -277,6 +279,8 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           ? await updateEventReport(existing.id, data)
           : await createEventReport(data);
         if (!existing) existingEvents.push(saved);
+        else existingEvents.splice(existingEvents.findIndex((event) => event.id === existing.id), 1, saved);
+        await importEventLogistics(saved.id, row);
         successEvents++;
       } catch (err: unknown) {
         assertAuthSession(context);

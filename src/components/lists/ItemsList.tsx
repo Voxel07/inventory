@@ -126,13 +126,16 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         .filter((row) => locationStock || locationIds.length === 0 || locationIds.includes(row.item.storageLocation) || matchingItemIds.has(row.id));
 
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' } as const;
+    /** Availability keeps its traffic-light color; damaged units always read as an error. */
     function availabilityText(row: ItemRow) {
         const base = row.availability === 'none'
             ? t('Nicht verfügbar', 'None available')
             : t(`${row.stock} von ${row.totalStock} verfügbar`, `${row.stock} of ${row.totalStock} available`);
         const low = row.availability === 'low' ? ` · ${t('niedrig', 'low')}` : '';
-        const damaged = row.damaged > 0 ? ` · ${row.damaged} ${t('defekt', 'damaged')}` : '';
-        return base + low + damaged;
+        return <>
+            <Box component="span" sx={{ color: availabilityColor[row.availability] }}>{base + low}</Box>
+            {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {row.damaged} {t('defekt', 'damaged')}</Box>}
+        </>;
     }
 
     function clearFilters() {
@@ -161,7 +164,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         ...(requiredQuantities ? [{ field: 'required', headerName: t('Menge je Baugruppe', 'Per assembly'), type: 'number', width: 130, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
         { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.item.category]) },
         { field: 'stock', headerName: locationStock ? t('Verfügbar hier', 'Available here') : t('Verfügbar', 'Available'), type: 'number', width: 210,
-            renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor[row.availability], fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.3, textAlign: 'right' }}>
+            renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.3, textAlign: 'right' }}>
                 {availabilityText(row)}
             </Typography> },
         ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.location === '—' ? undefined : row.location]) } satisfies GridColDef<ItemRow>] : []),
@@ -234,9 +237,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id}
                     to={`/items/${row.id}`}
                     title={row.name}
-                    primary={<Box component="span" sx={{ color: availabilityColor[row.availability], fontWeight: 600 }}>{availabilityText(row)}</Box>}
-                    primarySuffix={!locationStock && row.location !== '—' ? row.location : undefined}
-                    secondary={[requiredQuantities ? `${requiredQuantities[row.id] ?? 1}× ${t('je Baugruppe', 'per assembly')}` : '', row.category, row.events !== '—' ? row.events : ''].filter(Boolean).join(' · ')}
+                    primary={<Box component="span" sx={{ fontWeight: 600 }}>{availabilityText(row)}</Box>}
+                    secondary={requiredQuantities ? `${requiredQuantities[row.id] ?? 1}× ${t('je Baugruppe', 'per assembly')}` : undefined}
                     selectable={selecting && canEditItem(row.item)}
                     selected={selectedIds.has(row.id)}
                     onToggleSelected={() => toggleSelected(row.id)}

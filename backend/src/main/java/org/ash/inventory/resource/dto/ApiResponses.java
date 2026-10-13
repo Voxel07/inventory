@@ -417,8 +417,12 @@ public final class ApiResponses {
             String currentCustodianName,
             String notes,
             boolean active,
-            long version
+            long version,
+            @JsonInclude(JsonInclude.Include.NON_NULL) AssetReservationResponse reservedFor
     ) {}
+
+    /** The open order holding a reserved or staged asset. */
+    public record AssetReservationResponse(String kind, UUID orderId, String label) {}
 
     public record OutboxEventResponse(
             UUID id,

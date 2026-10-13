@@ -1,4 +1,5 @@
 import { type ItemFormData, type AssemblyFormData, type EventReportFormData, type FactionOrderFormData, type GeneralOrderFormData, type EventType } from './index';
+import type { EventAttendeeInput, EventTimelineInput } from './eventLogistics';
 
 export interface ParsedItemRow {
   index: number;
@@ -37,6 +38,8 @@ export interface ParsedEventReportRow {
   rawRow: Record<string, string>;
   plannedItems: ParsedAssemblyComponent[];
   usedItems: ParsedAssemblyComponent[];
+  attendees: EventAttendeeInput[];
+  timeline: EventTimelineInput[];
   status: 'valid' | 'error';
   statusMessage?: string;
 }

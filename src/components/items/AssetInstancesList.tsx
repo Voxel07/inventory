@@ -24,6 +24,7 @@ import {
     useTheme,
     useMediaQuery,
     Checkbox,
+    Link,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeed';
@@ -32,7 +33,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
@@ -53,6 +54,8 @@ const statusColorMap: Record<string, 'success' | 'warning' | 'error' | 'info' | 
     available: 'success',
     in_custody: 'warning',
     in_field: 'warning',
+    reserved: 'info',
+    staged: 'info',
     in_maintenance: 'info',
     in_repair: 'warning',
     damaged: 'error',
@@ -89,17 +92,17 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     })();
     const { pageItems: pageAssets, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(filteredAssets);
 
-    // Metrics
-    const metrics = (() => {
-        if (!assets) return { total: 0, available: 0, inCustody: 0, maintenance: 0, damaged: 0 };
-        return {
-            total: assets.length,
-            available: assets.filter((a) => a.availabilityStatus === 'available').length,
-            inCustody: assets.filter((a) => a.availabilityStatus === 'in_custody' || a.availabilityStatus === 'in_field').length,
-            maintenance: assets.filter((a) => a.availabilityStatus === 'in_maintenance' || a.availabilityStatus === 'in_repair').length,
-            damaged: assets.filter((a) => a.availabilityStatus === 'damaged' || a.conditionStatus === 'damaged' || a.conditionStatus === 'unsafe').length,
-        };
-    })();
+    /** Reserved and staged units name the order that holds them. */
+    function reservationNote(asset: AssetInstance) {
+        if (asset.availabilityStatus !== 'reserved' && asset.availabilityStatus !== 'staged') return null;
+        const holder = asset.reservedFor;
+        if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t('Keine offene Bestellung gefunden', 'No open order found')}</Typography>;
+        const to = holder.kind === 'faction_order' ? `/orders/faction/${holder.orderId}` : '/orders?tab=general';
+        return <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {t('Für Bestellung', 'For order')}{' '}
+            <Link component={RouterLink} to={to} underline="hover">{holder.label}</Link>
+        </Typography>;
+    }
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialogs
@@ -262,19 +265,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </Stack>}
             </Box>
 
-            {/* Metrics Chips */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
-                <Chip label={`${t('Gesamt', 'Total')}: ${metrics.total}`} variant="outlined" />
-                <Chip label={`${t('Verfügbar', 'Available')}: ${metrics.available}`} color="success" />
-                <Chip label={`${t('Im Einsatz / Ausgeliehen', 'In custody')}: ${metrics.inCustody}`} color="warning" />
-                {metrics.maintenance > 0 && (
-                    <Chip label={`${t('In Wartung / Reparatur', 'In maintenance')}: ${metrics.maintenance}`} color="info" />
-                )}
-                {metrics.damaged > 0 && (
-                    <Chip label={`${t('Defekt', 'Damaged')}: ${metrics.damaged}`} color="error" />
-                )}
-            </Stack>
-
             {/* Toolbar / Search */}
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <TextField
@@ -352,6 +342,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     {asset.currentCustodianName && (
                                         <div>{t('Besitzer', 'Custodian')}: <strong>{asset.currentCustodianName}</strong></div>
                                     )}
+                                    {reservationNote(asset) && <Box sx={{ gridColumn: '1 / -1' }}>{reservationNote(asset)}</Box>}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                                     <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')}>
@@ -410,6 +401,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                             label={formatStatus(asset.availabilityStatus)}
                                             color={statusColorMap[asset.availabilityStatus] || 'default'}
                                         />
+                                        {reservationNote(asset)}
                                     </TableCell>
                                     <TableCell>{formatStatus(asset.conditionStatus)}</TableCell>
                                     <TableCell>{asset.currentLocationName || '—'}</TableCell>

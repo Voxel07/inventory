@@ -1,6 +1,6 @@
 import { formatDate } from '../../utils/dateFormat';
 import { formatMoney } from '../../utils/money';
-import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip } from '@mui/material';
+import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip, TextField } from '@mui/material';
 import { useLocalizedText } from '../../utils/naming';
 import { type CsvImportCounts, type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow, type FactionOrderImportStatus } from '../../types/csvImport';
 import { CSV_OPERATIONS } from '../../utils/csvOperations';
@@ -19,10 +19,16 @@ interface Props {
   parsedReturns: ParsedReturnRow[];
   parsedCheckouts: ParsedCheckoutRow[];
   parsedOperations: ParsedOperationRow[];
+  itemSearch: string;
+  assemblySearch: string;
+  onItemSearchChange: (value: string) => void;
+  onAssemblySearchChange: (value: string) => void;
 }
 
-function getPreviewRows<T extends { status: string }>(rows: T[]): T[] {
-  return rows.slice(0, 50).concat(rows.slice(50).filter((row) => row.status === 'error'));
+function searchRows<T extends { rawRow: Record<string, string>; statusMessage?: string; data: { name?: string; description?: string }; components?: { itemName: string }[] }>(rows: T[], query: string): T[] {
+  const term = query.trim().toLocaleLowerCase();
+  return term ? rows.filter((row) => [...Object.values(row.rawRow), row.data.name ?? '', row.data.description ?? '', row.statusMessage ?? '', ...(row.components?.map((component) => component.itemName) ?? [])]
+    .some((value) => value.toLocaleLowerCase().includes(term))) : rows;
 }
 
 function getOrderStatusChip(status: FactionOrderImportStatus, t: (de: string, en: string) => string) {
@@ -44,14 +50,20 @@ function getOrderStatusChip(status: FactionOrderImportStatus, t: (de: string, en
   }
 }
 
-export function CsvImportPreview({ tabType, updateExistingItems, importedCounts, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations }: Props) {
+export function CsvImportPreview({ tabType, updateExistingItems, importedCounts, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, itemSearch, assemblySearch, onItemSearchChange, onAssemblySearchChange }: Props) {
   const t = useLocalizedText();
+  const visibleItems = searchRows(parsedItems, itemSearch);
+  const visibleAssemblies = searchRows(parsedAssemblies, assemblySearch);
   return <>
             {/* Preview Tables */}
             {tabType !== 'assemblies' && parsedItems.length > 0 && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t('Artikel-Vorschau', 'Items Preview')} ({parsedItems.length} / {importedCounts.items})
+                </Typography>
+                <TextField fullWidth size="small" label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(event) => onItemSearchChange(event.target.value)} sx={{ mb: 1 }} />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  {t(`${visibleItems.length} von ${parsedItems.length} Artikeln`, `${visibleItems.length} of ${parsedItems.length} items`)}
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -68,7 +80,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {getPreviewRows(parsedItems).map((row) => (
+                      {visibleItems.map((row) => (
                         <TableRow key={row.index} id={`csv-import-items-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
@@ -119,14 +131,10 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           <TableCell>{row.storageLocationName || '—'}</TableCell>
                         </TableRow>
                       ))}
+                      {!visibleItems.length && <TableRow><TableCell colSpan={8}>{t('Keine passenden Artikel.', 'No matching items.')}</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TableContainer>
-                {parsedItems.length > 50 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    {t(`Zeige erste 50 von ${parsedItems.length} Artikeln`, `Showing first 50 of ${parsedItems.length} items`)}
-                  </Typography>
-                )}
               </Box>
             )}
 
@@ -134,6 +142,10 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t('Baugruppen-Vorschau', 'Assemblies Preview')} ({parsedAssemblies.length} / {importedCounts.assemblies})
+                </Typography>
+                <TextField fullWidth size="small" label={t('Baugruppen suchen', 'Search assemblies')} value={assemblySearch} onChange={(event) => onAssemblySearchChange(event.target.value)} sx={{ mb: 1 }} />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  {t(`${visibleAssemblies.length} von ${parsedAssemblies.length} Baugruppen`, `${visibleAssemblies.length} of ${parsedAssemblies.length} assemblies`)}
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
@@ -147,7 +159,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {getPreviewRows(parsedAssemblies).map((row) => (
+                      {visibleAssemblies.map((row) => (
                         <TableRow key={row.index} id={`csv-import-assemblies-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
@@ -180,6 +192,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           <TableCell>{row.data.description || '—'}</TableCell>
                         </TableRow>
                       ))}
+                      {!visibleAssemblies.length && <TableRow><TableCell colSpan={5}>{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -201,6 +214,8 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                         <TableCell>{t('Datum', 'Date')}</TableCell>
                         <TableCell>{t('Geplant', 'Planned')}</TableCell>
                         <TableCell>{t('Verwendet', 'Used')}</TableCell>
+                        <TableCell>{t('Teilnehmer / Reisezeiten', 'Attendees / travel times')}</TableCell>
+                        <TableCell>{t('Zeitplan', 'Timeline')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -216,10 +231,12 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                               </Tooltip>
                             )}
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 500 }}>{row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType}</TableCell>
-                          <TableCell>{formatDate(row.data.eventDate)}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.data.name || (row.data.eventType === 'LS' ? 'LightSim' : row.data.eventType)}</TableCell>
+                          <TableCell>{formatDate(row.data.startDate ?? row.data.eventDate)}{row.data.endDate !== row.data.startDate && ` – ${formatDate(row.data.endDate)}`}</TableCell>
                           <TableCell>{row.plannedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                           <TableCell>{row.usedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.attendees.map((person) => `${person.personName}: ${person.arrivesAt?.replace('T', ' ') ?? '—'} – ${person.leavesAt?.replace('T', ' ') ?? '—'}`).join('\n') || '—'}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.timeline.map((entry) => `${entry.title}: ${entry.startsAt.replace('T', ' ')}${entry.endsAt ? ` – ${entry.endsAt.replace('T', ' ')}` : ''}`).join('\n') || '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -294,7 +311,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
 
             {tabType === 'combined' && parsedOperations.length > 0 && <Box sx={{ mt: 2 }}>
               <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktionen-Vorschau', 'Actions preview')} ({parsedOperations.length} / {importedCounts.operations})</Typography>
-              <TableContainer component={Paper} variant="outlined"><Table size="small">
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280, overflowY: 'auto' }}><Table size="small" stickyHeader>
                 <TableHead><TableRow><TableCell>{t('Name', 'Name')}</TableCell><TableCell>{t('Aktion', 'Action')}</TableCell><TableCell>{t('Beschreibung', 'Description')}</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
                 <TableBody>{parsedOperations.map((row) => <TableRow key={row.index} id={`csv-import-operations-row-${row.index}`}>
                   <TableCell>{row.name}</TableCell><TableCell>{Object.hasOwn(CSV_OPERATIONS, row.operation) ? t(CSV_OPERATIONS[row.operation][0], CSV_OPERATIONS[row.operation][1]) : row.operation}</TableCell>

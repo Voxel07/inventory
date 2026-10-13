@@ -22,14 +22,26 @@ export function generateSampleAssembliesCsv(): string {
 }
 
 export function generateSampleCombinedCsv(): string {
+  const event = Array<string>(21).fill('');
+  event[0] = 'Event';
+  event[1] = 'Beispiel-Event';
+  event[12] = 'DE';
+  event[13] = '2026-06-13';
+  const quoteJson = (value: unknown) => `"${JSON.stringify(value).replaceAll('"', '""')}"`;
+  event.push('2026-06-13', '2026-06-14', quoteJson([
+    { personName: 'Alex König', arrivesAt: '2026-06-12T15:00', leavesAt: '2026-06-14T13:00', roles: [{ role: 'event_crew', assignment: 'Aufbau & Logistik' }] },
+  ]), quoteJson([
+    { category: 'preparation', title: 'Aufbau', startsAt: '2026-06-12T15:00', endsAt: '2026-06-12T18:00', owner: 'Alex König', location: 'HQ', status: 'completed' },
+    { category: 'in_game', title: 'Briefing', startsAt: '2026-06-13T09:00', endsAt: '2026-06-13T09:30', status: 'completed' },
+  ]));
   return [
-    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes;Eventtyp;Eventdatum;BestellteArtikel;RueckgabeArtikel;VerbrauchteArtikel;Bestellstatus;Zweck;Bestellname;Fraktion',
+    'Typ;Name;Kategorie;Menge;Mindestbestand;Einzelwert;Lagerort;Komponenten;Events;Hinweis;TrackingMode;AssetCodes;Eventtyp;Eventdatum;BestellteArtikel;RueckgabeArtikel;VerbrauchteArtikel;Bestellstatus;Zweck;Bestellname;Fraktion;Startdatum;Enddatum;Teilnehmer;Zeitplan',
     'Artikel;Feld-PC;IT & Elektronik;2;1;650,00;Lager A; ;DE,TNO;Live-Map Rechner;serialized;"PC-01, PC-02"',
     'Artikel;Zeltgestänge 4x4m;Infrastruktur;6;2;120,00;Lager Zelt; ;DE,TNO;Auf Vollständigkeit prüfen;bulk;',
     'Artikel;Zeltplane 4x4m;Infrastruktur;6;2;180,00;Lager Zelt; ;DE,TNO;Trocken lagern;bulk;',
     'Artikel;Heringe 30cm (10er Set);Infrastruktur;12;4;15,00;Lager Zelt; ;DE,TNO,LS;Immer nachzählen;bulk;',
     'Baugruppe;SG-Zelt komplett;Zelte; ; ; ; ;"Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2";DE,TNO;Komplettes Zelt mit Heringen;;',
-    'Event;;;;;;;;;;;;DE;2026-06-13;;;;;',
+    event.join(';'),
     'AllgemeineBestellung;Catering;;;;;;;;;;;DE;2026-06-13;"Heringe 30cm (10er Set): 2";"Heringe 30cm (10er Set): 1";;partially_returned;Catering-Zelt;',
     'Return;Heringe 30cm (10er Set);;1;;;;;;;;;DE;2026-06-13;;;;;;Catering',
     'Ausleihe;Zeltgestänge 4x4m;;1;;;;;;;;;DE;;;;;;;;KGG',

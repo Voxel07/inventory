@@ -5,7 +5,7 @@ import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
 import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
 import { Dialog } from '../shared/ClosableDialog';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { DialogTitle, DialogContent, Box, Typography, Tabs, Stack, Paper, FormControlLabel, Checkbox, LinearProgress, Alert, TextField, Collapse, useMediaQuery, useTheme } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -53,6 +53,13 @@ export function CsvImportDialog({
   const [fileName, setFileName] = useState('');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [itemSearch, setItemSearch] = useState('');
+  const [assemblySearch, setAssemblySearch] = useState('');
+  const [errorTarget, setErrorTarget] = useState<{ section: string; index: number } | null>(null);
+
+  useEffect(() => {
+    if (errorTarget) document.getElementById(`csv-import-${errorTarget.section}-row-${errorTarget.index}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [errorTarget]);
 
   // Options
   const [updateExistingItems, setUpdateExistingItems] = useState(false);
@@ -94,10 +101,14 @@ export function CsvImportDialog({
 
     if (!firstError) return;
 
-    document.getElementById(`csv-import-${firstError.section}-row-${firstError.index}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setItemSearch('');
+    setAssemblySearch('');
+    setErrorTarget(firstError);
   }
 
   function handleFileSelected(file: File) {
+    setItemSearch('');
+    setAssemblySearch('');
     setFileName(file.name);
     setImportResult(null);
     setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
@@ -141,6 +152,9 @@ export function CsvImportDialog({
   }
 
   function resetState() {
+    setItemSearch('');
+    setAssemblySearch('');
+    setErrorTarget(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setCsvContent('');
     setFileName('');
@@ -176,6 +190,8 @@ export function CsvImportDialog({
       errors,
     });
     if (errors.length === 0) {
+      setItemSearch('');
+      setAssemblySearch('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       setCsvContent('');
       setFileName('');
@@ -442,7 +458,7 @@ export function CsvImportDialog({
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               {t('Vorschau-Zähler: Gesamt / importiert', 'Preview counts: total / imported')}
             </Typography>
-            <CsvImportPreview tabType={tabType} updateExistingItems={updateExistingItems} importedCounts={importedCounts} parsedItems={parsedItems} parsedAssemblies={parsedAssemblies} parsedEvents={parsedEvents} parsedOrders={parsedOrders} parsedGeneralOrders={parsedGeneralOrders} parsedReturns={parsedReturns} parsedCheckouts={parsedCheckouts} parsedOperations={parsedOperations} />
+            <CsvImportPreview tabType={tabType} updateExistingItems={updateExistingItems} importedCounts={importedCounts} parsedItems={parsedItems} parsedAssemblies={parsedAssemblies} parsedEvents={parsedEvents} parsedOrders={parsedOrders} parsedGeneralOrders={parsedGeneralOrders} parsedReturns={parsedReturns} parsedCheckouts={parsedCheckouts} parsedOperations={parsedOperations} itemSearch={itemSearch} assemblySearch={assemblySearch} onItemSearchChange={setItemSearch} onAssemblySearchChange={setAssemblySearch} />
           </Box>
         )}
       </DialogContent>

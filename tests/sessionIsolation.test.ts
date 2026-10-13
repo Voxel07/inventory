@@ -87,10 +87,97 @@ const privacy = await import('../src/services/privateInventoryCache');
 const pagination = await import('../src/services/apiPagination');
 const codes = await import('../src/utils/codeResolver');
 const reports = await import('../src/services/reportService');
+const { createCsvEventLogisticsImporter } = await import('../src/services/csvEventLogisticsImport');
+const { parseEventReportsFromCsv } = await import('../src/utils/csv/events');
+import type { EventAttendee, EventPersonSummary, EventTimelineEntry } from '../src/types/eventLogistics';
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
 const signIn = (id: string) => auth.setDevelopmentSession(`dev:${id}`, user(id));
+
+function logisticsRow() {
+  return parseEventReportsFromCsv([{
+    Typ: 'Event', Eventtyp: 'DE', Eventdatum: '2026-10-17',
+    Teilnehmer: JSON.stringify(['alex', 'Mara'].map((personName) => ({ personName, roles: [{ role: 'event_crew' }] }))),
+    Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' }]),
+  }], [], { eventTypes: ['DE'], factions: [] })[0];
+}
+
+test('CSV logistics retries reuse people, preserve linked accounts, and update existing records', async () => {
+  signIn('planner');
+  connectivity.onLine = true;
+  const people: EventPersonSummary[] = [{ id: 'alex', name: 'Alex', userId: 'linked-account', userName: 'Account' }];
+  const attendees = new Map<string, EventAttendee[]>();
+  const timeline = new Map<string, EventTimelineEntry[]>();
+  const writes: { path: string; method: string; body: Record<string, unknown> }[] = [];
+  fetchRequest = (async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    const method = options?.method ?? 'GET';
+    if (path === '/api/event-people') return Response.json(people);
+    const [, , , eventId, section, id] = path.split('/');
+    if (!attendees.has(eventId)) attendees.set(eventId, []);
+    if (!timeline.has(eventId)) timeline.set(eventId, []);
+    const rows = section === 'attendees' ? attendees.get(eventId)! : timeline.get(eventId)!;
+    if (method === 'GET') return Response.json(rows);
+    const body = JSON.parse(String(options?.body));
+    writes.push({ path, method, body });
+    let saved;
+    if (section === 'attendees') {
+      let person = people.find((person) => person.id === body.personId);
+      if (!person) { person = { id: `person-${people.length}`, name: body.personName, userId: null, userName: null }; people.push(person); }
+      saved = { ...body, id: id ?? `attendee-${rows.length}`, eventId, person };
+    } else {
+      // ISO LocalDateTime may omit zero seconds; retry matching must treat them equally.
+      saved = { ...body, id: id ?? `timeline-${rows.length}`, eventId, startsAt: body.startsAt.slice(0, 16) };
+    }
+    if (id) rows.splice(rows.findIndex((entry) => entry.id === id), 1, saved);
+    else rows.push(saved);
+    return Response.json(saved);
+  }) as typeof fetch;
+  const importer = createCsvEventLogisticsImporter();
+  await importer('first', logisticsRow());
+  await importer('second', logisticsRow());
+  await createCsvEventLogisticsImporter()('first', logisticsRow());
+  expect(people).toHaveLength(2);
+  expect(attendees.get('first')).toHaveLength(2);
+  expect(attendees.get('second')).toHaveLength(2);
+  expect(timeline.get('first')).toHaveLength(1);
+  expect(timeline.get('second')).toHaveLength(1);
+  expect(writes.filter((write) => write.method === 'POST')).toHaveLength(6);
+  expect(writes.filter((write) => write.method === 'PUT')).toHaveLength(3);
+  const alex = writes.filter((write) => write.body.personId === 'alex');
+  expect(alex).toHaveLength(3);
+  expect(alex.every((write) => write.body.personUserId === 'linked-account' && write.body.personName === 'Alex')).toBe(true);
+});
+
+test('CSV logistics rejects ambiguous names before attendee writes', async () => {
+  signIn('planner');
+  connectivity.onLine = true;
+  let writes = 0;
+  fetchRequest = (async (url, options) => {
+    if (options?.method && options.method !== 'GET') writes++;
+    return Response.json(String(url).endsWith('/event-people')
+      ? [{ id: 'a', name: 'Alex' }, { id: 'b', name: 'alex' }] : []);
+  }) as typeof fetch;
+  await expect(createCsvEventLogisticsImporter()('event', logisticsRow())).rejects.toThrow('Multiple people are named alex');
+  expect(writes).toBe(0);
+});
+
+test('CSV logistics stops when the signed-in account changes during lookup', async () => {
+  signIn('first');
+  connectivity.onLine = true;
+  let writes = 0;
+  fetchRequest = (async (url, options) => {
+    if (options?.method && options.method !== 'GET') writes++;
+    if (String(url).endsWith('/event-people')) {
+      connectivity.onLine = false;
+      signIn('second');
+    }
+    return Response.json([]);
+  }) as typeof fetch;
+  await expect(createCsvEventLogisticsImporter()('event', logisticsRow())).rejects.toBeInstanceOf(auth.SessionChangedError);
+  expect(writes).toBe(0);
+});
 
 beforeEach(async () => {
   connectivity.onLine = false;

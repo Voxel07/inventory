@@ -12,11 +12,10 @@ export type RowAction = { label: string; icon: ReactNode; onClick: () => void; d
  * A compact catalog record for phones and tablets: the name wraps freely,
  * availability stays on its own line, and explicit actions live behind "More".
  */
-export function CatalogRow({ to, title, primary, primarySuffix, secondary, selectable, selected, onToggleSelected, onOpenMenu }: {
+export function CatalogRow({ to, title, primary, secondary, selectable, selected, onToggleSelected, onOpenMenu }: {
   to: string;
   title: string;
   primary: ReactNode;
-  primarySuffix?: string;
   secondary?: string;
   selectable?: boolean;
   selected?: boolean;
@@ -34,7 +33,6 @@ export function CatalogRow({ to, title, primary, primarySuffix, secondary, selec
       <Typography component="span" sx={{ display: 'block', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.35 }}>{title}</Typography>
       <Typography component="span" variant="body2" className="tabular" sx={{ display: 'block', mt: 0.25 }}>
         {primary}
-        {primarySuffix && <Box component="span" sx={{ color: 'text.secondary' }}> · {primarySuffix}</Box>}
       </Typography>
       {secondary && <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{secondary}</Typography>}
     </ButtonBase>

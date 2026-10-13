@@ -1,4 +1,6 @@
 import { type Item, type EventReportStatus } from '../../types';
+import { isCsvDate, parseEventAttendees, parseEventTimeline } from './eventLogistics';
+import type { EventAttendeeInput, EventTimelineInput } from '../../types/eventLogistics';
 import { knownEventType, type CsvReference } from './reference';
 import { type ParsedEventReportRow, type ParsedAssemblyComponent } from '../../types/csvImport';
 import { parseInlineComponents, getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, EVENT_STATUS_ALIASES, EVENT_PLANNED_ALIASES, EVENT_USED_ALIASES, HINT_ALIASES } from './core';
@@ -43,6 +45,8 @@ export function parseEventReportsFromCsv(
 
     const eventType = knownEventType(reference, getField(raw, EVENT_REPORT_TYPE_ALIASES));
     const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
+    const startDate = getField(raw, ['startDate', 'Startdatum']) || eventDate;
+    const endDate = getField(raw, ['endDate', 'Enddatum']) || startDate;
     const rawStatus = getField(raw, EVENT_STATUS_ALIASES)?.toLowerCase().trim();
     const status: EventReportStatus = ['planned', 'geplant'].includes(rawStatus ?? '') ? 'planned' : 'completed';
     const planned = resolve(getField(raw, EVENT_PLANNED_ALIASES));
@@ -51,22 +55,36 @@ export function parseEventReportsFromCsv(
 
     let validationStatus: ParsedEventReportRow['status'] = 'valid';
     let statusMessage: string | undefined;
+    let attendees: EventAttendeeInput[] = [];
+    let timeline: EventTimelineInput[] = [];
     if (!eventType) {
       validationStatus = 'error';
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
-    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+    } else if (!isCsvDate(eventDate) || !isCsvDate(startDate) || !isCsvDate(endDate) || startDate !== eventDate || endDate < startDate) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum muss im Format JJJJ-MM-TT angegeben werden';
+      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (JJJJ-MM-TT) sein; Startdatum muss dem Eventdatum entsprechen und Enddatum darf nicht davor liegen';
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
+    }
+    if (validationStatus === 'valid') {
+      try {
+        attendees = parseEventAttendees(getField(raw, ['Teilnehmer', 'attendees']), eventType!, reference);
+        timeline = parseEventTimeline(getField(raw, ['Zeitplan', 'timeline', 'timings']));
+      } catch (error) {
+        validationStatus = 'error';
+        statusMessage = error instanceof Error ? error.message : String(error);
+      }
     }
 
     results.push({
       index: index + 1,
       data: {
         eventType: eventType ?? 'LS',
+        name: getField(raw, ['name', 'eventname']),
         eventDate,
+        startDate,
+        endDate,
         status,
         itemIds: Object.keys(used.quantities),
         plannedQuantities: planned.quantities,
@@ -76,6 +94,8 @@ export function parseEventReportsFromCsv(
       rawRow: raw,
       plannedItems: planned.components,
       usedItems: used.components,
+      attendees,
+      timeline,
       status: validationStatus,
       statusMessage,
     });

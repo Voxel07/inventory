@@ -22,7 +22,7 @@ For a local JVM run, use a Java 25 installation and Maven:
 mvn -Ddev quarkus:dev
 ```
 
-Development currently uses PostgreSQL and Hibernate `update`; tests use PostgreSQL/drop-and-create with `TEST_DB_URL`, `TEST_DB_USER` and `TEST_DB_PASSWORD`. Production uses PostgreSQL, the single Flyway baseline and Hibernate validation.
+All profiles use PostgreSQL, the single Flyway baseline, and Hibernate validation. Tests clean and recreate the dedicated database configured with `TEST_DB_URL`, `TEST_DB_USER`, and `TEST_DB_PASSWORD` at startup.
 
 Production requires `OIDC_ENABLED=true` and the Authentik issuer/client settings. `DEV_AUTH_ENABLED` must be `false` outside local development.
 
@@ -84,7 +84,13 @@ be reachable by the backend and need not be reachable by the browser.
 
 Records store canonical relative object keys. Absolute/external URL forms are rejected rather than translated from historical values. Existing image formats display without re-encoding; re-upload to apply WebP conversion.
 
-Run `mvn test` for media storage and API regression tests. For actual browser
+Set `TEST_DB_URL`, `TEST_DB_USER`, and `TEST_DB_PASSWORD` to a dedicated PostgreSQL
+test database, then run `mvn clean test` for media storage and API regression tests.
+The test profile cleans the configured test database at startup. A clean build
+removes compiled classes left behind after deleting or renaming nested DTOs;
+those stale classes can otherwise cause Quarkus startup to fail with an
+`IncompatibleClassChangeError` about disagreeing `InnerClasses` attributes.
+For actual browser
 encoding and authenticated rendering checks, start the frontend with `bun run dev`
 and open `/tests/media.browser.html`; its generated fixtures and mocked API do not
 need a running backend or S3 service.

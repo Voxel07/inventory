@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { parseCsv } from '../src/utils/csv/core';
 import { parseFactionOrdersFromCsv, parseGeneralOrdersFromCsv } from '../src/utils/csv/orders';
+import { parseEventReportsFromCsv } from '../src/utils/csv/events';
+import { generateSampleCombinedCsv } from '../src/utils/csv/templates';
 import type { CsvReference } from '../src/utils/csv/reference';
 import type { EventType, Faction, Item } from '../src/types';
 
@@ -42,4 +44,59 @@ test('orders past "ready" need an exact pickup point', () => {
   const valid = parse('Abgeschlossen', '50.5520, 9.6800');
   expect(valid.status).toBe('valid');
   expect(valid.pickupPoint).toEqual({ latitude: 50.552, longitude: 9.68 });
+});
+
+test('every sample event has valid attendees, travel times and preparation/game timings', () => {
+  const events = parseEventReportsFromCsv(rows, items, reference);
+  expect(events).toHaveLength(14);
+  expect(events.filter((row) => row.status === 'error').map((row) => `${row.index}: ${row.statusMessage}`)).toEqual([]);
+  for (const event of events) {
+    expect(event.data.name).toBe(event.rawRow.Name);
+    expect(event.data.startDate).toBe(event.data.eventDate);
+    expect(event.data.endDate! > event.data.startDate!).toBe(true);
+    expect(event.attendees).toHaveLength(6);
+    expect(event.attendees.every((person) => person.arrivesAt && person.leavesAt && person.roles.length)).toBe(true);
+    expect(event.timeline).toHaveLength(4);
+    expect(new Set(event.timeline.map((entry) => entry.category))).toEqual(new Set(['in_game', 'preparation']));
+    expect(event.timeline.every((entry) => entry.status === event.data.status)).toBe(true);
+  }
+  expect(events.find((event) => event.data.eventType === 'DE')?.attendees[0].roles[0].factionId).toBe('KGG');
+});
+
+test('downloadable combined template includes a valid event with logistics', () => {
+  const event = parseEventReportsFromCsv(parseCsv(generateSampleCombinedCsv()).rows, [], reference)[0];
+  expect(event.status).toBe('valid');
+  expect(event.attendees[0].personName).toBe('Alex König');
+  expect(event.timeline).toHaveLength(2);
+});
+
+test('event validation rejects malformed logistics and invalid calendar/time ranges', () => {
+  const base = { Typ: 'Event', Eventtyp: 'DE', Eventdatum: '2026-10-17' };
+  const attendee = { personName: 'Person', roles: [{ role: 'event_crew' }] };
+  const timeline = { category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' };
+  for (const invalid of [
+    { Teilnehmer: '{broken' }, { Teilnehmer: '{}' }, { Teilnehmer: '[null]' },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'faction_leader', faction: 'TERA' }] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'event_crew', faction: 'KGG' }] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'as_held', assignment: 'Task' }] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'unknown' }] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'event_crew' }, { role: 'event_crew' }] }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, foodStampsIssued: 'false' }]) },
+    { Teilnehmer: JSON.stringify([attendee, attendee]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, arrivesAt: '2026-10-17T10:00', leavesAt: '2026-10-17T09:00' }]) },
+    { Eventdatum: '2026-02-30' }, { Enddatum: '2026-10-16' },
+    { Zeitplan: JSON.stringify([{ ...timeline, startsAt: '2026-10-17T25:00' }]) },
+    { Zeitplan: JSON.stringify([{ ...timeline, startsAt: '2026-10-17T09:00Z' }]) },
+    { Zeitplan: JSON.stringify([{ ...timeline, endsAt: '2026-10-17T08:00' }]) },
+    { Zeitplan: JSON.stringify([{ ...timeline, category: 'unknown' }]) },
+    { Zeitplan: JSON.stringify([{ ...timeline, status: 'unknown' }]) },
+    { Zeitplan: JSON.stringify([timeline, timeline]) },
+  ]) {
+    expect(parseEventReportsFromCsv([{ ...base, ...invalid }], [], reference)[0].status).toBe('error');
+  }
+  const valid = parseEventReportsFromCsv([{ ...base, attendees: JSON.stringify([attendee]), timeline: JSON.stringify([timeline]) }], [], reference)[0];
+  expect(valid.status).toBe('valid');
+  expect(valid.timeline[0].startsAt).toBe('2026-10-17T09:00:00');
+  expect(valid.timeline[0].status).toBe('planned');
 });
