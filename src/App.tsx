@@ -8,7 +8,7 @@ import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { KeyboardShortcuts } from './components/shared/KeyboardShortcuts';
-import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
+import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useAppLanguage, translate, useLocalizedText } from './utils/naming';
@@ -43,6 +43,7 @@ const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ defa
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
 const LocationScan = lazy(() => import('./pages/LocationScan').then(m => ({ default: m.LocationScan })));
 const Operations = lazy(() => import('./pages/Operations').then((m) => ({ default: m.Operations })));
+const SharingGroups = lazy(() => import('./pages/SharingGroups').then((m) => ({ default: m.SharingGroups })));
 
 function RouteLoadingFallback() {
   return (
@@ -129,12 +130,12 @@ function AppContent() {
               <Route path="/items/:itemId/assets/:assetId" element={<CatalogAccessGuard><AssetDetail /></CatalogAccessGuard>} />
               <Route path="/assemblies" element={<CatalogAccessGuard><Assemblies /></CatalogAccessGuard>} />
               <Route path="/assemblies/:assemblyId" element={<CatalogAccessGuard><AssemblyDetail /></CatalogAccessGuard>} />
-              <Route path="/events" element={<InventoryManagerGuard><Events /></InventoryManagerGuard>} />
-              <Route path="/events/attendees" element={<InventoryManagerGuard><EventAttendees /></InventoryManagerGuard>} />
-              <Route path="/events/timeline" element={<InventoryManagerGuard><EventTimeline /></InventoryManagerGuard>} />
-              <Route path="/events/:reportId" element={<InventoryManagerGuard><EventDetail /></InventoryManagerGuard>} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
+              <Route path="/events" element={<OrganizationGuard><Events /></OrganizationGuard>} />
+              <Route path="/events/attendees" element={<OrganizationGuard><EventAttendees /></OrganizationGuard>} />
+              <Route path="/events/timeline" element={<OrganizationGuard><EventTimeline /></OrganizationGuard>} />
+              <Route path="/events/:reportId" element={<OrganizationGuard><EventDetail /></OrganizationGuard>} />
+              <Route path="/orders" element={<OrganizationGuard><Orders /></OrganizationGuard>} />
+              <Route path="/orders/faction/:orderId" element={<OrganizationGuard><FactionOrderDetail /></OrganizationGuard>} />
               <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
               <Route path="/returns" element={<InventoryManagerGuard><ReturnedItemsPage /></InventoryManagerGuard>} />
               <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
@@ -147,6 +148,7 @@ function AppContent() {
               <Route path="/storage-locations" element={<CatalogAccessGuard><StorageLocations /></CatalogAccessGuard>} />
               <Route path="/operations" element={<InventoryManagerGuard><Operations /></InventoryManagerGuard>} />
               <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
+              <Route path="/sharing" element={<SharingGroups />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

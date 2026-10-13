@@ -52,6 +52,12 @@ public class UserResource {
         return queries.users(page, size);
     }
 
+    /** Inventory admin sets role and faction memberships; Authentik only grants access to the system. */
+    @jakarta.ws.rs.PATCH @Path("/users/{id}")
+    public ApiResponses.UserResponse updateAccess(@jakarta.ws.rs.PathParam("id") java.util.UUID id, @Valid ApiModels.UserAccessInput input) {
+        return mapper.user(users.updateAccess(id, input));
+    }
+
     @GET @Path("/users/assignable")
     public List<ApiResponses.UserResponse> assignableUsers(
             @jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,

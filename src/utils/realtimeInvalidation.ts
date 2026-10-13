@@ -4,6 +4,11 @@ import { containsPrivateInventory } from '../services/privateInventoryCache';
 
 /** One invalidation per change/batch, shared by local writes and SSE. */
 export function invalidateForApiChange(queryClient: QueryClient, detail?: ApiChangeDetail): void {
+  if (detail?.type === 'user.changed' || detail?.type === 'batch' && detail.changes?.some(change => change.type === 'user.changed')) {
+    // Role changes can revoke organization data as well as private grants.
+    void queryClient.cancelQueries().then(() => queryClient.resetQueries());
+    return;
+  }
   if (revokesAccess(detail)) {
     // A permission change (or events missed while disconnected) can revoke private views: drop cached
     // private data at once. Everything else keeps its data while active queries refetch in place.

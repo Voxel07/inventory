@@ -240,7 +240,7 @@ export function ItemForm({
                             label={formData.privateResource ? t('Privater Artikel', 'Private item') : t('Im gemeinsamen Katalog', 'In the shared catalog')} />
                         <FormHelperText sx={{ mt: 0 }}>
                             {formData.privateResource
-                                ? t('Nur du, HQ-Admins und Personen, für die du ihn freigibst, sehen diesen Artikel.', 'Only you, HQ admins and people you share it with can see this item.')
+                                ? t('Nur du, Inventar-Admins und Personen, für die du ihn freigibst, sehen diesen Artikel.', 'Only you, inventory admins and people you share it with can see this item.')
                                 : t('Alle mit Katalogzugriff sehen diesen Artikel.', 'Everyone with catalog access can see this item.')}
                             {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
                         </FormHelperText>

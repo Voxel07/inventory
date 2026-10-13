@@ -137,6 +137,10 @@ public final class ApiModels {
             String certificateObjectKey) {}
 
     public record DevLoginInput(@NotBlank String email, String password) {}
+    /** Role and faction memberships (`EVENT:slug`) set by the inventory admin. */
+    public record UserAccessInput(@NotNull @jakarta.validation.constraints.Size(min = 1, max = 6) List<@NotBlank String> roles,
+            @NotNull @jakarta.validation.constraints.Size(max = 100) List<String> factions,
+            @NotNull Long revision, @NotBlank @jakarta.validation.constraints.Size(max = 1000) String reason) {}
     public record SyncAction(@NotNull UUID idempotencyKey, @NotBlank String type,
             @NotNull Map<String, Object> payload, Instant localTimestamp, String deviceId, Integer retryCount,
             UUID supersedes, @jakarta.validation.constraints.Size(max = 2000) String resolutionNote) {}

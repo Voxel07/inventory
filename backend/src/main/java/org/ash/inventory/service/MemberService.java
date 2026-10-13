@@ -17,6 +17,7 @@ public class MemberService {
     @Inject CustodyBalanceService custody;
     @Inject ReturnSubmissionService returns;
     @Inject DomainEventService events;
+    @Inject ItemRequestNotifier requests;
     public record Stored(UUID itemId, String name, UUID locationId, String location, UUID assetId, String assetCode, int quantity) {}
     public record RequestInput(@NotNull UUID itemId, UUID assetId, UUID locationId,
             @NotBlank String kind, @Min(1) int quantity, @NotBlank @Size(max=2000) String notes, @NotNull UUID commandId) {}
@@ -68,7 +69,7 @@ public class MemberService {
         actors.requireWarehouse(); var l = orm.findLocked(StorageLocation.class, id);
         if (l == null) throw ApiException.notFound("Location not found");
         var user = input.userId() == null ? null : orm.find(UserAccount.class, input.userId());
-        if (input.userId() != null && (user == null || user.role == DomainEnums.UserRole.read_only)) throw ApiException.badRequest("Choose a contributor account");
+        if (input.userId() != null && (user == null || !user.role.atLeast(DomainEnums.UserRole.faction_leader))) throw ApiException.badRequest("Choose a contributor account");
         l.keeperUser = user;
         events.record("location.keeper_assigned", "storage_location", id, actors.current().id, null, Map.of("userId", user == null ? "" : user.id.toString()));
     }
@@ -79,6 +80,7 @@ public class MemberService {
         return orm.requests(actor, staff, bounds.offset(), bounds.limit()).stream().map(this::view).toList();
     }
     @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public RequestView request(RequestInput input) {
         writable(); var actor = actors.current();
         var prior = orm.requestCommands(input.commandId()).findFirst().orElse(null);
@@ -97,10 +99,11 @@ public class MemberService {
         r.location = input.locationId() == null ? null : orm.find(StorageLocation.class, input.locationId()); r.kind = input.kind();
         r.quantity = input.quantity(); r.notes = input.notes().trim(); r.commandId = input.commandId(); orm.persist(r);
         events.record("member_request.created", "member_request", r.id, actor.id, input.commandId(), Map.of("kind", r.kind, "itemId", item.id.toString()));
+        requests.notifyOwners(List.of(item), actor, r.kind + "_request", "", r.id.toString());
         return view(r);
     }
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public RequestView decide(UUID id, Decision input) {
         actors.requireWarehouse(); var r = orm.findLocked(MemberRequest.class, id);
         if (r == null) throw ApiException.notFound("Request not found");
@@ -110,7 +113,7 @@ public class MemberService {
         orm.flush(); return view(r);
     }
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public UUID submitReturn(ReturnInput input) {
         writable(); var actor = actors.current();
         var prior = orm.returnCommands(input.commandId()).findFirst().orElse(null);
@@ -131,6 +134,7 @@ public class MemberService {
         orm.persist(r); events.record("return.submitted", "return_submission", r.id, actor.id, null, Map.of("itemId", r.item.id.toString(), "quantity", r.quantity)); return r.id;
     }
     private RequestView view(MemberRequest r) { return new RequestView(r.id, r.item.id, r.item.name, r.requester.name, r.kind, r.quantity, r.notes, r.status, r.response, r.createdAt, r.revision, r.asset == null ? null : r.asset.id, r.location == null ? null : r.location.id); }
-    private void writable() { if (actors.current().role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access"); }
-    private boolean staff() { return Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew).contains(actors.current().role); }
+    /** Self-service for items in one's own custody starts at faction leader. */
+    private void writable() { actors.requireOrdering(); }
+    private boolean staff() { return actors.atLeast(DomainEnums.UserRole.warehouse_crew); }
 }

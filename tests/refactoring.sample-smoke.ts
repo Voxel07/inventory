@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 const origin = process.argv[2] ?? 'http://127.0.0.1:18085';
 assert.equal(new URL(origin).hostname, '127.0.0.1', 'Use only an isolated loopback API');
-const actor = { 'X-Actor-Id': 'refactoring-sample-test', 'X-Actor-Name': 'Sample regression tester', 'X-Actor-Role': 'hq_admin' };
+const actor = { 'X-Actor-Id': 'refactoring-sample-test', 'X-Actor-Name': 'Sample regression tester', 'X-Actor-Role': 'admin' };
 async function api(path: string, body?: unknown, expected = body ? 201 : 200) {
   const response = await fetch(`${origin}/api${path}`, { method: body ? 'POST' : 'GET', headers: { ...actor, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const payload = await response.json();

@@ -157,7 +157,7 @@ public class SyncService {
                         value.pickupLatitude(), value.pickupLongitude())));
             }
             case "order.return" -> {
-                actors.requireMarshal();
+                actors.requireWarehouse();
                 UUID orderId = uuid(action.payload(), "orderId");
                 Object inputObj = action.payload().get("input");
                 if (inputObj == null) {

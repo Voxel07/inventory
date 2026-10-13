@@ -17,7 +17,7 @@ class PrivateInventoryApiTest {
     }
     private RequestSpecification owner() { return actor("owner", "read_only"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
-    private RequestSpecification admin() { return actor("admin", "hq_admin"); }
+    private RequestSpecification admin() { return actor("admin", "admin"); }
     private String person(String name) {
         actor(name, "read_only").get("/api/access/people").then().statusCode(200);
         return admin().get("/api/access/people").then().statusCode(200).extract().jsonPath()
@@ -65,9 +65,10 @@ class PrivateInventoryApiTest {
 
     @Test void groupMembershipRevocationAndRevisionChecksApplyWithoutRoleEscalation() {
         String readerId = person("reader"), item = item(), name = "Private team " + UUID.randomUUID();
-        var groupBody = Map.of("name", name, "revision", 0, "memberIds", List.of(readerId), "reason", "Create sharing team");
+        var groupBody = Map.of("name", name, "revision", 0, "memberIds", List.of(readerId), "reason", "Create sharing team", "adminManaged", true);
         owner().body(groupBody).post("/api/access/groups").then().statusCode(403);
-        String group = admin().body(groupBody).post("/api/access/groups").then().statusCode(200).extract().path("id");
+        String group = admin().body(groupBody).post("/api/access/groups").then().statusCode(200).body("ownerId", nullValue()).extract().path("id");
+        reader().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Members cannot edit HQ groups")).patch("/api/access/groups/" + group).then().statusCode(403);
         owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(200).body("access.canEdit", equalTo(true)).body("access.sources.kind", hasItem("group"));
         reader().get("/api/access/groups").then().statusCode(200).body("find { it.id == '" + group + "' }.memberIds", empty());
@@ -135,7 +136,7 @@ class PrivateInventoryApiTest {
 
     @Test void concurrentEditsAndGroupRevocationCompleteAndSubsequentEditsAreDenied() throws Exception {
         String readerId = person("reader"), item = item(), name = "Concurrent team " + UUID.randomUUID();
-        String group = admin().body(Map.of("name", name, "revision", 0, "memberIds", List.of(readerId), "reason", "Create concurrent team"))
+        String group = admin().body(Map.of("name", name, "revision", 0, "memberIds", List.of(readerId), "reason", "Create concurrent team", "adminManaged", true))
                 .post("/api/access/groups").then().statusCode(200).extract().path("id");
         owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
         var start = new CountDownLatch(1);
@@ -148,5 +149,81 @@ class PrivateInventoryApiTest {
         }
         reader().body(editInput()).patch("/api/items/" + item).then().statusCode(404);
         reader().header("If-None-Match", "*").get("/api/items/" + item).then().statusCode(404);
+    }
+
+    private RequestSpecification tenant(String name) { return actor(name, "tenant"); }
+    private String building(RequestSpecification owner, String parent) {
+        var body = new HashMap<String, Object>(Map.of("name", "Rented building " + UUID.randomUUID()));
+        if (parent != null) body.put("parentLocationId", parent);
+        return owner.body(body).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+    }
+
+    @Test void sharingABuildingWithAGroupSharesTheItemsAndSubLocationsStoredThere() {
+        String guestId = person("guest");
+        String hall = building(tenant("landlord"), null), room = building(tenant("landlord"), hall);
+        var input = itemInput(); input.put("storageLocation", room);
+        String stored = tenant("landlord").body(input).post("/api/items").then().statusCode(200).extract().path("id");
+        String elsewhere = item();
+        actor("guest", "read_only").get("/api/items/" + stored).then().statusCode(404);
+
+        // A tenant creates their own share group and shares the building with it.
+        String group = tenant("landlord").body(Map.of("name", "Building crew " + UUID.randomUUID(), "revision", 0, "memberIds", List.of(guestId), "reason", "People allowed into my building"))
+                .post("/api/access/groups").then().statusCode(200).body("canManage", equalTo(true)).extract().path("id");
+        tenant("landlord").body(shares(0, List.of(Map.of("groupId", group, "canEdit", false)))).put(policy("storage-locations", hall)).then().statusCode(200);
+        actor("guest", "read_only").get("/api/items/" + stored).then().statusCode(200)
+                .body("access.canEdit", equalTo(false)).body("access.sources.kind", hasItem("location"));
+        actor("guest", "read_only").get("/api/storage-locations").then().statusCode(200).body("id", hasItems(hall, room));
+        actor("guest", "read_only").get("/api/items/" + elsewhere).then().statusCode(404);
+        actor("guest", "read_only").body(editInput()).patch("/api/items/" + stored).then().statusCode(404);
+        tenant("landlord").get(policy("items", stored)).then().statusCode(200).body("inherited.kind", hasItem("group"));
+
+        // Moving the item out of the building ends the inherited access.
+        tenant("landlord").body(editInput()).patch("/api/items/" + stored).then().statusCode(200);
+        actor("guest", "read_only").get("/api/items/" + stored).then().statusCode(404);
+
+        // Other users neither see nor use the tenant's private group; deleting it revokes its shares.
+        owner().get("/api/access/groups").then().statusCode(200).body("id", not(hasItem(group)));
+        owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", false)))).put(policy("items", elsewhere)).then().statusCode(400);
+        owner().body(Map.of("revision", 1, "reason", "Not mine")).post("/api/access/groups/" + group + "/delete").then().statusCode(404);
+        tenant("landlord").body(Map.of("revision", 1, "reason", "Lease ended")).post("/api/access/groups/" + group + "/delete").then().statusCode(204);
+        actor("guest", "read_only").get("/api/storage-locations").then().statusCode(200).body("id", not(hasItem(hall)));
+    }
+
+    @Test void buildingOwnersManageWhatOthersStoreInTheirBuildingButNotItsSharing() {
+        String lodgerId = person("lodger");
+        String hall = building(tenant("host"), null);
+        tenant("host").body(shares(0, List.of(Map.of("userId", lodgerId, "canEdit", true)))).put(policy("storage-locations", hall)).then().statusCode(200);
+        var input = itemInput(); input.put("storageLocation", hall);
+        String lodgerItem = actor("lodger", "read_only").body(input).post("/api/items").then().statusCode(200).extract().path("id");
+        tenant("host").get("/api/items/" + lodgerItem).then().statusCode(200).body("access.canEdit", equalTo(true)).body("access.canManage", equalTo(false));
+        var edit = editInput(); edit.put("storageLocation", hall);
+        tenant("host").body(edit).patch("/api/items/" + lodgerItem).then().statusCode(200);
+        tenant("host").body(shares(0, List.of())).put(policy("items", lodgerItem)).then().statusCode(403);
+        // Sub-locations of a private building must stay private.
+        admin().body(Map.of("name", "Public room", "privateResource", false, "parentLocationId", hall)).post("/api/storage-locations").then().statusCode(400);
+    }
+
+    @Test void itemsOfferedForUseAreVisibleToOrganizationMembersAndNotifyTheOwnerOnce() {
+        String item = tenant("lender").body(itemInput()).post("/api/items").then().statusCode(200).extract().path("id");
+        actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(404);
+        tenant("lender").body(Map.of("revision", 0, "grants", List.of(), "reason", "Available for events", "publicUse", true))
+                .put(policy("items", item)).then().statusCode(200).body("publicUse", equalTo(true));
+        actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(200)
+                .body("access.canEdit", equalTo(false)).body("access.sources.kind", hasItem("public_use"));
+        actor("borrower", "faction_leader").body(editInput()).patch("/api/items/" + item).then().statusCode(404);
+        tenant("other-tenant").get("/api/items/" + item).then().statusCode(404);
+
+        var leader = actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test");
+        String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", "2043-06-01",
+                        "requestedQuantities", Map.of(item, 1), "requestedAssemblyQuantities", Map.of()))
+                .post("/api/orders").then().statusCode(200).extract().path("id");
+        for (String target : List.of("submitted", "draft", "submitted"))
+            actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test").body(Map.of("idempotencyKey", UUID.randomUUID()))
+                    .post("/api/orders/" + order + "/transitions/" + target).then().statusCode(200);
+        tenant("lender").get("/api/notifications").then().statusCode(200)
+                .body("findAll { it.type == 'item_requested' }.size()", equalTo(1))
+                .body("find { it.type == 'item_requested' }.payload.itemId", equalTo(item))
+                .body("find { it.type == 'item_requested' }.payload.path", equalTo("/items/" + item))
+                .body("find { it.type == 'item_requested' }.factionOrderId", nullValue());
     }
 }

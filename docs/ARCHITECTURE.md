@@ -19,7 +19,7 @@ Each subject has one owner above. Keep detailed requirements in the PRD, stack d
 
 ```mermaid
 flowchart LR
-    Users[HQ, warehouse, marshal, planner, maintenance, faction leaders and members] --> PWA[React 19 PWA]
+    Users[Inventory admin, warehouse crew, ASH and faction leaders, read-only members and tenants] --> PWA[React 19 PWA]
     PWA -->|OIDC code and PKCE| IdP[Authentik]
     PWA -->|Bearer JWT, JSON and command UUID| API[Quarkus modular monolith]
     MCP[MCP clients] -->|Bearer JWT| API
@@ -36,7 +36,7 @@ A modular monolith keeps stock, order, custody and lifecycle changes in local AC
 - Server state authorizes stock operations; cached catalogs, report snapshots and queued commands never do.
 - Stock-affecting commands validate current state under locks, deduplicate command IDs and commit movement/projection/audit/outbox changes together.
 - Preparation reserves; pickup transfers custody. Physical transfer transit and unreceived supplier orders are separate. Pending return submission remains custody until acceptance.
-- Private account ownership and explicit view/edit grants are separate from keeper, current custodian and display owner name. Warehouse and other staff do not implicitly see private resources except HQ admin.
+- Private account ownership and explicit view/edit grants are separate from keeper, current custodian and display owner name. Warehouse and other staff do not implicitly see private resources except the inventory admin.
 - REST, MCP and offline replay delegate to the same services/policies; DTOs separate persistence from API output.
 - Data is disposable; change the single schema baseline/entities directly. No incremental migrations or compatibility adapters are the intended development model.
 

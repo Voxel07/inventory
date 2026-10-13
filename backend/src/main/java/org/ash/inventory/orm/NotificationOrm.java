@@ -21,4 +21,17 @@ public class NotificationOrm {
     }
 
     public Notification find(UUID id) { return entityManager.find(Notification.class, id); }
+
+    /** Serializes deduplicated notices per recipient. */
+    public void lockRecipient(UserAccount recipient) {
+        entityManager.lock(recipient, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    public boolean exists(UserAccount recipient, String type, String dedupeKey) {
+        return !entityManager.createQuery("select n.id from Notification n where n.recipient = :recipient and n.type = :type and n.dedupeKey = :key", UUID.class)
+                .setParameter("recipient", recipient).setParameter("type", type).setParameter("key", dedupeKey)
+                .setMaxResults(1).getResultList().isEmpty();
+    }
+
+    public void persist(Notification notification) { entityManager.persist(notification); }
 }

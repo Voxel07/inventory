@@ -65,7 +65,7 @@ public class PrivacyProjectionService {
         JsonNode tree = json.valueToTree(value); var actor = actors.current();
         // Lock policies in a deterministic order while the command transaction is active.
         orm.referencedPolicies(references(tree)).stream().sorted(Comparator.comparing(policy -> policy.id))
-                .forEach(policy -> access.require(policy, actor, true));
+                .forEach(policy -> access.require(policy, actor, true, actors.inUsageCommand()));
     }
 
     private Set<String> strings(Set<UUID> ids) {

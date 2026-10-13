@@ -33,21 +33,7 @@ The Authentik OAuth2/OIDC provider must use client type **Public**, because the 
 
 The sign-out button revokes the refresh and access tokens at the provider's `revocation_endpoint`, signs out every open tab, and then redirects to the provider's `end_session_endpoint` from OIDC discovery, including the ID token and configured redirect URI. To make this RP-initiated logout also end the user's main Authentik SSO session, configure the provider's invalidation flow with a **User Logout** stage. In Authentik, open **Flows and Stages → Flows → default-provider-invalidation-flow → Stage Bindings**, bind the existing `default-invalidation-logout` stage, and assign that flow to the provider. Without this Authentik setting, its default behavior ends only the Inventory application session.
 
-Authentik supplies application roles through its `groups` claim. Use these namespaced group names so they cannot be confused with roles belonging to another application:
-
-| Authentik group | Inventory role |
-| --- | --- |
-| `inventory_hq_admin` | `hq_admin` |
-| `inventory_warehouse_crew` | `warehouse_crew` |
-| `inventory_marshal` | `marshal` |
-| `inventory_event_planner` | `event_planner` |
-| `inventory_maintenance_crew` | `maintenance_crew` |
-| `inventory_faction_leader` | `faction_leader` |
-| `inventory_read_only` | `read_only` |
-
-Faction leaders additionally need one group per faction, named `inventory_faction_<EVENT>_<slug>` (for example `inventory_faction_DE_kgg`, `inventory_faction_TNO_militar`); the slug is shown by `GET /api/factions`.
-
-Authentik is the only source of roles and factions: they are read from the token's groups on every request and mirrored to `app_users` for display. The User management page is read-only. Accounts are bound to the token's issuer and immutable `sub`, never to the username. A token without a recognized inventory group is rejected with 403.
+Authentik only decides who may use the inventory: members of the group `inventory` (`INVENTORY_ACCESS_GROUP`) can sign in; everyone else gets 403. Roles (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`) and faction memberships are set in the app on the **Users** page by the inventory admin. New users start as read only; `INVENTORY_BOOTSTRAP_ADMINS` (e-mails or usernames) names the first admins. Users may have multiple assigned roles; the highest role in the ladder determines access. Accounts are bound to the token's issuer and immutable `sub`, never to the username. The permission matrix, role combinations and the sharing scenarios are described in [Authentik setup §3](docs/AUTHENTIK_SETUP.md#3-access-and-roles).
 
 ## Sample inventory import
 
@@ -89,9 +75,9 @@ On **Maintenance**, set a category's interval in days to schedule its items. An 
 
 ## PostgreSQL schema and API
 
-OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Production initializes an empty database from the single `V1.0.0__init.sql` baseline and Hibernate validates it. Data is disposable: edit the baseline/entities directly and recreate databases after schema changes. Incremental migrations and legacy baselining procedures are removed.
+OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Flyway applies the single editable `V1.0.0__init.sql` baseline; Hibernate validates it. Recreate disposable databases after schema changes.
 
-Roles are enforced by the backend services (shared by REST, MCP and offline replay) using the seven canonical values listed above. Faction leaders can only access the factions of their `inventory_faction_*` groups; inventory lifecycle actions remain crew-only.
+Roles are enforced by the backend services (shared by REST, MCP and offline replay) using the six roles listed above. Every organization member reads all order lists; faction leaders change only the lists of the factions the admin assigned to them; inventory lifecycle actions remain warehouse-only.
 
 The backend exposes explicit workflow APIs rather than generic entity CRUD:
 

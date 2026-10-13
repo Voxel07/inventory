@@ -19,7 +19,7 @@ import type { MemberStored as Stored, MemberRequest as Request } from '../types/
 import { inputNumber, inputText, optionalText, inputBoolean } from '../utils/inputValues';
 import { useAuth } from '../hooks/useAuth';
 import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
-import { canOperateWarehouse } from '../utils/access';
+import { canOperateWarehouse, canOrder } from '../utils/access';
 import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
 import { OperationForm } from '../components/operations/OperationForm';
 
@@ -32,7 +32,7 @@ type EquipmentRow = { id: string; name: string; quantity: number; event?: string
 
 export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const { openActionInbox } = useActionInboxDialog();
-  const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = user?.role !== 'read_only';
+  const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
   const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
   const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
   const [returning, setReturning] = useState<NonNullable<typeof custody.data>[number] | null>(null);

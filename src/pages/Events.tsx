@@ -2,7 +2,7 @@ import { formatDate } from '../utils/dateFormat';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessProcurement } from '../utils/access';
+import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
@@ -46,7 +46,7 @@ export function Events() {
   const t = useLocalizedText();
   const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
-  const canEdit = canAccessProcurement(user);
+  const canEdit = canEditEvents(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);

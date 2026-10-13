@@ -109,7 +109,7 @@ public class StockManagementOrm extends EntityOrm {
         return InventoryAccessOrm.visible(item + ".accessPolicy") + " and (" + item + ".accessPolicy is not null or :manager = true or " + item + ".visibilityScope in :publicScopes or " + item + ".assignedUser.id = :actorId or " + item + ".assignedGroup in :groups)";
     }
     private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query, UserAccount actor) {
-        return InventoryAccessOrm.bind(query, actor).setParameter("manager", actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew)
+        return InventoryAccessOrm.bind(query, actor).setParameter("manager", actor.role.atLeast(DomainEnums.UserRole.warehouse_crew))
                 .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
                 .setParameter("actorId", actor.id).setParameter("groups", actor.factions == null || actor.factions.isEmpty() ? List.of("__none__") : actor.factions);
     }

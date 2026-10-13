@@ -37,6 +37,7 @@ public class InventoryMcpResources {
     @Resource(uri = "inventory://locations", name = "Storage Locations", description = "Current list of active storage locations and warehouses")
     @Transactional
     public TextResourceContents locations() throws Exception {
+        service.authenticate();
         var data = service.locations(null, null, null);
         return TextResourceContents.create("inventory://locations", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(data));
     }
@@ -44,6 +45,7 @@ public class InventoryMcpResources {
     @Resource(uri = "inventory://categories", name = "Catalog Categories", description = "Distinct item categories in the inventory catalog")
     @Transactional
     public TextResourceContents categories() throws Exception {
+        service.authenticate();
         var categories = service.categories();
         return TextResourceContents.create("inventory://categories", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(categories));
     }

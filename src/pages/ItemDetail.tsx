@@ -65,7 +65,7 @@ import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import type { ItemFormData, TransactionFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canOperateWarehouse, canPerformCustody } from '../utils/access';
+import { canEditCatalog, canOperateWarehouse, canPerformCustody, canTakeOut } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
@@ -99,6 +99,7 @@ export function ItemDetail() {
     const equipment = useEquipmentProfile(itemId ?? '');
     const canEdit = item?.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canTransact = item?.access?.privateResource ? item.access.canEdit : canOperateWarehouse(user);
+    const canCheckout = canTakeOut(user) && (!item?.access?.privateResource || item.access.canEdit || item.access.publicUse);
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
@@ -121,11 +122,11 @@ export function ItemDetail() {
         enabled: Boolean(itemId && isGenerator),
     });
 
-    const checkoutRequest = `${itemId}:${searchParams.get('transaction')}:${canTransact}`;
+    const checkoutRequest = `${itemId}:${searchParams.get('transaction')}:${canTransact || canCheckout}`;
     const [handledCheckoutRequest, setHandledCheckoutRequest] = useState('');
     if (handledCheckoutRequest !== checkoutRequest) {
         setHandledCheckoutRequest(checkoutRequest);
-        if (canTransact && searchParams.get('transaction') === '1') setCheckoutOpen(true);
+        if ((canTransact || canCheckout) && searchParams.get('transaction') === '1') setCheckoutOpen(true);
     }
 
     useEffect(() => {
@@ -348,14 +349,14 @@ export function ItemDetail() {
                         </Typography>
                     </Box>
                     <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-                        {canTransact && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{t('Ausgabe / Rückgabe', 'Check out / return')}</Button>}
+                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</Button>}
                         {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
                         <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Etikett drucken', 'Print label')}</Button>
                     </Stack>
                 </Box>
                 {item.hint && <Alert severity="info" icon={false} sx={{ mt: 1, py: 0, px: 1.5, '& .MuiAlert-message': { py: 0.5 } }}>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>
-                        <Box component="span" sx={{ fontWeight: 600 }}>{t('Besonderer Hinweis', 'Special instruction')}: </Box>{item.hint}
+                        <Box component="span" sx={{ fontWeight: 600 }}></Box>{item.hint}
                     </Typography>
                 </Alert>}
                 {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0 }}>{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert>}
@@ -503,7 +504,7 @@ export function ItemDetail() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>{t('Ausgabe / Rückgabe', 'Check out / return')}</DialogTitle>
+                <DialogTitle>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</DialogTitle>
                 <DialogContent dividers>
                     <TransactionForm
                         items={[item]}

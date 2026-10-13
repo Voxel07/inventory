@@ -26,7 +26,7 @@ class PrivacyProjectionServiceTest {
         var service = new PrivacyProjectionService();
         service.json = new ObjectMapper();
         service.orm = facts;
-        service.actors = new ActorService(null, null, null, false) {
+        service.actors = new ActorService(null, null, null, false, "inventory", java.util.Optional.empty()) {
             @Override public UserAccount current() { return new UserAccount(); }
         };
         return service;

@@ -27,7 +27,7 @@ class PriorityRefactorApiTest {
     private RequestSpecification actor(String id, String role) {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", id).header("X-Actor-Role", role);
     }
-    private RequestSpecification admin() { return actor("priority-admin", "hq_admin"); }
+    private RequestSpecification admin() { return actor("priority-admin", "admin"); }
     private String location() {
         return admin().body(Map.of("name", "Priority " + UUID.randomUUID())).post("/api/storage-locations")
                 .then().statusCode(200).extract().path("id");
@@ -54,7 +54,7 @@ class PriorityRefactorApiTest {
         admin().body(Map.of()).post("/api/inventory-counts/" + id + "/start").then().statusCode(200);
         String status = admin().body(input).post("/api/inventory-counts/" + id + "/submit").then().statusCode(200).extract().path("status");
         if ("awaiting_recount".equals(status)) admin().body(input).post("/api/inventory-counts/" + id + "/recount").then().statusCode(200);
-        actor("priority-approver", "hq_admin").body(Map.of()).post("/api/inventory-counts/" + id + "/approve")
+        actor("priority-approver", "admin").body(Map.of()).post("/api/inventory-counts/" + id + "/approve")
                 .then().statusCode(200).body("status", equalTo("approved"));
         return id;
     }

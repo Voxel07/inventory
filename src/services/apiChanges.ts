@@ -62,7 +62,7 @@ const purchasing = ['purchase-orders', 'procurement-deficits', 'reports', 'actio
 /** Permission changes, and events possibly missed while the stream was disconnected, can revoke private views. */
 export function revokesAccess(detail?: ApiChangeDetail): boolean {
   if (detail?.type === 'batch') return (detail.changes ?? []).some(revokesAccess);
-  return detail?.type === 'access.changed' || detail?.type === 'realtime.reconnected';
+  return detail?.type === 'access.changed' || detail?.type === 'user.changed' || detail?.type === 'realtime.reconnected';
 }
 
 /** null means unknown: preserve conservative invalidation of every reader. */

@@ -33,7 +33,7 @@ class ArchitectureApiCoverageTest {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", "architecture-" + name)
                 .header("X-Actor-Name", "Architecture " + name).header("X-Actor-Role", role);
     }
-    private RequestSpecification admin() { return actor("admin", "hq_admin"); }
+    private RequestSpecification admin() { return actor("admin", "admin"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
     private String location() {
         return admin().body(Map.of("name", "Architecture shelf " + UUID.randomUUID()))
@@ -173,7 +173,7 @@ class ArchitectureApiCoverageTest {
         input.put("lines", List.of(Map.of("itemId", id, "orderedQuantity", 4, "unitPriceCents", 600)));
         admin().body(input).put("/api/purchase-orders/" + purchase).then().statusCode(200)
                 .body("lines[0].orderedQuantity", equalTo(4)).body("lines.size()", equalTo(1));
-        String staged = given().header("X-Actor-Id", "architecture-admin").header("X-Actor-Role", "hq_admin")
+        String staged = given().header("X-Actor-Id", "architecture-admin").header("X-Actor-Role", "admin")
                 .multiPart("file", "invoice.pdf", "%PDF-1.7\nreview".getBytes(java.nio.charset.StandardCharsets.UTF_8), "application/pdf")
                 .post("/api/media").then().statusCode(200).extract().path("key");
         var document = Map.of("vendorId", vendor, "purchaseOrderId", purchase, "documentType", "invoice",

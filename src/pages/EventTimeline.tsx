@@ -18,7 +18,7 @@ import { EventMetric, EventWorkspace } from '../components/events/EventWorkspace
 import { timelineHooks } from '../hooks/useEventLogistics';
 import { useEventWorkspace } from '../hooks/useEventWorkspace';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessProcurement } from '../utils/access';
+import { canEditEvents } from '../utils/access';
 import { useLocalizedText } from '../utils/naming';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { useUIStore } from '../store/uiStore';
@@ -48,7 +48,7 @@ function TimelineSchedule({ eventId, startDate }: { eventId: string; startDate: 
   const t = useLocalizedText();
   const statusLabels = useStatusLabels();
   const { user } = useAuth();
-  const canEdit = canAccessProcurement(user);
+  const canEdit = canEditEvents(user);
   const query = timelineHooks.useList(eventId);
   const save = timelineHooks.useSave(eventId);
   const remove = timelineHooks.useDelete(eventId);

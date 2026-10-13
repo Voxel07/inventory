@@ -3,7 +3,7 @@ import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { Button } from '../shared/ActionButtons';
 import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
-import { canOperateWarehouse, canPerformCustody, effectiveAccess } from '../../utils/access';
+import { canOperateWarehouse, canPerformCustody, canTakeOut, canUseGeneralOrders } from '../../utils/access';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -62,6 +62,8 @@ export function GeneralOrders() {
   const updateOrder = useUpdateOrder();
   const transitionOrder = useTransitionOrder();
   const { user } = useAuth();
+  // ASH crew change their own general orders; warehouse workers change every order.
+  const canChange = (order: GeneralOrderSummary) => (order.createdBy === user?.id && canUseGeneralOrders(user)) || canOperateWarehouse(user);
   const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'} | null>(null);
   const [pickupOrder, setPickupOrder] = useState<string | null>(null);
   const [editing, setEditing] = useState<GeneralOrderSummary | null | 'new'>(null);
@@ -151,13 +153,13 @@ export function GeneralOrders() {
       actions: <>
         <Button title={t('Verantwortliche und Abholgruppen anzeigen', 'Show responsible people and pickup groups')} onClick={() => setPickupOrder(order.id)}>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</Button>
         <Button title={translate('Den Verlauf dieser Bestellung anzeigen', 'Display the history of this order')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('Verlauf', 'History')}</Button>
-        {order.status === 'draft' && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <><Button title={translate('Artikel und Mengen dieser Bestellung bearbeiten', 'Edit this order\'s items and quantities')} size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button title={translate('Diese Bestellung zur Bearbeitung einreichen', 'Submit this order for processing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
+        {order.status === 'draft' && canChange(order) && <><Button title={translate('Artikel und Mengen dieser Bestellung bearbeiten', 'Edit this order\'s items and quantities')} size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button title={translate('Diese Bestellung zur Bearbeitung einreichen', 'Submit this order for processing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
         {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('Vorbereitete Mengen und Gerätezuordnungen erfassen', 'Enter prepared quantities and asset assignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('Vorbereiten', 'Prepare')}</Button>}
         {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('Diese Bestellung abholbereit melden', 'Mark this order ready for pickup')} onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
-        {order.status === 'ready' && canPerformCustody(user) && <Button title={translate('Abholung und Verantwortlichen erfassen', 'Record pickup and the responsible person')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('Ausgeben', 'Pick up')}</Button>}
+        {order.status === 'ready' && canTakeOut(user) && <Button title={translate('Abholung und Verantwortlichen erfassen', 'Record pickup and the responsible person')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('Ausgeben', 'Pick up')}</Button>}
         {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('Rückgabemengen und Zustand erfassen', 'Enter return quantities and condition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('Rückgabe erfassen', 'Record return')}</Button>}
         {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('Diese Bestellung abschließen', 'Close this order')} size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
-        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && effectiveAccess(user) !== 'read_only' && (order.createdBy === user?.id || ['hq_admin', 'warehouse_crew', 'event_planner'].includes(effectiveAccess(user))) && <Button title={translate('Diese Bestellung stornieren', 'Cancel this order')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
+        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('Diese Bestellung stornieren', 'Cancel this order')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
       </>,
     };
   }
@@ -166,7 +168,7 @@ export function GeneralOrders() {
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
       <Box><Typography variant="h4">{t('Allgemeine Bestellungen', 'General orders')}</Typography>
         <Typography color="text.secondary">{t('Artikel für Catering, Sponsorenzelte, Bühnen und andere Zwecke.', 'Items for catering, sponsor tents, stages, and other purposes.')}</Typography></Box>
-      <Button title={translate('Eine neue allgemeine Bestellung anlegen', 'Create a new general order')} disabled={effectiveAccess(user) === 'read_only'} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
+      <Button title={translate('Eine neue allgemeine Bestellung anlegen', 'Create a new general order')} disabled={!canUseGeneralOrders(user)} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
     </Stack>
     <OrderEventFilter
       eventTypes={eventTypes}

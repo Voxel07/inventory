@@ -18,7 +18,7 @@ import { attendeeHooks, useEventAccounts, useEventPeople } from '../hooks/useEve
 import { useEventWorkspace } from '../hooks/useEventWorkspace';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessProcurement } from '../utils/access';
+import { canEditEvents } from '../utils/access';
 import { useLocalizedText } from '../utils/naming';
 import { formatDateTime } from '../utils/dateFormat';
 import { useUIStore } from '../store/uiStore';
@@ -59,7 +59,7 @@ function AttendeeList({ eventId, eventType }: { eventId: string; eventType: Even
   const t = useLocalizedText();
   const roleLabels = useRoleLabels();
   const { user } = useAuth();
-  const canEdit = canAccessProcurement(user);
+  const canEdit = canEditEvents(user);
   const query = attendeeHooks.useList(eventId);
   const save = attendeeHooks.useSave(eventId);
   const remove = attendeeHooks.useDelete(eventId);

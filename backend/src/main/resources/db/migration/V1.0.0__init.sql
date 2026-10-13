@@ -13,7 +13,9 @@ create table app_users (
     issuer varchar(255) not null,
     external_subject varchar(255) not null,
     name varchar(255) not null,
-    role varchar(255) not null check ((role in ('hq_admin','warehouse_crew','marshal','event_planner','maintenance_crew','faction_leader','read_only'))),
+    role varchar(255) not null default 'read_only' check (role in ('tenant','read_only','faction_leader','ash','warehouse_crew','admin')),
+    roles jsonb not null default '["read_only"]' check (jsonb_typeof(roles) = 'array' and jsonb_array_length(roles) > 0),
+    access_revision bigint not null default 0,
     factions jsonb not null,
     primary key (id),
     constraint uq_app_users_identity unique (issuer, external_subject)
@@ -563,8 +565,10 @@ create table notifications (
     delivery_status varchar(255) not null,
     type varchar(255) not null,
     payload jsonb not null,
+    dedupe_key varchar(512),
     primary key (id)
 );
+create unique index notifications_dedupe on notifications(recipient_id, type, dedupe_key) where dedupe_key is not null;
 
 create table order_line_asset_assignments (
     created_at timestamp(6) with time zone not null,
@@ -1113,16 +1117,27 @@ alter table equipment_commitments add constraint equipment_commitments_recorded_
 alter table loan_arrangements add constraint loan_arrangements_commitment_id_fkey foreign key (commitment_id) references equipment_commitments(id);
 alter table loan_arrangements add constraint loan_arrangements_provider_location_id_fkey foreign key (provider_location_id) references storage_locations(id);
 
--- Private resource policies and stable, administrator-managed share groups.
+-- Private resource policies and user-owned or administrator-managed sharing groups.
 create table inventory_access_policies (
     id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
-    owner_user_id uuid not null references app_users(id), revision bigint not null
+    owner_user_id uuid not null references app_users(id), revision bigint not null,
+    public_use boolean not null default false
 );
 create table inventory_access_groups (
     id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
-    name varchar(255) not null unique, revision bigint not null
+    name varchar(255) not null, revision bigint not null,
+    owner_user_id uuid references app_users(id)
 );
-create unique index inventory_access_group_name on inventory_access_groups(lower(name));
+create unique index inventory_access_group_owner_name on inventory_access_groups
+    (coalesce(owner_user_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name));
+create index inventory_access_groups_owner on inventory_access_groups(owner_user_id);
+create table inventory_access_links (
+    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    policy_id uuid not null references inventory_access_policies(id) on delete cascade,
+    ancestor_policy_id uuid not null references inventory_access_policies(id) on delete cascade,
+    unique (policy_id, ancestor_policy_id), check (policy_id <> ancestor_policy_id)
+);
+create index inventory_access_links_ancestor on inventory_access_links(ancestor_policy_id, policy_id);
 create table inventory_access_group_members (
     group_id uuid not null references inventory_access_groups(id), user_id uuid not null references app_users(id),
     primary key (group_id, user_id)
@@ -1139,6 +1154,10 @@ create index inventory_access_grants_group on inventory_access_grants(group_id, 
 alter table items add column access_policy_id uuid unique references inventory_access_policies(id);
 alter table storage_locations add column access_policy_id uuid unique references inventory_access_policies(id);
 alter table assemblies add column access_policy_id uuid unique references inventory_access_policies(id);
+alter table items add column responsible_person_id uuid references app_users(id);
+create index ix_items_responsible_person on items (responsible_person_id);
+alter table faction_orders add column pickup_assignments jsonb not null default '{}';
+alter table general_orders add column pickup_assignments jsonb not null default '{}';
 create table inventory_media_objects (
     id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
     object_key varchar(1024) not null unique, uploader_id uuid not null references app_users(id),

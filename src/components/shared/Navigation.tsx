@@ -35,6 +35,7 @@ import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlin
 import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
@@ -43,7 +44,7 @@ import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { LanguageSelector } from './LanguageSelector';
 import { useT, useLocalizedText } from '../../utils/naming';
-import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog } from '../../utils/access';
+import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog, canViewOrganization } from '../../utils/access';
 import type { User } from '../../types';
 
 const DRAWER_WIDTH = 256;
@@ -58,6 +59,7 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
     const manager = canManageInventory(user);
     const catalog = manager || canViewCatalog(user);
     const operations = canOperateWarehouse(user) || canManagePurchasing(user) || canPerformMaintenance(user);
+    const organization = canViewOrganization(user);
     const groups: NavGroup[] = [
         { label: text('Übersicht', 'Overview'), items: [
             { label: text('Start', 'Home'), path: '/', icon: <HomeOutlinedIcon /> },
@@ -67,23 +69,24 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
             { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryOutlinedIcon /> },
             { label: text('Lagerorte', 'Locations'), path: '/storage-locations', icon: <RoomOutlinedIcon /> },
             ...(manager ? [{ label: text('Etiketten & QR-Codes', 'Labels & QR codes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
+            { label: text('Freigabegruppen', 'Sharing groups'), path: '/sharing', icon: <GroupsOutlinedIcon /> },
         ] : [] },
-        { label: text('Bestellungen & Rückgaben', 'Orders & returns'), items: [
+        { label: text('Bestellungen & Rückgaben', 'Orders & returns'), items: organization ? [
             { label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> },
+            { label: text('Eventplanung', 'Event planning'), path: '/events', icon: <EventOutlinedIcon /> },
+            { label: text('Eventteilnehmer', 'Event attendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
+            { label: text('Eventzeitplan', 'Event timeline'), path: '/events/timeline', icon: <TimelineIcon /> },
             ...(manager ? [
-                { label: text('Eventplanung', 'Event planning'), path: '/events', icon: <EventOutlinedIcon /> },
-                { label: text('Eventteilnehmer', 'Event attendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
-                { label: text('Eventzeitplan', 'Event timeline'), path: '/events/timeline', icon: <TimelineIcon /> },
                 { label: text('Ausgegeben', 'Checked out'), path: '/checked-out', icon: <OutputIcon /> },
                 { label: text('Rückgaben prüfen', 'Review returns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
             ] : []),
-        ] },
-        { label: text('Betrieb', 'Operations'), items: manager ? [
+        ] : [] },
+        { label: text('Betrieb', 'Operations'), items: [
             ...(operations ? [{ label: text('Lageraufgaben', 'Warehouse tasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),
             ...(canAccessProcurement(user) ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartOutlinedIcon /> }] : []),
-            { label: t('nav.maintenance'), path: '/maintenance', icon: <BuildOutlinedIcon /> },
-            { label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemOutlinedIcon /> },
-        ] : [] },
+            ...(manager ? [{ label: t('nav.maintenance'), path: '/maintenance', icon: <BuildOutlinedIcon /> }] : []),
+            ...(manager ? [{ label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemOutlinedIcon /> }] : []),
+        ] },
         { label: text('Berichte', 'Reports'), items: manager ? [
             { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         ] : [] },
@@ -212,7 +215,9 @@ export function Navigation() {
                     >
                         <BottomNavigationAction label={text('Start', 'Home')} value="/" icon={<HomeOutlinedIcon />} />
                         {catalog && <BottomNavigationAction label={text('Inventar', 'Inventory')} value="/items" icon={<Inventory2OutlinedIcon />} />}
-                        <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<ReceiptLongOutlinedIcon />} />
+                        {canViewOrganization(user)
+                            ? <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<ReceiptLongOutlinedIcon />} />
+                            : <BottomNavigationAction label={text('Lagerorte', 'Locations')} value="/storage-locations" icon={<RoomOutlinedIcon />} />}
                         <BottomNavigationAction label={text('Aufgaben', 'Tasks')} value="tasks" aria-haspopup="dialog"
                             icon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>} />
                         <BottomNavigationAction label={t('nav.more')} value="more" aria-haspopup="dialog" icon={<MenuIcon />} />

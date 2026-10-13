@@ -20,7 +20,9 @@ class EventLogisticsApiTest {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", "logistics-" + name)
                 .header("X-Actor-Name", "Logistics " + name).header("X-Actor-Role", role);
     }
-    private RequestSpecification planner() { return actor("planner", "event_planner"); }
+    /** Event planning belongs to the inventory admin. */
+    private RequestSpecification planner() { return actor("planner", "admin"); }
+    private RequestSpecification tenant() { return actor("tenant", "tenant"); }
     private RequestSpecification warehouse() { return actor("warehouse", "warehouse_crew"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
 
@@ -92,12 +94,14 @@ class EventLogisticsApiTest {
         warehouse().get(path).then().statusCode(200).body("size()", equalTo(0));
     }
 
-    @Test void readsAreStaffOnlyWritesArePlannerOnlyAndScopedToTheEvent() {
+    @Test void readsAreForOrganizationMembersWritesAreAdminOnlyAndScopedToTheEvent() {
         String event = event("DE"), other = event("DE");
         String path = "/api/events/" + event + "/attendees";
         var crew = attendee(null, "Crew " + UUID.randomUUID(), List.of(role("event_crew", null, "Setup")));
-        reader().get(path).then().statusCode(403);
-        reader().get("/api/event-people").then().statusCode(403);
+        reader().get(path).then().statusCode(200);
+        reader().get("/api/event-people").then().statusCode(200);
+        reader().body(crew).post(path).then().statusCode(403);
+        tenant().get(path).then().statusCode(403);
         warehouse().body(crew).post(path).then().statusCode(403);
         warehouse().get("/api/event-people/accounts").then().statusCode(403);
         String attendee = planner().body(crew).post(path).then().statusCode(200).extract().path("id");
@@ -147,7 +151,7 @@ class EventLogisticsApiTest {
         String name = "Kept " + UUID.randomUUID();
         String person = planner().body(attendee(null, name, List.of(role("event_crew", null, null))))
                 .post("/api/events/" + event + "/attendees").then().statusCode(200).extract().path("person.id");
-        actor("admin", "hq_admin").delete("/api/events/" + event).then().statusCode(204);
+        actor("admin", "admin").delete("/api/events/" + event).then().statusCode(204);
         warehouse().get(path).then().statusCode(404);
         warehouse().get("/api/event-people").then().statusCode(200)
                 .body("find { it.id == '" + person + "' }.attendances", equalTo(0));

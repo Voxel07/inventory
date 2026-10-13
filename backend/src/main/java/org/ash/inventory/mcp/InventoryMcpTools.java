@@ -97,7 +97,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Create an event using REST EventInput. Planner access required; item quotas must refer to visible items.")
+    @Tool(description = "Create an event using REST EventInput. Inventory admin access required; item quotas must refer to visible items.")
     public ApiResponses.EventResponse create_event(
             @ToolArg(description = "EventInput: eventType and startDate (YYYY-MM-DD) required; optional name/endDate/status/notes/plannedQuantities/usedQuantities", required = true) ApiModels.EventInput input) {
         return call(() -> service.createEvent(input));
@@ -120,7 +120,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Update an event using REST EventInput, including eventType/startDate. Planner access required; supplied quotas must refer to visible items.")
+    @Tool(description = "Update an event using REST EventInput, including eventType/startDate. Inventory admin access required; supplied quotas must refer to visible items.")
     public ApiResponses.EventResponse update_event(
             @ToolArg(description = "Event UUID", required = true) UUID eventId,
             @ToolArg(description = "EventInput with REST update semantics", required = true) ApiModels.EventInput input) {
@@ -128,7 +128,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Delete an event only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides are removed with it. Planner access required.")
+    @Tool(description = "Delete an event only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides are removed with it. Inventory admin access required.")
     public InventoryMcpDtos.DeleteResultDto delete_event(
             @ToolArg(description = "Event UUID", required = true) UUID eventId) {
         return call(() -> service.deleteEvent(eventId));
@@ -179,7 +179,7 @@ public class InventoryMcpTools {
         return call(() -> service.maintenanceAlerts());
     }
     private <T> T call(Supplier<T> action) {
-        try { return action.get(); }
+        try { service.authenticate(); return action.get(); }
         catch (ApiException exception) {
             // The transactional service has already rolled back before conversion.
             throw new ToolCallException(exception.status + ": " + exception.getMessage());

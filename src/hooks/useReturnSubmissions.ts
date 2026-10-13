@@ -1,4 +1,5 @@
 import { useAuth } from './useAuth';
+import { canViewOrganization } from '../utils/access';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReturnSubmissionFormData, ReturnSubmissionStatus } from '../types';
 import {
@@ -13,6 +14,7 @@ export function useReturnSubmissions(status?: ReturnSubmissionStatus) {
   return useQuery({
     queryKey: ['return-submissions', status ?? 'all', user?.id],
     queryFn: () => getReturnSubmissions(status),
+    enabled: canViewOrganization(user),
   });
 }
 

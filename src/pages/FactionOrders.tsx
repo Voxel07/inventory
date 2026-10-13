@@ -27,7 +27,7 @@ import type { EventType, FactionOrder, FactionOrderStatus } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessFaction, canManageInventory, factionKeyOf } from '../utils/access';
+import { canManageInventory, canOrder, canWriteFaction, factionKeyOf } from '../utils/access';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -68,9 +68,9 @@ export function FactionOrders() {
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
-  const accessibleFactions = (type: EventType) => catalog.factionsFor(type)
-    .filter((faction) => canAccessFaction(currentUser, factionKeyOf(faction)))
-    .map((faction) => faction.name);
+  // Every organization member reads all factions' lists; faction leaders write only their own.
+  const accessibleFactions = (type: EventType) => catalog.factionsFor(type).map((faction) => faction.name);
+  const canCreateList = catalog.factionsFor(eventType).some((faction) => canWriteFaction(currentUser, factionKeyOf(faction)));
   const selectableEvents = catalog.eventTypes.filter((type) => accessibleFactions(type).length > 0);
   const visibleFactions = accessibleFactions(eventType);
   const selectedFaction = visibleFactions.includes(chosenFaction) ? chosenFaction : visibleFactions[0] ?? '';
@@ -82,8 +82,7 @@ export function FactionOrders() {
   const { data: allOrders = [], isLoading, isError, isComplete, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
   const createOrder = useCreateFactionOrder();
   const orders = allOrders.filter((order) => order.eventType === eventType
-    && (!selectedEventId || order.eventOccurrenceId === selectedEventId)
-    && canAccessFaction(currentUser, order.factionKey));
+    && (!selectedEventId || order.eventOccurrenceId === selectedEventId));
 
   const activeOrders = orders.filter((order) => !isHistoricalOrder(order));
   const factionOverview = visibleFactions.map((faction) => {
@@ -189,7 +188,7 @@ export function FactionOrders() {
             )}
           </Typography>
         </Box>
-        <Button title={translate('Eine neue Fraktionsbestellliste anlegen', 'Create a new faction order list')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!visibleFactions.length || currentUser?.role === 'read_only'} sx={{ alignSelf: { sm: 'flex-start' } }}>
+        <Button title={translate('Eine neue Fraktionsbestellliste anlegen', 'Create a new faction order list')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!canCreateList} sx={{ alignSelf: { sm: 'flex-start' } }}>
           {t('Neue Liste', 'New list')}
         </Button>
       </Stack>
@@ -223,7 +222,7 @@ export function FactionOrders() {
             </Stack>
           )}
         </Box>
-        {!isManager && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
+        {!isManager && canOrder(currentUser) && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
       </OrderEventFilter>
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}

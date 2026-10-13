@@ -3,6 +3,8 @@ import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { PageHeader } from '../components/shared/PageHeader';
 import { StateMessage } from '../components/common/StateMessage';
@@ -14,8 +16,8 @@ import { useItems } from '../hooks/useItems';
 import { useTransactions } from '../hooks/useTransactions';
 import { useActionInbox } from '../hooks/useActionInbox';
 import { useActionInboxDialog } from '../hooks/useActionInboxDialog';
-import { noticeText, notificationPath, notificationTitle, usePickupNotifications } from '../hooks/useInbox';
-import { canManageInventory, canViewCatalog } from '../utils/access';
+import { noticeDetails, notificationPath, notificationTitle, usePickupNotifications } from '../hooks/useInbox';
+import { canManageInventory, canViewCatalog, canViewOrganization } from '../utils/access';
 import { useLocalizedText } from '../utils/naming';
 import { Contributor } from './Contributor';
 import { TeamOverview } from './TeamOverview';
@@ -40,8 +42,27 @@ export function UserDashboard() {
                 <ToggleButton value="team">{t('Lager gesamt', 'Whole inventory')}</ToggleButton>
             </ToggleButtonGroup>}
         />
-        {scope === 'team' ? <TeamOverview /> : <PersonalOverview />}
+        {!canViewOrganization(user) ? <TenantOverview /> : scope === 'team' ? <TeamOverview /> : <PersonalOverview />}
     </Box>;
+}
+
+/** Tenants manage only their private inventory: requests for items they offered, their items, buildings and groups. */
+function TenantOverview() {
+    const t = useLocalizedText();
+    return <Stack spacing={3}>
+        <WorkQueue />
+        <Paper component="section" aria-labelledby="overview-private" sx={{ p: { xs: 2, sm: 3 } }}>
+            <Typography id="overview-private" variant="h6" component="h2" sx={{ mb: 1 }}>{t('Meine privaten Sachen', 'My private inventory')}</Typography>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>{t(
+                'Lege deinen gemieteten Lagerort an, gib ihn für eine Gruppe frei und alles, was dort lagert, wird für die Gruppe sichtbar. Artikel, die du zur Nutzung anbietest, können andere anfragen.',
+                'Create your rented storage location, share it with a group and everything stored there becomes visible to that group. Others can request items you offer for use.')}</Typography>
+            <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" component={RouterLink} to="/items" startIcon={<Inventory2OutlinedIcon />}>{t('Meine Artikel', 'My items')}</Button>
+                <Button variant="outlined" component={RouterLink} to="/storage-locations" startIcon={<WarehouseOutlinedIcon />}>{t('Meine Lagerorte', 'My storage locations')}</Button>
+                <Button variant="outlined" component={RouterLink} to="/sharing" startIcon={<GroupsOutlinedIcon />}>{t('Freigabegruppen', 'Sharing groups')}</Button>
+            </Stack>
+        </Paper>
+    </Stack>;
 }
 
 function PersonalOverview() {
@@ -91,8 +112,8 @@ function WorkQueue() {
         ...notices.unread.map((notification) => ({
             key: notification.id,
             title: notificationTitle(notification),
-            detail: [noticeText(notification, 'faction'), noticeText(notification, 'groupNames'), noticeText(notification, 'pickupLocation')].filter(Boolean).join(' · '),
-            label: labels.pickup, urgent: false,
+            detail: noticeDetails(notification),
+            label: notification.type === 'item_requested' ? t('Anfrage', 'Request') : labels.pickup, urgent: false,
             path: notificationPath(notification),
         })),
         ...due.map((action) => ({ key: action.key, title: action.title, detail: [action.detail, action.due && `${t('Fällig', 'Due')}: ${action.due}`].filter(Boolean).join(' · '), label: labels[action.kind] ?? action.kind, urgent: action.kind === 'overdue_return', path: action.path })),

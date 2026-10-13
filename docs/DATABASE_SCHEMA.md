@@ -1,6 +1,6 @@
 # Database Schema and Data Storage
 
-This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql); JPA mappings are in [model/](../backend/src/main/java/org/ash/inventory/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
+This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql) (including pickup groups, assigned roles, owned share groups, grant inheritance and offer for use); JPA mappings are in [model/](../backend/src/main/java/org/ash/inventory/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
 
 ## 1. Persistence boundaries
 
@@ -18,9 +18,9 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **59 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **60 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
-Flyway initializes the same editable baseline in dev/test/prod; Hibernate validates. Current data is disposable. Schema/entity changes update this baseline directly; do not add incremental migrations or compatibility readers. The test profile cleans its configured PostgreSQL test database at startup.
+Flyway applies the single editable baseline in dev/test/prod; Hibernate validates it. Data is disposable: recreate the database after a baseline change. There are no upgrade migrations or backfills. The test profile cleans its configured PostgreSQL test database at startup.
 
 Some columns and foreign keys are added later inside the same baseline, so the complete SQL file, not just the opening CREATE TABLE blocks, defines the schema. A non-null UUID inside JSON or a polymorphic target does not automatically have a foreign key.
 
@@ -70,18 +70,19 @@ General orders form a separate aggregate: creator and optional event are relatio
 
 ## 4. Table inventory
 
-### Identity and access (6 tables)
+### Identity and access (7 tables)
 
 | Table | Key data and relationships |
 |---|---|
-| `app_users` | UUID; unique `(issuer, external_subject)`; name/email, role, JSON faction memberships mirrored from OIDC |
-| `inventory_access_policies` | UUID; owner user FK; revision and timestamps |
-| `inventory_access_groups` | UUID; unique name plus case-insensitive name index; revision |
+| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app |
+| `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (item offered for use) and timestamps |
+| `inventory_access_groups` | UUID; optional owner user FK (null = admin group, usable by everyone); name unique per owner, case-insensitive; revision |
 | `inventory_access_group_members` | Composite `(group_id, user_id)` PK; group/user FKs |
 | `inventory_access_grants` | Policy plus user **or** group; `can_edit`; XOR grantee check; unique grant per policy/grantee |
+| `inventory_access_links` | Materialized grant inheritance: policy FK and ancestor policy FK (cascade), unique pair, ancestor index. A private item links to the policies of its private home location and that location's private ancestors; a private location to its private ancestors |
 | `inventory_media_objects` | Unique object key; uploader FK; optional resource type/ID pair; both absent means staged |
 
-Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; legacy item `visibility_scope`, assigned user/group and event scopes still coexist (PLAN-01). Display `owner_name`, keeper, location keeper and current custodian are different roles. Policy grants do not transitively disclose private components or locations.
+Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; legacy item `visibility_scope`, assigned user/group and event scopes still coexist (PLAN-01). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
 
 ### Catalog and storage geography (6 tables)
 
@@ -176,7 +177,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | Table | Key data and relationships |
 |---|---|
 | `member_requests` | UUID; requester/item/asset/location/handler links; kind/quantity/notes, status/response/time, unique command ID and revision |
-| `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence |
+| `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request |
 | `action_reminders` | UUID; user FK, action key and reminder time; unique user/action |
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
 | `inventory_codes` | UUID; globally unique stored code, target type/UUID, active/primary flags and retirement time; polymorphic target validated in services |
@@ -239,7 +240,7 @@ Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still 
 
 | Data | Stored in | Source | Retention today |
 |---|---|---|---|
-| Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Authentik claims, refreshed at sign-in | Indefinite; no deactivation or deletion |
+| Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Name/email/subject from Authentik claims, refreshed at sign-in; role and factions set by the inventory admin | Indefinite; no deactivation or deletion |
 | Actor references on every movement and transition | `stock_transactions`, `faction_order_history`, `general_order_history`, `return_reconciliations`, `custody_handovers`, damage/repair/maintenance records, `inventory_count_*`, `goods_receipts` | App actions | Permanent (append-only evidence) |
 | Collector name, pickup coordinates, notes | `faction_orders`, `custody_handovers` | Staff input | Permanent |
 | Handover acknowledgements, placement photos, certificates | Media store (local disk or Garage S3) referenced from `custody_handovers`, `return_submissions`, `maintenance_records` | Uploads | Permanent once attached; staged uploads purged after 24 h |

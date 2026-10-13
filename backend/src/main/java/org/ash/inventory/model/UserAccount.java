@@ -26,9 +26,22 @@ public class UserAccount extends BaseEntity {
     public String email;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    public DomainEnums.UserRole role = DomainEnums.UserRole.faction_leader;
+    /** Effective (highest assigned) role, used by database visibility queries. */
+    public DomainEnums.UserRole role = DomainEnums.UserRole.read_only;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
-    /** Mirrored {@code EVENT:slug} faction memberships from the identity provider's groups. */
+    public List<DomainEnums.UserRole> roles = new ArrayList<>(List.of(DomainEnums.UserRole.read_only));
+
+    public void setRoles(java.util.Collection<DomainEnums.UserRole> assigned) {
+        if (assigned.isEmpty()) throw new IllegalArgumentException("Assign at least one role");
+        roles = new ArrayList<>(new java.util.TreeSet<>(assigned));
+        role = roles.getLast();
+    }
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb", nullable = false)
+    /** {@code EVENT:slug} faction memberships, managed in the app by the inventory admin. */
     public List<String> factions = new ArrayList<>();
+    /** Incremented on every role/faction change; guards concurrent edits. */
+    @Column(name = "access_revision", nullable = false)
+    public long accessRevision;
 }

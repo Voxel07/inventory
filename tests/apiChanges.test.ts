@@ -3,6 +3,16 @@ import { QueryClient } from '@tanstack/react-query';
 import { localWriteChange } from '../src/services/apiChanges';
 import { createApiChangeCoalescer, invalidateForApiChange } from '../src/utils/realtimeInvalidation';
 
+test('role changes discard cached organization data, including inactive event queries', async () => {
+  const client = new QueryClient();
+  const keys = [['event-reports'], ['event-logistics', 'event-a', 'attendees'], ['items'], ['users']];
+  keys.forEach(key => client.setQueryData(key, [{ sensitive: 'organization data' }]));
+  invalidateForApiChange(client, localWriteChange('/api/users/user-a'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  keys.forEach(key => expect(client.getQueryData(key)).toBeUndefined());
+  client.clear();
+});
+
 test('a reminder write invalidates inbox queries without refetching stock or reports', () => {
   const client = new QueryClient();
   for (const key of [['action-inbox'], ['items'], ['reports', 'events'], ['operations', 'assets:item']]) {

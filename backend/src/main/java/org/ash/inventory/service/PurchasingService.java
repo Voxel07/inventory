@@ -38,14 +38,14 @@ public class PurchasingService {
 
     @Transactional
     public List<PurchasingDtos.VendorResponse> vendors(int page, int size) {
-        if (actors.current().role != DomainEnums.UserRole.maintenance_crew) actors.requireProcurement();
+        actors.requireWarehouse();
         return orm.vendors(PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorResponse createVendor(PurchasingDtos.VendorInput input) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         if (orm.vendorNameExists(input.name(), null)) throw ApiException.conflict("Vendor name already exists");
         var value = new Vendor();
         apply(value, input);
@@ -57,7 +57,7 @@ public class PurchasingService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.VendorResponse updateVendor(UUID id, PurchasingDtos.VendorInput input) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         var value = orm.requireLocked(Vendor.class, id, "Vendor");
         if (orm.vendorNameExists(input.name(), id)) throw ApiException.conflict("Vendor name already exists");
         apply(value, input);
@@ -68,7 +68,7 @@ public class PurchasingService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireVendor(UUID id) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         var value = orm.requireLocked(Vendor.class, id, "Vendor");
         value.active = false;
         events.record("vendor.retired", "vendor", value.id, actors.current().id, null, Map.of("name", value.name));
@@ -76,7 +76,7 @@ public class PurchasingService {
 
     @Transactional
     public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(String status, int page, int size) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         List<PurchaseOrder> values;
         try {
             values = orm.purchaseOrders(status, PageBounds.of(page, size).offset(), size);
@@ -90,7 +90,7 @@ public class PurchasingService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse createPurchaseOrder(PurchasingDtos.PurchaseOrderInput input) {
         var actor = actors.current();
-        actors.requireProcurement();
+        actors.requireWarehouse();
         var vendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         if (!vendor.active) throw ApiException.conflict("Vendor is inactive");
         var order = new PurchaseOrder();
@@ -115,7 +115,7 @@ public class PurchasingService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse updatePurchaseOrder(UUID id, PurchasingDtos.PurchaseOrderInput input) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         var order = orm.requireLocked(PurchaseOrder.class, id, "Purchase order");
         if (order.status != DomainEnums.PurchaseOrderStatus.draft) {
             throw ApiException.conflict("Only draft purchase orders can be edited");
@@ -142,7 +142,7 @@ public class PurchasingService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public PurchasingDtos.PurchaseOrderResponse transitionPurchaseOrder(UUID id,
             PurchasingDtos.PurchaseOrderTransitionInput input) {
-        actors.requireProcurement();
+        actors.requireWarehouse();
         var order = orm.requireLocked(PurchaseOrder.class, id, "Purchase order");
         boolean allowed = switch (order.status) {
             case draft -> input.status() == DomainEnums.PurchaseOrderStatus.ordered

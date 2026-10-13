@@ -35,7 +35,7 @@ class InventoryMcpAuthenticationTest {
 
     @Test
     void developmentActorHeadersCannotBypassTransportAuthentication() {
-        given().header("X-Actor-Id", "spoofed-admin").header("X-Actor-Role", "hq_admin")
+        given().header("X-Actor-Id", "spoofed-admin").header("X-Actor-Role", "admin")
                 .header("Accept", "application/json, text/event-stream").contentType("application/json")
                 .body(Map.of("jsonrpc", "2.0", "id", 1, "method", "tools/list", "params", Map.of()))
                 .post("/mcp").then().statusCode(401);

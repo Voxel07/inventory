@@ -35,7 +35,9 @@ public final class ApiResponses {
             String username,
             String email,
             String role,
-            List<String> faction
+            List<String> roles,
+            List<String> faction,
+            long revision
     ) {}
 
     public record GeneralOrderResponse(

@@ -163,9 +163,9 @@ class StorageQueryRegressionTest {
         };
         var identity = QuarkusSecurityIdentity.builder()
                 .setPrincipal(token)
-                .addRole("inventory_read_only").build();
+                .addRole("inventory").build();
         // The authenticated identity path does not need an HTTP request.
-        return new ActorService(identity, null, users, false);
+        return new ActorService(identity, null, users, false, "inventory", java.util.Optional.empty());
     }
 
     @Test

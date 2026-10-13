@@ -50,8 +50,7 @@ public class CatalogOrm extends EntityOrm {
 
     private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query,
             UUID actorId, List<String> actorGroups, boolean manager) {
-        return query.setParameter("accessAdmin", accessActor.current().role == DomainEnums.UserRole.hq_admin)
-                .setParameter("accessActor", actorId).setParameter("manager", manager)
+        return InventoryAccessOrm.bind(query, accessActor.current()).setParameter("manager", manager)
                 .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
                 .setParameter("personScope", DomainEnums.ItemVisibilityScope.person)
                 .setParameter("groupScope", DomainEnums.ItemVisibilityScope.group)

@@ -27,6 +27,37 @@ class InventoryApiTest {
     @Inject DomainEventService domainEvents;
 
     @Test
+    void ashTakesOutItemsAndPicksUpPreparedOrdersWithoutWarehouseEditRights() {
+        String item = request().body(Map.of("sku", "ASH-TAKEOUT-" + java.util.UUID.randomUUID(), "name", "ASH takeout",
+                "category", "Test", "amount", 3, "value", 0, "privateResource", false))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String event = request().body(Map.of("eventType", "DE", "name", "ASH takeout event",
+                "startDate", LocalDate.now(java.time.ZoneId.of("Europe/Berlin")).toString(), "status", "planned"))
+                .post("/api/events").then().statusCode(200).extract().path("id");
+        var checkout = Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 1,
+                "reason", "ASH crew equipment", "eventType", "DE", "faction", "ASH", "eventOccurrenceId", event);
+        factionLeaderRequest().body(checkout).post("/api/transactions").then().statusCode(403);
+        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+                .body(checkout).post("/api/transactions").then().statusCode(200).body("transactionType", equalTo("checkout"));
+        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+                .body(Map.of("itemId", item, "transactionType", "added", "quantityChanged", 1, "reason", "Not warehouse"))
+                .post("/api/transactions").then().statusCode(403);
+        String order = request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+                .body(Map.of("name", "Crew order", "purpose", "Setup", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 1)))
+                .post("/api/general-orders").then().statusCode(200).extract().path("id");
+        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash").body(Map.of())
+                .post("/api/general-orders/" + order + "/submit").then().statusCode(200);
+        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+                .body(Map.of("preparedQuantities", Map.of(item, 1)))
+                .post("/api/general-orders/" + order + "/prepare").then().statusCode(403);
+        request().body(Map.of("preparedQuantities", Map.of(item, 1)))
+                .post("/api/general-orders/" + order + "/prepare").then().statusCode(200);
+        request().body(Map.of()).post("/api/general-orders/" + order + "/ready").then().statusCode(200);
+        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash").body(Map.of())
+                .post("/api/general-orders/" + order + "/pickup").then().statusCode(200).body("status", equalTo("picked_up"));
+    }
+
+    @Test
     void categoryMaintenanceIntervalAppliesToExistingAndNewItems() {
         String category = "Maintenance policy test";
         String firstId = request().body(Map.of("sku", "MAINT-POLICY-001", "name", "Policy first item",
@@ -439,7 +470,7 @@ class InventoryApiTest {
         request().body(secondSubmission).post("/api/inventory-counts/" + id + "/submit").then().statusCode(200).body("status", equalTo("awaiting_recount"));
         request().body(firstSubmission).post("/api/inventory-counts/" + id + "/recount").then().statusCode(200).body("status", equalTo("awaiting_recount"));
         request().body(secondSubmission).post("/api/inventory-counts/" + id + "/recount").then().statusCode(200).body("status", equalTo("awaiting_approval"));
-        given().contentType(ContentType.JSON).header("X-Actor-Id", "partial-count-approver").header("X-Actor-Role", "hq_admin")
+        given().contentType(ContentType.JSON).header("X-Actor-Id", "partial-count-approver").header("X-Actor-Role", "admin")
                 .body(Map.of()).post("/api/inventory-counts/" + id + "/approve").then().statusCode(200);
         request().body(Map.of()).post("/api/inventory-counts/" + id + "/post").then().statusCode(200).body("status", equalTo("posted"));
         request().get("/api/items/" + first).then().statusCode(200).body("stock.onHand", equalTo(0));
@@ -495,7 +526,7 @@ class InventoryApiTest {
         request().body(submission).post("/api/inventory-counts/" + countId + "/recount")
                 .then().statusCode(200).body("status", equalTo("awaiting_approval"));
         request().body(Map.of()).post("/api/inventory-counts/" + countId + "/approve").then().statusCode(403);
-        given().contentType(ContentType.JSON).header("X-Actor-Id", "count-independent-approver").header("X-Actor-Role", "hq_admin")
+        given().contentType(ContentType.JSON).header("X-Actor-Id", "count-independent-approver").header("X-Actor-Role", "admin")
                 .body(Map.of()).post("/api/inventory-counts/" + countId + "/approve")
                 .then().statusCode(200).body("lines[0].varianceQuantity", equalTo(-1));
         request().body(Map.of()).post("/api/inventory-counts/" + countId + "/post")
@@ -556,13 +587,37 @@ class InventoryApiTest {
     void devAuthRoleChangesAreAppliedToExistingUsers() {
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "role-refresh-user")
-                .header("X-Actor-Role", "hq_admin")
-                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("hq_admin"));
+                .header("X-Actor-Role", "admin")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("admin"));
 
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "role-refresh-user")
-                .header("X-Actor-Role", "marshal")
-                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("marshal"));
+                .header("X-Actor-Role", "ash")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("ash"));
+    }
+
+    @Test
+    void inventoryAdminManagesRolesAndFactionsInTheApp() {
+        String userId = given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "managed-role-user").header("X-Actor-Role", "tenant")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("tenant")).extract().path("id");
+        int revision = request().get("/api/users").then().statusCode(200).extract().jsonPath()
+                .getInt("find { it.id == '" + userId + "' }.revision");
+        var change = new java.util.HashMap<String, Object>(Map.of("roles", java.util.List.of("faction_leader", "ash"), "factions", java.util.List.of("TNO:militar"),
+                "revision", revision, "reason", "Leads the military faction"));
+        factionLeaderRequest().body(change).patch("/api/users/" + userId).then().statusCode(403);
+        request().body(Map.of("roles", java.util.List.of("faction_leader", "ash"), "factions", java.util.List.of("TNO:does-not-exist"), "revision", revision, "reason", "Typo"))
+                .patch("/api/users/" + userId).then().statusCode(400);
+        request().body(Map.of("roles", java.util.List.of("hq_admin"), "factions", java.util.List.of(), "revision", revision, "reason", "Old role name"))
+                .patch("/api/users/" + userId).then().statusCode(400);
+        request().body(change).patch("/api/users/" + userId).then().statusCode(200)
+                .body("role", equalTo("ash")).body("roles", equalTo(java.util.List.of("faction_leader", "ash"))).body("faction", equalTo(java.util.List.of("TNO:militar")))
+                .body("revision", equalTo(revision + 1));
+        request().body(change).patch("/api/users/" + userId).then().statusCode(409);
+        request().body(Map.of("roles", java.util.List.of("faction_leader"), "factions", java.util.List.of("TNO:militar"),
+                        "revision", revision + 1, "reason", "Remove ASH, keep faction leadership"))
+                .patch("/api/users/" + userId).then().statusCode(200)
+                .body("role", equalTo("faction_leader")).body("roles", equalTo(java.util.List.of("faction_leader")));
     }
 
     @Test
@@ -578,22 +633,35 @@ class InventoryApiTest {
     void accountsWithoutAnInventoryRoleAreRejected() {
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "no-inventory-role")
-                .header("X-Actor-Role", "admin")
+                .header("X-Actor-Role", "superuser")
                 .get("/api/items").then().statusCode(403);
     }
 
     @Test
     void canonicalRolesAreAuthorizedAndRemovedRoleNamesHaveNoPrivilege() {
         given().contentType(ContentType.JSON)
-                .header("X-Actor-Id", "canonical-event-planner")
-                .header("X-Actor-Role", "event_planner")
+                .header("X-Actor-Id", "canonical-event-admin")
+                .header("X-Actor-Role", "admin")
                 .body(Map.of("eventType", "DE", "name", "Canonical role event",
                         "startDate", "2038-09-10", "endDate", "2038-09-11", "status", "planned"))
                 .post("/api/events").then().statusCode(200);
 
+        // Event planning is the inventory admin's; warehouse workers and removed role names may not.
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "canonical-event-warehouse")
+                .header("X-Actor-Role", "warehouse_crew")
+                .body(Map.of("eventType", "DE", "name", "Warehouse event",
+                        "startDate", "2038-09-12", "endDate", "2038-09-13", "status", "planned"))
+                .post("/api/events").then().statusCode(403);
+        for (String removed : java.util.List.of("marshal", "event_planner", "maintenance_crew"))
+            given().contentType(ContentType.JSON)
+                    .header("X-Actor-Id", "removed-" + removed)
+                    .header("X-Actor-Role", removed)
+                    .get("/api/items").then().statusCode(403);
+
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "removed-role-user")
-                .header("X-Actor-Role", "admin")
+                .header("X-Actor-Role", "hq_admin")
                 .body(Map.of("privateResource", false, "sku", "REMOVED-ROLE-001", "name", "Must not be created",
                         "category", "Test", "amount", 1, "value", 0))
                 .post("/api/items").then().statusCode(403);
@@ -1018,7 +1086,7 @@ class InventoryApiTest {
         return given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-admin")
                 .header("X-Actor-Name", "Test Admin")
-                .header("X-Actor-Role", "hq_admin");
+                .header("X-Actor-Role", "admin");
     }
 
     private static io.restassured.specification.RequestSpecification factionLeaderRequest() {
@@ -1037,24 +1105,25 @@ class InventoryApiTest {
     }
 
     @Test
-    void procurementDeficitsRequirePlannerAccess() {
+    void procurementDeficitsRequireAdminAndPurchasingRequiresWarehouse() {
         factionLeaderRequest()
                 .get("/api/procurement/deficits")
                 .then().statusCode(403);
         factionLeaderRequest().get("/api/purchase-orders").then().statusCode(403);
 
         given().contentType(ContentType.JSON)
-                .header("X-Actor-Id", "test-event-planner")
-                .header("X-Actor-Name", "Test Event Planner")
-                .header("X-Actor-Role", "event_planner")
+                .header("X-Actor-Id", "test-warehouse-procurement")
+                .header("X-Actor-Name", "Test Warehouse Worker")
+                .header("X-Actor-Role", "warehouse_crew")
                 .get("/api/procurement/deficits")
-                .then().statusCode(200);
+                .then().statusCode(403);
         given().contentType(ContentType.JSON)
-                .header("X-Actor-Id", "test-event-planner")
-                .header("X-Actor-Name", "Test Event Planner")
-                .header("X-Actor-Role", "event_planner")
+                .header("X-Actor-Id", "test-warehouse-procurement")
+                .header("X-Actor-Name", "Test Warehouse Worker")
+                .header("X-Actor-Role", "warehouse_crew")
                 .get("/api/purchase-orders")
                 .then().statusCode(200);
+        request().get("/api/procurement/deficits").then().statusCode(200);
     }
 
     @Test
@@ -1065,7 +1134,7 @@ class InventoryApiTest {
                 .body("faction", equalTo(java.util.List.of("DE:allowed-api-faction")));
         // Roles and factions come from the identity provider; the API has no permission editor.
         request()
-                .body(Map.of("role", "hq_admin", "faction", java.util.List.of()))
+                .body(Map.of("role", "admin", "faction", java.util.List.of()))
                 .patch("/api/users/" + java.util.UUID.randomUUID())
                 .then().statusCode(org.hamcrest.Matchers.anyOf(equalTo(404), equalTo(405)));
 
@@ -1123,13 +1192,18 @@ class InventoryApiTest {
                 .post("/api/orders")
                 .then().statusCode(200)
                 .extract().path("id");
+        // Faction leaders read every faction's lists (read-only rights) but only change their own.
         assignedFactionLeaderRequest()
                 .get("/api/orders/" + unassignedOrderId)
+                .then().statusCode(200);
+        assignedFactionLeaderRequest()
+                .body(unassignedOrder)
+                .patch("/api/orders/" + unassignedOrderId)
                 .then().statusCode(403);
         assignedFactionLeaderRequest()
                 .get("/api/orders")
                 .then().statusCode(200)
-                .body("faction", org.hamcrest.Matchers.everyItem(equalTo("Allowed API faction")));
+                .body("faction", org.hamcrest.Matchers.hasItems("Allowed API faction", "Hidden API faction"));
     }
 
     @Test
@@ -1166,20 +1240,34 @@ class InventoryApiTest {
     }
 
     @Test
-    void everyAuthenticatedUserCanCreateAGeneralOrder() {
+    void generalOrdersStartAtAshFactionLeaderAndAreReadableByOrganizationMembers() {
         factionLeaderRequest()
+                .body(Map.of("name", "Faction tent", "purpose", "Faction leaders only order for their faction"))
+                .post("/api/general-orders")
+                .then().statusCode(403);
+
+        ashRequest()
                 .body(Map.of("name", "Sponsor tent", "purpose", "Provide a covered sponsor area"))
                 .post("/api/general-orders")
                 .then().statusCode(200)
                 .body("name", equalTo("Sponsor tent"))
                 .body("purpose", equalTo("Provide a covered sponsor area"))
                 .body("createdBy", notNullValue())
-                .body("expand.createdBy.name", equalTo("Test Faction Leader"));
+                .body("expand.createdBy.name", equalTo("Test ASH Faction Leader"));
 
-        factionLeaderRequest()
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-read-only-orders")
+                .header("X-Actor-Role", "read_only")
                 .get("/api/general-orders")
                 .then().statusCode(200)
-                .body("[0].name", equalTo("Sponsor tent"));
+                .body("name", org.hamcrest.Matchers.hasItem("Sponsor tent"));
+    }
+
+    private static io.restassured.specification.RequestSpecification ashRequest() {
+        return given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "test-ash-faction-leader")
+                .header("X-Actor-Name", "Test ASH Faction Leader")
+                .header("X-Actor-Role", "ash");
     }
 
     @Test

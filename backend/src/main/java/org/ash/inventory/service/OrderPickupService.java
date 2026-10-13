@@ -198,13 +198,15 @@ public class OrderPickupService {
     }
 
     private boolean canViewAll(OrderData data, UserAccount actor) {
-        if (data.entity instanceof FactionOrder o) return actors.canAccessFaction(actor, o.faction);
-        return actor.role != DomainEnums.UserRole.faction_leader || data.creator.id.equals(actor.id);
+        return actors.canViewFaction(actor);
     }
+    /** The creator, while still allowed to order that kind of order, or a warehouse worker. */
     private boolean canEdit(OrderData data, UserAccount actor) {
-        return List.of("draft", "submitted", "preparing", "ready").contains(data.status)
-                && actor.role != DomainEnums.UserRole.read_only && canViewAll(data, actor)
-                && (data.creator.id.equals(actor.id) || Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.event_planner, DomainEnums.UserRole.warehouse_crew).contains(actor.role));
+        if (!List.of("draft", "submitted", "preparing", "ready").contains(data.status)) return false;
+        if (actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)) return true;
+        if (!data.creator.id.equals(actor.id)) return false;
+        if (data.entity instanceof FactionOrder o) return actors.canWriteFaction(actor, o.faction);
+        return actor.role.atLeast(DomainEnums.UserRole.ash);
     }
     private void requireEdit(OrderData data) {
         if (!canEdit(data, actors.current())) throw ApiException.forbidden("Only the order owner or an order manager may coordinate active orders");

@@ -14,33 +14,92 @@ How to configure [Authentik](https://goauthentik.io/) as the identity provider. 
    - Subject mode: **Based on the User's hashed ID** or **UUID**. Do not use username or email; the account is bound to `(issuer, sub)` and must stay stable when someone renames themselves.
    - Include claims in id_token: on
 2. **Applications → Create** with slug `inventory` and the provider above. The issuer becomes `https://auth.example.com/application/o/inventory/`; set it as `OIDC_AUTH_SERVER_URL` and `VITE_OIDC_AUTHORITY`.
-3. Bind the application to the groups below (policy/group bindings) so users without any inventory group cannot even sign in. The API would reject them anyway (403).
+3. Create the group `inventory` and bind the application to it (policy/group binding), so only its members can sign in. The API checks the same group on every request (403 without it).
 
 ## 2. Group claim
 
-The API reads roles and factions from the `groups` claim of the **access token** (`quarkus.oidc.roles.role-claim-path=groups`). Authentik's default `profile` scope mapping includes `groups`; if you use custom scope mappings, keep a mapping that returns:
+The API reads the `groups` claim of the **access token** (`quarkus.oidc.roles.role-claim-path=groups`) only to check the access group. Authentik's default `profile` scope mapping includes `groups`; if you use custom scope mappings, keep a mapping that returns:
 
 ```python
 return {"groups": [group.name for group in request.user.ak_groups.all()]}
 ```
 
-## 3. Groups
+## 3. Access and roles
 
-Create one group per role. A user needs **exactly one** role group; if several are present, the first in this order wins:
+### 3.1 One Authentik group for access
 
-| Authentik group | App role |
+Authentik has exactly one inventory group: **`inventory`** (configurable with `INVENTORY_ACCESS_GROUP`). Membership decides whether a person may use the inventory system at all. Removing someone from the group locks them out at the next access-token refresh; their role in the app is kept for a later return.
+
+Everything else — the assigned roles and the faction memberships — is set in the app on the **Users** page by the inventory admin, with a required reason that is audited (`user.changed`). Changes apply on the user's next request.
+
+**New users start as read only**. The inventory admin can assign one or more roles. Assign only `tenant` to someone who should see private inventory without company data; the highest assigned role determines access.
+
+**First admin.** Set `INVENTORY_BOOTSTRAP_ADMINS` to a comma-separated list of e-mail addresses or Authentik usernames. A listed account becomes inventory admin on its first sign-in, and is promoted again whenever no admin exists (recovery). The app never removes the last inventory admin. Keep e-mail addresses in Authentik verified, because the list matches on them.
+
+### 3.2 Roles
+
+Roles form a **ladder**: each role includes every right of the roles above it in this table.
+
+| App role | Adds to the role above |
 |---|---|
-| `inventory_hq_admin` | HQ administrator |
-| `inventory_warehouse_crew` | Warehouse crew |
-| `inventory_marshal` | Marshal |
-| `inventory_event_planner` | Event planner |
-| `inventory_maintenance_crew` | Maintenance crew |
-| `inventory_read_only` | Read-only participant |
-| `inventory_faction_leader` | Faction leader |
+| Tenant (`tenant`) | Own private inventory only: private items, assemblies and storage locations (e.g. the rented building), own share groups, "offer for use" with request notifications. Never sees company data. |
+| Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only |
+| Faction leader (`faction_leader`) | Create and edit faction order lists for the user's own factions; return and report items in their own custody |
+| ASH crew (`ash`) | General (non-faction) orders and item takeout, including pickup of prepared faction and general orders. Preparation, returns and closing remain with the warehouse |
+| Warehouse crew (`warehouse_crew`) | All catalog work, all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs, reports), preparing and handing out orders (pickup, returns, close), damage reports, custody overview, history; order lists for every faction |
+| Inventory admin (`admin`) | Everything: user roles and factions, events, participants and timing, procurement planning, write-offs, count approval, audit and recovery, ownership transfer, every private resource |
 
-Faction membership uses separate groups named `inventory_faction_<EVENT>_<slug>`, for example `inventory_faction_LS_red`. `<EVENT>` is the event type (as in the app's event list) and `<slug>` the faction slug; a faction leader can only order for factions they belong to. Group names are case-sensitive.
+Every role except the tenant also has the tenant's private-inventory rights: anyone can own private items, share them and offer them for use.
 
-Roles and factions are re-read from every token, so group changes take effect at the next token refresh. The app's **Users** page is a read-only mirror; all changes happen in Authentik.
+**Factions.** On the same Users page the admin assigns factions (event type and faction, stored as `EVENT:slug`). Every organization member *reads* all factions' order lists; faction leaders and ASH crew only *create and change* lists of the factions assigned to them. Warehouse crew and the inventory admin change every list.
+
+
+### 3.3 Permission matrix
+
+| Capability | Tenant | Read only | Faction leader | ASH crew | Warehouse crew | Inventory admin |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Own private items, locations, assemblies; share groups; offer for use | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| See company items, assemblies and public locations | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| See participants and event timing | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| See faction and general orders | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Create/edit/submit/withdraw faction orders (own factions) | | | ✓ | ✓ | ✓ (all) | ✓ (all) |
+| Return/report items in own custody | | | ✓ | ✓ | ✓ | ✓ |
+| General orders (own) | | | | ✓ | ✓ (all) | ✓ (all) |
+| Company catalog and storage edits | | | | | ✓ | ✓ |
+| Prepare orders, cancel during preparation | | | | | ✓ | ✓ |
+| Hand out and take back: pickup, returns, close, damage reports, custody overview | | | | | ✓ | ✓ |
+| Stock, counts, transfers, loans, receiving, purchasing | | | | | ✓ | ✓ |
+| Maintenance, repairs, schedules | | | | | ✓ | ✓ |
+| History and operational reports | | | | | ✓ | ✓ |
+| Events, participants, timing (edit); procurement planning | | | | | | ✓ |
+| Write-offs, count approval, users, audit, recovery | | | | | | ✓ |
+| Every private resource, ownership transfer | | | | | | ✓ |
+
+Private resources are never visible through a role alone (except to the inventory admin): they need ownership, a share, a share of the storage location they are kept in, or an offer for use (§3.4).
+
+### 3.4 Company and private equipment
+
+- **Company equipment** has no private policy. It is visible to every organization member (read only and up) and managed by the warehouse crew.
+- **Private equipment** belongs to a user account. Only the owner, the inventory admin and people or groups it is shared with see it. Sharing is done on the item, assembly or location (**Access & sharing**) and is audited with a reason.
+- **Sharing groups** (`/sharing`, and on the Users page for admins) are owned by the user who creates them; only the owner and the inventory admin see their members and change them. Groups created by the inventory admin as *admin groups* can be used by everyone. Share groups are app data, separate from the Authentik groups above.
+- **Location sharing is inherited.** A share on a private storage location also applies to its private sub-locations and to every private item whose home location is inside it. The location owner can view and edit what others store there, but cannot change those items' sharing. Sub-locations of a private location must be private.
+- **Offer for use.** The owner of a private item can switch on *Offer for use*. The item becomes visible read-only to every organization member (not to tenants) and can be put on faction and general orders; its availability becomes *commitment required*, so it is only handed out against the owner's commitment. The owner receives an in-app notification (`item_requested`) when it is on a submitted order or a pickup/damage request, once per order or request.
+
+### 3.5 Scenarios
+
+| Situation | Role and factions (set in the app) | Result |
+|---|---|---|
+| Company tent for the KGG faction at DE | Faction leader, faction DE · KGG | Sees the tent in the catalog, puts it on the KGG list and submits; the warehouse prepares and hands it out. |
+| ASH crew member who also leads a faction | ASH crew + Faction leader, faction DE · KGG | Assign ASH crew and faction leader independently, plus DE · KGG membership. ASH is the effective role; both assignments are retained. May take items out and pick up prepared orders. |
+| ASH crew needs a stage kit | ASH crew | Creates and submits a general order; the warehouse prepares it. ASH crew may pick it up or check out items directly. |
+| Leader of two factions | Faction leader, factions DE · KGG and LS · Red | Edits both factions' lists; reads every other list. |
+| Building tenant who stores own equipment | Tenant (explicitly assigned) | Creates a private location for the building, adds items, creates a share group "Hall crew" and shares the building with it; the group sees everything stored there. Sees nothing of the company inventory. |
+| Tenant lends a generator for an event | Tenant | Offers the generator for use and records a commitment for the event dates; faction leaders order it; the tenant gets a notice per order. Warehouse staff need a share of the building (or the item is brought in) to collect it. |
+| Read-only participant | Read only | Reads catalog, orders, participants and timing; keeps own private items. |
+
+### 3.6 Changes take effect
+
+Access (the `inventory` group) is re-read from every token, so removing someone takes effect at the next token refresh. Role and faction changes made on the Users page apply on the user's next API request. Open browsers refresh the current account on `user.changed` and reconnect, and discard cached views when access changes.
 
 ## 4. Token lifetimes and logout
 
@@ -59,9 +118,12 @@ The default is one public client shared by SPA and API. With two clients (`VITE_
 
 ## 6. Check
 
-- [ ] Sign-in redirects back to the app and the header shows the expected role.
-- [ ] A user without an inventory role group is refused (API returns 403).
-- [ ] Removing a role group takes effect after at most one access-token lifetime.
+- [ ] Sign-in redirects back to the app; a new user is shown as read only, a bootstrap admin as inventory admin.
+- [ ] A user outside the `inventory` group is refused (API returns 403).
+- [ ] Changing a role on the Users page applies on that user's next request.
+- [ ] A tenant sees only their own private items and locations, no orders or events.
+- [ ] A faction leader can edit lists of their own factions only, but reads all lists.
+- [ ] Removing a user from `inventory` takes effect after at most one access-token lifetime.
 - [ ] Logout in one tab signs out the other tabs.
 
 These checks are part of [ACC-01](IMPLEMENTATION_PLAN.md).

@@ -20,6 +20,13 @@ public class LocationHierarchyOrm extends EntityOrm {
         return entityManager.createQuery("from StorageLocation where parent = :parent", StorageLocation.class).setParameter("parent", parent).getResultList();
     }
 
+    /** Items whose home location is one of {@code locations}; unscoped, for maintaining access links. */
+    public List<Item> itemsStoredIn(java.util.Collection<java.util.UUID> locations) {
+        if (locations.isEmpty()) return List.of();
+        return entityManager.createQuery("from Item i where i.storageLocation.id in :locations and i.accessPolicy is not null", Item.class)
+                .setParameter("locations", locations).getResultList();
+    }
+
     public Long activeChildren(StorageLocation parent) {
         return entityManager.createQuery("select count(l) from StorageLocation l where l.parent = :parent and l.active = true", Long.class).setParameter("parent", parent).getSingleResult();
     }

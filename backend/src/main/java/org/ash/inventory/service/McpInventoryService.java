@@ -29,7 +29,8 @@ public class McpInventoryService {
     @Inject PositionService positions;
     @Inject Validator validator;
 
-    public void authenticate() { actors.current(); }
+    /** MCP serves organization data only; tenant accounts manage their private items in the app. */
+    public void authenticate() { actors.requireReader(); }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.ItemResponse createItem(ApiModels.ItemInput input) {
@@ -82,7 +83,7 @@ public class McpInventoryService {
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.EventResponse createEvent(ApiModels.EventInput input) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         valid(input);
         requireVisibleQuantities(input);
         return visibleEvents(List.of(queries.projectEvent(catalog.createEvent(input)))).getFirst();
@@ -90,7 +91,7 @@ public class McpInventoryService {
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.EventResponse updateEvent(UUID id, ApiModels.EventInput input) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         valid(input);
         requireVisibleQuantities(input);
         return visibleEvents(List.of(queries.projectEvent(catalog.updateEvent(id, input)))).getFirst();
@@ -98,7 +99,7 @@ public class McpInventoryService {
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public InventoryMcpDtos.DeleteResultDto deleteEvent(UUID id) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         catalog.deleteEvent(id);
         return new InventoryMcpDtos.DeleteResultDto(true, "EventOccurrence", id, "Event deleted");
     }

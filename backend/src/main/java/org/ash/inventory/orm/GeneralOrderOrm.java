@@ -25,9 +25,8 @@ public class GeneralOrderOrm {
 
     public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, int offset, int limit) {
         var denied = privacyScopes.deniedReferences(actor);
-        boolean scoped = actor.role == org.ash.inventory.model.DomainEnums.UserRole.faction_leader;
-        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence" + (scoped ? " where o.createdBy = :actor" : " where 1=1") + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc", GeneralOrder.class);
-        if (scoped) query.setParameter("actor", actor);
+        // Organization members read all general orders; changes are limited to owners and warehouse.
+        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence where 1=1" + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc", GeneralOrder.class);
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

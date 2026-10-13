@@ -7,7 +7,7 @@ import { WarehousesPanel } from '../components/operations/WarehousesPanel';
 import { getWarehouses } from '../services/warehouseService';
 import { locationPath, isDescendant } from '../utils/locationHierarchy';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog } from '../utils/access';
+import { canEditCatalog, canViewOrganization } from '../utils/access';
 import { ItemsList } from '../components/lists/ItemsList';
 import { getLocationInventory } from '../utils/locationStock';
 import { useOperationList } from '../hooks/useOperations';
@@ -39,6 +39,8 @@ export function StorageLocations() {
     const t = useLocalizedText();
     const { user } = useAuth();
     const canEdit = canEditCatalog(user);
+    // Tenants keep their buildings outside of the organization's warehouses.
+    const organization = canViewOrganization(user);
     const navigate = useNavigate();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const theme = useTheme();
@@ -70,7 +72,7 @@ export function StorageLocations() {
     const [showInactive, setShowInactive] = useState(false);
     const [warehousesOpen, setWarehousesOpen] = useState(false);
     const [tab, setTab] = useState('locations');
-    const warehouses = useOperationList('warehouses', getWarehouses);
+    const warehouses = useOperationList('warehouses', getWarehouses, organization);
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -143,6 +145,8 @@ export function StorageLocations() {
         setSelectedLocId(locId);
         setDeleteConfirmOpen(true);
     }
+
+    const parentIsPrivate = Boolean(locations?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -421,10 +425,15 @@ export function StorageLocations() {
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
-                            <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource)} disabled={Boolean(editingLoc) || !canEdit}
-                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('Privater Lagerort — nur Eigentümer, HQ-Admins und Freigaben', 'Private storage location — owner, HQ admins and explicit shares only')} />
-                            <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>
-                            <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => setFormData({ ...formData, parentLocationId: e.target.value || null })}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
+                            <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource) || parentIsPrivate} disabled={Boolean(editingLoc) || !canEdit || parentIsPrivate}
+                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('Privater Lagerort — nur Eigentümer, Inventar-Admins und Freigaben (gilt auch für alles, was hier lagert)', 'Private storage location — owner, inventory admins and explicit shares only (also covers everything stored here)')} />
+                            {organization && <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>}
+                            <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => {
+                                const parentId = e.target.value || null;
+                                // Shares flow down a private location tree, so children of private locations are private.
+                                const privateParent = Boolean(locations?.find((l) => l.id === parentId)?.access?.privateResource);
+                                setFormData({ ...formData, parentLocationId: parentId, ...(privateParent ? { privateResource: true } : {}) });
+                            }}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
                             <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
                             <FormControlLabel label={t('Aktiv', 'Active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
                             <Alert severity="info">{t('Inaktive Lagerorte bleiben für Bestand und Historie sichtbar. Unterorte müssen zuerst deaktiviert werden.', 'Inactive locations remain visible for stock and history. Deactivate child locations first.')}</Alert>

@@ -57,7 +57,7 @@ export function Operations() {
   const active = group?.sections.find((section) => section.key === requested) ?? group?.sections[0];
   const select = (key: string) => setParams(current => { current.set('tab', key); return current; });
   if (!group || !active) return <StateMessage kind="empty" title={t('Keine Betriebsaufgaben verfügbar', 'No operational tasks available')}
-    description={t('Für diese Aufgaben ist eine Lager-, Einkaufs- oder Wartungsberechtigung erforderlich.', 'These tasks require warehouse, purchasing or maintenance permission.')} />;
+    description={t('Für diese Aufgaben ist die Rolle Lagerteam oder Inventar-Admin erforderlich.', 'These tasks require the warehouse crew or inventory admin role.')} />;
   return <Box sx={{
     '& .MuiTableCell-root': { px: 1, py: 0.75 },
     '& a:not(.MuiButton-root)': { color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },

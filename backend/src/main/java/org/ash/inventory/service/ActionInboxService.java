@@ -37,8 +37,10 @@ public class ActionInboxService {
     }
     private List<Action> live() {
         var actor = actors.current(); var today = BusinessTime.today(); var out = new ArrayList<Action>();
-        boolean warehouse = Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew).contains(actor.role);
-        boolean maintenance = actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.maintenance_crew;
+        // Tenants have no organization work items; their notices arrive as notifications.
+        if (!ActorService.seesOrganization(actor)) return List.of();
+        boolean warehouse = actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
+        boolean maintenance = warehouse;
         for (var o : orm.readyFactionOrders(warehouse ? null : actor.id))
             if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, o.createdBy.id.equals(actor.id) || warehouse ? "/orders/faction/" + o.id : "/contributor");
         for (var o : orm.readyGeneralOrders(warehouse ? null : actor.id))
@@ -51,9 +53,9 @@ public class ActionInboxService {
         }
         for (var r : orm.pendingReturns(warehouse ? null : actor.id))
             if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : "/contributor");
-        if (warehouse || actor.role == DomainEnums.UserRole.event_planner)
+        if (warehouse)
             for (var p : orm.incomingPurchases())
-                add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=" + (warehouse ? "receipts" : "purchases"));
+                add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts");
         if (warehouse)
             for (var l : orm.availableLots(today.plusDays(30))) {
                 var due = l.expiryDate == null ? l.bestBeforeDate : l.bestBeforeDate == null || l.expiryDate.isBefore(l.bestBeforeDate) ? l.expiryDate : l.bestBeforeDate;

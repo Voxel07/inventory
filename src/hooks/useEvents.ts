@@ -2,6 +2,8 @@ import type { EventReport, EventReportFormData, EventType } from '../types';
 import { eventApi, getEventReports } from '../services/eventService';
 import { createResourceHooks } from './useResourceApi';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from './useAuth';
+import { canViewOrganization } from '../utils/access';
 
 const baseHooks = createResourceHooks<EventReport, EventReportFormData>(eventApi, 'event-reports');
 
@@ -11,9 +13,11 @@ export const useUpdateEventReport = baseHooks.useUpdate;
 export const useDeleteEventReport = baseHooks.useDelete;
 
 export function useEventReports(eventType?: EventType) {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ['event-reports', eventType],
     queryFn: () => getEventReports(eventType),
     networkMode: 'offlineFirst',
+    enabled: canViewOrganization(user),
   });
 }

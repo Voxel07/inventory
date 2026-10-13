@@ -16,12 +16,17 @@ import {
 import type { EventType, FactionOrder, FactionOrderFormData } from '../types';
 import type { AssetReturnOutcome, ReturnLineInput } from '../services/factionOrderService';
 import { useProgressiveList } from './useProgressiveList';
+import { useAuth } from './useAuth';
+import { canViewOrganization } from '../utils/access';
 
 
 export function useFactionOrders(eventType?: EventType, faction?: string) {
+  const { user } = useAuth();
+  // Tenants have no access to organization orders; skip the request instead of failing.
   return useProgressiveList<FactionOrder>(
     ['faction-orders', eventType, faction],
     (page, size) => getFactionOrders({ eventType, faction, page, size }),
+    { enabled: canViewOrganization(user) },
   );
 }
 

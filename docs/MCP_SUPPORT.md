@@ -20,8 +20,8 @@ This follows the extension's [HTTP security guidance](https://docs.quarkiverse.i
 
 | Capability | Required access |
 |---|---|
-| Shared item and assembly create/update/delete | HQ administrator or warehouse crew; private resource creation/editing follows owner/editor rights through canonical services |
-| Event create/update/delete | HQ administrator or event planner, using `ActorService.requirePlanner()` |
+| Shared item and assembly create/update/delete | Inventory admin or warehouse crew; private resource creation/editing follows owner/editor rights through canonical services |
+| Event create/update/delete | Inventory admin, using `ActorService.requireAdmin()`. Tenants cannot use MCP (`McpInventoryService.authenticate` requires read-only or higher) |
 | Item, stock, asset, category and operational reads | Authenticated actor; active item visibility combines current catalog scope and private owner/HQ/grantee policies; other staff do not implicitly bypass a private policy |
 | Assembly reads | Every component must be active and visible; otherwise the assembly is omitted or returns not found |
 | Event reads | Authenticated actor; item IDs, names and all per-item quantity maps are filtered to visible active items |

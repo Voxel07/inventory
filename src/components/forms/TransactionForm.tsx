@@ -25,6 +25,8 @@ import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
 import { translate, useNames, useLocalizedText } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
+import { useAuth } from '../../hooks/useAuth';
+import { canOperateWarehouse, canTakeOut } from '../../utils/access';
 
 interface Props {
     items: Item[];
@@ -45,6 +47,7 @@ function outstandingForItem(order: FactionOrder, itemId: string) {
 }
 
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData, orders = [] }: Props) {
+    const { user } = useAuth();
     const names = useNames();
     const lookup = useStockLookups();
     const t = useLocalizedText();
@@ -53,7 +56,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const transactionReasons = Object.values(names.reason);
     const [formData, setFormData] = useState<TransactionFormData>({
         itemId: initialData?.itemId ?? preselectedItemId ?? '',
-        transactionType: initialData?.transactionType ?? 'checkout',
+        transactionType: initialData?.transactionType ?? (canTakeOut(user) ? 'checkout' : 'added'),
         quantityChanged: initialData?.quantityChanged ?? 1,
         assetInstanceId: initialData?.assetInstanceId,
         reason: initialData?.reason ?? '',
@@ -65,6 +68,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     });
     const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
     const selectedItem = items.find((item) => item.id === formData.itemId);
+    const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
+    const canCheckout = canTakeOut(user) && (!selectedItem?.access?.privateResource || selectedItem.access.canEdit || selectedItem.access.publicUse);
     const lots = useOperationList(`transaction-lots:${formData.itemId}`, operationsApi.lots({ itemId: formData.itemId }), Boolean(formData.itemId));
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
@@ -109,7 +114,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if ((!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing) return;
+        if ((formData.transactionType === 'checkout' ? !canCheckout : !canEditStock)
+            || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing) return;
         onSubmit({ ...formData, quantityChanged: isSerialized ? 1 : Number(quantityInput) });
     }
 
@@ -169,11 +175,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         aria-label={t('Transaktionstyp', 'Transaction type')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
                     >
-                        <ToggleButton title={translate('Eine Ausleihe erfassen', 'Record a checkout')} value="checkout"><LogoutIcon />{names.action.checkout}</ToggleButton>
-                        <ToggleButton title={translate('Eine Rückgabe erfassen', 'Record a check-in')} value="checkin" disabled={selectedStock.checkedOut < 1}>
+                        <ToggleButton title={translate('Eine Ausleihe erfassen', 'Record a checkout')} value="checkout" disabled={!canCheckout}><LogoutIcon />{names.action.checkout}</ToggleButton>
+                        <ToggleButton title={translate('Eine Rückgabe erfassen', 'Record a check-in')} value="checkin" disabled={!canEditStock || selectedStock.checkedOut < 1}>
                             <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('draußen', 'out')})
                         </ToggleButton>
-                        <ToggleButton title={translate('Eine Bestandszugabe erfassen', 'Record added stock')} value="added" disabled={isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
+                        <ToggleButton title={translate('Eine Bestandszugabe erfassen', 'Record added stock')} value="added" disabled={!canEditStock || isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
                     </ToggleButtonGroup>
                     {isSerialized && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

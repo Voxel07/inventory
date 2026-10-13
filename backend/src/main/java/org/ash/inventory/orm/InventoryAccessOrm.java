@@ -8,15 +8,24 @@ import java.util.*;
 
 @ApplicationScoped
 public class InventoryAccessOrm extends EntityOrm {
-    /** Use this predicate before pagination; :accessActor/:accessAdmin are bound below. */
+    /**
+     * Use this predicate before pagination; :accessActor/:accessAdmin/:accessPublic are bound below.
+     * Public rows are organization data (not for tenants). Private rows need ownership, an offer for
+     * use (organization members), or a direct or inherited grant; inherited grants and owners come
+     * from the private locations listed in {@link InventoryAccessLink}. Mirrors {@link #granted}.
+     */
     public static String visible(String policy) {
-        return "(" + policy + " is null or :accessAdmin = true or exists (select p.id from InventoryAccessPolicy p where p = " + policy
-                + " and (p.owner.id = :accessActor or exists (select g.id from InventoryAccessGrant g where g.policy = p"
+        return "((" + policy + " is null and :accessPublic = true) or :accessAdmin = true or exists (select p.id from InventoryAccessPolicy p where p = " + policy
+                + " and (p.owner.id = :accessActor or (p.publicUse = true and :accessPublic = true)"
+                + " or exists (select g.id from InventoryAccessGrant g where (g.policy = p"
+                + " or exists (select k.id from InventoryAccessLink k where k.policy = p and k.ancestor = g.policy))"
                 + " and (g.user.id = :accessActor or exists (select grp.id from InventoryAccessGroup grp"
-                + " join grp.members member where grp = g.group and member.id = :accessActor))))))";
+                + " join grp.members member where grp = g.group and member.id = :accessActor)))"
+                + " or exists (select k.id from InventoryAccessLink k where k.policy = p and k.ancestor.owner.id = :accessActor))))";
     }
     public static <T> TypedQuery<T> bind(TypedQuery<T> query, UserAccount actor) {
-        return query.setParameter("accessAdmin", actor.role == DomainEnums.UserRole.hq_admin)
+        return query.setParameter("accessAdmin", actor.role == DomainEnums.UserRole.admin)
+                .setParameter("accessPublic", actor.role.atLeast(DomainEnums.UserRole.read_only))
                 .setParameter("accessActor", actor.id);
     }
     public List<InventoryAccessGrant> grants(InventoryAccessPolicy policy) {
@@ -25,8 +34,33 @@ public class InventoryAccessOrm extends EntityOrm {
     }
     public List<Object[]> policyViews(Collection<UUID> ids) {
         if (ids.isEmpty()) return List.of();
-        return entityManager.createQuery("select p.id, p.owner.id, p.owner.name, p.revision from InventoryAccessPolicy p where p.id in :ids", Object[].class)
+        return entityManager.createQuery("select p.id, p.owner.id, p.owner.name, p.revision, p.publicUse from InventoryAccessPolicy p where p.id in :ids", Object[].class)
                 .setParameter("ids", ids).getResultList();
+    }
+    /**
+     * Grants inherited from private locations:
+     * (policy, location id, location name, grant user, user name, grant group, group name, can edit, actor is member).
+     */
+    public List<Object[]> inheritedGrantViews(Collection<UUID> ids, UUID actor) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("""
+                select k.policy.id, s.id, s.name, u.id, u.name, grp.id, grp.name, g.canEdit,
+                    case when exists (select m.id from InventoryAccessGroup members join members.members m
+                        where members = grp and m.id = :actor) then true else false end
+                from InventoryAccessLink k join InventoryAccessGrant g on g.policy = k.ancestor
+                    join StorageLocation s on s.accessPolicy = k.ancestor
+                    left join g.user u left join g.group grp
+                where k.policy.id in :ids
+                """, Object[].class).setParameter("ids", ids).setParameter("actor", actor).getResultList();
+    }
+    /** Owners of the private locations a resource is stored in: (policy, location id, location name, owner id, owner name). */
+    public List<Object[]> inheritedOwnerViews(Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("""
+                select k.policy.id, s.id, s.name, o.id, o.name
+                from InventoryAccessLink k join StorageLocation s on s.accessPolicy = k.ancestor join k.ancestor.owner o
+                where k.policy.id in :ids
+                """, Object[].class).setParameter("ids", ids).getResultList();
     }
     public List<Object[]> grantViews(Collection<UUID> ids, UUID actor) {
         if (ids.isEmpty()) return List.of();
@@ -42,22 +76,54 @@ public class InventoryAccessOrm extends EntityOrm {
         return entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.id in :ids", StorageLocation.class)
                 .setParameter("ids", ids).getResultList();
     }
+    /** Direct or inherited grant, or ownership of a private location the resource is stored in. */
     public boolean granted(InventoryAccessPolicy policy, UserAccount actor, boolean edit) {
-        return !entityManager.createQuery("select g.id from InventoryAccessGrant g where g.policy = :policy"
+        boolean grant = !entityManager.createQuery("select g.id from InventoryAccessGrant g where (g.policy = :policy"
+                + " or exists (select k.id from InventoryAccessLink k where k.policy = :policy and k.ancestor = g.policy))"
                 + (edit ? " and g.canEdit = true" : "")
                 + " and (g.user = :actor or exists (select grp.id from InventoryAccessGroup grp join grp.members member where grp = g.group and member = :actor))", UUID.class)
                 .setParameter("policy", policy).setParameter("actor", actor).setMaxResults(1).getResultList().isEmpty();
+        return grant || !entityManager.createQuery("select k.id from InventoryAccessLink k where k.policy = :policy and k.ancestor.owner = :actor", UUID.class)
+                .setParameter("policy", policy).setParameter("actor", actor).setMaxResults(1).getResultList().isEmpty();
+    }
+    /** Locks the policies a resource inherits from, in id order (descendants lock after themselves). */
+    public void lockAncestorPolicies(InventoryAccessPolicy policy) {
+        entityManager.createQuery("select k.ancestor from InventoryAccessLink k where k.policy = :policy order by k.ancestor.id", InventoryAccessPolicy.class)
+                .setParameter("policy", policy).getResultList().forEach(this::lock);
+    }
+    public List<UUID> ancestorPolicyIds(InventoryAccessPolicy policy) {
+        return entityManager.createQuery("select k.ancestor.id from InventoryAccessLink k where k.policy = :policy", UUID.class)
+                .setParameter("policy", policy).getResultList();
+    }
+    /** Replaces the inheritance links of {@code policy}. */
+    public void replaceLinks(InventoryAccessPolicy policy, Collection<InventoryAccessPolicy> ancestors) {
+        entityManager.createQuery("delete from InventoryAccessLink k where k.policy = :policy").setParameter("policy", policy).executeUpdate();
+        for (var ancestor : new LinkedHashSet<>(ancestors)) {
+            if (ancestor.equals(policy)) continue;
+            var link = new InventoryAccessLink();
+            link.policy = policy;
+            link.ancestor = ancestor;
+            entityManager.persist(link);
+        }
+    }
+    public void deleteLinks(InventoryAccessPolicy policy) {
+        entityManager.createQuery("delete from InventoryAccessLink k where k.policy = :policy or k.ancestor = :policy")
+                .setParameter("policy", policy).executeUpdate();
     }
     public void deleteGrants(InventoryAccessPolicy policy) {
         entityManager.createQuery("delete from InventoryAccessGrant g where g.policy = :policy").setParameter("policy", policy).executeUpdate();
     }
     public List<InventoryAccessGroup> groups() {
-        return entityManager.createQuery("select distinct g from InventoryAccessGroup g left join fetch g.members order by g.name", InventoryAccessGroup.class).getResultList();
+        return entityManager.createQuery("select distinct g from InventoryAccessGroup g left join fetch g.members left join fetch g.owner order by g.name", InventoryAccessGroup.class).getResultList();
     }
-    public void lockGroupPolicies(UUID groupId) {
+    public List<InventoryAccessPolicy> lockGroupPolicies(UUID groupId) {
         var policies = entityManager.createQuery("select distinct p from InventoryAccessPolicy p where exists (select g.id from InventoryAccessGrant g where g.policy = p and g.group.id = :group) order by p.id", InventoryAccessPolicy.class)
                 .setParameter("group", groupId).getResultList();
         policies.forEach(this::lock);
+        return policies;
+    }
+    public void deleteGroupGrants(InventoryAccessGroup group) {
+        entityManager.createQuery("delete from InventoryAccessGrant g where g.group = :group").setParameter("group", group).executeUpdate();
     }
     public void lockGrantedGroups(InventoryAccessPolicy policy) {
         var groups = entityManager.createQuery("select distinct grp from InventoryAccessGroup grp where exists (select g.id from InventoryAccessGrant g where g.policy = :policy and g.group = grp) order by grp.id", InventoryAccessGroup.class)
@@ -77,15 +143,26 @@ public class InventoryAccessOrm extends EntityOrm {
     public List<UserAccount> people() {
         return entityManager.createQuery("from UserAccount order by name, id", UserAccount.class).getResultList();
     }
+    /**
+     * Organization-wide scoping for ledgers, orders and other aggregates. Tenants never reach those
+     * (their whole organization data would be denied), so fail closed instead of walking the ledger.
+     */
     public Set<UUID> deniedReferences(UserAccount actor) {
+        if (!actor.role.atLeast(DomainEnums.UserRole.read_only))
+            throw org.ash.inventory.resource.ApiException.forbidden("Not available for tenant accounts");
         return relatedReferences(deniedRoots(actor, null));
     }
-    /** One set-based authorization read per resource kind, independent of the number of policies. */
+    /**
+     * One set-based authorization read per resource kind, independent of the number of policies. For
+     * tenants public resources are denied roots as well.
+     */
     private Set<UUID> deniedRoots(UserAccount actor, Set<UUID> candidates) {
-        if (actor.role == DomainEnums.UserRole.hq_admin || candidates != null && candidates.isEmpty()) return Set.of();
+        if (actor.role == DomainEnums.UserRole.admin || candidates != null && candidates.isEmpty()) return Set.of();
+        boolean includePublic = !actor.role.atLeast(DomainEnums.UserRole.read_only);
         var roots = new HashSet<UUID>();
         for (String type : List.of("Item", "StorageLocation", "Assembly")) {
-            var query = entityManager.createQuery("select r.id from " + type + " r where r.accessPolicy is not null"
+            var query = entityManager.createQuery("select r.id from " + type + " r where "
+                    + (includePublic ? "1 = 1" : "r.accessPolicy is not null")
                     + " and not " + visible("r.accessPolicy")
                     + (candidates == null ? "" : " and r.id in :candidates"), UUID.class);
             if (candidates != null) query.setParameter("candidates", candidates);
@@ -191,13 +268,18 @@ public class InventoryAccessOrm extends EntityOrm {
 
     /** Walk only the ancestors of IDs present in a response or command. */
     public Map<UUID, Set<UUID>> privateReferenceOrigins(Set<UUID> references) {
-        if (references.isEmpty() || !privateRootsExist()) return Map.of();
-        String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), " + """
-            roots(id) as not materialized (
-                select id from items where access_policy_id is not null
-                union select id from storage_locations where access_policy_id is not null
-                union select id from assemblies where access_policy_id is not null
-            ), ancestors(reference, id) as (
+        return ancestorRoots(references, false);
+    }
+
+    /** {@code includePublic}: tenants must not see public roots either, so every item/location/assembly is a root. */
+    private Map<UUID, Set<UUID>> ancestorRoots(Set<UUID> references, boolean includePublic) {
+        if (references.isEmpty() || !includePublic && !privateRootsExist()) return Map.of();
+        String filter = includePublic ? "" : " where access_policy_id is not null";
+        String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), "
+            + "roots(id) as not materialized (select id from items" + filter
+            + " union select id from storage_locations" + filter
+            + " union select id from assemblies" + filter + "), " + """
+            ancestors(reference, id) as (
                 select id, id from roots where id in (:references)
                 union select target, source from edges where target in (:references)
                 union select a.reference, e.source from edges e join ancestors a on e.target = a.id
@@ -225,7 +307,7 @@ public class InventoryAccessOrm extends EntityOrm {
     public record ReferenceAccess(Set<UUID> privateIds, Set<UUID> deniedIds) {}
 
     public ReferenceAccess referenceAccess(Set<UUID> references, UserAccount actor) {
-        var origins = privateReferenceOrigins(references);
+        var origins = ancestorRoots(references, !actor.role.atLeast(DomainEnums.UserRole.read_only));
         var roots = origins.values().stream().flatMap(Set::stream).collect(java.util.stream.Collectors.toSet());
         var deniedRoots = deniedRoots(actor, roots);
         var denied = new HashSet<UUID>();

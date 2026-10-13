@@ -40,7 +40,7 @@ import { translate, useLocalizedText } from '../utils/naming';
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessFaction, canManageInventory, canWriteOff } from '../utils/access';
+import { canManageInventory, canViewFaction, canWriteFaction, canWriteOff } from '../utils/access';
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 
@@ -243,7 +243,7 @@ export function FactionOrderDetail() {
   }
 
   const currentUser = user;
-  if (!canAccessFaction(currentUser, order.factionKey)) {
+  if (!canViewFaction(currentUser)) {
     return (
       <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
         {t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}
@@ -262,7 +262,7 @@ export function FactionOrderDetail() {
     : pickupPoint ?? t('Nicht angegeben', 'Not specified');
 
   const isManager = canManageInventory(currentUser);
-  const canEditOrder = currentUser?.role !== 'read_only' && canAccessFaction(currentUser, order.factionKey);
+  const canEditOrder = canWriteFaction(currentUser, order.factionKey);
   const canEditOrderContents = canEditOrder && ['draft', 'submitted'].includes(order.status);
   const requestedTotal = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0)
     + Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);

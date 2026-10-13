@@ -135,7 +135,7 @@ try {
       throw new Error('Unexpected network request during media test');
     };
     URL.revokeObjectURL = (url) => { revoked.push(url); originalRevoke.call(URL, url); };
-    setDevelopmentSession('media-test-token', { id: 'test', name: 'Image Test', role: 'hq_admin' });
+    setDevelopmentSession('media-test-token', { id: 'test', name: 'Image Test', role: 'admin' });
     root.render(React.createElement(MediaImage, { src: apiFileUrl('items/version/item-id.webp'), alt: 'Converted inventory image', sx: { width: 256 } }));
     await waitUntil(() => document.querySelector('#image img')?.naturalWidth > 0);
     check(authorization === 'Bearer media-test-token', 'Image requests include the bearer token');

@@ -18,6 +18,7 @@ public class GeneralOrderService {
     private final GeneralOrderOrm orm;
     private final InventoryOperationsService inventory;
     private final DomainEventService events;
+    @jakarta.inject.Inject ItemRequestNotifier requests;
 
     public GeneralOrderService(ActorService actors, GeneralOrderOrm orm,
             InventoryOperationsService inventory, DomainEventService events) {
@@ -25,36 +26,39 @@ public class GeneralOrderService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public GeneralOrder create(ApiModels.GeneralOrderInput input) {
-        if (actors.current().role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
+        actors.requireGeneralOrders();
         var order = new GeneralOrder(); order.createdBy = actors.current();
         assign(order, input); orm.persist(order); audit(order, "created", null, null); return order;
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public GeneralOrder update(UUID id, ApiModels.GeneralOrderInput input) {
-        var order = locked(id); requireOwnerOrPlanner(order); requireStatus(order, "draft");
+        var order = locked(id); requireOwnerOrWarehouse(order); requireStatus(order, "draft");
         assign(order, input); audit(order, "updated", null, null); return order;
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public GeneralOrder transition(UUID id, String action, ApiModels.GeneralOrderPickupInput input) {
         var order = locked(id);
         var key = input == null ? null : input.idempotencyKey();
         switch (action) {
             case "prepare", "ready" -> actors.requireWarehouse();
-            case "pickup", "close" -> actors.requireMarshal();
-            default -> requireOwnerOrPlanner(order);
+            case "pickup" -> actors.requireTakeout();
+            case "close" -> actors.requireWarehouse();
+            default -> requireOwnerOrWarehouse(order);
         }
         if (replayed(order, key)) return order;
         switch (action) {
             case "submit" -> {
-                requireOwnerOrPlanner(order); requireStatus(order, "draft");
+                requireOwnerOrWarehouse(order); requireStatus(order, "draft");
                 if (order.eventOccurrence == null || order.requestedQuantities.isEmpty()) throw ApiException.badRequest("Select an event and at least one item");
                 order.status = "submitted";
+                requests.notifyOwners(order.requestedQuantities.keySet().stream().map(item -> orm.find(Item.class, UUID.fromString(item))).toList(),
+                        actors.current(), "general_order", order.name, order.id.toString());
             }
             case "prepare" -> { actors.requireWarehouse(); prepare(order, input); }
             case "ready" -> {
@@ -63,7 +67,7 @@ public class GeneralOrderService {
                 order.status = "ready";
             }
             case "pickup" -> {
-                actors.requireMarshal(); requireStatus(order, "ready");
+                actors.requireTakeout(); requireStatus(order, "ready");
                 var prepared = new LinkedHashMap<>(order.preparedQuantities);
                 release(order);
                 for (var entry : prepared.entrySet()) {
@@ -71,9 +75,9 @@ public class GeneralOrderService {
                 }
                 order.preparedQuantities = new LinkedHashMap<>(prepared); order.handedOverQuantities = prepared; order.status = "picked_up";
             }
-            case "close" -> { actors.requireMarshal(); requireStatus(order, "returned"); order.status = "closed"; }
+            case "close" -> { actors.requireWarehouse(); requireStatus(order, "returned"); order.status = "closed"; }
             case "cancel" -> {
-                requireOwnerOrPlanner(order);
+                requireOwnerOrWarehouse(order);
                 if (!List.of("draft", "submitted", "preparing", "ready").contains(order.status)) throw ApiException.conflict("This order can no longer be cancelled");
                 release(order); order.status = "cancelled";
             }
@@ -128,9 +132,9 @@ public class GeneralOrderService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public GeneralOrder returnItems(UUID id, ApiModels.GeneralOrderReturnInput input) {
-        actors.requireMarshal(); var order = locked(id);
+        actors.requireWarehouse(); var order = locked(id);
         if (input == null) throw ApiException.badRequest("Return data is required");
         if (replayed(order, input.idempotencyKey())) return order;
         if (!List.of("picked_up", "partially_returned").contains(order.status)) throw ApiException.conflict("Order must be picked up before return");
@@ -238,9 +242,11 @@ public class GeneralOrderService {
         input.forEach((id, quantity) -> { if (id == null || quantity == null || quantity < 0) throw ApiException.badRequest("Quantities must be non-negative"); if (quantity > 0) { if (orm.find(Item.class, id) == null) throw ApiException.notFound("Item not found"); result.put(id.toString(), quantity); } }); return result;
     }
     private void requireStatus(GeneralOrder order, String status) { if (!order.status.equals(status)) throw ApiException.conflict("Order must be " + status); }
-    private void requireOwnerOrPlanner(GeneralOrder order) {
+    /** ASH crew change their own general orders; warehouse workers change every order. */
+    private void requireOwnerOrWarehouse(GeneralOrder order) {
         var actor = actors.current();
-        if (actor.role == DomainEnums.UserRole.read_only || (!order.createdBy.id.equals(actor.id) && !List.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.event_planner, DomainEnums.UserRole.warehouse_crew).contains(actor.role))) throw ApiException.forbidden("Only the owner or an order manager may change this order");
+        boolean owner = order.createdBy.id.equals(actor.id) && actor.role.atLeast(DomainEnums.UserRole.ash);
+        if (!owner && !actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)) throw ApiException.forbidden("Only the owner or a warehouse worker may change this order");
     }
     private boolean replayed(GeneralOrder order, UUID key) {
         if (key == null) return false;

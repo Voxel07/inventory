@@ -90,7 +90,7 @@ const reports = await import('../src/services/reportService');
 const { createCsvEventLogisticsImporter } = await import('../src/services/csvEventLogisticsImport');
 const { parseEventReportsFromCsv } = await import('../src/utils/csv/events');
 import type { EventAttendee, EventPersonSummary, EventTimelineEntry } from '../src/types/eventLogistics';
-const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
+const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
 const signIn = (id: string) => auth.setDevelopmentSession(`dev:${id}`, user(id));
@@ -206,6 +206,37 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => { connectivity.onLine = false; await auth.clearAuth(); api.stopRealtimeEvents(); });
+
+test('a server role-change event refreshes identity and clears organization views before token rotation', async () => {
+  auth.setDevelopmentSession('dev:role-change', user('role-change', 'ash'));
+  const oldClient = queries.getSessionQueryClient();
+  oldClient.setQueryData(['event-logistics', 'attendees'], [{ name: 'Company participant' }]);
+  const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+  let accountReads = 0;
+  fetchRequest = async (input) => {
+    if (String(input).endsWith('/api/events/stream')) return new Response(new ReadableStream<Uint8Array>({
+      start(controller) { streams.push(controller); },
+    }));
+    if (String(input).endsWith('/api/auth/me')) {
+      accountReads++;
+      return new Response(JSON.stringify(user('role-change', 'tenant')));
+    }
+    return new Response('[]');
+  };
+  connectivity.onLine = true;
+  const connection = api.startRealtimeEvents();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  streams[0].enqueue(new TextEncoder().encode('data: {"type":"user.changed"}\n\n'));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  expect(accountReads).toBeGreaterThan(0);
+  expect(auth.getAuthSnapshot().token).toBe('dev:role-change');
+  expect(auth.getAuthSnapshot().user?.role).toBe('tenant');
+  expect(queries.getSessionQueryClient()).not.toBe(oldClient);
+  expect(oldClient.getQueryData(['event-logistics', 'attendees'])).toBeUndefined();
+  api.stopRealtimeEvents();
+  streams.forEach(controller => controller.close());
+  await connection;
+});
 
 test('private catalog responses remove durable snapshots and private writes cannot enter the queue', async () => {
   signIn('privacy-owner');

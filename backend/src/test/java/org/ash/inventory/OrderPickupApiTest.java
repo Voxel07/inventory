@@ -13,7 +13,7 @@ class OrderPickupApiTest {
     private RequestSpecification actor(String subject, String role) {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", subject).header("X-Actor-Name", subject).header("X-Actor-Role", role).header("X-Actor-Factions", "");
     }
-    private RequestSpecification admin() { return actor("pickup-admin", "hq_admin"); }
+    private RequestSpecification admin() { return actor("pickup-admin", "admin"); }
     private String user(String subject) { return actor(subject, "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id"); }
     private String location(String name) {
         return admin().body(Map.of("name", name + " " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(200).extract().path("id");
@@ -54,9 +54,11 @@ class OrderPickupApiTest {
         admin().body(Map.of("assignments", Map.of(light, assignment(alice, "Lighting rig", tech), table, assignment(bob, "General event equipment", general), chair, assignment(bob, "General event equipment", general))))
                 .patch(path).then().statusCode(200);
         actor(aliceSubject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(1));
+        // Organization members read every order's plan; only the creator's side and warehouse change it.
         actor(bobSubject, "faction_leader").get(path).then().statusCode(200).body("canEdit", equalTo(false))
-                .body("groups.size()", equalTo(1)).body("groups[0].items.itemId", containsInAnyOrder(table, chair));
-        actor("unassigned-" + suffix, "faction_leader").get(path).then().statusCode(403);
+                .body("groups.size()", equalTo(2));
+        actor("unassigned-" + suffix, "read_only").get(path).then().statusCode(200).body("canEdit", equalTo(false));
+        actor("tenant-" + suffix, "tenant").get(path).then().statusCode(403);
         actor(bobSubject, "faction_leader").body(Map.of("assignments", Map.of())).patch(path).then().statusCode(403);
         admin().post(path + "/notify").then().statusCode(200).body(equalTo("2"));
         actor(bobSubject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(2));
@@ -96,8 +98,11 @@ class OrderPickupApiTest {
         String order = faction(Map.of(light, 1, table, 1), Map.of()), path = "/api/orders/" + order + "/pickup-groups";
         admin().body(Map.of("assignments", Map.of(light, assignment(keeper, "Lighting", publicPoint), table, assignment(null, "Furniture", privatePoint))))
                 .patch(path).then().statusCode(200);
-        actor(subject, "faction_leader").get(path).then().statusCode(200).body("groups.size()", equalTo(1))
-                .body("groups[0].items.itemId", contains(light)).body("groups[0].pickupLocationId", equalTo(publicPoint));
+        // The keeper reads the whole plan, but the private pickup point stays hidden.
+        actor(subject, "faction_leader").get(path).then().statusCode(200).body("groups.size()", equalTo(2))
+                .body("groups.pickupLocationId", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(privatePoint)))
+                .body("groups.find { it.responsiblePersonId == '" + keeper + "' }.items.itemId", contains(light))
+                .body("groups.find { it.responsiblePersonId == '" + keeper + "' }.pickupLocationId", equalTo(publicPoint));
         admin().post(path + "/notify").then().statusCode(200).body(equalTo("1"));
         actor(subject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(1)).body("[0].payload.pickupLocation", nullValue());
     }

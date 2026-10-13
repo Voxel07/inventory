@@ -42,7 +42,7 @@ import {
 import { useUIStore } from '../../store/uiStore';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { useAuth } from '../../hooks/useAuth';
-import { canAccessFaction, factionKeyOf } from '../../utils/access';
+import { canWriteFaction, factionKeyOf } from '../../utils/access';
 import { getItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
@@ -92,7 +92,7 @@ export function FactionOrderForm({
   const initialEventType = initialData?.eventType ?? defaultEventType;
   // Faction leaders only see the factions of their identity-provider groups.
   const allowedFactions = (type: EventType) => catalog.factionsFor(type)
-    .filter((candidate) => canAccessFaction(user, factionKeyOf(candidate)))
+    .filter((candidate) => canWriteFaction(user, factionKeyOf(candidate)))
     .map((candidate) => candidate.name);
   const allowedEvents = catalog.eventTypes.filter((type) => allowedFactions(type).length > 0);
   const [chosenEventType, setEventType] = useState<EventType>(initialEventType);

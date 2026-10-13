@@ -86,7 +86,7 @@ export type AssetReturnOutcome = {
   notes?: string;
 };
 
-/** `missing` is the unresolved total after the command; the other quantities are reconciled now. Write-offs are HQ-admin only. */
+/** `missing` is the unresolved total after the command; the other quantities are reconciled now. Write-offs are inventory-admin only. */
 export type ReturnLineInput = { returned: number; consumed: number; missing: number; damaged: number; writtenOff: number; operatingHours?: number; notes?: string };
 
 export function returnFactionOrderItems(

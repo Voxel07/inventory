@@ -28,6 +28,7 @@ import java.util.UUID;
 public class CatalogService {
     @Inject LocationHierarchyService hierarchy;
     @Inject InventoryAccessService accessPolicies;
+    @Inject InventoryAccessInheritance inheritance;
     @jakarta.inject.Inject PositionService positions;
     @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
     private final org.ash.inventory.helper.storage.MediaService media;
@@ -119,10 +120,12 @@ public class CatalogService {
     }
 
     public List<EventOccurrence> getEvents(String eventType) {
+        actorService.requireReader();
         return orm.events(eventType);
     }
 
     public List<Faction> getFactions(String eventType) {
+        actorService.requireReader();
         return orm.factions(eventType);
     }
 
@@ -139,7 +142,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item createItem(ApiModels.ItemInput input) {
-        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         var item = new Item();
         boolean privateItem = Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current());
         if (input.storageLocation() != null) {
@@ -150,9 +153,10 @@ public class CatalogService {
             item.accessPolicy = accessPolicies.create();
             item.ownershipType = Item.Ownership.private_owner; item.ownerName = actorService.current().name;
             item.availabilityPolicy = Item.AvailabilityPolicy.unavailable;
-        } else actorService.requireManager();
+        } else actorService.requireWarehouse();
         apply(item, input);
         orm.persist(item);
+        inheritance.refreshItem(item);
         persistImages(item, input.images());
         int initialAmount = input.amount() == null ? 0 : input.amount();
         if (item.trackingMode == DomainEnums.TrackingMode.serialized && initialAmount > 0) {
@@ -205,6 +209,7 @@ public class CatalogService {
             }
         }
         apply(item, input);
+        inheritance.refreshItem(item);
         if (input.images() != null) {
             var previousImages = orm.itemImages(item).stream().map(image -> image.objectKey).toList();
             orm.deleteItemImages(item);
@@ -292,7 +297,7 @@ public class CatalogService {
     }
 
     private boolean canManageInventory(UserAccount actor) {
-        return actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew;
+        return actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
     }
 
     private boolean canView(Item item, UserAccount actor) {
@@ -303,14 +308,15 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StorageLocation createLocation(ApiModels.StorageLocationInput input) {
-        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         hierarchy.lockHierarchy();
         var location = new StorageLocation();
         location.name = input.name().trim();
         if (Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current())) location.accessPolicy = accessPolicies.create();
-        else actorService.requireManager();
+        else actorService.requireWarehouse();
         orm.persist(location);
         apply(location, input);
+        inheritance.refreshLocationSubtree(location);
         catalogChanged("storage-locations", location.id);
         return location;
     }
@@ -322,6 +328,7 @@ public class CatalogService {
         var location = orm.requireLocked(StorageLocation.class, id, "Storage location");
         actorService.requireLocationEdit(location);
         apply(location, input);
+        inheritance.refreshLocationSubtree(location);
         catalogChanged("storage-locations", location.id);
         return location;
     }
@@ -351,18 +358,24 @@ public class CatalogService {
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
         target.mapOverlayUrl = input.mapOverlay() == null ? null : media.attachToLocation(input.mapOverlay(), target.id);
         target.overlayBounds = input.overlayBounds();
+        // Warehouses are organization sites; tenants keep their buildings outside of them.
+        if (input.warehouseId() != null && !ActorService.seesOrganization(actorService.current()))
+            throw ApiException.badRequest("Warehouse not found");
         hierarchy.apply(target, input);
+        // Grants flow down a private location tree, so it must not contain public sub-locations.
+        if (target.parent != null && target.parent.accessPolicy != null && target.accessPolicy == null)
+            throw ApiException.badRequest("Sub-locations of a private location must be private");
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Assembly createAssembly(ApiModels.AssemblyInput input) {
-        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireManager();
+        if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         var assembly = new Assembly();
         // Like items: members without inventory management create personal assemblies.
         if (Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current()))
             assembly.accessPolicy = accessPolicies.create();
-        else actorService.requireManager();
+        else actorService.requireWarehouse();
         apply(assembly, input);
         orm.persist(assembly);
         replaceComponents(assembly, input);
@@ -436,7 +449,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence createEvent(ApiModels.EventInput input) {
-        actorService.requirePlanner();
+        actorService.requireAdmin();
         return newEvent(input);
     }
 
@@ -460,7 +473,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public EventOccurrence updateEvent(UUID id, ApiModels.EventInput input) {
-        actorService.requirePlanner();
+        actorService.requireAdmin();
         var event = orm.requireLocked(EventOccurrence.class, id, "Event occurrence");
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
         event.name = input.name() == null ? event.name : input.name();
@@ -478,7 +491,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void deleteEvent(UUID id) {
-        actorService.requirePlanner();
+        actorService.requireAdmin();
         var event = orm.requireLocked(EventOccurrence.class, id, "Event occurrence");
         if (orm.hasEventHistory(id)) {
             throw ApiException.conflict("Event cannot be deleted once orders, movements, returns or commitments reference it");
@@ -491,7 +504,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Faction createFaction(ApiModels.FactionInput input) {
-        actorService.requirePlanner();
+        actorService.requireAdmin();
         return newFaction(input);
     }
 
@@ -762,7 +775,7 @@ public class CatalogService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public AssetInstance updateAssetCondition(UUID itemId, UUID assetId, ApiModels.AssetConditionInput input) {
         var item = orm.requireLocked(Item.class, itemId, "Item");
-        if (item.accessPolicy == null) actorService.requireMaintenance(); else actorService.requireItemEdit(item);
+        if (item.accessPolicy == null) actorService.requireWarehouse(); else actorService.requireItemEdit(item);
         var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         assertOwnedActiveAsset(item, asset);
         assertExpectedVersion(asset, input.expectedVersion());

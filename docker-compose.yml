@@ -73,6 +73,8 @@ services:
       API_RATE_LIMIT_BACKEND: memory
       EVENT_BACKEND: memory
       INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
+      INVENTORY_ACCESS_GROUP: ${INVENTORY_ACCESS_GROUP:-inventory}
+      INVENTORY_BOOTSTRAP_ADMINS: ${INVENTORY_BOOTSTRAP_ADMINS:-}
       OIDC_ENABLED: ${OIDC_ENABLED:-true}
       OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
       # A single public Authentik client mirrors the working WRW setup. The

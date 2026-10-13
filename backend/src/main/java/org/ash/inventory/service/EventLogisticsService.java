@@ -55,7 +55,7 @@ public class EventLogisticsService {
     }
 
     public PersonResponse savePerson(UUID id, @Valid PersonInput input) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         var person = person(id, input.name(), input.userId());
         peopleChanged(person.id);
         var summary = PersonSummary.from(person);
@@ -64,7 +64,7 @@ public class EventLogisticsService {
 
     /** Only people who attend no event can leave the directory; attendance history stays intact. */
     public void deletePerson(UUID id) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         var person = orm.requireLocked(EventPerson.class, id, "Person");
         if (orm.attendanceCount(id) > 0) throw ApiException.conflict(person.name + " still attends an event");
         orm.remove(person);
@@ -73,7 +73,7 @@ public class EventLogisticsService {
 
     /** Accounts a person can be linked to; only planners link, so only they see the directory. */
     public List<AccountOption> accounts() {
-        actors.requirePlanner();
+        actors.requireAdmin();
         var linked = orm.people().stream().filter(person -> person.user != null)
                 .collect(Collectors.toMap(person -> person.user.id, person -> person.id));
         return orm.accounts().stream().map(user -> new AccountOption(user.id, user.name, linked.get(user.id))).toList();
@@ -177,15 +177,13 @@ public class EventLogisticsService {
     }
 
     private EventOccurrence writableEvent(UUID id) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         return orm.requireLocked(EventOccurrence.class, id, "Event");
     }
 
+    /** Participants and event timing are readable by every organization member (not tenants). */
     private void requireRead() {
-        if (!Set.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew,
-                DomainEnums.UserRole.marshal, DomainEnums.UserRole.event_planner,
-                DomainEnums.UserRole.maintenance_crew).contains(actors.current().role))
-            throw ApiException.forbidden("Event logistics access required");
+        actors.requireReader();
     }
 
     private void requireEvent(UUID expected, UUID actual) {

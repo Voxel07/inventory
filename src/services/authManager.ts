@@ -144,6 +144,7 @@ export function setDevelopmentSession(token: string, user: User): void {
 
 export function updateAuthUser(user: User): void {
   if (user.id !== session.user?.id || user.role !== session.user?.role
+    || JSON.stringify(user.roles) !== JSON.stringify(session.user?.roles)
     || JSON.stringify([...(user.faction ?? [])].sort()) !== JSON.stringify([...(session.user?.faction ?? [])].sort())) advanceSession();
   session = { ...session, user };
   void persist();
@@ -237,7 +238,7 @@ export async function getAuthorizationHeaders(): Promise<Record<string, string>>
   if (token.startsWith('dev:')) {
     headers['X-Actor-Id'] = token.slice(4);
     headers['X-Actor-Name'] = session.user?.name || 'Development Admin';
-    headers['X-Actor-Role'] = String(session.user?.role || 'hq_admin').trim().toLowerCase();
+    headers['X-Actor-Role'] = String(session.user?.role || 'admin').trim().toLowerCase();
   }
   return headers;
 }

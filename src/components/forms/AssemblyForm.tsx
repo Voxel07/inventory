@@ -106,7 +106,7 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
                         label={formData.privateResource ? t('Private Baugruppe', 'Private assembly') : t('Im gemeinsamen Katalog', 'In the shared catalog')} />
                     <FormHelperText sx={{ mt: 0 }}>
                         {formData.privateResource
-                            ? t('Nur du, HQ-Admins und Personen, für die du sie freigibst, sehen diese Baugruppe.', 'Only you, HQ admins and people you share it with can see this assembly.')
+                            ? t('Nur du, Inventar-Admins und Personen, für die du sie freigibst, sehen diese Baugruppe.', 'Only you, inventory admins and people you share it with can see this assembly.')
                             : t('Alle mit Katalogzugriff sehen diese Baugruppe.', 'Everyone with catalog access can see this assembly.')}
                         {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
                     </FormHelperText>

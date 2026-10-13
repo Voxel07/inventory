@@ -10,7 +10,7 @@ Quality goals, in order:
 
 1. **Stock correctness:** atomic, idempotent changes validated against current state under locks.
 2. **Traceability:** actor, server time, source, delta and command evidence for movements/transitions.
-3. **Privacy:** private resources available only to their account owner, HQ admin and explicit grantees.
+3. **Privacy:** private resources available only to their account owner, the inventory admin, explicit grantees (directly, through a group or through the storage location they are kept in) and, read-only, organization members when the owner offers them for use.
 4. **Field resilience:** previously cached reads and supported queued commands, with the server authoritative.
 5. **Simplicity:** one model per concept and explicit contracts; disposable development data.
 
@@ -18,19 +18,20 @@ The last goal is partly a target: order models, maintenance state and visibility
 
 ## 2. Users and responsibilities
 
+Roles form a ladder, listed from least to most privileged; each role includes the rights of the roles before it. Authentik membership in `inventory` grants access; the inventory admin assigns one or more roles and factions in the app; the highest assigned role determines access, and new users start as read only. The full matrix and scenarios are in [Authentik setup §3](AUTHENTIK_SETUP.md#3-access-and-roles).
+
 | Persona / role | Primary product work |
 |---|---|
-| HQ administrator (`hq_admin`) | Oversight, access/share groups, stock write-off, material count variance approval and system recovery |
-| Warehouse crew (`warehouse_crew`) | Shared catalog, storage, receiving, preparation/reservation, transfers/counts and custody operations |
-| Marshal (`marshal`) | Pickup handover and return reconciliation |
-| Event planner (`event_planner`) | Occurrences/factions, demand planning, procurement and purchasing |
-| Maintenance crew (`maintenance_crew`) | Damage, repair, inspection and maintenance schedules |
-| Faction leader (`faction_leader`) | Orders within provider-assigned factions and own equipment/custody tasks |
-| Read-only participant (`read_only`) | Permitted organizational reads and own private inventory/self-service |
-| Equipment owner / member | A user responsibility, not an additional role enum: private resources, consent, requests, returns and reminders |
-| MCP client | Authorized tool/resource interaction under the user's same business policies |
+| Tenant (`tenant`) | Only own private inventory: private items, assemblies and storage locations (e.g. a rented building), own share groups, offering items for use and answering requests. No company data. |
+| Read-only participant (`read_only`) | Reads company catalog, participants, event timing and all orders |
+| Faction leader (`faction_leader`) | Faction orders for provider-assigned factions; returns and reports for items in own custody |
+| ASH crew (`ash`) | Crew members who create general orders, take out items and pick up prepared orders |
+| Warehouse crew (`warehouse_crew`) | Company catalog and storage, preparation, handing out and taking back (pickup, returns, damage reports, custody overview), all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs), history and reports |
+| Inventory admin (`admin`) | Everything: events, participants and timing, procurement planning, write-off, count variance approval, users, recovery, all private resources |
+| Equipment owner / member | A user responsibility, not an additional role: private resources, consent, requests, returns and reminders |
+| MCP client | Authorized tool/resource interaction under the user's same business policies; not available to tenants |
 
-Any recognized account can use permitted self-service and private ownership workflows. Staff roles do not implicitly bypass private resource access except HQ admin. Provider groups control organizational roles/factions; users do not grant themselves staff rights in the app.
+Every account can own private resources and share them. Roles do not bypass private resource access except the inventory admin. The identity provider controls who may use the system; only the inventory admin assigns roles and factions in the app.
 
 ## 3. Capability map
 
@@ -61,7 +62,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | CAT-02 | Maintain assemblies with fixed component quantities; an assembly is visible only if every component is | Implemented | `CatalogService`, `ApiQueryService.projectAssemblies`, `AssemblyDetail` |
 | CAT-03 | Serialized equipment is one parent item with aggregate stock and `minStock`, batch asset-ID generation, and asset drill-down (state, location, hours, custodian) | Implemented | `AssetInstance`, `AssetInstancesList`, `AssetDetail` |
 | CAT-04 | Item detail shows free-form product info, stock, images, history and assets | Implemented | `ItemDetail` |
-| CAT-05 | Shared/event catalog plus private items visible to owner, `hq_admin` and grantees | Partial | `InventoryAccessPolicy`, scoped `CatalogOrm`. Legacy `visibilityScope` runs in parallel [PLAN-01](IMPLEMENTATION_PLAN.md) |
+| CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Partial | `InventoryAccessPolicy`, scoped `CatalogOrm`. Legacy `visibilityScope` runs in parallel [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
 | CAT-08 | Unique SKU/asset/label codes; aliases are retired, never reused; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
@@ -87,7 +88,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ORD-01 | Order lifecycle in [App Flow](APP_FLOW.md), including cancellation; transitions under an order lock | Partial | `OrderService`, `GeneralOrderService`. Two separate order models [PLAN-02](IMPLEMENTATION_PLAN.md) |
 | ORD-02 | Commission items, assemblies and exact assets on desktop and mobile | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` |
 | ORD-03 | Preparation reserves; pickup atomically converts reservations to custody | Implemented | `OrderService`, `OrderAllocationService` |
-| ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `hq_admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
+| ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
 | ORD-05 | Opt-in comparison with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve SKU/QR, asset code and order code with targeted queries; returns show the quantity out and can link the originating order | Implemented | `codeResolver.ts`, `TransactionForm` |
 | ORD-07 | Camera and manual code scanning; scanning never changes stock | Implemented | `CameraScanner`, `useBarcodeScanner`; nginx allows `camera=(self)` |
@@ -101,7 +102,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
-| DAM-01 | Report → triage → repair → verify, or write off; repair never creates stock; write-off only by `hq_admin` | Implemented | `LifecycleService`, `DamageReportsList` |
+| DAM-01 | Report → triage → repair → verify, or write off; repair never creates stock; write-off only by `admin` | Implemented | `LifecycleService`, `DamageReportsList` |
 | DAM-02 | Resolution comment; optionally update the item hint | Implemented | `LifecycleService`, `DamageReportsList` |
 | MNT-01 | Schedules by date, operating hours or usage, per item or per asset; warning window; checkout blocking | Partial | `MaintenancePolicy`, `MaintenanceEvaluationService`, `IndividualSchedules`. Item columns duplicate the schedules [PLAN-10](IMPLEMENTATION_PLAN.md) |
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
@@ -130,15 +131,16 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
 | SEC-01 | Authentik OIDC; the account is bound to the provider's stable subject; logout ends server-side token use | Partial | Quarkus OIDC (`principal-claim=sub`), `ActorService` (`issuer`+`sub`), `oidcClient.ts` (revocation), cross-tab logout, SSE ends at `exp`. A revoked access token stays valid until `exp` unless `OIDC_REQUIRE_INTROSPECTION` is on [ACC-01](IMPLEMENTATION_PLAN.md) |
-| SEC-02 | Canonical roles from namespaced Authentik groups; factions per user; no group → no access | Implemented | `ActorService.roleFrom` / `factionsFrom` (`inventory_faction_<EVENT>_<slug>`); no role → 403; read-only `UserManagement` |
-| SEC-03 | New private resources default to owner + `hq_admin`; other staff need an explicit grant | Implemented | `InventoryAccess`, ORM visibility predicate |
-| SEC-04 | Owner/admin grant and revoke view access for multiple people and groups | Implemented | `InventoryAccessService`, `InventorySharing`, `InventoryAccessGroups` |
+| SEC-02 | One Authentik group (`inventory`) grants access; role ladder and factions are managed in the app by the inventory admin (audited, revision-checked, last admin kept); new users start as read only | Implemented | `ActorService.hasAccess`, bootstrap admins, `UserService.updateAccess` (`PATCH /api/users/{id}`), `UserManagement` |
+| SEC-03 | New private resources default to owner + `admin`; other staff need an explicit grant. Tenants see no company resources and reach no organization API | Implemented | `InventoryAccess`, ORM visibility predicate (`:accessPublic`), `TenantScopeFilter` |
+| SEC-04 | Owner/admin grant and revoke view access for multiple people and groups; every user manages own share groups; shares of a private location apply to its private sub-locations and the items stored there | Implemented | `InventoryAccessService`, `InventoryAccessInheritance` (`inventory_access_links`), `InventorySharing`, `InventoryAccessGroups`, `/sharing` |
 | SEC-05 | View, edit, share-management and stock-operation rights are separate; viewers can't escalate | Implemented | `InventoryAccess`, `PrivateInventoryCommandInterceptor` |
 | SEC-06 | One policy across REST, MCP, nested records, search, stock, reports, media and realtime | Partial | Present via `PrivacyResponseFilter` and the reference graph; denied sets bound as one `uuid[]`; SSE carries no IDs. Query-predicate migration pending measurement [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | SEC-07 | Audited permission/owner changes with revision check; access rechecked on every operation | Implemented | `InventoryAccessService`, `access.changed` events |
 | SEC-08 | Caches are scoped to the access context and dropped after permission changes; offline limits documented | Implemented | `no-store` private responses, session `QueryClient`, `privateInventoryCache.ts`; `access.changed` resets only queries holding private data |
 | SEC-09 | Uploads are type- and size-restricted, bound to their resource, and staged uploads expire | Implemented | `MediaTypes` (sniffed WebP/PNG/JPEG/PDF), 10 MB, per-user pending quota, `StagedMediaPurge` (24 h), `InventoryMediaService` binding |
 | SEC-10 | Dev authentication can't be enabled in production | Implemented | `ProductionAuthGuard`; production builds offer dev login only with explicit `DEV_LOGIN=true` |
+| SEC-11 | Owners offer private items for use: organization members view and order them read-only (against owner commitments); the owner is notified once per order or request | Implemented | `InventoryAccessPolicy.publicUse`, `@PrivateInventoryCommand(usage = true)`, `ItemRequestNotifier` (`item_requested`) |
 | API-01 | Explicit DTOs; entities are never serialized | Implemented | `ApiResponses`, `ApiMapper` |
 | API-02 | Each frontend contract exposes only supported operations | Implemented | Capability interfaces in `resourceFactory.ts`. Target: generated client [PLAN-04](IMPLEMENTATION_PLAN.md) |
 | API-03 | Lists are paged, filtered and sorted on the server; clients never download whole collections | Partial | Endpoints support paging and search; the frontend still drains catalog pages but refetches only on relevant events [PLAN-03](IMPLEMENTATION_PLAN.md) |
@@ -199,7 +201,9 @@ Domain terms with their German UI label (where the UI has one) and the identifie
 | Custodian | Besitzer | `AssetInstance.currentCustodian`, custody handover | Person who currently holds checked-out equipment, from pickup until accepted return. |
 | Collector | Abholer | `collectorName` on orders/handovers | Person who physically picked up an order; may differ from the faction leader who ordered it. |
 | Grantee | Freigabe-Empfänger | `inventory_access_grants` | User or access group given view or edit access to a private resource. |
-| Marshal | Marshal | `marshal` role | Staff member who performs pickup handovers and return checks at the event. |
+| ASH crew | ASH-Crew | `ash` role | Crew member who requests equipment through general orders; the warehouse prepares and hands it out. |
+| Tenant | Mieter | `tenant` role | Person who rents storage (e.g. a building) and only manages their own private equipment there. |
+| Offer for use | Zur Nutzung angeboten | `InventoryAccessPolicy.publicUse` | A private item its owner lets organization members see and request; handing it out still needs the owner's commitment. |
 | Faction | Fraktion | `factions`, `EVENT:slug` | A team within an event type. Faction leaders order for their factions. |
 
 ### Equipment and stock
@@ -228,7 +232,7 @@ Domain terms with their German UI label (where the UI has one) and the identifie
 | Handover / pickup | Übergabe / Abholung | Turns reservations into custody. |
 | Return submission | Rückgabemeldung | Member reports a return; stock changes only after warehouse acceptance. |
 | Reconciliation | Rückgabeabgleich | Accounting of returned, consumed, damaged, missing and written-off units against handed-over units. |
-| Write-off | Abschreibung | Permanent reduction of owned stock (HQ admin only). |
+| Write-off | Abschreibung | Permanent reduction of owned stock (inventory admin only). |
 | Commitment | Zusage | Owner's consent to lend private equipment for a time window. |
 | Loan / rental | Leihe / Miete | Agreement for lending a commitment, with collection and return evidence. |
 | Blind count | Blindzählung | Stock count without showing expected quantities. |

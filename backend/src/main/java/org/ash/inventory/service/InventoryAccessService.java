@@ -20,23 +20,35 @@ public class InventoryAccessService {
     @Inject InventoryOperationsService inventory;
     @Inject CatalogService catalog;
     public record Grant(UUID userId, UUID groupId, boolean canEdit) {}
+    /** {@code publicUse}: items only, null keeps the current offer. */
     public record Input(@NotNull Long revision, @NotNull List<Grant> grants, UUID ownerId,
-                        @NotBlank @Size(max=1000) String reason) {}
+                        @NotBlank @Size(max=1000) String reason, Boolean publicUse) {}
+    /**
+     * {@code inherited}: shares that reach this resource through the private locations it is stored in;
+     * listed for managers only, like {@code grants}.
+     */
     public record View(boolean privateResource, UUID ownerId, String ownerName, long revision,
-                       boolean canEdit, boolean canManage, List<Grant> grants, List<Source> sources) {}
+                       boolean canEdit, boolean canManage, boolean publicUse, List<Grant> grants,
+                       List<Inherited> inherited, List<Source> sources) {}
+    /** kind: owner, admin, person, group, location (inherited) or public_use. */
     public record Source(String kind, UUID principalId, String name, boolean canEdit) {}
+    /** kind: owner (of the location), person or group. */
+    public record Inherited(UUID locationId, String locationName, String kind, UUID principalId, String name, boolean canEdit) {}
     public record Person(UUID id, String name) {}
-    public record Group(UUID id, String name, long revision, List<UUID> memberIds) {}
-    public record GroupInput(@NotBlank @Size(max=255) String name, @NotNull List<UUID> memberIds,
-                             @NotNull Long revision, @NotBlank @Size(max=1000) String reason) {}
+    /** {@code ownerId} null: managed by the inventory admin. Members are listed for managers only. */
+    public record Group(UUID id, String name, long revision, List<UUID> memberIds, UUID ownerId, String ownerName, boolean canManage) {}
+    /** {@code adminManaged}: admin only, creates a shared admin group without a personal owner. */
+    public record GroupInput(@NotBlank @Size(max=255) String name, @NotNull @Size(max=200) List<UUID> memberIds,
+                             @NotNull Long revision, @NotBlank @Size(max=1000) String reason, Boolean adminManaged) {}
+    public record GroupDeletion(@NotNull Long revision, @NotBlank @Size(max=1000) String reason) {}
 
     public InventoryAccessPolicy create() {
         var policy = new InventoryAccessPolicy(); policy.owner = actors.current(); orm.persist(policy); return policy;
     }
-    /** Removes the policy of a hard-deleted resource together with its shares. */
+    /** Removes the policy of a hard-deleted resource together with its shares and inheritance links. */
     public void delete(InventoryAccessPolicy policy) {
         if (policy == null) return;
-        orm.deleteGrants(policy); orm.remove(policy);
+        orm.deleteLinks(policy); orm.deleteGrants(policy); orm.remove(policy);
     }
     public View view(InventoryAccessPolicy policy) {
         if (policy == null) return publicView();
@@ -44,29 +56,54 @@ public class InventoryAccessService {
         if (result == null) throw ApiException.notFound("Resource not found");
         return result;
     }
-    private View publicView() { return new View(false, null, null, 0, false, false, List.of(), List.of()); }
+    private View publicView() { return new View(false, null, null, 0, false, false, false, List.of(), List.of(), List.of()); }
+    /** Mirrors {@link InventoryAccess#allows} and {@link InventoryAccessOrm#visible} for a batch of policies. */
     public Map<UUID, View> views(Collection<UUID> ids) {
         var actor = actors.current();
-        var grantRows = orm.grantViews(ids, actor.id);
-        var byPolicy = new HashMap<UUID, List<Object[]>>();
-        grantRows.forEach(row -> byPolicy.computeIfAbsent((UUID) row[0], ignored -> new ArrayList<>()).add(row));
+        var byPolicy = groupRows(orm.grantViews(ids, actor.id));
+        var inheritedGrants = groupRows(orm.inheritedGrantViews(ids, actor.id));
+        var inheritedOwners = groupRows(orm.inheritedOwnerViews(ids));
         var result = new HashMap<UUID, View>();
         for (var row : orm.policyViews(ids)) {
             UUID id = (UUID) row[0], owner = (UUID) row[1];
-            boolean manage = owner.equals(actor.id) || actor.role == DomainEnums.UserRole.hq_admin;
+            boolean publicUse = (Boolean) row[4];
+            boolean manage = owner.equals(actor.id) || actor.role == DomainEnums.UserRole.admin;
             boolean edit = manage, visible = manage;
-            var sources = new ArrayList<Source>(); var grants = new ArrayList<Grant>();
+            var sources = new ArrayList<Source>(); var grants = new ArrayList<Grant>(); var inherited = new ArrayList<Inherited>();
             if (owner.equals(actor.id)) sources.add(new Source("owner", actor.id, actor.name, true));
-            if (actor.role == DomainEnums.UserRole.hq_admin) sources.add(new Source("admin", actor.id, actor.name, true));
+            if (actor.role == DomainEnums.UserRole.admin) sources.add(new Source("admin", actor.id, actor.name, true));
             for (var g : byPolicy.getOrDefault(id, List.of())) {
                 boolean canEdit = (Boolean) g[4];
                 grants.add(new Grant((UUID) g[1], (UUID) g[2], canEdit));
                 if (actor.id.equals(g[1])) { sources.add(new Source("person", actor.id, actor.name, canEdit)); visible = true; edit |= canEdit; }
                 if (g[2] != null && (Boolean) g[5]) { sources.add(new Source("group", (UUID) g[2], (String) g[3], canEdit)); visible = true; edit |= canEdit; }
             }
-            if (visible) result.put(id, new View(true, owner, (String) row[2], ((Number) row[3]).longValue(), edit, manage,
-                    manage ? List.copyOf(grants) : List.of(), List.copyOf(sources)));
+            // Shares of the private locations this resource is stored in apply here as well.
+            for (var g : inheritedGrants.getOrDefault(id, List.of())) {
+                UUID location = (UUID) g[1]; String locationName = (String) g[2];
+                UUID user = (UUID) g[3]; UUID group = (UUID) g[5]; boolean canEdit = (Boolean) g[7];
+                inherited.add(new Inherited(location, locationName, user != null ? "person" : "group",
+                        user != null ? user : group, user != null ? (String) g[4] : (String) g[6], canEdit));
+                if (actor.id.equals(user) || group != null && (Boolean) g[8]) {
+                    sources.add(new Source("location", location, locationName, canEdit)); visible = true; edit |= canEdit;
+                }
+            }
+            for (var o : inheritedOwners.getOrDefault(id, List.of())) {
+                UUID location = (UUID) o[1]; String locationName = (String) o[2]; UUID locationOwner = (UUID) o[3];
+                inherited.add(new Inherited(location, locationName, "owner", locationOwner, (String) o[4], true));
+                if (actor.id.equals(locationOwner)) { sources.add(new Source("location", location, locationName, true)); visible = true; edit = true; }
+            }
+            if (publicUse && !visible && ActorService.seesOrganization(actor)) {
+                sources.add(new Source("public_use", owner, (String) row[2], false)); visible = true;
+            }
+            if (visible) result.put(id, new View(true, owner, (String) row[2], ((Number) row[3]).longValue(), edit, manage, publicUse,
+                    manage ? List.copyOf(grants) : List.of(), manage ? List.copyOf(inherited) : List.of(), List.copyOf(sources)));
         }
+        return result;
+    }
+    private static Map<UUID, List<Object[]>> groupRows(List<Object[]> rows) {
+        var result = new HashMap<UUID, List<Object[]>>();
+        rows.forEach(row -> result.computeIfAbsent((UUID) row[0], ignored -> new ArrayList<>()).add(row));
         return result;
     }
     @Inject jakarta.transaction.TransactionSynchronizationRegistry transactions;
@@ -100,7 +137,7 @@ public class InventoryAccessService {
         prepare(policies);
     }
     public boolean projectionAllows(InventoryAccessPolicy policy) {
-        if (policy == null) return true;
+        if (policy == null) return ActorService.seesOrganization(actors.current());
         var values = projections();
         if (!values.containsKey(policy.id)) prepare(List.of(policy));
         return values.get(policy.id) != null;
@@ -115,7 +152,7 @@ public class InventoryAccessService {
         var policy = lockedPolicy(kind, id);
         if (policy == null) throw ApiException.badRequest("Create a private resource before managing shares");
         orm.lock(policy); orm.refresh(policy);
-        if (!access.manages(policy, actors.current())) throw ApiException.forbidden("Only the owner or HQ admin can manage sharing");
+        if (!access.manages(policy, actors.current())) throw ApiException.forbidden("Only the owner or the inventory admin can manage sharing");
         if (policy.revision != input.revision()) throw ApiException.conflict("Access changed; reload before saving");
         var before = view(policy);
         // Transfer requires explicit administrator review of stock/custody obligations.
@@ -137,8 +174,22 @@ public class InventoryAccessService {
             if (!seen.add(key)) throw ApiException.badRequest("Duplicate share");
             var value = new InventoryAccessGrant(); value.policy = policy; value.canEdit = g.canEdit();
             if (g.userId() != null) value.user = person(g.userId());
-            else { value.group = orm.findLocked(InventoryAccessGroup.class, g.groupId()); if (value.group == null) throw ApiException.badRequest("Group not found"); }
+            else {
+                value.group = orm.findLocked(InventoryAccessGroup.class, g.groupId());
+                // Other users' private groups stay unknown; only shareable groups may be used.
+                if (value.group == null || !canUse(value.group, actors.current())) throw ApiException.badRequest("Group not found");
+            }
             values.add(value);
+        }
+        if (input.publicUse() != null && input.publicUse() != policy.publicUse) {
+            if (!kind.equals("items")) throw ApiException.badRequest("Only items can be offered for use");
+            policy.publicUse = input.publicUse();
+            var item = orm.findLocked(Item.class, id);
+            // Offered items are requested through owner commitments, never handed out freely.
+            if (policy.publicUse && item.availabilityPolicy == Item.AvailabilityPolicy.unavailable) {
+                item.availabilityPolicy = Item.AvailabilityPolicy.commitment_required;
+                item.equipmentRevision++;
+            }
         }
         orm.deleteGrants(policy); values.forEach(orm::persist); policy.revision++; orm.flush();
         var after = view(policy);
@@ -146,26 +197,64 @@ public class InventoryAccessService {
         return after;
     }
     public List<Person> people() { actors.current(); return orm.people().stream().map(u -> new Person(u.id, u.name)).toList(); }
+    /**
+     * The inventory admin sees every group. Others see the groups they own (with members), groups they
+     * belong to and admin-managed groups; other users' private groups stay hidden.
+     */
     public List<Group> groups() {
-        var actor = actors.current(); boolean admin = actor.role == DomainEnums.UserRole.hq_admin;
-        return orm.groups().stream().map(g -> new Group(g.id, g.name, g.revision,
-                admin ? g.members.stream().map(u -> u.id).sorted().toList() : List.of())).toList();
+        var actor = actors.current();
+        return orm.groups().stream().filter(g -> canUse(g, actor)).map(g -> group(g, actor)).toList();
     }
+    /** Any user may create share groups (e.g. a tenant for the people allowed into their building). */
     public Group saveGroup(UUID id, GroupInput input) {
-        actors.requireAdmin();
+        var actor = actors.current();
+        boolean admin = actor.role == DomainEnums.UserRole.admin;
+        if (Boolean.TRUE.equals(input.adminManaged()) && !admin) throw ApiException.forbidden("Only the inventory admin manages admin groups");
         if (id != null) orm.lockGroupPolicies(id);
         var g = id == null ? new InventoryAccessGroup() : orm.findLocked(InventoryAccessGroup.class, id);
-        if (g == null) throw ApiException.notFound("Group not found");
+        if (g == null || id != null && !canUse(g, actor)) throw ApiException.notFound("Group not found");
+        if (id != null && !canManage(g, actor)) throw ApiException.forbidden("Only the group owner or the inventory admin can change this group");
+        if (id == null) g.owner = Boolean.TRUE.equals(input.adminManaged()) ? null : actor;
         if (g.revision != input.revision()) throw ApiException.conflict("Group changed; reload");
-        if (orm.groups().stream().anyMatch(other -> !Objects.equals(other.id, id) && other.name.equalsIgnoreCase(input.name().trim()))) throw ApiException.conflict("Group name already exists");
+        UUID scope = g.owner == null ? null : g.owner.id;
+        if (orm.groups().stream().anyMatch(other -> !Objects.equals(other.id, id) && Objects.equals(other.owner == null ? null : other.owner.id, scope)
+                && other.name.equalsIgnoreCase(input.name().trim()))) throw ApiException.conflict("Group name already exists");
         var before = g.members.stream().map(u -> u.id).toList();
         var beforeName = g.name == null ? "" : g.name;
         g.name = input.name().trim(); g.members = new HashSet<>();
         for (var member : input.memberIds()) g.members.add(person(member));
         g.revision++; if (id == null) orm.persist(g); orm.flush();
-        events.record("access.changed", "access_group", g.id, actors.current().id, null,
+        events.record("access.changed", "access_group", g.id, actor.id, null,
                 Map.of("beforeName", beforeName, "name", g.name, "beforeMembers", before, "members", input.memberIds(), "reason", input.reason()));
-        return new Group(g.id, g.name, g.revision, g.members.stream().map(u -> u.id).toList());
+        return group(g, actor);
+    }
+    /** Removes a group and every share made with it. */
+    public void deleteGroup(UUID id, GroupDeletion input) {
+        var actor = actors.current();
+        var policies = orm.lockGroupPolicies(id);
+        var g = orm.findLocked(InventoryAccessGroup.class, id);
+        if (g == null || !canUse(g, actor)) throw ApiException.notFound("Group not found");
+        if (!canManage(g, actor)) throw ApiException.forbidden("Only the group owner or the inventory admin can delete this group");
+        if (g.revision != input.revision()) throw ApiException.conflict("Group changed; reload");
+        var members = g.members.stream().map(u -> u.id).toList();
+        String name = g.name;
+        orm.deleteGroupGrants(g);
+        policies.forEach(policy -> policy.revision++);
+        g.members.clear(); orm.remove(g); orm.flush();
+        events.record("access.changed", "access_group", id, actor.id, null,
+                Map.of("beforeName", name, "beforeMembers", members, "deleted", true, "reason", input.reason()));
+    }
+    private static boolean canManage(InventoryAccessGroup g, UserAccount actor) {
+        return actor.role == DomainEnums.UserRole.admin || g.owner != null && g.owner.id.equals(actor.id);
+    }
+    /** Groups an actor may see and share with: own, admin-managed, or one they belong to. */
+    private static boolean canUse(InventoryAccessGroup g, UserAccount actor) {
+        return canManage(g, actor) || g.owner == null || g.members.stream().anyMatch(u -> u.id.equals(actor.id));
+    }
+    private static Group group(InventoryAccessGroup g, UserAccount actor) {
+        boolean manage = canManage(g, actor);
+        return new Group(g.id, g.name, g.revision, manage ? g.members.stream().map(u -> u.id).sorted().toList() : List.of(),
+                g.owner == null ? null : g.owner.id, g.owner == null ? null : g.owner.name, manage);
     }
     private Grant grant(InventoryAccessGrant g) { return new Grant(g.user == null ? null : g.user.id, g.group == null ? null : g.group.id, g.canEdit); }
     private UserAccount person(UUID id) { var u = id == null ? null : orm.find(UserAccount.class, id); if (u == null) throw ApiException.badRequest("Person not found"); return u; }

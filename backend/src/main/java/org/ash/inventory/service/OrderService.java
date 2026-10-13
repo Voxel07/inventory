@@ -46,6 +46,7 @@ public class OrderService {
     @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
+    @jakarta.inject.Inject ItemRequestNotifier requests;
     private final OrderOrm orm;
     private final ActorService actors;
     private final CatalogService catalog;
@@ -77,7 +78,7 @@ public class OrderService {
             DomainEnums.OrderStatus.returned, Set.of(DomainEnums.OrderStatus.closed));
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder create(ApiModels.OrderInput input) {
         requireWritable();
         var actor = actors.current();
@@ -112,7 +113,7 @@ public class OrderService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder update(UUID id, ApiModels.OrderInput input) {
         requireWritable();
         var order = lockedOrder(id);
@@ -148,11 +149,12 @@ public class OrderService {
         if (!previousFactionId.equals(faction.id)) changes.put("factionId", faction.id.toString());
         audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(), changes);
         orderEvent("order.updated", order, actors.current(), null);
+        if (order.status == DomainEnums.OrderStatus.submitted) notifyItemOwners(order, actors.current());
         return order;
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder prepare(UUID id, ApiModels.PreparationInput input) {
         actors.requireWarehouse();
         var order = lockedOrder(id);
@@ -210,7 +212,7 @@ public class OrderService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder transition(UUID id, DomainEnums.OrderStatus target, ApiModels.TransitionInput input) {
         requireTransitionRole(target);
         requireWritable();
@@ -220,12 +222,8 @@ public class OrderService {
             return order;
         if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft)
             assertFactionAccess(actor, order.faction);
-        else if (target == DomainEnums.OrderStatus.picked_up || target == DomainEnums.OrderStatus.closed)
-            actors.requireMarshal();
-        else if (target == DomainEnums.OrderStatus.ready || target == DomainEnums.OrderStatus.preparing)
-            actors.requireWarehouse();
-        else
-            actors.requirePlanner();
+        else if (target == DomainEnums.OrderStatus.cancelled)
+            requireCancel(order, actor);
         if (target == DomainEnums.OrderStatus.ready) {
             var lines = orm.lines(order);
             boolean nonePrepared = lines.stream().allMatch(line -> line.preparedQuantity == 0);
@@ -254,13 +252,14 @@ public class OrderService {
             createReadyNotification(order);
         if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.ready)
             pickupGroups.notifyResponsible("faction", order.id, target == DomainEnums.OrderStatus.ready ? "order_group_ready" : "order_items_assigned");
+        if (target == DomainEnums.OrderStatus.submitted) notifyItemOwners(order, actor);
         return order;
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder returnItems(UUID id, ApiModels.ReturnInput input) {
-        actors.requireMarshal();
+        actors.requireWarehouse();
         var order = lockedOrder(id);
         if (idempotent(order, input.idempotencyKey()))
             return order;
@@ -344,9 +343,9 @@ public class OrderService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public FactionOrder returnAll(UUID id, UUID idempotencyKey) {
-        actors.requireMarshal();
+        actors.requireWarehouse();
         var order = lockedOrder(id);
         var lines = orm.lines(order);
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
@@ -366,8 +365,9 @@ public class OrderService {
         return returnItems(id, new ApiModels.ReturnInput(outcomes, assetOutcomes, idempotencyKey, "Full order return"));
     }
 
+    /** Every organization member reads every faction's orders; writes are limited per faction. */
     public void assertCanView(FactionOrder order) {
-        assertFactionAccess(actors.current(), order.faction);
+        actors.requireFactionView(actors.current());
     }
 
     private void pickup(FactionOrder order, UserAccount actor, UUID idempotencyKey) {
@@ -1091,15 +1091,32 @@ public class OrderService {
     /** Shared by REST, MCP and offline replay. */
     private void requireTransitionRole(DomainEnums.OrderStatus target) {
         switch (target) {
-            case submitted, draft -> actors.current();
-            case picked_up, closed -> actors.requireMarshal();
-            case ready, preparing -> actors.requireWarehouse();
-            default -> actors.requirePlanner();
+            case draft, submitted, cancelled -> actors.requireOrdering();
+            case preparing, ready -> actors.requireWarehouse();
+            case picked_up -> actors.requireTakeout();
+            case closed -> actors.requireWarehouse();
+            case partially_returned, returned -> throw ApiException.badRequest("Record returns through the return endpoint");
         }
     }
 
+    /**
+     * Faction leaders withdraw their faction's lists before the warehouse starts; once preparation has
+     * begun only warehouse workers cancel (the transition table forbids it after pickup).
+     */
+    private void requireCancel(FactionOrder order, UserAccount actor) {
+        boolean early = order.status == DomainEnums.OrderStatus.draft || order.status == DomainEnums.OrderStatus.submitted;
+        boolean member = order.createdBy.id.equals(actor.id) || actors.canWriteFaction(actor, order.faction);
+        if (early && member) return;
+        actors.requireWarehouse();
+    }
+
     private void requireWritable() {
-        if (actors.current().role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
+        actors.requireOrdering();
+    }
+
+    private void notifyItemOwners(FactionOrder order, UserAccount actor) {
+        requests.notifyOwners(orm.lines(order).stream().map(line -> line.item).toList(), actor,
+                "faction_order", order.orderCode, order.id.toString());
     }
 
     private void assertFactionAccess(UserAccount actor, Faction faction) {

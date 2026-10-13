@@ -72,8 +72,31 @@ public class InventoryOperationsService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public StockTransaction transact(ApiModels.TransactionInput input) {
+        return input.transactionType() == DomainEnums.TransactionType.checkout ? checkout(input) : transactInventory(input);
+    }
+
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
+    public StockTransaction checkout(ApiModels.TransactionInput input) {
+        actors.requireTakeout();
+        if (input.transactionType() != DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Checkout transaction required");
+        return recordTransaction(input);
+    }
+
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public StockTransaction transactInventory(ApiModels.TransactionInput input) {
+        if (input.transactionType() == DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Use the checkout workflow");
+        return recordTransaction(input);
+    }
+
+    private void requireTransactionAccess(Item item, ApiModels.TransactionInput input) {
+        if (input.transactionType() == DomainEnums.TransactionType.checkout) actors.requireItemAccess(item);
+        else actors.requireItemEdit(item);
+    }
+
+    private StockTransaction recordTransaction(ApiModels.TransactionInput input) {
         var actor = actors.current();
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
@@ -84,7 +107,7 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
         }
         if (input.idempotencyKey() != null) {
-            actors.requireItemEdit(orm.find(Item.class, input.itemId()));
+            requireTransactionAccess(orm.find(Item.class, input.itemId()), input);
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
             if (existing != null) {
                 actors.protect(existing, true);
@@ -93,9 +116,7 @@ public class InventoryOperationsService {
             }
         }
         var item = lockedItem(input.itemId());
-        actors.requireItemEdit(item);
-        if (item.accessPolicy != null && !org.ash.inventory.service.EquipmentService.freelyAvailable(item)
-                && input.transactionType() == DomainEnums.TransactionType.checkout) actors.requireWarehouse();
+        requireTransactionAccess(item, input);
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             return transactSerialized(input, item, actor, occurredAt);
         }
@@ -370,13 +391,13 @@ public class InventoryOperationsService {
     /** Damage reported through REST or offline replay. */
     @Transactional
     public DamageReport reportDamage(ApiModels.DamageInput input) {
-        actors.requireMarshal();
+        actors.requireWarehouse();
         return createDamage(input);
     }
 
     /** Also used by return workflows that record damage on behalf of their own authorized actor. */
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public DamageReport createDamage(ApiModels.DamageInput input) {
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (input.idempotencyKey() != null) {
@@ -433,7 +454,7 @@ public class InventoryOperationsService {
     /** Damage resolution by maintenance staff; the repair lifecycle calls {@link #resolveDamage} itself. */
     @Transactional
     public DamageReport resolveDamageReport(UUID id, ApiModels.DamageResolutionInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         return resolveDamage(id, input);
     }
 
@@ -560,7 +581,7 @@ public class InventoryOperationsService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceRecord recordMaintenance(ApiModels.MaintenanceInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         var item = lockedItem(input.itemId());
         actors.protect(item, true);
         var record = new MaintenanceRecord();

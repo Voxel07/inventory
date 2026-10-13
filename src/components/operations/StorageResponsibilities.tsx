@@ -10,6 +10,7 @@ import { memberApi } from '../../services/memberService';
 import type { StorageLocation } from '../../types';
 import type { MemberAssignment } from '../../types/member';
 import { optionalText } from '../../utils/inputValues';
+import { atLeast } from '../../utils/access';
 import { locationPath } from '../../utils/locationHierarchy';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 
@@ -68,7 +69,7 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
                 noRowsLabel: missingOnly ? t('Keine fehlenden Angaben.', 'No missing information.') : t('Keine aktiven Lagerorte.', 'No active storage locations.') }}
             sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
         {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }}
-            fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter((person) => person.role !== 'read_only').map((person) => ({ value: person.id, label: person.name })) }]}
+            fields={[{ key: 'userId', label: t('Verantwortliche Person (leer = entfernen)', 'Responsible person (empty = remove)'), options: (users.data ?? []).filter((person) => atLeast(person, 'faction_leader')).map((person) => ({ value: person.id, label: person.name })) }]}
             onSave={(values) => memberApi.assign(editing.id, optionalText(values.userId))} />}
     </Stack>;
 }

@@ -54,7 +54,9 @@ public class ApiMapper {
                 value.name,
                 value.email,
                 value.role.name(),
-                value.factions == null ? List.of() : value.factions
+                value.roles.stream().map(Enum::name).toList(),
+                value.factions == null ? List.of() : value.factions,
+                value.accessRevision
         );
     }
 

@@ -14,6 +14,7 @@ export type {
   DamageStatusHistoryEntry,
 } from './damageReport';
 export type { User, UserRole, AccessRole } from './user';
+export { ROLE_LADDER } from './user';
 export type { GeneralOrder, GeneralOrderSummary, GeneralOrderFormData } from './order';
 export type { EventType, EventReportStatus, EventReport, EventReportFormData } from './event';
 export type {

@@ -1,7 +1,7 @@
 import { formatDate } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useAuth } from '../../../hooks/useAuth';
-import { canOperateWarehouse, canPerformCustody, canAccessProcurement } from '../../../utils/access';
+import { canOperateWarehouse, canPerformCustody, canTakeOut } from '../../../utils/access';
 import {
   Alert,
   Box,
@@ -109,7 +109,10 @@ export function OrderDetailHeader({
   const { user } = useAuth();
   const warehouse = canOperateWarehouse(user);
   const custody = canPerformCustody(user);
-  const planner = canAccessProcurement(user);
+  const takeout = canTakeOut(user);
+  // Faction leaders withdraw their lists before preparation starts; afterwards only the warehouse cancels.
+  const canCancel = (canEditOrder && ['draft', 'submitted'].includes(order.status))
+    || (warehouse && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status));
   const t = useLocalizedText();
 
   function statusLabel(status: FactionOrderStatus) {
@@ -157,14 +160,14 @@ export function OrderDetailHeader({
         </Button>
       </>
     )}
-    {(warehouse || custody) && order.status === 'ready' && (
+    {takeout && order.status === 'ready' && (
       <>
         <Button title={translate('Die Liste erneut zur Vorbereitung öffnen', 'Reopen this list for preparation')}
           size="small" variant="outlined" startIcon={<ReplayIcon />} onClick={onReopenPreparation} disabled={isReopeningPreparation || !warehouse}>
           {t('Zurück in Vorbereitung', 'Back to preparation')}
         </Button>
         <Button title={translate('Die vollständige Liste als abgeholt buchen', 'Record pickup of the complete list')}
-          size="small" variant="contained" color="success" startIcon={<LocalShippingIcon />} onClick={onPickUp} disabled={!custody}>
+          size="small" variant="contained" color="success" startIcon={<LocalShippingIcon />} onClick={onPickUp}>
           {t('Komplette Liste abholen', 'Pick up complete list')}
         </Button>
       </>
@@ -175,7 +178,7 @@ export function OrderDetailHeader({
         {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
       </Button>
     )}
-    {planner && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (
+    {canCancel && (
       <Button title={translate('Die Stornierung dieser Bestellliste bestätigen', 'Review cancellation of this order list')}
         size="small" color="error" startIcon={<CancelIcon />} onClick={onCancel}>
         {t('Stornieren', 'Cancel')}

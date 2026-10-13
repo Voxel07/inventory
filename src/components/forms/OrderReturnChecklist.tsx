@@ -11,7 +11,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
   order: FactionOrder;
   items: Item[];
   busy?: boolean;
-  /** HQ admins may write off units that will not come back, which lets the order close. */
+  /** inventory admins may write off units that will not come back, which lets the order close. */
   canWriteOff?: boolean;
   onCancel: () => void;
   onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;

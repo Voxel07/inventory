@@ -47,7 +47,7 @@ public class LifecycleService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceSchedule createSchedule(LifecycleDtos.ScheduleInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         var schedule = new MaintenanceSchedule();
         apply(schedule, input);
         orm.persist(schedule);
@@ -59,7 +59,7 @@ public class LifecycleService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public MaintenanceSchedule updateSchedule(UUID id, LifecycleDtos.ScheduleInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
         apply(schedule, input);
         return schedule;
@@ -68,7 +68,7 @@ public class LifecycleService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireSchedule(UUID id) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule").active = false;
     }
 
@@ -105,7 +105,7 @@ public class LifecycleService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public RepairCase createRepair(LifecycleDtos.RepairInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
         var damage = orm.require(DamageReport.class, input.damageReportId(), "Damage report");
         var existing = orm.repairForDamage(damage.id);
@@ -130,7 +130,7 @@ public class LifecycleService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
-        actors.requireMaintenance();
+        actors.requireWarehouse();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
         var repair = orm.requireLocked(RepairCase.class, id, "Repair case");
         if (occurredAt.isBefore(repair.createdAt)

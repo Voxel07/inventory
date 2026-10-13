@@ -348,12 +348,14 @@ class InventoryMcpTest {
     @Test
     void managerAndPlannerPermissionsAreCheckedOnEachHttpCall() throws Exception {
         String actorId = "mcp-role-check-" + UUID.randomUUID();
-        String session = session(actorId, "hq_admin");
+        String session = session(actorId, "admin");
         assertTrue(call(session, actorId, "read_only", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
         assertTrue(call(session, actorId, "warehouse_crew", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
-        assertTrue(call(session, actorId, "event_planner", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assertTrue(call(session, actorId, "ash", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        // Tenants manage their private inventory in the app; MCP serves organization data only.
+        assertTrue(call(session, actorId, "tenant", "get_item_details", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
         assertFalse(call(session, actorId, "warehouse_crew", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
-        assertFalse(call(session, actorId, "event_planner", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
+        assertFalse(call(session, actorId, "admin", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
     }
 
     @Test

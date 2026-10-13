@@ -1,7 +1,7 @@
 import { Button } from '../components/shared/ActionButtons';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessProcurement } from '../utils/access';
+import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -41,7 +41,7 @@ export function EventDetail() {
   const t = useLocalizedText();
   const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
-  const canEdit = canAccessProcurement(user);
+  const canEdit = canEditEvents(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
   const { data: items = [] } = useItems();

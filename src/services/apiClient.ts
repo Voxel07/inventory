@@ -440,6 +440,7 @@ function handleSseBlock(block: string): void {
   }
   window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
   publishApiChange(changeDetail);
+  if (changeDetail.type === 'user.changed') void refreshCurrentUser();
 }
 
 export async function startRealtimeEvents(): Promise<void> {
@@ -465,6 +466,7 @@ export async function startRealtimeEvents(): Promise<void> {
     if (realtimeGeneration === context.generation) {
       conditionalGetCache.clear();
       publishApiChange({ type: 'realtime.reconnected' }, context);
+      void refreshCurrentUser();
     }
     realtimeGeneration = context.generation;
     const reader = response.body.getReader();
@@ -533,8 +535,7 @@ subscribeAuth(() => {
   const rotated = getAuthSnapshot().token !== currentToken;
   currentToken = getAuthSnapshot().token;
   if (requestGeneration === getAuthSnapshot().generation) {
-    // Roles and factions come from the token's groups: re-read the account only when a refreshed
-    // token arrives instead of polling /api/auth/me.
+    // Token refresh also recovers app-managed access changes missed while disconnected.
     if (rotated && currentToken && getAuthSnapshot().user) void refreshCurrentUser();
     return;
   }

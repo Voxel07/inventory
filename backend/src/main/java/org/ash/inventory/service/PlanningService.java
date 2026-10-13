@@ -24,7 +24,7 @@ public class PlanningService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void override(OverrideInput input) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         if (input.eventId() == null || input.itemId() == null || input.quantity() < 0 || input.reason() == null || input.reason().isBlank()) throw ApiException.badRequest("Event, item, non-negative forecast and reason are required");
         var event = orm.find(EventOccurrence.class, input.eventId()); var item = orm.find(Item.class, input.itemId());
         if (event == null || item == null) throw ApiException.notFound("Event or item not found");
@@ -35,7 +35,7 @@ public class PlanningService {
     @org.ash.inventory.helper.ConsistentRead
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<ApiResponses.DeficitResponse> deficits(UUID eventId) {
-        actors.requirePlanner();
+        actors.requireAdmin();
         EventOccurrence selected = eventId == null ? null : orm.find(EventOccurrence.class, eventId);
         if (eventId != null && selected == null) throw ApiException.notFound("Event not found");
         // Keep earlier demand: reusable overlap and cumulative consumables need more than the selected event.

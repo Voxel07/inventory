@@ -30,31 +30,33 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 
 | Route | Screen / purpose | Current route-level access |
 |---|---|---|
-| `/` | Overview, personal equipment/custody/tasks; optional team scope | Any signed-in user; team toggle requires staff |
+| `/` | Overview, personal equipment/custody/tasks; optional team scope. Tenants get their private-inventory overview and notices | Any signed-in user; team toggle requires warehouse crew |
 | `/global-dashboard` | Redirect to `/?scope=team` | Redirect; destination restricts team scope |
-| `/items` | Item catalog, search, filters and editor entry points | Catalog guard: any signed-in user |
-| `/items/:itemId` | Item details, stock, media, assets, ownership and sharing | Catalog guard; backend resource policy |
+| `/items` | Item catalog, search, filters and editor entry points | Catalog guard: any signed-in user (tenants see only private items) |
+| `/items/:itemId` | Item details, stock, media, assets, ownership and sharing (offer for use) | Catalog guard; backend resource policy |
 | `/items/:itemId/assets/:assetId` | Exact serialized asset detail | Catalog guard; backend resource policy |
 | `/assemblies`, `/assemblies/:assemblyId` | Kit catalog and composition | Catalog guard; all components must be visible |
 | `/storage-locations` | Hierarchical location catalog and map | Catalog guard; backend policy/redaction |
 | `/locations/:locationId` | Location scan destination | Signed-in app shell; backend resource policy |
-| `/orders` | Faction tab by default; `?tab=general` selects general orders | Signed-in app shell; list/action scopes inside workflow |
-| `/orders/faction/:orderId` | Faction order detail and lifecycle | Signed-in app shell; faction policy in services |
-| `/events`, `/events/:reportId` | Event planning and occurrence detail | InventoryManagerGuard |
-| `/events/attendees?eventId=…` | Attendees from the shared people registry, predefined roles, arrival/departure and food-stamp issuance | InventoryManagerGuard; HQ admin / event planner edits |
-| `/events/timeline?eventId=…&tab=preparation` | Day-grouped schedule; in-game default tab and setup/preparation tab | InventoryManagerGuard; HQ admin / event planner edits |
+| `/sharing` | Own share groups (all groups for the inventory admin) | Any signed-in user |
+| `/orders` | Faction tab by default; `?tab=general` selects general orders | OrganizationGuard (read only and up); writes per faction / ASH crew (general orders) in services |
+| `/orders/faction/:orderId` | Faction order detail and lifecycle | OrganizationGuard; faction write policy in services |
+| `/events`, `/events/:reportId` | Event planning and occurrence detail | OrganizationGuard; inventory admin edits |
+| `/events/attendees?eventId=…` | Attendees from the shared people registry, predefined roles, arrival/departure and food-stamp issuance | OrganizationGuard; inventory admin edits |
+| `/events/timeline?eventId=…&tab=preparation` | Day-grouped schedule; in-game default tab and setup/preparation tab | OrganizationGuard; inventory admin edits |
 | `/checked-out` | Outstanding custody | InventoryManagerGuard |
 | `/returns` | Pending return acceptance and history | InventoryManagerGuard |
 | `/transactions` | Movement history | InventoryManagerGuard |
 | `/print-qr` | Label/QR printing | InventoryManagerGuard |
-| `/damage-reports`, `/maintenance` | Damage and maintenance work | InventoryManagerGuard; finer action permissions |
-| `/procurement` | Demand/supply deficits and purchasing preparation | HQ admin / event planner |
+| `/damage-reports` | Damage reports | InventoryManagerGuard; finer action permissions |
+| `/maintenance` | Maintenance work | InventoryManagerGuard; finer action permissions |
+| `/procurement` | Demand/supply deficits and purchasing preparation | Inventory admin |
 | `/operations` | Grouped warehouse, purchasing, maintenance and system tasks | InventoryManagerGuard; permitted tabs only |
-| `/users` | Read-only provider-managed account directory | HQ admin |
+| `/users` | Account directory: set role and factions per user (Authentik only grants access); all share groups | Inventory admin |
 | `/profile` | Own profile | Any signed-in user |
 | Unmatched path | Redirect to `/` | Signed-in app shell |
 
-`InventoryManagerGuard` currently admits HQ admin, warehouse crew, marshal, event planner and maintenance crew. It is broader than permission to run each action. General order detail is composed within the general orders workflow; the router declares no separate general-order detail URL. Inbox, sync and sharing administration are dialogs/panels rather than independent routes.
+Guards follow the role ladder ([Authentik setup §3](AUTHENTIK_SETUP.md#3-access-and-roles)): `OrganizationGuard` admits read only and up (tenants are sent to `/items`), `InventoryManagerGuard` warehouse crew and the inventory admin. Guards are UX only; the API enforces every action. General order detail is composed within the general orders workflow; the router declares no separate general-order detail URL. Inbox and sync are dialogs/panels rather than independent routes.
 
 ## 3. Catalog, private inventory and scanning
 
@@ -71,7 +73,7 @@ Items, locations and assemblies are retired, never deleted: they leave the catal
 
 From Event planning or an event detail, open **Attendees & food stamps** or **Event timeline** for the selected occurrence. Both pages also appear in navigation and offer a dated event selector. Attendees come from a shared people registry: in the add dialog, pick a known person or type a new name. A person may be linked to an Authentik account but need not be (event crew usually has no account). Renaming a person in the edit dialog applies at every event. Each attendance holds one or more predefined roles: **Faction leader**, **Faction deputy** or **HQ crew** of one of the event type's factions, **AS-Held** for the whole event, or **Event crew** with free-text assigned work. A person attends an event at most once. Arrival/departure times, notes and a stamp-issued flag are per attendance. Each person receives four main-meal stamps and one breakfast stamp regardless of the number of roles; totals and remaining issuance always use the full attendee list, independently of search and role filter.
 
-The timeline defaults to **In game**; **Setup & preparation** covers construction, preparation and teardown, including dates outside the event itself. Add/edit entries with start, optional end, responsible person/team, location/area, status and description. Entries appear chronologically, grouped by day. Times on both pages are wall-clock times at the event. Reads are staff-only; writes require HQ admin or event planner, are online-only and refresh other sessions through `event_logistics.changed`.
+The timeline defaults to **In game**; **Setup & preparation** covers construction, preparation and teardown, including dates outside the event itself. Add/edit entries with start, optional end, responsible person/team, location/area, status and description. Entries appear chronologically, grouped by day. Times on both pages are wall-clock times at the event. Reads are open to read-only members and up (not tenants); writes require the inventory admin, are online-only and refresh other sessions through `event_logistics.changed`.
 
 1. A planner maintains event occurrences, factions and demand; compares demand with usable supply and expected receipts.
 2. The planner records reasoned overrides where needed and prepares supplier quantities.
@@ -103,13 +105,13 @@ stateDiagram-v2
 
 This is the main business lifecycle. Specialized edits, preparation reopening and repeated partial reconciliation remain service-controlled actions; this diagram is not an exhaustive endpoint transition table.
 
-1. A faction leader selects an authorized event/faction and builds an order from items and assemblies. General orders capture purpose and requested quantities for broader needs.
+1. A faction leader selects one of their own factions and an event and builds an order from items and assemblies; every organization member can read all lists. General orders (ASH crew and up) capture purpose and requested quantities for broader needs. Private items their owner offered for use can be ordered too; submission notifies the owner once.
 2. Submission places the order into staff preparation work and creates an in-app notice for each assigned responsible person. Warehouse staff use `/operations?tab=order-preparation` or order details.
 3. Preparation chooses source locations, usable quantities and exact serialized assets. It reserves stock without checking it out. Edits can credit back only that order's reservation.
 4. Mark ready after preparation, record pickup details, and notify the recipient and responsible people. Order details group items (including assembly components) by responsible person, subgroup and pickup location. Item defaults are set in the ownership panel; the order owner or staff can override the person, group name and pickup point per item and manually notify responsible people. Automatic submission/ready notices go to each person once per order; later group or order changes only show on the order page, and the manual button re-sends on request. Fully configured group pickup points replace the single map point requirement. Notices link to the recipient-scoped groups on the orders page; email/push delivery remains deferred.
-5. At pickup, staff confirm collector/condition/evidence. The command converts reservations into custody and writes checkout/history atomically.
+5. At pickup, ASH crew or warehouse staff confirm collector/condition/evidence; faction leaders request pickup. The command converts reservations into custody and writes checkout/history atomically.
 6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
-7. Units that will not come back are written off by an HQ admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
+7. Units that will not come back are written off by an inventory admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations; faction leaders may withdraw their lists while draft or submitted, afterwards only the warehouse cancels. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
 
 Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
 

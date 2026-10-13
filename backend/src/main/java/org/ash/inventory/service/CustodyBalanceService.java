@@ -23,8 +23,8 @@ public class CustodyBalanceService {
     @Transactional
     public List<Balance> list(boolean mine) {
         var actor = actors.current();
-        boolean all = !mine && List.of(DomainEnums.UserRole.hq_admin, DomainEnums.UserRole.warehouse_crew,
-                DomainEnums.UserRole.marshal).contains(actor.role);
+        // The warehouse oversees everyone's custody; others see their own.
+        boolean all = !mine && actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
         UUID recipient = all ? null : actor.id;
         var rows = new LinkedHashMap<String, Balance>();
         var factionLines = orm.factionLines(recipient);

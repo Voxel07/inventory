@@ -8,22 +8,18 @@ import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { factionKeyOf } from '../utils/access';
 
 const ROLE_KEYS: Record<string, string> = {
+  admin: 'profile.roles.admin',
   warehouse_crew: 'profile.roles.warehouseCrew',
-  marshal: 'profile.roles.marshal',
-  event_planner: 'profile.roles.eventPlanner',
-  maintenance_crew: 'profile.roles.maintenanceCrew',
-  hq_admin: 'profile.roles.hqAdmin',
-  read_only: 'profile.roles.readOnly',
+  ash: 'profile.roles.ash',
   faction_leader: 'profile.roles.factionLeader',
+  read_only: 'profile.roles.readOnly',
+  tenant: 'profile.roles.tenant',
 };
 
 export function Profile() {
   const { user } = useAuth();
   const t = useT();
   const role = user?.role?.trim().toLowerCase() ?? '';
-  const roleLabel = ROLE_KEYS[role]
-    ? t(ROLE_KEYS[role])
-    : user?.role?.trim() || t('profile.roles.unknown');
   const displayName = user?.name?.trim() || user?.email || t('profile.unknownUser');
   const { factions } = useFactionCatalog();
   const factionLabel = (key: string) => {
@@ -80,7 +76,10 @@ export function Profile() {
               <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                 {t('profile.role')}
               </Typography>
-              <Chip icon={<BadgeIcon />} label={roleLabel} color="primary" variant="outlined" />
+              <Stack direction="row" useFlexGap sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                {user?.roles.map((assigned) => <Chip key={assigned} icon={<BadgeIcon />} label={t(ROLE_KEYS[assigned])}
+                  color={assigned === role ? 'primary' : 'default'} variant="outlined" />)}
+              </Stack>
             </Box>
 
             <Box>

@@ -3,7 +3,15 @@ package org.ash.inventory.model;
 public final class DomainEnums {
     private DomainEnums() {}
 
-    public enum UserRole { hq_admin, warehouse_crew, marshal, event_planner, maintenance_crew, faction_leader, read_only }
+    /**
+     * Role ladder, declared from least to most privileged: every role includes all rights of the
+     * roles before it. Keep this order; {@link UserRole#atLeast} and highest-role selection depend on it.
+     */
+    public enum UserRole {
+        tenant, read_only, faction_leader, ash, warehouse_crew, admin;
+
+        public boolean atLeast(UserRole minimum) { return ordinal() >= minimum.ordinal(); }
+    }
     public enum TrackingMode { bulk, serialized, lot_tracked }
     public enum InventoryRole { consumable, returnable, repairable, rental }
     public enum ItemVisibilityScope { global, event, person, group }

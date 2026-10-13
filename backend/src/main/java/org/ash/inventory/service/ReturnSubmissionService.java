@@ -43,10 +43,10 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission create(ApiModels.ReturnSubmissionInput input) {
         var actor = actors.current();
-        if (actor.role == DomainEnums.UserRole.read_only) throw ApiException.forbidden("Read-only access");
+        actors.requireOrdering();
         var item = orm.requireLockedFresh(Item.class, input.itemId(), "Item");
         var returnedFor = input.returnedForUserId() == null ? actor
                 : orm.require(UserAccount.class, input.returnedForUserId(), "Return user");
@@ -111,7 +111,7 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission acknowledge(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
@@ -146,7 +146,7 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission reject(UUID id, ApiModels.ReturnDecisionInput input) {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
@@ -196,7 +196,7 @@ public class ReturnSubmissionService {
     }
 
     private boolean canManageReturns(UserAccount actor) {
-        return actor.role == DomainEnums.UserRole.hq_admin || actor.role == DomainEnums.UserRole.warehouse_crew;
+        return actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
     }
 
 

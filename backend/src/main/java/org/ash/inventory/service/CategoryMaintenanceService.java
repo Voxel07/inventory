@@ -36,7 +36,7 @@ public class CategoryMaintenanceService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Policy save(Policy input) {
-        actors.requireManager();
+        actors.requireWarehouse();
         var name = input.category() == null ? "" : input.category().trim();
         if (name.isEmpty() || name.length() > 255) throw ApiException.badRequest("Invalid category");
         if (input.intervalDays() < 0) throw ApiException.badRequest("Interval must not be negative");

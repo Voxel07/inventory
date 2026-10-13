@@ -41,17 +41,17 @@ export function useInboxCount() {
   return dueActions + unreadNotices;
 }
 
-export function noticeText(notification: AppNotification, key: string): string | undefined {
-  const value = notification.payload[key];
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-export function notificationPath(notification: AppNotification): string | undefined {
-  const path = noticeText(notification, 'path');
-  return path?.startsWith('/orders?') ? path : notification.orderId ? `/orders/faction/${notification.orderId}` : undefined;
-}
+export { noticeDetails, noticeText, notificationPath } from '../utils/notifications';
+import { noticeText } from '../utils/notifications';
 
 export function notificationTitle(notification: AppNotification): string {
+  if (notification.type === 'item_requested') {
+    const item = noticeText(notification, 'itemName') ?? translate('Ihr Artikel', 'your item');
+    const requester = noticeText(notification, 'requesterName');
+    return requester
+      ? translate(`${requester} hat ${item} angefragt`, `${requester} requested ${item}`)
+      : translate(`${item} wurde angefragt`, `${item} was requested`);
+  }
   const name = noticeText(notification, 'orderCode');
   if (notification.type === 'order_items_assigned') return name
     ? translate(`Artikel für Bestellung ${name} vorbereiten`, `Prepare items for order ${name}`)
