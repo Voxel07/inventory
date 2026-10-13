@@ -163,6 +163,19 @@ test('CSV logistics rejects ambiguous names before attendee writes', async () =>
   expect(writes).toBe(0);
 });
 
+test('CSV logistics writes no attendee when a later name is ambiguous', async () => {
+  signIn('planner');
+  connectivity.onLine = true;
+  let writes = 0;
+  fetchRequest = (async (url, options) => {
+    if (options?.method && options.method !== 'GET') writes++;
+    return Response.json(String(url).endsWith('/event-people')
+      ? [{ id: 'a', name: 'Mara' }, { id: 'b', name: 'mara' }] : []);
+  }) as typeof fetch;
+  await expect(createCsvEventLogisticsImporter()('event', logisticsRow())).rejects.toThrow('Multiple people are named Mara');
+  expect(writes).toBe(0);
+});
+
 test('CSV logistics stops when the signed-in account changes during lookup', async () => {
   signIn('first');
   connectivity.onLine = true;

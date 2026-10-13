@@ -3,12 +3,10 @@ package org.ash.inventory.orm;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.GeneralOrder;
 import org.ash.inventory.model.OrderLineAssetAssignment;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,13 +32,18 @@ public class AssetReservationOrm {
                 .setParameter("ids", assetIds).setParameter("open", OPEN_ORDER).getResultList()
                 .forEach(assignment -> result.put(assignment.assetInstance.id, new Holder("faction_order", assignment.order.id,
                         assignment.order.orderCode + " · " + assignment.order.faction.name)));
-        var wanted = new HashSet<String>();
-        assetIds.forEach(id -> { if (!result.containsKey(id)) wanted.add(id.toString()); });
+        var wanted = assetIds.stream().filter(id -> !result.containsKey(id)).map(UUID::toString).toList();
         if (wanted.isEmpty()) return result;
-        for (var order : entityManager.createQuery("from GeneralOrder o where o.status in ('preparing', 'ready')", GeneralOrder.class).getResultList()) {
-            for (var assigned : order.assetAssignments.values()) for (var id : assigned) {
-                if (wanted.remove(id)) result.put(UUID.fromString(id), new Holder("general_order", order.id, order.name));
-            }
+        // Filter the jsonb assignments in SQL so only orders holding a wanted asset are read.
+        for (var value : entityManager.createNativeQuery("""
+                select o.id, o.name, a.value from general_orders o
+                cross join lateral jsonb_each(o.asset_assignments) e
+                cross join lateral jsonb_array_elements_text(e.value) a
+                where o.status in ('preparing', 'ready') and lower(a.value) in (:ids)
+                """, Object[].class).setParameter("ids", wanted).getResultList()) {
+            var row = (Object[]) value;
+            result.putIfAbsent(UUID.fromString(row[2].toString()),
+                    new Holder("general_order", UUID.fromString(row[0].toString()), row[1].toString()));
         }
         return result;
     }

@@ -13,12 +13,16 @@ export function createCsvEventLogisticsImporter() {
     const base = `/api/events/${eventId}`;
     if (row.attendees.length) {
       people ??= await apiRequest<EventPersonSummary[]>('/api/event-people');
-      const attendees = await apiRequest<EventAttendee[]>(`${base}/attendees`);
-      for (const input of row.attendees) {
-        assertAuthSession(context);
-        const matches = people.filter((person) => person.name.toLowerCase().trim() === input.personName.toLowerCase());
+      const known = people;
+      // Resolve every name before writing so an ambiguous name leaves the event untouched.
+      const resolved = row.attendees.map((input) => {
+        const matches = known.filter((person) => person.name.toLowerCase().trim() === input.personName.toLowerCase());
         if (matches.length > 1) throw new Error(translate(`Mehrere Personen heißen ${input.personName}`, `Multiple people are named ${input.personName}`));
-        const person = matches[0];
+        return { input, person: matches.at(0) };
+      });
+      const attendees = await apiRequest<EventAttendee[]>(`${base}/attendees`);
+      for (const { input, person } of resolved) {
+        assertAuthSession(context);
         const existing = attendees.find((attendee) => attendee.person.id === person?.id);
         const saved = await apiRequest<EventAttendee>(existing ? `${base}/attendees/${existing.id}` : `${base}/attendees`, {
           method: existing ? 'PUT' : 'POST',

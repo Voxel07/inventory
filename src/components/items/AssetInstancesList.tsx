@@ -92,13 +92,25 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     })();
     const { pageItems: pageAssets, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(filteredAssets);
 
+    // Metrics
+    const metrics = (() => {
+        if (!assets) return { total: 0, available: 0, inCustody: 0, maintenance: 0, damaged: 0 };
+        return {
+            total: assets.length,
+            available: assets.filter((a) => a.availabilityStatus === 'available').length,
+            inCustody: assets.filter((a) => a.availabilityStatus === 'in_custody' || a.availabilityStatus === 'in_field').length,
+            maintenance: assets.filter((a) => a.availabilityStatus === 'in_maintenance' || a.availabilityStatus === 'in_repair').length,
+            damaged: assets.filter((a) => a.availabilityStatus === 'damaged' || a.conditionStatus === 'damaged' || a.conditionStatus === 'unsafe').length,
+        };
+    })();
+
     /** Reserved and staged units name the order that holds them. */
-    function reservationNote(asset: AssetInstance) {
+    function reservationNote(asset: AssetInstance, gridColumn?: string) {
         if (asset.availabilityStatus !== 'reserved' && asset.availabilityStatus !== 'staged') return null;
         const holder = asset.reservedFor;
-        if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t('Keine offene Bestellung gefunden', 'No open order found')}</Typography>;
+        if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('Keine offene Bestellung gefunden', 'No open order found')}</Typography>;
         const to = holder.kind === 'faction_order' ? `/orders/faction/${holder.orderId}` : '/orders?tab=general';
-        return <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>
             {t('Für Bestellung', 'For order')}{' '}
             <Link component={RouterLink} to={to} underline="hover">{holder.label}</Link>
         </Typography>;
@@ -265,6 +277,19 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </Stack>}
             </Box>
 
+            {/* Metrics Chips */}
+            <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
+                <Chip label={`${t('Gesamt', 'Total')}: ${metrics.total}`} variant="outlined" />
+                <Chip label={`${t('Verfügbar', 'Available')}: ${metrics.available}`} color="success" />
+                <Chip label={`${t('Im Einsatz / Ausgeliehen', 'In custody')}: ${metrics.inCustody}`} color="warning" />
+                {metrics.maintenance > 0 && (
+                    <Chip label={`${t('In Wartung / Reparatur', 'In maintenance')}: ${metrics.maintenance}`} color="info" />
+                )}
+                {metrics.damaged > 0 && (
+                    <Chip label={`${t('Defekt', 'Damaged')}: ${metrics.damaged}`} color="error" />
+                )}
+            </Stack>
+
             {/* Toolbar / Search */}
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <TextField
@@ -342,7 +367,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     {asset.currentCustodianName && (
                                         <div>{t('Besitzer', 'Custodian')}: <strong>{asset.currentCustodianName}</strong></div>
                                     )}
-                                    {reservationNote(asset) && <Box sx={{ gridColumn: '1 / -1' }}>{reservationNote(asset)}</Box>}
+                                    {reservationNote(asset, '1 / -1')}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                                     <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')}>

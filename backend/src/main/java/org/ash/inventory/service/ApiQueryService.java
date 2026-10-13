@@ -273,7 +273,10 @@ public class ApiQueryService {
         visibleAssemblies.forEach(a -> visibleComponents.put(a.id, components.getOrDefault(a.id, List.of())));
         var items = lines.stream().map(l -> l.item).distinct().filter(i -> catalog.canViewItem(i, actor)).toList();
         var assignments = new LinkedHashMap<String, List<ApiResponses.AssetInstanceResponse>>();
-        orders.assetAssignments(value).forEach(a -> assignments.computeIfAbsent(a.assetInstance.item.id.toString(), ignored -> new ArrayList<>()).add(mapper.asset(a.assetInstance)));
+        var assigned = orders.assetAssignments(value).stream().map(a -> a.assetInstance).toList();
+        var mappedAssets = mapper.assets(assigned);
+        for (int i = 0; i < assigned.size(); i++)
+            assignments.computeIfAbsent(assigned.get(i).item.id.toString(), ignored -> new ArrayList<>()).add(mappedAssets.get(i));
         var sources = new LinkedHashMap<String, String>();
         orders.reservations(value).stream().filter(r -> r.location != null).forEach(r -> sources.putIfAbsent(r.item.id.toString(), r.location.id.toString()));
         return mapper.order(value, lines, quantities, projectItems(items), projectAssemblies(visibleAssemblies, visibleComponents),

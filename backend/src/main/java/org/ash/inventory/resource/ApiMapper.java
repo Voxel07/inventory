@@ -542,7 +542,8 @@ public class ApiMapper {
         return result;
     }
 
-    public ApiResponses.AssetInstanceResponse asset(AssetInstance value) { return asset(value, null); }
+    /** Resolves the holder of a reserved or staged asset, like the list projection. */
+    public ApiResponses.AssetInstanceResponse asset(AssetInstance value) { return assets(List.of(value)).getFirst(); }
 
     private ApiResponses.AssetInstanceResponse asset(AssetInstance value, org.ash.inventory.orm.AssetReservationOrm.Holder holder) {
         return new ApiResponses.AssetInstanceResponse(
@@ -569,7 +570,7 @@ public class ApiMapper {
         );
     }
 
-    /** List projections also say which order holds each reserved or staged asset. */
+    /** Asset projections also say which order holds each reserved or staged asset. */
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
         prepareLocations(values.stream().map(a -> a.currentLocation).toList());
         var holders = assetReservations.holders(values.stream()

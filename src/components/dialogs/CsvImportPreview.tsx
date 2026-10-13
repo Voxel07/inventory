@@ -31,6 +31,11 @@ function searchRows<T extends { rawRow: Record<string, string>; statusMessage?: 
     .some((value) => value.toLocaleLowerCase().includes(term))) : rows;
 }
 
+/** Rendering is capped; error rows stay visible so the error jump can reach them. */
+function getPreviewRows<T extends { status: string }>(rows: T[]): T[] {
+  return rows.slice(0, 50).concat(rows.slice(50).filter((row) => row.status === 'error'));
+}
+
 function getOrderStatusChip(status: FactionOrderImportStatus, t: (de: string, en: string) => string) {
   switch (status) {
     case 'closed':
@@ -54,6 +59,8 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
   const t = useLocalizedText();
   const visibleItems = searchRows(parsedItems, itemSearch);
   const visibleAssemblies = searchRows(parsedAssemblies, assemblySearch);
+  const shownItems = getPreviewRows(visibleItems);
+  const shownAssemblies = getPreviewRows(visibleAssemblies);
   return <>
             {/* Preview Tables */}
             {tabType !== 'assemblies' && parsedItems.length > 0 && (
@@ -80,7 +87,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {visibleItems.map((row) => (
+                      {shownItems.map((row) => (
                         <TableRow key={row.index} id={`csv-import-items-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
@@ -135,6 +142,11 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                     </TableBody>
                   </Table>
                 </TableContainer>
+                {shownItems.length < visibleItems.length && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {t(`Zeige erste 50 von ${visibleItems.length} Artikeln und alle Fehlerzeilen; Suche grenzt die Liste ein`, `Showing first 50 of ${visibleItems.length} items and all error rows; search narrows the list`)}
+                  </Typography>
+                )}
               </Box>
             )}
 
@@ -159,7 +171,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {visibleAssemblies.map((row) => (
+                      {shownAssemblies.map((row) => (
                         <TableRow key={row.index} id={`csv-import-assemblies-row-${row.index}`} hover>
                           <TableCell>{row.index}</TableCell>
                           <TableCell>
@@ -196,6 +208,11 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                     </TableBody>
                   </Table>
                 </TableContainer>
+                {shownAssemblies.length < visibleAssemblies.length && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {t(`Zeige erste 50 von ${visibleAssemblies.length} Baugruppen und alle Fehlerzeilen; Suche grenzt die Liste ein`, `Showing first 50 of ${visibleAssemblies.length} assemblies and all error rows; search narrows the list`)}
+                  </Typography>
+                )}
               </Box>
             )}
 

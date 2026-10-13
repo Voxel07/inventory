@@ -73,7 +73,7 @@ export function parseEventAttendees(value: string | undefined, eventType: string
       return { personId: null, personUserId: null, personName, arrivesAt, leavesAt,
         foodStampsIssued: entry.foodStampsIssued === true, notes: text(entry.notes, false, 2000), roles };
     } catch (error) {
-      throw new Error(`Teilnehmer ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Teilnehmer ${index + 1}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   });
 }
@@ -96,7 +96,7 @@ export function parseEventTimeline(value: string | undefined): EventTimelineInpu
       return { category, status, title, startsAt, endsAt, owner: text(entry.owner),
         location: text(entry.location), description: text(entry.description, false, 2000) };
     } catch (error) {
-      throw new Error(`Zeitplaneintrag ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Zeitplaneintrag ${index + 1}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   });
 }

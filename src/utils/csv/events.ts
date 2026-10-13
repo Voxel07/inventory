@@ -44,8 +44,9 @@ export function parseEventReportsFromCsv(
     if (!rowType || !['event', 'ereignis', 'eventbericht', 'eventreport'].includes(rowType)) continue;
 
     const eventType = knownEventType(reference, getField(raw, EVENT_REPORT_TYPE_ALIASES));
-    const eventDate = getField(raw, EVENT_DATE_ALIASES) ?? '';
-    const startDate = getField(raw, ['startDate', 'Startdatum']) || eventDate;
+    // Startdatum names the event's first day, so it takes precedence over Eventdatum.
+    const startDate = getField(raw, ['startDate', 'Startdatum']) || getField(raw, EVENT_DATE_ALIASES) || '';
+    const eventDate = startDate;
     const endDate = getField(raw, ['endDate', 'Enddatum']) || startDate;
     const rawStatus = getField(raw, EVENT_STATUS_ALIASES)?.toLowerCase().trim();
     const status: EventReportStatus = ['planned', 'geplant'].includes(rawStatus ?? '') ? 'planned' : 'completed';
@@ -60,9 +61,9 @@ export function parseEventReportsFromCsv(
     if (!eventType) {
       validationStatus = 'error';
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
-    } else if (!isCsvDate(eventDate) || !isCsvDate(startDate) || !isCsvDate(endDate) || startDate !== eventDate || endDate < startDate) {
+    } else if (!isCsvDate(startDate) || !isCsvDate(endDate) || endDate < startDate) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (JJJJ-MM-TT) sein; Startdatum muss dem Eventdatum entsprechen und Enddatum darf nicht davor liegen';
+      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (JJJJ-MM-TT) sein; Enddatum darf nicht vor dem Startdatum liegen';
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
@@ -81,7 +82,8 @@ export function parseEventReportsFromCsv(
       index: index + 1,
       data: {
         eventType: eventType ?? 'LS',
-        name: getField(raw, ['name', 'eventname']),
+        // An empty Name cell keeps the existing name on re-import instead of blanking it.
+        name: getField(raw, ['name', 'eventname']) || undefined,
         eventDate,
         startDate,
         endDate,

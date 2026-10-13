@@ -280,8 +280,17 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           : await createEventReport(data);
         if (!existing) existingEvents.push(saved);
         else existingEvents.splice(existingEvents.findIndex((event) => event.id === existing.id), 1, saved);
-        await importEventLogistics(saved.id, row);
         successEvents++;
+        // The event itself is saved; a logistics failure is reported separately.
+        try {
+          await importEventLogistics(saved.id, row);
+        } catch (err: unknown) {
+          assertAuthSession(context);
+          errors.push(translate(
+            `Event ${row.data.eventType} ${row.data.eventDate} gespeichert, Teilnehmer/Zeitplan unvollständig: ${(err as Error).message || err}`,
+            `Event ${row.data.eventType} ${row.data.eventDate} saved, attendees/timeline incomplete: ${(err as Error).message || err}`,
+          ));
+        }
       } catch (err: unknown) {
         assertAuthSession(context);
         errors.push(`Event ${row.data.eventType} ${row.data.eventDate}: ${(err as Error).message || err}`);
