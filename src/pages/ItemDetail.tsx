@@ -234,13 +234,6 @@ export function ItemDetail() {
     const policyLabels = { available: t('Verfügbar', 'Available'), commitment_required: t('Zusage erforderlich', 'Commitment required'), unavailable: t('Nicht verfügbar', 'Unavailable') };
     const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 5) ? 'low' : 'ok';
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' }[availability];
-    const availabilityText = remaining <= 0
-        ? t(`Nicht verfügbar (0 von ${physicalTotal})`, `None available (0 of ${physicalTotal})`)
-        : t(`${remaining} von ${physicalTotal} verfügbar`, `${remaining} of ${physicalTotal} available`) + (availability === 'low' ? ` · ${t('niedriger Bestand', 'low stock')}` : '');
-    const secondaryStock = [
-        checkedOut > 0 && t(`${checkedOut} ausgeliehen`, `${checkedOut} checked out`),
-        inTransit > 0 && t(`${inTransit} im Transfer`, `${inTransit} in transit`),
-    ].filter(Boolean).join(' · ');
     const location = item.expand?.storageLocation;
     const locationText = location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : '';
     const exactLocation = [location?.location, location?.position].filter(Boolean).join(' / ');
@@ -347,11 +340,8 @@ export function ItemDetail() {
                             <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
                             {profile && <Chip size="small" variant="outlined" sx={tinyChip} color={profile.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
                         </Stack>
-                        <Typography className="tabular" sx={{ fontSize: '0.8125rem', mt: 0.25 }}>
-                            <Box component="span" sx={{ color: availabilityColor, fontWeight: 600 }}>{availabilityText}</Box>
-                            {secondaryStock && <Box component="span" sx={{ color: 'text.secondary' }}> · {secondaryStock}</Box>}
-                            {damaged > 0 && <Box component="span" sx={{ color: 'error.main', fontWeight: 600 }}> · {t(`${damaged} defekt`, `${damaged} damaged`)}</Box>}
-                            <Box component="span" sx={{ color: 'text.secondary' }}> · {t('Lagerort', 'Location')}: </Box>
+                        <Typography sx={{ fontSize: '0.8125rem', mt: 0.25 }}>
+                            <Box component="span" sx={{ color: 'text.secondary' }}>{t('Lagerort', 'Location')}: </Box>
                             {item.storageLocation
                                 ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`}>{locationText || item.storageLocation}</Link>
                                 : t('Nicht zugewiesen', 'Not assigned')}

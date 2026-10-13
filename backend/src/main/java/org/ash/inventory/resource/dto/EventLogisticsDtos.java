@@ -34,6 +34,9 @@ public final class EventLogisticsDtos {
             LocalDateTime arrivesAt, LocalDateTime leavesAt, boolean foodStampsIssued, @Size(max = 2000) String notes,
             @NotNull @Size(min = 1, max = 20) List<@NotNull @Valid RoleInput> roles) {}
 
+    /** A directory entry; renaming or relinking applies at every event the person attends. */
+    public record PersonInput(@NotBlank @Size(max = 255) String name, UUID userId) {}
+
     public record PersonSummary(UUID id, String name, UUID userId, String userName) {
         public static PersonSummary from(EventPerson person) {
             return new PersonSummary(person.id, person.name,

@@ -6,12 +6,14 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import RestaurantOutlinedIcon from '@mui/icons-material/RestaurantOutlined';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import { Button, IconButton } from '../components/shared/ActionButtons';
 import { PageHeader } from '../components/shared/PageHeader';
 import { FormDialog, DialogForm } from '../components/shared/FormDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { QueryFeedback } from '../components/common/QueryFeedback';
 import { EventMetric, EventWorkspace } from '../components/events/EventWorkspace';
+import { EventPeopleDirectory } from '../components/events/EventPeopleDirectory';
 import { attendeeHooks, useEventAccounts, useEventPeople } from '../hooks/useEventLogistics';
 import { useEventWorkspace } from '../hooks/useEventWorkspace';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
@@ -66,6 +68,8 @@ function AttendeeList({ eventId, eventType }: { eventId: string; eventType: Even
   const [roleFilter, setRoleFilter] = useState<AttendeeRoleKind | ''>('');
   const [editing, setEditing] = useState<EventAttendee | 'new' | null>(null);
   const [deleting, setDeleting] = useState<EventAttendee | null>(null);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [pickedPerson, setPickedPerson] = useState<EventPerson | undefined>();
   const attendees = query.data ?? [];
   const unissued = attendees.filter((attendee) => !attendee.foodStampsIssued);
   const missingDates = attendees.filter((attendee) => !attendee.arrivesAt || !attendee.leavesAt).length;
@@ -106,7 +110,10 @@ function AttendeeList({ eventId, eventType }: { eventId: string; eventType: Even
               {ATTENDEE_ROLES.map((role) => <MenuItem key={role} value={role}>{roleLabels[role]}</MenuItem>)}
             </TextField>
           </Stack>
-          {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => { save.reset(); setEditing('new'); }}>{t('Person hinzufügen', 'Add person')}</Button>}
+          {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button variant="outlined" startIcon={<GroupsOutlinedIcon />} onClick={() => setDirectoryOpen(true)}>{t('Personenliste', 'People list')}</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => { save.reset(); setPickedPerson(undefined); setEditing('new'); }}>{t('Person hinzufügen', 'Add person')}</Button>
+          </Stack>}
         </Stack>
       </Paper>
       {!attendees.length ? <Alert severity="info">{t('Noch keine Teilnehmer. Füge die ersten Personen hinzu, um Rollen, Reisezeiten und Verpflegung zu planen.', 'No attendees yet. Add the first people to plan roles, travel times and catering.')}</Alert>
@@ -152,10 +159,13 @@ function AttendeeList({ eventId, eventType }: { eventId: string; eventType: Even
         </>}
     </>}
     <FormDialog open={editing !== null} maxWidth="md" onClose={() => { if (!save.isPending) setEditing(null); }}>
-      {editing && <AttendeeForm attendee={editing === 'new' ? undefined : editing} eventType={eventType}
+      {editing && <AttendeeForm attendee={editing === 'new' ? undefined : editing} initialPerson={pickedPerson} eventType={eventType}
         attendingPersonIds={attendees.map((attendee) => attendee.person.id)} pending={save.isPending} error={save.error?.message}
         onSubmit={submit} onCancel={() => setEditing(null)} />}
     </FormDialog>
+    {canEdit && <EventPeopleDirectory open={directoryOpen} onClose={() => setDirectoryOpen(false)}
+      attendingPersonIds={attendees.map((attendee) => attendee.person.id)}
+      onAddToEvent={(person) => { save.reset(); setPickedPerson(person); setDirectoryOpen(false); setEditing('new'); }} />}
     <ConfirmDialog open={Boolean(deleting)} title={t('Teilnehmer entfernen', 'Remove attendee')}
       message={t(`${deleting?.person.name ?? ''} aus diesem Event entfernen? Die Person bleibt für andere Events erhalten; die Essensmarken-Summen werden angepasst.`,
         `Remove ${deleting?.person.name ?? ''} from this event? The person stays available for other events; food-stamp totals will be updated.`)}
@@ -169,8 +179,8 @@ function AttendeeList({ eventId, eventType }: { eventId: string; eventType: Even
 
 type RoleRow = { role: AttendeeRoleKind; factionId: string; factionName: string | null; assignment: string };
 
-function AttendeeForm({ attendee, eventType, attendingPersonIds, pending, error, onSubmit, onCancel }: {
-  attendee?: EventAttendee; eventType: EventType; attendingPersonIds: string[]; pending: boolean; error?: string;
+function AttendeeForm({ attendee, initialPerson, eventType, attendingPersonIds, pending, error, onSubmit, onCancel }: {
+  attendee?: EventAttendee; initialPerson?: EventPerson; eventType: EventType; attendingPersonIds: string[]; pending: boolean; error?: string;
   onSubmit: (data: EventAttendeeInput) => void; onCancel: () => void;
 }) {
   const t = useLocalizedText();
@@ -178,9 +188,9 @@ function AttendeeForm({ attendee, eventType, attendingPersonIds, pending, error,
   const people = useEventPeople();
   const accounts = useEventAccounts(true);
   const factions = useFactionCatalog().factionsFor(eventType);
-  const [person, setPerson] = useState<EventPerson | null>(null);
-  const [personName, setPersonName] = useState(attendee?.person.name ?? '');
-  const [userId, setUserId] = useState<string | null>(attendee?.person.userId ?? null);
+  const [person, setPerson] = useState<EventPerson | null>(initialPerson ?? null);
+  const [personName, setPersonName] = useState(attendee?.person.name ?? initialPerson?.name ?? '');
+  const [userId, setUserId] = useState<string | null>(attendee?.person.userId ?? initialPerson?.userId ?? null);
   const [roles, setRoles] = useState<RoleRow[]>(attendee?.roles.map((role) => ({ ...role, factionId: role.factionId ?? '', assignment: role.assignment ?? '' }))
     ?? [{ role: 'event_crew', factionId: '', factionName: null, assignment: '' }]);
   const [arrivesAt, setArrivesAt] = useState(attendee?.arrivesAt?.slice(0, 16) ?? '');
@@ -242,8 +252,8 @@ function AttendeeForm({ attendee, eventType, attendingPersonIds, pending, error,
           renderInput={(params) => <TextField {...params} autoFocus required label={t('Name', 'Name')}
             slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, maxLength: 255 } }}
             helperText={person ? t(`Bekannte Person · ${person.attendances} Events`, `Known person · ${person.attendances} events`)
-              : personName.trim() ? t('Wird als neue Person angelegt.', 'Will be added as a new person.')
-                : t('Bekannte Person auswählen oder neuen Namen eingeben.', 'Pick a known person or type a new name.')} />} />}
+              : personName.trim() ? t('Kein Treffer gewählt – wird als neuer Eintrag in der Personenliste angelegt.', 'No match picked – will be created as a new entry in the people list.')
+                : t('Aus der Personenliste wählen oder neuen Namen eingeben.', 'Pick from the people list or type a new name.')} />} />}
       {sameName && <Alert severity="warning">{t(`„${sameName.name}“ existiert bereits. Wähle die Person aus der Liste, um Doppelungen zu vermeiden.`,
         `“${sameName.name}” already exists. Pick them from the list to avoid a duplicate.`)}</Alert>}
       <Autocomplete options={linkable} value={linkedAccount} loading={accounts.isLoading}

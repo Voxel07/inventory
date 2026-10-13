@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
+import { KeyboardShortcuts } from './components/shared/KeyboardShortcuts';
 import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
@@ -152,6 +153,7 @@ function AppContent() {
         </ErrorBoundary>
       </Box>
       <AppSnackbar />
+      <KeyboardShortcuts />
     </Box></ActionInboxDialogProvider>
   );
 }

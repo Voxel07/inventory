@@ -1,4 +1,6 @@
-import { Button, IconButton } from '../shared/ActionButtons';
+import { Button } from '../shared/ActionButtons';
+import { RowActions, type RowAction } from '../shared/RowActions';
+import { useCollapsedRowActions } from '../../hooks/useCollapsedRowActions';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -92,18 +94,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     })();
     const { pageItems: pageAssets, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(filteredAssets);
 
-    // Metrics
-    const metrics = (() => {
-        if (!assets) return { total: 0, available: 0, inCustody: 0, maintenance: 0, damaged: 0 };
-        return {
-            total: assets.length,
-            available: assets.filter((a) => a.availabilityStatus === 'available').length,
-            inCustody: assets.filter((a) => a.availabilityStatus === 'in_custody' || a.availabilityStatus === 'in_field').length,
-            maintenance: assets.filter((a) => a.availabilityStatus === 'in_maintenance' || a.availabilityStatus === 'in_repair').length,
-            damaged: assets.filter((a) => a.availabilityStatus === 'damaged' || a.conditionStatus === 'damaged' || a.conditionStatus === 'unsafe').length,
-        };
-    })();
-
     /** Reserved and staged units name the order that holds them. */
     function reservationNote(asset: AssetInstance, gridColumn?: string) {
         if (asset.availabilityStatus !== 'reserved' && asset.availabilityStatus !== 'staged') return null;
@@ -115,6 +105,19 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             <Link component={RouterLink} to={to} underline="hover">{holder.label}</Link>
         </Typography>;
     }
+    function assetActions(asset: AssetInstance): RowAction[] {
+        const assetPath = `/items/${item.id}/assets/${asset.id}`;
+        return [
+            { key: 'info', label: t('Asset-Infoseite öffnen', 'Open asset info page'), icon: <InfoOutlinedIcon fontSize="small" />, onClick: () => navigate(assetPath) },
+            ...(canReportDamage ? [{ key: 'damage', label: t('Schaden an diesem Asset melden', 'Report damage to this asset'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => navigate(`${assetPath}?reportDamage=1`), color: 'error' as const }] : []),
+            { key: 'qr', label: t('QR-Code anzeigen', 'Show QR code'), icon: <QrCode2Icon fontSize="small" />, onClick: () => setQrAsset(asset) },
+            ...(canEdit ? [
+                { key: 'edit', label: t('Bearbeiten', 'Edit'), icon: <EditIcon fontSize="small" />, onClick: () => handleOpenEdit(asset) },
+                { key: 'retire', label: t('Ausbuchen / Ausmustern', 'Write off / Retire'), icon: <DeleteIcon fontSize="small" />, onClick: () => setDeleteTarget(asset), color: 'error' as const },
+            ] : []),
+        ];
+    }
+    const { ref: tableRef, collapsed: actionsCollapsed } = useCollapsedRowActions<HTMLDivElement>();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialogs
@@ -277,19 +280,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </Stack>}
             </Box>
 
-            {/* Metrics Chips */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
-                <Chip label={`${t('Gesamt', 'Total')}: ${metrics.total}`} variant="outlined" />
-                <Chip label={`${t('Verfügbar', 'Available')}: ${metrics.available}`} color="success" />
-                <Chip label={`${t('Im Einsatz / Ausgeliehen', 'In custody')}: ${metrics.inCustody}`} color="warning" />
-                {metrics.maintenance > 0 && (
-                    <Chip label={`${t('In Wartung / Reparatur', 'In maintenance')}: ${metrics.maintenance}`} color="info" />
-                )}
-                {metrics.damaged > 0 && (
-                    <Chip label={`${t('Defekt', 'Damaged')}: ${metrics.damaged}`} color="error" />
-                )}
-            </Stack>
-
             {/* Toolbar / Search */}
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <TextField
@@ -370,28 +360,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     {reservationNote(asset, '1 / -1')}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                    <IconButton size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)} title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')}>
-                                        <InfoOutlinedIcon fontSize="small" />
-                                    </IconButton>
-                                    {canReportDamage && <IconButton size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)} title={translate('Einen Schaden für dieses Gerät melden', 'Report damage to this asset')}>
-                                        <ReportProblemOutlinedIcon fontSize="small" />
-                                    </IconButton>}
-                                    <IconButton size="small" onClick={() => setQrAsset(asset)} title={translate('Den QR-Code dieses Geräts anzeigen', 'Display the QR code for this asset')}>
-                                        <QrCode2Icon fontSize="small" />
-                                    </IconButton>
-                                    {canEdit && <IconButton size="small" onClick={() => handleOpenEdit(asset)} title={translate('Die Gerätedaten bearbeiten', 'Edit the asset details')}>
-                                        <EditIcon fontSize="small" />
-                                    </IconButton>}
-                                    {canEdit && <IconButton size="small" color="error" onClick={() => setDeleteTarget(asset)} title={translate('Die Ausbuchung dieses Geräts bestätigen', 'Review retirement of this asset')}>
-                                        <DeleteIcon fontSize="small" />
-                                    </IconButton>}
+                                    <RowActions actions={assetActions(asset)} collapsed={false} />
                                 </Stack>
                             </CardContent>
                         </Card>
                     ))}
                 </Stack>
             ) : (
-                <TableContainer>
+                <TableContainer ref={tableRef}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
@@ -432,32 +408,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     <TableCell>{asset.currentLocationName || '—'}</TableCell>
                                     <TableCell>{asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}</TableCell>
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>
-                                    <TableCell align="right">
-
-                                        <IconButton title={t('Asset-Infoseite öffnen', 'Open asset info page')} size="small" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}`)}>
-                                            <InfoOutlinedIcon fontSize="small" />
-                                        </IconButton>
-
-                                        {canReportDamage &&
-                                        <IconButton title={t('Schaden an diesem Asset melden', 'Report damage to this asset')} size="small" color="error" onClick={() => navigate(`/items/${item.id}/assets/${asset.id}?reportDamage=1`)}>
-                                            <ReportProblemOutlinedIcon fontSize="small" />
-                                        </IconButton>
-                                        }
-
-                                        <IconButton title={t('QR-Code anzeigen', 'Show QR code')} size="small" onClick={() => setQrAsset(asset)}>
-                                            <QrCode2Icon fontSize="small" />
-                                        </IconButton>
-
-                                        {canEdit &&
-                                        <IconButton title={t('Bearbeiten', 'Edit')} size="small" onClick={() => handleOpenEdit(asset)}>
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                        }
-                                        {canEdit &&
-                                        <IconButton title={t('Ausbuchen / Ausmustern', 'Write off / Retire')} size="small" color="error" onClick={() => setDeleteTarget(asset)}>
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                        }
+                                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                        <RowActions actions={assetActions(asset)} collapsed={actionsCollapsed} />
                                     </TableCell>
                                 </TableRow>
                             ))}

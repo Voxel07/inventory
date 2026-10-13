@@ -26,6 +26,11 @@ export interface EventPerson extends EventPersonSummary {
   attendances: number;
 }
 
+export interface EventPersonInput {
+  name: string;
+  userId: string | null;
+}
+
 export interface EventAccountOption {
   id: string;
   name: string;

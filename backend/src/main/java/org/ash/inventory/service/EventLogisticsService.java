@@ -54,6 +54,23 @@ public class EventLogisticsService {
         }).toList();
     }
 
+    public PersonResponse savePerson(UUID id, @Valid PersonInput input) {
+        actors.requirePlanner();
+        var person = person(id, input.name(), input.userId());
+        peopleChanged(person.id);
+        var summary = PersonSummary.from(person);
+        return new PersonResponse(person.id, person.name, summary.userId(), summary.userName(), id == null ? 0 : orm.attendanceCount(person.id));
+    }
+
+    /** Only people who attend no event can leave the directory; attendance history stays intact. */
+    public void deletePerson(UUID id) {
+        actors.requirePlanner();
+        var person = orm.requireLocked(EventPerson.class, id, "Person");
+        if (orm.attendanceCount(id) > 0) throw ApiException.conflict(person.name + " still attends an event");
+        orm.remove(person);
+        peopleChanged(id);
+    }
+
     /** Accounts a person can be linked to; only planners link, so only they see the directory. */
     public List<AccountOption> accounts() {
         actors.requirePlanner();
@@ -69,7 +86,7 @@ public class EventLogisticsService {
         if (id != null) requireEvent(eventId, attendee.event.id);
         var factions = orm.factions(event.eventType);
         var roles = roles(input.roles(), factions);
-        var person = person(input);
+        var person = person(input.personId(), input.personName(), input.personUserId());
         if (orm.attendances(eventId, person.id).stream().anyMatch(other -> !other.equals(attendee.id)))
             throw ApiException.conflict(person.name + " already attends this event");
         attendee.event = event;
@@ -86,10 +103,10 @@ public class EventLogisticsService {
     }
 
     /** Creates the person or renames/relinks the existing one; the change shows at every event. */
-    private EventPerson person(AttendeeInput input) {
-        var person = input.personId() == null ? new EventPerson() : orm.requireLocked(EventPerson.class, input.personId(), "Person");
-        person.name = input.personName().trim();
-        UserAccount user = input.personUserId() == null ? null : orm.require(UserAccount.class, input.personUserId(), "User");
+    private EventPerson person(UUID id, String name, UUID userId) {
+        var person = id == null ? new EventPerson() : orm.requireLocked(EventPerson.class, id, "Person");
+        person.name = name.trim();
+        UserAccount user = userId == null ? null : orm.require(UserAccount.class, userId, "User");
         if (user != null) {
             var linked = orm.personLinkedTo(user.id);
             if (linked != null && !linked.equals(person)) throw ApiException.conflict(user.name + " is already linked to " + linked.name);
@@ -178,6 +195,10 @@ public class EventLogisticsService {
     private void validateRange(LocalDateTime start, LocalDateTime end) {
         if (start != null && end != null && end.isBefore(start))
             throw ApiException.badRequest("End time cannot be before start time");
+    }
+
+    private void peopleChanged(UUID personId) {
+        events.record("event_logistics.changed", "event_person", personId, actors.current().id, null, Map.of("section", "people"));
     }
 
     private void changed(UUID eventId, String section) {

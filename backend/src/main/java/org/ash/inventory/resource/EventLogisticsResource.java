@@ -27,6 +27,18 @@ public class EventLogisticsResource {
     @GET @Path("/event-people")
     public List<PersonResponse> people() { return service.people(); }
 
+    @POST @Path("/event-people")
+    public PersonResponse createPerson(@Valid PersonInput input) { return service.savePerson(null, input); }
+
+    @PUT @Path("/event-people/{id}")
+    public PersonResponse updatePerson(@PathParam("id") UUID id, @Valid PersonInput input) { return service.savePerson(id, input); }
+
+    @DELETE @Path("/event-people/{id}")
+    public Response deletePerson(@PathParam("id") UUID id) {
+        service.deletePerson(id);
+        return Response.noContent().build();
+    }
+
     @GET @Path("/event-people/accounts")
     public List<AccountOption> accounts() { return service.accounts(); }
 

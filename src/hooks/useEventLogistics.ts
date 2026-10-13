@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../services/apiClient';
 import type {
-  EventAccountOption, EventAttendee, EventAttendeeInput, EventPerson, EventTimelineEntry, EventTimelineInput,
+  EventAccountOption, EventAttendee, EventAttendeeInput, EventPerson, EventPersonInput, EventTimelineEntry, EventTimelineInput,
 } from '../types/eventLogistics';
 
 function createEventLogisticsHooks<T, TInput>(section: 'attendees' | 'timeline') {
@@ -33,6 +33,20 @@ export const attendeeHooks = createEventLogisticsHooks<EventAttendee, EventAtten
 /** The shared people registry, for picking a person who attended an earlier event. */
 export function useEventPeople() {
   return useQuery({ queryKey: ['event-logistics', 'people'], queryFn: () => apiRequest<EventPerson[]>('/api/event-people') });
+}
+
+/** Adds a person to the shared directory, or renames/relinks them for every event. */
+export function useSaveEventPerson() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: EventPersonInput }) => apiRequest<EventPerson>(
+      id ? `/api/event-people/${id}` : '/api/event-people', { method: id ? 'PUT' : 'POST', body: data },
+    ),
+  });
+}
+
+/** Only people without any event attendance can be removed. */
+export function useDeleteEventPerson() {
+  return useMutation({ mutationFn: (id: string) => apiRequest(`/api/event-people/${id}`, { method: 'DELETE' }) });
 }
 
 /** Accounts a person can be linked to; planners only. */

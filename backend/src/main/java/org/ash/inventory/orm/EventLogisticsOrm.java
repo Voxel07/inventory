@@ -35,6 +35,11 @@ public class EventLogisticsOrm extends EntityOrm {
                 .getResultStream().collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
     }
 
+    public long attendanceCount(UUID personId) {
+        return entityManager.createQuery("select count(a) from EventAttendee a where a.person.id = :personId", Long.class)
+                .setParameter("personId", personId).getSingleResult();
+    }
+
     public EventPerson personLinkedTo(UUID userId) {
         return entityManager.createQuery("select p from EventPerson p where p.user.id = :userId", EventPerson.class)
                 .setParameter("userId", userId).getResultStream().findFirst().orElse(null);
