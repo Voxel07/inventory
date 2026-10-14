@@ -183,7 +183,7 @@ public final class ApiResponses {
             List<ReturnDamageResponse> reportedDamage
     ) {}
 
-    /** An open damage report the warehouse should see before returning the item to stock. */
+    /** Open damage the warehouse should see before returning the item to stock; contributor requests carry no severity. */
     public record ReturnDamageResponse(
             UUID id,
             String assetCode,

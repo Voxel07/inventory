@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.Item;
+import org.ash.inventory.model.MemberRequest;
 import org.ash.inventory.model.ReturnSubmission;
 import org.ash.inventory.model.UserAccount;
 
@@ -63,6 +64,16 @@ public class ReturnSubmissionOrm extends EntityOrm {
                 .setParameter("open", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
                         DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
                         DomainEnums.DamageStatus.in_repair))
+                .getResultList();
+    }
+
+    /** Contributor damage requests on these items that stand alone, without a linked damage report. */
+    public List<MemberRequest> openMemberDamage(java.util.Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return List.of();
+        return entityManager.createQuery(
+                "select r from MemberRequest r join fetch r.requester join fetch r.item where r.item.id in :items"
+                        + " and r.kind = 'damage' and r.status <> 'resolved' and r.damageReport is null order by r.createdAt desc", MemberRequest.class)
+                .setParameter("items", itemIds)
                 .getResultList();
     }
 

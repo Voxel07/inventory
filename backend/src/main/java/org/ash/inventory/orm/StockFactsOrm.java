@@ -38,7 +38,7 @@ public class StockFactsOrm {
                 union all
                 select 'member_damage', r.item_id, null, 0, 0
                 from member_requests r join scope s on s.id = r.item_id
-                where r.kind = 'damage' and r.status <> 'resolved' group by r.item_id
+                where r.kind = 'damage' and r.status <> 'resolved' and r.damage_report_id is null group by r.item_id
                 """, Object[].class).unwrap(org.hibernate.query.NativeQuery.class);
         query.addScalar("kind", String.class).addScalar("item_id", UUID.class)
                 .addScalar("subtype", String.class).addScalar("quantity", Long.class).addScalar("custody", Long.class);

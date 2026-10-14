@@ -172,7 +172,8 @@ export interface ReturnDamage {
   id: string;
   assetCode?: string;
   quantity: number;
-  severity: string;
+  /** Absent for contributor damage requests on bulk items. */
+  severity?: string;
   status: string;
   description: string;
   reportedByName?: string;

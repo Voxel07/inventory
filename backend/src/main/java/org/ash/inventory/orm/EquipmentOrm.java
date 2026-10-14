@@ -12,7 +12,7 @@ import java.util.stream.Stream;
 public class EquipmentOrm extends EntityOrm {
     public List<UUID> openMemberDamage(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return entityManager.createQuery("select distinct r.item.id from MemberRequest r where r.item.id in :ids and r.kind = 'damage' and r.status <> 'resolved'", UUID.class)
+        return entityManager.createQuery("select distinct r.item.id from MemberRequest r where r.item.id in :ids and r.kind = 'damage' and r.status <> 'resolved' and r.damageReport is null", UUID.class)
                 .setParameter("ids", itemIds).getResultList();
     }
 
@@ -43,7 +43,7 @@ public class EquipmentOrm extends EntityOrm {
     }
 
     public Long openMemberDamage(Item item) {
-        return entityManager.createQuery("select count(r) from MemberRequest r where r.item = :item and r.kind = 'damage' and r.status <> 'resolved'", Long.class).setParameter("item", item).getSingleResult();
+        return entityManager.createQuery("select count(r) from MemberRequest r where r.item = :item and r.kind = 'damage' and r.status <> 'resolved' and r.damageReport is null", Long.class).setParameter("item", item).getSingleResult();
     }
 
     public List<LoanArrangement> openLoans(Item item) {

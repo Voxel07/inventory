@@ -10,11 +10,13 @@ import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.Item;
+import org.ash.inventory.model.MemberRequest;
 import org.ash.inventory.model.ReturnSubmission;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.ReturnSubmissionOrm;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.ApiModels;
+import org.ash.inventory.resource.dto.ApiResponses;
 
 import java.time.Instant;
 import java.util.List;
@@ -179,16 +181,32 @@ public class ReturnSubmissionService {
     }
 
     /**
-     * Open damage reports the reviewer must see: those on the returned asset, or for bulk items those
-     * filed by the returning people or against the same order.
+     * Open damage the reviewer must see: reports on the returned asset, or for bulk items those filed by the
+     * returning people or against the same order, plus their open contributor damage requests.
      */
-    public Map<UUID, List<DamageReport>> reportedDamage(List<ReturnSubmission> submissions) {
-        var reports = orm.openDamage(submissions.stream().map(value -> value.item.id).collect(java.util.stream.Collectors.toSet()));
-        var result = new java.util.HashMap<UUID, List<DamageReport>>();
+    public Map<UUID, List<ApiResponses.ReturnDamageResponse>> reportedDamage(List<ReturnSubmission> submissions) {
+        var items = submissions.stream().map(value -> value.item.id).collect(java.util.stream.Collectors.toSet());
+        var reports = orm.openDamage(items);
+        var requests = orm.openMemberDamage(items);
+        var result = new java.util.HashMap<UUID, List<ApiResponses.ReturnDamageResponse>>();
         for (var value : submissions) {
-            result.put(value.id, reports.stream().filter(report -> concerns(value, report)).toList());
+            var damage = new java.util.ArrayList<ApiResponses.ReturnDamageResponse>();
+            reports.stream().filter(report -> concerns(value, report)).map(report -> new ApiResponses.ReturnDamageResponse(
+                    report.id, report.assetInstance == null ? null : report.assetInstance.assetCode, report.quantity,
+                    report.severity.name(), report.status.name(), report.description, report.reporter.name, report.createdAt))
+                    .forEach(damage::add);
+            requests.stream().filter(request -> concerns(value, request)).map(request -> new ApiResponses.ReturnDamageResponse(
+                    request.id, null, request.quantity, null, request.status, request.notes, request.requester.name, request.createdAt))
+                    .forEach(damage::add);
+            result.put(value.id, damage);
         }
         return result;
+    }
+
+    /** Asset damage requests carry a damage report; only bulk requests stand on their own. */
+    private static boolean concerns(ReturnSubmission value, MemberRequest request) {
+        return value.assetInstance == null && request.item.id.equals(value.item.id)
+                && (request.requester.id.equals(value.returnedFor.id) || request.requester.id.equals(value.submittedBy.id));
     }
 
     private static boolean concerns(ReturnSubmission value, DamageReport report) {

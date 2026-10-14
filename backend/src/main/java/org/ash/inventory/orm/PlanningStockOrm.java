@@ -61,7 +61,7 @@ public class PlanningStockOrm {
                     "general_orders o cross join lateral jsonb_each_text(o.prepared_quantities) q join scope s on lower(q.key) = s.id::text where o.status in ('preparing', 'ready') group by s.id"),
             rows("member_damage", "r.item_id", null, null, null, null, null,
                     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    "member_requests r join scope s on s.id = r.item_id where r.kind = 'damage' and r.status <> 'resolved' group by r.item_id"),
+                    "member_requests r join scope s on s.id = r.item_id where r.kind = 'damage' and r.status <> 'resolved' and r.damage_report_id is null group by r.item_id"),
             rows("position", "p.item_id", null, "p.location_id", null, null, null,
                     "p.quantity_on_hand", "p.quantity_damaged", "p.quantity_reserved", "p.quantity_quarantined",
                     "p.quantity_in_transit", null, null, null, null, null, null, "p.lot_id is not null",

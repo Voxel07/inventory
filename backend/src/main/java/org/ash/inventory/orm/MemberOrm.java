@@ -30,6 +30,11 @@ public class MemberOrm extends EntityOrm {
         }
         return List.copyOf(result.values());
     }
+    public java.util.Map<UUID, String> assetCodes(java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        return entityManager.createQuery("select a.id, a.assetCode from AssetInstance a where a.id in :ids", Object[].class).setParameter("ids", ids)
+                .getResultStream().collect(java.util.stream.Collectors.toMap(row -> (UUID) row[0], row -> (String) row[1]));
+    }
     public java.util.Map<UUID, Item> custodyItems(java.util.Collection<UUID> ids) {
         if (ids.isEmpty()) return java.util.Map.of();
         return entityManager.createQuery("from Item i where i.id in :ids", Item.class).setParameter("ids", ids)

@@ -121,7 +121,7 @@ public final class ApiModels {
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude) {}
 
     public record DamageInput(
-            UUID itemId, @Min(1) int amount, @NotBlank String description,
+            UUID itemId, @Min(1) int amount, @NotBlank @jakarta.validation.constraints.Size(max = 2000) String description,
             @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey,
             UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId,
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}

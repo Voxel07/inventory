@@ -18,14 +18,16 @@ public class MemberService {
     @Inject ReturnSubmissionService returns;
     @Inject DomainEventService events;
     @Inject ItemRequestNotifier requests;
+    @Inject InventoryOperationsService inventory;
     public record Stored(UUID itemId, String name, UUID locationId, String location, UUID assetId, String assetCode, int quantity) {}
     public record RequestInput(@NotNull UUID itemId, UUID assetId, UUID locationId,
-            @NotBlank String kind, @Min(1) int quantity, @NotBlank @Size(max=2000) String notes, @NotNull UUID commandId) {}
+            @NotBlank String kind, @Min(1) int quantity, @NotBlank @Size(max=2000) String notes, @NotNull UUID commandId,
+            DomainEnums.DamageSeverity severity) {}
     public record Decision(@NotNull Long revision, @NotBlank @Size(max=2000) String response, boolean resolved) {}
     public record Assignment(UUID userId) {}
     public record LocationView(UUID id, String name, UUID userId) {}
     public record RequestView(UUID id, UUID itemId, String item, String requester, String kind, int quantity,
-            String notes, String status, String response, Instant createdAt, long revision, UUID assetId, UUID locationId) {}
+            String notes, String status, String response, Instant createdAt, long revision, UUID assetId, UUID locationId, UUID damageReportId) {}
     public record ReturnInput(@NotBlank String custodyKey, @Min(1) int quantity, UUID assetId, @Size(max=255) String notes, @NotNull UUID commandId) {}
 
     @Transactional
@@ -36,8 +38,10 @@ public class MemberService {
         var orders = balances.stream().filter(b -> b.factionOrderId() != null && items.get(b.itemId()).trackingMode == DomainEnums.TrackingMode.serialized)
                 .map(CustodyBalanceService.Balance::factionOrderId).distinct().toList();
         var assets = orm.custodyAssets(orders).stream().collect(java.util.stream.Collectors.groupingBy(a -> a.order() + ":" + a.item()));
+        var codes = orm.assetCodes(balances.stream().map(CustodyBalanceService.Balance::assetInstanceId).filter(Objects::nonNull).toList());
         for (var b : balances) {
             var item = items.get(b.itemId());
+            if (b.assetInstanceId() != null) { result.add(withName(b, b.name() + " · " + codes.get(b.assetInstanceId()))); continue; }
             if (b.factionOrderId() == null || item.trackingMode != DomainEnums.TrackingMode.serialized) { result.add(b); continue; }
             for (var candidate : assets.getOrDefault(b.factionOrderId() + ":" + b.itemId(), List.of())) {
                 var asset = candidate.asset();
@@ -92,12 +96,19 @@ public class MemberService {
         if (!Set.of("damage", "pickup").contains(input.kind())) throw ApiException.badRequest("Choose damage or pickup");
         boolean stored = stored().stream().anyMatch(s -> s.itemId().equals(item.id) && Objects.equals(s.locationId(), input.locationId())
                 && Objects.equals(s.assetId(), input.assetId()) && s.quantity() >= input.quantity());
-        boolean held = input.locationId() == null && custodyRows().stream().anyMatch(b -> b.itemId().equals(item.id)
-                && Objects.equals(b.assetInstanceId(), input.assetId()) && b.checkedOut() >= input.quantity());
-        if (!stored && !held) throw ApiException.forbidden("Equipment must be in your custody or explicitly assigned storage");
+        var held = input.locationId() != null ? null : custodyRows().stream().filter(b -> b.itemId().equals(item.id)
+                && Objects.equals(b.assetInstanceId(), input.assetId()) && b.checkedOut() >= input.quantity()).findFirst().orElse(null);
+        if (!stored && held == null) throw ApiException.forbidden("Equipment must be in your custody or explicitly assigned storage");
         var r = new MemberRequest(); r.requester = actor; r.item = item; r.asset = input.assetId() == null ? null : orm.find(AssetInstance.class, input.assetId());
         r.location = input.locationId() == null ? null : orm.find(StorageLocation.class, input.locationId()); r.kind = input.kind();
-        r.quantity = input.quantity(); r.notes = input.notes().trim(); r.commandId = input.commandId(); orm.persist(r);
+        r.quantity = input.quantity(); r.notes = input.notes().trim(); r.commandId = input.commandId();
+        if (r.kind.equals("damage") && r.asset != null) {
+            // Serialized damage belongs to the asset: it marks its condition and reaches the asset page and return review.
+            if (input.severity() == null) throw ApiException.badRequest("Choose the damage severity");
+            r.damageReport = inventory.createDamage(new ApiModels.DamageInput(item.id, 1, r.notes, input.severity(),
+                    held == null ? null : held.factionOrderId(), input.commandId(), r.asset.id, null, false, null, null));
+        }
+        orm.persist(r);
         events.record("member_request.created", "member_request", r.id, actor.id, input.commandId(), Map.of("kind", r.kind, "itemId", item.id.toString()));
         requests.notifyOwners(List.of(item), actor, r.kind + "_request", "", r.id.toString());
         return view(r);
@@ -133,7 +144,11 @@ public class MemberService {
         r.memberCommandId = input.commandId();
         orm.persist(r); events.record("return.submitted", "return_submission", r.id, actor.id, null, Map.of("itemId", r.item.id.toString(), "quantity", r.quantity)); return r.id;
     }
-    private RequestView view(MemberRequest r) { return new RequestView(r.id, r.item.id, r.item.name, r.requester.name, r.kind, r.quantity, r.notes, r.status, r.response, r.createdAt, r.revision, r.asset == null ? null : r.asset.id, r.location == null ? null : r.location.id); }
+    private static CustodyBalanceService.Balance withName(CustodyBalanceService.Balance b, String name) {
+        return new CustodyBalanceService.Balance(b.key(), b.itemId(), name, b.category(), b.storageLocation(), b.checkedOut(), b.pendingQuantity(),
+                b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), b.generalOrderId(), b.assetInstanceId(), b.eventOccurrenceId());
+    }
+    private RequestView view(MemberRequest r) { return new RequestView(r.id, r.item.id, r.item.name, r.requester.name, r.kind, r.quantity, r.notes, r.status, r.response, r.createdAt, r.revision, r.asset == null ? null : r.asset.id, r.location == null ? null : r.location.id, r.damageReport == null ? null : r.damageReport.id); }
     /** Self-service for items in one's own custody starts at faction leader. */
     private void writable() { actors.requireOrdering(); }
     private boolean staff() { return actors.atLeast(DomainEnums.UserRole.warehouse_crew); }

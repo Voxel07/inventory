@@ -175,7 +175,7 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
           <Stack component="ul" spacing={0.75} sx={{ m: 0, pl: 2.5 }}>
             {submission.reportedDamage.map((damage) => <li key={damage.id}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {[damage.assetCode, `${damage.quantity}×`, formatStatus(damage.severity), formatStatus(damage.status)].filter(Boolean).join(' · ')}
+                {[damage.assetCode, `${damage.quantity}×`, damage.severity && formatStatus(damage.severity), formatStatus(damage.status)].filter(Boolean).join(' · ')}
               </Typography>
               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{damage.description}</Typography>
               <Typography variant="caption" color="text.secondary">{[damage.reportedByName, formatDateTime(damage.reportedAt)].filter(Boolean).join(' · ')}</Typography>

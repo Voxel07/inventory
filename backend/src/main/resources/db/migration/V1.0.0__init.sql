@@ -114,7 +114,7 @@ create table damage_reports (
     idempotency_key uuid unique,
     item_id uuid ,
     reporter_id uuid not null,
-    description varchar(255) not null,
+    description varchar(2000) not null,
     resolution_notes varchar(255),
     severity varchar(255) not null check ((severity in ('low','medium','high','critical','total_loss'))),
     status varchar(255) not null check ((status in ('reported','triaged','awaiting_repair','in_review','in_repair','repaired','verified','returned_to_service','written_off','resolved'))),
@@ -817,6 +817,7 @@ create table member_requests (
     item_id uuid not null,
     asset_id uuid,
     location_id uuid,
+    damage_report_id uuid unique,
     kind varchar(255) not null,
     quantity integer not null check (quantity > 0),
     notes varchar(2000) not null,
@@ -1091,6 +1092,7 @@ alter table member_requests add constraint member_requests_requester_id_fkey for
 alter table member_requests add constraint member_requests_item_id_fkey foreign key (item_id) references items(id);
 alter table member_requests add constraint member_requests_asset_id_fkey foreign key (asset_id) references asset_instances(id);
 alter table member_requests add constraint member_requests_location_id_fkey foreign key (location_id) references storage_locations(id);
+alter table member_requests add constraint member_requests_damage_report_id_fkey foreign key (damage_report_id) references damage_reports(id);
 alter table member_requests add constraint member_requests_handled_by_id_fkey foreign key (handled_by_id) references app_users(id);
 alter table action_reminders add constraint action_reminders_user_id_fkey foreign key (user_id) references app_users(id);
 alter table general_order_history add constraint general_order_history_order_id_fkey foreign key (order_id) references general_orders(id);

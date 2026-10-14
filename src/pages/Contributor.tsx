@@ -14,13 +14,14 @@ import type { ReturnSubmission } from '../types';
 import { Link } from 'react-router-dom';
 import { memberApi } from '../services/memberService';
 import { useMember } from '../hooks/useMember';
-import { useActionInboxDialog } from '../hooks/useActionInboxDialog';
 import type { MemberStored as Stored, MemberRequest as Request } from '../types/member';
 import { inputNumber, inputText, optionalText, inputBoolean } from '../utils/inputValues';
 import { useAuth } from '../hooks/useAuth';
 import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
 import { canOperateWarehouse, canOrder } from '../utils/access';
-import { translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { nameFor, translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { SEVERITY_LEVELS } from '../utils/constants';
+import type { DamageSeverity } from '../types';
 import { OperationForm } from '../components/operations/OperationForm';
 
 type EquipmentSource =
@@ -31,7 +32,6 @@ type EquipmentSource =
 type EquipmentRow = { id: string; name: string; quantity: number; event?: string; location?: string; pending?: number; status?: string; kind?: string; requester?: string; created?: string; notes?: string; source: EquipmentSource };
 
 export function Contributor({ embedded = false }: { embedded?: boolean }) {
-  const { openActionInbox } = useActionInboxDialog();
   const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
   const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
   const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
@@ -40,6 +40,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const [reply, setReply] = useState<Request | null>(null);
   const error = custody.error || stored.error || requests.error || returns.error;
   const report = (item: Stored, kind: string) => setRequest({ item, kind, commandId: crypto.randomUUID() });
+  const assetDamage = request?.kind === 'damage' && Boolean(request.item.assetId);
   const language = useAppLanguage();
   const isMobile = useMediaQuery('(max-width:599.95px)');
   const [section, setSection] = useState('custody');
@@ -110,7 +111,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
         </Stack>;
         if (source.kind === 'requests' && warehouse && source.data.status !== 'resolved') return <Stack direction="row" spacing={0.25}>
           <IconButton size="small" title={t('Antworten / abschließen', 'Respond / resolve')} onClick={() => setReply(source.data)}><ReplyIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title={t('Artikel prüfen', 'Inspect item')} component={Link} to={`/items/${source.data.itemId}`}><OpenInNewIcon fontSize="small" /></IconButton>
+          <IconButton size="small" title={t('Artikel prüfen', 'Inspect item')} component={Link} to={source.data.assetId ? `/items/${source.data.itemId}/assets/${source.data.assetId}` : `/items/${source.data.itemId}`}><OpenInNewIcon fontSize="small" /></IconButton>
         </Stack>;
         return null;
       },
@@ -119,18 +120,15 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   return <Stack spacing={1}>
     {!embedded && <Typography variant="h6">{t('Meine Ausrüstung & Abholungen', 'My equipment & pickups')}</Typography>}
     {error && <Alert severity="error" action={<Button size="small" title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>{t('Deine Ausrüstung konnte nicht vollständig geladen werden.', 'Could not load all of your equipment.')}</Alert>}
-    <Stack direction={{ xs: 'column', md: 'row' }} sx={{ alignItems: { md: 'center' }, gap: 1 }}>
-      <Tabs value={section} onChange={(_, value: string) => setSection(value)} variant="scrollable" scrollButtons="auto"
-        sx={{ minWidth: 0, flex: 1 }} aria-label={t('Ausrüstungsbereiche', 'Equipment sections')}>
-        {sections.map(entry => <Tab key={entry.key} value={entry.key} label={`${entry.label} (${entry.loading ? '…' : entry.count ?? 0})`}
-          id={`equipment-tab-${entry.key}`} aria-controls={`equipment-panel-${entry.key}`} />)}
-      </Tabs>
-      <Button size="small" sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, flexShrink: 0 }} aria-haspopup="dialog" onClick={openActionInbox}>{t('Posteingang', 'Inbox')}</Button>
-    </Stack>
+    <Tabs value={section} onChange={(_, value: string) => setSection(value)} variant="scrollable" scrollButtons="auto"
+      sx={{ minWidth: 0 }} aria-label={t('Ausrüstungsbereiche', 'Equipment sections')}>
+      {sections.map(entry => <Tab key={entry.key} value={entry.key} label={`${entry.label} (${entry.loading ? '…' : entry.count ?? 0})`}
+        id={`equipment-tab-${entry.key}`} aria-controls={`equipment-panel-${entry.key}`} />)}
+    </Tabs>
     <TextField type="search" label={t('Ausrüstung durchsuchen', 'Search equipment')} value={search}
       onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
     {section === 'requests' && <Alert severity="info" sx={{ py: 0 }}>
-      {t('Schadensmeldungen sperren den Artikel bis zur Klärung. Das Lager prüft den Schaden und dokumentiert die Bestandsaktion vor dem Abschluss. Abholanfragen bewegen keinen Bestand.', 'Damage reports block the item until reviewed. Warehouse staff inspect the damage and document the stock action before closing the report. Pickup requests do not move stock.')}
+      {t('Schäden an einem Einzelgerät werden als Schadensbericht am Gerät erfasst und sperren nur dieses Gerät. Andere Schadensmeldungen sperren den Artikel bis zur Klärung. Abholanfragen bewegen keinen Bestand.', 'Damage to a serialized unit is filed as a damage report on that unit and blocks only that unit. Other damage reports block the item until reviewed. Pickup requests do not move stock.')}
     </Alert>}
     <Box role="tabpanel" id={`equipment-panel-${section}`} aria-labelledby={`equipment-tab-${section}`}>
       <DataGrid key={section} rows={rows} columns={columns} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight disableRowSelectionOnClick
@@ -140,7 +138,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
         sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
     </Box>
     {section === "requests" && requests.hasNextPage && <Button title={t("Weitere Meldungen laden", "Load more requests")} disabled={requests.isFetchingNextPage} onClick={() => { void requests.fetchNextPage(); }}>{t("Mehr laden", "Load more")}</Button>}
-    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes) })} />}
+    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, ...(assetDamage ? [{ key: 'severity', label: t('Schweregrad', 'Severity'), required: true, options: SEVERITY_LEVELS.map(value => ({ value, label: nameFor('severity', value) })) }] : []), { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes), severity: assetDamage ? inputText(v.severity) as DamageSeverity : undefined })} />}
     {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}
     {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => memberApi.decide(reply.id, { response: inputText(v.response), resolved: inputBoolean(v.resolved), revision: reply.revision })} />}
   </Stack>;

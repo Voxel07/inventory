@@ -27,7 +27,7 @@ public class DamageReport extends BaseEntity {
     @Column(name = "written_off_quantity", nullable = false) public int writtenOffQuantity;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.DamageSeverity severity;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.DamageStatus status = DomainEnums.DamageStatus.reported;
-    @Column(nullable = false) public String description;
+    @Column(nullable = false, length = 2000) public String description;
     @Column(name = "resolution_notes") public String resolutionNotes;
     @Column(name = "safety_impact", nullable = false) public boolean safetyImpact;
     @Column(name = "idempotency_key", unique = true) public java.util.UUID idempotencyKey;
