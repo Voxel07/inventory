@@ -28,9 +28,15 @@ public class McpInventoryService {
     @Inject InventoryOperationsService inventory;
     @Inject PositionService positions;
     @Inject Validator validator;
+    @Inject org.ash.inventory.resource.ApiRateLimitFilter rateLimit;
+    @Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
 
     /** MCP serves organization data only; tenant accounts manage their private items in the app. */
-    public void authenticate() { actors.requireReader(); }
+    public void authenticate() {
+        var actor = actors.current();
+        rateLimit.acquire(rateLimit.caller(actor.id.toString()));
+        actors.requireReader();
+    }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.ItemResponse createItem(ApiModels.ItemInput input) {
@@ -147,9 +153,7 @@ public class McpInventoryService {
     public List<ApiResponses.StorageLocationResponse> locations(UUID warehouseId, Integer page, Integer limit) {
         actors.current();
         var bounds = bounds(page, limit);
-        return mapper.locations(catalog.getLocations().stream().filter(l -> warehouseId == null
-                || (l.warehouse != null && warehouseId.equals(l.warehouse.id)))
-                .skip(bounds.offset()).limit(bounds.limit()).toList());
+        return mapper.locations(catalogOrm.locations(warehouseId, bounds.offset(), bounds.limit()));
     }
 
     public List<String> categories() { return catalog.getVisibleCategories(); }
@@ -174,30 +178,36 @@ public class McpInventoryService {
                 p.lot == null ? null : p.lot.lotNumber, p.lot == null || p.lot.expiryDate == null ? null : p.lot.expiryDate.toString())).toList();
     }
 
-    public List<InventoryMcpDtos.LowStockAlertDto> lowStock(Integer threshold) {
+    /** Evaluates one bounded page of the visible catalog; continue while {@code hasMore}. */
+    public InventoryMcpDtos.AlertPage<InventoryMcpDtos.LowStockAlertDto> lowStock(Integer threshold, Integer page, Integer limit) {
         int buffer = threshold == null ? 0 : threshold;
         if (buffer < 0) throw ApiException.badRequest("threshold must be non-negative");
-        var items = catalog.getItems(null, 0, Integer.MAX_VALUE).stream().filter(i -> i.minStock > 0).toList();
+        var bounds = bounds(page, limit);
+        var window = catalog.getItems(null, bounds.offset(), bounds.limit() + 1);
+        var items = window.stream().limit(bounds.limit()).filter(i -> i.minStock > 0).toList();
         var stock = inventory.stock(items);
-        return items.stream().filter(i -> (long) stock.get(i.id).available() <= (long) i.minStock + buffer)
+        return new InventoryMcpDtos.AlertPage<>(items.stream().filter(i -> (long) stock.get(i.id).available() <= (long) i.minStock + buffer)
                 .map(i -> new InventoryMcpDtos.LowStockAlertDto(i.id, i.sku, i.name, stock.get(i.id).onHand(),
                         stock.get(i.id).available(), i.minStock, Math.max(0, i.minStock - stock.get(i.id).available()),
-                        actors.canViewLocation(i.storageLocation) ? i.storageLocation.name : null)).toList();
+                        actors.canViewLocation(i.storageLocation) ? i.storageLocation.name : null)).toList(),
+                bounds.offset() / bounds.limit(), bounds.limit(), window.size() > bounds.limit());
     }
 
+    /** Aggregate counts only; maintenance alerts are read page by page with {@link #maintenanceAlerts}. */
     public InventoryMcpDtos.OperationalMetricsDto summary() {
-        var items = catalog.getItems(null, 0, Integer.MAX_VALUE);
-        var stock = inventory.readStock(items);
-        return new InventoryMcpDtos.OperationalMetricsDto(items.size(),
-                stock.values().stream().mapToLong(s -> s.policy().assets().size()).sum(),
-                catalog.getLocations().size(), catalog.getEvents(null).stream()
-                        .filter(e -> !e.startDate.isBefore(BusinessTime.today()) && !"cancelled".equalsIgnoreCase(e.status)).count(),
-                maintenanceAlerts(items, stock).size());
+        var actor = actors.current();
+        var counts = catalogOrm.visibleCounts(actor.id, actor.factions, catalog.managesInventory(actor));
+        return new InventoryMcpDtos.OperationalMetricsDto(counts.items(), counts.serializedAssets(), counts.locations(),
+                catalogOrm.upcomingEventCount(BusinessTime.today()));
     }
 
-    public List<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts() {
-        var items = catalog.getItems(null, 0, Integer.MAX_VALUE);
-        return maintenanceAlerts(items, inventory.readStock(items));
+    /** Evaluates one bounded page of the visible catalog; continue while {@code hasMore}. */
+    public InventoryMcpDtos.AlertPage<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts(Integer page, Integer limit) {
+        var bounds = bounds(page, limit);
+        var window = catalog.getItems(null, bounds.offset(), bounds.limit() + 1);
+        var items = window.stream().limit(bounds.limit()).toList();
+        return new InventoryMcpDtos.AlertPage<>(maintenanceAlerts(items, inventory.readStock(items)),
+                bounds.offset() / bounds.limit(), bounds.limit(), window.size() > bounds.limit());
     }
 
     private List<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts(List<Item> items,

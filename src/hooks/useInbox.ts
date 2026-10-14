@@ -1,44 +1,64 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getNotifications, markNotificationRead, type AppNotification } from '../services/notificationService';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { getUnreadNotificationCount, getUnreadNotifications, markAllNotificationsRead, markNotificationRead, NOTICE_PAGE_SIZE, type AppNotification } from '../services/notificationService';
 import { useUIStore } from '../store/uiStore';
 import { translate } from '../utils/naming';
 import { useActionInbox } from './useActionInbox';
 
-const NOTIFICATIONS_KEY = ['notifications'];
+const NOTIFICATIONS_KEY = ['notifications', 'unread'];
+const UNREAD_COUNT_KEY = ['notifications', 'unread-count'];
+
+function useUnreadNoticeCount() {
+  return useQuery({ queryKey: UNREAD_COUNT_KEY, queryFn: getUnreadNotificationCount, refetchInterval: 60_000 });
+}
 
 /** Pickup notices are one inbox category alongside tasks and reminders. */
 export function usePickupNotifications() {
   const queryClient = useQueryClient();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
-  const query = useQuery({ queryKey: NOTIFICATIONS_KEY, queryFn: getNotifications, refetchInterval: 60_000 });
-  const unread = (query.data ?? []).filter((notification) => !notification.readAt);
+  const query = useInfiniteQuery({
+    queryKey: NOTIFICATIONS_KEY, initialPageParam: 0, refetchInterval: 60_000,
+    queryFn: ({ pageParam }) => getUnreadNotifications(pageParam),
+    getNextPageParam: (last, pages) => last.length === NOTICE_PAGE_SIZE ? pages.length : undefined,
+  });
+  const count = useUnreadNoticeCount();
+  // Pages can overlap after a notice is read between page loads; keep one row per notice.
+  const unread = [...new Map((query.data?.pages ?? []).flat().filter((notification) => !notification.readAt)
+    .map((notification) => [notification.id, notification])).values()];
+  // Total unread on the server; the list holds the newest page of them.
+  const unreadTotal = Math.max(unread.length, count.data ?? 0);
   const markRead = useMutation({
     mutationFn: (ids: string[]) => Promise.all(ids.map(markNotificationRead)),
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
-      const previous = queryClient.getQueryData<AppNotification[]>(NOTIFICATIONS_KEY);
+      const previous = queryClient.getQueryData<InfiniteData<AppNotification[], number>>(NOTIFICATIONS_KEY);
       const readAt = new Date().toISOString();
-      queryClient.setQueryData<AppNotification[]>(NOTIFICATIONS_KEY, (current = []) =>
-        current.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification),
-      );
+      queryClient.setQueryData<InfiniteData<AppNotification[], number>>(NOTIFICATIONS_KEY, (current) => current && ({
+        ...current,
+        pages: current.pages.map((page) => page.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification)),
+      }));
       return { previous };
     },
     onError: (_error, _ids, context) => {
       if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_KEY, context.previous);
       showSnackbar(translate('Abholhinweis konnte nicht ausgeblendet werden', 'Could not dismiss pickup notice'), 'error');
     },
-    onSettled: (_data, error) => { if (error) void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }); },
+    // Refetch so older unread notices move into the page and the total stays exact.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
-  return { ...query, unread, markRead };
+  const markAll = useMutation({
+    mutationFn: () => markAllNotificationsRead(unread[0]?.createdAt),
+    onError: () => showSnackbar(translate('Hinweise konnten nicht ausgeblendet werden', 'Could not dismiss notices'), 'error'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+  return { ...query, unread, unreadTotal, markRead, markAll };
 }
 
 /** Number of inbox entries that currently need attention: due tasks plus unread notices. */
 export function useInboxCount() {
   const inbox = useActionInbox();
-  const notices = useQuery({ queryKey: NOTIFICATIONS_KEY, queryFn: getNotifications, refetchInterval: 60_000 });
+  const notices = useUnreadNoticeCount();
   const dueActions = (inbox.data ?? []).filter((action) => !action.remindAt || Date.parse(action.remindAt) <= inbox.dataUpdatedAt).length;
-  const unreadNotices = (notices.data ?? []).filter((notification) => !notification.readAt).length;
-  return dueActions + unreadNotices;
+  return dueActions + (notices.data ?? 0);
 }
 
 export { noticeDetails, noticeText, notificationPath } from '../utils/notifications';

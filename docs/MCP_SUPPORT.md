@@ -67,12 +67,14 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `list_events` | Optional `status`, `page`, `limit` | Matching events in start-date order; page defaults to 0, limit to 20, maximum 100; scoped item maps |
 | `update_event` | `eventId`, `input: EventInput` | Requires eventType/startDate; null quota maps retain existing values, supplied maps replace them |
 | `delete_event` | `eventId` | Rejected (409) once orders, stock movements, return submissions or owner commitments reference the event; planning overrides are removed with it |
-| `list_storage_locations` | Optional `warehouseId`, `page`, `limit` | Active locations with warehouse metadata; same paging bounds |
+| `list_storage_locations` | Optional `warehouseId`, `page`, `limit` | Active locations with warehouse metadata; same paging bounds, paged in SQL |
 | `get_inventory_positions` | `itemId` | Bulk/lot positions with FEFO command reservations, damage/quarantine and policy holds; serialized items return an empty list |
-| `list_asset_instances` | `itemId`; optional `status`, `page`, `limit` | Visible item's active assets; typed availability-state filter applied before pagination; default limit 20, maximum 100 |
-| `check_low_stock_items` | Optional nonnegative `threshold` | Visible items with availability ≤ minStock + buffer; deficit = max(0, minStock − available) |
-| `get_operational_summary` | None | Visible active item/asset and maintenance-alert counts; shared active locations and upcoming non-cancelled events |
-| `get_maintenance_alerts` | None | Visible item/asset flags and active calendar/hours/usage schedules, including unknown evidence |
+| `list_asset_instances` | `itemId`; optional `status`, `page`, `limit` | Visible item's active assets; typed availability-state filter applied before pagination; default limit 20, maximum 100. A reservation held by an order hidden from the caller shows only `reservedFor.kind` and `label: "restricted"` |
+| `check_low_stock_items` | Optional nonnegative `threshold`, `page`, `limit` | Evaluates one catalog page (default 20, maximum 100 items) and returns `{alerts, page, limit, hasMore}`; alerts have availability ≤ minStock + buffer; deficit = max(0, minStock − available) |
+| `get_operational_summary` | None | SQL counts of visible active items/serialized assets, shared active locations and upcoming non-cancelled events; maintenance alerts come from `get_maintenance_alerts` |
+| `get_maintenance_alerts` | Optional `page`, `limit` | Evaluates one catalog page and returns `{alerts, page, limit, hasMore}`: item/asset flags and active calendar/hours/usage schedules, including unknown evidence |
+
+Every MCP tool, resource and prompt call draws from the same per-caller rate-limit budget as the REST API (`inventory.api.rate-limit.*`); an exhausted budget fails the call with `429`.
 
 `ItemInput.value` uses decimal currency units; location/assignment identifiers are UUIDs and dates use ISO format. Creation supports unlocated bulk stock without inventing a null-location position. Serialized creation produces assets and no bulk positions. Existing stock cannot be edited through `update_item`; use the existing stock-command API. Metadata updates follow REST defaults/null handling rather than partial MCP patch rules. Image ownership and item tracking guards remain in the catalog service.
 

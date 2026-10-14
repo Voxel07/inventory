@@ -186,7 +186,7 @@ export function CountsPanel() {
         [`note:${line.id}`, line.notes ?? ''],
       ]))} fields={[
       ...(['submit', 'recount'].includes(action.type) ? action.count.lines.flatMap((line): Field[] => [
-        { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}`, type: 'number', min: 0, max: line.assetCode ? 1 : undefined, help: `${t('Erwartet', 'Expected')}: ${line.expectedQuantity ?? '—'}${line.lotId ? ` · ${t('Charge', 'Lot')}: ${line.lotId}` : ''}` }, { key: `note:${line.id}`, label: t('Zeilennotiz', 'Line notes') },
+        { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}`, type: 'number', min: 0, max: line.assetCode ? 1 : undefined, help: [line.expectedQuantity != null && `${t('Erwartet', 'Expected')}: ${line.expectedQuantity}`, line.lotId && `${t('Charge', 'Lot')}: ${line.lotId}`].filter(Boolean).join(' · ') || undefined }, { key: `note:${line.id}`, label: t('Zeilennotiz', 'Line notes') },
       ]) : []), { key: 'notes', label: t('Notiz / Freigabebegründung', 'Notes / approval reason'), multiline: true },
     ]} onSave={(values) => {
       if (['submit', 'recount'].includes(action.type) && !action.count.lines.some(line => values[`quantity:${line.id}`] !== '' && values[`quantity:${line.id}`] !== undefined)) return Promise.reject(new Error(t('Mindestens eine gezählte Menge eingeben.', 'Enter at least one counted quantity.')));

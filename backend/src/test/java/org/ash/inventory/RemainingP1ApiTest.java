@@ -96,8 +96,9 @@ class RemainingP1ApiTest {
     }
 
     @Test void generalOrderSummariesOmitHistoryAndDetailsRetainActorScope() {
-        var owner = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-owner").header("X-Actor-Role", "faction_leader");
-        var other = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-other").header("X-Actor-Role", "faction_leader");
+        // General orders need ASH crew; organization members read every order, only owner or warehouse change it.
+        var owner = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-owner").header("X-Actor-Role", "ash");
+        var other = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-other").header("X-Actor-Role", "ash");
         String id = owner.body(Map.of("name", "P02 summary", "purpose", "History on demand"))
                 .post("/api/general-orders").then().statusCode(200).extract().path("id");
         owner.body(Map.of("name", "P02 summary updated", "purpose", "History on demand"))
@@ -107,8 +108,9 @@ class RemainingP1ApiTest {
         org.junit.jupiter.api.Assertions.assertFalse(summary.containsKey("history"));
         owner.get("/api/general-orders/" + id).then().statusCode(200)
                 .body("name", equalTo("P02 summary updated")).body("history.action", hasItems("created", "updated"));
-        other.get("/api/general-orders").then().statusCode(200).body("id", not(hasItem(id)));
-        other.get("/api/general-orders/" + id).then().statusCode(403);
+        other.get("/api/general-orders").then().statusCode(200).body("id", hasItem(id));
+        other.body(Map.of("name", "Not mine", "purpose", "History on demand"))
+                .patch("/api/general-orders/" + id).then().statusCode(403);
         admin().get("/api/general-orders/" + id).then().statusCode(200).body("history.size()", equalTo(2));
     }
 }

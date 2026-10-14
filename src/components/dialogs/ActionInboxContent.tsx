@@ -38,7 +38,7 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
   const show = (value: Category) => category === 'all' ? value !== 'later' : category === value;
   const loading = query.isLoading || notices.isLoading;
   const failed = query.isError || notices.isError;
-  const visibleCount = (show('notices') ? notices.unread.length : 0) + (show('tasks') ? due.length : 0) + (show('later') ? later.length : 0);
+  const visibleCount = (show('notices') ? notices.unreadTotal : 0) + (show('tasks') ? due.length : 0) + (show('later') ? later.length : 0);
 
   const taskRow = (a: InboxAction) => <ListItem key={a.key} disableGutters sx={rowSx}>
     <Box sx={{ minWidth: 0 }}>
@@ -60,8 +60,8 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
   return <Stack spacing={2}>
     <ToggleButtonGroup exclusive size="small" value={category} onChange={(_, value: Category | null) => { if (value) setCategory(value); }}
       aria-label={t('Kategorie', 'Category')} sx={{ flexWrap: 'wrap' }}>
-      <ToggleButton value="all">{t('Alle', 'All')} ({due.length + notices.unread.length})</ToggleButton>
-      <ToggleButton value="notices">{t('Hinweise', 'Notices')} ({notices.unread.length})</ToggleButton>
+      <ToggleButton value="all">{t('Alle', 'All')} ({due.length + notices.unreadTotal})</ToggleButton>
+      <ToggleButton value="notices">{t('Hinweise', 'Notices')} ({notices.unreadTotal})</ToggleButton>
       <ToggleButton value="tasks">{t('Aufgaben', 'Tasks')} ({due.length})</ToggleButton>
       <ToggleButton value="later">{t('Später', 'Snoozed')} ({later.length})</ToggleButton>
     </ToggleButtonGroup>
@@ -73,7 +73,7 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
     {!loading && !failed && visibleCount === 0 && <StateMessage kind="done" title={t('Alles erledigt', 'All caught up')}
       description={t('Erledigte Aufgaben verschwinden automatisch.', 'Completed tasks disappear automatically.')} />}
 
-    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('Hinweise', 'Notices')} count={notices.unread.length}>
+    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('Hinweise', 'Notices')} count={notices.unreadTotal}>
       {notices.unread.map((notification) => {
         const path = notificationPath(notification);
         const details = noticeDetails(notification);
@@ -88,8 +88,14 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
           </Stack>
         </ListItem>;
       })}
-      {notices.unread.length > 1 && <Button size="small" startIcon={<DoneAllIcon />} disabled={notices.markRead.isPending} sx={{ mt: 1 }}
-        onClick={() => notices.markRead.mutate(notices.unread.map((notification) => notification.id))}>{t('Alle als gelesen markieren', 'Mark all as read')}</Button>}
+      <Stack direction="row" useFlexGap sx={{ mt: 1, gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+        {notices.hasNextPage && <Button size="small" variant="outlined" disabled={notices.isFetchingNextPage} onClick={() => { void notices.fetchNextPage(); }}
+          aria-label={t(`Weitere Hinweise laden, ${notices.unread.length} von ${notices.unreadTotal} angezeigt`, `Load more notices, ${notices.unread.length} of ${notices.unreadTotal} shown`)}>
+          {t('Weitere Hinweise laden', 'Load more notices')} ({notices.unread.length}/{notices.unreadTotal})</Button>}
+        {/* Applies to every unread notice up to the newest shown, including pages not loaded yet. */}
+        {notices.unreadTotal > 1 && <Button size="small" startIcon={<DoneAllIcon />} disabled={notices.markAll.isPending} onClick={() => notices.markAll.mutate()}>
+          {t(`Alle ${notices.unreadTotal} als gelesen markieren`, `Mark all ${notices.unreadTotal} as read`)}</Button>}
+      </Stack>
     </InboxSection>}
 
     {show('tasks') && due.length > 0 && <InboxSection title={t('Aufgaben', 'Tasks')} count={due.length}>{due.map(taskRow)}</InboxSection>}

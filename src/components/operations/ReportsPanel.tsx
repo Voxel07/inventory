@@ -13,6 +13,7 @@ import { useEventReports } from '../../hooks/useEvents';
 import { getWarehouses } from '../../services/warehouseService';
 import { locationPath } from '../../utils/locationHierarchy';
 import { translate, useLocalizedText } from '../../utils/naming';
+import { reportPdf } from './reportPdf';
 
 const TextField: typeof MuiTextField = (props) => <MuiTextField size="small" {...props} />;
 
@@ -28,15 +29,37 @@ export function ReportsPanel() {
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));
   const [exporting, setExporting] = useState(false); const [exportError, setExportError] = useState('');
-  async function download() {
+  /** Readable active filters for the PDF header. */
+  function filterLabels(): string[] {
+    const named: [string, string | undefined][] = [
+      [t('Artikel', 'Item'), items.data?.find((item) => item.id === filters.itemId)?.name ?? filters.itemId],
+      [t('Veranstaltung', 'Event'), events.data?.find((event) => event.id === filters.eventId)?.name ?? filters.eventId],
+      [t('Standort', 'Warehouse'), warehouses.data?.find((w) => w.id === filters.warehouseId)?.name ?? filters.warehouseId],
+      [t('Lagerort', 'Location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
+      [t('Suche', 'Search'), filters.search], [t('Status', 'Status'), filters.status], [t('Kategorie', 'Category'), filters.category],
+      [t('Von', 'From'), filters.from], [t('Bis', 'To'), filters.to],
+    ];
+    return named.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`);
+  }
+  function save(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function download(format: 'csv' | 'pdf') {
     setExporting(true); setExportError('');
     try {
-      const { rows, generation } = await reportApi.exportRows(name, filters, t('Bericht wurde während des Exports neu erstellt. Bitte wiederholen.', 'Report rebuilt during export. Please retry.'));
+      const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('Bericht wurde während des Exports neu erstellt. Bitte wiederholen.', 'Report rebuilt during export. Please retry.'));
+      const fileName = `${name}-${generation?.slice(0, 10) ?? 'unbuilt'}.${format}`;
+      if (format === 'pdf') {
+        const label = labels[name as keyof typeof labels];
+        save(await reportPdf({ title: label ? t(label[0], label[1]) : title(name), definition: definition ?? definitions.data?.[name],
+          generatedAt: generation ?? '', stale, filters: filterLabels(), rows, heading: title, t }), fileName);
+        return;
+      }
       const keys = [...new Set(rows.flatMap(Object.keys))];
       const cell = (value: unknown) => { let s = String(value ?? ''); if (/^[=+@\-\t\r]/.test(s)) s = `'${s}`; return `"${s.replaceAll('"', '""')}"`; };
       const csv = [keys.map(cell).join(','), ...rows.map((row) => keys.map((key) => cell(row[key])).join(','))].join('\r\n');
-      const url = URL.createObjectURL(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }));
-      const a = document.createElement('a'); a.href = url; a.download = `${name}-${generation?.slice(0, 10) ?? 'unbuilt'}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      save(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }), fileName);
     } catch (e) { setExportError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
   }
   return <Stack spacing={2}>
@@ -44,7 +67,7 @@ export function ReportsPanel() {
     <TextField select label={t('Bericht', 'Report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label[0], label[1])}</MenuItem>)}</TextField>
     <Typography variant="body2">{report.data?.definition ?? definitions.data?.[name]}</Typography>
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('Erstellt', 'Generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('Quelldaten oder Zeitbezug haben sich geändert. Neu berechnen.', 'Sources or time reference changed. Rebuild required.') : t('Stand der letzten Berechnung', 'As of the last rebuild')}</> : t('Noch kein Bericht erstellt. Jetzt aus den Quelldaten neu berechnen.', 'No report built yet. Rebuild from source records now.')}</Alert>
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('Diesen Bericht mit aktuellen Daten neu berechnen', 'Recalculate this report using current data')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button title={translate('Die gefilterten Berichtsdaten als CSV herunterladen', 'Download the filtered report data as CSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download(); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button title={translate('Alle Berichtsfilter zurücksetzen', 'Reset all report filters')} onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('Diesen Bericht mit aktuellen Daten neu berechnen', 'Recalculate this report using current data')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button title={translate('Die gefilterten Berichtsdaten als CSV herunterladen', 'Download the filtered report data as CSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('csv'); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button title={translate('Den gefilterten Bericht als PDF herunterladen', 'Download the filtered report as PDF')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('pdf'); }}>{t('Gefilterter Bericht als PDF', 'Export filtered PDF')}</Button><Button title={translate('Alle Berichtsfilter zurücksetzen', 'Reset all report filters')} onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
       <TextField select fullWidth label={t('Artikel', 'Item')} value={filters.itemId ?? ''} onChange={(e) => change('itemId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{items.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('Veranstaltung', 'Event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}

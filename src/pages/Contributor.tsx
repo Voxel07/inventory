@@ -1,6 +1,7 @@
 import { formatDateTime } from '../utils/dateFormat';
 import { Button, IconButton, Tab } from '../components/shared/ActionButtons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, Box, Stack, Tabs, TextField, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
@@ -31,6 +32,8 @@ type EquipmentSource =
   | { kind: 'returns'; data: ReturnSubmission };
 type EquipmentRow = { id: string; name: string; quantity: number; event?: string; location?: string; pending?: number; status?: string; kind?: string; requester?: string; created?: string; notes?: string; source: EquipmentSource };
 
+const SECTIONS = ['custody', 'stored', 'requests', 'returns'];
+
 export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
   const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
@@ -43,7 +46,18 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const assetDamage = request?.kind === 'damage' && Boolean(request.item.assetId);
   const language = useAppLanguage();
   const isMobile = useMediaQuery('(max-width:599.95px)');
-  const [section, setSection] = useState('custody');
+  // Inbox deep links (/?equipment=<section>&focus=<row id>) select the section and highlight the task row.
+  const [params] = useSearchParams();
+  const linkedSection = params.get('equipment');
+  const focus = params.get('focus');
+  const [section, setSection] = useState(linkedSection && SECTIONS.includes(linkedSection) ? linkedSection : 'custody');
+  const [linked, setLinked] = useState(linkedSection);
+  if (linked !== linkedSection) {
+    setLinked(linkedSection);
+    if (linkedSection && SECTIONS.includes(linkedSection)) setSection(linkedSection);
+  }
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (focus) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [focus, linkedSection]);
   const myReturns = returns.data?.filter(row => row.returnedForUserId === user?.id) ?? [];
   const sections = [
     { key: 'custody', label: t('In meiner Obhut', 'In my custody'), count: custody.data?.length, loading: custody.isLoading },
@@ -68,8 +82,10 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     id: row.id, name: row.itemName, quantity: row.quantity, status: row.status, notes: row.acknowledgementNotes,
     source: { kind: 'returns', data: row },
   }));
-  const rows = query ? sectionRows.filter(row => [row.name, row.event, row.location, row.requester, row.notes]
+  const filteredRows = query ? sectionRows.filter(row => [row.name, row.event, row.location, row.requester, row.notes]
     .some(value => value?.toLocaleLowerCase().includes(query))) : sectionRows;
+  // The linked task leads the first page.
+  const rows = focus ? [...filteredRows.filter(row => row.id === focus), ...filteredRows.filter(row => row.id !== focus)] : filteredRows;
   const columns: GridColDef<EquipmentRow>[] = [
     { field: 'name', headerName: t('Artikel', 'Item'), flex: 1.3, minWidth: 180,
       renderCell: ({ value }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{value}</Typography> },
@@ -130,12 +146,13 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     {section === 'requests' && <Alert severity="info" sx={{ py: 0 }}>
       {t('Schäden an einem Einzelgerät werden als Schadensbericht am Gerät erfasst und sperren nur dieses Gerät. Andere Schadensmeldungen sperren den Artikel bis zur Klärung. Abholanfragen bewegen keinen Bestand.', 'Damage to a serialized unit is filed as a damage report on that unit and blocks only that unit. Other damage reports block the item until reviewed. Pickup requests do not move stock.')}
     </Alert>}
-    <Box role="tabpanel" id={`equipment-panel-${section}`} aria-labelledby={`equipment-tab-${section}`}>
+    <Box ref={panel} role="tabpanel" id={`equipment-panel-${section}`} aria-labelledby={`equipment-tab-${section}`} sx={{ scrollMarginTop: 80 }}>
       <DataGrid key={section} rows={rows} columns={columns} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight disableRowSelectionOnClick
         loading={sections.find(entry => entry.key === section)?.loading}
         initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }} pageSizeOptions={[20, 50, 100]}
         localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
-        sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
+        getRowClassName={({ id }) => id === focus ? 'linked-task' : ''}
+        sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' }, '& .linked-task': { bgcolor: 'action.selected' } }} />
     </Box>
     {section === "requests" && requests.hasNextPage && <Button title={t("Weitere Meldungen laden", "Load more requests")} disabled={requests.isFetchingNextPage} onClick={() => { void requests.fetchNextPage(); }}>{t("Mehr laden", "Load more")}</Button>}
     {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, ...(assetDamage ? [{ key: 'severity', label: t('Schweregrad', 'Severity'), required: true, options: SEVERITY_LEVELS.map(value => ({ value, label: nameFor('severity', value) })) }] : []), { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes), severity: assetDamage ? inputText(v.severity) as DamageSeverity : undefined })} />}

@@ -245,7 +245,12 @@ class ArchitectureApiCoverageTest {
         reader().get("/api/notifications").then().statusCode(200).body("id", not(hasItem(notification)));
         reader().patch("/api/notifications/" + notification + "/read").then().statusCode(404);
         actor("order-owner", "faction_leader").get("/api/notifications").then().statusCode(200).body("id", hasItem(notification));
+        actor("order-owner", "faction_leader").get("/api/notifications?unread=true").then().statusCode(200).body("id", hasItem(notification));
         actor("order-owner", "faction_leader").patch("/api/notifications/" + notification + "/read").then().statusCode(200).body("readAt", notNullValue());
+        actor("order-owner", "faction_leader").get("/api/notifications?unread=true").then().statusCode(200).body("id", not(hasItem(notification)));
+        actor("order-owner", "faction_leader").get("/api/notifications/unread-count").then().statusCode(200).body("count", notNullValue());
+        actor("order-owner", "faction_leader").body(Map.of()).post("/api/notifications/read-all").then().statusCode(200).body("count", notNullValue());
+        actor("order-owner", "faction_leader").get("/api/notifications/unread-count").then().statusCode(200).body("count", equalTo(0));
     }
 
     @Test void deadLetterRecoveryHasAdminGuardAndResetsDeliveryState() {

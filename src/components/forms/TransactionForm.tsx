@@ -21,7 +21,9 @@ import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import AddBoxIcon from '@mui/icons-material/AddBox';
 import EventIcon from '@mui/icons-material/Event';
 import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
-import type { FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
+import type { TransactionFormData, Item, TransactionType } from '../../types';
+import type { CheckedOutRow } from '../../types/custody';
+import { useCustodyBalances } from '../../hooks/useCustodyBalances';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
@@ -36,22 +38,17 @@ interface Props {
     onSubmit: (data: TransactionFormData) => void;
     isLoading?: boolean;
     initialData?: TransactionFormData;
-    orders?: FactionOrder[];
 }
 
 /** Event use books the checkout to a dated event and faction; general use is out-of-game (workshop, setup, transport). */
 type Usage = 'event' | 'general';
 
-function outstandingForItem(order: FactionOrder, itemId: string) {
-    const handedOver = order.handedOverQuantities?.[itemId] ?? 0;
-    const reconciled = (order.returnedQuantities?.[itemId] ?? 0)
-        + (order.consumedQuantities?.[itemId] ?? 0)
-        + (order.damagedQuantities?.[itemId] ?? 0)
-        + (order.writtenOffQuantities?.[itemId] ?? 0);
-    return Math.max(0, handedOver - reconciled);
+/** Units of a custody row that are not already awaiting a return acknowledgement. */
+function returnable(row: CheckedOutRow) {
+    return Math.max(0, row.checkedOut - (row.pendingQuantity ?? 0));
 }
 
-export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData, orders = [] }: Props) {
+export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
     const { user } = useAuth();
     const names = useNames();
     const lookup = useStockLookups();
@@ -91,13 +88,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const equipment = useEquipmentAvailability(formData.eventOccurrenceId);
     const commitment = equipment.data?.[formData.itemId];
     const checkoutAvailable = commitment ? (commitment.pickupAllowed ? commitment.available : 0) : selectedStock.remaining;
-    const eligibleOrders = orders.filter((order) => (
-        order.status === 'picked_up' || order.status === 'partially_returned'
-    ) && outstandingForItem(order, formData.itemId) > 0);
-    const selectedOrder = eligibleOrders.find((order) => order.id === formData.factionOrderId);
-    const returnLimit = selectedOrder
-        ? outstandingForItem(selectedOrder, formData.itemId)
-        : selectedStock.checkedOut;
+    const isCheckin = formData.transactionType === 'checkin';
+    // A return settles one exact custody: custodian, event and order. General orders return through their order screen.
+    const custody = useCustodyBalances(false, isCheckin);
+    const custodySources = (custody.data ?? []).filter((row) => row.itemId === formData.itemId
+        && !row.generalOrderId && returnable(row) > 0);
+    const [custodyKey, setCustodyKey] = useState('');
+    const custodySource = custodySources.find((row) => row.key === custodyKey);
+    const returnLimit = custodySource ? returnable(custodySource) : 0;
     const quantity = Number(quantityInput);
     const quantityLimit = isCheckout
         ? checkoutAvailable
@@ -115,8 +113,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                 && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
                 && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified');
         }
-        if (formData.transactionType === 'checkin') {
-            return ['in_field', 'in_custody'].includes(asset.availabilityStatus);
+        if (isCheckin) {
+            return ['in_field', 'in_custody'].includes(asset.availabilityStatus)
+                && (!custodySource?.assetInstanceId || custodySource.assetInstanceId === asset.id);
         }
         return false;
     });
@@ -124,6 +123,21 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         && ['checkout', 'checkin'].includes(formData.transactionType));
     const assetSelectionMissing = assetSelectionRequired && !selectableAssets.some(asset => asset.id === formData.assetInstanceId);
     const factionOptions = factionNames(formData.eventType);
+    const custodySourceMissing = isCheckin && !custodySource;
+
+    function selectCustodySource(key: string) {
+        const row = custodySources.find((candidate) => candidate.key === key);
+        setCustodyKey(key);
+        setFormData((previous) => ({
+            ...previous,
+            userId: row?.personId,
+            eventOccurrenceId: row?.eventOccurrenceId || undefined,
+            eventType: undefined,
+            factionOrderId: row?.factionOrderId,
+            assetInstanceId: row?.assetInstanceId,
+        }));
+        if (row) setQuantityInput(String(Math.min(Number(quantityInput) || 1, returnable(row))));
+    }
 
     function selectOccurrence(occurrenceId: string) {
         const occurrence = events.find((value) => value.id === occurrenceId);
@@ -147,10 +161,26 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         }));
     }
 
+    function changeType(value: TransactionType) {
+        setCustodyKey('');
+        setFormData((prev) => ({
+            ...prev,
+            transactionType: value,
+            assetInstanceId: undefined,
+            userId: undefined,
+            factionOrderId: undefined,
+            eventOccurrenceId: value === 'checkout' ? prev.eventOccurrenceId : undefined,
+            eventType: value === 'checkout' ? prev.eventType : undefined,
+            faction: value === 'checkout' ? prev.faction : '',
+            reason: value === 'checkout' && usage === 'event' && !prev.reason ? names.reason.eventUse
+                : value !== 'checkout' && prev.reason === names.reason.eventUse ? '' : prev.reason,
+        }));
+    }
+
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if ((isCheckout ? !canCheckout : !canEditStock)
-            || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing) return;
+            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing) return;
         const general = isCheckout && usage === 'general';
         onSubmit({
             ...formData,
@@ -189,15 +219,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         exclusive
                         fullWidth
                         value={formData.transactionType}
-                        onChange={(_, value: TransactionType | null) => value && setFormData((prev) => ({
-                            ...prev,
-                            transactionType: value,
-                            assetInstanceId: undefined,
-                            factionOrderId: value === 'checkin' ? prev.factionOrderId : undefined,
-                            faction: value === 'checkout' ? prev.faction : '',
-                            reason: value === 'checkout' && usage === 'event' && !prev.reason ? names.reason.eventUse
-                                : value !== 'checkout' && prev.reason === names.reason.eventUse ? '' : prev.reason,
-                        }))}
+                        onChange={(_, value: TransactionType | null) => value && changeType(value)}
                         aria-label={t('Transaktionstyp', 'Transaction type')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
                     >
@@ -234,19 +256,18 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </ToggleButtonGroup>
                     </Box>
                 )}
-                {(eventUse || formData.transactionType === 'checkin') && (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: eventUse ? '3fr 2fr' : '1fr' }, gap: 2 }}>
+                {eventUse && (
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '3fr 2fr' }, gap: 2 }}>
                         <TextField
                             select
                             label={t('Event', 'Event')}
                             value={formData.eventOccurrenceId ?? ''}
-                            required={eventUse}
+                            required
                             onChange={(event) => selectOccurrence(event.target.value)}
                         >
-                            {!eventUse && <MenuItem value="">{t('Ohne Event (allgemeine Nutzung)', 'No event (general use)')}</MenuItem>}
                             {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                         </TextField>
-                        {eventUse && <TextField
+                        <TextField
                             select
                             label={t('Fraktion', 'Faction')}
                             value={formData.faction ?? ''}
@@ -256,7 +277,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             helperText={formData.eventOccurrenceId ? undefined : t('Zuerst ein Event wählen', 'Choose an event first')}
                         >
                             {factionOptions.map((faction) => <MenuItem key={faction} value={faction}>{faction}</MenuItem>)}
-                        </TextField>}
+                        </TextField>
                     </Box>
                 )}
                 {!isSerialized && <TextField select label={isCheckout ? t('Quelllager', 'Source location') : t('Ziellager', 'Destination location')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
@@ -277,29 +298,24 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </Alert>
                         <TextField
                             select
-                            label={t('Zugehörige Fraktionsbestellung (optional)', 'Related faction order (optional)')}
-                            value={formData.factionOrderId ?? ''}
-                            onChange={(e) => {
-                                const order = eligibleOrders.find((candidate) => candidate.id === e.target.value);
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    factionOrderId: order?.id,
-                                    eventType: order?.eventType ?? prev.eventType,
-                                    faction: order?.faction ?? '',
-                                }));
-                                if (order) {
-                                    setQuantityInput(String(Math.min(Number(quantityInput) || 1, outstandingForItem(order, formData.itemId))));
-                                }
-                            }}
-                            helperText={eligibleOrders.length
-                                ? t('Nur Bestellungen mit noch ausstehenden Einheiten werden angezeigt.', 'Only orders with outstanding units are shown.')
-                                : t('Für diesen Artikel gibt es keine offene Rückgabe aus einer Bestellung.', 'No order has an outstanding return for this item.')}
+                            required
+                            label={t('Ausleihe', 'Custody')}
+                            value={custodySource ? custodyKey : ''}
+                            onChange={(e) => selectCustodySource(e.target.value)}
+                            disabled={custody.isLoading}
+                            error={!custody.isLoading && custodySources.length === 0}
+                            helperText={custody.isLoading
+                                ? t('Ausleihen werden geladen …', 'Loading custody…')
+                                : custodySources.length
+                                    ? t('Die Rückgabe wird genau dieser Person, diesem Event und dieser Bestellung zugeordnet.', 'The return settles exactly this person, event and order.')
+                                    : t('Keine offene Ausleihe für diesen Artikel. Allgemeine Bestellungen werden über die Bestellung zurückgegeben.', 'No outstanding custody for this item. General orders are returned through the order.')}
                             fullWidth
                         >
-                            <MenuItem value="">{t('Keine Bestellung / manuelle Rückgabe', 'No order / manual return')}</MenuItem>
-                            {eligibleOrders.map((order) => (
-                                <MenuItem key={order.id} value={order.id}>
-                                    {order.orderCode} · {order.eventType} / {order.faction} · {outstandingForItem(order, formData.itemId)} {t('ausstehend', 'outstanding')}
+                            {custodySources.map((row) => (
+                                <MenuItem key={row.key} value={row.key}>
+                                    {[row.person, row.event || t('Ohne Event', 'No event'),
+                                        row.factionOrderId && t('Fraktionsbestellung', 'Faction order'),
+                                        `${returnable(row)} ${t('ausstehend', 'outstanding')}`].filter(Boolean).join(' · ')}
                                 </MenuItem>
                             ))}
                         </TextField>
@@ -378,6 +394,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         variant="outlined"
                         color="inherit"
                         onClick={() => {
+                            setCustodyKey('');
                             setFormData(initialForm());
                             setUsage(initialUsage);
                             setQuantityInput(String(initialData?.quantityChanged ?? 1));
@@ -392,7 +409,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         type="submit"
                         variant="contained"
                         disabled={isLoading || !formData.itemId || !formData.reason
-                            || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing}
+                            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing}
                         sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
                     >
                         {t('Transaktion buchen', 'Post transaction')}

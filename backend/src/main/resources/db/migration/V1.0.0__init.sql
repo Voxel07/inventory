@@ -1076,6 +1076,8 @@ create index ix_reservation_location on stock_reservations (location_id) where l
 create index ix_handover_lines_item on custody_handover_lines (item_id);
 -- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
 create index ix_asset_code_lower on asset_instances (lower(asset_code));
+alter table items add constraint ck_items_consumable_role check (is_consumable = (inventory_role = 'consumable'));
+alter table items add constraint ck_items_serialized_returnable check (tracking_mode <> 'serialized' or inventory_role = 'returnable');
 create index ix_items_name_trgm on items using gin (lower(name) public.gin_trgm_ops);
 create index ix_items_sku_trgm on items using gin (lower(sku) public.gin_trgm_ops);
 create index ix_items_category_trgm on items using gin (lower(category) public.gin_trgm_ops);

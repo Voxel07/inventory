@@ -55,6 +55,23 @@ public class CustodyOrm {
         var events = batch(EventOccurrence.class, rows.stream().map(row -> (UUID) row[2]).filter(java.util.Objects::nonNull).distinct().toList());
         return rows.stream().map(row -> new Direct(items.get(row[0]), users.get(row[1]), row[2] == null ? null : events.get(row[2]), (UUID) row[3], Math.toIntExact(((Number) row[4]).longValue()))).toList();
     }
+    /** Positive direct custody groups (custodian, event) for one bulk item, or for one serialized asset. */
+    public record DirectSource(UUID user, UUID event, int quantity) {}
+    public List<DirectSource> directSources(UUID item, UUID asset) {
+        var query = em.createQuery("""
+                select t.user.id, e.id,
+                    sum(case when t.type = checkout then t.quantity
+                        when t.type = checkin or t.type = consumed or (t.type = written_off and t.custodyWriteOff = true)
+                        then -t.quantity else 0 end)
+                from StockTransaction t left join t.eventOccurrence e
+                where t.factionOrder is null and t.relatedEntityType is null and t.item.id = :item
+                    and (t.type in (checkout, checkin, consumed) or (t.type = written_off and t.custodyWriteOff = true))
+                """ + (asset == null ? " and t.assetInstance is null" : " and t.assetInstance.id = :asset")
+                + " group by t.user.id, e.id", Object[].class).setParameter("item", item);
+        if (asset != null) query.setParameter("asset", asset);
+        return query.getResultList().stream().filter(row -> ((Number) row[2]).longValue() > 0)
+                .map(row -> new DirectSource((UUID) row[0], (UUID) row[1], Math.toIntExact(((Number) row[2]).longValue()))).toList();
+    }
     private <T extends BaseEntity> java.util.Map<UUID, T> batch(Class<T> type, List<UUID> ids) {
         if (ids.isEmpty()) return java.util.Map.of();
         return em.createQuery("from " + type.getSimpleName() + " e where e.id in :ids", type).setParameter("ids", ids)

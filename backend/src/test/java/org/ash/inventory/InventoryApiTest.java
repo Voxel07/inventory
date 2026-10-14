@@ -37,23 +37,23 @@ class InventoryApiTest {
         var checkout = Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 1,
                 "reason", "ASH crew equipment", "eventType", "DE", "faction", "ASH", "eventOccurrenceId", event);
         factionLeaderRequest().body(checkout).post("/api/transactions").then().statusCode(403);
-        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+        takeoutAshRequest()
                 .body(checkout).post("/api/transactions").then().statusCode(200).body("transactionType", equalTo("checkout"));
-        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+        takeoutAshRequest()
                 .body(Map.of("itemId", item, "transactionType", "added", "quantityChanged", 1, "reason", "Not warehouse"))
                 .post("/api/transactions").then().statusCode(403);
-        String order = request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+        String order = takeoutAshRequest()
                 .body(Map.of("name", "Crew order", "purpose", "Setup", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 1)))
                 .post("/api/general-orders").then().statusCode(200).extract().path("id");
-        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash").body(Map.of())
+        takeoutAshRequest().body(Map.of())
                 .post("/api/general-orders/" + order + "/submit").then().statusCode(200);
-        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash")
+        takeoutAshRequest()
                 .body(Map.of("preparedQuantities", Map.of(item, 1)))
                 .post("/api/general-orders/" + order + "/prepare").then().statusCode(403);
         request().body(Map.of("preparedQuantities", Map.of(item, 1)))
                 .post("/api/general-orders/" + order + "/prepare").then().statusCode(200);
         request().body(Map.of()).post("/api/general-orders/" + order + "/ready").then().statusCode(200);
-        request().header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash").body(Map.of())
+        takeoutAshRequest().body(Map.of())
                 .post("/api/general-orders/" + order + "/pickup").then().statusCode(200).body("status", equalTo("picked_up"));
     }
 
@@ -1096,6 +1096,11 @@ class InventoryApiTest {
                 .header("X-Actor-Role", "faction_leader");
     }
 
+    /** A separate spec: adding headers to {@code request()} would send a second, ignored actor role. */
+    private static io.restassured.specification.RequestSpecification takeoutAshRequest() {
+        return given().contentType(ContentType.JSON).header("X-Actor-Id", "takeout-ash").header("X-Actor-Role", "ash");
+    }
+
     private static io.restassured.specification.RequestSpecification assignedFactionLeaderRequest() {
         return given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-assigned-faction-leader")
@@ -1132,11 +1137,11 @@ class InventoryApiTest {
                 .get("/api/auth/me")
                 .then().statusCode(200)
                 .body("faction", equalTo(java.util.List.of("DE:allowed-api-faction")));
-        // Roles and factions come from the identity provider; the API has no permission editor.
-        request()
-                .body(Map.of("role", "admin", "faction", java.util.List.of()))
+        // Roles and factions are app data that only the inventory admin edits.
+        assignedFactionLeaderRequest()
+                .body(Map.of("roles", java.util.List.of("admin"), "factions", java.util.List.of(), "revision", 0, "reason", "Self promotion"))
                 .patch("/api/users/" + java.util.UUID.randomUUID())
-                .then().statusCode(org.hamcrest.Matchers.anyOf(equalTo(404), equalTo(405)));
+                .then().statusCode(403);
 
         String itemId = request()
                 .body(Map.of("sku", "FACTION-ACCESS-001", "name", "Faction access item", "category", "Equipment", "amount", 2, "value", 0))
@@ -1160,6 +1165,10 @@ class InventoryApiTest {
                 "eventDate", "2034-05-06",
                 "requestedQuantities", Map.of(itemId, 1),
                 "requestedAssemblyQuantities", Map.of());
+        // Orders reference existing events and factions; the admin catalog command creates them.
+        request().body(Map.of("eventType", "DE", "startDate", "2034-05-06")).post("/api/events").then().statusCode(200);
+        request().body(Map.of("eventType", "DE", "name", "Allowed API faction", "slug", "allowed-api-faction")).post("/api/factions").then().statusCode(200);
+        request().body(Map.of("eventType", "DE", "name", "Hidden API faction")).post("/api/factions").then().statusCode(200);
 
         assignedFactionLeaderRequest()
                 .body(assignedOrder)

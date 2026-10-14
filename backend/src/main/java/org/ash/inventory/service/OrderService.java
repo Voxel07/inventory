@@ -43,6 +43,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class OrderService {
     @jakarta.inject.Inject OrderPickupService pickupGroups;
+    @jakarta.inject.Inject org.ash.inventory.orm.ItemLocks itemLocks;
     @jakarta.inject.Inject OrderAllocationService allocation;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
@@ -91,11 +92,12 @@ public class OrderService {
         }
         var event = input.eventOccurrenceId() != null
                 ? orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence")
-                : catalog.findOrCreateEvent(requiredText(input.eventType(), "eventType"),
+                : catalog.eventForOrder(requiredText(input.eventType(), "eventType"),
                         requiredDate(input.eventDate()));
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
-                : catalog.findOrCreateFaction(event.eventType, requiredText(input.faction(), "faction"));
+                : catalog.factionForOrder(event.eventType, requiredText(input.faction(), "faction"));
+        requireFactionOfEvent(faction, event, true);
         assertFactionAccess(actor, faction);
         var order = new FactionOrder();
         order.eventOccurrence = event;
@@ -110,6 +112,12 @@ public class OrderService {
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, input.idempotencyKey(), input.notes(), lineSnapshot(order));
         orderEvent("order.created", order, actor, input.idempotencyKey());
         return order;
+    }
+
+    private static void requireFactionOfEvent(Faction faction, EventOccurrence event, boolean newReference) {
+        if (!faction.eventType.equals(event.eventType))
+            throw ApiException.badRequest("Faction must belong to the selected event type");
+        if (newReference && !faction.active) throw ApiException.badRequest("Faction is inactive");
     }
 
     @Transactional
@@ -129,9 +137,8 @@ public class OrderService {
                 : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
-                : input.faction() == null ? order.faction : catalog.findOrCreateFaction(event.eventType, input.faction());
-        if (!faction.eventType.equals(event.eventType))
-            throw ApiException.badRequest("Faction must belong to the selected event type");
+                : input.faction() == null ? order.faction : catalog.factionForOrder(event.eventType, input.faction());
+        requireFactionOfEvent(faction, event, !faction.id.equals(order.faction.id));
         assertFactionAccess(actors.current(), faction);
         if (!order.faction.id.equals(faction.id)
                 || !order.eventOccurrence.eventType.equals(event.eventType)
@@ -168,6 +175,7 @@ public class OrderService {
 
         releaseAssetAssignments(order);
         var requestedByItem = aggregate(lines, false);
+        itemLocks.lock(requestedByItem.keySet().stream().map(item -> item.id).toList());
         var assignedAssetIds = new HashSet<UUID>();
         var sources = new LinkedHashMap<UUID, UUID>();
         for (var entry : requestedByItem.entrySet()) {
@@ -280,6 +288,7 @@ public class OrderService {
                 throw ApiException.badRequest("Asset outcome has no matching item return line: " + assetId);
             }
         }
+        itemLocks.lock(input.lines().keySet());
         for (var entry : input.lines().entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey());
             if (item == null)
@@ -372,7 +381,9 @@ public class OrderService {
 
     private void pickup(FactionOrder order, UserAccount actor, UUID idempotencyKey) {
         var lines = orm.lines(order);
-        for (var entry : aggregatePrepared(lines).entrySet()) {
+        var prepared = aggregatePrepared(lines);
+        itemLocks.lock(prepared.keySet().stream().map(item -> item.id).toList());
+        for (var entry : prepared.entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey().id);
             inventory.assertCheckoutAllowed(item);
             equipment.assertPickup(item, order.eventOccurrence);
@@ -641,6 +652,8 @@ public class OrderService {
     }
 
     private void releaseAssetAssignments(FactionOrder order) {
+        // Item locks precede the asset writes and the flush of the assignment delete.
+        itemLocks.lock(orm.lines(order).stream().map(line -> line.item.id).distinct().toList());
         for (var assignment : orm.assetAssignments(order)) {
             var asset = assignment.assetInstance;
             if (asset.availabilityStatus == DomainEnums.AssetState.staged

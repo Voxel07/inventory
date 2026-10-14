@@ -62,10 +62,10 @@ Guards follow the role ladder ([Authentik setup §3](AUTHENTIK_SETUP.md#3-access
 
 1. Open Items, Assemblies or Locations and choose search/filter context.
 2. Open details to inspect API stock, exact assets, images, history, keeper, return location or kit components.
-3. Authorized staff maintain shared catalog records. Any recognized user can maintain their own private resources; editors need explicit grants.
+3. Authorized staff maintain shared catalog records. Every account except read-only maintains its own private resources (read-only accounts cannot add inventory); editors need explicit grants.
 4. Owners/HQ manage view/edit grants and owner transfer. Sharing a location does not reveal its private items. An item can show restricted whereabouts when the location policy is not granted.
 5. Open QR labels or the camera/manual scanner. Resolve the exact item, asset, location or order; show details or prefill a form.
-6. A separate user action submits checkout/check-in. Scanning itself makes no stock change. Direct checkout requires event and faction, and serialized checkout requires an exact asset.
+6. A separate user action submits checkout/check-in. Scanning itself makes no stock change. Event-use checkout requires event and faction, general use omits both; check-in selects the exact custody it settles; serialized checkout requires an exact asset.
 
 Items, locations and assemblies are retired, never deleted: they leave the catalog and cannot be ordered, while codes and history stay. An event occurrence can be deleted only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides, attendances and timeline entries go with it; the people stay in the registry.
 

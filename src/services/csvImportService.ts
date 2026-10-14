@@ -372,7 +372,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
             finalOrder = await saveFactionOrderPreparation(
-              finalOrder.id,
+              finalOrder,
               finalOrder.requestedQuantities || {},
               finalOrder.requestedAssemblyQuantities || {},
               assetAssignments,

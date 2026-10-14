@@ -215,7 +215,8 @@ export interface AssetInstance {
   active: boolean;
   version: number;
   /** The open order holding a reserved or staged asset. */
-  reservedFor?: { kind: 'faction_order' | 'general_order'; orderId: string; label: string };
+  /** orderId is absent when the holding order is hidden from the viewer (restricted indicator). */
+  reservedFor?: { kind: 'faction_order' | 'general_order'; orderId?: string; label: string };
 }
 
 export interface AssetInstanceInput {

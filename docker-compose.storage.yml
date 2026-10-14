@@ -38,6 +38,10 @@ services:
       - "${GARAGE_RPC_BIND_ADDRESS:-0.0.0.0}:3901:3901"
       - "${GARAGE_WEB_BIND_ADDRESS:-0.0.0.0}:3902:3902"
       - "${GARAGE_ADMIN_BIND_ADDRESS:-127.0.0.1}:3903:3903"
+    environment:
+      # Secrets come from the environment; compose refuses to start without them (no placeholder credentials).
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Set GARAGE_RPC_SECRET (openssl rand -hex 32)}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Set GARAGE_ADMIN_TOKEN (openssl rand -hex 32)}
     volumes:
       - ${GARAGE_CONFIG:-./etc/garage.toml}:/etc/garage.toml:ro
       - ${GARAGE_META_DIR:-./meta}:/var/lib/garage/meta
@@ -69,7 +73,9 @@ services:
     environment:
       API_BASE_URL: http://garage:3903
       S3_ENDPOINT_URL: http://garage:3900
-      AUTH_USER_PASS: ${GARAGE_WEBUI_AUTH}
+      API_ADMIN_KEY: ${GARAGE_ADMIN_TOKEN:?Set GARAGE_ADMIN_TOKEN (openssl rand -hex 32)}
+      # user:bcrypt-hash, e.g. htpasswd -nbBC 10 admin <password>
+      AUTH_USER_PASS: ${GARAGE_WEBUI_AUTH:?Set GARAGE_WEBUI_AUTH for the Garage WebUI login}
     volumes:
       - ${GARAGE_CONFIG:-./etc/garage.toml}:/etc/garage.toml:ro
     networks:
@@ -88,8 +94,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - PORT=45876
-      - KEY=ssh-ed25519 123/asd
-      - TOKEN=123
+      - KEY=${BESZEL_AGENT_KEY:?Set BESZEL_AGENT_KEY from the Beszel hub}
+      - TOKEN=${BESZEL_AGENT_TOKEN:?Set BESZEL_AGENT_TOKEN from the Beszel hub}
       - HUB_URL=https://m.matzeschneider.de
     labels:
       - "traefik.enable=true"

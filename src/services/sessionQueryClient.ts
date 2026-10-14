@@ -18,7 +18,9 @@ function createSessionClient(generation: number): QueryClient {
         }
       },
     }),
-    defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: (failures, error) => failures < 2
+    // Mutations always run: apiRequest queues supported offline commands durably at once and rejects the rest
+    // with an explicit online-only error, instead of TanStack pausing them in memory until reconnect.
+    defaultOptions: { mutations: { networkMode: 'always' }, queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: (failures, error) => failures < 2
       && !(error instanceof SessionChangedError)
       && (!(error instanceof ApiError) || error.status === 408 || error.status === 429 || error.status >= 500) } },
   });

@@ -49,7 +49,9 @@ class PrivateInventoryApiTest {
     }
 
     @Test void readOnlyMembersCannotAddItemsAssembliesOrLocationsEvenPrivately() {
-        String component = item();
+        // A component the reader can see, so the creation ban (403) is tested rather than a hidden reference (404).
+        var publicInput = new HashMap<>(itemInput()); publicInput.put("privateResource", false);
+        String component = admin().body(publicInput).post("/api/items").then().statusCode(200).extract().path("id");
         reader().body(itemInput()).post("/api/items").then().statusCode(403);
         reader().body(Map.of("name", "Read-only shed " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(403);
         reader().body(Map.of("name", "Read-only kit " + UUID.randomUUID(), "itemQuantities", Map.of(component, 1))).post("/api/assemblies").then().statusCode(403);
@@ -217,6 +219,8 @@ class PrivateInventoryApiTest {
         actor("borrower", "faction_leader").body(editInput()).patch("/api/items/" + item).then().statusCode(404);
         tenant("other-tenant").get("/api/items/" + item).then().statusCode(404);
 
+        admin().body(Map.of("eventType", "DE", "startDate", "2043-06-01")).post("/api/events").then().statusCode(200);
+        admin().body(Map.of("eventType", "DE", "name", "Offer test")).post("/api/factions").then().statusCode(200);
         var leader = actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test");
         String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", "2043-06-01",
                         "requestedQuantities", Map.of(item, 1), "requestedAssemblyQuantities", Map.of()))

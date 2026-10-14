@@ -28,13 +28,13 @@ Source: [package.json](../package.json), [Vite configuration](../vite.config.ts)
 | Concern | Current dependency or implementation | Requirement / target |
 |---|---|---|
 | Runtime | React / React DOM `^19.3.0`; React Compiler `^1.0.0` | Use the compiler; avoid redundant manual memoization |
-| Tooling | Bun with `bun.lock`; Vite `^8.3.2`, React plugin `^6.1.1` | Bun manages frontend dependencies and scripts |
+| Tooling | Bun with `bun.lock`; Vite `^8.3.4`, React plugin `^6.1.2` | Bun manages frontend dependencies and scripts |
 | Language | TypeScript `~6.0.3`; `typescript-native` aliases TypeScript `~7.0.2` | TS 7 performs build typechecking; TS 6 supports lint tooling |
-| UI | MUI Material/icons `^9.4.0`, DataGrid `^9.14.0`, Emotion `^11.14.x` | Reuse theme and shared controls; see [Design Brief](DESIGN_BRIEF.md) |
-| Server state | TanStack React Query `^5.104.1` | Session-scoped QueryClient; selective query invalidation |
+| UI | MUI Material/icons `^9.5.0`, DataGrid `^9.15.0`, Emotion `^11.14.x` | Reuse theme and shared controls; see [Design Brief](DESIGN_BRIEF.md) |
+| Server state | TanStack React Query `^5.104.2` | Session-scoped QueryClient; selective query invalidation |
 | UI state | Zustand `^5.0.15` | Keep UI preferences separate from server state |
 | Routing | React Router DOM `^7.18.4`, BrowserRouter, lazy Routes | Data router / loaders remain planned, PLAN-08 |
-| Localization | i18next `^26.4.2`, German and English | Key-only translations remain planned, PLAN-09 |
+| Localization | i18next `^26.4.4`, German and English | Key-only translations remain planned, PLAN-09 |
 | Maps | Leaflet `^1.9.4`, React Leaflet `^5.0.0` | Location hierarchy, geographic position and overlays |
 | Charts | Recharts `^3.10.1` | Dashboard / reporting presentation |
 | Labels and exports | qrcode `^1.5.4`, jsPDF `^4.2.1` | Generate labels and PDFs; import heavy exports on demand |
@@ -42,7 +42,7 @@ Source: [package.json](../package.json), [Vite configuration](../vite.config.ts)
 | API contracts | Handwritten types, `apiClient.ts`, capability-based `resourceFactory.ts` | OpenAPI-generated `openapi-typescript` / `openapi-fetch` are targets, PLAN-04 |
 | Offline | Custom IndexedDB cache, queue, history and conflict handling | Query persistence and persisted paused mutations are targets, PLAN-06 |
 | Forms | Component field state and shared dialogs | react-hook-form and zod are targets, PLAN-07 |
-| Lint | ESLint `^10.11.0`, TypeScript ESLint `^8.71.0`, React hooks `^7.1.1` | Apply TypeScript and React Compiler lint rules |
+| Lint | ESLint `^10.12.0`, TypeScript ESLint `^8.71.2`, React hooks `^7.1.1` | Apply TypeScript and React Compiler lint rules |
 
 Target libraries are **not installed requirements of the current app**. Their adoption must retain existing behavior and privacy guarantees.
 
@@ -152,7 +152,7 @@ Successful operations produce debug summaries with operation, outcome, backend a
 
 Outbox rows retain producer trace context in `trace_context`; delivery restores it on every attempt, including after process restart or delivery on another node. Committed business-event counters run after transaction commit. Sync metrics distinguish new commands from idempotent replays, and unexpected sync exceptions receive ERROR logs/spans even if the batch HTTP response succeeds.
 
-[OpenObserve signals and alert setup](OPENOBSERVE_SIGNALS.md) lists metric names, dimensions, suggested panels and alert conditions. [Review and implementation progress](OPENOBSERVE_REVIEW.md) records verification and remaining infrastructure work.
+Alert rules, dashboards and infrastructure signals are not yet documented as a separate guide; the remaining work is listed under [Not yet covered](#not-yet-covered) and tracked as OBS-01.
 
 ### OpenObserve container
 
@@ -211,10 +211,10 @@ The exporter uses OTLP over HTTP/protobuf (`/v1/traces`, `/v1/metrics` or `/v1/l
 
 ### Not yet covered
 
-Outbox dead-letter/backlog and sync outcome signals are implemented. Alert rules and notification destinations still need provisioning in the external OpenObserve instance; suggested conditions are documented in [OpenObserve signals](OPENOBSERVE_SIGNALS.md). PostgreSQL replication lag, retained WAL and host/disk metrics need an infrastructure collector/exporter; see [PostgreSQL logical replication](postgres-logical-replication.md). Telemetry absence must be monitored outside the API process. Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+Outbox dead-letter/backlog and sync outcome signals are implemented. Alert rules and notification destinations still need provisioning in the external OpenObserve instance; alert conditions remain to be written up with that provisioning. PostgreSQL replication lag, retained WAL and host/disk metrics need an infrastructure collector/exporter; see [PostgreSQL logical replication](postgres-logical-replication.md). Telemetry absence must be monitored outside the API process. Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
 
 ## 8. Engineering acceptance
 
-The repository requires direct changes to current contracts and the editable schema baseline: disposable data, no compatibility adapters or incremental migration files. Builds and application tests run only when explicitly authorized by [agent.md](../agent.md).
+The repository requires direct changes to current contracts and the editable schema baseline: disposable data, no compatibility adapters or incremental migration files. Builds and application tests run only when explicitly authorized by [AGENTS.md](../AGENTS.md).
 
 The pending Authentik, browser/mobile, S3, load, restore and cluster checks are tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).

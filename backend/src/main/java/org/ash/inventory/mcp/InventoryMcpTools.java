@@ -163,22 +163,26 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "List visible items with usable availability at or below minStock plus buffer. Includes serialized assets, reservations and maintenance/consent holds; deficit is max(0, minStock minus available).")
-    public List<InventoryMcpDtos.LowStockAlertDto> check_low_stock_items(
-            @ToolArg(description = "Non-negative threshold buffer; default 0", required = false) Integer threshold) {
-        return call("check_low_stock_items", () -> service.lowStock(threshold));
+    @Tool(description = "Evaluate one page of visible items and list those with usable availability at or below minStock plus buffer. Includes serialized assets, reservations and maintenance/consent holds; deficit is max(0, minStock minus available). Request the next page while hasMore is true.")
+    public InventoryMcpDtos.AlertPage<InventoryMcpDtos.LowStockAlertDto> check_low_stock_items(
+            @ToolArg(description = "Non-negative threshold buffer; default 0", required = false) Integer threshold,
+            @ToolArg(description = "Zero-based catalog page; default 0", required = false) Integer page,
+            @ToolArg(description = "Items evaluated per page, 1–100; default 20", required = false) Integer limit) {
+        return call("check_low_stock_items", () -> service.lowStock(threshold, page, limit));
     }
 
     @Blocking
-    @Tool(description = "Summarize visible active items, their serialized assets and maintenance alerts, plus shared active locations and upcoming non-cancelled events")
+    @Tool(description = "Count visible active items and their serialized assets, shared active locations and upcoming non-cancelled events")
     public InventoryMcpDtos.OperationalMetricsDto get_operational_summary() {
         return call("get_operational_summary", () -> service.summary());
     }
 
     @Blocking
-    @Tool(description = "Read visible active item/asset maintenance alerts, including calendar, hours and usage schedules evaluated with canonical policy; unknown meter evidence is an alert")
-    public List<InventoryMcpDtos.MaintenanceAlertDto> get_maintenance_alerts() {
-        return call("get_maintenance_alerts", () -> service.maintenanceAlerts());
+    @Tool(description = "Evaluate one page of visible active items for item/asset maintenance alerts, including calendar, hours and usage schedules evaluated with canonical policy; unknown meter evidence is an alert. Request the next page while hasMore is true.")
+    public InventoryMcpDtos.AlertPage<InventoryMcpDtos.MaintenanceAlertDto> get_maintenance_alerts(
+            @ToolArg(description = "Zero-based catalog page; default 0", required = false) Integer page,
+            @ToolArg(description = "Items evaluated per page, 1–100; default 20", required = false) Integer limit) {
+        return call("get_maintenance_alerts", () -> service.maintenanceAlerts(page, limit));
     }
     private <T> T call(String tool, Supplier<T> action) {
         try { return telemetry.call("mcp", tool, "service", () -> { service.authenticate(); return action.get(); }); }

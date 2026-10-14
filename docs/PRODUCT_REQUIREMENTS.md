@@ -75,7 +75,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 |---|---|:-:|---|
 | INV-01 | Distinguish owned, on-hand, checked-out, in-transit, damaged, reserved, available and ordered (see [stock semantics](DATABASE_SCHEMA.md)) | Implemented | `InventoryOperationsService.StockState`, `StockPolicy`; one item eligibility predicate `AvailabilityData.eligible()` for commands, planning, reports and MCP |
 | INV-02 | Block over-allocation and checkout of unsafe or overdue equipment under lock | Implemented | `InventoryOperationsService`, `OrderService`, `MaintenancePolicy` |
-| INV-03 | Every direct checkout carries event and faction; stored on the immutable transaction | Implemented | `TransactionForm`, `InventoryOperationsService`, `StockTransaction` |
+| INV-03 | Event-use checkouts carry event and faction; general (out-of-game) use carries neither; direct check-in settles one exact custody (custodian, event); both stored on the immutable transaction | Implemented | `TransactionForm`, `InventoryOperationsService`, `StockTransaction` |
 | INV-04 | Serialized stock moves by exact asset only; batches of assets can be assigned per faction order | Implemented | `OrderService`, `OrderPickListTable` |
 | INV-05 | Transfers: dispatch → transit → (partial) receipt with discrepancies; transit is not custody | Implemented | `TransferService`, `TransfersPanel` |
 | INV-06 | Counts: blind count and recount; a different admin approves material variance; posting creates adjustment entries | Implemented | `CountService`, `StockOperations` |
@@ -120,7 +120,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | OWN-03 | Lending: owner consent windows, loan agreement before transfer, collection/return evidence, extensions, rental cost | Implemented | `EquipmentService`, `LoanService`, `LoansPanel`, `EquipmentOwnership` |
 | MBR-01 | Member self-service: own custody, keeper assignments, requests, return submissions | Implemented | `MemberService`, `Contributor` |
 | MBR-02 | Recipient-scoped action inbox and reminders (overdue returns, expiry, maintenance) | Implemented | `ActionInboxService`, `ActionInboxContent` |
-| OPS-01 | Eight report snapshots with filters, freshness flag and CSV/PDF export | Implemented | `OperationalReportService`, `ReportsPanel`; freshness from sharded, commit-ordered revision counters |
+| OPS-01 | Eight report snapshots with filters, freshness flag and CSV/PDF export | Implemented | `OperationalReportService`, `ReportsPanel`, `reportPdf`; both exports read one generation-checked snapshot; freshness from sharded, commit-ordered revision counters |
 | OPS-02 | Outbox with lease, retry, dead letter and operator retry; purge after 30 days | Implemented | `DomainEventService`, `OutboxDispatcher` |
 | OPS-03 | CSV import with preview, dependency order and per-row results | Implemented | `CsvImportDialog`, `csvImportService` |
 | OFF-01 | Queue supported field commands offline and replay them idempotently; conflicts are corrected with a new command | Implemented | `offlineQueue.ts`, `SyncService`, `SyncIssuesDialog` |
@@ -154,7 +154,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 - Private account ownership differs from display owner name, keeper, location and custodian. Grants are resource-specific; an item grant does not reveal a private location or another private component.
 - History must preserve actor, UTC/server time, movement/transition and command evidence. Items, locations and assemblies are retired, never deleted; event occurrences can be deleted only while nothing references them. Stock quantities come only from the ledger; the opening amount on item creation is an `added` movement.
 - Scanning resolves identity and never posts stock by itself. Client caches and report snapshots cannot authorize server operations.
-- Roles/factions come from identity-provider groups. Logout's actual server revocation bound depends on token lifetime/introspection (ACC-01).
+- The identity provider controls who may sign in; roles and factions are app-user data assigned by the inventory admin. Logout's actual server revocation bound depends on token lifetime/introspection (ACC-01).
 
 Exact storage semantics and current exceptions are in [Database Schema and Data Storage](DATABASE_SCHEMA.md); the lifecycle journey is in [App Flow](APP_FLOW.md).
 

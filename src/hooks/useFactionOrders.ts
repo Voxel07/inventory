@@ -35,6 +35,8 @@ export function useFactionOrder(id: string) {
     queryKey: ['faction-orders', 'detail', id],
     queryFn: () => getFactionOrder(id),
     enabled: Boolean(id),
+    // The first attempt runs offline so the IndexedDB fallback of an opened order can be reached.
+    networkMode: 'offlineFirst',
   });
 }
 
@@ -62,18 +64,18 @@ export function useSubmitFactionOrder() {
 
 export function useSaveFactionOrderPreparation() {
   return useOrderMutation(({
-    id,
+    order,
     values,
     assemblyValues,
     assetAssignments,
     sourceLocations,
   }: {
-    id: string;
+    order: FactionOrder;
     values: Record<string, number>;
     assemblyValues: Record<string, number>;
     assetAssignments: Record<string, string[]>;
     sourceLocations?: Record<string, string>;
-  }) => saveFactionOrderPreparation(id, values, assemblyValues, assetAssignments, sourceLocations));
+  }) => saveFactionOrderPreparation(order, values, assemblyValues, assetAssignments, sourceLocations));
 }
 
 export function useMarkFactionOrderReady() {

@@ -15,6 +15,7 @@ import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StorageLocation;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -73,6 +74,31 @@ public class CatalogOrm extends EntityOrm {
     public List<StorageLocation> locations() {
         var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true and " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.createdAt desc", StorageLocation.class);
         return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
+    }
+
+    /** One page of visible active locations, optionally within one warehouse. */
+    public List<StorageLocation> locations(UUID warehouseId, int offset, int limit) {
+        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true and "
+                + InventoryAccessOrm.visible("l.accessPolicy") + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
+                + " order by l.createdAt desc, l.id", StorageLocation.class);
+        if (warehouseId != null) query.setParameter("warehouse", warehouseId);
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public record VisibleCounts(long items, long serializedAssets, long locations) {}
+    public VisibleCounts visibleCounts(UUID actorId, List<String> actorGroups, boolean manager) {
+        long items = visible(entityManager.createQuery("select count(i) from Item i where i.active = true" + visibility(), Long.class),
+                actorId, actorGroups, manager).getSingleResult();
+        long assets = visible(entityManager.createQuery("select count(a) from AssetInstance a join a.item i where a.active = true and i.active = true"
+                + visibility(), Long.class), actorId, actorGroups, manager).getSingleResult();
+        long locations = InventoryAccessOrm.bind(entityManager.createQuery("select count(l) from StorageLocation l where l.active = true and "
+                + InventoryAccessOrm.visible("l.accessPolicy"), Long.class), accessActor.current()).getSingleResult();
+        return new VisibleCounts(items, assets, locations);
+    }
+
+    public long upcomingEventCount(LocalDate today) {
+        return entityManager.createQuery("select count(e) from EventOccurrence e where e.startDate >= :today and lower(e.status) <> 'cancelled'", Long.class)
+                .setParameter("today", today).getSingleResult();
     }
 
     public List<StorageLocation> allLocations() {
@@ -214,6 +240,32 @@ public class CatalogOrm extends EntityOrm {
                 + " order by a.assetCode asc, a.id", AssetInstance.class).setParameter("item", item);
         if (status != null) query.setParameter("status", status);
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    /** Custody, return and order obligations that must settle before an item may be retired. */
+    public List<String> openObligations(Item item) {
+        var row = (Object[]) entityManager.createNativeQuery("""
+                select
+                    exists (select 1 from stock_transactions t
+                        where t.item_id = :item and t.faction_order_id is null and t.related_entity_type is null
+                            and (t.type in ('checkout', 'checkin', 'consumed') or (t.type = 'written_off' and t.custody_write_off))
+                        group by t.user_id, t.event_occurrence_id, t.asset_instance_id
+                        having sum(case when t.type = 'checkout' then t.quantity else -t.quantity end) > 0),
+                    exists (select 1 from faction_order_lines l join faction_orders o on o.id = l.faction_order_id
+                        where l.item_id = :item and (o.status not in ('returned', 'closed', 'cancelled')
+                            or l.handed_over_quantity - l.returned_quantity - l.consumed_quantity
+                                - l.damaged_quantity - l.written_off_quantity > 0)),
+                    exists (select 1 from general_orders o
+                        where o.status not in ('returned', 'closed', 'cancelled')
+                            and (jsonb_exists(o.requested_quantities, cast(:item as text)) or jsonb_exists(o.handed_over_quantities, cast(:item as text)))),
+                    exists (select 1 from return_submissions r where r.item_id = :item and r.status = 'pending'),
+                    exists (select 1 from stock_reservations r where r.item_id = :item and r.status in ('active', 'partially_released'))
+                """).setParameter("item", item.id).getSingleResult();
+        var labels = List.of("outstanding direct custody", "open faction orders", "open general orders",
+                "pending returns", "active reservations");
+        var result = new ArrayList<String>();
+        for (int i = 0; i < labels.size(); i++) if (Boolean.TRUE.equals(row[i])) result.add(labels.get(i));
+        return result;
     }
 
     public long countAssets(Item item) {

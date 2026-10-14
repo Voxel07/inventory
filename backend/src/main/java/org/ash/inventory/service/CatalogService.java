@@ -229,6 +229,10 @@ public class CatalogService {
     public void retireItem(UUID id) {
         var item = orm.requireLocked(Item.class, id, "Item");
         actorService.requireItemEdit(item);
+        // Returns and order reconciliation only operate on active items; settle them before retirement.
+        var obligations = orm.openObligations(item);
+        if (!obligations.isEmpty())
+            throw ApiException.conflict("Item cannot be retired while it has " + String.join(", ", obligations));
         item.active = false;
         catalogChanged("items", item.id);
     }
@@ -260,13 +264,17 @@ public class CatalogService {
         if (item.visibilityScope != DomainEnums.ItemVisibilityScope.person) item.assignedUser = null;
         if (item.visibilityScope != DomainEnums.ItemVisibilityScope.group) item.assignedGroup = null;
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
-        item.consumable = input.consumable();
         item.trackingMode = input.trackingMode() == null
                 ? (item.trackingMode != null ? item.trackingMode : DomainEnums.TrackingMode.bulk)
                 : input.trackingMode();
+        // The role is authoritative; the consumable flag is its projection and must agree when both are given.
+        if (input.inventoryRole() != null && input.consumable() != (input.inventoryRole() == DomainEnums.InventoryRole.consumable)) {
+            throw ApiException.badRequest("consumable must match inventoryRole");
+        }
         item.inventoryRole = input.inventoryRole() == null
                 ? (input.consumable() ? DomainEnums.InventoryRole.consumable : DomainEnums.InventoryRole.returnable)
                 : input.inventoryRole();
+        item.consumable = item.inventoryRole == DomainEnums.InventoryRole.consumable;
         if (item.trackingMode == DomainEnums.TrackingMode.serialized
                 && item.inventoryRole == DomainEnums.InventoryRole.consumable) {
             throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
@@ -296,6 +304,8 @@ public class CatalogService {
         item.bestBeforeDate = input.bestBeforeDate();
         if (input.maintenanceStatus() != null) item.maintenanceStatus = input.maintenanceStatus();
     }
+
+    public boolean managesInventory(UserAccount actor) { return canManageInventory(actor); }
 
     private boolean canManageInventory(UserAccount actor) {
         return actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
@@ -456,7 +466,6 @@ public class CatalogService {
         return newEvent(input);
     }
 
-    /** Also used when an order implicitly creates its event occurrence; callers authorize. */
     private EventOccurrence newEvent(ApiModels.EventInput input) {
         var event = new EventOccurrence();
         event.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -511,7 +520,6 @@ public class CatalogService {
         return newFaction(input);
     }
 
-    /** Also used when an order names a new faction; callers authorize. */
     private Faction newFaction(ApiModels.FactionInput input) {
         var faction = new Faction();
         faction.eventType = input.eventType().toUpperCase(Locale.ROOT);
@@ -523,10 +531,12 @@ public class CatalogService {
         return faction;
     }
 
-    public EventOccurrence findOrCreateEvent(String eventType, LocalDate date) {
+    /** Orders reference existing events; a missing one is created only through the admin-only catalog command. */
+    public EventOccurrence eventForOrder(String eventType, LocalDate date) {
         var event = orm.findEvent(eventType.toUpperCase(Locale.ROOT), date);
         if (event != null) return event;
-        return newEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
+        if (!actorService.atLeast(DomainEnums.UserRole.admin)) throw ApiException.notFound("Event not found");
+        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
     }
 
     private Map<String, Integer> eventQuantities(Map<UUID, Integer> quantities) {
@@ -543,10 +553,12 @@ public class CatalogService {
         return result;
     }
 
-    public Faction findOrCreateFaction(String eventType, String name) {
-        var faction = orm.findFaction(eventType.toUpperCase(Locale.ROOT), name.toLowerCase(Locale.ROOT));
+    /** Orders reference existing factions; a missing one is created only through the admin-only catalog command. */
+    public Faction factionForOrder(String eventType, String name) {
+        var faction = orm.findFaction(eventType.toUpperCase(Locale.ROOT), name.trim().toLowerCase(Locale.ROOT));
         if (faction != null) return faction;
-        return newFaction(new ApiModels.FactionInput(eventType, name, slug(name), true));
+        if (!actorService.atLeast(DomainEnums.UserRole.admin)) throw ApiException.notFound("Faction not found");
+        return createFaction(new ApiModels.FactionInput(eventType, name.trim(), slug(name), true));
     }
 
     private void persistImages(Item item, List<String> images) {

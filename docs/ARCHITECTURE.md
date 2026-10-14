@@ -53,7 +53,7 @@ The source still contains exceptions and unfinished consolidation: guarded maste
 | [Deployment Step 2](DEPLOYMENT_STEP2.md) | Proposed replicated API/multi-host topology and its limits |
 | [PostgreSQL logical replication](postgres-logical-replication.md) | Operator publication/subscription procedure |
 | [Test inventory](../tests/README.md) | Existing regression ownership and historical test procedures |
-| [Agent guidelines](../agent.md) | Repository rules for builds/tests, contracts and schema edits |
+| [Agent guidelines](../AGENTS.md) | Repository rules for builds/tests, contracts and schema edits |
 
 ## Verification status
 

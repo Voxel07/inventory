@@ -8,6 +8,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import org.ash.inventory.mcp.InventoryMcpDtos;
 import org.ash.inventory.mcp.InventoryMcpPrompts;
 import org.ash.inventory.mcp.InventoryMcpResources;
 import org.ash.inventory.mcp.InventoryMcpTools;
@@ -114,6 +115,25 @@ class InventoryMcpTest {
         });
     }
 
+    /** Reads every page of the bounded MCP low-stock evaluation. */
+    private List<InventoryMcpDtos.LowStockAlertDto> lowStock() {
+        var result = new java.util.ArrayList<InventoryMcpDtos.LowStockAlertDto>();
+        for (int page = 0; ; page++) {
+            var alerts = tools.check_low_stock_items(0, page, 100);
+            result.addAll(alerts.alerts());
+            if (!alerts.hasMore()) return result;
+        }
+    }
+
+    private List<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts() {
+        var result = new java.util.ArrayList<InventoryMcpDtos.MaintenanceAlertDto>();
+        for (int page = 0; ; page++) {
+            var alerts = tools.get_maintenance_alerts(page, 100);
+            result.addAll(alerts.alerts());
+            if (!alerts.hasMore()) return result;
+        }
+    }
+
     private Item item(String name, DomainEnums.TrackingMode tracking) {
         var item = new Item();
         item.name = name;
@@ -149,7 +169,7 @@ class InventoryMcpTest {
         QuarkusTransaction.requiringNew().run(() -> {
             var tx = em.createQuery("from StockTransaction t join fetch t.user where t.item.id = :id", StockTransaction.class)
                     .setParameter("id", created.id()).getSingleResult();
-            assertEquals("dev-hq-admin", tx.user.externalSubject);
+            assertEquals("dev-admin", tx.user.externalSubject);
             assertEquals(4, tx.quantity);
             var changed = em.createQuery("from DomainEvent e where e.aggregateId = :id and e.eventType = 'catalog.changed'", DomainEvent.class)
                     .setParameter("id", created.id()).getSingleResult();
@@ -205,7 +225,7 @@ class InventoryMcpTest {
                 null, List.of(), Map.of(bulk.id, 0), null, false, null)));
         assertThrows(ToolCallException.class, () -> tools.update_item(bulk.id, itemInput(bulk.name, 11, "bulk")));
         assertEquals(10, tools.get_item_details(bulk.id).stock().onHand());
-        assertThrows(ToolCallException.class, () -> tools.check_low_stock_items(-1));
+        assertThrows(ToolCallException.class, () -> tools.check_low_stock_items(-1, null, null));
     }
 
     @Test
@@ -228,7 +248,7 @@ class InventoryMcpTest {
 
     @Test
     void serializedLowStockUsesAssetsAndHoldsUseCanonicalAvailability() {
-        var alert = tools.check_low_stock_items(0).stream().filter(a -> a.itemId().equals(serialized.id)).findFirst().orElseThrow();
+        var alert = lowStock().stream().filter(a -> a.itemId().equals(serialized.id)).findFirst().orElseThrow();
         assertEquals(1, alert.currentOnHand());
         assertEquals(1, alert.currentAvailable());
         assertEquals(4, alert.deficit());
@@ -296,7 +316,7 @@ class InventoryMcpTest {
         });
         assertEquals(0, tools.get_inventory_positions(bulk.id).getFirst().availableQuantity());
         assertEquals(0, tools.get_item_details(bulk.id).stock().available());
-        var alert = tools.check_low_stock_items(0).stream().filter(a -> a.itemId().equals(bulk.id)).findFirst().orElseThrow();
+        var alert = lowStock().stream().filter(a -> a.itemId().equals(bulk.id)).findFirst().orElseThrow();
         assertEquals(5, alert.deficit());
     }
 
@@ -314,10 +334,10 @@ class InventoryMcpTest {
             em.persist(schedule);
             return schedule.id;
         });
-        assertEquals("due", tools.get_maintenance_alerts().stream().filter(a -> a.entityId().equals(scheduleId)).findFirst().orElseThrow().status());
+        assertEquals("due", maintenanceAlerts().stream().filter(a -> a.entityId().equals(scheduleId)).findFirst().orElseThrow().status());
         assertEquals(0, tools.get_item_details(serialized.id).stock().available());
         QuarkusTransaction.requiringNew().run(() -> em.find(MaintenanceSchedule.class, scheduleId).nextDueValue = null);
-        assertEquals("unknown", tools.get_maintenance_alerts().stream().filter(a -> a.entityId().equals(scheduleId)).findFirst().orElseThrow().status());
+        assertEquals("unknown", maintenanceAlerts().stream().filter(a -> a.entityId().equals(scheduleId)).findFirst().orElseThrow().status());
     }
 
     @Test

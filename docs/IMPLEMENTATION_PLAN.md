@@ -90,8 +90,8 @@ PLAN-05..09 replace working libraries without direct user value; schedule them o
 
 | ID | Priority / status | Gap | Notes |
 |---|---|---|---|
-| OPS-01 | P1 · Deferred | No checked-in backup job or restore script; WAL archiving, dumps and media sync are documented proposals | Backup container (pg_dump + bucket sync to the storage box) and a scripted restore drill; evidence goes to ACC-04 |
-| OBS-01 | P2 · Partial | Application traces/logs/metrics implemented; external alerts and infrastructure signals pending | [Signals and alert conditions](OPENOBSERVE_SIGNALS.md); replication lag/WAL require infrastructure collection |
+| OPS-04 | P1 · Deferred | No checked-in backup job or restore script; WAL archiving, dumps and media sync are documented proposals | Backup container (pg_dump + bucket sync to the storage box) and a scripted restore drill; evidence goes to ACC-04 |
+| OBS-01 | P2 · Partial | Application traces/logs/metrics implemented; external alerts and infrastructure signals pending | Write up alert conditions/dashboards with the OpenObserve provisioning ([Observability](TECHNICAL_REQUIREMENTS.md#7-observability)); replication lag/WAL require infrastructure collection |
 
 ## 5. Delivery sequence
 
@@ -99,7 +99,7 @@ PLAN-05..09 replace working libraries without direct user value; schedule them o
 |---|---|---|
 | A — Documentation baseline | Done | Focused documents, overview links, source/target status, table inventory, prioritized gaps |
 | B — Stock/history/session contracts | Partly done | GAP-01/02/04 done; GAP-03 revocation bound verified in ACC-01 |
-| C — Missing operational workflows | Open | FEAT-01/02/03, OPS-01 |
+| C — Missing operational workflows | Open | FEAT-01/02/03, OPS-04 |
 | D — Consolidate core domain and privacy | Open | PLAN-01/02/10; authorization and transaction invariants retained across REST/MCP/replay |
 | E — Scalable client data access | Open | PLAN-03/04 |
 | F — Environment acceptance and release | Pending acceptance | ACC-01..05 evidence attached; no claim of HA or field readiness without checks |
@@ -135,7 +135,7 @@ Sorted by priority.
 | P2 | MCP `list_events` capped at 50, `list_storage_locations` unpaged | Done | `page`/`limit` on both (default 20, max 100) |
 | P3 | Missing Authentik runbook, glossary, personal-data inventory, observability guide | Done | [Authentik setup](AUTHENTIK_SETUP.md), [Glossary](PRODUCT_REQUIREMENTS.md#9-glossary), [Personal data](DATABASE_SCHEMA.md#8-personal-data), [Observability](TECHNICAL_REQUIREMENTS.md#7-observability) |
 | P3 | Review-process boilerplate in every document | Done | Removed; status distinctions kept |
-| — | Notifications, offboarding, erasure, reversal, deadlines, report rebuild, offline scope, MCP order reads, DB append-only, backups, alerts | Deferred | FEAT-01..09, OPS-01, OBS-01 above |
+| — | Notifications, offboarding, erasure, reversal, deadlines, report rebuild, offline scope, MCP order reads, DB append-only, backups, alerts | Deferred | FEAT-01..09, OPS-04, OBS-01 above |
 
 Checks run: backend `mvn -o test-compile`; 26 DB-free backend unit tests; frontend typecheck, ESLint, 52 Bun tests and production build. Not run: PostgreSQL `@QuarkusTest` suites (no disposable database available), so schema validation of the `assemblies.active` / removed `base_amount` columns and the updated `InventoryMcpTest` / `PrivateInventoryApiTest` remain to be executed. No browser session, Authentik or deployment check.
 

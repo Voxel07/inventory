@@ -62,6 +62,8 @@ public class LifecycleService {
         actors.requireWarehouse();
         var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
         apply(schedule, input);
+        events.record("maintenance_schedule.updated", "maintenance_schedule", schedule.id, actors.current().id, null,
+                scheduleEvidence(schedule));
         return schedule;
     }
 
@@ -69,7 +71,22 @@ public class LifecycleService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public void retireSchedule(UUID id) {
         actors.requireWarehouse();
-        orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule").active = false;
+        var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
+        schedule.active = false;
+        events.record("maintenance_schedule.retired", "maintenance_schedule", schedule.id, actors.current().id, null,
+                scheduleEvidence(schedule));
+    }
+
+    /** Audit payload: what changes checkout blocking and due-date evaluation for other sessions. */
+    private static Map<String, Object> scheduleEvidence(MaintenanceSchedule schedule) {
+        var payload = new java.util.LinkedHashMap<String, Object>();
+        payload.put("itemId", schedule.item.id.toString());
+        if (schedule.assetInstance != null) payload.put("assetInstanceId", schedule.assetInstance.id.toString());
+        payload.put("active", schedule.active);
+        payload.put("checkoutBlocking", schedule.checkoutBlocking);
+        if (schedule.nextDueAt != null) payload.put("nextDueAt", schedule.nextDueAt.toString());
+        if (schedule.nextDueValue != null) payload.put("nextDueValue", schedule.nextDueValue.toPlainString());
+        return payload;
     }
 
     private void apply(MaintenanceSchedule schedule, LifecycleDtos.ScheduleInput input) {
@@ -172,9 +189,9 @@ public class LifecycleService {
             repair.repairedPendingQuantity = 0;
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {
-            repair.assetInstance.active = true;
+            // Custody, reservation and transit states stay owned by their workflows.
             repair.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
-            repair.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+            repair.assetInstance.availabilityStatus = StockPolicy.releasedState(repair.assetInstance);
         }
         repair.status = input.status();
         repair.notes = input.notes() == null ? repair.notes : input.notes();

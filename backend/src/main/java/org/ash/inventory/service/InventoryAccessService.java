@@ -155,11 +155,13 @@ public class InventoryAccessService {
         if (!access.manages(policy, actors.current())) throw ApiException.forbidden("Only the owner or the inventory admin can manage sharing");
         if (policy.revision != input.revision()) throw ApiException.conflict("Access changed; reload before saving");
         var before = view(policy);
+        // Load the item before changing the policy: its access check refreshes the policy and would discard pending changes.
+        var item = kind.equals("items") ? orm.findLocked(Item.class, id) : null;
         // Transfer requires explicit administrator review of stock/custody obligations.
         if (input.ownerId() != null && !input.ownerId().equals(policy.owner.id)) {
             actors.requireAdmin();
-            if (kind.equals("items")) {
-                var item = orm.findLocked(Item.class, id); var stock = inventory.physicalStock(item);
+            if (item != null) {
+                var stock = inventory.physicalStock(item);
                 if (stock.checkedOut() > 0 || stock.reserved() > 0 || stock.inTransit() > 0 || orm.currentCommitments(item))
                     throw ApiException.conflict("Resolve custody, reservations, transfers and commitments before transferring ownership");
             } else if (kind.equals("storage-locations") && orm.locationOccupied(orm.findLocked(StorageLocation.class, id)))
@@ -182,9 +184,8 @@ public class InventoryAccessService {
             values.add(value);
         }
         if (input.publicUse() != null && input.publicUse() != policy.publicUse) {
-            if (!kind.equals("items")) throw ApiException.badRequest("Only items can be offered for use");
+            if (item == null) throw ApiException.badRequest("Only items can be offered for use");
             policy.publicUse = input.publicUse();
-            var item = orm.findLocked(Item.class, id);
             // Offered items are requested through owner commitments, never handed out freely.
             if (policy.publicUse && item.availabilityPolicy == Item.AvailabilityPolicy.unavailable) {
                 item.availabilityPolicy = Item.AvailabilityPolicy.commitment_required;

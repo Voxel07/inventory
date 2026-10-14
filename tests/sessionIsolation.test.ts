@@ -340,10 +340,41 @@ test('an obsolete refresh completion does not clear the new refresh in flight', 
   a.resolve(tokens('A-late'));
   expect((await old).error).toBeInstanceOf(auth.SessionChangedError);
   const shared = auth.getValidAccessToken(true);
-  expect(calls).toEqual(['A-refresh', 'B-refresh']);
+  for (let i = 0; i < 10 && !calls.length; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  // The obsolete refresh is abandoned before it spends A's rotating token.
+  expect(calls).toEqual(['B-refresh']);
   b.resolve(tokens('B-current'));
   expect(await current).toBe('B-current');
   expect(await shared).toBe('B-current');
+});
+
+test('a refresh adopts a token generation another tab already rotated', async () => {
+  const calls: string[] = [];
+  refresh = async (token) => { calls.push(token); return tokens('never'); };
+  auth.setOidcSession({ ...tokens('A'), expiresAt: Date.now() - 1 });
+  loadSession = async () => ({ ...tokens('A2'), expiresAt: Date.now() + 600_000, tokenRevision: Date.now() + 60_000, user: null });
+  connectivity.onLine = true;
+  try {
+    expect(await auth.getValidAccessToken()).toBe('A2');
+    expect(calls).toEqual([]);
+  } finally {
+    loadSession = async () => null;
+  }
+});
+
+test('an older stored token generation is never adopted', async () => {
+  const calls: string[] = [];
+  refresh = async (token) => { calls.push(token); return { ...tokens('A3'), expiresAt: Date.now() + 600_000 }; };
+  auth.setOidcSession({ ...tokens('A'), expiresAt: Date.now() - 1 });
+  // A delayed write from another tab left an earlier generation behind.
+  loadSession = async () => ({ ...tokens('A0'), expiresAt: Date.now() + 600_000, tokenRevision: 1, user: null });
+  connectivity.onLine = true;
+  try {
+    expect(await auth.getValidAccessToken()).toBe('A3');
+    expect(calls).toEqual(['A-refresh']);
+  } finally {
+    loadSession = async () => null;
+  }
 });
 
 test('late persisted-session restoration cannot overwrite a new login', async () => {

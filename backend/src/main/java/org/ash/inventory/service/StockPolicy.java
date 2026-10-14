@@ -22,6 +22,14 @@ public final class StockPolicy {
                 ? DomainEnums.AssetState.damaged : DomainEnums.AssetState.available;
     }
 
+    /** State after a repair is released: only warehouse-held damage/repair states return to availability. */
+    public static DomainEnums.AssetState releasedState(AssetInstance asset) {
+        return switch (asset.availabilityStatus) {
+            case damaged, in_repair, in_maintenance -> DomainEnums.AssetState.available;
+            default -> asset.availabilityStatus;
+        };
+    }
+
     public static AssetStock classify(AssetInstance asset) {
         if (!asset.active || asset.availabilityStatus == DomainEnums.AssetState.lost
                 || asset.availabilityStatus == DomainEnums.AssetState.written_off

@@ -103,8 +103,13 @@ class PriorityRefactorApiTest {
             actor("priority-owner", "read_only").get("/api/assemblies/" + assembly).then().statusCode(200)
                     .body("expand.itemIds.id", hasItems(person, group));
         }
-        String order = actor("priority-owner", "faction_leader").body(Map.of("eventType", "DE", "faction", "Priority",
-                "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1)))
+        var orderBody = Map.of("eventType", "DE", "faction", "Priority",
+                "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1));
+        // Orders reference existing events and factions; only the admin catalog command creates them.
+        actor("priority-owner", "faction_leader").body(orderBody).post("/api/orders").then().statusCode(404);
+        admin().body(Map.of("eventType", "DE", "startDate", "2039-09-10")).post("/api/events").then().statusCode(200);
+        admin().body(Map.of("eventType", "DE", "name", "Priority")).post("/api/factions").then().statusCode(200);
+        String order = actor("priority-owner", "faction_leader").body(orderBody)
                 .post("/api/orders").then().statusCode(200).extract().path("id");
         admin().body(Map.of("name", "Private component", "category", "Priority", "visibilityScope", "group", "assignedGroup", "Other"))
                 .patch("/api/items/" + person).then().statusCode(200);

@@ -101,6 +101,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         if (asset.availabilityStatus !== 'reserved' && asset.availabilityStatus !== 'staged') return null;
         const holder = asset.reservedFor;
         if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('Keine offene Bestellung gefunden', 'No open order found')}</Typography>;
+        if (!holder.orderId) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('Für eine nicht einsehbare Bestellung reserviert', 'Reserved for an order you cannot view')}</Typography>;
         const to = holder.kind === 'faction_order' ? `/orders/faction/${holder.orderId}` : '/orders?tab=general';
         return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>
             {t('Für Bestellung', 'For order')}{' '}

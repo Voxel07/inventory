@@ -19,6 +19,7 @@ import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.orm.CustodyOrm;
 import org.ash.inventory.orm.OperationsOrm;
 import org.ash.inventory.orm.PurchasingOrm;
 
@@ -39,6 +40,8 @@ public class InventoryOperationsService {
     @jakarta.inject.Inject PositionService positions;
     @jakarta.inject.Inject MaintenanceEvaluationService maintenance;
     @jakarta.inject.Inject EquipmentReadService readPolicy;
+    @jakarta.inject.Inject CustodyOrm custody;
+    @jakarta.inject.Inject org.ash.inventory.orm.ItemLocks itemLocks;
     private static final List<DomainEnums.TransactionType> DIRECT_TRANSACTION_TYPES = List.of(
             DomainEnums.TransactionType.checkout,
             DomainEnums.TransactionType.checkin,
@@ -68,27 +71,36 @@ public class InventoryOperationsService {
     public List<StockTransaction> transactBatch(List<ApiModels.TransactionInput> inputs) {
         actors.requireWarehouse();
         if (inputs == null || inputs.isEmpty() || inputs.size() > 200) throw ApiException.badRequest("Provide 1 to 200 transactions");
+        itemLocks.lock(inputs.stream().map(ApiModels.TransactionInput::itemId).filter(java.util.Objects::nonNull).distinct().toList());
         return inputs.stream().sorted(java.util.Comparator.comparing(ApiModels.TransactionInput::itemId)).map(this::transact).toList();
     }
 
+    /** Direct stock command; authorization follows the transaction type (checkout: ASH, otherwise item edit). */
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
-        return input.transactionType() == DomainEnums.TransactionType.checkout ? checkout(input) : transactInventory(input);
+        return transact(input, null);
+    }
+
+    /** General-order handover and reconciliation: the order owns the custody, so the ledger row is linked to it. */
+    @Transactional
+    public StockTransaction transact(ApiModels.TransactionInput input, UUID generalOrderId) {
+        return input.transactionType() == DomainEnums.TransactionType.checkout
+                ? checkout(input, generalOrderId) : transactInventory(input, generalOrderId);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
-    public StockTransaction checkout(ApiModels.TransactionInput input) {
+    public StockTransaction checkout(ApiModels.TransactionInput input, UUID generalOrderId) {
         actors.requireTakeout();
         if (input.transactionType() != DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Checkout transaction required");
-        return recordTransaction(input);
+        return recordTransaction(input, generalOrderId);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public StockTransaction transactInventory(ApiModels.TransactionInput input) {
+    public StockTransaction transactInventory(ApiModels.TransactionInput input, UUID generalOrderId) {
         if (input.transactionType() == DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Use the checkout workflow");
-        return recordTransaction(input);
+        return recordTransaction(input, generalOrderId);
     }
 
     private void requireTransactionAccess(Item item, ApiModels.TransactionInput input) {
@@ -96,7 +108,7 @@ public class InventoryOperationsService {
         else actors.requireItemEdit(item);
     }
 
-    private StockTransaction recordTransaction(ApiModels.TransactionInput input) {
+    private StockTransaction recordTransaction(ApiModels.TransactionInput input, UUID generalOrderId) {
         var actor = actors.current();
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
@@ -118,7 +130,7 @@ public class InventoryOperationsService {
         var item = lockedItem(input.itemId());
         requireTransactionAccess(item, input);
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            return transactSerialized(input, item, actor, occurredAt);
+            return transactSerialized(input, item, actor, occurredAt, generalOrderId);
         }
         if (input.assetInstanceId() != null)
             throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
@@ -150,6 +162,10 @@ public class InventoryOperationsService {
         transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
+        link(transaction, generalOrderId);
+        if (input.transactionType() == DomainEnums.TransactionType.checkin && generalOrderId == null) {
+            settleDirectCustody(transaction, null, input);
+        }
         switch (input.transactionType()) {
             case added, received, adjusted, checkin, transfer_in -> transaction.destinationLocation = input.transactionType() == DomainEnums.TransactionType.checkin && item.returnLocation != null ? item.returnLocation : item.storageLocation;
             case checkout, transfer_out, written_off -> transaction.sourceLocation = item.storageLocation;
@@ -169,7 +185,8 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt) {
+    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt,
+            UUID generalOrderId) {
         if (input.transactionType() != DomainEnums.TransactionType.checkout
                 && input.transactionType() != DomainEnums.TransactionType.checkin) {
             throw ApiException.conflict("Serialized stock changes must be made through individual asset records");
@@ -200,6 +217,7 @@ public class InventoryOperationsService {
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         transaction.availabilityBefore = before;
+        link(transaction, generalOrderId);
 
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
             requireCheckoutContext(input, transaction.eventOccurrence);
@@ -219,6 +237,7 @@ public class InventoryOperationsService {
                     && asset.availabilityStatus != DomainEnums.AssetState.returned_pending_check) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not checked out");
             }
+            if (generalOrderId == null) settleDirectCustody(transaction, asset, input);
             transaction.sourceLocation = asset.currentLocation;
             transaction.destinationLocation = input.locationId() == null ? (item.returnLocation == null ? item.storageLocation : item.returnLocation) : positions.location(input.locationId());
             asset.availabilityStatus = StockPolicy.returnedState(asset);
@@ -237,6 +256,39 @@ public class InventoryOperationsService {
         payload.put("quantity", 1);
         events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(), payload);
         return transaction;
+    }
+
+    private static void link(StockTransaction transaction, UUID generalOrderId) {
+        if (generalOrderId == null) return;
+        transaction.relatedEntityType = "general_order";
+        transaction.relatedEntityId = generalOrderId;
+    }
+
+    /**
+     * A direct check-in settles one exact direct custody (custodian and event). Order-held stock is settled by its
+     * order reconciliation. The ledger row names the custodian; the operator stays in the audit event.
+     */
+    private void settleDirectCustody(StockTransaction transaction, AssetInstance asset, ApiModels.TransactionInput input) {
+        var sources = custody.directSources(transaction.item.id, asset == null ? null : asset.id);
+        if (asset != null) {
+            if (sources.isEmpty()) throw ApiException.conflict("Asset " + asset.assetCode
+                    + " is not in direct custody; return it through its order");
+            var source = sources.getFirst();
+            if (input.userId() != null && !input.userId().equals(source.user()))
+                throw ApiException.conflict("Asset " + asset.assetCode + " is held by another custodian");
+            if (input.eventOccurrenceId() != null && !input.eventOccurrenceId().equals(source.event()))
+                throw ApiException.conflict("Asset " + asset.assetCode + " was checked out for another event");
+            transaction.user = orm.require(UserAccount.class, source.user(), "User");
+            transaction.eventOccurrence = source.event() == null ? null
+                    : orm.require(org.ash.inventory.model.EventOccurrence.class, source.event(), "Event");
+        } else {
+            UUID event = transaction.eventOccurrence == null ? null : transaction.eventOccurrence.id;
+            int held = sources.stream().filter(source -> source.user().equals(transaction.user.id)
+                    && java.util.Objects.equals(source.event(), event)).mapToInt(CustodyOrm.DirectSource::quantity).sum();
+            if (transaction.quantity > held) throw ApiException.conflict("Only " + held + " units are in the selected direct custody"
+                    + (event == null ? " without event" : " for this event"));
+        }
+        if (transaction.eventOccurrence != null) transaction.eventType = transaction.eventOccurrence.eventType;
     }
 
     public void assertAssetCheckoutAllowed(AssetInstance asset) {

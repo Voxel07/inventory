@@ -86,7 +86,8 @@ class P2StorageRegressionTest {
             var grant = new InventoryAccessGrant(); grant.policy = policy; grant.group = group; grant.canEdit = n % 2 == 0; em.persist(grant);
         }
         em.flush(); stats().clear(); var views = access.views(policies);
-        assertEquals(2, stats().getPrepareStatementCount()); assertEquals(0, stats().getEntityLoadCount());
+        // Direct grants, policy rows, and the two location-inheritance batches: constant in the number of policies.
+        assertEquals(4, stats().getPrepareStatementCount()); assertEquals(0, stats().getEntityLoadCount());
         assertEquals(25, views.size()); assertTrue(views.values().stream().allMatch(v -> v.sources().stream().anyMatch(s -> s.kind().equals("group"))));
         group.members.clear(); em.flush();
         assertTrue(access.views(policies).values().stream().allMatch(v -> v.sources().stream().noneMatch(s -> s.kind().equals("group"))));
@@ -150,7 +151,7 @@ class P2StorageRegressionTest {
         }
         em.flush(); em.clear(); actors.current(); stats().clear();
         var rows = queries.projectItems(catalog.getItems(prefix, 0, 100));
-        assertEquals(25, rows.size()); assertEquals(9, stats().getPrepareStatementCount());
+        assertEquals(25, rows.size()); assertEquals(11, stats().getPrepareStatementCount()); // includes the two inheritance batches
         assertEquals(0, stats().getCollectionFetchCount(), "No group member collections in DTO projection");
     }
     @Test

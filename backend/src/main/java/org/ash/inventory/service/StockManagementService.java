@@ -98,7 +98,11 @@ public class StockManagementService {
 
         var lot = orm.requireLocked(InventoryLot.class, id, "Inventory lot");
         actors.requireItemEdit(lot.item);
+        var previousStatus = lot.status;
         apply(lot, input, id);
+        events.record("inventory_lot.updated", "inventory_lot", lot.id, actors.current().id, null,
+                Map.of("itemId", lot.item.id.toString(), "lotNumber", lot.lotNumber,
+                        "status", lot.status.name(), "previousStatus", previousStatus.name()));
         return lot;
     }
 

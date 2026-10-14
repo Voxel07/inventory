@@ -8,6 +8,8 @@ export type StoredAuthSession = {
   refreshToken: string;
   idToken: string;
   expiresAt: number | null;
+  /** Monotonic token generation; absent on sessions stored before revisions existed. */
+  tokenRevision?: number;
   user: unknown;
 };
 

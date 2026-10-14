@@ -64,7 +64,9 @@ class EquipmentApiTest {
         admin().body(checkout(item, event, 1)).post("/api/transactions").then().statusCode(409);
         admin().body(Map.of("revision", 2, "reason", "Withdraw offer")).post(path(item) + "/commitments/" + commitment + "/cancel").then().statusCode(409);
         admin().body(profile(2)).put(path(item)).then().statusCode(200); // Contact-only edits remain possible.
-        admin().body(Map.of("itemId", item, "transactionType", "checkin", "quantityChanged", 2, "reason", "Returned" )).post("/api/transactions").then().statusCode(200);
+        // A direct check-in settles the exact custody: the same custodian and event.
+        admin().body(Map.of("itemId", item, "transactionType", "checkin", "quantityChanged", 2, "reason", "Returned")).post("/api/transactions").then().statusCode(409);
+        admin().body(Map.of("itemId", item, "transactionType", "checkin", "quantityChanged", 2, "reason", "Returned", "eventOccurrenceId", event)).post("/api/transactions").then().statusCode(200);
         admin().body(Map.of("revision", 3, "reason", "Owner withdrew offer")).post(path(item) + "/commitments/" + commitment + "/cancel").then().statusCode(200)
                 .body("commitments[0].status", equalTo("cancelled")).body("commitments[0].cancellationReason", equalTo("Owner withdrew offer"));
         admin().body(checkout(item, event, 1)).post("/api/transactions").then().statusCode(409);

@@ -1,6 +1,8 @@
 import type { FactionOrder, FactionOrderFormData } from '../types';
-import { apiRequest } from './apiClient';
+import { apiRequest, ApiError } from './apiClient';
 import { assertAuthSession, captureAuthSession } from './authManager';
+import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+import { containsPrivateInventory } from './privateInventoryCache';
 
 type FactionOrderSummaryResponse = Omit<FactionOrder, 'history'>;
 
@@ -8,8 +10,30 @@ export async function getFactionOrders(filters?: { eventType?: string; faction?:
   const orders = await apiRequest<FactionOrderSummaryResponse[]>('/api/orders', { query: filters });
   return orders.map((order) => ({ ...order, history: [] }));
 }
-export function getFactionOrder(id: string): Promise<FactionOrder> {
-  return apiRequest(`/api/orders/${id}`);
+const orderDetailKey = (id: string) => `faction-orders:detail:${encodeURIComponent(id)}`;
+
+/** Order detail with an account-scoped IndexedDB fallback for opened orders (offline preparation and returns). */
+export async function getFactionOrder(id: string): Promise<FactionOrder> {
+  const context = captureAuthSession();
+  const key = orderDetailKey(id);
+  try {
+    const order = await apiRequest<FactionOrder>(`/api/orders/${id}`, { session: context });
+    assertAuthSession(context);
+    if (containsPrivateInventory(order)) await removeOfflineCatalog(key, context);
+    else await setOfflineCatalog(key, order, context);
+    assertAuthSession(context);
+    return order;
+  } catch (error) {
+    assertAuthSession(context);
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+      await removeOfflineCatalog(key, context);
+    } else if (!(error instanceof ApiError) || error.status >= 500) {
+      const cached = await getOfflineCatalog<FactionOrder>(key, context);
+      assertAuthSession(context);
+      if (cached) return cached;
+    }
+    throw error;
+  }
 }
 export function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> {
   const idempotencyKey = crypto.randomUUID();
@@ -36,16 +60,16 @@ function transition(id: string, status: string, notes?: string, extra?: Record<s
 export function submitFactionOrder(id: string) { return transition(id, 'submitted'); }
 export function startFactionOrderPreparation(id: string) { return transition(id, 'preparing'); }
 
+/** Built from the loaded order snapshot so it can be queued offline; the server revalidates on replay. */
 export async function saveFactionOrderPreparation(
-  id: string,
+  order: FactionOrder,
   preparedQuantities: Record<string, number>,
   preparedAssemblyQuantities: Record<string, number>,
   assetAssignments: Record<string, string[]>,
   sourceLocations?: Record<string, string>,
 ): Promise<FactionOrder> {
+  const id = order.id;
   const context = captureAuthSession();
-  const order = await getFactionOrder(id);
-  assertAuthSession(context);
   const flattened = { ...preparedQuantities };
   for (const assembly of order.expand?.assemblyIds || []) {
     const assemblyCount = preparedAssemblyQuantities[assembly.id] || 0;

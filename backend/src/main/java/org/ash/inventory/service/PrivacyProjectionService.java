@@ -28,6 +28,12 @@ public class PrivacyProjectionService {
     public boolean denied(UUID resourceId) {
         return orm.referenceAccess(Set.of(resourceId), actors.current()).deniedIds().contains(resourceId);
     }
+    /** The subset of the given resources (transitively) hidden from the actor. */
+    @Transactional
+    public Set<UUID> deniedAmong(Set<UUID> resourceIds) {
+        if (resourceIds.isEmpty()) return Set.of();
+        return orm.referenceAccess(resourceIds, actors.current()).deniedIds();
+    }
     public boolean visible(Object value, Set<String> denied) { return visibleTree(json.valueToTree(value), denied); }
     public boolean visibleTree(JsonNode node, Set<String> denied) {
         if (denied.isEmpty() || node == null) return true;

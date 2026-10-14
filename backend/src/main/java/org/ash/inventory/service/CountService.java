@@ -270,8 +270,10 @@ public class CountService {
     }
 
     private CountDtos.CountResponse response(InventoryCountSession value, List<InventoryCountLine> lines) {
+        // Blind counts reveal expected quantities only at review, after the recount observation.
         boolean hideExpected = value.blindCount
-                && (value.status == DomainEnums.CountStatus.draft || value.status == DomainEnums.CountStatus.counting);
+                && (value.status == DomainEnums.CountStatus.draft || value.status == DomainEnums.CountStatus.counting
+                    || value.status == DomainEnums.CountStatus.awaiting_recount);
         return new CountDtos.CountResponse(value.id, value.sessionNumber,
                 value.warehouse == null ? null : value.warehouse.id,
                 value.location == null ? null : value.location.id, value.category,

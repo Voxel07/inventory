@@ -19,6 +19,7 @@ public class GeneralOrderService {
     private final InventoryOperationsService inventory;
     private final DomainEventService events;
     @jakarta.inject.Inject ItemRequestNotifier requests;
+    @jakarta.inject.Inject org.ash.inventory.orm.ItemLocks itemLocks;
 
     public GeneralOrderService(ActorService actors, GeneralOrderOrm orm,
             InventoryOperationsService inventory, DomainEventService events) {
@@ -93,8 +94,11 @@ public class GeneralOrderService {
     private void prepare(GeneralOrder order, ApiModels.GeneralOrderPickupInput input) {
         if (!List.of("submitted", "preparing").contains(order.status)) throw ApiException.conflict("Order must be submitted or preparing");
         if (input == null || input.preparedQuantities() == null) throw ApiException.badRequest("Enter prepared quantities");
-        release(order);
         var prepared = quantities(input.preparedQuantities()); var sources = new LinkedHashMap<String, String>(); var assignments = new LinkedHashMap<String, List<String>>();
+        // Lock the union of the previous and the new preparation before releasing anything, in canonical order.
+        var touched = new HashSet<>(order.preparedQuantities.keySet()); touched.addAll(prepared.keySet());
+        lockItems(touched);
+        release(order);
         for (var id : new TreeSet<>(prepared.keySet())) {
             var item = lockedItem(id); int quantity = prepared.get(id);
             if (quantity > order.requestedQuantities.getOrDefault(id, 0)) throw ApiException.badRequest("Preparation exceeds requested quantity");
@@ -122,8 +126,9 @@ public class GeneralOrderService {
     }
 
     private void release(GeneralOrder order) {
-        // Lock in a stable order, shared with the preparation path and direct checkout.
-        for (var id : new TreeSet<>(order.preparedQuantities.keySet())) lockedItem(id);
+        // Lock in the canonical order shared with faction orders and direct stock commands.
+        lockItems(order.preparedQuantities.keySet());
+        for (var id : order.preparedQuantities.keySet()) lockedItem(id);
         for (var selected : order.assetAssignments.values()) for (var id : selected) {
             var asset = orm.findLocked(AssetInstance.class, UUID.fromString(id));
             if (asset != null && asset.availabilityStatus == DomainEnums.AssetState.reserved) asset.availabilityStatus = DomainEnums.AssetState.available;
@@ -149,6 +154,7 @@ public class GeneralOrderService {
         var nextReturned = new LinkedHashMap<>(order.returnedQuantities); var nextConsumed = new LinkedHashMap<>(order.consumedQuantities);
         var nextDamaged = new LinkedHashMap<>(order.damagedQuantities); var nextMissing = new LinkedHashMap<>(order.missingQuantities); var nextWritten = new LinkedHashMap<>(order.writtenOffQuantities);
         var reconciled = new LinkedHashMap<>(order.reconciledAssets);
+        lockItems(mentioned);
         for (var idString : new TreeSet<>(mentioned)) {
             var item = lockedItem(idString); int good = returned.getOrDefault(idString, 0), used = consumed.getOrDefault(idString, 0), bad = damaged.getOrDefault(idString, 0), lost = writtenOff.getOrDefault(idString, 0);
             int outstanding = outstanding(order, idString);
@@ -225,10 +231,9 @@ public class GeneralOrderService {
         events.record("stock.changed", "item", item.id, actors.current().id, null, Map.of("type", type.name(), "quantity", amount));
     }
     private void transact(GeneralOrder order, String id, DomainEnums.TransactionType type, int quantity, List<String> assets) {
-        if (assets == null) link(order, inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, quantity, order.name, order.purpose, order.eventOccurrence.eventType, "General order", null, order.createdBy.id, null, null, order.eventOccurrence.id, type == DomainEnums.TransactionType.checkout && order.sourceLocations.containsKey(id) ? UUID.fromString(order.sourceLocations.get(id)) : null, null, null)));
-        else for (var asset : assets) link(order, inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, 1, order.name, order.purpose, order.eventOccurrence.eventType, "General order", UUID.fromString(asset), order.createdBy.id, null, null, order.eventOccurrence.id)));
+        if (assets == null) inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, quantity, order.name, order.purpose, order.eventOccurrence.eventType, "General order", null, order.createdBy.id, null, null, order.eventOccurrence.id, type == DomainEnums.TransactionType.checkout && order.sourceLocations.containsKey(id) ? UUID.fromString(order.sourceLocations.get(id)) : null, null, null), order.id);
+        else for (var asset : assets) inventory.transact(new ApiModels.TransactionInput(UUID.fromString(id), type, 1, order.name, order.purpose, order.eventOccurrence.eventType, "General order", UUID.fromString(asset), order.createdBy.id, null, null, order.eventOccurrence.id), order.id);
     }
-    private void link(GeneralOrder order, StockTransaction tx) { tx.relatedEntityType = "general_order"; tx.relatedEntityId = order.id; }
     private void assign(GeneralOrder order, ApiModels.GeneralOrderInput input) {
         order.name = input.name().trim(); order.purpose = input.purpose().trim(); order.eventOccurrence = input.eventOccurrenceId() == null ? null : orm.find(EventOccurrence.class, input.eventOccurrenceId());
         if (input.eventOccurrenceId() != null && order.eventOccurrence == null) throw ApiException.notFound("Event not found");
@@ -236,6 +241,7 @@ public class GeneralOrderService {
         for (var id : order.requestedQuantities.keySet()) actors.requireItemAccess(orm.find(Item.class, UUID.fromString(id)));
     }
     private GeneralOrder locked(UUID id) { actors.current(); var order = orm.locked(id); if (order == null) throw ApiException.notFound("Order not found"); return order; }
+    private void lockItems(java.util.Collection<String> ids) { itemLocks.lock(ids.stream().map(UUID::fromString).toList()); }
     private Item lockedItem(String id) { var item = orm.findLocked(Item.class, UUID.fromString(id)); if (item == null || !item.active) throw ApiException.notFound("Item not found"); return item; }
     private Map<String, Integer> quantities(Map<UUID, Integer> input) {
         var result = new LinkedHashMap<String, Integer>(); if (input == null) return result;

@@ -23,11 +23,26 @@ public class NotificationResource {
         this.queries = queries;
     }
 
+    /** Newest first; {@code unread=true} pages unread notices server-side so read ones never hide them. */
     @GET
     public List<ApiResponses.NotificationResponse> list(
+            @QueryParam("unread") @DefaultValue("false") boolean unread,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.notifications(page, size);
+        return queries.notifications(unread, page, size);
+    }
+
+    /** {@code before}: newest notice the user has seen; unread notices up to it are marked read, including unloaded pages. */
+    public record ReadAllInput(java.time.Instant before) {}
+
+    @jakarta.ws.rs.POST @Path("/read-all")
+    public java.util.Map<String, Integer> readAll(ReadAllInput input) {
+        return java.util.Map.of("count", queries.markAllNotificationsRead(input == null ? null : input.before()));
+    }
+
+    @GET @Path("/unread-count")
+    public java.util.Map<String, Long> unreadCount() {
+        return java.util.Map.of("count", queries.unreadNotificationCount());
     }
 
     @PATCH @Path("/{id}/read")

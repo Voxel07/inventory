@@ -48,8 +48,16 @@ Copy `.env.example` to `.env` on the app VPS and set the public URLs, then:
 docker compose up -d --build
 ```
 
-`docker-compose.yml` starts `postgres`, `garage` (optional in step 1),
-`inventory-api` (one node, in-process events and rate limiting), and `inventory-app` behind nginx.
+`docker-compose.yml` starts `postgres`, `inventory-api` (one node, in-process events and rate
+limiting), and `inventory-app` behind nginx. To keep media on the same host, add the Garage overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.garage.yml up -d --build
+```
+
+Garage templates take `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` and `GARAGE_WEBUI_AUTH` from `.env` and
+refuse to start without them. The admin API (3903) and WebUI (3909) bind to loopback; reach them through
+an SSH tunnel, never through the public interface.
 
 ## Node B — storage & backup
 
@@ -84,7 +92,8 @@ storage box on VPS B (or a Hetzner Storage Box), giving point-in-time recovery.
 
 ## Verification checklist
 
-- [ ] `https://app.example.com/q/health/live` returns 200.
+- [ ] `https://inventory-api.example.com/q/health/ready` (the API origin from `VITE_API_URL`) returns 200 with JSON
+      `"status": "UP"`; the static app origin serves SPA HTML for unknown paths and proves nothing.
 - [ ] Signing in through Authentik works; refresh tokens rotate.
 - [ ] Uploading an item image stores it in Garage S3 (visible in Garage WebUI).
 - [ ] `pg_stat_replication` on VPS A shows the replica connected and streaming.

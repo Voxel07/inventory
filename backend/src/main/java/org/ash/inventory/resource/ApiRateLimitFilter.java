@@ -57,6 +57,19 @@ public class ApiRateLimitFilter implements ContainerRequestFilter {
                 .build());
     }
 
+    /** Shared with the MCP boundary so both transports draw from one per-caller budget. */
+    public void acquire(String caller) {
+        RateLimiter.Result result = rateLimiter.tryAcquire(caller, requestLimit, windowSeconds);
+        if (!result.allowed()) throw new ApiException(429, "API rate limit exceeded; retry after "
+                + result.retryAfterSeconds() + " seconds");
+    }
+
+    /** Authenticated callers are keyed by subject; dev-auth callers by actor ID. */
+    public String caller(String devActorId) {
+        if (identity != null && !identity.isAnonymous()) return "subject:" + identity.getPrincipal().getName();
+        return "actor:" + devActorId;
+    }
+
     private String caller(ContainerRequestContext request) {
         if (identity != null && !identity.isAnonymous()) return "subject:" + identity.getPrincipal().getName();
         if (devAuthEnabled) {

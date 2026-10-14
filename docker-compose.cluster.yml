@@ -55,10 +55,14 @@ services:
     image: dxflrs/garage:v2.3.0
     restart: unless-stopped
     ports:
-      - "3900:3900" # S3 API
-      - "3901:3901" # RPC
-      - "3902:3902" # S3 Web
-      - "3903:3903" # Admin API
+      - "${GARAGE_S3_BIND_ADDRESS:-0.0.0.0}:3900:3900" # S3 API
+      - "${GARAGE_RPC_BIND_ADDRESS:-127.0.0.1}:3901:3901" # RPC: bind to the private peer network when clustering
+      - "${GARAGE_WEB_BIND_ADDRESS:-0.0.0.0}:3902:3902" # S3 Web
+      - "${GARAGE_ADMIN_BIND_ADDRESS:-127.0.0.1}:3903:3903" # Admin API: management interface only
+    environment:
+      # Secrets come from the environment; compose refuses to start without them (no placeholder credentials).
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Set GARAGE_RPC_SECRET (openssl rand -hex 32)}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Set GARAGE_ADMIN_TOKEN (openssl rand -hex 32)}
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
       - inventory-garage-meta:/var/lib/garage/meta

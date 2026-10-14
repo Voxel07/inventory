@@ -38,6 +38,7 @@ public class ApiMapper {
     @jakarta.inject.Inject org.ash.inventory.helper.security.ActorService actors;
     @jakarta.inject.Inject org.ash.inventory.service.InventoryAccessService accessPolicies;
     @jakarta.inject.Inject org.ash.inventory.orm.AssetReservationOrm assetReservations;
+    @jakarta.inject.Inject org.ash.inventory.service.PrivacyProjectionService privacy;
     private final MediaService media;
     public ApiMapper(MediaService media) { this.media = media; }
 
@@ -574,13 +575,23 @@ public class ApiMapper {
         );
     }
 
-    /** Asset projections also say which order holds each reserved or staged asset. */
+    /**
+     * Asset projections also say which order holds each reserved or staged asset. A holder order hidden from the
+     * actor (e.g. it references another user's private item) keeps only a restricted indicator, so REST and MCP agree.
+     */
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
         prepareLocations(values.stream().map(a -> a.currentLocation).toList());
         var holders = assetReservations.holders(values.stream()
                 .filter(a -> a.availabilityStatus == DomainEnums.AssetState.reserved || a.availabilityStatus == DomainEnums.AssetState.staged)
                 .map(a -> a.id).toList());
-        return values.stream().map(a -> asset(a, holders.get(a.id))).toList();
+        var denied = privacy.deniedAmong(holders.values().stream().map(org.ash.inventory.orm.AssetReservationOrm.Holder::orderId)
+                .collect(java.util.stream.Collectors.toSet()));
+        return values.stream().map(a -> {
+            var holder = holders.get(a.id);
+            if (holder != null && denied.contains(holder.orderId()))
+                holder = new org.ash.inventory.orm.AssetReservationOrm.Holder(holder.kind(), null, "restricted");
+            return asset(a, holder);
+        }).toList();
     }
 
     public ApiResponses.OutboxEventResponse outboxEvent(DomainEvent value) {

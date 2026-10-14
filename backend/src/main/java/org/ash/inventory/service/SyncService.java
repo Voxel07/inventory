@@ -155,7 +155,7 @@ public class SyncService {
                         value.requestedAssemblyQuantities(), action.idempotencyKey())));
             }
             case "transaction" -> {
-                actors.requireWarehouse();
+                // Same authorization as online: checkout needs ASH crew, other stock changes need item edit access.
                 var value = validated(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
                         value.reason(), value.notes(), value.eventType(), value.faction(), value.assetInstanceId(), value.userId(),

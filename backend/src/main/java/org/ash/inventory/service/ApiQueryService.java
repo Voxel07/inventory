@@ -294,11 +294,21 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.NotificationResponse> notifications(int page, int size) {
+    public List<ApiResponses.NotificationResponse> notifications(boolean unreadOnly, int page, int size) {
         var actor = actors.current();
         var bounds = bounds(page, size);
-        return notifications.forRecipient(actor, bounds.offset(), bounds.limit()).stream()
+        return notifications.forRecipient(actor, unreadOnly, bounds.offset(), bounds.limit()).stream()
                 .map(mapper::notification).toList();
+    }
+
+    @Transactional
+    public int markAllNotificationsRead(Instant before) {
+        var now = Instant.now();
+        return notifications.markAllRead(actors.current(), before == null || before.isAfter(now) ? now : before, now);
+    }
+
+    public long unreadNotificationCount() {
+        return notifications.unreadCount(actors.current());
     }
 
     @Transactional

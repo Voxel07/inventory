@@ -165,7 +165,7 @@ export function FactionOrderDetail() {
     }
     savePreparation.mutate(
       // No source locations: the backend takes the item's default location, or the location with free stock.
-      { id: order.id, values, assemblyValues, assetAssignments },
+      { order, values, assemblyValues, assetAssignments },
       {
         onSuccess: () => success(t('Vorbereitung gespeichert', 'Preparation saved')),
         onError: handleError,

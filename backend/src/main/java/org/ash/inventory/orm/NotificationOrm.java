@@ -15,9 +15,21 @@ public class NotificationOrm {
 
     public NotificationOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<Notification> forRecipient(UserAccount recipient, int offset, int limit) {
-        return entityManager.createQuery("from Notification n where n.recipient = :recipient order by n.createdAt desc", Notification.class)
+    public List<Notification> forRecipient(UserAccount recipient, boolean unreadOnly, int offset, int limit) {
+        return entityManager.createQuery("from Notification n where n.recipient = :recipient"
+                        + (unreadOnly ? " and n.readAt is null" : "") + " order by n.createdAt desc, n.id desc", Notification.class)
                 .setParameter("recipient", recipient).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    /** Marks every unread notice created up to {@code before}; later arrivals stay unread. */
+    public int markAllRead(UserAccount recipient, java.time.Instant before, java.time.Instant now) {
+        return entityManager.createQuery("update Notification n set n.readAt = :now where n.recipient = :recipient and n.readAt is null and n.createdAt <= :before")
+                .setParameter("now", now).setParameter("recipient", recipient).setParameter("before", before).executeUpdate();
+    }
+
+    public long unreadCount(UserAccount recipient) {
+        return entityManager.createQuery("select count(n) from Notification n where n.recipient = :recipient and n.readAt is null", Long.class)
+                .setParameter("recipient", recipient).getSingleResult();
     }
 
     public Notification find(UUID id) { return entityManager.find(Notification.class, id); }

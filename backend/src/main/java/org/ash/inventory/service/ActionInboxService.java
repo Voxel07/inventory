@@ -42,17 +42,17 @@ public class ActionInboxService {
         boolean warehouse = actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
         boolean maintenance = warehouse;
         for (var o : orm.readyFactionOrders(warehouse ? null : actor.id))
-            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, o.createdBy.id.equals(actor.id) || warehouse ? "/orders/faction/" + o.id : "/contributor");
+            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, "/orders/faction/" + o.id);
         for (var o : orm.readyGeneralOrders(warehouse ? null : actor.id))
             if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.name, o.purpose, o.eventOccurrence == null ? null : o.eventOccurrence.startDate, "/orders?tab=general");
         var balances = custody.list(!warehouse);
         var events = orm.events(balances.stream().map(CustodyBalanceService.Balance::eventOccurrenceId).filter(Objects::nonNull).distinct().toList());
         for (var b : balances) {
             var event = b.eventOccurrenceId() == null ? null : events.get(b.eventOccurrenceId());
-            if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : "/contributor");
+            if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : equipment("custody", b.key()));
         }
         for (var r : orm.pendingReturns(warehouse ? null : actor.id))
-            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : "/contributor");
+            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : equipment("returns", r.id.toString()));
         if (warehouse)
             for (var p : orm.incomingPurchases())
                 add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts");
@@ -67,10 +67,11 @@ public class ActionInboxService {
             if (!maintenance && (s.responsiblePerson == null || !s.responsiblePerson.id.equals(actor.id))) continue;
             LocalDate due = s.nextDueAt == null ? null : BusinessTime.date(s.nextDueAt);
             if (statuses.get(s.id) != MaintenancePolicy.Status.healthy)
-                add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules" : "/contributor");
+                add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules"
+                        : s.assetInstance == null ? "/items/" + s.item.id : "/items/" + s.item.id + "/assets/" + s.assetInstance.id);
         }
         for (var r : orm.openMemberRequests(warehouse ? null : actor.id))
-            if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, "/contributor");
+            if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, equipment("requests", r.id.toString()));
         if (warehouse) for (var l : orm.loans()) {
             var c = l.commitment; if (c.cancelled || l.returned == c.quantity) continue;
             add(out, "loan:" + l.id, l.collected < c.quantity ? "collection" : "provider_return", l.provider + " · " + c.item.name,
@@ -78,6 +79,10 @@ public class ActionInboxService {
         }
         var denied = privacy.deniedIds();
         return out.stream().filter(action -> privacy.visible(action, denied)).toList();
+    }
+    /** Deep link into the personal equipment overview: section plus the task row to focus. */
+    private static String equipment(String section, String focus) {
+        return "/?equipment=" + section + "&focus=" + java.net.URLEncoder.encode(focus, java.nio.charset.StandardCharsets.UTF_8);
     }
     private void add(List<Action> out, String key, String kind, String title, String detail, LocalDate due, String path) { out.add(new Action(key, kind, title, detail, due, path, null)); }
 }

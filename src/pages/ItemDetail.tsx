@@ -49,7 +49,6 @@ import {
 } from 'recharts';
 import { useItem, useUpdateItem } from '../hooks/useItems';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
-import { useFactionOrders } from '../hooks/useFactionOrders';
 import { getItemStock } from '../utils/stock';
 import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
@@ -103,7 +102,6 @@ export function ItemDetail() {
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
-    const { data: factionOrders = [] } = useFactionOrders();
     const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
     const { data: assignableUsers } = useAssignableUsers(canEditCatalog(user));
@@ -160,7 +158,8 @@ export function ItemDetail() {
     }
 
     function handleTransaction(data: TransactionFormData) {
-        if (data.transactionType === 'checkin' && data.factionOrderId) {
+        if (data.transactionType === 'checkin') {
+            // The form names the exact custody source; the return submission is checked against it.
             createReturn.mutate(
                 { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, factionOrderId: data.factionOrderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
                 {
@@ -170,21 +169,8 @@ export function ItemDetail() {
                     },
                     onError: (error) => {
                         if (isOfflineQueuedError(error)) return;
-                        showSnackbar(t('Bestellrückgabe fehlgeschlagen', 'Order return failed'), 'error');
+                        showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error');
                     },
-                },
-            );
-            return;
-        }
-        if (data.transactionType === 'checkin') {
-            createReturn.mutate(
-                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
-                {
-                    onSuccess: () => {
-                        setCheckoutOpen(false);
-                        showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
-                    },
-                    onError: () => showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error'),
                 },
             );
             return;
@@ -503,7 +489,6 @@ export function ItemDetail() {
                     <TransactionForm
                         items={[item]}
                         preselectedItemId={item.id}
-                        orders={factionOrders}
                         onSubmit={handleTransaction}
                         isLoading={createTransaction.isPending || createReturn.isPending}
                     />
