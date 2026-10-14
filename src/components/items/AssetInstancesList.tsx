@@ -35,6 +35,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import AvTimerIcon from '@mui/icons-material/AvTimer';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
@@ -42,6 +43,7 @@ import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { QrLabelDialog } from '../qr/QrLabelDialog';
+import { OperatingHoursDialog } from './OperatingHoursDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
 import { formatStatus } from '../../utils/formatters';
@@ -112,6 +114,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             ...(canReportDamage ? [{ key: 'damage', label: t('Schaden an diesem Asset melden', 'Report damage to this asset'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => navigate(`${assetPath}?reportDamage=1`), color: 'error' as const }] : []),
             { key: 'qr', label: t('QR-Code anzeigen', 'Show QR code'), icon: <QrCode2Icon fontSize="small" />, onClick: () => setQrAsset(asset) },
             ...(canEdit ? [
+                { key: 'hours', label: t('Betriebsstunden erfassen', 'Log operating hours'), icon: <AvTimerIcon fontSize="small" />, onClick: () => setHoursAsset(asset) },
                 { key: 'edit', label: t('Bearbeiten', 'Edit'), icon: <EditIcon fontSize="small" />, onClick: () => handleOpenEdit(asset) },
                 { key: 'retire', label: t('Ausbuchen / Ausmustern', 'Write off / Retire'), icon: <DeleteIcon fontSize="small" />, onClick: () => setDeleteTarget(asset), color: 'error' as const },
             ] : []),
@@ -125,6 +128,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     const [batchOpen, setBatchOpen] = useState(false);
     const [editAsset, setEditAsset] = useState<AssetInstance | null>(null);
     const [qrAsset, setQrAsset] = useState<AssetInstance | null>(null);
+    const [hoursAsset, setHoursAsset] = useState<AssetInstance | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AssetInstance | null>(null);
 
     // Form states
@@ -406,7 +410,12 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     </TableCell>
                                     <TableCell>{formatStatus(asset.conditionStatus)}</TableCell>
                                     <TableCell>{asset.currentLocationName || '—'}</TableCell>
-                                    <TableCell>{asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}</TableCell>
+                                    <TableCell>
+                                        {canEdit ? <Link component="button" type="button" underline="hover" onClick={() => setHoursAsset(asset)}
+                                            title={t('Betriebsstunden erfassen', 'Log operating hours')}>
+                                            {`${asset.operatingHours ?? 0} h`}
+                                        </Link> : asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}
+                                    </TableCell>
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>
                                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                         <RowActions actions={assetActions(asset)} collapsed={actionsCollapsed} />
@@ -588,6 +597,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <OperatingHoursDialog itemId={item.id} asset={hoursAsset} onClose={() => setHoursAsset(null)} />
 
             <QrLabelDialog
                 label={qrAsset ? { title: `QR-Code: ${qrAsset.assetCode}`, itemId: item.id, itemName: `${item.name} (${qrAsset.assetCode})`, textCode: qrAsset.assetCode } : null}

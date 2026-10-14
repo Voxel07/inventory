@@ -8,6 +8,20 @@ public final class StockPolicy {
     private StockPolicy() {}
     public record AssetStock(int onHand, int checkedOut, int inTransit, int damaged, int reserved, int available) {}
 
+    /** Checked out or returned awaiting inspection: the custody owns the availability state. */
+    public static boolean checkedOut(AssetInstance asset) {
+        return asset.availabilityStatus == DomainEnums.AssetState.in_field
+                || asset.availabilityStatus == DomainEnums.AssetState.in_custody
+                || asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check;
+    }
+
+    /** State of an asset coming back to stock: a damage reported while it was out keeps it out of availability. */
+    public static DomainEnums.AssetState returnedState(AssetInstance asset) {
+        return asset.conditionStatus == DomainEnums.ConditionStatus.damaged
+                || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
+                ? DomainEnums.AssetState.damaged : DomainEnums.AssetState.available;
+    }
+
     public static AssetStock classify(AssetInstance asset) {
         if (!asset.active || asset.availabilityStatus == DomainEnums.AssetState.lost
                 || asset.availabilityStatus == DomainEnums.AssetState.written_off

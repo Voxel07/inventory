@@ -19,7 +19,9 @@ import {
 import LogoutIcon from '@mui/icons-material/Logout';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import AddBoxIcon from '@mui/icons-material/AddBox';
-import type { EventType, FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
+import EventIcon from '@mui/icons-material/Event';
+import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
+import type { FactionOrder, TransactionFormData, Item, TransactionType } from '../../types';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
@@ -37,6 +39,9 @@ interface Props {
     orders?: FactionOrder[];
 }
 
+/** Event use books the checkout to a dated event and faction; general use is out-of-game (workshop, setup, transport). */
+type Usage = 'event' | 'general';
+
 function outstandingForItem(order: FactionOrder, itemId: string) {
     const handedOver = order.handedOverQuantities?.[itemId] ?? 0;
     const reconciled = (order.returnedQuantities?.[itemId] ?? 0)
@@ -51,21 +56,28 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const names = useNames();
     const lookup = useStockLookups();
     const t = useLocalizedText();
-    const { eventTypes, factionNames } = useFactionCatalog();
+    const { factionNames } = useFactionCatalog();
     const { data: events = [] } = useEventReports();
     const transactionReasons = Object.values(names.reason);
-    const [formData, setFormData] = useState<TransactionFormData>({
-        itemId: initialData?.itemId ?? preselectedItemId ?? '',
-        transactionType: initialData?.transactionType ?? (canTakeOut(user) ? 'checkout' : 'added'),
-        quantityChanged: initialData?.quantityChanged ?? 1,
-        assetInstanceId: initialData?.assetInstanceId,
-        reason: initialData?.reason ?? '',
-        notes: initialData?.notes ?? '',
-        eventType: initialData?.eventType,
-        eventOccurrenceId: initialData?.eventOccurrenceId,
-        faction: initialData?.faction ?? '',
-        factionOrderId: initialData?.factionOrderId,
-    });
+    const initialUsage: Usage = initialData && initialData.transactionType === 'checkout' && !initialData.eventOccurrenceId && !initialData.eventType
+        ? 'general' : 'event';
+    const initialForm = (): TransactionFormData => {
+        const transactionType = initialData?.transactionType ?? (canTakeOut(user) ? 'checkout' : 'added');
+        return {
+            itemId: initialData?.itemId ?? preselectedItemId ?? '',
+            transactionType,
+            quantityChanged: initialData?.quantityChanged ?? 1,
+            assetInstanceId: initialData?.assetInstanceId,
+            reason: initialData?.reason ?? (transactionType === 'checkout' && initialUsage === 'event' ? names.reason.eventUse : ''),
+            notes: initialData?.notes ?? '',
+            eventType: initialData?.eventType,
+            eventOccurrenceId: initialData?.eventOccurrenceId,
+            faction: initialData?.faction ?? '',
+            factionOrderId: initialData?.factionOrderId,
+        };
+    };
+    const [formData, setFormData] = useState<TransactionFormData>(initialForm);
+    const [usage, setUsage] = useState<Usage>(initialUsage);
     const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
@@ -74,6 +86,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = getItemStock(selectedItem);
+    const isCheckout = formData.transactionType === 'checkout';
+    const eventUse = isCheckout && usage === 'event';
     const equipment = useEquipmentAvailability(formData.eventOccurrenceId);
     const commitment = equipment.data?.[formData.itemId];
     const checkoutAvailable = commitment ? (commitment.pickupAllowed ? commitment.available : 0) : selectedStock.remaining;
@@ -85,18 +99,17 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         ? outstandingForItem(selectedOrder, formData.itemId)
         : selectedStock.checkedOut;
     const quantity = Number(quantityInput);
-    const quantityLimit = formData.transactionType === 'checkout'
+    const quantityLimit = isCheckout
         ? checkoutAvailable
         : formData.transactionType === 'checkin'
             ? returnLimit
             : undefined;
     const quantityInvalid = quantityInput === '' || quantity < 1
         || (quantityLimit !== undefined && quantity > quantityLimit);
-    const checkoutContextMissing = formData.transactionType === 'checkout'
-        && (!formData.eventType || !formData.faction || !formData.eventOccurrenceId);
+    const checkoutContextMissing = eventUse && (!formData.eventOccurrenceId || !formData.faction);
     const selectableAssets = itemAssets.filter((asset) => {
         if (!asset.active) return false;
-        if (formData.transactionType === 'checkout') {
+        if (isCheckout) {
             return asset.availabilityStatus === 'available'
                 && (!commitment || (commitment.pickupAllowed && commitment.assetIds.includes(asset.id)))
                 && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
@@ -112,33 +125,45 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const assetSelectionMissing = assetSelectionRequired && !selectableAssets.some(asset => asset.id === formData.assetInstanceId);
     const factionOptions = factionNames(formData.eventType);
 
+    function selectOccurrence(occurrenceId: string) {
+        const occurrence = events.find((value) => value.id === occurrenceId);
+        setFormData((previous) => ({
+            ...previous,
+            eventOccurrenceId: occurrence?.id,
+            eventType: occurrence?.eventType,
+            faction: previous.eventType === occurrence?.eventType ? previous.faction : '',
+        }));
+    }
+
+    function changeUsage(next: Usage) {
+        setUsage(next);
+        setFormData((previous) => ({
+            ...previous,
+            eventOccurrenceId: next === 'event' ? previous.eventOccurrenceId : undefined,
+            eventType: next === 'event' ? previous.eventType : undefined,
+            faction: next === 'event' ? previous.faction : '',
+            reason: next === 'general' && previous.reason === names.reason.eventUse ? ''
+                : next === 'event' && !previous.reason ? names.reason.eventUse : previous.reason,
+        }));
+    }
+
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if ((formData.transactionType === 'checkout' ? !canCheckout : !canEditStock)
+        if ((isCheckout ? !canCheckout : !canEditStock)
             || (!isSerialized && quantityInvalid) || checkoutContextMissing || assetSelectionMissing) return;
-        onSubmit({ ...formData, quantityChanged: isSerialized ? 1 : Number(quantityInput) });
+        const general = isCheckout && usage === 'general';
+        onSubmit({
+            ...formData,
+            quantityChanged: isSerialized ? 1 : Number(quantityInput),
+            ...(general ? { eventOccurrenceId: undefined, eventType: undefined, faction: undefined } : {}),
+        });
     }
 
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
-                {commitment && formData.transactionType === 'checkout' && <Alert severity={checkoutAvailable > 0 ? 'info' : 'warning'}>{t('Gemäß Zusage für das gewählte Event heute ausleihbar', 'Available for pickup today under the selected event commitment')}: {checkoutAvailable}</Alert>}
+                {commitment && eventUse && <Alert severity={checkoutAvailable > 0 ? 'info' : 'warning'}>{t('Gemäß Zusage für das gewählte Event heute ausleihbar', 'Available for pickup today under the selected event commitment')}: {checkoutAvailable}</Alert>}
                 {equipment.error && <Alert severity="warning">{t('Zusagen konnten nicht aktualisiert werden. Die Verfügbarkeit wird beim Buchen erneut geprüft.', 'Commitments could not be refreshed. Availability will be checked again when posting.')}</Alert>}
-                {!isSerialized && <TextField select label={formData.transactionType === 'checkout' ? t('Quelllager', 'Source location') : t('Ziellager', 'Destination location')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
-                    <MenuItem value="">{t('Standardlager des Artikels', 'Item default location')}</MenuItem>
-                    {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
-                </TextField>}
-                {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('Charge', 'Lot')} value={formData.lotId ?? ''} required={formData.transactionType !== 'checkout'} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
-                    <MenuItem value="">{t('Automatisch: frühestes Ablaufdatum', 'Automatic: earliest expiry first')}</MenuItem>
-                    {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status ? formatStatus(lot.status) : ''}</MenuItem>)}
-                </TextField>}
-                {['checkout', 'checkin'].includes(formData.transactionType) && <TextField select label={t('Eventtermin', 'Event occurrence')} value={formData.eventOccurrenceId ?? ''} required={formData.transactionType === 'checkout'} onChange={(event) => {
-                    const occurrence = events.find((value) => value.id === event.target.value);
-                    setFormData((previous) => ({ ...previous, eventOccurrenceId: occurrence?.id, eventType: occurrence?.eventType, faction: previous.eventType === occurrence?.eventType ? previous.faction : '' }));
-                }}>
-                    <MenuItem value="">{t('Ohne Zuordnung (alte Rückgabe)', 'Unassigned (legacy return)')}</MenuItem>
-                    {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
-                </TextField>}
                 {!preselectedItemId && <TextField
                     select
                     label={t('Artikel', 'Item')}
@@ -169,8 +194,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             transactionType: value,
                             assetInstanceId: undefined,
                             factionOrderId: value === 'checkin' ? prev.factionOrderId : undefined,
-                            eventType: value === 'checkout' ? prev.eventType : undefined,
                             faction: value === 'checkout' ? prev.faction : '',
+                            reason: value === 'checkout' && usage === 'event' && !prev.reason ? names.reason.eventUse
+                                : value !== 'checkout' && prev.reason === names.reason.eventUse ? '' : prev.reason,
                         }))}
                         aria-label={t('Transaktionstyp', 'Transaction type')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
@@ -184,41 +210,63 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     {isSerialized && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                             {t('Seriengeräte werden einzeln mit einem Asset-Code angelegt. Nutzen Sie „Seriengeräte“ in den Artikeldetails, um Bestand hinzuzufügen.', 'Serialized assets are added individually with an asset code. Use “Serialized assets” on the item detail page to add stock.')}
-                            {(checkoutAvailable < 1 || (formData.transactionType === 'checkout' && !assetsLoading && selectableAssets.length === 0))
+                            {(checkoutAvailable < 1 || (isCheckout && !assetsLoading && selectableAssets.length === 0))
                                 && ` ${t('Die Ausleihe ist gesperrt, bis ein verfügbares Seriengerät vorhanden ist.', 'Checkout is disabled until an available serialized asset exists.')}`}
                         </Typography>
                     )}
                 </Box>
-                {formData.transactionType === 'checkout' && (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                {isCheckout && (
+                    <Box>
+                        <Typography component="label" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                            {t('Wofür wird es genutzt?', 'What is it used for?')}
+                        </Typography>
+                        <ToggleButtonGroup
+                            exclusive
+                            fullWidth
+                            size="small"
+                            value={usage}
+                            onChange={(_, value: Usage | null) => value && changeUsage(value)}
+                            aria-label={t('Nutzung', 'Usage')}
+                            sx={{ '& .MuiToggleButton-root': { minHeight: 44, gap: 0.75, textTransform: 'none', fontWeight: 600 } }}
+                        >
+                            <ToggleButton title={translate('Ausleihe für ein Event und eine Fraktion', 'Checkout for an event and a faction')} value="event"><EventIcon fontSize="small" />{t('Event / Spiel', 'Event / in game')}</ToggleButton>
+                            <ToggleButton title={translate('Ausleihe außerhalb des Spiels, z. B. Werkstatt, Aufbau oder Transport', 'Checkout outside the game, e.g. workshop, setup or transport')} value="general"><HandymanOutlinedIcon fontSize="small" />{t('Allgemein (nicht im Spiel)', 'General (not in game)')}</ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
+                )}
+                {(eventUse || formData.transactionType === 'checkin') && (
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: eventUse ? '3fr 2fr' : '1fr' }, gap: 2 }}>
                         <TextField
                             select
                             label={t('Event', 'Event')}
-                            value={formData.eventType ?? ''}
-                            onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                eventType: e.target.value as EventType,
-                                eventOccurrenceId: undefined,
-                                faction: '',
-                            }))}
-                            required
+                            value={formData.eventOccurrenceId ?? ''}
+                            required={eventUse}
+                            onChange={(event) => selectOccurrence(event.target.value)}
                         >
-                            {eventTypes.map((eventType) => (
-                                <MenuItem key={eventType} value={eventType}>{eventType === 'LS' ? 'LightSim' : eventType}</MenuItem>
-                            ))}
+                            {!eventUse && <MenuItem value="">{t('Ohne Event (allgemeine Nutzung)', 'No event (general use)')}</MenuItem>}
+                            {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                         </TextField>
-                        <TextField
+                        {eventUse && <TextField
                             select
                             label={t('Fraktion', 'Faction')}
                             value={formData.faction ?? ''}
                             onChange={(e) => setFormData((prev) => ({ ...prev, faction: e.target.value }))}
                             required
-                            disabled={!formData.eventType}
+                            disabled={!formData.eventOccurrenceId}
+                            helperText={formData.eventOccurrenceId ? undefined : t('Zuerst ein Event wählen', 'Choose an event first')}
                         >
                             {factionOptions.map((faction) => <MenuItem key={faction} value={faction}>{faction}</MenuItem>)}
-                        </TextField>
+                        </TextField>}
                     </Box>
                 )}
+                {!isSerialized && <TextField select label={isCheckout ? t('Quelllager', 'Source location') : t('Ziellager', 'Destination location')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                    <MenuItem value="">{formData.transactionType === 'checkin' ? t('Rückgabeort des Artikels', 'Item return location') : t('Standardlager des Artikels', 'Item default location')}</MenuItem>
+                    {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
+                </TextField>}
+                {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('Charge', 'Lot')} value={formData.lotId ?? ''} required={!isCheckout} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
+                    <MenuItem value="">{t('Automatisch: frühestes Ablaufdatum', 'Automatic: earliest expiry first')}</MenuItem>
+                    {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status ? formatStatus(lot.status) : ''}</MenuItem>)}
+                </TextField>}
                 {formData.transactionType === 'checkin' && (
                     <>
                         <Alert severity="info">
@@ -236,7 +284,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                                 setFormData((prev) => ({
                                     ...prev,
                                     factionOrderId: order?.id,
-                                    eventType: order?.eventType,
+                                    eventType: order?.eventType ?? prev.eventType,
                                     faction: order?.faction ?? '',
                                 }));
                                 if (order) {
@@ -260,7 +308,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                 {assetSelectionRequired && (
                     <TextField
                         select
-                        label={formData.transactionType === 'checkout'
+                        label={isCheckout
                             ? t('Seriengerät auswählen', 'Select serialized asset')
                             : t('Seriengerät zurücknehmen', 'Select returned asset')}
                         value={formData.assetInstanceId ?? ''}
@@ -330,17 +378,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         variant="outlined"
                         color="inherit"
                         onClick={() => {
-                            setFormData({
-                                itemId: initialData?.itemId ?? preselectedItemId ?? '',
-                                transactionType: initialData?.transactionType ?? 'checkout',
-                                quantityChanged: initialData?.quantityChanged ?? 1,
-                                assetInstanceId: initialData?.assetInstanceId,
-                                reason: initialData?.reason ?? '',
-                                notes: initialData?.notes ?? '',
-                                eventType: initialData?.eventType,
-                                faction: initialData?.faction ?? '',
-                                factionOrderId: initialData?.factionOrderId,
-                            });
+                            setFormData(initialForm());
+                            setUsage(initialUsage);
                             setQuantityInput(String(initialData?.quantityChanged ?? 1));
                         }}
                         disabled={isLoading}

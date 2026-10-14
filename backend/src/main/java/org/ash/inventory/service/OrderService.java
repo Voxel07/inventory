@@ -821,7 +821,7 @@ public class OrderService {
                                     : DomainEnums.ReconciliationOutcome.returned_good,
                             1, clientCommandId, notes);
                     createSerializedReturnTransaction(item, order, actor, asset, DomainEnums.TransactionType.checkin,
-                            DomainEnums.AssetState.available, clientCommandId, "returned", notes);
+                            StockPolicy.returnedState(asset), clientCommandId, "returned", notes);
                     handoverDetails.add(new ReturnHandoverDetail(line, asset, 1, notes));
                     returned++;
                 }

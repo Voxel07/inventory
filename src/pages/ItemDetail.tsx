@@ -61,6 +61,7 @@ import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
 import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
+import { ItemDamageReports } from '../components/items/ItemDamageReports';
 import type { ItemFormData, TransactionFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
@@ -388,13 +389,15 @@ export function ItemDetail() {
                     )}
                 </DetailPanel>
 
+                <ItemDamageReports item={item} />
+
             <Box sx={{ display: 'grid', gap: 1.5, alignItems: 'start', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' } }}>
                 <DetailPanel title={t('Übersicht', 'Overview')}>
                     <FieldGrid>
                         <Field label={t('Kategorie', 'Category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
                         <Field label={t('Lagerort', 'Storage location')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location?.name || item.storageLocation}</Link> : '—'}</Field>
                         <Field label={t('Genauer Ort', 'Exact location')}>{exactLocation || '—'}</Field>
-                        <Field label={t('Rückgabeort', 'Return location')}>{item.expand?.returnLocation?.name || item.returnLocation || '—'}</Field>
+                        <Field label={t('Rückgabeort', 'Return location')}>{item.expand?.returnLocation?.name || (!item.returnLocation || item.returnLocation === item.storageLocation ? location?.name : undefined) || '—'}</Field>
                         <Field label={t('Eigentümer / Anbieter', 'Owner / provider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
                         <Field label={t('Verwahrer / Kontakt', 'Keeper / contact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
                         <Field label={item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}>{item.stock?.totalOwned ?? 0}</Field>

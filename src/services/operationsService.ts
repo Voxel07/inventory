@@ -18,7 +18,7 @@ export const operationsApi = {
   counts: list<Count>('inventory-counts'),
   createCount: (data: CountInput) => save<Count>('inventory-counts', data),
   countCommand: <A extends keyof CountCommands>(id: string, action: A, data: CountCommands[A]) => apiRequest<Count>(`/api/inventory-counts/${id}/${action}`, { method: 'POST', body: data }),
-  schedules: list<Schedule>('maintenance-schedules'),
+  schedules: (query: Query = {}) => list<Schedule>('maintenance-schedules', query),
   saveSchedule: (data: ScheduleInput, id?: string) => save<Schedule>('maintenance-schedules', data, id),
   retireSchedule: (id: string) => apiRequest<void>(`/api/maintenance-schedules/${id}`, { method: 'DELETE' }),
   repairs: list<Repair>('repairs'),

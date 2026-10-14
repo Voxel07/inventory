@@ -99,7 +99,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         break;
       }
       case 'maintenance': {
-        const existing = (await loadAllPages(operationsApi.schedules)).find((schedule) => schedule.itemId === itemId
+        const existing = (await loadAllPages(operationsApi.schedules())).find((schedule) => schedule.itemId === itemId
           && (schedule.assetInstanceId ?? null) === (data.assetInstanceId ?? null) && schedule.maintenanceType === data.maintenanceType && schedule.intervalType === data.intervalType);
         result = existing ?? await operationsApi.saveSchedule(scheduleInput(data));
         break;

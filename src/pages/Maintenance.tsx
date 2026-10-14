@@ -73,7 +73,7 @@ export function Maintenance() {
   const [policyCategory, setPolicyCategory] = useState('');
   const [policyInterval, setPolicyInterval] = useState('');
   const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort();
-  const schedules = useOperationList<Schedule>('schedules', operationsApi.schedules);
+  const schedules = useOperationList<Schedule>('schedules', operationsApi.schedules());
   const dateSchedules = (schedules.data ?? []).filter(isDateSchedule);
   const scheduledItemIds = new Set(dateSchedules.map((schedule) => schedule.itemId));
   const maintenanceItems = items.filter((item) => (item.maintenanceIntervalDays ?? 0) > 0 || scheduledItemIds.has(item.id));

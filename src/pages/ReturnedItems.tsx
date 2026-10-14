@@ -8,6 +8,7 @@ import { canOperateWarehouse } from '../utils/access';
 import { useState } from 'react';
 import {
   Alert,
+  AlertTitle,
   Box,
   ButtonBase,
   Chip,
@@ -34,6 +35,8 @@ import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import type { ReturnSubmission, ReturnSubmissionStatus } from '../types';
 import { useAppLanguage, useLocalizedText } from '../utils/naming';
 import { formatDateTime } from '../utils/dateFormat';
+import { formatStatus } from '../utils/formatters';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -61,6 +64,7 @@ export function ReturnedItemsPage() {
       renderCell: ({ row }) => <Box sx={{ minWidth: 0, py: 0.5 }}>
         <Link component={RouterLink} to={`/items/${row.itemId}`} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal' }}>{row.itemName}</Link>
         {row.assetCode && <Typography variant="body2" color="text.secondary" className="mono">{row.assetCode}</Typography>}
+        {row.reportedDamage?.length > 0 && <DamageChip count={row.reportedDamage.length} />}
       </Box> },
     { field: 'quantity', headerName: t('Menge', 'Quantity'), type: 'number', width: 90 },
     { field: 'returnedForUserName', headerName: t('Für', 'For'), minWidth: 140, flex: 0.8, valueGetter: (_, row) => person(row) },
@@ -100,6 +104,7 @@ export function ReturnedItemsPage() {
           <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
             {formatDateTime(row.created)}{row.assetCode ? ' · ' : ''}{row.assetCode && <span className="mono">{row.assetCode}</span>}
           </Typography>
+          {row.reportedDamage?.length > 0 && <DamageChip count={row.reportedDamage.length} />}
         </ButtonBase>
       </Box>)}
     </Paper>;
@@ -131,6 +136,12 @@ export function ReturnedItemsPage() {
   );
 }
 
+function DamageChip({ count }: { count: number }) {
+  const t = useLocalizedText();
+  return <Chip component="span" size="small" color="error" icon={<ReportProblemOutlinedIcon />} sx={{ mt: 0.5 }}
+    label={count === 1 ? t('Schaden gemeldet', 'Damage reported') : t(`${count} Schäden gemeldet`, `${count} damage reports`)} />;
+}
+
 function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: ReturnSubmission; statusLabel: string; onClose: () => void }) {
   const t = useLocalizedText();
   const { user } = useAuth();
@@ -156,6 +167,22 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
           <Link component={RouterLink} to={`/items/${submission.itemId}`} sx={{ fontWeight: 600, fontSize: '1.125rem' }}>{submission.quantity}× {submission.itemName}</Link>
           <Box sx={{ mt: 0.5 }}><Chip size="small" variant="outlined" color={statusColors[submission.status]} label={statusLabel} /></Box>
         </Box>
+        {submission.reportedDamage?.length > 0 && <Alert severity="error" icon={<ReportProblemOutlinedIcon />}>
+          <AlertTitle>{t('Für diese Rückgabe wurde ein Schaden gemeldet', 'Damage was reported for this return')}</AlertTitle>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            {t('Vor dem Einlagern prüfen. Der Schaden bleibt offen, bis er repariert oder abgeschrieben ist.', 'Inspect before returning to stock. The damage stays open until it is repaired or written off.')}
+          </Typography>
+          <Stack component="ul" spacing={0.75} sx={{ m: 0, pl: 2.5 }}>
+            {submission.reportedDamage.map((damage) => <li key={damage.id}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {[damage.assetCode, `${damage.quantity}×`, formatStatus(damage.severity), formatStatus(damage.status)].filter(Boolean).join(' · ')}
+              </Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{damage.description}</Typography>
+              <Typography variant="caption" color="text.secondary">{[damage.reportedByName, formatDateTime(damage.reportedAt)].filter(Boolean).join(' · ')}</Typography>
+            </li>)}
+          </Stack>
+          <Link component={RouterLink} to="/damage-reports" sx={{ display: 'inline-block', mt: 1 }}>{t('Schadensberichte öffnen', 'Open damage reports')}</Link>
+        </Alert>}
         <FactList>
           <Fact label={t('Zurückgegeben für', 'Returned for')}>{submission.returnedForUserName || submission.returnedForUserId}</Fact>
           <Fact label={t('Gemeldet von', 'Submitted by')}>{submission.submittedByName || '—'}</Fact>

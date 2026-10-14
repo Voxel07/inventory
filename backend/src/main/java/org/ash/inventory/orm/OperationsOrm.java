@@ -71,13 +71,18 @@ public class OperationsOrm extends EntityOrm {
                 .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
+    /** An asset's own schedule replaces the item-wide schedule of the same maintenance type. */
     public List<MaintenanceSchedule> blockingSchedules(Item item, AssetInstance asset) {
         var jpql = asset == null
                 ? "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and schedule.checkoutBlocking = true and schedule.assetInstance is null"
-                : "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and schedule.checkoutBlocking = true and (schedule.assetInstance is null or schedule.assetInstance = :asset)";
+                : "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and (schedule.assetInstance is null or schedule.assetInstance = :asset)";
         var query = entityManager.createQuery(jpql, MaintenanceSchedule.class).setParameter("item", item);
-        if (asset != null) query.setParameter("asset", asset);
-        return query.getResultList();
+        if (asset == null) return query.getResultList();
+        var schedules = query.setParameter("asset", asset).getResultList();
+        var overridden = schedules.stream().filter(schedule -> schedule.assetInstance != null)
+                .map(schedule -> schedule.maintenanceType).collect(java.util.stream.Collectors.toSet());
+        return schedules.stream().filter(schedule -> schedule.checkoutBlocking
+                && (schedule.assetInstance != null || !overridden.contains(schedule.maintenanceType))).toList();
     }
 
     public List<MaintenanceSchedule> schedules(Collection<UUID> itemIds) {

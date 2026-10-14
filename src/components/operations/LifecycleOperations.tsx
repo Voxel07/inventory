@@ -25,7 +25,7 @@ import { canManageUsers } from '../../utils/access';
 export function SchedulesPanel() {
   const t = useLocalizedText(); const lookup = useStockLookups();
   const people = useAssignableUsers();
-  const schedules = useOperationList('schedules', operationsApi.schedules);
+  const schedules = useOperationList('schedules', operationsApi.schedules());
   const [chooseItem, setChooseItem] = useState(false);
   const [edit, setEdit] = useState<{ itemId: string; schedule?: Schedule } | null>(null);
   const assets = useItemAssets(edit?.itemId);

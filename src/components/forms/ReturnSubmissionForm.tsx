@@ -34,7 +34,7 @@ export function ReturnSubmissionForm({
   const returnLocation = item.expand?.returnLocation;
   const returnLocationLabel = returnLocation
     ? [returnLocation.name, returnLocation.location, returnLocation.position].filter(Boolean).join(' / ')
-    : item.returnLocation || item.expand?.storageLocation?.name || item.storageLocation;
+    : (!item.returnLocation || item.returnLocation === item.storageLocation ? item.expand?.storageLocation?.name : undefined);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();

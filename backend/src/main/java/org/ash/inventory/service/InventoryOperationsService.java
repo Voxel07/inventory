@@ -221,7 +221,7 @@ public class InventoryOperationsService {
             }
             transaction.sourceLocation = asset.currentLocation;
             transaction.destinationLocation = input.locationId() == null ? (item.returnLocation == null ? item.storageLocation : item.returnLocation) : positions.location(input.locationId());
-            asset.availabilityStatus = DomainEnums.AssetState.available;
+            asset.availabilityStatus = StockPolicy.returnedState(asset);
             asset.currentLocation = transaction.destinationLocation;
             asset.currentCustodian = null;
         }
@@ -438,7 +438,8 @@ public class InventoryOperationsService {
             report.assetInstance = asset;
             asset.conditionStatus = input.safetyImpact()
                     ? DomainEnums.ConditionStatus.unsafe : DomainEnums.ConditionStatus.damaged;
-            asset.availabilityStatus = DomainEnums.AssetState.damaged;
+            // A checked-out asset stays in custody so it can still be returned; the condition blocks re-checkout.
+            if (!StockPolicy.checkedOut(asset)) asset.availabilityStatus = DomainEnums.AssetState.damaged;
         } else if (report.item != null && report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
         }
@@ -565,7 +566,8 @@ public class InventoryOperationsService {
                 report.assetInstance.active = false;
             } else {
                 report.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
-                report.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+                if (!StockPolicy.checkedOut(report.assetInstance))
+                    report.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
             }
         }
         transaction.availabilityAfter = stock(report.item).available();

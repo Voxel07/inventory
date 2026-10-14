@@ -164,6 +164,19 @@ export interface ReturnSubmission {
   acknowledgedByName?: string;
   acknowledgedAt?: string;
   acknowledgementNotes?: string;
+  /** Open damage reports on the returned asset, or by the returning people for bulk items. */
+  reportedDamage: ReturnDamage[];
+}
+
+export interface ReturnDamage {
+  id: string;
+  assetCode?: string;
+  quantity: number;
+  severity: string;
+  status: string;
+  description: string;
+  reportedByName?: string;
+  reportedAt: string;
 }
 
 export interface ReturnSubmissionFormData {

@@ -58,8 +58,8 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
         if (operation === 'stock' && !['adjusted', 'checkout', 'checkin'].includes(String(data.transactionType))) {
           throw new Error(translate('Bestandsänderungen verwenden adjusted, checkout oder checkin; Abschreibungen erfolgen über Reparaturen', 'Stock changes use adjusted, checkout or checkin; write-offs are done through repairs'));
         }
-        if (operation === 'stock' && data.transactionType === 'checkout' && (!data.eventType || !data.faction)) {
-          throw new Error(translate('Eventtyp und Fraktion sind für Ausleihen erforderlich', 'Event type and faction are required for loans'));
+        if (operation === 'stock' && data.transactionType === 'checkout' && (data.eventType || data.eventOccurrenceId) && !data.faction) {
+          throw new Error(translate('Für Ausleihen zu einem Event ist eine Fraktion erforderlich', 'Event checkouts require a faction'));
         }
         if (operation === 'damage' && !['low', 'medium', 'high', 'critical', 'total_loss'].includes(String(data.severity))) {
           throw new Error(translate('Ungültiger Schweregrad', 'Invalid severity'));
