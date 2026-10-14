@@ -4,7 +4,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.InventoryCode;
 import org.ash.inventory.model.InventoryLot;
 import org.ash.inventory.model.InventoryPosition;
 import org.ash.inventory.model.Warehouse;
@@ -33,41 +32,6 @@ public class StockManagementOrm extends EntityOrm {
                 .setParameter("code", code.trim().toLowerCase(Locale.ROOT));
         if (excluding != null) query.setParameter("excluding", excluding);
         return query.getSingleResult() > 0;
-    }
-
-    public List<InventoryCode> codes(UUID targetId, int offset, int limit, java.util.Set<UUID> denied) {
-        var query = new StringBuilder("from InventoryCode code where 1=1");
-        if (!denied.isEmpty()) query.append(" and not array_contains(:denied, code.id) and not array_contains(:denied, code.targetId)");
-        if (targetId != null) query.append(" and code.targetId = :targetId");
-        query.append(" order by code.active desc, code.code");
-        var typed = entityManager.createQuery(query.toString(), InventoryCode.class);
-        if (!denied.isEmpty()) typed.setParameter("denied", denied.toArray(UUID[]::new));
-        if (targetId != null) typed.setParameter("targetId", targetId);
-        return typed.setFirstResult(offset).setMaxResults(limit).getResultList();
-    }
-
-    public InventoryCode findCode(String value) {
-        return entityManager.createQuery("from InventoryCode code where lower(code.code) = :code", InventoryCode.class)
-                .setParameter("code", value.trim().toLowerCase(Locale.ROOT)).getResultStream().findFirst().orElse(null);
-    }
-
-    public boolean codeExists(String value, UUID excluding) {
-        var jpql = excluding == null
-                ? "select count(code) from InventoryCode code where lower(code.code) = :code"
-                : "select count(code) from InventoryCode code where lower(code.code) = :code and code.id <> :excluding";
-        var query = entityManager.createQuery(jpql, Long.class)
-                .setParameter("code", value.trim().toLowerCase(Locale.ROOT));
-        if (excluding != null) query.setParameter("excluding", excluding);
-        return query.getSingleResult() > 0;
-    }
-
-    public void clearPrimaryCode(DomainEnums.CodeTargetType type, UUID targetId, UUID excluding) {
-        var jpql = excluding == null
-                ? "update InventoryCode code set code.primaryCode = false where code.targetType = :type and code.targetId = :targetId"
-                : "update InventoryCode code set code.primaryCode = false where code.targetType = :type and code.targetId = :targetId and code.id <> :excluding";
-        var query = entityManager.createQuery(jpql).setParameter("type", type).setParameter("targetId", targetId);
-        if (excluding != null) query.setParameter("excluding", excluding);
-        query.executeUpdate();
     }
 
     public List<InventoryLot> lots(UUID itemId, int offset, int limit, UserAccount actor) {

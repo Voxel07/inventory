@@ -138,6 +138,7 @@ create table domain_event_outbox (
     id uuid not null,
     idempotency_key uuid,
     last_error varchar(2000),
+    trace_context jsonb not null,
     aggregate_type varchar(255) not null,
     event_type varchar(255) not null,
     status varchar(255) not null check ((status in ('pending','processing','published','failed','dead_letter'))),
@@ -338,19 +339,6 @@ create table goods_receipts (
     primary key (id)
 );
 
-create table inventory_codes (
-    active boolean not null,
-    is_primary boolean not null,
-    created_at timestamp(6) with time zone not null,
-    retired_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
-    id uuid not null,
-    target_id uuid not null,
-    code varchar(255) not null unique,
-    target_type varchar(255) not null check ((target_type in ('product','asset','location','assembly','container','lot'))),
-    primary key (id)
-);
-
 create table inventory_count_lines (
     expected_asset_version bigint,
     expected_asset_state varchar(255),
@@ -500,7 +488,7 @@ create table items (
     category varchar(255) not null,
     description varchar(255),
     hint varchar(255),
-    inventory_role varchar(255) not null check ((inventory_role in ('consumable','returnable','repairable','rental'))),
+    inventory_role varchar(255) not null check ((inventory_role in ('consumable','returnable'))),
     maintenance_status varchar(255) not null check ((maintenance_status in ('certified','due_soon','overdue','in_service'))),
     name varchar(255) not null,
     position_details varchar(255),
@@ -1087,7 +1075,6 @@ create index ix_reservation_location on stock_reservations (location_id) where l
 create index ix_handover_lines_item on custody_handover_lines (item_id);
 -- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
 create index ix_asset_code_lower on asset_instances (lower(asset_code));
-create index ix_inventory_code_lower on inventory_codes (lower(code));
 create index ix_items_name_trgm on items using gin (lower(name) public.gin_trgm_ops);
 create index ix_items_sku_trgm on items using gin (lower(sku) public.gin_trgm_ops);
 create index ix_items_category_trgm on items using gin (lower(category) public.gin_trgm_ops);

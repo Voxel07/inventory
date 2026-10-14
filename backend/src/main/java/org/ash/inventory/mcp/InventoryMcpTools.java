@@ -1,5 +1,6 @@
 package org.ash.inventory.mcp;
 
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
 import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 import io.quarkiverse.mcp.server.ToolCallException;
@@ -20,19 +21,20 @@ import java.util.function.Supplier;
 @ApplicationScoped
 public class InventoryMcpTools {
     @Inject McpInventoryService service;
+    @Inject InventoryTelemetry telemetry;
 
     @Blocking
     @Tool(description = "Create an item using the REST ItemInput contract. Manager access required; initial stock uses the canonical ledger and asset/position rules.")
     public ApiResponses.ItemResponse create_item(
             @ToolArg(description = "ItemInput: name/category required; value is decimal currency, locations are UUIDs; optional amount initializes stock", required = true) ApiModels.ItemInput input) {
-        return call(() -> service.createItem(input));
+        return call("create_item", () -> service.createItem(input));
     }
 
     @Blocking
     @Tool(description = "Read an active, visible item with canonical stock availability and metadata")
     public ApiResponses.ItemResponse get_item_details(
             @ToolArg(description = "Item UUID", required = true) UUID itemId) {
-        return call(() -> service.item(itemId));
+        return call("get_item_details", () -> service.item(itemId));
     }
 
     @Blocking
@@ -42,7 +44,7 @@ public class InventoryMcpTools {
             @ToolArg(description = "Exact category", required = false) String category,
             @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit,
             @ToolArg(description = "Zero-based page; default 0", required = false) Integer page) {
-        return call(() -> service.items(query, category, page, limit));
+        return call("search_items", () -> service.items(query, category, page, limit));
     }
 
     @Blocking
@@ -50,35 +52,35 @@ public class InventoryMcpTools {
     public ApiResponses.ItemResponse update_item(
             @ToolArg(description = "Item UUID", required = true) UUID itemId,
             @ToolArg(description = "Complete ItemInput metadata, with REST update semantics", required = true) ApiModels.ItemInput input) {
-        return call(() -> service.updateItem(itemId, input));
+        return call("update_item", () -> service.updateItem(itemId, input));
     }
 
     @Blocking
     @Tool(description = "Retire an item while preserving ledger and custody history. Manager access required.")
     public InventoryMcpDtos.DeleteResultDto delete_item(
             @ToolArg(description = "Item UUID", required = true) UUID itemId) {
-        return call(() -> service.retireItem(itemId));
+        return call("delete_item", () -> service.retireItem(itemId));
     }
 
     @Blocking
     @Tool(description = "Create a kit using the REST AssemblyInput contract. Managers create shared kits; privateResource=true (or a non-manager caller) creates a personal kit. Component quantities must be positive.")
     public ApiResponses.AssemblyResponse create_assembly(
             @ToolArg(description = "AssemblyInput: name and itemQuantities (item UUID to quantity) required", required = true) ApiModels.AssemblyInput input) {
-        return call(() -> service.createAssembly(input));
+        return call("create_assembly", () -> service.createAssembly(input));
     }
 
     @Blocking
     @Tool(description = "Read an assembly only when every active component is visible to the caller")
     public ApiResponses.AssemblyResponse get_assembly_details(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId) {
-        return call(() -> service.assembly(assemblyId));
+        return call("get_assembly_details", () -> service.assembly(assemblyId));
     }
 
     @Blocking
     @Tool(description = "List assemblies whose active components are all visible to the caller")
     public List<ApiResponses.AssemblyResponse> list_assemblies(
             @ToolArg(description = "Optional event tag", required = false) String eventTag) {
-        return call(() -> service.assemblies(eventTag));
+        return call("list_assemblies", () -> service.assemblies(eventTag));
     }
 
     @Blocking
@@ -86,28 +88,28 @@ public class InventoryMcpTools {
     public ApiResponses.AssemblyResponse update_assembly(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId,
             @ToolArg(description = "AssemblyInput: name and complete itemQuantities required", required = true) ApiModels.AssemblyInput input) {
-        return call(() -> service.updateAssembly(assemblyId, input));
+        return call("update_assembly", () -> service.updateAssembly(assemblyId, input));
     }
 
     @Blocking
     @Tool(description = "Retire an assembly: it leaves the catalog and can no longer be ordered, while codes and order history are kept. Managers retire shared kits; owners and editors retire personal kits.")
     public InventoryMcpDtos.DeleteResultDto delete_assembly(
             @ToolArg(description = "Assembly UUID", required = true) UUID assemblyId) {
-        return call(() -> service.deleteAssembly(assemblyId));
+        return call("delete_assembly", () -> service.deleteAssembly(assemblyId));
     }
 
     @Blocking
     @Tool(description = "Create an event using REST EventInput. Inventory admin access required; item quotas must refer to visible items.")
     public ApiResponses.EventResponse create_event(
             @ToolArg(description = "EventInput: eventType and startDate (YYYY-MM-DD) required; optional name/endDate/status/notes/plannedQuantities/usedQuantities", required = true) ApiModels.EventInput input) {
-        return call(() -> service.createEvent(input));
+        return call("create_event", () -> service.createEvent(input));
     }
 
     @Blocking
     @Tool(description = "Read an event with canonical deployment metrics; item IDs, names and quantities are scoped to the caller")
     public ApiResponses.EventResponse get_event_details(
             @ToolArg(description = "Event UUID", required = true) UUID eventId) {
-        return call(() -> service.event(eventId));
+        return call("get_event_details", () -> service.event(eventId));
     }
 
     @Blocking
@@ -116,7 +118,7 @@ public class InventoryMcpTools {
             @ToolArg(description = "Optional event status", required = false) String status,
             @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
             @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
-        return call(() -> service.events(status, page, limit));
+        return call("list_events", () -> service.events(status, page, limit));
     }
 
     @Blocking
@@ -124,14 +126,14 @@ public class InventoryMcpTools {
     public ApiResponses.EventResponse update_event(
             @ToolArg(description = "Event UUID", required = true) UUID eventId,
             @ToolArg(description = "EventInput with REST update semantics", required = true) ApiModels.EventInput input) {
-        return call(() -> service.updateEvent(eventId, input));
+        return call("update_event", () -> service.updateEvent(eventId, input));
     }
 
     @Blocking
     @Tool(description = "Delete an event only while no orders, stock movements, return submissions or owner commitments reference it; its planning overrides are removed with it. Inventory admin access required.")
     public InventoryMcpDtos.DeleteResultDto delete_event(
             @ToolArg(description = "Event UUID", required = true) UUID eventId) {
-        return call(() -> service.deleteEvent(eventId));
+        return call("delete_event", () -> service.deleteEvent(eventId));
     }
 
     @Blocking
@@ -140,14 +142,14 @@ public class InventoryMcpTools {
             @ToolArg(description = "Optional warehouse UUID", required = false) UUID warehouseId,
             @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
             @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
-        return call(() -> service.locations(warehouseId, page, limit));
+        return call("list_storage_locations", () -> service.locations(warehouseId, page, limit));
     }
 
     @Blocking
     @Tool(description = "Read bulk/lot positions for a visible item, including command reservations, lot/damage/quarantine, maintenance and contributor holds. Serialized items return no positions; use assets and item stock.")
     public List<InventoryMcpDtos.StockPositionDto> get_inventory_positions(
             @ToolArg(description = "Item UUID", required = true) UUID itemId) {
-        return call(() -> service.positions(itemId));
+        return call("get_inventory_positions", () -> service.positions(itemId));
     }
 
     @Blocking
@@ -157,29 +159,29 @@ public class InventoryMcpTools {
             @ToolArg(description = "Optional availability state", required = false) DomainEnums.AssetState status,
             @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
             @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
-        return call(() -> service.assets(itemId, status, page, limit));
+        return call("list_asset_instances", () -> service.assets(itemId, status, page, limit));
     }
 
     @Blocking
     @Tool(description = "List visible items with usable availability at or below minStock plus buffer. Includes serialized assets, reservations and maintenance/consent holds; deficit is max(0, minStock minus available).")
     public List<InventoryMcpDtos.LowStockAlertDto> check_low_stock_items(
             @ToolArg(description = "Non-negative threshold buffer; default 0", required = false) Integer threshold) {
-        return call(() -> service.lowStock(threshold));
+        return call("check_low_stock_items", () -> service.lowStock(threshold));
     }
 
     @Blocking
     @Tool(description = "Summarize visible active items, their serialized assets and maintenance alerts, plus shared active locations and upcoming non-cancelled events")
     public InventoryMcpDtos.OperationalMetricsDto get_operational_summary() {
-        return call(() -> service.summary());
+        return call("get_operational_summary", () -> service.summary());
     }
 
     @Blocking
     @Tool(description = "Read visible active item/asset maintenance alerts, including calendar, hours and usage schedules evaluated with canonical policy; unknown meter evidence is an alert")
     public List<InventoryMcpDtos.MaintenanceAlertDto> get_maintenance_alerts() {
-        return call(() -> service.maintenanceAlerts());
+        return call("get_maintenance_alerts", () -> service.maintenanceAlerts());
     }
-    private <T> T call(Supplier<T> action) {
-        try { service.authenticate(); return action.get(); }
+    private <T> T call(String tool, Supplier<T> action) {
+        try { return telemetry.call("mcp", tool, "service", () -> { service.authenticate(); return action.get(); }); }
         catch (ApiException exception) {
             // The transactional service has already rolled back before conversion.
             throw new ToolCallException(exception.status + ": " + exception.getMessage());

@@ -41,7 +41,7 @@ class BaselineSchemaTest {
                 "ix_damage_item_status", "ix_asset_item_active", "ix_schedule_item_active",
                 "ix_images_item_order", "ix_order_lines_order", "ix_purchase_lines_item", "ix_overrides_latest",
                 "ix_positions_location", "ix_tx_source_location", "ix_tx_destination_location", "ix_asset_current_location",
-                "ix_reservation_location", "ix_handover_lines_item", "ix_asset_code_lower", "ix_inventory_code_lower",
+                "ix_reservation_location", "ix_handover_lines_item", "ix_asset_code_lower",
                 "ix_items_name_trgm", "ix_items_sku_trgm", "ix_items_category_trgm", "ix_media_staged", "ix_media_staged_age");
         java.util.List<?> indexes = entityManager.createNativeQuery("select indexname from pg_indexes where schemaname = 'inventory_baseline_test' and indexname in (:names)")
                 .setParameter("names", names).getResultList();

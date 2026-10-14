@@ -124,10 +124,9 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
         var state = stock(item);
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
-            requiredText(input.eventType(), "eventType");
-            requiredText(input.faction(), "faction");
-            assertCheckoutAllowed(item);
             var event = transactionEvent(input);
+            requireCheckoutContext(input, event);
+            assertCheckoutAllowed(item);
             equipment.assertPickup(item, event);
             int available = availableFor(item, event, 0);
             if (input.quantityChanged() > available)
@@ -145,8 +144,9 @@ public class InventoryOperationsService {
         transaction.quantity = input.quantityChanged();
         transaction.reason = input.reason();
         transaction.notes = input.notes();
-        transaction.eventType = Inputs.blankToNull(input.eventType());
         transaction.eventOccurrence = transactionEvent(input);
+        transaction.eventType = transaction.eventOccurrence == null
+                ? Inputs.blankToNull(input.eventType()) : transaction.eventOccurrence.eventType;
         transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
@@ -193,16 +193,16 @@ public class InventoryOperationsService {
         transaction.quantity = 1;
         transaction.reason = input.reason();
         transaction.notes = input.notes();
-        transaction.eventType = Inputs.blankToNull(input.eventType());
         transaction.eventOccurrence = transactionEvent(input);
+        transaction.eventType = transaction.eventOccurrence == null
+                ? Inputs.blankToNull(input.eventType()) : transaction.eventOccurrence.eventType;
         transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         transaction.availabilityBefore = before;
 
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
-            requiredText(input.eventType(), "eventType");
-            requiredText(input.faction(), "faction");
+            requireCheckoutContext(input, transaction.eventOccurrence);
             assertCheckoutAllowed(item);
             assertAssetCheckoutAllowed(asset);
             equipment.assertPickup(item, transaction.eventOccurrence);
@@ -252,6 +252,11 @@ public class InventoryOperationsService {
                     + asset.serviceStatus);
         }
         assertNoBlockingScheduleIsDue(asset.item, asset);
+    }
+
+    /** Event use names the faction; a checkout without event or event type is general (out-of-game) use. */
+    private void requireCheckoutContext(ApiModels.TransactionInput input, org.ash.inventory.model.EventOccurrence event) {
+        if (event != null || Inputs.blankToNull(input.eventType()) != null) requiredText(input.faction(), "faction");
     }
 
     private org.ash.inventory.model.EventOccurrence transactionEvent(ApiModels.TransactionInput input) {

@@ -4,13 +4,6 @@ import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
 
-export interface InventoryCodeResolution {
-  code: string;
-  targetType: 'product' | 'asset' | 'location' | 'assembly' | string;
-  targetId: string;
-  itemId?: string;
-}
-
 async function uploadItemImages(files: File[] = [], context: AuthSessionContext): Promise<string[]> {
   assertAuthSession(context);
   return Promise.all(files.map((file) => stageImage(file, context)));
@@ -68,10 +61,6 @@ export async function getItemAssets(itemId: string, query?: { page?: number; siz
     assets.push(...rows);
     if (rows.length < 200) return assets;
   }
-}
-
-export function resolveInventoryCode(code: string): Promise<InventoryCodeResolution> {
-  return apiRequest(`/api/inventory-codes/resolve/${encodeURIComponent(code)}`);
 }
 
 export function getAssetByCode(code: string): Promise<AssetInstance> {

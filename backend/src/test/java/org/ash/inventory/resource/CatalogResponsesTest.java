@@ -41,7 +41,7 @@ class CatalogResponsesTest {
         @SuppressWarnings("unchecked") var unavailable = (jakarta.enterprise.inject.Instance<io.quarkus.redis.datasource.RedisDataSource>) Proxy.newProxyInstance(
                 jakarta.enterprise.inject.Instance.class.getClassLoader(), new Class[]{jakarta.enterprise.inject.Instance.class},
                 (proxy, method, args) -> method.getName().equals("isResolvable") ? false : null);
-        var broadcaster = new EventBroadcaster(unavailable, new ObjectMapper(), "redis");
+        var broadcaster = new EventBroadcaster(unavailable, new ObjectMapper(), new org.ash.inventory.helper.telemetry.InventoryTelemetry(io.opentelemetry.api.OpenTelemetry.noop()), "redis");
         var event = Map.<String,Object>of("eventId", UUID.randomUUID().toString(), "resource", "factions");
         assertThrows(RuntimeException.class, () -> broadcaster.broadcast("catalog.changed", event));
         source.set("committed");

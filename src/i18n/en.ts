@@ -130,6 +130,7 @@ export default {
       reset: 'Reset',
     },
     reason: {
+      eventUse: 'Event use',
       project: 'Project use',
       maintenance: 'Maintenance',
       testing: 'Testing',
@@ -240,7 +241,6 @@ export default {
       lot_tracked: 'Lot tracked',
       consumable: 'Consumable',
       returnable: 'Returnable',
-      repairable: 'Repairable',
       rental: 'Rental',
       borrow: 'Borrow',
       invoice: 'Invoice',

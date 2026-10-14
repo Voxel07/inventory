@@ -65,7 +65,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Partial | `InventoryAccessPolicy`, scoped `CatalogOrm`. Legacy `visibilityScope` runs in parallel [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
-| CAT-08 | Unique SKU/asset/label codes; aliases are retired, never reused; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
+| CAT-08 | Unique SKU/asset codes; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
 | LOC-01 | Warehouses and a hierarchical, georeferenced location tree with pickup points; no cycles, same-warehouse parent | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
 | LOC-02 | Private locations protect address, coordinates, overlays, hierarchy and contents | Implemented | `StorageLocation.accessPolicy`, `ApiMapper` redaction, `InventorySharing` |
 
@@ -147,7 +147,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 
 ## 5. Required business behavior
 
-- Tracking modes are bulk, serialized and lot-tracked; inventory roles are consumable, returnable, repairable and rental. Serialized operations require exact assets, and serialized items cannot be consumable.
+- Tracking modes are bulk, serialized and lot-tracked; inventory roles are consumable and returnable. Serialized operations require exact assets, and serialized items cannot be consumable.
 - Only usable, unreserved availability can be allocated. Preparation reserves; pickup moves into custody. Physical transfer transit is distinct from outstanding supplier orders and checked-out custody.
 - Maintenance, unsafe/damaged condition, quarantine/expiry, contributor damage review and owner-consent windows can block supply. Repair changes condition; write-off reduces owned stock under the required permission.
 - A submitted return is still custody until warehouse acceptance. Order outcomes reconcile against actual handover; missing units are tracked within outstanding custody.
@@ -177,7 +177,7 @@ Previously downloaded organizational catalogs can be read offline within the sav
 | Repair or write off damaged equipment | Repair does not create units; verification/maintenance controls usability; unauthorized write-off denied | DAM-01/02, MNT-01, INV-02 |
 | Grant/revoke access to private equipment/location | Owner/HQ/grantee scope; no incidental location/ancestor/media leak; permissions checked across REST/MCP/cache | CAT-05, LOC-02, SEC-03..09 |
 | Restart offline and reconnect under another account | Correct cached account context; original-owner queue isolation; commands replay once or expose conflict correction | OFF-01/02, SEC-08 |
-| Review report or scan an alias | Report freshness/filter/export explicit; retired code never reused; scan does not mutate stock | OPS-01, CAT-08, ORD-06/07 |
+| Review report or scan a code | Report freshness/filter/export explicit; scan does not mutate stock | OPS-01, CAT-08, ORD-06/07 |
 
 These scenarios define acceptance; the runs are still open. Refer to [tests/README.md](../tests/README.md) for existing regression ownership and [Implementation Plan](IMPLEMENTATION_PLAN.md) for ACC-01..05.
 

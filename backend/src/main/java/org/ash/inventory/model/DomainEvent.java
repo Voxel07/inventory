@@ -28,6 +28,8 @@ public class DomainEvent extends BaseEntity {
     @Column(name = "aggregate_id", nullable = false, updatable = false) public UUID aggregateId;
     @Column(name = "actor_id", updatable = false) public UUID actorId;
     @Column(name = "idempotency_key", updatable = false) public UUID idempotencyKey;
+    @JdbcTypeCode(SqlTypes.JSON) @Column(name = "trace_context", columnDefinition = "jsonb", nullable = false, updatable = false)
+    public Map<String, String> traceContext = new LinkedHashMap<>();
     @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false, updatable = false)
     public Map<String, Object> payload = new LinkedHashMap<>();
     @Column(name = "occurred_at", nullable = false, updatable = false) public Instant occurredAt;

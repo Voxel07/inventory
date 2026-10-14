@@ -12,7 +12,7 @@ export type RowAction = { label: string; icon: ReactNode; onClick: () => void; d
  * A compact catalog record for phones and tablets: the name wraps freely,
  * availability stays on its own line, and explicit actions live behind "More".
  */
-export function CatalogRow({ to, title, primary, secondary, selectable, selected, onToggleSelected, onOpenMenu }: {
+export function CatalogRow({ to, title, primary, secondary, selectable, selected, onToggleSelected, onOpenMenu, onClick }: {
   to: string;
   title: string;
   primary: ReactNode;
@@ -20,13 +20,15 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
   selectable?: boolean;
   selected?: boolean;
   onToggleSelected?: () => void;
-  onOpenMenu: (anchor: HTMLElement) => void;
+  /** Undefined hides the "More" menu. */
+  onOpenMenu?: (anchor: HTMLElement) => void;
+  onClick?: () => void;
 }) {
   const t = useLocalizedText();
   return <Box component="li" sx={{ display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
     {selectable && <Checkbox checked={selected} onChange={onToggleSelected} sx={{ ml: 0.5, p: 1.25 }}
       slotProps={{ input: { 'aria-label': t(`${title} auswählen`, `Select ${title}`) } }} />}
-    <ButtonBase component={RouterLink} to={to} sx={{
+    <ButtonBase component={RouterLink} to={to} onClick={onClick} sx={{
       flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
       '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { bgcolor: 'action.focus', outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
     }}>
@@ -36,10 +38,10 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
       </Typography>
       {secondary && <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{secondary}</Typography>}
     </ButtonBase>
-    <IconButton title={t(`Weitere Aktionen für ${title}`, `More actions for ${title}`)} aria-haspopup="menu"
+    {onOpenMenu && <IconButton title={t(`Weitere Aktionen für ${title}`, `More actions for ${title}`)} aria-haspopup="menu"
       onClick={(event) => onOpenMenu(event.currentTarget)} sx={{ mr: 0.5, flexShrink: 0 }}>
       <MoreVertIcon />
-    </IconButton>
+    </IconButton>}
   </Box>;
 }
 

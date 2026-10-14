@@ -207,7 +207,8 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.ReturnSubmissionResponse returnSubmission(ReturnSubmission value) {
+    public ApiResponses.ReturnSubmissionResponse returnSubmission(ReturnSubmission value,
+            List<org.ash.inventory.model.DamageReport> reportedDamage) {
         return new ApiResponses.ReturnSubmissionResponse(
                 value.id,
                 value.createdAt,
@@ -230,7 +231,16 @@ public class ApiMapper {
                 value.acknowledgedBy == null ? null : value.acknowledgedBy.id.toString(),
                 value.acknowledgedBy == null ? null : value.acknowledgedBy.name,
                 value.acknowledgedAt,
-                value.acknowledgementNotes
+                value.acknowledgementNotes,
+                reportedDamage.stream().map(report -> new ApiResponses.ReturnDamageResponse(
+                        report.id,
+                        report.assetInstance == null ? null : report.assetInstance.assetCode,
+                        report.quantity,
+                        report.severity.name(),
+                        report.status.name(),
+                        report.description,
+                        report.reporter.name,
+                        report.createdAt)).toList()
         );
     }
 

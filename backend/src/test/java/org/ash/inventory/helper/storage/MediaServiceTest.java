@@ -21,7 +21,7 @@ class MediaServiceTest {
     }
 
     private MediaService service(String mode, String endpoint) {
-        return new MediaService(null, mode, directory.toString(), endpoint, "inventory", "garage",
+        return new MediaService(new org.ash.inventory.helper.telemetry.InventoryTelemetry(io.opentelemetry.api.OpenTelemetry.noop()), null, mode, directory.toString(), endpoint, "inventory", "garage",
                 Optional.of("test-key"), Optional.of("test-secret"));
     }
 

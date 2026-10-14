@@ -9,7 +9,6 @@ import org.ash.inventory.orm.StockManagementOrm;
 import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.dto.StockDtos;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,8 +17,6 @@ import java.util.UUID;
 @ApplicationScoped
 public class StockManagementService {
     @jakarta.inject.Inject LocationHierarchyService hierarchy;
-    @jakarta.inject.Inject PrivacyProjectionService privacy;
-    @jakarta.inject.Inject CatalogService catalog;
     private final StockManagementOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -76,134 +73,6 @@ public class StockManagementService {
         value.name = input.name().trim();
         value.description = input.description();
         if (input.active() != null) value.active = input.active();
-    }
-
-    public List<InventoryCode> codes(UUID targetId, int page, int size) {
-        if (targetId == null) actors.requireWarehouse();
-        else {
-            Object target = null;
-            for (var type : List.of(Item.class, StorageLocation.class, AssetInstance.class, InventoryLot.class, Assembly.class)) {
-                target = orm.find(type, targetId); if (target != null) break;
-            }
-            if (target == null) throw ApiException.notFound("Code target not found");
-            boolean privateTarget = target instanceof Item i && i.accessPolicy != null
-                    || target instanceof StorageLocation l && l.accessPolicy != null
-                    || target instanceof AssetInstance a && a.item.accessPolicy != null
-                    || target instanceof InventoryLot lot && lot.item.accessPolicy != null;
-            if (!privateTarget) actors.requireWarehouse();
-        }
-        var denied = privacy.deniedIds().stream().map(UUID::fromString).collect(java.util.stream.Collectors.toSet());
-        return orm.codes(targetId, PageBounds.of(page, size).offset(), size, denied);
-    }
-
-    @Transactional
-    public InventoryCode resolveCode(String code) {
-        actors.current();
-        var result = orm.findCode(code);
-        if (result == null) throw ApiException.notFound("Inventory code not found");
-        var item = codeItem(result);
-        if (item != null) actors.requireItemAccess(item);
-        if (result.targetType == DomainEnums.CodeTargetType.assembly && !catalog.canViewAssembly(orm.find(Assembly.class, result.targetId))) throw ApiException.notFound("Code target not found");
-        if (result.targetType == DomainEnums.CodeTargetType.location) actors.requireLocationAccess(orm.find(StorageLocation.class, result.targetId), false);
-        if (!result.active) throw new ApiException(410, "This label has been retired; use its replacement");
-        return result;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public InventoryCode createCode(StockDtos.InventoryCodeInput input) {
-        requireCodeEdit(input.targetType(), input.targetId());
-        validateCodeTarget(input.targetType(), input.targetId());
-        if (orm.codeExists(input.code(), null)) throw ApiException.conflict("Inventory code already exists");
-        orm.findLocked(targetClass(input.targetType()), input.targetId());
-        var code = new InventoryCode();
-        apply(code, input);
-        if (code.primaryCode) orm.clearPrimaryCode(code.targetType, code.targetId, null);
-        orm.persist(code);
-        events.record("inventory_code.created", "inventory_code", code.id, actors.current().id, null,
-                Map.of("targetType", code.targetType.name(), "targetId", code.targetId.toString()));
-        return code;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public InventoryCode updateCode(UUID id, StockDtos.InventoryCodeInput input) {
-        var code = lockCode(id);
-        validateCodeTarget(input.targetType(), input.targetId());
-        if (orm.codeExists(input.code(), id)) throw ApiException.conflict("Inventory code already exists");
-        if (!code.active || !code.code.equals(input.code().trim().toUpperCase(Locale.ROOT)) || code.targetType != input.targetType() || !code.targetId.equals(input.targetId()))
-            throw ApiException.conflict("Codes are immutable; replace a label to preserve its history");
-        orm.findLocked(targetClass(code.targetType), code.targetId);
-        code.primaryCode = input.primaryCode();
-        if (code.primaryCode) orm.clearPrimaryCode(code.targetType, code.targetId, id);
-        return code;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public void retireCode(UUID id) {
-        var code = lockCode(id);
-        code.active = false;
-        code.primaryCode = false;
-        code.retiredAt = Instant.now();
-        events.record("inventory_code.retired", "inventory_code", code.id, actors.current().id, null, Map.of("code", code.code));
-    }
-
-    private InventoryCode lockCode(UUID id) {
-        var code = orm.require(InventoryCode.class, id, "Inventory code");
-        requireCodeEdit(code.targetType, code.targetId);
-        orm.findLocked(targetClass(code.targetType), code.targetId);
-        return orm.requireLocked(InventoryCode.class, id, "Inventory code");
-    }
-    public Item codeItem(InventoryCode code) {
-        if (orm.find(targetClass(code.targetType), code.targetId) == null) throw ApiException.notFound("Code target no longer exists");
-        return switch (code.targetType) {
-            case product -> orm.find(Item.class, code.targetId);
-            case asset -> orm.find(AssetInstance.class, code.targetId).item;
-            case lot -> orm.find(InventoryLot.class, code.targetId).item;
-            default -> null;
-        };
-    }
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public InventoryCode replaceCode(UUID id, StockDtos.InventoryCodeInput input) {
-        var old = lockCode(id);
-        if (!old.active || old.targetType != input.targetType() || !old.targetId.equals(input.targetId())) throw ApiException.conflict("Replace an active label for the same target");
-        var replacement = createCode(input);
-        retireCode(id);
-        events.record("inventory_code.replaced", "inventory_code", old.id, actors.current().id, null, Map.of("replacementId", replacement.id.toString(), "oldCode", old.code, "newCode", replacement.code));
-        return replacement;
-    }
-    private void requireCodeEdit(DomainEnums.CodeTargetType type, UUID id) {
-        var target = orm.require(targetClass(type), id, "Code target");
-        Item item = target instanceof Item i ? i : target instanceof AssetInstance a ? a.item : target instanceof InventoryLot l ? l.item : null;
-        if (item != null) actors.requireItemEdit(item);
-        else if (target instanceof StorageLocation l) actors.requireLocationEdit(l);
-        else actors.requireWarehouse();
-    }
-    private Class<?> targetClass(DomainEnums.CodeTargetType type) {
-        return switch(type) { case product -> Item.class; case asset -> AssetInstance.class; case location -> StorageLocation.class; case assembly -> Assembly.class; case lot -> InventoryLot.class; default -> throw ApiException.badRequest("Unsupported code target"); };
-    }
-
-    private void apply(InventoryCode value, StockDtos.InventoryCodeInput input) {
-        value.code = input.code().trim().toUpperCase(Locale.ROOT);
-        value.targetType = input.targetType();
-        value.targetId = input.targetId();
-        value.primaryCode = input.primaryCode();
-        value.active = true;
-        value.retiredAt = null;
-    }
-
-    private void validateCodeTarget(DomainEnums.CodeTargetType type, UUID id) {
-        Class<?> entityType = switch (type) {
-            case product -> Item.class;
-            case asset -> AssetInstance.class;
-            case location -> StorageLocation.class;
-            case assembly -> Assembly.class;
-            case lot -> InventoryLot.class;
-            case container -> throw ApiException.badRequest("Container codes are not supported until containers are modeled");
-        };
-        if (orm.find(entityType, id) == null) throw ApiException.badRequest("Inventory code target does not exist");
     }
 
     public List<InventoryLot> lots(UUID itemId, int page, int size) {

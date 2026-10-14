@@ -13,6 +13,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.ObservableLongGauge;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -38,17 +41,27 @@ public class EventBroadcaster {
     private final CopyOnWriteArrayList<Consumer<Map<String, Object>>> internalListeners = new CopyOnWriteArrayList<>();
     private final Set<String> deliveredEventIds = ConcurrentHashMap.newKeySet();
     private volatile PubSubCommands.RedisSubscriber redisSubscriber;
+    private final InventoryTelemetry telemetry;
+    private final java.util.concurrent.atomic.AtomicBoolean subscriptionUnavailable = new java.util.concurrent.atomic.AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicLong subscriptionGeneration = new java.util.concurrent.atomic.AtomicLong();
+    private volatile boolean shuttingDown;
+    private ObservableLongGauge subscriptionGauge;
 
     public EventBroadcaster(Instance<RedisDataSource> redisDataSource,
-            ObjectMapper objectMapper,
+            ObjectMapper objectMapper, InventoryTelemetry telemetry,
             @ConfigProperty(name = "inventory.events.backend", defaultValue = "memory") String backend) {
         this.redisDataSource = redisDataSource;
         this.objectMapper = objectMapper;
         this.backend = backend;
+        this.telemetry = telemetry;
     }
 
     @PostConstruct
     void initialize() {
+        subscriptionGauge = telemetry.meter().gaugeBuilder("inventory.redis.subscription.connected").ofLongs()
+                .buildWithCallback(measurement -> {
+                    if (usesRedis()) measurement.record(redisSubscriber == null ? 0 : 1);
+                });
         ensureRedisSubscription();
     }
 
@@ -58,17 +71,35 @@ public class EventBroadcaster {
     }
 
     private synchronized void ensureRedisSubscription() {
-        if (!usesRedis() || redisSubscriber != null || !redisDataSource.isResolvable()) return;
+        if (shuttingDown || !usesRedis() || redisSubscriber != null || !redisDataSource.isResolvable()) return;
+        long generation = subscriptionGeneration.incrementAndGet();
         try {
-            redisSubscriber = redisDataSource.get().pubsub(String.class).subscribe(CHANNEL, this::receiveRedisEvent);
+            var subscriber = redisDataSource.get().pubsub(String.class).subscribe(CHANNEL, this::receiveRedisEvent,
+                    () -> subscriptionEnded(generation, null), exception -> subscriptionEnded(generation, exception));
+            if (subscriptionGeneration.get() != generation) { subscriber.unsubscribe(); return; }
+            redisSubscriber = subscriber;
+            telemetry.count("inventory.redis.subscriptions", 1, InventoryTelemetry.dimensions("connect", "success"));
+            if (subscriptionUnavailable.getAndSet(false)) LOG.info("Redis inventory event subscription recovered");
         } catch (RuntimeException exception) {
-            LOG.warnv("Redis event subscription unavailable; this node will use local events: {0}", exception.getMessage());
+            subscriptionEnded(generation, exception);
+        }
+    }
+
+    private void subscriptionEnded(long generation, Throwable exception) {
+        if (!subscriptionGeneration.compareAndSet(generation, generation + 1)) return;
+        redisSubscriber = null;
+        if (shuttingDown) return;
+        telemetry.count("inventory.redis.subscriptions", 1, InventoryTelemetry.dimensions("disconnect", "failed"));
+        if (!subscriptionUnavailable.getAndSet(true)) {
+            LOG.warn("Redis inventory event subscription unavailable; reconnecting on the next poll", exception);
         }
     }
 
     @PreDestroy
     void shutdown() {
+        shuttingDown = true;
         if (redisSubscriber != null) redisSubscriber.unsubscribe();
+        if (subscriptionGauge != null) subscriptionGauge.close();
     }
 
     public void broadcast(String type, Map<String, Object> data) {
@@ -98,26 +129,30 @@ public class EventBroadcaster {
     }
 
     private void publish(Map<String, Object> payload) {
-        if (usesRedis()) {
+        telemetry.call("redis", "publish_event", usesRedis() ? "redis" : "memory", () -> {
+            if (usesRedis()) {
+                deliver(payload);
+                if (!redisDataSource.isResolvable()) {
+                    throw new IllegalStateException("Redis event backend is configured but no Redis data source is available");
+                }
+                try {
+                    redisDataSource.get().pubsub(String.class).publish(CHANNEL, objectMapper.writeValueAsString(payload));
+                    return null;
+                } catch (Exception exception) {
+                    throw new IllegalStateException("Redis event publication failed", exception);
+                }
+            }
             deliver(payload);
-            if (!redisDataSource.isResolvable()) {
-                throw new IllegalStateException("Redis event backend is configured but no Redis data source is available");
-            }
-            try {
-                redisDataSource.get().pubsub(String.class).publish(CHANNEL, objectMapper.writeValueAsString(payload));
-                return;
-            } catch (Exception exception) {
-                throw new IllegalStateException("Redis event publication failed", exception);
-            }
-        }
-        deliver(payload);
+            return null;
+        });
     }
 
     private void receiveRedisEvent(String encoded) {
         try {
             deliver(objectMapper.readValue(encoded, new TypeReference<Map<String, Object>>() {}));
         } catch (Exception exception) {
-            LOG.warnv("Ignoring malformed Redis inventory event: {0}", exception.getMessage());
+            telemetry.count("inventory.redis.events.invalid", 1, Attributes.empty());
+            LOG.warnf("Ignoring malformed Redis inventory event; exception_type=%s", exception.getClass().getName());
         }
     }
 
@@ -125,12 +160,14 @@ public class EventBroadcaster {
         Object eventId = payload.get("eventId");
         if (deliveredEventIds.size() >= 10_000) deliveredEventIds.clear();
         if (eventId != null && !deliveredEventIds.add(eventId.toString())) return;
+        telemetry.count("inventory.events.received", 1, Attributes.builder().put("backend", usesRedis() ? "redis" : "memory").build());
         processor.onNext(payload);
         for (var listener : internalListeners) {
             try {
                 listener.accept(payload);
             } catch (RuntimeException exception) {
-                LOG.warnv("Inventory event listener failed: {0}", exception.getMessage());
+                telemetry.count("inventory.events.listener.failures", 1, Attributes.empty());
+                LOG.warn("Inventory event listener failed", exception);
             }
         }
     }

@@ -180,7 +180,6 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request |
 | `action_reminders` | UUID; user FK, action key and reminder time; unique user/action |
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
-| `inventory_codes` | UUID; globally unique stored code, target type/UUID, active/primary flags and retirement time; polymorphic target validated in services |
 | `operational_reports` | Report name PK; generation version/times, source token and JSON rows; eight snapshot kinds |
 | `sync_command_audit` | UUID; unique command ID, owner/operation/payload/local time, server result/status/conflict/retry; supersedes and resolution-root FKs to command IDs |
 | `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
@@ -209,7 +208,7 @@ Stock/order history is append-only by application contract. This baseline does n
 
 ## 6. Query, indexing and snapshot behavior
 
-FK/location/stock indexes support operational reads. Catalog substring search uses `pg_trgm` GIN indexes on lowercased name/SKU/category. Lowercased code indexes accelerate exact case-insensitive lookup; those indexes are non-unique, while stored SKU/asset/label values have unique constraints. Alias retirement and cross-code reuse rules are enforced by code-management services.
+FK/location/stock indexes support operational reads. Catalog substring search uses `pg_trgm` GIN indexes on lowercased name/SKU/category. Lowercased code indexes accelerate exact case-insensitive lookup; those indexes are non-unique, while stored SKU/asset values have unique constraints.
 
 API list mapping batches ledger, damage, reservation, position, asset, maintenance and purchasing facts. Dynamic availability is not globally cached. Faction reference caching uses committed revisions. Privacy query scoping and `PrivacyResponseFilter`/reference-graph projection currently coexist (PLAN-01).
 

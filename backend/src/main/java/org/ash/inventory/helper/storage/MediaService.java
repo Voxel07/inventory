@@ -1,6 +1,8 @@
 package org.ash.inventory.helper.storage;
 
 import jakarta.annotation.PreDestroy;
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
+import io.opentelemetry.api.common.Attributes;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
@@ -48,6 +50,7 @@ public class MediaService {
 
     @jakarta.inject.Inject org.ash.inventory.service.InventoryMediaService permissions;
     private final TransactionSynchronizationRegistry transactions;
+    private final InventoryTelemetry telemetry;
     private final String mode;
     private final String localDirectory;
     private final String endpoint;
@@ -57,7 +60,7 @@ public class MediaService {
     private final Optional<String> secretKey;
     private volatile S3Client s3Client;
 
-    public MediaService(TransactionSynchronizationRegistry transactions,
+    public MediaService(InventoryTelemetry telemetry, TransactionSynchronizationRegistry transactions,
             @ConfigProperty(name = "inventory.media.mode") String mode,
             @ConfigProperty(name = "inventory.media.local-directory") String localDirectory,
             @ConfigProperty(name = "inventory.media.s3.endpoint") String endpoint,
@@ -66,6 +69,7 @@ public class MediaService {
             @ConfigProperty(name = "inventory.media.s3.access-key") Optional<String> accessKey,
             @ConfigProperty(name = "inventory.media.s3.secret-key") Optional<String> secretKey) {
         this.transactions = transactions;
+        this.telemetry = telemetry;
         this.mode = mode;
         this.localDirectory = localDirectory;
         this.endpoint = endpoint;
@@ -80,66 +84,59 @@ public class MediaService {
     public record StoredDocument(String key, String contentType, long contentLength, String checksum) {}
 
     public StoredMedia store(String originalName, String contentType, Path source) {
-        String key = newKey(originalName);
-        try {
+        return storage("store", () -> {
+            String key = newKey(originalName);
+            long bytes = Files.size(source);
             if (isS3()) {
-                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder()
-                        .bucket(bucket).key(key).contentType(contentType).build();
+                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build();
                 s3().putObject(request, RequestBody.fromFile(source));
             } else {
                 putLocal(key, source);
             }
+            uploaded(bytes);
             return new StoredMedia(key, null);
-        } catch (IOException exception) {
-            throw new ApiException(500, "Could not store media");
-        } catch (SdkException exception) {
-            throw storageFailure("store", exception);
-        }
+        });
     }
 
     /** Convenience overload for small in-memory callers; HTTP uploads use the Path overload. */
     public StoredMedia store(String originalName, String contentType, byte[] bytes) {
-        String key = newKey(originalName);
-        if (isS3()) {
-            try {
-                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder()
-                        .bucket(bucket).key(key).contentType(contentType).build();
+        return storage("store", () -> {
+            String key = newKey(originalName);
+            if (isS3()) {
+                PutObjectRequest request = (PutObjectRequest) PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build();
                 s3().putObject(request, RequestBody.fromBytes(bytes));
-            } catch (SdkException exception) {
-                throw storageFailure("store", exception);
+            } else {
+                try (var input = new ByteArrayInputStream(bytes)) { putLocal(key, input); }
             }
-        } else {
-            try (var input = new ByteArrayInputStream(bytes)) {
-                putLocal(key, input);
-            } catch (IOException exception) {
-                throw new ApiException(500, "Could not store media");
-            }
-        }
-        return new StoredMedia(key, null);
+            uploaded(bytes.length);
+            return new StoredMedia(key, null);
+        });
+    }
+
+    private void uploaded(long bytes) {
+        telemetry.measure("inventory.media.upload.size", bytes, "By",
+                Attributes.builder().put("backend", isS3() ? "s3" : "local").build());
     }
 
     public MediaContent read(String key) {
-        validateKey(key);
-        if (isS3()) {
-            try {
-                GetObjectRequest request = (GetObjectRequest) GetObjectRequest.builder().bucket(bucket).key(key).build();
-                ResponseInputStream<GetObjectResponse> stream = s3().getObject(request);
-                String responseType = stream.response().contentType();
-                return new MediaContent(stream, responseType == null ? contentType(key) : responseType,
-                        stream.response().contentLength());
-            } catch (S3Exception exception) {
-                if (exception.statusCode() == 404) throw ApiException.notFound("Media not found");
-                throw storageFailure("read", exception);
-            } catch (SdkException exception) {
-                throw storageFailure("read", exception);
+        return storage("read", () -> {
+            validateKey(key);
+            if (isS3()) {
+                try {
+                    GetObjectRequest request = (GetObjectRequest) GetObjectRequest.builder().bucket(bucket).key(key).build();
+                    ResponseInputStream<GetObjectResponse> stream = s3().getObject(request);
+                    String responseType = stream.response().contentType();
+                    return new MediaContent(stream, responseType == null ? contentType(key) : responseType,
+                            stream.response().contentLength());
+                } catch (S3Exception exception) {
+                    if (exception.statusCode() == 404) throw ApiException.notFound("Media not found");
+                    throw exception;
+                }
             }
-        }
-        try {
             Path file = localFile(key);
-            return new MediaContent(Files.newInputStream(file), contentType(key), Files.size(file));
-        } catch (IOException exception) {
-            throw new ApiException(500, "Could not read media");
-        }
+            long bytes = Files.size(file);
+            return new MediaContent(Files.newInputStream(file), contentType(key), bytes);
+        });
     }
 
     public String mediaReference(String value) {
@@ -169,21 +166,23 @@ public class MediaService {
     }
 
     public StoredDocument inspectVendorDocument(String reference) {
-        String source = mediaReference(reference);
-        permissions.requireStaged(source);
-        if (!STAGED_UPLOAD.matcher(source).matches()) {
-            throw ApiException.badRequest("Only staged uploads can be attached as vendor documents");
-        }
-        var content = read(source);
-        String checksum;
-        try (var stream = content.stream()) {
-            var digest = MessageDigest.getInstance("SHA-256");
-            stream.transferTo(new java.security.DigestOutputStream(OutputStream.nullOutputStream(), digest));
-            checksum = HexFormat.of().formatHex(digest.digest());
-        } catch (IOException | NoSuchAlgorithmException exception) {
-            throw new ApiException(500, "Could not inspect vendor document");
-        }
-        return new StoredDocument(source, content.contentType(), content.contentLength(), checksum);
+        return storage("inspect_document", () -> {
+            String source = mediaReference(reference);
+            permissions.requireStaged(source);
+            if (!STAGED_UPLOAD.matcher(source).matches()) {
+                throw ApiException.badRequest("Only staged uploads can be attached as vendor documents");
+            }
+            var content = read(source);
+            String checksum;
+            try (var stream = content.stream()) {
+                var digest = MessageDigest.getInstance("SHA-256");
+                stream.transferTo(new java.security.DigestOutputStream(OutputStream.nullOutputStream(), digest));
+                checksum = HexFormat.of().formatHex(digest.digest());
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException("SHA-256 is unavailable", exception);
+            }
+            return new StoredDocument(source, content.contentType(), content.contentLength(), checksum);
+        });
     }
 
     public StoredDocument attachToVendorDocument(StoredDocument inspected, UUID documentId, String originalFilename) {
@@ -241,46 +240,50 @@ public class MediaService {
     }
 
     private void copy(String source, String destination) {
-        validateKey(source);
-        validateKey(destination);
-        if (isS3()) {
-            try {
-                CopyObjectRequest request = (CopyObjectRequest) CopyObjectRequest.builder()
-                        .destinationBucket(bucket).destinationKey(destination)
+        storage("copy", () -> {
+            validateKey(source);
+            validateKey(destination);
+            if (isS3()) {
+                CopyObjectRequest request = (CopyObjectRequest) CopyObjectRequest.builder().destinationBucket(bucket).destinationKey(destination)
                         .sourceBucket(bucket).sourceKey(source).build();
                 s3().copyObject(request);
-            } catch (SdkException exception) {
-                throw storageFailure("copy", exception);
+            } else {
+                Path destinationFile = resolvedLocalPath(destination);
+                Files.createDirectories(destinationFile.getParent());
+                Files.copy(localFile(source), destinationFile, StandardCopyOption.REPLACE_EXISTING);
             }
-            return;
-        }
-        try {
-            Path destinationFile = resolvedLocalPath(destination);
-            Files.createDirectories(destinationFile.getParent());
-            Files.copy(localFile(source), destinationFile, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException exception) {
-            throw new ApiException(500, "Could not copy media");
-        }
+            return null;
+        });
     }
 
     /** Removes a stored object; used by the staged-upload purge. */
-    public void deleteObject(String key) {
-        delete(key);
-    }
+    public void deleteObject(String key) { delete(key); }
 
     private void delete(String key) {
-        validateKey(key);
-        if (isS3()) {
-            try {
-                DeleteObjectRequest request = (DeleteObjectRequest) DeleteObjectRequest.builder()
-                        .bucket(bucket).key(key).build();
-                s3().deleteObject(request);
-            } catch (SdkException exception) {
-                throw storageFailure("delete", exception);
+        storage("delete", () -> {
+            validateKey(key);
+            if (isS3()) {
+                s3().deleteObject((DeleteObjectRequest) DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+            } else {
+                Files.deleteIfExists(resolvedLocalPath(key));
             }
-        } else {
-            try { Files.deleteIfExists(resolvedLocalPath(key)); }
-            catch (IOException exception) { throw new ApiException(500, "Could not delete media"); }
+            return null;
+        });
+    }
+
+    @FunctionalInterface
+    private interface StorageCall<T> { T execute() throws IOException; }
+
+    private <T> T storage(String operation, StorageCall<T> action) {
+        try (var activity = telemetry.start("media", operation, isS3() ? "s3" : "local")) {
+            try { return action.execute(); }
+            catch (IOException exception) {
+                activity.failure(exception);
+                throw new ApiException(500, "Could not " + operation + " media");
+            } catch (SdkException exception) {
+                activity.failure(exception);
+                throw new ApiException(502, "Object storage is unavailable");
+            } catch (RuntimeException exception) { activity.failure(exception); throw exception; }
         }
     }
 
@@ -350,11 +353,6 @@ public class MediaService {
                     .build();
             return s3Client;
         }
-    }
-
-    private ApiException storageFailure(String operation, SdkException cause) {
-        LOG.warnf(cause, "Object storage %s failed", operation);
-        return new ApiException(502, "Object storage is unavailable");
     }
 
     @PreDestroy

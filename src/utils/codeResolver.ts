@@ -1,7 +1,6 @@
 import { getFactionOrders, getFactionOrder } from '../services/factionOrderService';
-import { getAssetByCode, getItems, getItem, resolveInventoryCode } from '../services/inventoryService';
+import { getAssetByCode, getItems, getItem } from '../services/inventoryService';
 import { getAssembly } from '../services/assemblyService';
-import { ApiError } from '../services/apiClient';
 
 export interface CodeResolutionResult {
   found: boolean;
@@ -65,28 +64,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
     };
   }
 
-  // 2. Direct Backend Inventory Code Resolution (/api/inventory-codes/resolve/{code})
-  try {
-    const res = await resolveInventoryCode(code);
-    if (res?.targetId) {
-      if (res.targetType === 'product') {
-        return { found: true, type: 'item', path: `/items/${res.targetId}?transaction=1`, code };
-      }
-      if (res.targetType === 'assembly') {
-        return { found: true, type: 'assembly', path: `/assemblies/${res.targetId}`, code };
-      }
-      if (res.targetType === 'location') {
-        return { found: true, type: 'location', path: `/locations/${res.targetId}`, code };
-      }
-      if (res.targetType === 'asset' && res.itemId) return { found: true, type: 'item', path: `/items/${res.itemId}/assets/${res.targetId}`, code };
-      if (res.targetType === 'lot' && res.itemId) return { found: true, type: 'item', path: `/items/${res.itemId}`, code };
-    }
-  } catch (error) {
-    if (error instanceof ApiError && error.status !== 404) throw error;
-    // Inventory code not found via resolver endpoint; proceed to other targeted checks
-  }
-
-  // 3. Asset code lookup (/api/assets/by-code/{code})
+  // 2. Asset code lookup (/api/assets/by-code/{code})
   try {
     const asset = await getAssetByCode(code);
     if (asset?.itemId && asset?.id) {
@@ -102,7 +80,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
     // Not an asset code
   }
 
-  // 4. If code is a direct UUID, check item, assembly, or order by ID
+  // 3. If code is a direct UUID, check item, assembly, or order by ID
   if (UUID_REGEX.test(code)) {
     try {
       const item = await getItem(code);
@@ -140,7 +118,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
 
   const lowerCode = code.toLowerCase();
 
-  // 5. Targeted Item search (search by SKU, barcode, or name)
+  // 4. Targeted Item search (search by SKU, barcode, or name)
   try {
     const items = await getItems({ search: code });
     const matchingItem = items.find(
@@ -163,7 +141,7 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
     console.error('Error searching items for code resolution', err);
   }
 
-  // 6. Faction Order Code check (e.g. DE26-KGG-01, LS26-HEX-01)
+  // 5. Faction Order Code check (e.g. DE26-KGG-01, LS26-HEX-01)
   try {
     const orders = await getFactionOrders({ orderCode: code });
     const matchingOrder = orders.find(

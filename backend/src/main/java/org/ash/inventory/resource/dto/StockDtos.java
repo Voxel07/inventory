@@ -16,12 +16,6 @@ public final class StockDtos {
     public record WarehouseResponse(UUID id, Instant createdAt, Instant updatedAt, String code, String name,
             String description, boolean active) {}
 
-    public record InventoryCodeInput(@NotBlank @jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}") String code, @NotNull DomainEnums.CodeTargetType targetType,
-            @NotNull UUID targetId, boolean primaryCode) {}
-    public record InventoryCodeResponse(UUID id, String code, String targetType, UUID targetId,
-            boolean primaryCode, boolean active, Instant retiredAt) {}
-    public record CodeResolutionResponse(String code, String targetType, UUID targetId, UUID itemId) {}
-
     public record LotInput(@NotNull UUID itemId, @NotBlank String lotNumber, String supplierLot,
             LocalDate manufactureDate, LocalDate expiryDate, LocalDate bestBeforeDate,
             String storageRequirements, DomainEnums.LotStatus status, String notes) {}

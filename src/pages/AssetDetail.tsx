@@ -1,6 +1,4 @@
 import { Button } from '../components/shared/ActionButtons';
-import { CodeManagement } from '../components/qr/CodeManagement';
-import { canOperateWarehouse } from '../utils/access';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -153,7 +151,6 @@ export function AssetDetail() {
                 <Button title={t('Gerät an einen anderen Lagerort verschieben', 'Move asset to another storage location')} onClick={() => setPrivateAction('relocate')}>{t('Gerät verschieben', 'Move asset')}</Button>
                 <Button title={t('Zustand des eigenen Geräts aktualisieren', 'Update private asset condition')} onClick={() => setPrivateAction('condition')}>{t('Zustand aktualisieren', 'Update condition')}</Button>
             </Stack>}
-            {(item.access?.privateResource ? canEditPrivate : canOperateWarehouse(user)) && <CodeManagement targetId={asset.id} targetType="asset" />}
             {canEditPrivate && privateAction && <OperationForm title={privateAction === 'relocate' ? t('Gerät verschieben', 'Move asset') : t('Zustand aktualisieren', 'Update condition')}
                 onClose={() => setPrivateAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
                 fields={privateAction === 'relocate'

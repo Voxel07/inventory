@@ -125,12 +125,8 @@ class PrivateInventoryApiTest {
         owner().get(policy("items", item)).then().statusCode(200).body("revision", equalTo(0));
     }
 
-    @Test void codesHistoryAndCachedReportsDoNotRevealPrivateInventoryToWarehouseStaff() {
-        String item = item(), code = "PRIV-" + UUID.randomUUID();
-        owner().body(Map.of("code", code, "targetType", "product", "targetId", item, "primaryCode", true))
-                .post("/api/inventory-codes").then().statusCode(201);
-        owner().get("/api/inventory-codes/resolve/" + code).then().statusCode(200).body("targetId", equalTo(item));
-        actor("warehouse", "warehouse_crew").get("/api/inventory-codes/resolve/" + code).then().statusCode(404);
+    @Test void historyAndCachedReportsDoNotRevealPrivateInventoryToWarehouseStaff() {
+        String item = item();
         actor("warehouse", "warehouse_crew").get("/api/transactions").then().statusCode(200).body("itemId", not(hasItem(item)));
         admin().body(Map.of()).post("/api/reports/availability/rebuild").then().statusCode(204);
         admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", greaterThan(0));

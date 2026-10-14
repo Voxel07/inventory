@@ -3,6 +3,7 @@ package org.ash.inventory.orm;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.ReturnSubmission;
@@ -50,6 +51,19 @@ public class ReturnSubmissionOrm extends EntityOrm {
         if (!manager) query.setParameter("actor", actor);
         InventoryAccessOrm.bind(query, actor);
         return query.getResultList();
+    }
+
+    /** Damage reports on these items that are still awaiting review or repair, newest first. */
+    public List<DamageReport> openDamage(java.util.Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) return List.of();
+        return entityManager.createQuery(
+                "select d from DamageReport d join fetch d.reporter left join fetch d.assetInstance left join fetch d.factionOrder"
+                        + " where d.item.id in :items and d.status in :open order by d.createdAt desc", DamageReport.class)
+                .setParameter("items", itemIds)
+                .setParameter("open", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
+                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
+                        DomainEnums.DamageStatus.in_repair))
+                .getResultList();
     }
 
     public long pendingQuantity(Item item, UserAccount user) {

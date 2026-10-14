@@ -1379,9 +1379,9 @@ class InventoryApiTest {
                 .body("stock.onHand", equalTo(3))
                 .extract().path("id");
 
-        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1))
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1, "eventType", "DE"))
                 .post("/api/transactions").then().statusCode(400)
-                .body("error", org.hamcrest.Matchers.containsString("eventType is required"));
+                .body("error", org.hamcrest.Matchers.containsString("faction is required"));
 
         request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1,
                         "eventType", "DE", "faction", "KGG"))
@@ -1394,6 +1394,20 @@ class InventoryApiTest {
                 .body("find { it.id == '" + itemId + "' }.stock.onHand", equalTo(2))
                 .body("find { it.id == '" + itemId + "' }.stock.checkedOut", equalTo(1))
                 .body("find { it.id == '" + itemId + "' }.stock.available", equalTo(2));
+    }
+
+    @Test
+    void generalUseCheckoutNeedsNoEventOrFaction() {
+        String itemId = request().body(Map.of(
+                        "sku", "GENERAL-USE-001", "name", "General use item", "category", "Test",
+                        "amount", 2, "value", 10))
+                .post("/api/items").then().statusCode(200)
+                .extract().path("id");
+
+        request().body(Map.of("itemId", itemId, "transactionType", "checkout", "quantityChanged", 1, "reason", "Workshop"))
+                .post("/api/transactions").then().statusCode(200)
+                .body("eventType", org.hamcrest.Matchers.nullValue())
+                .body("faction", org.hamcrest.Matchers.nullValue());
     }
 
     @Test

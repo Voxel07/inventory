@@ -6,6 +6,7 @@ import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.AssetInstance;
+import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.FactionOrder;
 import org.ash.inventory.model.Item;
@@ -175,6 +176,28 @@ public class ReturnSubmissionService {
     public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status) {
         var actor = actors.current();
         return orm.list(status, actor, canManageReturns(actor));
+    }
+
+    /**
+     * Open damage reports the reviewer must see: those on the returned asset, or for bulk items those
+     * filed by the returning people or against the same order.
+     */
+    public Map<UUID, List<DamageReport>> reportedDamage(List<ReturnSubmission> submissions) {
+        var reports = orm.openDamage(submissions.stream().map(value -> value.item.id).collect(java.util.stream.Collectors.toSet()));
+        var result = new java.util.HashMap<UUID, List<DamageReport>>();
+        for (var value : submissions) {
+            result.put(value.id, reports.stream().filter(report -> concerns(value, report)).toList());
+        }
+        return result;
+    }
+
+    private static boolean concerns(ReturnSubmission value, DamageReport report) {
+        if (!report.item.id.equals(value.item.id)) return false;
+        if (value.assetInstance != null) {
+            return report.assetInstance != null && report.assetInstance.id.equals(value.assetInstance.id);
+        }
+        return report.reporter.id.equals(value.returnedFor.id) || report.reporter.id.equals(value.submittedBy.id)
+                || (value.factionOrder != null && report.factionOrder != null && report.factionOrder.id.equals(value.factionOrder.id));
     }
 
     private ReturnSubmission pendingForDecision(UUID id) {

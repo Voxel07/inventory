@@ -483,17 +483,6 @@ test('QR links resolve exact assets and locations without making a request or ch
   expect(sent).toBe(0);
 });
 
-test('a retired label terminates scanning without falling back to item or order searches', async () => {
-  signIn('A');
-  const paths: string[] = [];
-  fetchRequest = async input => {
-    paths.push(new URL(String(input)).pathname);
-    return Response.json({ error: 'This label has been retired' }, { status: 410 });
-  };
-  await expect(codes.resolveScannedCode('OLD-LABEL')).rejects.toMatchObject({ status: 410 });
-  expect(paths).toEqual(['/api/inventory-codes/resolve/OLD-LABEL']);
-});
-
 test('SKU and order fallback searches are targeted, exact and read-only', async () => {
   signIn('A');
   const calls: URL[] = [];

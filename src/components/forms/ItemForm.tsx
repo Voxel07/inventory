@@ -17,6 +17,7 @@ import {
     FormHelperText,
     MenuItem,
     Switch,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -135,11 +136,17 @@ export function ItemForm({
         };
     }
 
+    /** The return location follows the storage location until it is set to a different place. */
+    function storageLocationChange(prev: ItemFormData, storageLocation: string) {
+        const followsStorage = !prev.returnLocation || prev.returnLocation === prev.storageLocation;
+        return { storageLocation, returnLocation: followsStorage ? storageLocation : prev.returnLocation };
+    }
+
     function handleCreateLocSubmit() {
         if (!newLocData.name.trim()) return;
         createLoc.mutate(newLocData, {
             onSuccess: (newLoc) => {
-                setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), storageLocation: newLoc.id }));
+                setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), ...storageLocationChange(prev, newLoc.id) }));
                 setAddLocationOpen(false);
                 setNewLocData({ name: '', area: '', location: '', position: '', description: '', privateResource: true });
                 showSnackbar(t('Lagerort erfolgreich erstellt', 'Storage location created'), 'success');
@@ -190,6 +197,11 @@ export function ItemForm({
     const isFood = ['food', 'lebensmittel', 'verpflegung'].some((value) => normalizedCategory.includes(value));
     const categorySpecific = isVehicle || isGenerator || isFood;
     const hasAdditionalDetails = Boolean(initialData && (initialData.supplier || initialData.hint || initialData.images?.length));
+    const trackingModes: { value: NonNullable<ItemFormData['trackingMode']>; label: string; help: string }[] = [
+        { value: 'bulk', label: t('Mengenbestand', 'Bulk'), help: t('Nur die Menge zählt, z. B. Kabelbinder oder Zeltheringe. Einheiten sind untereinander austauschbar.', 'Only the quantity counts, e.g. cable ties or tent pegs. Units are interchangeable.') },
+        { value: 'serialized', label: t('Einzelgeräte / Seriennummern', 'Serialized assets'), help: t('Jedes Stück wird einzeln mit Asset-Code, Zustand, Betriebsstunden und Wartung geführt, z. B. Generatoren oder Funkgeräte.', 'Every unit is tracked individually with asset code, condition, operating hours and maintenance, e.g. generators or radios.') },
+        { value: 'lot_tracked', label: t('Chargenbestand', 'Lot tracked'), help: t('Menge je Charge mit Chargennummer und Ablaufdatum, z. B. Lebensmittel oder Erste-Hilfe-Material.', 'Quantity per lot with lot number and expiry date, e.g. food or first-aid supplies.') },
+    ];
 
     return (
         <>
@@ -291,7 +303,9 @@ export function ItemForm({
                             label={t('Bestandsführung', 'Tracking mode')}
                             value={formData.trackingMode ?? 'bulk'}
                             disabled={hasStock}
-                            helperText={hasStock ? t('Nicht änderbar, solange Bestand vorhanden ist.', 'Cannot change while stock exists.') : undefined}
+                            helperText={hasStock
+                                ? t('Nicht änderbar, solange Bestand vorhanden ist.', 'Cannot change while stock exists.')
+                                : trackingModes.find((mode) => mode.value === (formData.trackingMode ?? 'bulk'))?.help}
                             onChange={(event) => {
                                 const trackingMode = event.target.value as ItemFormData['trackingMode'];
                                 setFormData((prev) => ({
@@ -304,9 +318,13 @@ export function ItemForm({
                                 if (trackingMode === 'serialized') setIsBulkPackage(false);
                             }}
                         >
-                            <MenuItem value="bulk">{t('Mengenbestand', 'Bulk')}</MenuItem>
-                            <MenuItem value="serialized">{t('Einzelgeräte / Seriennummern', 'Serialized assets')}</MenuItem>
-                            <MenuItem value="lot_tracked">{t('Chargenbestand', 'Lot tracked')}</MenuItem>
+                            {trackingModes.map((mode) => (
+                                <MenuItem key={mode.value} value={mode.value}>
+                                    <Tooltip title={mode.help} placement="right" arrow enterDelay={300}>
+                                        <Box component="span" sx={{ width: '100%' }}>{mode.label}</Box>
+                                    </Tooltip>
+                                </MenuItem>
+                            ))}
                         </TextField>
                         <TextField
                             select
@@ -326,8 +344,6 @@ export function ItemForm({
                         >
                             <MenuItem value="consumable">{t('Verbrauchsmaterial', 'Consumable')}</MenuItem>
                             <MenuItem value="returnable">{t('Rückgabepflichtig', 'Returnable')}</MenuItem>
-                            <MenuItem value="repairable">{t('Reparierbar', 'Repairable')}</MenuItem>
-                            <MenuItem value="rental">{t('Mietgerät', 'Rental')}</MenuItem>
                         </TextField>
                     </Stack>
                     {formData.trackingMode !== 'serialized' && <Box>
@@ -407,7 +423,7 @@ export function ItemForm({
                             getOptionLabel={(option) => option.name || ''}
                             isOptionEqualToValue={(option, val) => option.id === val.id}
                             value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
-                            onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), storageLocation: newValue ? newValue.id : '' }))}
+                            onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), ...storageLocationChange(prev, newValue?.id ?? '') }))}
                             renderInput={(params) => <TextField {...params} label={t('Lagerort', 'Storage location')} fullWidth />}
                             sx={{ flexGrow: 1, minWidth: 0 }}
                         />

@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.ash.inventory.model.InventoryCode;
 import org.ash.inventory.model.InventoryLot;
 import org.ash.inventory.model.InventoryPosition;
 import org.ash.inventory.model.Warehouse;
@@ -45,35 +44,6 @@ public class StockManagementResource {
     @DELETE @Path("/warehouses/{id}")
     public Response retireWarehouse(@PathParam("id") UUID id) { service.retireWarehouse(id); return Response.noContent().build(); }
 
-    @GET @Path("/inventory-codes")
-    public List<StockDtos.InventoryCodeResponse> codes(@QueryParam("targetId") UUID targetId,
-            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
-        return service.codes(targetId, page, size).stream().map(this::code).toList();
-    }
-
-    @GET @Path("/inventory-codes/resolve/{code:.+}")
-    public StockDtos.CodeResolutionResponse resolveCode(@PathParam("code") String value) {
-        var code = service.resolveCode(value);
-        return new StockDtos.CodeResolutionResponse(code.code, code.targetType.name(), code.targetId, service.codeItem(code) == null ? null : service.codeItem(code).id);
-    }
-
-    @POST @Path("/inventory-codes")
-    public Response createCode(@Valid StockDtos.InventoryCodeInput input) {
-        var value = service.createCode(input);
-        return Response.created(URI.create("/api/inventory-codes/" + value.id)).entity(code(value)).build();
-    }
-
-    @PUT @Path("/inventory-codes/{id}")
-    public StockDtos.InventoryCodeResponse updateCode(@PathParam("id") UUID id, @Valid StockDtos.InventoryCodeInput input) {
-        return code(service.updateCode(id, input));
-    }
-
-    @POST @Path("/inventory-codes/{id}/replace")
-    public StockDtos.InventoryCodeResponse replaceCode(@PathParam("id") UUID id, @Valid StockDtos.InventoryCodeInput input) { return code(service.replaceCode(id, input)); }
-
-    @DELETE @Path("/inventory-codes/{id}")
-    public Response retireCode(@PathParam("id") UUID id) { service.retireCode(id); return Response.noContent().build(); }
-
     @GET @Path("/inventory-lots")
     public List<StockDtos.LotResponse> lots(@QueryParam("itemId") UUID itemId,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
@@ -107,11 +77,6 @@ public class StockManagementResource {
     private StockDtos.WarehouseResponse warehouse(Warehouse value) {
         return new StockDtos.WarehouseResponse(value.id, value.createdAt, value.updatedAt, value.code,
                 value.name, value.description, value.active);
-    }
-
-    private StockDtos.InventoryCodeResponse code(InventoryCode value) {
-        return new StockDtos.InventoryCodeResponse(value.id, value.code, value.targetType.name(), value.targetId,
-                value.primaryCode, value.active, value.retiredAt);
     }
 
     private StockDtos.LotResponse lot(InventoryLot value) {

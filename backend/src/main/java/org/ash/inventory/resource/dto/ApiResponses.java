@@ -179,7 +179,20 @@ public final class ApiResponses {
             String acknowledgedById,
             String acknowledgedByName,
             Instant acknowledgedAt,
-            String acknowledgementNotes
+            String acknowledgementNotes,
+            List<ReturnDamageResponse> reportedDamage
+    ) {}
+
+    /** An open damage report the warehouse should see before returning the item to stock. */
+    public record ReturnDamageResponse(
+            UUID id,
+            String assetCode,
+            int quantity,
+            String severity,
+            String status,
+            String description,
+            String reportedByName,
+            Instant reportedAt
     ) {}
 
     public record AssemblyResponse(

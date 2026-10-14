@@ -7,7 +7,7 @@ export type ApiChangeDetail = {
 type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated' | 'order.changed'
   | 'general_order.changed' | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'
-  | 'inventory_code.changed' | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
+  | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
   | 'vendor_document.attached' | 'loan.changed' | 'planning.overridden' | 'report.rebuilt' | 'reminder.changed'
   | 'access.changed' | 'notification.read' | 'user.changed' | 'location.keeper_assigned' | 'member_request.changed' | 'outbox.changed' | 'event_logistics.changed' | 'unknown';
 type LocalWriteChange = ApiChangeDetail & { source: 'local'; type: LocalChangeType };
@@ -33,7 +33,6 @@ export function localWriteChange(path: string): LocalWriteChange {
     case 'transfers': return change('transfer.changed');
     case 'inventory-counts': return change('count.changed');
     case 'inventory-lots': return change('inventory_lot.changed');
-    case 'inventory-codes': return change('inventory_code.changed');
     case 'warehouses': return change('warehouse.changed');
     case 'vendors': return change('vendor.changed');
     case 'purchase-orders': return change('purchase_order.changed');
@@ -99,7 +98,6 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('vendor.')) return new Set([...purchasing, 'operations:vendors', 'operations:repair-vendors', 'operations:repairs']);
   if (type.startsWith('purchase_order.')) return new Set([...purchasing, 'items']);
   if (type.startsWith('goods_receipt.')) return new Set([...stock, ...purchasing]);
-  if (type.startsWith('inventory_code.')) return new Set(['operations:codes']);
   if (type.startsWith('warehouse.')) return new Set(['storageLocations', 'items', 'assemblies', 'member-storage', 'member-assignments', 'reports', 'operations:warehouses', 'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets']);
   if (type === 'location.keeper_assigned') return new Set(['storageLocations', 'member-assignments', 'member-storage', 'action-inbox']);
   if (type.startsWith('outbox.')) return new Set(['operations:outbox', 'operations:dead-letters']);

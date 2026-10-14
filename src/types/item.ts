@@ -79,7 +79,7 @@ export interface Item {
   hint?: string;
   isConsumable?: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
-  inventoryRole?: 'consumable' | 'returnable' | 'repairable' | 'rental';
+  inventoryRole?: 'consumable' | 'returnable';
   containerSize?: number;
   containerCount?: number;
   containersOpened?: number;
@@ -122,7 +122,7 @@ export interface ItemFormData {
   hint?: string;
   isConsumable?: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
-  inventoryRole?: 'consumable' | 'returnable' | 'repairable' | 'rental';
+  inventoryRole?: 'consumable' | 'returnable';
   imageFiles?: File[];
   imageReplacements?: Record<string, File>;
   removeImages?: string[];

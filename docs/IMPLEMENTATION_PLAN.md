@@ -91,7 +91,7 @@ PLAN-05..09 replace working libraries without direct user value; schedule them o
 | ID | Priority / status | Gap | Notes |
 |---|---|---|---|
 | OPS-01 | P1 · Deferred | No checked-in backup job or restore script; WAL archiving, dumps and media sync are documented proposals | Backup container (pg_dump + bucket sync to the storage box) and a scripted restore drill; evidence goes to ACC-04 |
-| OBS-01 | P2 · Deferred | No alerts for outbox dead letters, sync conflicts, replication lag or retained WAL | OpenObserve alerts once metrics are exported ([Observability](TECHNICAL_REQUIREMENTS.md#7-observability)) |
+| OBS-01 | P2 · Partial | Application traces/logs/metrics implemented; external alerts and infrastructure signals pending | [Signals and alert conditions](OPENOBSERVE_SIGNALS.md); replication lag/WAL require infrastructure collection |
 
 ## 5. Delivery sequence
 

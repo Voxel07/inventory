@@ -1,5 +1,7 @@
 package org.ash.inventory.resource;
 
+import io.opentelemetry.api.common.Attributes;
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -20,6 +22,7 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 @Path("/api/media")
 public class MediaResource {
     @jakarta.inject.Inject org.ash.inventory.service.InventoryMediaService permissions;
+    @jakarta.inject.Inject InventoryTelemetry telemetry;
     private final MediaService media;
     private final ActorService actors;
     private final long maxUploadBytes;
@@ -36,24 +39,31 @@ public class MediaResource {
     @Produces(MediaType.APPLICATION_JSON)
     @jakarta.transaction.Transactional
     public ApiResponses.MediaResponse upload(@RestForm("file") FileUpload upload) {
-        actors.current();
-        if (upload == null) throw ApiException.badRequest("A file is required");
-        if (upload.size() > maxUploadBytes) throw new ApiException(413, "The file is too large");
-        String contentType = MediaTypes.sniff(upload.uploadedFile());
-        if (contentType == null) throw new ApiException(415, "Only WebP, PNG and JPEG images and PDF documents can be uploaded");
-        permissions.requireUploadQuota();
-        var stored = media.store(MediaTypes.fileName(upload.fileName(), contentType), contentType, upload.uploadedFile());
-        permissions.register(stored.key());
-        return new ApiResponses.MediaResponse(stored.key(), stored.url());
+        return telemetry.call("media", "upload", "api", () -> {
+            actors.current();
+            if (upload == null) throw ApiException.badRequest("A file is required");
+            if (upload.size() > maxUploadBytes) throw new ApiException(413, "The file is too large");
+            String contentType = MediaTypes.sniff(upload.uploadedFile());
+            if (contentType == null) throw new ApiException(415, "Only WebP, PNG and JPEG images and PDF documents can be uploaded");
+            permissions.requireUploadQuota();
+            var stored = media.store(MediaTypes.fileName(upload.fileName(), contentType), contentType, upload.uploadedFile());
+            permissions.register(stored.key());
+            return new ApiResponses.MediaResponse(stored.key(), stored.url());
+        });
     }
 
     @GET @Path("/{key:.+}")
     public Response get(@PathParam("key") String key) {
         permissions.requireRead(key);
         var content = media.read(key);
+        var context = io.opentelemetry.context.Context.current();
         StreamingOutput output = target -> {
-            try (var source = content.stream()) {
-                source.transferTo(target);
+            try (var scope = context.makeCurrent(); var activity = telemetry.start("media", "download", "api");
+                    var source = content.stream()) {
+                try {
+                    long bytes = source.transferTo(target);
+                    telemetry.measure("inventory.media.download.size", bytes, "By", Attributes.empty());
+                } catch (java.io.IOException exception) { activity.failure(exception); throw exception; }
             }
         };
         // Only allowlisted images render inline; anything else is a download.

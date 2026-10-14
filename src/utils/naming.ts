@@ -36,7 +36,7 @@ const GROUP_VALUES: Record<NamingGroup, readonly string[]> = {
     'reservation_released', 'transfer_out', 'transfer_in', 'staged', 'damaged', 'missing',
   ],
   action: ['checkout', 'checkin', 'scanAgain', 'reset'],
-  reason: ['project', 'maintenance', 'testing', 'returnAfterUse', 'restock', 'correction', 'other'],
+  reason: ['eventUse', 'project', 'maintenance', 'testing', 'returnAfterUse', 'restock', 'correction', 'other'],
   value: [],
 };
 

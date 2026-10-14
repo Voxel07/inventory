@@ -130,6 +130,7 @@ export default {
       reset: 'Zurücksetzen',
     },
     reason: {
+      eventUse: 'Eventnutzung',
       project: 'Projektnutzung',
       maintenance: 'Wartung',
       testing: 'Testen',
@@ -240,7 +241,6 @@ export default {
       lot_tracked: 'Chargenverfolgt',
       consumable: 'Verbrauchsmaterial',
       returnable: 'Rückgabepflichtig',
-      repairable: 'Reparierbar',
       rental: 'Miete',
       borrow: 'Leihe',
       invoice: 'Rechnung',

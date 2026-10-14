@@ -135,18 +135,24 @@ nginx generates CSP connect origins from configured API/OIDC URLs and enables sa
 
 ## 7. Observability
 
-The API can export OpenTelemetry **traces** to [OpenObserve](https://openobserve.ai/). Export is off by default (`OTEL_SDK_DISABLED=true`).
+The API exports OpenTelemetry **traces, metrics and correlated application logs** to [OpenObserve](https://openobserve.ai/) when `OTEL_SDK_DISABLED=false`. All three signals and JDBC instrumentation are built into the image; the SDK remains disabled by default until ingestion credentials and a reachable endpoint are configured. Application logs default to DEBUG even when export is off.
 
 ### What is exported
 
 | Signal | Status | Notes |
 |---|---|---|
-| Traces | Exported when enabled | HTTP server spans and instrumented outgoing calls; `service.name=ash-inventory-api`. JDBC spans would need `quarkus.datasource.jdbc.telemetry=true` (build time, not set) |
-| Metrics | Not exported | `quarkus.otel.metrics.enabled` is a build-time property and is not set; the metrics exporter protocol in `application.properties` is prepared but inactive |
-| Logs | Not exported | Container stdout only (`docker compose logs inventory-api`) |
-| Browser RUM | Not used | The PWA does not ship the OpenObserve RUM SDK, and its CSP `connect-src` only allows the API and OIDC origins |
+| Traces | Exported when enabled | Full parent-aware sampling; HTTP, Redis, JDBC/connection acquisition, sync commands, MCP tools, media and outbox dispatch/delivery spans |
+| Metrics | Exported when enabled | Native HTTP/JVM metrics plus application operations, DB pool, sync, outbox, Redis/rate limits, media and SSE; default export every 15 seconds |
+| Logs | Exported when enabled | Application DEBUG logs and stack traces with trace/span correlation; log stream `inventory_backend` |
+| Browser RUM | Not used | The PWA does not ship the OpenObserve RUM SDK; browser traces can send `traceparent`/`tracestate` to the API |
 
-Both API nodes in the cluster template use the same `service.name`; distinguish them by host attributes in OpenObserve.
+Both API nodes retain `service.name=ash-inventory-api`. Resources also include `service.namespace=ash`, `service.version` from `APP_VERSION`, `deployment.environment.name`, and a process UUID for `service.instance.id`. Optional explicit instance IDs must differ between replicas. REST responses expose `X-Trace-Id` while tracing is active.
+
+Successful operations produce debug summaries with operation, outcome, backend and duration. REST summaries use route templates and report time to response headers; native HTTP duration measures request completion. SSE connections can last an hour and should be excluded from ordinary request latency panels. Request bodies, query strings, tokens, tool arguments and media filenames are not explicitly logged. Review exception messages and JDBC statements before granting broad telemetry access.
+
+Outbox rows retain producer trace context in `trace_context`; delivery restores it on every attempt, including after process restart or delivery on another node. Committed business-event counters run after transaction commit. Sync metrics distinguish new commands from idempotent replays, and unexpected sync exceptions receive ERROR logs/spans even if the batch HTTP response succeeds.
+
+[OpenObserve signals and alert setup](OPENOBSERVE_SIGNALS.md) lists metric names, dimensions, suggested panels and alert conditions. [Review and implementation progress](OPENOBSERVE_REVIEW.md) records verification and remaining infrastructure work.
 
 ### OpenObserve container
 
@@ -199,13 +205,13 @@ No port is published; the UI and ingestion API (port 5080) are reached through t
    OTEL_EXPORTER_OTLP_TOKEN=<base64 email:password>
    ```
 
-4. Restart the API. Traces appear under **Traces** with service `ash-inventory-api`.
+4. Deploy the updated backend image. Traces appear under **Traces** with service `ash-inventory-api`, application logs under **Logs → inventory_backend**, and measurements under **Metrics**. Metrics/logs/JDBC enablement is fixed into the image at build time. The directly edited SQL baseline includes the outbox trace-context column; use a freshly recreated disposable database for this baseline.
 
-The exporter uses OTLP over HTTP/protobuf (`/v1/traces` is appended to the endpoint); OpenObserve's gRPC port is not used. If nothing arrives, set `OTEL_LOG_LEVEL=DEBUG` and check the API log for exporter `401` (wrong token) or `404` (wrong organization path).
+The exporter uses OTLP over HTTP/protobuf (`/v1/traces`, `/v1/metrics` or `/v1/logs` is appended to the organization base endpoint); OpenObserve's gRPC port is not used. Export-enabled startup rejects a missing/malformed ingestion token or an invalid organization endpoint without echoing credentials. Set `INVENTORY_LOG_LEVEL` and `OTEL_LOGS_LEVEL` to adjust application and export verbosity; `OTEL_LOG_STREAM`, `OTEL_METRIC_EXPORT_INTERVAL` and `OTEL_OUTBOX_SNAPSHOT_EVERY` control routing and intervals. If nothing arrives, set `OTEL_LOG_LEVEL=DEBUG` and check the API log for exporter `401` (wrong token) or `404` (wrong organization path).
 
 ### Not yet covered
 
-No alerts are configured for outbox dead letters, sync conflicts, replication lag or retained WAL on the logical replication slot. These are visible only in the app's System tab and with the SQL queries in [PostgreSQL logical replication](postgres-logical-replication.md). Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+Outbox dead-letter/backlog and sync outcome signals are implemented. Alert rules and notification destinations still need provisioning in the external OpenObserve instance; suggested conditions are documented in [OpenObserve signals](OPENOBSERVE_SIGNALS.md). PostgreSQL replication lag, retained WAL and host/disk metrics need an infrastructure collector/exporter; see [PostgreSQL logical replication](postgres-logical-replication.md). Telemetry absence must be monitored outside the API process. Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
 
 ## 8. Engineering acceptance
 

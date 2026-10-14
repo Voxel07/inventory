@@ -8,6 +8,9 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.validation.Valid;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.helper.security.ActorService;
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
+import io.opentelemetry.api.common.Attributes;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.ash.inventory.resource.dto.ApiResponses;
 
 import java.util.ArrayList;
@@ -19,6 +22,7 @@ public class SyncService {
     @jakarta.inject.Inject org.ash.inventory.orm.SyncAuditOrm orm;
     @jakarta.inject.Inject org.ash.inventory.service.ApiQueryService queries;
     @jakarta.inject.Inject jakarta.validation.Validator validator;
+    @jakarta.inject.Inject InventoryTelemetry telemetry;
     private final ObjectMapper objectMapper;
     private final OrderService orders;
     private final InventoryOperationsService inventory;
@@ -39,64 +43,94 @@ public class SyncService {
 
     public ApiResponses.SyncBatchResponse sync(@Valid ApiModels.SyncBatch batch) {
         var actor = actors.current();
-        var results = new ArrayList<ApiResponses.SyncActionResponse>();
-        for (var action : batch.actions()) {
-            var previous = audits.existing(action.idempotencyKey());
-            if (previous != null && (!previous.user.id.equals(actor.id)
-                    || !previous.operationType.equals(action.type()) || !objectMapper.valueToTree(previous.payload).equals(objectMapper.valueToTree(action.payload())))) {
-                results.add(new ApiResponses.SyncActionResponse(action.idempotencyKey(), "rejected", null, "Command ID belongs to a different actor or payload; create a correction with a new ID"));
-                continue;
+        return telemetry.call("sync", "batch", "database", () -> {
+            telemetry.measure("inventory.sync.batch.size", batch.actions().size(), "{command}", Attributes.empty());
+            var results = new ArrayList<ApiResponses.SyncActionResponse>();
+            for (var action : batch.actions()) {
+                results.add(syncCommand(action, actor.id));
             }
-            if (action.supersedes() != null) {
-                var original = audits.existing(action.supersedes());
-                if (original == null || !original.user.id.equals(actor.id) || "applied".equals(original.syncStatus)
-                        || !original.operationType.equals(action.type()) || action.resolutionNote() == null || action.resolutionNote().isBlank()
-                        || action.resolutionNote().length() > 2000 || action.supersedes().equals(action.idempotencyKey())) {
-                    results.add(new ApiResponses.SyncActionResponse(action.idempotencyKey(), "rejected", null, "Correction requires your failed command and a resolution note"));
-                    continue;
-                }
-            }
-            if (previous != null) {
-                results.add(new ApiResponses.SyncActionResponse(action.idempotencyKey(), previous.syncStatus,
-                        previous.serverResult, previous.conflictMessage));
-                continue;
-            }
+            return new ApiResponses.SyncBatchResponse(results);
+        });
+    }
+
+    private ApiResponses.SyncActionResponse syncCommand(ApiModels.SyncAction action, UUID actorId) {
+        String operation = InventoryTelemetry.syncOperation(action.type());
+        try (var activity = telemetry.start("sync", operation, "database")) {
+            activity.attribute("inventory.command.id", action.idempotencyKey().toString())
+                    .attribute("inventory.command.retry", action.retryCount() == null ? 0 : Math.max(0, action.retryCount()));
+            if (action.localTimestamp() != null) telemetry.measure("inventory.sync.queue.age",
+                    InventoryTelemetry.ageSeconds(action.localTimestamp()), "s",
+                    Attributes.builder().put("operation", operation).build());
+            var replayed = new AtomicBoolean();
             try {
-                Object entity = QuarkusTransaction.requiringNew().call(() -> {
-                    orm.lockActor(actor.id);
-                    var repeated = orm.find(action.idempotencyKey());
-                    if (repeated != null) {
-                        if (!repeated.user.id.equals(actor.id) || !repeated.operationType.equals(action.type())
-                                || !objectMapper.valueToTree(repeated.payload).equals(objectMapper.valueToTree(action.payload()))) throw ApiException.conflict("Command ID already belongs to another payload");
-                        if ("applied".equals(repeated.syncStatus)) return repeated.serverResult;
-                        throw new ApiException("conflict".equals(repeated.syncStatus) ? 409 : 400, repeated.conflictMessage);
+                var previous = audits.existing(action.idempotencyKey());
+                if (previous != null && (!previous.user.id.equals(actorId)
+                        || !previous.operationType.equals(action.type()) || !objectMapper.valueToTree(previous.payload).equals(objectMapper.valueToTree(action.payload())))) {
+                    activity.outcome("rejected");
+                    return new ApiResponses.SyncActionResponse(action.idempotencyKey(), "rejected", null, "Command ID belongs to a different actor or payload; create a correction with a new ID");
+                }
+                if (action.supersedes() != null) {
+                    var original = audits.existing(action.supersedes());
+                    if (original == null || !original.user.id.equals(actorId) || "applied".equals(original.syncStatus)
+                            || !original.operationType.equals(action.type()) || action.resolutionNote() == null || action.resolutionNote().isBlank()
+                            || action.resolutionNote().length() > 2000 || action.supersedes().equals(action.idempotencyKey())) {
+                        activity.outcome("rejected");
+                        return new ApiResponses.SyncActionResponse(action.idempotencyKey(), "rejected", null, "Correction requires your failed command and a resolution note");
                     }
-                    if (action.supersedes() != null) {
-                        var original = orm.requiredLocked(action.supersedes());
-                        UUID root = original.resolutionRoot == null ? original.commandId : original.resolutionRoot;
-                        if (orm.hasAppliedCorrection(root)) throw ApiException.conflict("This command already has an applied correction");
-                    }
-                    Object value = execute(action);
-                    audits.record(action, actor.id, "applied", value, null);
-                    return value;
-                });
-                results.add(new ApiResponses.SyncActionResponse(
-                        action.idempotencyKey(), "applied", entity, null));
-            } catch (ApiException exception) {
-                String status = exception.status == 409 ? "conflict" : "rejected";
-                audits.record(action, actor.id, status, null, exception.getMessage());
-                results.add(new ApiResponses.SyncActionResponse(
-                        action.idempotencyKey(), status, null,
-                        exception.getMessage()));
-            } catch (RuntimeException exception) {
-                String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
-                audits.record(action, actor.id, "rejected", null, message);
-                results.add(new ApiResponses.SyncActionResponse(
-                        action.idempotencyKey(), "rejected", null,
-                        message));
+                }
+                if (previous != null) {
+                    replayed.set(true);
+                    activity.outcome(previous.syncStatus);
+                    return new ApiResponses.SyncActionResponse(action.idempotencyKey(), previous.syncStatus,
+                            previous.serverResult, previous.conflictMessage);
+                }
+                try {
+                    Object entity = QuarkusTransaction.requiringNew().call(() -> {
+                        orm.lockActor(actorId);
+                        var repeated = orm.find(action.idempotencyKey());
+                        if (repeated != null) {
+                            if (!repeated.user.id.equals(actorId) || !repeated.operationType.equals(action.type())
+                                    || !objectMapper.valueToTree(repeated.payload).equals(objectMapper.valueToTree(action.payload()))) throw ApiException.conflict("Command ID already belongs to another payload");
+                            replayed.set(true);
+                            if ("applied".equals(repeated.syncStatus)) return repeated.serverResult;
+                            throw new ApiException("conflict".equals(repeated.syncStatus) ? 409 : 400, repeated.conflictMessage);
+                        }
+                        if (action.supersedes() != null) {
+                            var original = orm.requiredLocked(action.supersedes());
+                            UUID root = original.resolutionRoot == null ? original.commandId : original.resolutionRoot;
+                            if (orm.hasAppliedCorrection(root)) throw ApiException.conflict("This command already has an applied correction");
+                        }
+                        Object value = execute(action);
+                        audits.record(action, actorId, "applied", value, null);
+                        return value;
+                    });
+                    activity.outcome("applied");
+                    return new ApiResponses.SyncActionResponse(action.idempotencyKey(), "applied", entity, null);
+                } catch (ApiException exception) {
+                    String status = exception.status == 409 ? "conflict" : "rejected";
+                    activity.failure(exception);
+                    if (exception.status < 500) activity.outcome(status);
+                    audits.record(action, actorId, status, null, exception.getMessage());
+                    return new ApiResponses.SyncActionResponse(
+                            action.idempotencyKey(), status, null,
+                            exception.getMessage());
+                } catch (RuntimeException exception) {
+                    activity.failure(exception);
+                    // Details belong in the correlated exception log, not the public batch response/audit payload.
+                    String message = "Unexpected sync command failure";
+                    audits.record(action, actorId, "rejected", null, message);
+                    return new ApiResponses.SyncActionResponse(
+                            action.idempotencyKey(), "rejected", null,
+                            message);
+                }
+            } catch (RuntimeException exception) { activity.failure(exception); throw exception; }
+            finally {
+                activity.attribute("inventory.command.delivery", replayed.get() ? "replay" : "new");
+                telemetry.count("inventory.sync.commands", 1, Attributes.builder()
+                        .put("operation", operation).put("outcome", activity.outcome())
+                        .put("delivery", replayed.get() ? "replay" : "new").build());
             }
         }
-        return new ApiResponses.SyncBatchResponse(results);
     }
 
 

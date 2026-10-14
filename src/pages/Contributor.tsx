@@ -1,7 +1,7 @@
 import { formatDateTime } from '../utils/dateFormat';
 import { Button, IconButton, Tab } from '../components/shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, Stack, Tabs, Tooltip, Typography, useMediaQuery } from '@mui/material';
+import { Alert, Box, Stack, Tabs, TextField, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
@@ -50,7 +50,9 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     { key: 'requests', label: t('Meldungen & Absprachen', 'Reports & coordination'), count: requests.data?.length, loading: requests.isLoading },
     { key: 'returns', label: t('Rückgabestatus', 'Return status'), count: myReturns.length, loading: returns.isLoading },
   ];
-  const rows: EquipmentRow[] = section === 'custody' ? (custody.data ?? []).map(row => ({
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLocaleLowerCase();
+  const sectionRows: EquipmentRow[] = section === 'custody' ? (custody.data ?? []).map(row => ({
     id: row.key, name: row.name, quantity: row.checkedOut, event: row.event, location: row.storageLocation,
     pending: row.pendingQuantity ?? 0, source: { kind: 'custody', data: row },
   })) : section === 'stored' ? (stored.data ?? []).map((row, index) => ({
@@ -65,6 +67,8 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     id: row.id, name: row.itemName, quantity: row.quantity, status: row.status, notes: row.acknowledgementNotes,
     source: { kind: 'returns', data: row },
   }));
+  const rows = query ? sectionRows.filter(row => [row.name, row.event, row.location, row.requester, row.notes]
+    .some(value => value?.toLocaleLowerCase().includes(query))) : sectionRows;
   const columns: GridColDef<EquipmentRow>[] = [
     { field: 'name', headerName: t('Artikel', 'Item'), flex: 1.3, minWidth: 180,
       renderCell: ({ value }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{value}</Typography> },
@@ -123,6 +127,8 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
       </Tabs>
       <Button size="small" sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, flexShrink: 0 }} aria-haspopup="dialog" onClick={openActionInbox}>{t('Posteingang', 'Inbox')}</Button>
     </Stack>
+    <TextField type="search" label={t('Ausrüstung durchsuchen', 'Search equipment')} value={search}
+      onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
     {section === 'requests' && <Alert severity="info" sx={{ py: 0 }}>
       {t('Schadensmeldungen sperren den Artikel bis zur Klärung. Das Lager prüft den Schaden und dokumentiert die Bestandsaktion vor dem Abschluss. Abholanfragen bewegen keinen Bestand.', 'Damage reports block the item until reviewed. Warehouse staff inspect the damage and document the stock action before closing the report. Pickup requests do not move stock.')}
     </Alert>}

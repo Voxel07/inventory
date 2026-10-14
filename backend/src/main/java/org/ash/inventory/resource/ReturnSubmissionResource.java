@@ -33,26 +33,32 @@ public class ReturnSubmissionResource {
     @Transactional
     public List<ApiResponses.ReturnSubmissionResponse> list(
             @QueryParam("status") DomainEnums.ReturnSubmissionStatus status) {
-        return service.list(status).stream().map(mapper::returnSubmission).toList();
+        var submissions = service.list(status);
+        var damage = service.reportedDamage(submissions);
+        return submissions.stream().map(value -> mapper.returnSubmission(value, damage.get(value.id))).toList();
+    }
+
+    private ApiResponses.ReturnSubmissionResponse response(org.ash.inventory.model.ReturnSubmission value) {
+        return mapper.returnSubmission(value, service.reportedDamage(List.of(value)).get(value.id));
     }
 
     @POST
     @Transactional
     public ApiResponses.ReturnSubmissionResponse create(@Valid ApiModels.ReturnSubmissionInput input) {
-        return mapper.returnSubmission(service.create(input));
+        return response(service.create(input));
     }
 
     @POST @Path("/{id}/acknowledge")
     @Transactional
     public ApiResponses.ReturnSubmissionResponse acknowledge(@PathParam("id") UUID id,
             ApiModels.ReturnDecisionInput input) {
-        return mapper.returnSubmission(service.acknowledge(id, input));
+        return response(service.acknowledge(id, input));
     }
 
     @POST @Path("/{id}/reject")
     @Transactional
     public ApiResponses.ReturnSubmissionResponse reject(@PathParam("id") UUID id,
             ApiModels.ReturnDecisionInput input) {
-        return mapper.returnSubmission(service.reject(id, input));
+        return response(service.reject(id, input));
     }
 }

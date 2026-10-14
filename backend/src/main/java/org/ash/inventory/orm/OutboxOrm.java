@@ -59,6 +59,16 @@ public class OutboxOrm {
         return result;
     }
 
+    public record TelemetryRow(DomainEnums.OutboxStatus status, long count, Instant oldest) {}
+
+    /** One bounded aggregate query; exporter callbacks only read the resulting in-memory snapshot. */
+    public List<TelemetryRow> telemetrySnapshot() {
+        return entityManager.createQuery(
+                "select event.status, count(event), min(event.occurredAt) from DomainEvent event group by event.status", Object[].class)
+                .getResultList().stream().map(row -> new TelemetryRow((DomainEnums.OutboxStatus) row[0],
+                        ((Number) row[1]).longValue(), (Instant) row[2])).toList();
+    }
+
     /** Delivered events are only needed for at-least-once dispatch; drop them after retention. */
     public int deletePublishedBefore(Instant cutoff) {
         return entityManager.createQuery("""

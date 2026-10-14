@@ -81,7 +81,7 @@ Roles are enforced by the backend services (shared by REST, MCP and offline repl
 
 The backend exposes explicit workflow APIs rather than generic entity CRUD:
 
-- stock master data: `/api/warehouses`, `/api/storage-locations`, `/api/inventory-codes`, `/api/inventory-lots`, and `/api/inventory-positions`
+- stock master data: `/api/warehouses`, `/api/storage-locations`, `/api/inventory-lots`, and `/api/inventory-positions`
 - purchasing: `/api/vendors`, `/api/purchase-orders`, `/api/goods-receipts`, and `/api/vendor-documents`
 - controlled movements: `/api/transfers` and `/api/inventory-counts`
 - lifecycle and custody: `/api/maintenance-schedules`, `/api/repairs`, and the nested order handover/reconciliation resources

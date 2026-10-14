@@ -1,5 +1,7 @@
 package org.ash.inventory.helper.ratelimit;
 
+import io.opentelemetry.api.common.Attributes;
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
 import io.quarkus.redis.datasource.RedisDataSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -36,6 +38,8 @@ public class DistributedRateLimiterService implements RateLimiter {
     private final InMemoryRateLimiter inMemory;
     private final Instance<RedisDataSource> redisDataSource;
     private final String backend;
+    @jakarta.inject.Inject InventoryTelemetry telemetry;
+    private final java.util.concurrent.atomic.AtomicBoolean redisUnavailable = new java.util.concurrent.atomic.AtomicBoolean();
 
     public DistributedRateLimiterService(InMemoryRateLimiter inMemory, Instance<RedisDataSource> redisDataSource,
             @ConfigProperty(name = "inventory.api.rate-limit.backend", defaultValue = "memory") String backend) {
@@ -48,13 +52,26 @@ public class DistributedRateLimiterService implements RateLimiter {
     public Result tryAcquire(String key, int limit, long windowSeconds) {
         if ("redis".equalsIgnoreCase(backend) && redisDataSource.isResolvable()) {
             try {
-                return tryAcquireRedis(key, limit, windowSeconds);
+                Result result = tryAcquireRedis(key, limit, windowSeconds);
+                if (redisUnavailable.getAndSet(false)) LOG.info("Redis rate limiter recovered");
+                return observed(result, "redis");
             } catch (Exception e) {
-                LOG.warnv("Redis rate limiter failed, falling back to in-memory limiter: {0}", e.getMessage());
-                return inMemory.tryAcquire(key, limit, windowSeconds);
+                telemetry.count("inventory.ratelimit.fallbacks", 1, Attributes.empty());
+                if (!redisUnavailable.getAndSet(true)) LOG.warn("Redis rate limiter failed, using in-memory limiter", e);
+                return observed(inMemory.tryAcquire(key, limit, windowSeconds), "memory_fallback");
             }
         }
-        return inMemory.tryAcquire(key, limit, windowSeconds);
+        if ("redis".equalsIgnoreCase(backend)) {
+            telemetry.count("inventory.ratelimit.fallbacks", 1, Attributes.empty());
+            if (!redisUnavailable.getAndSet(true)) LOG.warn("Redis rate limiter unavailable, using in-memory limiter");
+        }
+        return observed(inMemory.tryAcquire(key, limit, windowSeconds), "redis".equalsIgnoreCase(backend) ? "memory_fallback" : "memory");
+    }
+
+    private Result observed(Result result, String selectedBackend) {
+        telemetry.count("inventory.ratelimit.requests", 1, Attributes.builder()
+                .put("backend", selectedBackend).put("outcome", result.allowed() ? "allowed" : "denied").build());
+        return result;
     }
 
     private Result tryAcquireRedis(String key, int limit, long windowSeconds) {

@@ -7,7 +7,6 @@ import { FormDialog } from '../components/shared/FormDialog';
 import { DetailPanel, Field, FieldGrid, Metric, MetricList } from '../components/items/CompactDetail';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { InventorySharing } from '../components/items/InventorySharing';
-import { CodeManagement } from '../components/qr/CodeManagement';
 import { Button, IconButton } from '../components/shared/ActionButtons';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
@@ -236,7 +235,6 @@ export function ItemDetail() {
     const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 5) ? 'low' : 'ok';
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' }[availability];
     const location = item.expand?.storageLocation;
-    const locationText = location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : '';
     const exactLocation = [location?.location, location?.position].filter(Boolean).join(' / ');
     const profile = equipment.data;
     const sortedTransactions = [...itemTransactions].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -341,12 +339,6 @@ export function ItemDetail() {
                             <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
                             {profile && <Chip size="small" variant="outlined" sx={tinyChip} color={profile.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
                         </Stack>
-                        <Typography sx={{ fontSize: '0.8125rem', mt: 0.25 }}>
-                            <Box component="span" sx={{ color: 'text.secondary' }}>{t('Lagerort', 'Location')}: </Box>
-                            {item.storageLocation
-                                ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`}>{locationText || item.storageLocation}</Link>
-                                : t('Nicht zugewiesen', 'Not assigned')}
-                        </Typography>
                     </Box>
                     <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
                         {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</Button>}
@@ -437,7 +429,6 @@ export function ItemDetail() {
                         <EquipmentOwnership item={item} canEdit={canEdit} embedded showSummary={false} />
                     </DetailPanel>
                     <InventorySharing kind="items" id={item.id} access={item.access} />
-                    {canEdit && <CodeManagement targetId={item.id} targetType="product" embedded />}
                 </Stack>
             </Box>
 

@@ -217,7 +217,6 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select location_id as source, id as target from custody_handovers where location_id is not null
                 union all select receiving_location_id as source, id as target from goods_receipts where receiving_location_id is not null
                 union all select pickup_location_id as source, id as target from faction_orders where pickup_location_id is not null
-                union all select target_id as source, id as target from inventory_codes where target_id is not null
                 union all select damage_report_id as source, id as target from repair_cases where damage_report_id is not null
                 union all select commitment_id as source, id as target from loan_arrangements where commitment_id is not null
                 union all select item_id as source, assembly_id as target from assembly_items where item_id is not null

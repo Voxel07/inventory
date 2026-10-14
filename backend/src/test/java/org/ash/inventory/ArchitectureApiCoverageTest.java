@@ -109,23 +109,6 @@ class ArchitectureApiCoverageTest {
                 .body("findAll { it.transactionType == 'written_off' }.size()", equalTo(1));
     }
 
-    @Test void labelsRemainUniqueAndRetiredAliasesReturnGone() {
-        String id = item(location(), 1, "bulk"), value = "ARC-LABEL-" + UUID.randomUUID();
-        var input = new HashMap<String, Object>(Map.of("code", value, "targetType", "product", "targetId", id, "primaryCode", true));
-        String label = admin().body(input).post("/api/inventory-codes").then().statusCode(201).extract().path("id");
-        admin().body(input).put("/api/inventory-codes/" + label).then().statusCode(200).body("primaryCode", equalTo(true));
-        admin().queryParam("targetId", id).get("/api/inventory-codes").then().statusCode(200).body("id", hasItem(label));
-        input.put("code", value + "-NEW");
-        admin().body(input).put("/api/inventory-codes/" + label).then().statusCode(409);
-        String replacement = admin().body(input).post("/api/inventory-codes/" + label + "/replace")
-                .then().statusCode(200).extract().path("id");
-        reader().get("/api/inventory-codes/resolve/" + value).then().statusCode(410);
-        reader().get("/api/inventory-codes/resolve/" + input.get("code")).then().statusCode(200).body("targetId", equalTo(id));
-        admin().body(Map.of("code", value, "targetType", "product", "targetId", id)).post("/api/inventory-codes").then().statusCode(409);
-        admin().delete("/api/inventory-codes/" + replacement).then().statusCode(204);
-        reader().get("/api/inventory-codes/resolve/" + input.get("code")).then().statusCode(410);
-    }
-
     @Test void lotAndScheduleListsRetainTheirStateAndPolicy() {
         String id = item(location(), 0, "lot_tracked");
         String lot = admin().body(Map.of("itemId", id, "lotNumber", "ARC-LOT", "status", "hold"))

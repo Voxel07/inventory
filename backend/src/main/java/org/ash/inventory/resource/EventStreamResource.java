@@ -1,5 +1,6 @@
 package org.ash.inventory.resource;
 
+import org.ash.inventory.helper.telemetry.InventoryTelemetry;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
@@ -35,6 +36,7 @@ public class EventStreamResource {
     private final EventBroadcaster broadcaster;
     private final ActorService actors;
     private final SecurityIdentity identity;
+    @jakarta.inject.Inject InventoryTelemetry telemetry;
 
     public EventStreamResource(EventBroadcaster broadcaster, ActorService actors, SecurityIdentity identity) {
         this.broadcaster = broadcaster;
@@ -50,7 +52,13 @@ public class EventStreamResource {
         actors.current();
         Duration lifetime = lifetime(identity.isAnonymous() ? null : identity.getPrincipal(), Instant.now());
         if (lifetime.isZero()) throw new ApiException(401, "Token expired");
-        return broadcaster.stream().map(EventStreamResource::publicEvent).select().first(lifetime);
+        return Multi.createFrom().deferred(() -> {
+            long started = System.nanoTime();
+            telemetry.streamOpened();
+            return broadcaster.stream().map(EventStreamResource::publicEvent).select().first(lifetime)
+                    .onTermination().invoke((failure, cancelled) -> telemetry.streamClosed(
+                            failure != null ? "error" : cancelled ? "client_cancelled" : "lifetime_expired", started));
+        });
     }
 
     static Duration lifetime(Object principal, Instant now) {

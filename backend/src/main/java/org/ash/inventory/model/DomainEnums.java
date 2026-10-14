@@ -13,7 +13,7 @@ public final class DomainEnums {
         public boolean atLeast(UserRole minimum) { return ordinal() >= minimum.ordinal(); }
     }
     public enum TrackingMode { bulk, serialized, lot_tracked }
-    public enum InventoryRole { consumable, returnable, repairable, rental }
+    public enum InventoryRole { consumable, returnable }
     public enum ItemVisibilityScope { global, event, person, group }
     public enum AssetState { available, reserved, staged, in_transit, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }
     public enum ConditionStatus { new_condition, good, fair, damaged, unsafe, lost }
@@ -37,6 +37,5 @@ public final class DomainEnums {
     public enum MaintenanceIntervalType { date, operating_hours, usage_count }
     public enum RepairStatus { reported, triaged, awaiting_repair, in_repair, repaired, verified, returned_to_service, written_off }
     public enum LotStatus { available, hold, recalled, expired, depleted }
-    public enum CodeTargetType { product, asset, location, assembly, container, lot }
     public enum OutboxStatus { pending, processing, published, failed, dead_letter }
 }
