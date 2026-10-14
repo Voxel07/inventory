@@ -32,12 +32,10 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
     }
     for (const p of parsedItems) {
       if (p.data.name && !map.has(p.data.name.toLowerCase().trim())) {
+        // Keep every parsed attribute (consumable, tracking mode, ...) so dependent rows validate like real items.
         map.set(p.data.name.toLowerCase().trim(), {
+          ...p.data,
           id: `csv-new-${p.index}`,
-          name: p.data.name,
-          category: p.data.category,
-          minStock: p.data.minStock,
-          value: p.data.value,
           storageLocation: p.storageLocationId || '',
           created: '',
           updated: '',

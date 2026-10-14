@@ -1,7 +1,7 @@
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
 import type { CsvReference } from './reference';
-import { getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, MAINTENANCE_STATUS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
+import { catalogRowKind, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, MAINTENANCE_STATUS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
   if (!val) return undefined;
@@ -61,10 +61,7 @@ export function parseItemsFromCsv(
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
-    const typeField = getField(raw, ['type', 'typ']);
-    if (typeField && !['item', 'artikel', 'part'].includes(typeField.toLowerCase().trim())) {
-      continue; // Skip non-item rows in combined files
-    }
+    if (catalogRowKind(raw) !== 'item') continue;
 
     const name = getField(raw, ITEM_NAME_ALIASES);
     if (!name) {

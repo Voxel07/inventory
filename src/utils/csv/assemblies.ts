@@ -1,7 +1,7 @@
 import { type Item, type Assembly, type EventType } from '../../types';
 import { type ParsedAssemblyRow, type ParsedAssemblyComponent } from '../../types/csvImport';
 import type { CsvReference } from './reference';
-import { getField, ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_NAME_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, DESCRIPTION_ALIASES, HINT_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, parseInlineComponents } from './core';
+import { catalogRowKind, getField, ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_NAME_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, DESCRIPTION_ALIASES, HINT_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, parseInlineComponents } from './core';
 
 /**
  * Parses raw CSV rows into Assembly structures, supporting both inline components and multi-row format
@@ -44,10 +44,7 @@ export function parseAssembliesFromCsv(
 
     for (let i = 0; i < rows.length; i++) {
       const raw = rows[i];
-      const typeField = getField(raw, ['type', 'typ']);
-      if (typeField && !['assembly', 'baugruppe', 'set'].includes(typeField.toLowerCase().trim())) {
-        continue;
-      }
+      if (catalogRowKind(raw) !== 'assembly') continue;
 
       const name = getField(raw, ASSEMBLY_NAME_ALIASES);
       if (!name) continue;
@@ -131,10 +128,7 @@ export function parseAssembliesFromCsv(
   const results: ParsedAssemblyRow[] = [];
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
-    const typeField = getField(raw, ['type', 'typ']);
-    if (typeField && !['assembly', 'baugruppe', 'set'].includes(typeField.toLowerCase().trim())) {
-      continue;
-    }
+    if (catalogRowKind(raw) !== 'assembly') continue;
 
     const name = getField(raw, ASSEMBLY_NAME_ALIASES);
     if (!name) {

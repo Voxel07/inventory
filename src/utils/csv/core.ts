@@ -1,4 +1,3 @@
-import { type CsvImportType } from '../../types/csvImport';
 import type { EventType } from '../../types';
 
 /**
@@ -267,18 +266,19 @@ export const RETURN_PERSON_ALIASES = [
   'ausleiher',
 ];
 
-export function detectCsvType(headers: string[]): CsvImportType {
-  const normHeaders = headers.map(normalizeKey);
+const ITEM_ROW_TYPES = ['item', 'artikel', 'part'];
+const ASSEMBLY_ROW_TYPES = ['assembly', 'baugruppe', 'set'];
+const ASSEMBLY_ONLY_NAME_ALIASES = ASSEMBLY_NAME_ALIASES.filter((alias) => alias !== 'name');
 
-  const hasTypeCol = normHeaders.some((h) => ['type', 'typ', 'art'].includes(h));
-  if (hasTypeCol) return 'combined';
-
-  const hasAssembly = normHeaders.some((h) =>
-    ['baugruppe', 'baugruppenname', 'assembly', 'assemblyname', 'komponenten', 'components', 'bestandteile'].includes(h),
-  );
-  if (hasAssembly) return 'assemblies';
-
-  return 'items';
+/**
+ * Classifies a row as catalog item or assembly. Typed rows follow their type column (other types
+ * return undefined); untyped rows count as assemblies only when they carry assembly data.
+ */
+export function catalogRowKind(row: Record<string, string>): 'item' | 'assembly' | undefined {
+  const type = getField(row, ['type', 'typ', 'art'])?.toLowerCase();
+  if (type) return ITEM_ROW_TYPES.includes(type) ? 'item' : ASSEMBLY_ROW_TYPES.includes(type) ? 'assembly' : undefined;
+  return [ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_ONLY_NAME_ALIASES].some((aliases) => getField(row, aliases))
+    ? 'assembly' : 'item';
 }
 
 export function parseBoolean(val: string | undefined): boolean {

@@ -18,7 +18,6 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
-import { parseCsv, detectCsvType } from '../../utils/csv/core';
 
 import { generateSampleItemsCsv, generateSampleAssembliesCsv, generateSampleCombinedCsv } from '../../utils/csv/templates';
 import { EMPTY_CSV_IMPORT_COUNTS, type CsvImportCounts, type CsvImportType } from '../../types/csvImport';
@@ -32,6 +31,8 @@ interface Props {
   assemblies: Assembly[];
   storageLocations: StorageLocation[];
   catalogComplete: boolean;
+  /** Preselected tab; the user's tab choice decides what gets imported. */
+  initialType: CsvImportType;
 }
 
 export function CsvImportDialog({
@@ -41,6 +42,7 @@ export function CsvImportDialog({
   assemblies,
   storageLocations,
   catalogComplete,
+  initialType,
 }: Props) {
   const t = useLocalizedText();
   const theme = useTheme();
@@ -48,7 +50,7 @@ export function CsvImportDialog({
   const showSnackbar = useUIStore((s) => s.showSnackbar);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [tabType, setTabType] = useState<CsvImportType>('items');
+  const [tabType, setTabType] = useState<CsvImportType>(initialType);
   const [csvContent, setCsvContent] = useState('');
   const [fileName, setFileName] = useState('');
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -113,15 +115,7 @@ export function CsvImportDialog({
     setImportResult(null);
     setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = (e.target?.result as string) || '';
-      setCsvContent(text);
-      const parsed = parseCsv(text);
-      if (parsed.headers.length > 0) {
-        const detected = detectCsvType(parsed.headers);
-        setTabType(detected);
-      }
-    };
+    reader.onload = (e) => setCsvContent((e.target?.result as string) || '');
     reader.readAsText(file);
   }
 
@@ -352,10 +346,6 @@ export function CsvImportDialog({
                     onChange={(e) => {
                       setCsvContent(e.target.value);
                       setFileName('Eingefügter Text');
-                      const parsed = parseCsv(e.target.value);
-                      if (parsed.headers.length > 0) {
-                        setTabType(detectCsvType(parsed.headers));
-                      }
                     }}
                   />
                 </Box>

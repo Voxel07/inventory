@@ -120,6 +120,7 @@ export function Items() {
 
             <CsvImportDialog
                 open={importOpen}
+                initialType="items"
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
                 assemblies={assemblies ?? []}

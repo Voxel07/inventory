@@ -106,6 +106,7 @@ export function Assemblies() {
             {/* CSV Import Dialog */}
             <CsvImportDialog
                 open={importOpen}
+                initialType="assemblies"
                 onClose={() => setImportOpen(false)}
                 items={items ?? []}
                 assemblies={assemblies ?? []}
