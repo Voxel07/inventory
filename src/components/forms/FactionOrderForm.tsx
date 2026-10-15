@@ -103,7 +103,8 @@ export function FactionOrderForm({
   const factionOptions = allowedFactions(eventType);
   const faction = factionOptions.includes(chosenFaction) ? chosenFaction : factionOptions[0] ?? '';
   const [eventOccurrenceId, setEventOccurrenceId] = useState(initialData?.eventOccurrenceId ?? defaultEventOccurrenceId ?? '');
-  const eventOptions = events.filter((event) => event.eventType === eventType);
+  // Closed events take no new orders.
+  const eventOptions = events.filter((event) => event.eventType === eventType && event.status !== 'completed');
   const selectedEvent = eventOptions.find((event) => event.id === eventOccurrenceId) ?? eventOptions[0];
   const eventDate = selectedEvent?.startDate?.slice(0, 10) ?? selectedEvent?.eventDate?.slice(0, 10) ?? '';
   const [requestedPickupDate, setRequestedPickupDate] = useState(

@@ -371,7 +371,7 @@ export function AssemblyDetail() {
                         {t('pages.assemblyDetail.thisChecksOutEveryItemInNameInTheSpecified', { name: String(assembly.name) })}
                     </DialogContentText>
                     <TextField select fullWidth required label={t('pages.assemblyDetail.eventOccurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
-                        {checkoutEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
+                        {checkoutEvents.filter((event) => event.status !== 'completed').map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                     </TextField>
                     <TextField
                         select

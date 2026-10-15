@@ -63,6 +63,9 @@ public class OrderService {
         this.events = events;
     }
 
+    /** Steps that move items toward an event; a closed event blocks them. */
+    private static final Set<DomainEnums.OrderStatus> OUTBOUND = Set.of(DomainEnums.OrderStatus.submitted,
+            DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready, DomainEnums.OrderStatus.picked_up);
     private static final Map<DomainEnums.OrderStatus, Set<DomainEnums.OrderStatus>> TRANSITIONS = Map.of(
             DomainEnums.OrderStatus.draft, Set.of(DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.cancelled),
             DomainEnums.OrderStatus.submitted,
@@ -95,6 +98,7 @@ public class OrderService {
                 ? orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence")
                 : catalog.eventForOrder(requiredText(input.eventType(), "eventType"),
                         requiredDate(input.eventDate()));
+        requireOpenEvent(event);
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
                 : catalog.factionForOrder(event.eventType, requiredText(input.faction(), "faction"));
@@ -113,6 +117,12 @@ public class OrderService {
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, input.idempotencyKey(), input.notes(), lineSnapshot(order));
         orderEvent("order.created", order, actor, input.idempotencyKey());
         return order;
+    }
+
+    /** Closed events take no new orders, items or handovers; returns and cancellations stay possible. */
+    private static void requireOpenEvent(EventOccurrence event) {
+        if (event != null && event.closed())
+            throw ApiException.conflict("Event " + event.name + " is closed; correct its items on the event page instead");
     }
 
     private static void requireFactionOfEvent(Faction faction, EventOccurrence event, boolean newReference) {
@@ -160,6 +170,7 @@ public class OrderService {
         order.name = requiredText(input.name(), "name").trim();
         order.purpose = requiredText(input.purpose(), "purpose").trim();
         order.eventOccurrence = input.eventOccurrenceId() == null ? null : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event");
+        requireOpenEvent(order.eventOccurrence);
         if (order.id != null) orm.deleteLines(order);
         if (input.requestedQuantities() == null) return;
         for (var entry : input.requestedQuantities().entrySet()) {
@@ -185,6 +196,7 @@ public class OrderService {
         var event = input.eventOccurrenceId() == null
                 ? order.eventOccurrence
                 : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
+        requireOpenEvent(event);
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
                 : input.faction() == null ? order.faction : catalog.factionForOrder(event.eventType, input.faction());
@@ -218,6 +230,7 @@ public class OrderService {
         var order = lockedOrder(id);
         if (idempotent(order, input.idempotencyKey()))
             return order;
+        requireOpenEvent(order.eventOccurrence);
         var lines = orm.lines(order);
         if (order.status == DomainEnums.OrderStatus.submitted)
             transition(order, DomainEnums.OrderStatus.preparing, null, "preparation_started", input.notes(), Map.of());
@@ -288,6 +301,7 @@ public class OrderService {
         if (order.kind == InventoryOrder.Kind.general) requireGeneralTransition(order, target);
         if (idempotent(order, input.idempotencyKey()))
             return order;
+        if (OUTBOUND.contains(target)) requireOpenEvent(order.eventOccurrence);
         if (order.kind == InventoryOrder.Kind.faction && (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft))
             assertFactionAccess(actor, order.faction);
         else if (target == DomainEnums.OrderStatus.cancelled)

@@ -1,8 +1,8 @@
-import { Button } from '../components/shared/ActionButtons';
-import { useFactionCatalog } from '../hooks/useFactionCatalog';
+import { Button, IconButton } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
+import { AddEventItemsDialog } from '../components/events/AddEventItemsDialog';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -10,7 +10,6 @@ import {
   Box,
   Chip,
   LinearProgress,
-  MenuItem,
   Paper,
   Stack,
   Table,
@@ -21,16 +20,15 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { DateRangeField, TextField } from '../components/shared/DateTextField';
+import { TextField } from '../components/shared/DateTextField';
+import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
-import { useItemsByIds, usePagedItems } from '../hooks/useItems';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { LoadMore } from '../components/shared/LoadMore';
-import type { EventReportStatus, EventType } from '../types';
+import { useItemsByIds } from '../hooks/useItems';
 import { translate, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
@@ -41,34 +39,20 @@ export function EventDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const t = useT();
-  const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
   const canEdit = canEditEvents(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
   const updateReport = useUpdateEventReport();
   const [editing, setEditing] = useState(() => canEdit && searchParams.get('edit') === '1');
-  const [eventType, setEventType] = useState<EventType>('DE');
-  const [eventDate, setEventDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [name, setName] = useState('');
-  const [status, setStatus] = useState<EventReportStatus>('completed');
+  const [adding, setAdding] = useState(false);
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [used, setUsed] = useState<QuantityInputs>({});
-  const [notes, setNotes] = useState('');
-  const [search, setSearch] = useState('');
 
   const resetForm = () => {
     if (!report) return;
-    setEventType(report.eventType);
-    setEventDate(report.eventDate.slice(0, 10));
-    setEndDate(report.endDate?.slice(0, 10) ?? report.eventDate.slice(0, 10));
-    setName(report.name);
-    setStatus(report.status);
     setPlanned(toQuantityInputs(report.plannedQuantities));
     setUsed(toQuantityInputs(report.usedQuantities));
-    setNotes(report.notes ?? '');
-    setSearch('');
   };
 
   const [formSource, setFormSource] = useState(report);
@@ -77,30 +61,14 @@ export function EventDetail() {
     resetForm();
   }
 
-  const recordedIds = new Set([
-    ...Object.keys(planned),
-    ...Object.keys(used),
-  ]);
-  // Recorded items by id; while editing, server matches for the search (or the event type's tagged items).
-  const recorded = useItemsByIds([...recordedIds]);
-  const term = useDebouncedValue(search.trim());
-  const candidates = usePagedItems(term ? { search: term, sort: 'name' } : { eventType, sort: 'name' }, { enabled: editing });
-  const items = [...new Map([...(recorded.data ?? []), ...(editing ? candidates.data ?? [] : [])].map((item) => [item.id, item])).values()];
-  const itemMap = new Map(items.map((item) => [item.id, item]));
-  const missingItemIds = [...recordedIds].filter((id) => !itemMap.has(id) && (
-      Number(used[id]) > 0 || Number(planned[id]) > 0
-    ));
-  const visibleItems = (() => {
-    return items
-      .filter((item) => {
-        const isRecorded = Number(used[item.id]) > 0
-          || Number(planned[item.id]) > 0;
-        if (isRecorded) return true;
-        if (!editing) return false;
-        return candidates.data?.some((candidate) => candidate.id === item.id) ?? false;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  })();
+  // A closed event's usage is its frozen report and is corrected here; an open event's usage comes from orders.
+  const closed = report?.status === 'completed';
+  const rowIds = [...new Set([...Object.keys(planned), ...Object.keys(used)])];
+  const recorded = useItemsByIds(rowIds);
+  const itemMap = new Map((recorded.data ?? []).map((item) => [item.id, item]));
+  const itemName = (id: string) => itemMap.get(id)?.name ?? report?.itemNames?.[id] ?? id;
+  const rows = rowIds.map((id) => ({ id, name: itemName(id), category: itemMap.get(id)?.category }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   const plannedQuantities = toNonNegativeQuantities(planned);
   const usedQuantities = toNonNegativeQuantities(used);
@@ -113,25 +81,39 @@ export function EventDetail() {
     setEditing(false);
   }
 
+  /** New items land in the usage of a closed event and in the plan of an open one. */
+  function addItems(quantities: Record<string, number>) {
+    const add = (current: QuantityInputs) => {
+      const next = { ...current };
+      Object.entries(quantities).forEach(([id, quantity]) => { next[id] = String((Number(next[id]) || 0) + quantity); });
+      return next;
+    };
+    if (closed) setUsed(add); else setPlanned(add);
+  }
+
+  function removeItem(id: string) {
+    const without = (current: QuantityInputs) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id));
+    setPlanned(without);
+    setUsed(without);
+  }
+
+  // Event details stay as they are; this page only corrects the item quantities.
   function save() {
-    if (!report || !eventDate || !endDate || endDate < eventDate || !name.trim()) return;
-    const knownItemIds = [...new Set([
-      ...Object.keys(plannedQuantities),
-      ...Object.keys(usedQuantities),
-    ])].filter((id) => itemMap.has(id));
+    if (!report) return;
+    const positive = (values: Record<string, number>) => Object.fromEntries(Object.entries(values).filter(([, value]) => value > 0));
     updateReport.mutate({
       id: report.id,
       data: {
-        eventType,
-        eventDate: new Date(`${eventDate}T12:00:00.000Z`).toISOString(),
-        startDate: eventDate,
-        endDate,
-        name: name.trim(),
-        status,
-        itemIds: knownItemIds,
-        plannedQuantities,
-        usedQuantities,
-        notes: notes.trim(),
+        eventType: report.eventType,
+        eventDate: report.eventDate,
+        startDate: report.startDate.slice(0, 10),
+        endDate: (report.endDate ?? report.startDate).slice(0, 10),
+        name: report.name,
+        status: report.status,
+        itemIds: [],
+        plannedQuantities: positive(plannedQuantities),
+        usedQuantities: closed ? positive(usedQuantities) : undefined,
+        notes: report.notes ?? '',
       },
     }, {
       onSuccess: () => {
@@ -154,6 +136,9 @@ export function EventDetail() {
     );
   }
 
+  const quantityInput = (values: QuantityInputs, setValues: (update: (current: QuantityInputs) => QuantityInputs) => void, id: string) =>
+    <TextField type="number" size="small" value={values[id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [id]: event.target.value }))}
+      slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': itemName(id) } }} sx={{ width: 100 }} />;
 
   return (
     <Box>
@@ -167,121 +152,84 @@ export function EventDetail() {
             <Typography variant="h4">{report.name || (report.eventType === 'LS' ? 'LightSim' : report.eventType)}</Typography>
             <Chip
               size="small"
-              color={report.status === 'completed' ? 'success' : 'info'}
-              label={report.status === 'completed' ? t('common.completed') : t('common.planned')}
+              color={closed ? 'success' : 'info'}
+              label={closed ? t('common.completed') : t('common.planned')}
             />
           </Stack>
           <Typography color="text.secondary">{formatDate(report.eventDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}</Typography>
         </Box>
         {!editing ? (
-          <Button title={translate('pages.eventDetail.editThisEventSDetails')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
-            {t('pages.eventDetail.correctEvent')}
+          <Button title={translate('pages.eventDetail.correctTheItemsAndQuantitiesOfThisEvent')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
+            {t('pages.eventDetail.editItems')}
           </Button>
         ) : (
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' } }}>
             <Button title={translate('common.discardChangesAndClose')} startIcon={<CloseIcon />} onClick={cancelEditing}>{t('common.cancel')}</Button>
-            <Button title={translate('pages.eventDetail.saveChangesToThisEvent')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
+            <Button title={translate('pages.eventDetail.saveChangesToThisEvent')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending}>
               {t('pages.eventDetail.saveChanges')}
             </Button>
           </Stack>
         )}
       </Stack>
 
-      {!editing && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
-        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('pages.eventDetail.attendeesFoodStamps')}</Button>
-        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('common.eventTimeline')}</Button>
-      </Stack>}
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
-      </Box>
-
-      {editing && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          {t('pages.eventDetail.plannedQuantitiesCanBeCorrectedUsedQuantitiesAreCalculatedFrom')}
-        </Alert>
-      )}
-
-      {editing && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Stack spacing={2}>
-            <TextField fullWidth label={t('pages.eventDetail.eventName')} value={name} onChange={(event) => setName(event.target.value)} required />
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField select fullWidth label={t('nav.event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
-                {eventTypes.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
-              </TextField>
-              <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={eventDate} end={endDate}
-                onChange={(range) => { setEventDate(range.start); setEndDate(range.end); }} />
-              <TextField select fullWidth label={t('common.status')} value={status} onChange={(event) => setStatus(event.target.value as EventReportStatus)}>
-                <MenuItem value="planned">{t('common.planned')}</MenuItem>
-                <MenuItem value="completed">{t('common.completed')}</MenuItem>
-              </TextField>
-            </Stack>
-            <TextField
-              fullWidth
-              label={t('pages.eventDetail.addAnItemToTheEvent')}
-              placeholder={t('pages.eventDetail.searchNameCategoryOrSubcategory')}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </Stack>
-        </Paper>
-      )}
-
-      {!editing && <EventQuantities event={report} />}
-      {editing && (<TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('common.item')}</TableCell>
-              <TableCell>{t('common.category')}</TableCell>
-              <TableCell align="right">{t('common.planned')}</TableCell>
-              <TableCell align="right">{t('common.used')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {visibleItems.map((item) => (
-              <TableRow key={item.id} hover>
-                <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
-                <TableCell>{item.category || '—'}</TableCell>
-                <TableCell align="right">
-                  {editing ? (
-                    <TextField type="number" size="small" value={planned[item.id] ?? ''} onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))} slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }} sx={{ width: 100 }} />
-                  ) : plannedQuantities[item.id] ?? 0}
-                </TableCell>
-                <TableCell align="right">
-                  {usedQuantities[item.id] ?? 0}
-                </TableCell>
-              </TableRow>
-            ))}
-            {missingItemIds.map((itemId) => (
-              <TableRow key={itemId}>
-                <TableCell>
-                  <Typography sx={{ fontWeight: 600 }}>{report.itemNames?.[itemId] ?? itemId}</Typography>
-                </TableCell>
-                <TableCell>—</TableCell>
-                <TableCell align="right">{plannedQuantities[itemId] ?? 0}</TableCell>
-                <TableCell align="right">{usedQuantities[itemId] ?? 0}</TableCell>
-              </TableRow>
-            ))}
-            {!visibleItems.length && !missingItemIds.length && (
-              <TableRow><TableCell colSpan={4}>{t('pages.eventDetail.noItemsWereRecordedForThisEvent')}</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>)}
-      {editing && <LoadMore list={candidates} />}
-
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>{t('common.notes')}</Typography>
-        {editing ? (
-          <TextField fullWidth multiline minRows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
-        ) : (
+      {!editing && <>
+        <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
+          <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('pages.eventDetail.attendeesFoodStamps')}</Button>
+          <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('common.eventTimeline')}</Button>
+        </Stack>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
+          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
+          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
+          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
+        </Box>
+        <EventQuantities event={report} />
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('common.notes')}</Typography>
           <Typography color={report.notes ? 'text.primary' : 'text.secondary'}>{report.notes || t('pages.eventDetail.noNotes')}</Typography>
-        )}
-      </Paper>
+        </Paper>
+      </>}
+
+      {editing && <Paper sx={{ p: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="h6">{t('pages.eventDetail.itemsUsed')}</Typography>
+          <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setAdding(true)}>{t('pages.eventDetail.addItems')}</Button>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {closed ? t('pages.eventDetail.thisEventIsClosedUsedQuantitiesAreItsReport') : t('pages.eventDetail.usedQuantitiesComeFromOrdersUntilTheEventIsClosed')}
+        </Typography>
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('common.item')}</TableCell>
+                <TableCell>{t('common.category')}</TableCell>
+                <TableCell align="right">{t('common.planned')}</TableCell>
+                <TableCell align="right">{t('common.used')}</TableCell>
+                <TableCell align="right" sx={{ width: 56 }} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id} hover>
+                  <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
+                  <TableCell>{row.category || '—'}</TableCell>
+                  <TableCell align="right">{quantityInput(planned, setPlanned, row.id)}</TableCell>
+                  <TableCell align="right">{closed ? quantityInput(used, setUsed, row.id) : usedQuantities[row.id] ?? 0}</TableCell>
+                  <TableCell align="right">
+                    <IconButton size="small" title={t('pages.eventDetail.removeItem')} disabled={!closed && (usedQuantities[row.id] ?? 0) > 0} onClick={() => removeItem(row.id)}>
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!rows.length && (
+                <TableRow><TableCell colSpan={5}>{t('pages.eventDetail.noItemsWereRecordedForThisEvent')}</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>}
+      <AddEventItemsDialog open={adding} onClose={() => setAdding(false)} onAdd={addItems} />
     </Box>
   );
 }

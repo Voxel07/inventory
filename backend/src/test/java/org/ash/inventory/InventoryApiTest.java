@@ -87,7 +87,7 @@ class InventoryApiTest {
     }
 
     @Test
-    void eventUsageComesFromOrdersAndReturns() {
+    void eventUsageComesFromOrdersUntilTheEventIsClosed() {
         String usedItemId = request().body(Map.of("sku", "EVENT-USED-001", "name", "Used event item",
                         "category", "Test", "amount", 10, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
@@ -100,7 +100,7 @@ class InventoryApiTest {
         event.put("name", "LightSim history test");
         event.put("startDate", "2026-06-13");
         event.put("endDate", "2026-06-13");
-        event.put("status", "completed");
+        event.put("status", "planned");
         event.put("plannedQuantities", Map.of(usedItemId, 8, plannedOnlyItemId, 3));
         event.put("usedQuantities", Map.of(usedItemId, 6, plannedOnlyItemId, 0));
 
@@ -123,12 +123,25 @@ class InventoryApiTest {
         request().get("/api/events/" + eventId).then().statusCode(200)
                 .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
                 .body("itemIds", org.hamcrest.Matchers.hasItem(plannedOnlyItemId));
+        // Closing freezes the usage; returns still settle, but the event takes no new orders.
+        event.put("status", "completed");
+        event.remove("usedQuantities");
+        request().body(event).patch("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.'" + usedItemId + "'", equalTo(6));
         request().body(Map.of("lines", Map.of(usedItemId, Map.of("returned", 2))))
                 .post("/api/orders/general/" + orderId + "/return").then().statusCode(200)
                 .body("status", equalTo("partially_returned"));
         request().get("/api/events/" + eventId).then().statusCode(200)
                 .body("usedQuantities.'" + usedItemId + "'", equalTo(6))
                 .body("quantities.outstanding.'" + usedItemId + "'", equalTo(4));
+        request().body(Map.of("name", "Late order", "purpose", "Test use",
+                        "eventOccurrenceId", eventId, "requestedQuantities", Map.of(usedItemId, 1)))
+                .post("/api/orders/general").then().statusCode(409);
+        // A closed report is corrected explicitly.
+        event.put("usedQuantities", Map.of(usedItemId, 7, plannedOnlyItemId, 1));
+        request().body(event).patch("/api/events/" + eventId).then().statusCode(200)
+                .body("usedQuantities.'" + usedItemId + "'", equalTo(7))
+                .body("usedQuantities.'" + plannedOnlyItemId + "'", equalTo(1));
         request().delete("/api/events/" + eventId).then().statusCode(409);
         request().get("/api/events/" + eventId).then().statusCode(200);
     }

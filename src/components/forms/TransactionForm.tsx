@@ -266,7 +266,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             required
                             onChange={(event) => selectOccurrence(event.target.value)}
                         >
-                            {events.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
+                            {events.filter((event) => !isCheckout || event.status !== 'completed' || event.id === formData.eventOccurrenceId)
+                                .map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                         </TextField>
                         <TextField
                             select

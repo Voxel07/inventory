@@ -28,4 +28,9 @@ public class EventOccurrence extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "used_quantities", columnDefinition = "jsonb")
     public Map<String, Integer> usedQuantities = new LinkedHashMap<>();
+
+    /** A completed event is closed: its report is frozen and it accepts no new orders or checkouts. */
+    public boolean closed() {
+        return "completed".equals(status);
+    }
 }

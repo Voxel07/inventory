@@ -19,6 +19,6 @@ export function useAssemblies() {
 }
 
 /** The assembly catalog screen: server search and "mine", pages on demand. */
-export function usePagedAssemblies(query: { search?: string; mine?: boolean }) {
-  return usePagedList<Assembly>(['assemblies', 'page', query], (page, size) => assemblyApi.getPage(query, page, size));
+export function usePagedAssemblies(query: { search?: string; mine?: boolean }, options?: { enabled?: boolean }) {
+  return usePagedList<Assembly>(['assemblies', 'page', query], (page, size) => assemblyApi.getPage(query, page, size), options);
 }

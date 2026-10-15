@@ -34,6 +34,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import EditIcon from '@mui/icons-material/Edit';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { itemApi } from '../services/inventoryService';
@@ -43,7 +44,6 @@ import type { EventReport, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { translate, useAppLanguage, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
-import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 import { catalogGridSx } from '../components/lists/catalogGrid';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -71,7 +71,6 @@ export function Events() {
   const [editName, setEditName] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
-  const [planned, setPlanned] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
   const [usageSearch, setUsageSearch] = useState('');
   // Planning an event type needs every item tagged for it: an explicit complete read of that subset only.
@@ -158,13 +157,11 @@ export function Events() {
     });
   }
 
-  /** Seeds the editor from the event; a fresh plan starts from the last completed event's usage. */
+  /** Event details only; item quantities are corrected on the event's own page. */
   function openEdit(event: EventReport) {
-    const hasPlan = Object.keys(event.plannedQuantities ?? {}).length > 0;
     setEditName(event.name);
     setEditStart(event.startDate.slice(0, 10));
     setEditEnd((event.endDate ?? event.startDate).slice(0, 10));
-    setPlanned(toQuantityInputs(hasPlan ? event.plannedQuantities : lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
     setNotes(event.notes ?? '');
     setEditOpen(true);
   }
@@ -184,7 +181,7 @@ export function Events() {
 
   function saveEdit() {
     if (!selectedEvent || !editName.trim() || !editStart || !editEnd || editEnd < editStart) return;
-    update(selectedEvent, { name: editName.trim(), startDate: editStart, endDate: editEnd, status: 'planned', plannedQuantities: toNonNegativeQuantities(planned), notes: notes.trim() }, () => {
+    update(selectedEvent, { name: editName.trim(), startDate: editStart, endDate: editEnd, status: 'planned', plannedQuantities: selectedEvent.plannedQuantities, notes: notes.trim() }, () => {
       setEditOpen(false);
       showSnackbar(t('pages.events.eventPlanSaved'), 'success');
     });
@@ -232,7 +229,7 @@ export function Events() {
           </MenuItem>)}
         </TextField>
         {canEdit && selectedEvent?.status === 'planned' && <>
-          <Button title={translate('pages.events.editTheEventDetailsAndPlannedQuantities')} variant="outlined" startIcon={<EditIcon />} onClick={() => openEdit(selectedEvent)}>
+          <Button title={translate('pages.events.editTheEventNameDatesAndNotes')} variant="outlined" startIcon={<EditIcon />} onClick={() => openEdit(selectedEvent)}>
             {t('pages.events.editEvent')}
           </Button>
           <Button title={translate(eventOver ? 'pages.events.closeTheEventAndLockItsReport' : 'pages.events.theEventCanBeClosedOnItsLastDay')} variant="outlined"
@@ -240,6 +237,10 @@ export function Events() {
             {t('pages.events.closeEvent')}
           </Button>
         </>}
+        {canEdit && selectedEvent && <Button title={translate('pages.events.correctTheItemsAndQuantitiesOfThisEvent')} variant="outlined" startIcon={<Inventory2OutlinedIcon />}
+          onClick={() => navigate(`/events/${selectedEvent.id}?edit=1`)}>
+          {t('pages.events.editItems')}
+        </Button>}
         {selectedEvent?.status === 'completed' && <Chip color="success" icon={<EventAvailableIcon />} label={t('pages.events.closedReportLocked')} />}
       </Stack>
 
@@ -378,15 +379,6 @@ export function Events() {
           <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={editStart} end={editEnd}
             onChange={(range) => { setEditStart(range.start); setEditEnd(range.end); }} />
           <TextField label={t('common.notes')} value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} />
-          <Typography variant="subtitle2" component="h3">{t('pages.events.plannedQuantities')}</Typography>
-          <Stack spacing={1}>
-            {eventItems.map((item) => <Stack key={item.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-              <TextField type="number" size="small" label={t('common.quantity')} value={planned[item.id] ?? ''}
-                onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))}
-                slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 100 }} />
-            </Stack>)}
-          </Stack>
         </Stack></DialogContent>
         <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheEventChanges')} variant="contained" disabled={editInvalid || updateReport.isPending} onClick={saveEdit}>{t('common.save')}</Button></DialogActions>
       </Dialog>

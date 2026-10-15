@@ -81,7 +81,8 @@ export function GeneralOrders() {
   const [itemSearch, setItemSearch] = useState('');
 
   const eventMap = new Map(events.map((event) => [event.id, event]));
-  const activeEvents = events;
+  // Closed events take no new orders.
+  const activeEvents = events.filter((event) => event.status !== 'completed');
   const selectedEvent = eventMap.get(eventId);
   // The editor searches the catalog on the server; items usable for every event (untagged) stay offered.
   const catalog = usePagedItems({ search: useDebouncedValue(itemSearch.trim()) || undefined, eventType: selectedEvent?.eventType,

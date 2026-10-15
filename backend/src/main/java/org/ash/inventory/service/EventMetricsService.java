@@ -57,8 +57,10 @@ public class EventMetricsService {
             String metric = switch (tx.type) { case checkout -> "handedOver"; case checkin -> "returned"; case consumed -> "consumed"; case written_off -> tx.custodyWriteOff ? "writtenOff" : null; default -> null; };
             if (metric != null) quantities.get(metric).merge(tx.item.id.toString(), tx.quantity, Integer::sum);
         }
-        used.putAll(quantities.get("handedOver"));
-        used.forEach((id, handedOver) -> quantities.get("outstanding").put(id, Math.max(0, handedOver
+        // A closed event reports its frozen usage; an open one derives usage from handed-over quantities.
+        if (value.closed()) { if (value.usedQuantities != null) used.putAll(value.usedQuantities); }
+        else used.putAll(quantities.get("handedOver"));
+        quantities.get("handedOver").forEach((id, handedOver) -> quantities.get("outstanding").put(id, Math.max(0, handedOver
                 - quantities.get("returned").getOrDefault(id, 0) - quantities.get("consumed").getOrDefault(id, 0)
                 - quantities.get("damaged").getOrDefault(id, 0) - quantities.get("writtenOff").getOrDefault(id, 0))));
         var itemNames = new LinkedHashMap<String, String>();

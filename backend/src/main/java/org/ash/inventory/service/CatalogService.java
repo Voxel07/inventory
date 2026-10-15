@@ -30,6 +30,7 @@ public class CatalogService {
     @Inject InventoryAccessInheritance inheritance;
     @jakarta.inject.Inject PositionService positions;
     @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
+    @Inject EventMetricsService eventMetrics;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -457,10 +458,13 @@ public class CatalogService {
         event.startDate = input.startDate();
         event.endDate = input.endDate() == null ? input.startDate() : input.endDate();
         if (event.endDate.isBefore(event.startDate)) throw ApiException.badRequest("Event end date cannot be before its start date");
+        boolean closing = !event.closed() && "completed".equals(input.status());
+        // Closing freezes the usage derived from orders; afterwards the report is corrected only explicitly.
+        if (closing) event.usedQuantities = new LinkedHashMap<>(eventMetrics.summarize(event).used());
         event.status = input.status() == null ? event.status : input.status();
         event.notes = input.notes();
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
-        if (input.usedQuantities() != null) event.usedQuantities = eventQuantities(input.usedQuantities());
+        if (input.usedQuantities() != null && event.closed()) event.usedQuantities = eventQuantities(input.usedQuantities());
         catalogChanged("events", event.id);
         return event;
     }

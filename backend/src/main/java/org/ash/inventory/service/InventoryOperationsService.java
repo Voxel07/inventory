@@ -299,6 +299,8 @@ public class InventoryOperationsService {
         var event = orm.require(org.ash.inventory.model.EventOccurrence.class, input.eventOccurrenceId(), "Event");
         if (input.eventType() != null && !event.eventType.equals(input.eventType()))
             throw ApiException.badRequest("Event occurrence does not match event type");
+        if (event.closed() && input.transactionType() == DomainEnums.TransactionType.checkout)
+            throw ApiException.conflict("Event " + event.name + " is closed; correct its items on the event page instead");
         return event;
     }
 
