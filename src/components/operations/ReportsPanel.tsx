@@ -2,7 +2,7 @@ import { formatDateTime } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
-import { TextField as MuiTextField } from '../shared/DateTextField';
+import { DateRangeField, TextField as MuiTextField } from '../shared/DateTextField';
 import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
@@ -83,8 +83,10 @@ export function ReportsPanel() {
       <TextField fullWidth label={t('operations.reportsPanel.search')} value={filters.search ?? ''} onChange={(e) => change('search', e.target.value)} />
       <TextField fullWidth label={t('operations.reportsPanel.statusExact')} value={filters.status ?? ''} onChange={(e) => change('status', e.target.value)} />
       <TextField fullWidth label={t('operations.reportsPanel.categoryExact')} value={filters.category ?? ''} onChange={(e) => change('category', e.target.value)} />
-      <TextField type="date" label={t('operations.reportsPanel.from')} slotProps={{ inputLabel: { shrink: true } }} value={filters.from ?? ''} onChange={(e) => change('from', e.target.value)} />
-      <TextField type="date" label={t('operations.reportsPanel.to')} slotProps={{ inputLabel: { shrink: true } }} value={filters.to ?? ''} onChange={(e) => change('to', e.target.value)} />
+      <Box sx={{ flex: '2 1 0', minWidth: { md: 340 } }}>
+        <DateRangeField startLabel={t('operations.reportsPanel.from')} endLabel={t('operations.reportsPanel.to')} start={filters.from ?? ''} end={filters.to ?? ''}
+          onChange={(range) => { setFilters({ ...filters, from: range.start, to: range.end }); setPage(0); }} />
+      </Box>
     </Stack>
     {(filters.from || filters.to) && <Typography variant="caption">{t('operations.reportsPanel.dateFiltersExcludeRowsWithNoDateTheDefinitionAbove')}</Typography>}
     {(report.isFetching || command.isPending || exporting) && <LinearProgress />}

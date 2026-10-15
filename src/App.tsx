@@ -18,6 +18,11 @@ import { createApiChangeCoalescer } from './utils/realtimeInvalidation';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { LoginPage } from './pages/LoginPage';
 import { buildTheme } from './theme';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { deDE as pickersDE, enUS as pickersEN } from '@mui/x-date-pickers/locales';
+import 'dayjs/locale/de';
+import 'dayjs/locale/en-gb';
 
 const Items = lazy(() => import('./pages/Items').then((m) => ({ default: m.Items })));
 const ItemDetail = lazy(() => import('./pages/ItemDetail').then((m) => ({ default: m.ItemDetail })));
@@ -189,15 +194,18 @@ export default function App() {
 }
 
 function ThemedApp() {
-  useAppLanguage();
+  const language = useAppLanguage();
   const themeMode = useUIStore((s) => s.themeMode);
   const theme = buildTheme(themeMode);
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={language === 'de' ? 'de' : 'en-gb'}
+        localeText={(language === 'de' ? pickersDE : pickersEN).components.MuiLocalizationProvider.defaultProps.localeText}>
+        <CssBaseline />
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </LocalizationProvider>
     </ThemeProvider>
   );
 }

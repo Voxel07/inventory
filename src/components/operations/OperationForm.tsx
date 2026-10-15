@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Autocomplete, Checkbox, FormControlLabel, Stack } from '@mui/material';
-import { TextField } from '../shared/DateTextField';
+import { DateRangeField, TextField } from '../shared/DateTextField';
 import { useOperationCommand } from '../../hooks/useOperations';
 import { DialogForm, FormDialog } from '../shared/FormDialog';
 
@@ -14,6 +14,11 @@ export function Fields({ fields, values, onChange }: { fields: Field[]; values: 
     const update = (next: string | number | boolean) => onChange({ ...values, ...field.reset, [field.key]: next });
     if (field.type === 'item') return <ItemAutocomplete key={field.key} label={field.label} required={field.required} helperText={field.help}
       value={value === '' ? null : String(value)} filter={field.itemFilter} onChange={(item) => update(item?.id ?? '')} />;
+    if (field.type === 'dateRange' && field.endKey) {
+      const endKey = field.endKey;
+      return <DateRangeField key={field.key} startLabel={field.label} endLabel={field.endLabel ?? endKey} required={field.required} helperText={field.help}
+        start={String(value)} end={String(values[endKey] ?? '')} onChange={(range) => onChange({ ...values, ...field.reset, [field.key]: range.start, [endKey]: range.end })} />;
+    }
     if (field.type === 'checkbox') return <FormControlLabel key={field.key} label={field.label} control={<Checkbox checked={Boolean(value)} onChange={(_, checked) => update(checked)} />} />;
     if (field.pagedOptions) return <PagedAutocomplete key={field.key} {...field.pagedOptions} value={String(value)} onChange={update} label={field.label} required={field.required} helperText={field.help} />;
     if (field.options) return <Autocomplete key={field.key} options={field.options} value={field.options.find((option) => option.value === value) ?? null} getOptionLabel={(option) => option.label} isOptionEqualToValue={(a, b) => a.value === b.value} onChange={(_, option) => update(option?.value ?? '')} renderInput={(params) => <TextField {...params} label={field.label} required={field.required} helperText={field.help} />} />;

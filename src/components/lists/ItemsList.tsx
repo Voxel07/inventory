@@ -2,7 +2,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Box, Checkbox, Drawer, FormControl, InputLabel, ListItemIcon, ListItemText, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -16,7 +16,6 @@ import { useAppLanguage, useT } from '../../utils/naming';
 import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useItemCategories, type ItemQuery } from '../../hooks/useItems';
-import { LoadMore } from '../shared/LoadMore';
 import { locationPath } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
@@ -43,9 +42,10 @@ interface Props {
     emptyHint?: string;
     /**
      * Catalog mode: `items` are server pages already filtered by `query`; filter controls edit the query and
-     * `list` loads further pages on demand. Without it, `items` is a bounded set filtered here.
+     * the remaining pages of `list` load in the background once the first page is shown. Without it, `items`
+     * is a bounded set filtered here.
      */
-    server?: { query: ItemQuery; onQueryChange: (query: ItemQuery) => void; list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown } };
+    server?: { query: ItemQuery; onQueryChange: (query: ItemQuery) => void; list: { hasNextPage: boolean; isFetchingNextPage: boolean; isFetchNextPageError: boolean; fetchNextPage: () => unknown } };
 }
 
 type Availability = 'none' | 'low' | 'ok';
@@ -96,6 +96,13 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
     const [menu, setMenu] = useState<{ anchor: HTMLElement; row: ItemRow } | null>(null);
+    const list = server?.list;
+    const loadNextPage = Boolean(list?.hasNextPage && !list.isFetchingNextPage && !list.isFetchNextPageError);
+    const fetchNextPage = list?.fetchNextPage;
+    // Each finished page starts the next one; a failed page stops until the user retries it.
+    useEffect(() => {
+        if (loadNextPage) void fetchNextPage?.();
+    }, [loadNextPage, fetchNextPage]);
     const locations = useStorageLocations({ includeInactive: true });
     const eventItems = (items ?? []).filter((item) => query || !eventType || item.eventTypes?.includes(eventType));
     const categories = query ? serverCategories.data ?? []
@@ -296,8 +303,10 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             </Button>
         </Paper>}
         {content}
-        {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('lists.itemsList.loadingMoreEntries')}</Typography>}
-        {server && <LoadMore list={server.list} />}
+        {list?.isFetchNextPageError && <Alert severity="warning" sx={{ mt: 1.5 }} action={<Button size="small" onClick={() => { void list.fetchNextPage(); }}>{t('common.retry')}</Button>}>
+            {t('lists.itemsList.onlyItemCountItemsCouldBeLoadedTheListIsIncomplete', { itemCount: String(items?.length ?? 0) })}
+        </Alert>}
+        {(loadingMore || list?.isFetchingNextPage) && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('lists.itemsList.loadingMoreEntries')}</Typography>}
         <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
             <MenuItem component={RouterLink} to={menu ? `/items/${menu.row.id}` : '#'} onClick={() => setMenu(null)}>
                 <ListItemText>{t('common.open')}</ListItemText>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Autocomplete, Box, Checkbox, Chip, FormControlLabel, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Typography } from '@mui/material';
-import { TextField } from '../components/shared/DateTextField';
+import { DateRangeField, TextField } from '../components/shared/DateTextField';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
@@ -350,12 +350,9 @@ function AttendeeForm({ attendee, initialPerson, eventType, startDate, endDate, 
       {duplicateRole && <Alert severity="warning">{t('pages.eventAttendees.eachRoleCanBeHeldOnlyOncePerFaction')}</Alert>}
 
       <Typography variant="subtitle2" component="h3" sx={{ pt: 1 }}>{t('pages.eventAttendees.travelCatering')}</Typography>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField fullWidth type="datetime-local" label={t('pages.eventAttendees.arrival')} value={arrivesAt} onChange={(e) => setArrivesAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField fullWidth type="datetime-local" label={t('pages.eventAttendees.departure')} value={leavesAt} onChange={(e) => setLeavesAt(e.target.value)} error={invalidRange}
-          helperText={invalidRange ? t('pages.eventAttendees.departureMustBeAtOrAfterArrival') : undefined}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: arrivesAt || undefined } }} />
-      </Stack>
+      <DateRangeField withTime startLabel={t('pages.eventAttendees.arrival')} endLabel={t('pages.eventAttendees.departure')} start={arrivesAt} end={leavesAt}
+        rangeErrorText={t('pages.eventAttendees.departureMustBeAtOrAfterArrival')}
+        onChange={(range) => { setArrivesAt(range.start); setLeavesAt(range.end); }} />
       <Typography variant="caption" color="text.secondary">{t('pages.eventAttendees.localTimeAtTheEventLeaveUnknownTravelTimesEmpty')}</Typography>
       <Alert icon={<RestaurantOutlinedIcon />} severity="info">{t('pages.eventAttendees.cateringCalculation')}</Alert>
       <FormControlLabel control={<Checkbox checked={foodStampsIssued} onChange={(e) => setFoodStampsIssued(e.target.checked)} />} label={t('pages.eventAttendees.foodStampsAlreadyIssued')} />

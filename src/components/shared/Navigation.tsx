@@ -73,13 +73,15 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
         ] : [] },
         { label: t('shared.navigation.ordersReturns'), items: organization ? [
             { label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> },
-            { label: t('common.eventPlanning'), path: '/events', icon: <EventOutlinedIcon /> },
-            { label: t('common.eventAttendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
-            { label: t('common.eventTimeline'), path: '/events/timeline', icon: <TimelineIcon /> },
             ...(manager ? [
                 { label: t('shared.navigation.checkedOut'), path: '/checked-out', icon: <OutputIcon /> },
                 { label: t('shared.navigation.reviewReturns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
             ] : []),
+        ] : [] },
+        { label: t('nav.events'), items: organization ? [
+            { label: t('common.eventPlanning'), path: '/events', icon: <EventOutlinedIcon /> },
+            { label: t('common.eventAttendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
+            { label: t('common.eventTimeline'), path: '/events/timeline', icon: <TimelineIcon /> },
         ] : [] },
         { label: t('shared.navigation.operations'), items: [
             ...(operations ? [{ label: t('shared.navigation.warehouseTasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),

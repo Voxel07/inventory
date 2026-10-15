@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Box, Chip, MenuItem, Paper, Stack, Tabs, Typography } from '@mui/material';
-import { TextField } from '../shared/DateTextField';
+import { DateRangeField, TextField } from '../shared/DateTextField';
 import AddIcon from '@mui/icons-material/Add';
 import SportsEsportsOutlinedIcon from '@mui/icons-material/SportsEsportsOutlined';
 import ConstructionOutlinedIcon from '@mui/icons-material/ConstructionOutlined';
@@ -180,12 +180,9 @@ function TimelineForm({ entry, category, startDate, endDate, pending, error, onS
       <TextField autoFocus fullWidth required label={t('pages.eventTimeline.title')} value={title} onChange={(e) => setTitle(e.target.value)}
         placeholder={category === 'catering' ? t('pages.eventTimeline.crewCatering') : category === 'in_game' ? t('pages.eventTimeline.eGMissionBriefing') : t('pages.eventTimeline.eGSetUpRadioNetwork')}
         slotProps={{ htmlInput: { maxLength: 255 } }} />
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField fullWidth required type="datetime-local" label={t('pages.eventTimeline.start')} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField fullWidth type="datetime-local" label={t('pages.eventTimeline.endOptional')} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} error={invalidRange}
-          helperText={invalidRange ? t('pages.eventTimeline.endMustBeAtOrAfterStart') : t('pages.eventTimeline.leaveEmptyForAPointInTimeAction')}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: startsAt || undefined } }} />
-      </Stack>
+      <DateRangeField withTime required="start" startLabel={t('pages.eventTimeline.start')} endLabel={t('pages.eventTimeline.endOptional')} start={startsAt} end={endsAt}
+        rangeErrorText={t('pages.eventTimeline.endMustBeAtOrAfterStart')} helperText={t('pages.eventTimeline.leaveEmptyForAPointInTimeAction')}
+        onChange={(range) => { setStartsAt(range.start); setEndsAt(range.end); }} />
       <Alert severity="info">{category === 'catering' ? t('pages.eventTimeline.cateringDescription') : t('pages.eventTimeline.localTimeAtTheEventPreparationAndTeardownCanFall')}</Alert>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField fullWidth label={t('pages.eventTimeline.responsiblePersonTeam')} value={owner} onChange={(e) => setOwner(e.target.value)} slotProps={{ htmlInput: { maxLength: 255 } }} />

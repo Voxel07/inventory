@@ -21,7 +21,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { TextField } from '../components/shared/DateTextField';
+import { DateRangeField, TextField } from '../components/shared/DateTextField';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
@@ -212,8 +212,8 @@ export function EventDetail() {
               <TextField select fullWidth label={t('nav.event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
                 {eventTypes.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
               </TextField>
-              <TextField fullWidth type="date" label={t('common.startDate')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
-              <TextField fullWidth type="date" label={t('common.endDate')} value={endDate} onChange={(event) => setEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(endDate && endDate < eventDate)} required />
+              <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={eventDate} end={endDate}
+                onChange={(range) => { setEventDate(range.start); setEndDate(range.end); }} />
               <TextField select fullWidth label={t('common.status')} value={status} onChange={(event) => setStatus(event.target.value as EventReportStatus)}>
                 <MenuItem value="planned">{t('common.planned')}</MenuItem>
                 <MenuItem value="completed">{t('common.completed')}</MenuItem>

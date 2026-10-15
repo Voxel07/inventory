@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { Dialog } from '../components/shared/ClosableDialog';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,42 +27,53 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import { TextField } from '../components/shared/DateTextField';
+import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import { deDE, enUS } from '@mui/x-data-grid/locales';
+import { DateRangeField, TextField } from '../components/shared/DateTextField';
+import AddIcon from '@mui/icons-material/Add';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import SaveIcon from '@mui/icons-material/Save';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { itemApi } from '../services/inventoryService';
 import { useQuery } from '@tanstack/react-query';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
-import type { EventReportStatus, EventType, Item } from '../types';
+import type { EventReport, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
-import { translate, useT } from '../utils/naming';
+import { translate, useAppLanguage, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
+import { catalogGridSx } from '../components/lists/catalogGrid';
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+type UsageRow = { id: string; name: string };
 
 export function Events() {
   const navigate = useNavigate();
   const t = useT();
+  const language = useAppLanguage();
   const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
   const canEdit = canEditEvents(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
-  const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
-  const [eventEndDate, setEventEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedEventId, setSelectedEventId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
-  const [planOpen, setPlanOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
-  const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
-  const [newEndDate, setNewEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newDate, setNewDate] = useState(today());
+  const [newEndDate, setNewEndDate] = useState(today());
+  const [editName, setEditName] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
+  const [usageSearch, setUsageSearch] = useState('');
   // Planning an event type needs every item tagged for it: an explicit complete read of that subset only.
   const { data: items, isLoading: itemsLoading } = useQuery({ queryKey: ['items', 'all', 'event-type', eventType],
     queryFn: () => itemApi.getAll({ eventType, sort: 'name' }), networkMode: 'offlineFirst' });
@@ -85,32 +97,43 @@ export function Events() {
   const completedReports = reports?.filter((report) => report.status === 'completed') ?? [];
   const lastCompleted = completedReports[0];
   const selectedEvent = reports?.find((report) => report.id === selectedEventId) ?? reports?.find((report) => report.status === 'planned') ?? reports?.[0];
-  const currentEvent = selectedEvent;
   const eventItems = items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [];
   const usageReports = [...completedReports].sort((left, right) => left.eventDate.localeCompare(right.eventDate));
-  const usageItemIds = (() => {
+  // A planned event can be closed from its last day on; closing locks its report.
+  const eventOver = Boolean(selectedEvent && (selectedEvent.endDate ?? selectedEvent.startDate).slice(0, 10) <= today());
+
+  function itemName(itemId: string): string {
+    return items?.find((item) => item.id === itemId)?.name ?? usageReports.find((entry) => entry.itemNames?.[itemId])?.itemNames?.[itemId] ?? itemId;
+  }
+
+  const usageRows: UsageRow[] = (() => {
     const ids = new Set<string>();
     usageReports.forEach((report) => Object.entries(report.usedQuantities ?? {})
       .filter(([, quantity]) => quantity > 0)
       .forEach(([itemId]) => ids.add(itemId)));
-    const names = new Map(items?.map((item) => [item.id, item.name]) ?? []);
-    return [...ids].sort((left, right) => (names.get(left) ?? left).localeCompare(names.get(right) ?? right));
+    const query = usageSearch.trim().toLocaleLowerCase();
+    return [...ids].map((id) => ({ id, name: itemName(id) }))
+      .filter((row) => row.name.toLocaleLowerCase().includes(query))
+      .sort((left, right) => left.name.localeCompare(right.name));
   })();
+  const usageColumns: GridColDef<UsageRow>[] = [
+    { field: 'name', headerName: t('common.item'), flex: 1, minWidth: 200 },
+    ...usageReports.map((report): GridColDef<UsageRow> => ({
+      field: `report:${report.id}`, headerName: report.name || formatDate(report.eventDate), description: `${formatDate(report.startDate)} – ${formatDate(report.endDate)}`,
+      type: 'number', width: 130, valueGetter: (_value, row) => report.usedQuantities?.[row.id] ?? null,
+      valueFormatter: (value: number | null) => value ?? '—',
+    })),
+  ];
 
-  const planningKey = JSON.stringify([eventType, selectedEvent?.id, selectedEvent?.notes, selectedEvent?.plannedQuantities, lastCompleted?.plannedQuantities, lastCompleted?.usedQuantities]);
-  const [planningSource, setPlanningSource] = useState<string | undefined>(undefined);
-  if (planningSource !== planningKey) {
-    setPlanningSource(planningKey);
-    setPlanned(toQuantityInputs(selectedEvent?.plannedQuantities ?? lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
-    setNotes(selectedEvent?.notes ?? '');
+  function stockFor(item: Item) {
+    return getItemStock(item).remaining;
   }
 
-  const datesKey = JSON.stringify([eventType, currentEvent?.id, currentEvent?.eventDate, currentEvent?.endDate]);
-  const [datesSource, setDatesSource] = useState<string | undefined>(undefined);
-  if (datesSource !== datesKey) {
-    setDatesSource(datesKey);
-    setEventDate(currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-    setEventEndDate(currentEvent?.endDate?.slice(0, 10) ?? currentEvent?.eventDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  function openCreate() {
+    setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
+    setNewDate(today());
+    setNewEndDate(today());
+    setCreateOpen(true);
   }
 
   function createEvent() {
@@ -135,57 +158,62 @@ export function Events() {
     });
   }
 
-  function itemName(itemId: string, report?: { itemNames?: Record<string, string> }): string {
-    return items?.find((item) => item.id === itemId)?.name ?? report?.itemNames?.[itemId] ?? usageReports.find((entry) => entry.itemNames?.[itemId])?.itemNames?.[itemId] ?? itemId;
+  /** Seeds the editor from the event; a fresh plan starts from the last completed event's usage. */
+  function openEdit(event: EventReport) {
+    const hasPlan = Object.keys(event.plannedQuantities ?? {}).length > 0;
+    setEditName(event.name);
+    setEditStart(event.startDate.slice(0, 10));
+    setEditEnd((event.endDate ?? event.startDate).slice(0, 10));
+    setPlanned(toQuantityInputs(hasPlan ? event.plannedQuantities : lastCompleted?.usedQuantities ?? lastCompleted?.plannedQuantities));
+    setNotes(event.notes ?? '');
+    setEditOpen(true);
   }
 
-  function stockFor(item: Item) {
-    return getItemStock(item).remaining;
-  }
-
-  function save(status: EventReportStatus) {
-    if (!selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate) return;
-    const plannedQuantities = toNonNegativeQuantities(planned);
-
-    const data = {
-      eventType,
-      eventDate: new Date(`${eventDate}T12:00:00.000Z`).toISOString(),
-      name: selectedEvent?.name,
-      startDate: eventDate,
-      endDate: eventEndDate,
-      status,
+  // usedQuantities is omitted so updates keep the usage recorded through orders.
+  function update(event: EventReport, changes: { name: string; startDate: string; endDate: string; status: EventReport['status']; plannedQuantities: Record<string, number>; notes: string }, onSuccess: () => void) {
+    updateReport.mutate({ id: event.id, data: {
+      eventType: event.eventType,
+      eventDate: new Date(`${changes.startDate}T12:00:00.000Z`).toISOString(),
       itemIds: [],
-      plannedQuantities,
-      usedQuantities: {},
-      notes: notes.trim(),
-    };
-    const existing = selectedEvent;
-    const callbacks = {
-      onSuccess: () => {
-        showSnackbar(
-          status === 'completed'
-            ? t('pages.events.eventReportSaved')
-            : t('pages.events.eventPlanSaved'),
-          'success',
-        );
-        setNotes('');
-        setPlanOpen(false);
-      },
+      ...changes,
+    } }, {
+      onSuccess,
       onError: () => showSnackbar(t('pages.events.couldNotSaveEvent'), 'error'),
-    };
-    if (existing) updateReport.mutate({ id: existing.id, data }, callbacks);
+    });
+  }
+
+  function saveEdit() {
+    if (!selectedEvent || !editName.trim() || !editStart || !editEnd || editEnd < editStart) return;
+    update(selectedEvent, { name: editName.trim(), startDate: editStart, endDate: editEnd, status: 'planned', plannedQuantities: toNonNegativeQuantities(planned), notes: notes.trim() }, () => {
+      setEditOpen(false);
+      showSnackbar(t('pages.events.eventPlanSaved'), 'success');
+    });
+  }
+
+  function closeEvent() {
+    if (!selectedEvent) return;
+    update(selectedEvent, {
+      name: selectedEvent.name,
+      startDate: selectedEvent.startDate.slice(0, 10),
+      endDate: (selectedEvent.endDate ?? selectedEvent.startDate).slice(0, 10),
+      status: 'completed',
+      plannedQuantities: selectedEvent.plannedQuantities,
+      notes: selectedEvent.notes ?? '',
+    }, () => {
+      setCloseOpen(false);
+      showSnackbar(t('pages.events.eventClosed'), 'success');
+    });
   }
 
   const isLoading = itemsLoading || reportsLoading;
+  const editInvalid = !editName.trim() || !editStart || !editEnd || editEnd < editStart;
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4">{t('common.eventPlanning')}</Typography>
-        <Typography color="text.secondary">
-          {t('pages.events.planAvailableItemsAndCompareUsageFromPreviousEvents')}
-        </Typography>
-      </Box>
+      <PageHeader title={t('common.eventPlanning')} description={t('pages.events.planAvailableItemsAndCompareUsageFromPreviousEvents')}
+        actions={<Button title={translate('pages.events.createANewEvent')} variant="contained" startIcon={<AddIcon />} disabled={!canEdit} onClick={openCreate}>
+          {t('pages.events.createEvent')}
+        </Button>} />
 
       <ToggleButtonGroup
         exclusive
@@ -196,26 +224,24 @@ export function Events() {
         {eventTypes.map((type) => <ToggleButton title={translate('pages.events.filterEventsByThisEventType')} key={type} value={type}>{type}</ToggleButton>)}
       </ToggleButtonGroup>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap sx={{ mb: 3, gap: 2, alignItems: { sm: 'center' }, flexWrap: 'wrap' }}>
         <TextField select label={t('pages.events.selectEvent')} value={selectedEvent?.id ?? ''}
           onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: 260 }}>
           {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
             {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}
           </MenuItem>)}
         </TextField>
-        <Button title={translate('pages.events.createANewEvent')} variant="contained" disabled={!canEdit} onClick={() => {
-          setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
-          setNewDate(new Date().toISOString().slice(0, 10));
-          setNewEndDate(new Date().toISOString().slice(0, 10));
-          setCreateOpen(true);
-        }}>{t('pages.events.createEvent')}</Button>
-        {canEdit && selectedEvent?.status === 'planned' && <Button title={translate('pages.events.editThePlannedItemQuantities')} variant="outlined" onClick={() => setPlanOpen(true)}>{t('pages.events.editPlan')}</Button>}
+        {canEdit && selectedEvent?.status === 'planned' && <>
+          <Button title={translate('pages.events.editTheEventDetailsAndPlannedQuantities')} variant="outlined" startIcon={<EditIcon />} onClick={() => openEdit(selectedEvent)}>
+            {t('pages.events.editEvent')}
+          </Button>
+          <Button title={translate(eventOver ? 'pages.events.closeTheEventAndLockItsReport' : 'pages.events.theEventCanBeClosedOnItsLastDay')} variant="outlined"
+            startIcon={<EventAvailableIcon />} disabled={!eventOver} onClick={() => setCloseOpen(true)}>
+            {t('pages.events.closeEvent')}
+          </Button>
+        </>}
+        {selectedEvent?.status === 'completed' && <Chip color="success" icon={<EventAvailableIcon />} label={t('pages.events.closedReportLocked')} />}
       </Stack>
-
-      {selectedEvent && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
-        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${selectedEvent.id}`)}>{t('pages.events.attendeesFoodStamps')}</Button>
-        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${selectedEvent.id}`)}>{t('common.eventTimeline')}</Button>
-      </Stack>}
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Paper sx={{ p: 2, flex: 1 }}>
@@ -259,78 +285,19 @@ export function Events() {
 
       <EventQuantities event={selectedEvent} />
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>{t('pages.events.currentEventUsage')}</Typography>
-        {currentEvent && Object.entries(currentEvent.usedQuantities ?? {}).some(([, quantity]) => quantity > 0) ? (
-          <Stack spacing={0.5}>
-            {Object.entries(currentEvent.usedQuantities).filter(([, quantity]) => quantity > 0).map(([id, quantity]) => (
-              <Typography key={id}>{itemName(id, currentEvent)}: {quantity}</Typography>
-            ))}
-          </Stack>
-        ) : <Typography color="text.secondary">{t('pages.events.noItemsHaveBeenPickedUpThroughOrdersYet')}</Typography>}
-      </Paper>
-
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Stack spacing={2}>
-          <Typography variant="h6">{t('pages.events.savePlanOrReport')}</Typography>
-          <TextField
-            label={t('common.startDate')}
-            type="date"
-            value={eventDate}
-            onChange={(event) => setEventDate(event.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField label={t('common.endDate')} type="date" value={eventEndDate} onChange={(event) => setEventEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(eventEndDate && eventEndDate < eventDate)} />
-          <TextField
-            label={t('common.notes')}
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            multiline
-            minRows={2}
-          />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button title={translate('pages.events.saveThisEventAndItsQuantitiesAsAPlan')} startIcon={<SaveIcon />} variant="outlined" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('planned')}>
-              {t('pages.events.saveAsPlan')}
-            </Button>
-            <Button title={translate('pages.events.saveThisEventAsCompleted')} startIcon={<EventAvailableIcon />} variant="contained" disabled={!canEdit || !selectedEvent || !eventDate || !eventEndDate || eventEndDate < eventDate || createReport.isPending || updateReport.isPending} onClick={() => save('completed')}>
-              {t('pages.events.saveAsCompleted')}
-            </Button>
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {usageReports.length > 1 && usageItemIds.length > 0 && (
+      {usageReports.length > 0 && (
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>{t('pages.events.usageOverTime')}</Typography>
+          <Typography variant="h6" sx={{ mb: 0.5 }}>{t('pages.events.usageOverTime')}</Typography>
           <Typography color="text.secondary" sx={{ mb: 1.5 }}>
             {t('pages.events.actualQuantitiesUsedPerCompletedEventItemsThatAreOnly')}
           </Typography>
-          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('common.item')}</TableCell>
-                  {usageReports.map((report) => (
-                    <TableCell key={report.id} align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      {formatDate(report.eventDate)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {usageItemIds.map((itemId) => (
-                  <TableRow key={itemId} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{itemName(itemId)}</TableCell>
-                    {usageReports.map((report) => (
-                      <TableCell key={report.id} align="right">
-                        {report.usedQuantities?.[itemId] ?? '—'}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <TextField type="search" label={t('lists.itemsList.searchByName')} value={usageSearch}
+            onChange={(event) => setUsageSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />
+          <DataGrid rows={usageRows} columns={usageColumns} density="compact" autoHeight disableRowSelectionOnClick
+            onRowClick={({ row }) => navigate(`/items/${row.id}`)}
+            initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } } }} pageSizeOptions={[25, 50, 100]}
+            localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}
+            sx={catalogGridSx} />
         </Box>
       )}
 
@@ -384,28 +351,44 @@ export function Events() {
         onClose={() => setDeletingEventId(null)}
         onConfirm={deleteEvent}
       />
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
+      <ConfirmDialog
+        open={closeOpen}
+        title={t('pages.events.closeEvent')}
+        message={t('pages.events.closeNameTheReportIsLockedAndCanNoLongerBeEdited', { name: selectedEvent?.name ?? '' })}
+        actionLabel={t('pages.events.closeEvent')}
+        pending={updateReport.isPending}
+        onClose={() => setCloseOpen(false)}
+        onConfirm={closeEvent}
+      />
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('pages.events.createEvent')}</DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>
           <Stack spacing={2}>
             <TextField required autoFocus label={t('pages.events.eventName')} value={newName} onChange={(event) => setNewName(event.target.value)} />
-            <TextField required type="date" label={t('pages.events.eventDate')} value={newDate} onChange={(event) => setNewDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField required type="date" label={t('common.endDate')} value={newEndDate} onChange={(event) => setNewEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: newDate } }} error={Boolean(newEndDate && newEndDate < newDate)} />
+            <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={newDate} end={newEndDate}
+              onChange={(range) => { setNewDate(range.start); setNewEndDate(range.end); }} />
           </Stack>
         </DialogContent>
         <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheNewEvent')} variant="contained" disabled={!newName.trim() || !newDate || !newEndDate || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('pages.events.create')}</Button></DialogActions>
       </Dialog>
-      <Dialog open={planOpen} onClose={() => setPlanOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{t('pages.events.planEvent')}: {selectedEvent?.name}</DialogTitle>
-        <DialogContent dividers><Stack spacing={1}>
-          {eventItems.map((item) => <Stack key={item.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-            <TextField type="number" size="small" label={t('common.quantity')} value={planned[item.id] ?? ''}
-              onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 100 }} />
-          </Stack>)}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('pages.events.editEvent')}: {selectedEvent?.name}</DialogTitle>
+        <DialogContent dividers><Stack spacing={2}>
+          <TextField required label={t('pages.events.eventName')} value={editName} onChange={(event) => setEditName(event.target.value)} />
+          <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={editStart} end={editEnd}
+            onChange={(range) => { setEditStart(range.start); setEditEnd(range.end); }} />
+          <TextField label={t('common.notes')} value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} />
+          <Typography variant="subtitle2" component="h3">{t('pages.events.plannedQuantities')}</Typography>
+          <Stack spacing={1}>
+            {eventItems.map((item) => <Stack key={item.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Typography sx={{ flex: 1 }}>{item.name}</Typography>
+              <TextField type="number" size="small" label={t('common.quantity')} value={planned[item.id] ?? ''}
+                onChange={(event) => setPlanned((current) => ({ ...current, [item.id]: event.target.value }))}
+                slotProps={{ htmlInput: { min: 0, step: 1 } }} sx={{ width: 100 }} />
+            </Stack>)}
+          </Stack>
         </Stack></DialogContent>
-        <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setPlanOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveThePlannedItemQuantities')} variant="contained" disabled={updateReport.isPending} onClick={() => save('planned')}>{t('pages.events.savePlan')}</Button></DialogActions>
+        <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheEventChanges')} variant="contained" disabled={editInvalid || updateReport.isPending} onClick={saveEdit}>{t('common.save')}</Button></DialogActions>
       </Dialog>
     </Box>
   );

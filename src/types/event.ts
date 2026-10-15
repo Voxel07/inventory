@@ -35,6 +35,7 @@ export interface EventReportFormData {
   status: EventReportStatus;
   itemIds: string[];
   plannedQuantities: Record<string, number>;
-  usedQuantities: Record<string, number>;
+  /** Omitted on update to keep the usage recorded through orders. */
+  usedQuantities?: Record<string, number>;
   notes?: string;
 }

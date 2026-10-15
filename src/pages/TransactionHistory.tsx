@@ -1,6 +1,6 @@
 import { Button } from '../components/shared/ActionButtons';
 import { Alert, Box, MenuItem, Stack, Typography } from '@mui/material';
-import { TextField } from '../components/shared/DateTextField';
+import { DateRangeField, TextField } from '../components/shared/DateTextField';
 import { useState } from 'react';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
 import { useTransactions } from '../hooks/useTransactions';
@@ -46,8 +46,10 @@ export function TransactionHistoryPage() {
           <MenuItem value="">{t('common.all')}</MenuItem>
           {(['checkout', 'checkin', 'added', 'repaired', 'written_off'] as const).map((type) => <MenuItem key={type} value={type}>{nameFor('transactionType', type)}</MenuItem>)}
         </TextField>
-        <TextField label={t('common.startDate')} type="date" value={transactionFilters.startDate} onChange={(event) => setTransactionFilters({ startDate: event.target.value })} size="small" slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField label={t('common.endDate')} type="date" value={transactionFilters.endDate} onChange={(event) => setTransactionFilters({ endDate: event.target.value })} size="small" slotProps={{ inputLabel: { shrink: true } }} />
+        <Box sx={{ minWidth: { sm: 340 } }}>
+          <DateRangeField size="small" startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={transactionFilters.startDate} end={transactionFilters.endDate}
+            onChange={(range) => setTransactionFilters({ startDate: range.start, endDate: range.end })} />
+        </Box>
 
         <Button title={t('pages.transactionHistory.resetAllFilters')} variant="outlined" onClick={() => { resetTransactionFilters(); setSearch(''); }} size="small">{names.action.reset}</Button>
       </Stack>
