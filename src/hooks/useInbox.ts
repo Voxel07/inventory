@@ -41,14 +41,14 @@ export function usePickupNotifications() {
     },
     onError: (_error, _ids, context) => {
       if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_KEY, context.previous);
-      showSnackbar(translate('Abholhinweis konnte nicht ausgeblendet werden', 'Could not dismiss pickup notice'), 'error');
+      showSnackbar(translate('hooks.useInbox.couldNotDismissPickupNotice'), 'error');
     },
     // Refetch so older unread notices move into the page and the total stays exact.
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
   const markAll = useMutation({
     mutationFn: () => markAllNotificationsRead(unread[0]?.createdAt),
-    onError: () => showSnackbar(translate('Hinweise konnten nicht ausgeblendet werden', 'Could not dismiss notices'), 'error'),
+    onError: () => showSnackbar(translate('hooks.useInbox.couldNotDismissNotices'), 'error'),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
   return { ...query, unread, unreadTotal, markRead, markAll };
@@ -67,19 +67,19 @@ import { noticeText } from '../utils/notifications';
 
 export function notificationTitle(notification: AppNotification): string {
   if (notification.type === 'item_requested') {
-    const item = noticeText(notification, 'itemName') ?? translate('Ihr Artikel', 'your item');
+    const item = noticeText(notification, 'itemName') ?? translate('hooks.useInbox.yourItem');
     const requester = noticeText(notification, 'requesterName');
     return requester
-      ? translate(`${requester} hat ${item} angefragt`, `${requester} requested ${item}`)
-      : translate(`${item} wurde angefragt`, `${item} was requested`);
+      ? translate('hooks.useInbox.requesterRequestedItem', { requester: requester, item: item })
+      : translate('hooks.useInbox.itemWasRequested', { item: item });
   }
   const name = noticeText(notification, 'orderCode');
   if (notification.type === 'order_items_assigned') return name
-    ? translate(`Artikel für Bestellung ${name} vorbereiten`, `Prepare items for order ${name}`)
-    : translate('Bestellte Artikel vorbereiten', 'Prepare ordered items');
+    ? translate('hooks.useInbox.prepareItemsForOrderName', { name: name })
+    : translate('hooks.useInbox.prepareOrderedItems');
   if (notification.type === 'order_group_ready') return name
-    ? translate(`Ihre Artikel für Bestellung ${name} sind abholbereit`, `Your items for order ${name} are ready for pickup`)
-    : translate('Ihre Artikel sind abholbereit', 'Your items are ready for pickup');
-  return name ? translate(`Bestellung ${name} ist abholbereit`, `Order ${name} is ready for pickup`)
-    : translate('Bestellung ist abholbereit', 'Order is ready for pickup');
+    ? translate('hooks.useInbox.yourItemsForOrderNameAreReadyForPickup', { name: name })
+    : translate('hooks.useInbox.yourItemsAreReadyForPickup');
+  return name ? translate('hooks.useInbox.orderNameIsReadyForPickup', { name: name })
+    : translate('header.orderReadyGeneric');
 }

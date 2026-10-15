@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { itemApi } from '../services/inventoryService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { ListPagination } from '../components/shared/ListPagination';
 import { useClientPagination } from '../hooks/useClientPagination';
 
@@ -78,7 +78,7 @@ function QRCodeThumbnail({ id, type, name }: { id: string; type: 'item' | 'assem
 }
 
 export function PrintQRCodesPage() {
-    const t = useLocalizedText();
+    const t = useT();
     // Label printing is an explicit export: it reads every visible item once, on this page only.
     const { data: items, isLoading: itemsLoading } = useQuery({ queryKey: ['items', 'all', 'labels'], queryFn: () => itemApi.getAll(), networkMode: 'offlineFirst' });
     const { data: assemblies, isLoading: assembliesLoading } = useAssemblies();
@@ -169,7 +169,7 @@ export function PrintQRCodesPage() {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>{t('Lade Daten...', 'Loading data...')}</Typography>
+                <Typography sx={{ ml: 2 }}>{t('pages.printQRCodes.loadingData')}</Typography>
             </Box>
         );
     }
@@ -179,19 +179,19 @@ export function PrintQRCodesPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">QR-Codes</Typography>
 
-                <Button title={translate('QR-Etiketten für die gefilterten Einträge als PDF herunterladen', 'Download QR labels for the filtered entries as PDF')}
+                <Button title={translate('pages.printQRCodes.downloadQRLabelsForTheFilteredEntriesAsPDF')}
                     variant="contained"
                     startIcon={<PictureAsPdfIcon />}
                     onClick={handleGeneratePDF}
                     disabled={filteredEntries.length === 0 || pdfGenerating}
                 >
-                    {pdfGenerating ? t('Wird generiert…', 'Generating…') : t('PDF herunterladen', 'Download PDF')}
+                    {pdfGenerating ? t('pages.printQRCodes.generating') : t('pages.printQRCodes.downloadPDF')}
                 </Button>
             </Box>
 
             <Paper sx={{ p: 2, mb: 3 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    {t('Filter', 'Filter')}
+                    {t('pages.printQRCodes.filter')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
                     <ToggleButtonGroup
@@ -205,42 +205,42 @@ export function PrintQRCodesPage() {
                         }}
                         size="small"
                     >
-                        <ToggleButton title={translate('QR-Etiketten für Artikel und Baugruppen anzeigen', 'Display QR labels for items and assemblies')} value="all">{t('Alle', 'All')}</ToggleButton>
-                        <ToggleButton title={translate('Nur QR-Etiketten für Artikel anzeigen', 'Display QR labels for items only')} value="items">{t('Nur Artikel', 'Items only')}</ToggleButton>
-                        <ToggleButton title={translate('Nur QR-Etiketten für Baugruppen anzeigen', 'Display QR labels for assemblies only')} value="assemblies">{t('Nur Baugruppen', 'Assemblies only')}</ToggleButton>
-                        <ToggleButton title={translate('Ein einzelnes QR-Etikett auswählen', 'Choose a single QR label')} value="single">{t('Einzeln', 'Single')}</ToggleButton>
-                        <ToggleButton title={translate('Mehrere QR-Etiketten gezielt auswählen', 'Select specific QR labels')} value="selected">{t('Auswahl', 'Selection')}</ToggleButton>
+                        <ToggleButton title={translate('pages.printQRCodes.displayQRLabelsForItemsAndAssemblies')} value="all">{t('common.all')}</ToggleButton>
+                        <ToggleButton title={translate('pages.printQRCodes.displayQRLabelsForItemsOnly')} value="items">{t('pages.printQRCodes.itemsOnly')}</ToggleButton>
+                        <ToggleButton title={translate('pages.printQRCodes.displayQRLabelsForAssembliesOnly')} value="assemblies">{t('pages.printQRCodes.assembliesOnly')}</ToggleButton>
+                        <ToggleButton title={translate('pages.printQRCodes.chooseASingleQRLabel')} value="single">{t('pages.printQRCodes.single')}</ToggleButton>
+                        <ToggleButton title={translate('pages.printQRCodes.selectSpecificQRLabels')} value="selected">{t('pages.printQRCodes.selection')}</ToggleButton>
                     </ToggleButtonGroup>
 
                     {filterMode === 'single' && (
                         <Autocomplete
                             options={allEntries}
-                            getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
+                            getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('common.item') : t('enum.value.assembly')})`}
                             value={allEntries.find((o) => `${o.type}:${o.id}` === selectedId) ?? null}
                             onChange={(_e, newValue) => {
                                 setSelectedId(newValue ? `${newValue.type}:${newValue.id}` : null);
                                 setPage(1);
                             }}
                             renderInput={(params) => (
-                                <TextField {...params} label={t('Artikel oder Baugruppe auswählen', 'Select item or assembly')} size="small" />
+                                <TextField {...params} label={t('pages.printQRCodes.selectItemOrAssembly')} size="small" />
                             )}
                             sx={{ minWidth: 280 }}
                         />
                     )}
                     {filterMode === 'selected' && <Autocomplete multiple options={allEntries}
-                        getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')})`}
+                        getOptionLabel={(option) => `${option.name} (${option.type === 'item' ? t('common.item') : t('enum.value.assembly')})`}
                         isOptionEqualToValue={(option, value) => option.id === value.id && option.type === value.type}
                         value={allEntries.filter((entry) => selectedIds.includes(`${entry.type}:${entry.id}`))}
                         onChange={(_event, values) => {
                             setSelectedIds(values.map((entry) => `${entry.type}:${entry.id}`));
                             setPage(1);
                         }}
-                        renderInput={(params) => <TextField {...params} label={t('QR-Codes auswählen', 'Select QR codes')} size="small" />}
+                        renderInput={(params) => <TextField {...params} label={t('pages.printQRCodes.selectQRCodes')} size="small" />}
                         sx={{ minWidth: 300, flex: 1 }} />}
 
                     <TextField
                         select
-                        label={t('M221-Etikettenformat', 'M221 label size')}
+                        label={t('pages.printQRCodes.m221LabelSize')}
                         value={labelFormatId}
                         onChange={(event) => setLabelFormatId(event.target.value as LabelFormatId)}
                         size="small"
@@ -252,10 +252,7 @@ export function PrintQRCodesPage() {
                     </TextField>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                    {t(
-                        'Eine PDF-Seite pro Etikett. Im Druckdialog „Tatsächliche Größe“ bzw. 100 % wählen.',
-                        'One PDF page per label. Choose “Actual size” or 100% in the print dialog.',
-                    )}
+                    {t('pages.printQRCodes.onePDFPagePerLabelChooseActualSizeOr100')}
                 </Typography>
             </Paper>
 
@@ -263,8 +260,8 @@ export function PrintQRCodesPage() {
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <Typography color="text.secondary">
                         {filterMode === 'single' && !selectedId
-                            ? t('Wählen Sie oben einen Artikel oder eine Baugruppe aus', 'Select an item or assembly above')
-                            : t('Keine QR-Codes zum Anzeigen', 'No QR codes to display')}
+                            ? t('pages.printQRCodes.selectAnItemOrAssemblyAbove')
+                            : t('pages.printQRCodes.noQRCodesToDisplay')}
                     </Typography>
                 </Paper>
             ) : (
@@ -280,7 +277,7 @@ export function PrintQRCodesPage() {
                                     {entry.name}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {entry.type === 'item' ? t('Artikel', 'Item') : t('Baugruppe', 'Assembly')}
+                                    {entry.type === 'item' ? t('common.item') : t('enum.value.assembly')}
                                 </Typography>
                             </Paper>
                         </Grid>

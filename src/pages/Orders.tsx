@@ -5,12 +5,12 @@ import { OrderPickupGroups } from '../components/orders/OrderPickupGroups';
 import { useSearchParams } from 'react-router-dom';
 import { GeneralOrders } from '../components/orders/GeneralOrders';
 import { FactionOrders } from './FactionOrders';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 
 type OrderTab = 'general' | 'faction';
 
 export function Orders() {
-  const t = useLocalizedText();
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: OrderTab = searchParams.get('tab') === 'general' ? 'general' : 'faction';
   const pickupOrder = searchParams.get('pickupOrder');
@@ -20,7 +20,7 @@ export function Orders() {
     <Box>
       {pickupOrder && <Paper sx={{ p: 2, mb: 3 }}>
         <OrderPickupGroups key={`${pickupKind}:${pickupOrder}`} kind={pickupKind} orderId={pickupOrder} />
-        <Button onClick={() => setSearchParams({ tab: pickupKind })}>{t('Zur Bestellübersicht', 'Back to order overview')}</Button>
+        <Button onClick={() => setSearchParams({ tab: pickupKind })}>{t('pages.orders.backToOrderOverview')}</Button>
       </Paper>}
       <Paper sx={{ mb: 3, px: 1 }}>
         <Tabs
@@ -28,10 +28,10 @@ export function Orders() {
           onChange={(_event, value: OrderTab) => setSearchParams({ tab: value })}
           variant="scrollable"
           allowScrollButtonsMobile
-          aria-label={t('Bestellarten', 'Order types')}
+          aria-label={t('pages.orders.orderTypes')}
         >
-          <Tab value="general" label={t('Allgemeine Bestellungen', 'General orders')} id="orders-tab-general" aria-controls="orders-panel" />
-          <Tab value="faction" label={t('Fraktionsbestellungen', 'Faction orders')} id="orders-tab-faction" aria-controls="orders-panel" />
+          <Tab value="general" label={t('common.generalOrders')} id="orders-tab-general" aria-controls="orders-panel" />
+          <Tab value="faction" label={t('pages.orders.factionOrders')} id="orders-tab-faction" aria-controls="orders-panel" />
         </Tabs>
       </Paper>
       <Box id="orders-panel" role="tabpanel" aria-labelledby={`orders-tab-${tab}`}>

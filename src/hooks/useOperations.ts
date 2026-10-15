@@ -15,7 +15,7 @@ export function useOperationCommand() {
     mutationFn: (command: () => Promise<unknown>) => command(),
     onSuccess: () => {
       // apiRequest broadcasts each successful write to the app's shared invalidation policy.
-      feedback.success(translate('Gespeichert', 'Saved'));
+      feedback.success(translate('hooks.useOperations.saved'));
     },
   });
 }

@@ -10,7 +10,7 @@ import { type AssemblyFormData, type Assembly } from '../../types';
 import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { LoadMore } from '../shared/LoadMore';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
 
@@ -24,7 +24,7 @@ interface Props {
 
 /** Components are found by server search; selected components are resolved by id. */
 export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading }: Props) {
-    const t = useLocalizedText();
+    const t = useT();
     const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
     const canCreatePublic = canEditCatalog(user);
@@ -75,17 +75,17 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
 
     return (
         <DialogForm title={title} onSubmit={handleSubmit} onCancel={onCancel} noValidate pending={isLoading} submitDisabled={!formData.name.trim()}
-            submitLabel={initialData ? t('Baugruppe speichern', 'Save assembly') : t('Baugruppe erstellen', 'Create assembly')}>
-            <FormSection title={t('Grunddaten', 'Basic details')}>
+            submitLabel={initialData ? t('forms.assemblyForm.saveAssembly') : t('forms.assemblyForm.createAssembly')}>
+            <FormSection title={t('forms.assemblyForm.basicDetails')}>
                 <TextField
-                    label={t('Name', 'Name')}
+                    label={t('profile.name')}
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     required
                     fullWidth
                 />
                 <TextField
-                    label={t('Beschreibung', 'Description')}
+                    label={t('common.description')}
                     value={formData.description}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                     multiline
@@ -94,38 +94,38 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                 />
             </FormSection>
 
-            <FormSection title={t('Sichtbarkeit', 'Visibility')}>
+            <FormSection title={t('common.visibility')}>
                 <Box>
                     <FormControlLabel
                         control={<Switch checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
                             onChange={(_, checked) => setFormData((prev) => ({ ...prev, privateResource: checked }))} />}
-                        label={formData.privateResource ? t('Private Baugruppe', 'Private assembly') : t('Im gemeinsamen Katalog', 'In the shared catalog')} />
+                        label={formData.privateResource ? t('forms.assemblyForm.privateAssembly') : t('forms.assemblyForm.inTheSharedCatalog')} />
                     <FormHelperText sx={{ mt: 0 }}>
                         {formData.privateResource
-                            ? t('Nur du, Inventar-Admins und Personen, für die du sie freigibst, sehen diese Baugruppe.', 'Only you, inventory admins and people you share it with can see this assembly.')
-                            : t('Alle mit Katalogzugriff sehen diese Baugruppe.', 'Everyone with catalog access can see this assembly.')}
-                        {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
+                            ? t('forms.assemblyForm.onlyYouInventoryAdminsAndPeopleYouShareItWith')
+                            : t('forms.assemblyForm.everyoneWithCatalogAccessCanSeeThisAssembly')}
+                        {initialData ? ` ${t('forms.assemblyForm.visibilityCannotBeChangedAfterCreation')}` : ''}
                     </FormHelperText>
                 </Box>
             </FormSection>
 
-            <FormSection title={t('Bestandteile', 'Components')} description={t(`${selectedItems.length} Artikel ausgewählt`, `${selectedItems.length} items selected`)}>
+            <FormSection title={t('forms.assemblyForm.components')} description={t('forms.assemblyForm.selectedItemCountItemsSelected', { selectedItemCount: String(selectedItems.length) })}>
                 {selectedItems.length > 0 && (
                     <Stack spacing={0.5}>
                         {selectedItems.map((item) => (
                             <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Chip title={translate('Diesen Artikel aus der Auswahl entfernen', 'Remove this item from the selection')}
+                                <Chip title={translate('forms.assemblyForm.removeThisItemFromTheSelection')}
                                     label={item.name}
                                     onDelete={() => handleToggle(item.id)}
                                     sx={{ flexGrow: 1, justifyContent: 'space-between', minWidth: 0 }}
                                 />
-                                <IconButton title={t('Menge verringern', 'Decrease quantity')} type="button" onClick={() => handleQuantityChange(item.id, -1)}>
+                                <IconButton title={t('forms.assemblyForm.decreaseQuantity')} type="button" onClick={() => handleQuantityChange(item.id, -1)}>
                                     <RemoveIcon fontSize="small" />
                                 </IconButton>
                                 <Typography variant="body2" className="tabular" aria-live="polite" sx={{ minWidth: 24, textAlign: 'center', fontWeight: 600 }}>
                                     {formData.itemQuantities[item.id] ?? 1}
                                 </Typography>
-                                <IconButton title={t('Menge erhöhen', 'Increase quantity')} type="button" onClick={() => handleQuantityChange(item.id, 1)}>
+                                <IconButton title={t('forms.assemblyForm.increaseQuantity')} type="button" onClick={() => handleQuantityChange(item.id, 1)}>
                                     <AddIcon fontSize="small" />
                                 </IconButton>
                             </Box>
@@ -133,7 +133,7 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                     </Stack>
                 )}
                 <TextField
-                    label={t('Artikel suchen', 'Search items')}
+                    label={t('common.searchItems')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     fullWidth
@@ -142,7 +142,7 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                 <Paper variant="outlined" sx={{ maxHeight: 280, overflow: 'auto' }}>
                     {filteredItems.length === 0 ? (
                         <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                            {t('Keine Artikel gefunden', 'No items found')}
+                            {t('forms.assemblyForm.noItemsFound')}
                         </Typography>
                     ) : (
                         <List dense disablePadding>
@@ -171,9 +171,9 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                 </Paper>
             </FormSection>
 
-            <FormSection title={t('Weitere Angaben', 'Additional details')}>
+            <FormSection title={t('forms.assemblyForm.additionalDetails')}>
                 <TextField
-                    label={t('Montageanweisung', 'Assembly instructions')}
+                    label={t('forms.assemblyForm.assemblyInstructions')}
                     value={formData.hint ?? ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, hint: e.target.value }))}
                     multiline
@@ -185,7 +185,7 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                     options={eventTypes}
                     value={formData.eventTypes ?? []}
                     onChange={(_event, values) => setFormData((prev) => ({ ...prev, eventTypes: values }))}
-                    renderInput={(params) => <TextField {...params} label={t('Benötigt für Events', 'Needed for events')} />}
+                    renderInput={(params) => <TextField {...params} label={t('forms.assemblyForm.neededForEvents')} />}
                 />
                 <ImageAttachments existing={initialData?.image ? [initialData.image] : []} value={images} onChange={setImages} maxImages={1} disabled={isLoading} />
             </FormSection>

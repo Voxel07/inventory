@@ -2,22 +2,22 @@ import type { Item } from '../types';
 import { translate } from './naming';
 
 export const CSV_OPERATIONS = {
-  stock: ['Bestandsänderung', 'Stock change', ['itemId', 'transactionType', 'quantityChanged', 'reason']],
-  damage: ['Schadensmeldung', 'Damage report', ['itemId', 'amount', 'description', 'severity']],
-  repair: ['Reparaturfall', 'Repair case', ['damageReportId']],
-  repair_transition: ['Reparaturstatus', 'Repair transition', ['repairId', 'status']],
-  lot: ['Charge', 'Lot', ['itemId', 'lotNumber']],
-  maintenance: ['Wartungsplan', 'Maintenance schedule', ['itemId', 'maintenanceType', 'intervalType', 'intervalValue']],
-  purchase: ['Einkauf', 'Purchase order', ['vendorName', 'orderNumber', 'orderDate', 'lines']],
-  receipt: ['Wareneingang', 'Goods receipt', ['purchaseOrderId', 'receivingLocationId', 'lines']],
-  equipment: ['Eigentum / Verwahrung', 'Ownership / keeper', ['itemId', 'ownershipType', 'availabilityPolicy', 'reason']],
-  commitment: ['Verfügbarkeitszusage', 'Availability commitment', ['itemId', 'quantity', 'availableFrom', 'availableUntil', 'pickupDetails', 'notes']],
-  loan: ['Leihe / Miete', 'Borrowing / rental', ['commitmentId', 'providerLocationId', 'kind', 'provider', 'contact', 'terms']],
-  loan_collect: ['Anbieter-Abholung', 'Provider collection', ['loanId', 'transferId', 'notes']],
-  transfer: ['Umlagerung', 'Transfer', ['sourceLocationId', 'destinationLocationId', 'lines']],
-  count: ['Inventur', 'Stock count', ['sessionNumber']],
-  member_request: ['Mitgliederanfrage', 'Member request', ['itemId', 'kind', 'quantity', 'notes']],
-  member_return: ['Rückgabe zur Bestätigung', 'Return for acknowledgement', ['itemId', 'quantity', 'notes']],
+  stock: { label: 'utils.csvOperations.operationLabels.stock', requiredFields: ['itemId', 'transactionType', 'quantityChanged', 'reason'] },
+  damage: { label: 'utils.csvOperations.operationLabels.damage', requiredFields: ['itemId', 'amount', 'description', 'severity'] },
+  repair: { label: 'utils.csvOperations.operationLabels.repair', requiredFields: ['damageReportId'] },
+  repair_transition: { label: 'utils.csvOperations.operationLabels.repair_transition', requiredFields: ['repairId', 'status'] },
+  lot: { label: 'utils.csvOperations.operationLabels.lot', requiredFields: ['itemId', 'lotNumber'] },
+  maintenance: { label: 'utils.csvOperations.operationLabels.maintenance', requiredFields: ['itemId', 'maintenanceType', 'intervalType', 'intervalValue'] },
+  purchase: { label: 'utils.csvOperations.operationLabels.purchase', requiredFields: ['vendorName', 'orderNumber', 'orderDate', 'lines'] },
+  receipt: { label: 'utils.csvOperations.operationLabels.receipt', requiredFields: ['purchaseOrderId', 'receivingLocationId', 'lines'] },
+  equipment: { label: 'utils.csvOperations.operationLabels.equipment', requiredFields: ['itemId', 'ownershipType', 'availabilityPolicy', 'reason'] },
+  commitment: { label: 'utils.csvOperations.operationLabels.commitment', requiredFields: ['itemId', 'quantity', 'availableFrom', 'availableUntil', 'pickupDetails', 'notes'] },
+  loan: { label: 'utils.csvOperations.operationLabels.loan', requiredFields: ['commitmentId', 'providerLocationId', 'kind', 'provider', 'contact', 'terms'] },
+  loan_collect: { label: 'utils.csvOperations.operationLabels.loan_collect', requiredFields: ['loanId', 'transferId', 'notes'] },
+  transfer: { label: 'utils.csvOperations.operationLabels.transfer', requiredFields: ['sourceLocationId', 'destinationLocationId', 'lines'] },
+  count: { label: 'utils.csvOperations.operationLabels.count', requiredFields: ['sessionNumber'] },
+  member_request: { label: 'utils.csvOperations.operationLabels.member_request', requiredFields: ['itemId', 'kind', 'quantity', 'notes'] },
+  member_return: { label: 'utils.csvOperations.operationLabels.member_return', requiredFields: ['itemId', 'quantity', 'notes'] },
 } as const;
 
 export type CsvOperation = keyof typeof CSV_OPERATIONS;
@@ -43,45 +43,45 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
     let statusMessage: string | undefined;
     try {
       const parsed: unknown = JSON.parse(raw.Daten ?? raw.Data ?? '');
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(translate('Daten müssen ein JSON-Objekt sein', 'Data must be a JSON object'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(translate('utils.csvOperations.dataMustBeAJSONObject'));
       data = parsed as Record<string, unknown>;
-      if (!Object.hasOwn(CSV_OPERATIONS, operation)) throw new Error(translate(`Unbekannte Aktion: ${operation}`, `Unknown action: ${operation}`));
-      if (!name || names.has(name)) throw new Error(translate('Ein eindeutiger Name für die Aktion fehlt', 'A unique name for the action is missing'));
-      for (const key of CSV_OPERATIONS[operation][2]) {
-        if (data[key] == null || data[key] === '' || (Array.isArray(data[key]) && !data[key].length)) throw new Error(translate(`Pflichtfeld fehlt: ${key}`, `Required field missing: ${key}`));
+      if (!Object.hasOwn(CSV_OPERATIONS, operation)) throw new Error(translate('utils.csvOperations.unknownActionOperation', { operation: operation }));
+      if (!name || names.has(name)) throw new Error(translate('utils.csvOperations.aUniqueNameForTheActionIsMissing'));
+      for (const key of CSV_OPERATIONS[operation].requiredFields) {
+        if (data[key] == null || data[key] === '' || (Array.isArray(data[key]) && !data[key].length)) throw new Error(translate('utils.csvOperations.requiredFieldMissingKey', { key: key }));
       }
       if (['stock', 'damage', 'repair', 'repair_transition'].includes(operation)) {
         const quantity = operation === 'stock' ? data.quantityChanged : data.amount;
         if (quantity != null && (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1)) {
-          throw new Error(translate('Die Menge muss eine positive ganze Zahl sein', 'The quantity must be a positive whole number'));
+          throw new Error(translate('utils.csvOperations.theQuantityMustBeAPositiveWholeNumber'));
         }
         if (operation === 'stock' && !['adjusted', 'checkout', 'checkin'].includes(String(data.transactionType))) {
-          throw new Error(translate('Bestandsänderungen verwenden adjusted, checkout oder checkin; Abschreibungen erfolgen über Reparaturen', 'Stock changes use adjusted, checkout or checkin; write-offs are done through repairs'));
+          throw new Error(translate('utils.csvOperations.stockChangesUseAdjustedCheckoutOrCheckinWriteOffsAre'));
         }
         if (operation === 'stock' && data.transactionType === 'checkout' && (data.eventType || data.eventOccurrenceId) && !data.faction) {
-          throw new Error(translate('Für Ausleihen zu einem Event ist eine Fraktion erforderlich', 'Event checkouts require a faction'));
+          throw new Error(translate('utils.csvOperations.eventCheckoutsRequireAFaction'));
         }
         if (operation === 'damage' && !['low', 'medium', 'high', 'critical', 'total_loss'].includes(String(data.severity))) {
-          throw new Error(translate('Ungültiger Schweregrad', 'Invalid severity'));
+          throw new Error(translate('utils.csvOperations.invalidSeverity'));
         }
         if (operation === 'repair_transition') {
           if (!['triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service', 'written_off'].includes(String(data.status))) {
-            throw new Error(translate('Ungültiger Reparaturstatus', 'Invalid repair status'));
+            throw new Error(translate('utils.csvOperations.invalidRepairStatus'));
           }
-          if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error(translate('Die Reparatur-/Abschreibungsmenge fehlt', 'The repair/write-off quantity is missing'));
-          if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error(translate('Das Prüfergebnis fehlt', 'The inspection result is missing'));
+          if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error(translate('utils.csvOperations.theRepairWriteOffQuantityIsMissing'));
+          if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error(translate('utils.csvOperations.theInspectionResultIsMissing'));
         }
         if (data.occurredAt != null && (typeof data.occurredAt !== 'string'
           || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.occurredAt)
           || !Number.isFinite(Date.parse(data.occurredAt)) || Date.parse(data.occurredAt) > Date.now())) {
-          throw new Error(translate('occurredAt muss ein gültiger ISO-Zeitstempel mit Zeitzone in der Vergangenheit sein', 'occurredAt must be a valid ISO timestamp with time zone in the past'));
+          throw new Error(translate('utils.csvOperations.occurredAtMustBeAValidISOTimestampWithTimeZone'));
         }
       }
       function check(value: unknown): void {
         if (typeof value === 'string') {
-          if (value.startsWith('@row:') && !names.has(value.slice(5))) throw new Error(translate(`Aktion muss vorher stehen: ${value.slice(5)}`, `Action must come first: ${value.slice(5)}`));
-          if (value.startsWith('@item:') && !itemNames.has(value.slice(6).toLowerCase().trim())) throw new Error(translate(`Unbekannter Artikel: ${value.slice(6)}`, `Unknown item: ${value.slice(6)}`));
-          if (/^@(date|datetime):/.test(value) && !/^@(date|datetime):[+-]?\d+$/.test(value)) throw new Error(translate(`Ungültiger relativer Termin: ${value}`, `Invalid relative date: ${value}`));
+          if (value.startsWith('@row:') && !names.has(value.slice(5))) throw new Error(translate('utils.csvOperations.actionMustComeFirstValue', { value: String(value.slice(5)) }));
+          if (value.startsWith('@item:') && !itemNames.has(value.slice(6).toLowerCase().trim())) throw new Error(translate('utils.csvOperations.unknownItemValue', { value: String(value.slice(6)) }));
+          if (/^@(date|datetime):/.test(value) && !/^@(date|datetime):[+-]?\d+$/.test(value)) throw new Error(translate('utils.csvOperations.invalidRelativeDateValue', { value: value }));
         } else if (Array.isArray(value)) value.forEach(check);
         else if (value && typeof value === 'object') Object.values(value).forEach(check);
       }

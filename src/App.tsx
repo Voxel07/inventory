@@ -11,7 +11,7 @@ import { KeyboardShortcuts } from './components/shared/KeyboardShortcuts';
 import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, ProcurementGuard } from './components/shared/AccessGuard';
 import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
-import { useAppLanguage, translate, useLocalizedText } from './utils/naming';
+import { useAppLanguage, translate, useT } from './utils/naming';
 import { subscribeToApiChanges } from './services/apiClient';
 import { getSessionQueryClient, subscribeSessionQueryClient } from './services/sessionQueryClient';
 import { createApiChangeCoalescer } from './utils/realtimeInvalidation';
@@ -78,7 +78,7 @@ function AppContent() {
       const detail = (event as CustomEvent<{ message?: string; retryAfterSeconds?: number }>).detail ?? {};
       const retry = detail.retryAfterSeconds ? ` (${detail.retryAfterSeconds}s)` : '';
       useUIStore.getState().showSnackbar(
-        translate(`Zu viele Anfragen — kurz warten${retry}`, `Too many requests — try again shortly${retry}`),
+        translate('app.tooManyRequestsTryAgainShortlyRetry', { retry: retry }),
         'warning',
       );
     };
@@ -162,14 +162,14 @@ function AppContent() {
 
 /** Visible on keyboard focus so keyboard users can bypass the header and navigation. */
 function SkipLink() {
-  const t = useLocalizedText();
+  const t = useT();
   return (
     <Link href="#main-content" className="no-print" sx={{
       position: 'fixed', left: 8, top: 8, zIndex: (theme) => theme.zIndex.tooltip + 1,
       px: 2, py: 1.25, borderRadius: 1, bgcolor: 'background.paper', color: 'primary.dark', fontWeight: 600,
       boxShadow: 3, transform: 'translateY(-200%)', '&:focus': { transform: 'none' },
     }}>
-      {t('Zum Inhalt springen', 'Skip to content')}
+      {t('app.skipToContent')}
     </Link>
   );
 }

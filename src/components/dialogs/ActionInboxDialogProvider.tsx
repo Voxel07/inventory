@@ -2,12 +2,12 @@ import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from '
 import { DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { Dialog } from '../shared/ClosableDialog';
 import { ActionInboxDialogContext } from '../../hooks/useActionInboxDialog';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 const ActionInboxContent = lazy(() => import('./ActionInboxContent').then((module) => ({ default: module.ActionInboxContent })));
 
 export function ActionInboxDialogProvider({ children }: { children: ReactNode }) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(false);
@@ -18,7 +18,7 @@ export function ActionInboxDialogProvider({ children }: { children: ReactNode })
   return <ActionInboxDialogContext.Provider value={value}>
     {children}
     <Dialog open={open} onClose={closeActionInbox} fullWidth maxWidth="md" fullScreen={fullScreen} aria-labelledby="action-inbox-title">
-      <DialogTitle id="action-inbox-title">{t('Posteingang', 'Inbox')}</DialogTitle>
+      <DialogTitle id="action-inbox-title">{t('dialogs.actionInboxDialogProvider.inbox')}</DialogTitle>
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
         {open && <Suspense fallback={<LinearProgress />}><ActionInboxContent onOpenTask={closeActionInbox} /></Suspense>}
       </DialogContent>

@@ -3,7 +3,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import { Alert, Box, DialogActions, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import type { AssetInstance, FactionOrder, Item } from '../../types';
 import type { AssetReturnOutcome, ReturnLineInput } from '../../services/factionOrderService';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 type Outcome = ReturnLineInput;
 
@@ -16,7 +16,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
   onCancel: () => void;
   onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const outstanding: Record<string, number> = Object.fromEntries(items.map((item) => {
     const handedOver = order.handedOverQuantities?.[item.id] ?? 0;
     const reconciled = (order.returnedQuantities?.[item.id] ?? 0)
@@ -191,24 +191,24 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
 
   return (
     <>
-      <Alert severity="info" sx={{ mb: 2 }}>{t('Jede Komponente einzeln prüfen. Fehlende Teile bleiben der Fraktion zugeordnet.', 'Inspect every component. Missing units remain assigned to the faction.')}</Alert>
+      <Alert severity="info" sx={{ mb: 2 }}>{t('forms.orderReturnChecklist.inspectEveryComponentMissingUnitsRemainAssignedToTheFaction')}</Alert>
       <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button title={translate('Alle offenen Mengen als intakt zurückgekommen markieren', 'Mark all outstanding units as returned intact')}
+        <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsAsReturnedIntact')}
           variant="contained"
           color="success"
           size="small"
           onClick={markAllReturned}
         >
-          {t('Alles vollständig & intakt zurücknehmen', 'All returned complete & intact')}
+          {t('forms.orderReturnChecklist.allReturnedCompleteIntact')}
         </Button>
         {items.some((i) => i.isConsumable && (outstanding[i.id] ?? 0) > 0) && (
-          <Button title={translate('Alle Verbrauchsmengen als verbraucht markieren', 'Mark all consumable quantities as consumed')}
+          <Button title={translate('forms.orderReturnChecklist.markAllConsumableQuantitiesAsConsumed')}
             variant="outlined"
             color="warning"
             size="small"
             onClick={markAllConsumablesConsumed}
           >
-            {t('Verbrauchsmaterial als verbraucht buchen', 'Record consumables as consumed')}
+            {t('forms.orderReturnChecklist.recordConsumablesAsConsumed')}
           </Button>
         )}
       </Box>
@@ -219,35 +219,35 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
           return (
             <Box key={itemId} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                <Typography sx={{ fontWeight: 800 }}>{item?.name ?? itemId} · {quantity} {t('offen', 'outstanding')}</Typography>
+                <Typography sx={{ fontWeight: 800 }}>{item?.name ?? itemId} · {quantity} {t('forms.orderReturnChecklist.outstanding')}</Typography>
                 <Stack direction="row" spacing={0.5}>
                   {item?.isConsumable ? (
                     <>
-                      <Button title={translate('Alle offenen Einheiten dieses Artikels als intakt markieren', 'Mark all outstanding units of this item as returned intact')}
+                      <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsReturnedIntact')}
                         size="small"
                         variant="text"
                         color="success"
                         onClick={() => markItemComplete(itemId, Number(quantity), false)}
                       >
-                        {t('Vollständig zurück', 'All returned')}
+                        {t('forms.orderReturnChecklist.allReturned')}
                       </Button>
-                      <Button title={translate('Alle offenen Einheiten dieses Artikels als verbraucht markieren', 'Mark all outstanding units of this item as consumed')}
+                      <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsConsumed')}
                         size="small"
                         variant="text"
                         color="warning"
                         onClick={() => markItemComplete(itemId, Number(quantity), true)}
                       >
-                        {t('Alles verbraucht', 'All consumed')}
+                        {t('forms.orderReturnChecklist.allConsumed')}
                       </Button>
                     </>
                   ) : (
-                    <Button title={translate('Alle offenen Einheiten dieses Artikels als intakt markieren', 'Mark all outstanding units of this item as returned intact')}
+                    <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsReturnedIntact')}
                       size="small"
                       variant="text"
                       color="success"
                       onClick={() => markItemComplete(itemId, Number(quantity), false)}
                     >
-                      {t('Vollständig zurück', 'All returned')}
+                      {t('forms.orderReturnChecklist.allReturned')}
                     </Button>
                   )}
                 </Stack>
@@ -261,41 +261,41 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
                         <TextField
                           select
                           size="small"
-                          label={t('Ergebnis', 'Outcome')}
+                          label={t('forms.orderReturnChecklist.outcome')}
                           value={assetOutcomes[asset.id]?.outcome ?? 'unchanged_missing'}
                           onChange={(event) => setAssetOutcome(itemId, asset.id, event.target.value)}
                           sx={{ minWidth: 210 }}
                         >
-                          <MenuItem value="unchanged_missing">{asset.availabilityStatus === 'lost' ? t('Weiterhin fehlend', 'Still missing') : t('Noch nicht geprüft', 'Not inspected yet')}</MenuItem>
-                          <MenuItem value="returned_good">{t('Intakt zurück', 'Returned good')}</MenuItem>
-                          <MenuItem value="returned_damaged">{t('Beschädigt zurück', 'Returned damaged')}</MenuItem>
-                          {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('Fehlend', 'Missing')}</MenuItem>}
-                          {canWriteOff && <MenuItem value="written_off">{t('Abschreiben', 'Write off')}</MenuItem>}
+                          <MenuItem value="unchanged_missing">{asset.availabilityStatus === 'lost' ? t('forms.orderReturnChecklist.stillMissing') : t('forms.orderReturnChecklist.notInspectedYet')}</MenuItem>
+                          <MenuItem value="returned_good">{t('forms.orderReturnChecklist.returnedGood')}</MenuItem>
+                          <MenuItem value="returned_damaged">{t('forms.orderReturnChecklist.returnedDamaged')}</MenuItem>
+                          {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('enum.transactionType.missing')}</MenuItem>}
+                          {canWriteOff && <MenuItem value="written_off">{t('common.writeOff')}</MenuItem>}
                         </TextField>
                       </Stack>
                     ))}
                   </Stack>
                 ) : (
                   <>
-                    <TextField size="small" type="number" label={item?.isConsumable ? t('Ungeöffnet zurück', 'Returned unopened') : t('Zurück', 'Returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                    {item?.isConsumable && <TextField size="small" type="number" label={t('Verbraucht', 'Consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
-                    <TextField size="small" type="number" label={t('Fehlt', 'Missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                    <TextField size="small" type="number" label={t('Beschädigt', 'Damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                    {canWriteOff && <TextField size="small" type="number" label={t('Abschreiben', 'Write off')} value={value.writtenOff} onChange={(e) => setValue(itemId, 'writtenOff', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} helperText={t('Fehlende zuerst', 'Missing units first')} />}
-                    {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('Betriebsstunden', 'Operating hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
+                    <TextField size="small" type="number" label={item?.isConsumable ? t('forms.orderReturnChecklist.returnedUnopened') : t('forms.orderReturnChecklist.returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    {item?.isConsumable && <TextField size="small" type="number" label={t('enum.transactionType.consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
+                    <TextField size="small" type="number" label={t('forms.orderReturnChecklist.missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    <TextField size="small" type="number" label={t('enum.itemStatus.damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
+                    {canWriteOff && <TextField size="small" type="number" label={t('common.writeOff')} value={value.writtenOff} onChange={(e) => setValue(itemId, 'writtenOff', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} helperText={t('forms.orderReturnChecklist.missingUnitsFirst')} />}
+                    {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('enum.value.operating_hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
                   </>
                 )}
               </Stack>
-              {(value.damaged > 0 || value.missing > 0 || value.writtenOff > 0) && <TextField fullWidth size="small" sx={{ mt: 1 }} required={value.writtenOff > 0} error={value.writtenOff > 0 && !value.notes?.trim()} label={value.writtenOff > 0 ? t('Begründung der Abschreibung', 'Write-off reason') : t('Notiz zu Schaden/Fehlteil', 'Damage/missing note')} value={value.notes ?? ''} onChange={(e) => setValue(itemId, 'notes', e.target.value)} />}
+              {(value.damaged > 0 || value.missing > 0 || value.writtenOff > 0) && <TextField fullWidth size="small" sx={{ mt: 1 }} required={value.writtenOff > 0} error={value.writtenOff > 0 && !value.notes?.trim()} label={value.writtenOff > 0 ? t('forms.orderReturnChecklist.writeOffReason') : t('forms.orderReturnChecklist.damageMissingNote')} value={value.notes ?? ''} onChange={(e) => setValue(itemId, 'notes', e.target.value)} />}
             </Box>
           );
         })}
       </Stack>
-      {exceedsOutstanding && <Alert severity="error" sx={{ mt: 2 }}>{t('Die Summe darf die offene Menge nicht überschreiten. Abgeschriebene Fehlteile zählen nicht mehr als fehlend.', 'The outcome total cannot exceed the outstanding quantity. Written-off missing units no longer count as missing.')}</Alert>}
-      {writeOffWithoutReason && <Alert severity="error" sx={{ mt: 2 }}>{t('Für Abschreibungen ist eine Begründung erforderlich.', 'A reason is required for write-offs.')}</Alert>}
+      {exceedsOutstanding && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.theOutcomeTotalCannotExceedTheOutstandingQuantityWrittenOff')}</Alert>}
+      {writeOffWithoutReason && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.aReasonIsRequiredForWriteOffs')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
-        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={onCancel}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button title={translate('Die geprüften Rückgabemengen buchen', 'Record the reviewed return quantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('Rückgabe buchen', 'Record return')}</Button>
+        <Button title={translate('common.discardChangesAndClose')} onClick={onCancel}>{t('common.cancel')}</Button>
+        <Button title={translate('forms.orderReturnChecklist.recordTheReviewedReturnQuantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('forms.orderReturnChecklist.recordReturn')}</Button>
       </DialogActions>
     </>
   );

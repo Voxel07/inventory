@@ -21,19 +21,19 @@ async function stripWebpMetadata(blob: Blob): Promise<Uint8Array<ArrayBuffer>> {
   const fourCC = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
   if (bytes.length < 12 || fourCC(0) !== 'RIFF' || fourCC(8) !== 'WEBP'
       || view.getUint32(4, true) + 8 !== bytes.length) {
-    throw new Error(translate('Der Browser hat ein ungültiges WebP-Bild geliefert.', 'The browser returned an invalid WebP image.'));
+    throw new Error(translate('utils.prepareItemImage.theBrowserReturnedAnInvalidWebPImage'));
   }
   const chunks: Uint8Array<ArrayBuffer>[] = [];
   for (let offset = 12; offset < bytes.length;) {
-    if (offset + 8 > bytes.length) throw new Error(translate('Ungültiger WebP-Chunk.', 'Invalid WebP chunk.'));
+    if (offset + 8 > bytes.length) throw new Error(translate('utils.prepareItemImage.invalidWebPChunk'));
     const type = fourCC(offset);
     const size = view.getUint32(offset + 4, true);
     const end = offset + 8 + size + size % 2;
-    if (end > bytes.length) throw new Error(translate('Ungültige WebP-Chunk-Länge.', 'Invalid WebP chunk length.'));
+    if (end > bytes.length) throw new Error(translate('utils.prepareItemImage.invalidWebPChunkLength'));
     if (['VP8X', 'VP8 ', 'VP8L', 'ALPH'].includes(type)) {
       const chunk = bytes.slice(offset, end);
       if (type === 'VP8X') {
-        if (size !== 10) throw new Error(translate('Ungültiger erweiterter WebP-Header.', 'Invalid WebP extended header.'));
+        if (size !== 10) throw new Error(translate('utils.prepareItemImage.invalidWebPExtendedHeader'));
         chunk[8] &= ~0x2c; // Clear ICC, EXIF and XMP feature bits; preserve alpha.
       }
       chunks.push(chunk);
@@ -50,18 +50,18 @@ async function stripWebpMetadata(blob: Blob): Promise<Uint8Array<ArrayBuffer>> {
 
 export async function decodeImage(file: File): Promise<ImageBitmap> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    throw new Error(translate('Bitte ein JPEG-, PNG- oder WebP-Bild auswählen.', 'Please select a JPEG, PNG or WebP image.'));
+    throw new Error(translate('utils.prepareItemImage.pleaseSelectAJPEGPNGOrWebPImage'));
   }
-  if (file.size > MAX_BYTES) throw new Error(translate('Bilder müssen kleiner als 20 MB sein.', 'Images must be smaller than 20 MB.'));
+  if (file.size > MAX_BYTES) throw new Error(translate('utils.prepareItemImage.imagesMustBeSmallerThan20MB'));
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch {
-    throw new Error(translate('Dieses Bild konnte nicht gelesen werden. Bitte ein gültiges JPEG-, PNG- oder WebP-Bild auswählen.', 'This image could not be decoded. Please select a valid JPEG, PNG or WebP image.'));
+    throw new Error(translate('utils.prepareItemImage.thisImageCouldNotBeDecodedPleaseSelectAValid'));
   }
   if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > MAX_PIXELS) {
     bitmap.close();
-    throw new Error(translate('Bilder dürfen höchstens 40 Millionen Pixel enthalten.', 'Images must contain no more than 40 million pixels.'));
+    throw new Error(translate('utils.prepareItemImage.imagesMustContainNoMoreThan40MillionPixels'));
   }
   return bitmap;
 }
@@ -77,18 +77,18 @@ export async function prepareItemImage(file: File, options?: { crop?: ImageCrop;
     if (!Object.values(crop).every(Number.isFinite) || crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0
         || crop.x + crop.width > bitmap.width + 0.001 || crop.y + crop.height > bitmap.height + 0.001
         || !Number.isFinite(maxDimension) || maxDimension < MIN_DIMENSION || maxDimension > MAX_DIMENSION) {
-      throw new Error(translate('Ungültiger Bildausschnitt oder ungültige Ausgabegröße.', 'Invalid image crop or output size.'));
+      throw new Error(translate('utils.prepareItemImage.invalidImageCropOrOutputSize'));
     }
     const scale = Math.min(1, maxDimension / Math.max(crop.width, crop.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(crop.width * scale));
     canvas.height = Math.max(1, Math.round(crop.height * scale));
     const context = canvas.getContext('2d', { colorSpace: 'srgb' });
-    if (!context) throw new Error(translate('Die Bildkonvertierung ist in diesem Browser nicht verfügbar.', 'Image conversion is unavailable in this browser.'));
+    if (!context) throw new Error(translate('utils.prepareItemImage.imageConversionIsUnavailableInThisBrowser'));
     context.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
     // Some browsers silently return PNG when WebP encoding is unavailable.
-    if (!blob || blob.type !== 'image/webp') throw new Error(translate('Dieser Browser kann Bilder nicht in WebP umwandeln.', 'This browser cannot convert images to WebP.'));
+    if (!blob || blob.type !== 'image/webp') throw new Error(translate('utils.prepareItemImage.thisBrowserCannotConvertImagesToWebP'));
     const prepared = new File([await stripWebpMetadata(blob)], 'image.webp', { type: 'image/webp' });
     preparedImages.add(prepared);
     return prepared;

@@ -4,7 +4,7 @@ import { Autocomplete, Box, Chip, MenuItem, Stack, TextField, ToggleButton, Togg
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import type { Assembly, AssetInstance, DamageReportFormData, DamageSeverity, Item } from '../../types';
 import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
-import { translate, nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { translate, nameFor, useAppLanguage, useT } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
 export interface DamageReportFormProps {
@@ -24,7 +24,7 @@ export function DamageReportForm({
     preselectedAsset, onSubmit, isLoading, maxAmount,
 }: DamageReportFormProps) {
     useAppLanguage();
-    const t = useLocalizedText();
+    const t = useT();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
     const [targetType, setTargetType] = useState<'item' | 'assembly'>(preselectedAssemblyId ? 'assembly' : 'item');
     const [formData, setFormData] = useState<DamageReportFormData>({
@@ -68,23 +68,23 @@ export function DamageReportForm({
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
                 {!preselectedItemId && !preselectedAssemblyId && <>
-                    <ToggleButtonGroup exclusive size="small" value={targetType} aria-label={t('Schadensobjekt', 'Damage target')}
+                    <ToggleButtonGroup exclusive size="small" value={targetType} aria-label={t('forms.damageReportForm.damageTarget')}
                         onChange={(_, value: 'item' | 'assembly' | null) => { if (value) { setTargetType(value); selectItem(null); } }}>
-                        <ToggleButton value="item">{t('Artikel', 'Item')}</ToggleButton>
-                        <ToggleButton value="assembly">{t('Baugruppe', 'Assembly')}</ToggleButton>
+                        <ToggleButton value="item">{t('common.item')}</ToggleButton>
+                        <ToggleButton value="assembly">{t('enum.value.assembly')}</ToggleButton>
                     </ToggleButtonGroup>
                     {targetType === 'item'
-                        ? <ItemAutocomplete label={t('Artikel suchen', 'Search item')} required value={formData.itemId} onChange={selectItem} />
+                        ? <ItemAutocomplete label={t('forms.damageReportForm.searchItem')} required value={formData.itemId} onChange={selectItem} />
                         : <Autocomplete options={assemblies} value={assemblies.find((assembly) => assembly.id === formData.assemblyId) ?? null}
                             onChange={(_, assembly) => selectAssembly(assembly)} isOptionEqualToValue={(option, value) => option.id === value.id}
                             getOptionLabel={(assembly) => assembly.name}
-                            renderInput={(params) => <TextField {...params} label={t('Baugruppe suchen', 'Search assembly')} required />} />}
+                            renderInput={(params) => <TextField {...params} label={t('forms.damageReportForm.searchAssembly')} required />} />}
                 </>}
 
                 {(preselectedItemId || preselectedAssemblyId) && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2" color="text.secondary">{t('Schadensobjekt', 'Damage target')}:</Typography>
-                        <Chip label={preselectedAsset?.assetCode ?? selectedItem?.name ?? assemblies.find((assembly) => assembly.id === preselectedAssemblyId)?.name ?? t('Ausgewählt', 'Selected')} color="primary" variant="outlined" />
+                        <Typography variant="body2" color="text.secondary">{t('forms.damageReportForm.damageTarget')}:</Typography>
+                        <Chip label={preselectedAsset?.assetCode ?? selectedItem?.name ?? assemblies.find((assembly) => assembly.id === preselectedAssemblyId)?.name ?? t('forms.damageReportForm.selected')} color="primary" variant="outlined" />
                     </Box>
                 )}
 
@@ -96,18 +96,18 @@ export function DamageReportForm({
                         onChange={(_, asset) => setFormData((previous) => ({ ...previous, assetInstanceId: asset?.id }))}
                         isOptionEqualToValue={(option, value) => option.id === value.id}
                         getOptionLabel={(asset) => [asset.assetCode, asset.serialNumber && `S/N ${asset.serialNumber}`].filter(Boolean).join(' · ')}
-                        renderInput={(params) => <TextField {...params} label={t('Beschädigtes Einzelgerät suchen', 'Search damaged serialized asset')} required helperText={t('Bei serialisierten Artikeln muss das konkrete Einzelgerät gewählt werden.', 'Choose the exact unit for serialized items.')} />}
+                        renderInput={(params) => <TextField {...params} label={t('forms.damageReportForm.searchDamagedSerializedAsset')} required helperText={t('forms.damageReportForm.chooseTheExactUnitForSerializedItems')} />}
                     />
                 )}
 
-                <TextField select label={t('Schweregrad', 'Severity')} value={formData.severity} onChange={(event) => setFormData((previous) => ({ ...previous, severity: event.target.value as DamageSeverity }))} required fullWidth>
+                <TextField select label={t('common.severity')} value={formData.severity} onChange={(event) => setFormData((previous) => ({ ...previous, severity: event.target.value as DamageSeverity }))} required fullWidth>
                     {severities.map((severity) => <MenuItem key={severity.value} value={severity.value}>{severity.label}</MenuItem>)}
                 </TextField>
-                <TextField label={t('Menge', 'Quantity')} type="number" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} slotProps={{ htmlInput: { min: 1, max: effectiveMaxAmount, step: 1 } }} helperText={needsAsset ? t('Ein serialisiertes Einzelgerät entspricht der Menge 1.', 'A serialized asset always has quantity 1.') : undefined} disabled={needsAsset} required fullWidth />
-                <TextField label={t('Beschreibung', 'Description')} value={formData.description} onChange={(event) => setFormData((previous) => ({ ...previous, description: event.target.value }))} multiline rows={4} required fullWidth />
+                <TextField label={t('common.quantity')} type="number" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} slotProps={{ htmlInput: { min: 1, max: effectiveMaxAmount, step: 1 } }} helperText={needsAsset ? t('forms.damageReportForm.aSerializedAssetAlwaysHasQuantity1') : undefined} disabled={needsAsset} required fullWidth />
+                <TextField label={t('common.description')} value={formData.description} onChange={(event) => setFormData((previous) => ({ ...previous, description: event.target.value }))} multiline rows={4} required fullWidth />
 
-                <Button title={translate('Den Schaden mit Menge und Beschreibung melden', 'Submit the damage report with quantity and description')} type="submit" variant="contained" color="error" disabled={isLoading || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
-                    {t('Schadensbericht einreichen', 'Submit damage report')}
+                <Button title={translate('forms.damageReportForm.submitTheDamageReportWithQuantityAndDescription')} type="submit" variant="contained" color="error" disabled={isLoading || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
+                    {t('forms.damageReportForm.submitDamageReport')}
                 </Button>
             </Stack>
         </Box>

@@ -116,7 +116,7 @@ export function Header() {
         <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
-                <IconButton title={translate('Das Navigationsmenü ein- oder ausblenden', 'Show or hide the navigation menu')}
+                <IconButton title={translate('shared.header.showOrHideTheNavigationMenu')}
                     color="inherit"
                     edge="start"
                     onClick={toggleSidebar}
@@ -130,22 +130,22 @@ export function Header() {
                     {t('header.inventory')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
-                <IconButton title={translate('Den QR- und Barcode-Scanner öffnen', 'Open the QR code and barcode scanner')}
+                <IconButton title={translate('shared.header.openTheQRCodeAndBarcodeScanner')}
                     color="inherit"
                     onClick={() => setQuickScanOpen(true)}
-                    aria-label={translate('QR- oder Barcode scannen', 'Scan a QR code or barcode')}
+                    aria-label={translate('shared.header.scanAQRCodeOrBarcode')}
                     sx={{ mr: 0.5 }}
                 >
                     <QrCodeScannerIcon />
                 </IconButton>
                 {/* On phones the inbox lives in the bottom navigation as "Tasks". */}
                 {!isCompact && <Button color="inherit" aria-haspopup="dialog" onClick={openActionInbox}
-                    aria-label={translate(`Posteingang öffnen, ${inboxCount} offen`, `Open inbox, ${inboxCount} open`)}
+                    aria-label={translate('shared.header.openInboxInboxCountOpen', { inboxCount: inboxCount })}
                     startIcon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>}
                     sx={{ mr: 0.5, px: 1.5 }}>
-                    {translate('Posteingang', 'Inbox')}
+                    {translate('shared.header.inbox')}
                 </Button>}
-                <IconButton title={translate('Zwischen hellem und dunklem Farbschema wechseln', 'Switch between light and dark mode')}
+                <IconButton title={translate('shared.header.switchBetweenLightAndDarkMode')}
                     color="inherit"
                     onClick={toggleThemeMode}
                     aria-label={t('header.toggleColourScheme')}
@@ -166,7 +166,7 @@ export function Header() {
                 {syncIssues > 0 && (
                     isMobile ? (
 
-                        <IconButton title={translate('Synchronisationskonflikte prüfen', 'Review synchronization conflicts')}
+                        <IconButton title={translate('shared.header.reviewSynchronizationConflicts')}
                             color="error"
                             onClick={openSyncIssues}
                             sx={{ mr: 0.5 }}
@@ -177,7 +177,7 @@ export function Header() {
                         </IconButton>
 
                     ) : (
-                        <Chip title={translate('Synchronisationskonflikte prüfen', 'Review synchronization conflicts')}
+                        <Chip title={translate('shared.header.reviewSynchronizationConflicts')}
                             size="small"
                             color="error"
                             icon={<ErrorOutlineIcon />}
@@ -188,7 +188,7 @@ export function Header() {
                     )
                 )}
                 {isMobile ? (
-                    <IconButton title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
+                    <IconButton title={translate('shared.header.displayQueuedOfflineActions')}
                         color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'inherit'}
                         onClick={openQueuedActions}
                         aria-label={t('header.viewQueuedActions')}
@@ -199,13 +199,13 @@ export function Header() {
                         </Badge>
                     </IconButton>
                 ) : (
-                    <Chip title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
+                    <Chip title={translate('shared.header.displayQueuedOfflineActions')}
                         size="small"
                         variant={syncAttention ? 'filled' : 'outlined'}
                         color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'default'}
                         icon={!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
-                        label={syncPaused ? translate('Synchronisierung angehalten', 'Sync paused') : cachedAt ? t('header.cachedData') : online
-                            ? (queued ? t('header.queuedActions', { count: queued }) : translate('Synchronisiert', 'In sync'))
+                        label={syncPaused ? translate('shared.header.syncPaused') : cachedAt ? t('header.cachedData') : online
+                            ? (queued ? t('header.queuedActions', { count: queued }) : translate('shared.header.inSync'))
                             : t('header.offlineQueued', { count: queued })}
                         onClick={openQueuedActions}
                     />
@@ -218,27 +218,27 @@ export function Header() {
             maxWidth="xs"
             fullWidth
         >
-            <DialogTitle sx={{ fontWeight: 700 }}>{t('header.quickScanTitle', 'QR- / Barcode-Suche')}</DialogTitle>
+            <DialogTitle sx={{ fontWeight: 700 }}>{t('header.quickScanTitle')}</DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <CameraScanner onScan={code => void handleQuickScanSubmit(undefined, code)} />
                 <Box component="form" onSubmit={handleQuickScanSubmit}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        {t('header.quickScanHint', 'Gescannte Barcodes werden automatisch geöffnet, oder tippen/fügen Sie hier einen Code ein:')}
+                        {t('header.quickScanHint')}
                     </Typography>
                     <TextField
                         autoFocus
                         fullWidth
                         size="small"
-                        label={t('header.quickScanPlaceholder', 'Code / SKU / URL eingeben')}
+                        label={t('header.quickScanPlaceholder')}
                         value={quickScanInput}
                         onChange={(e) => setQuickScanInput(e.target.value)}
                         placeholder={t('header.quickScanExample')}
                         sx={{ mb: 2 }}
                     />
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                        <Button title={translate('Den Scanner schließen', 'Close the scanner')} onClick={() => setQuickScanOpen(false)}>{t('common.cancel', 'Abbrechen')}</Button>
-                        <Button title={translate('Das Ziel des eingegebenen QR- oder Barcodes öffnen', 'Open the target of the entered QR code or barcode')} variant="contained" type="submit" disabled={!quickScanInput.trim()}>
-                            {t('common.open', 'Öffnen')}
+                        <Button title={translate('shared.header.closeTheScanner')} onClick={() => setQuickScanOpen(false)}>{t('common.cancel')}</Button>
+                        <Button title={translate('shared.header.openTheTargetOfTheEnteredQRCodeOrBarcode')} variant="contained" type="submit" disabled={!quickScanInput.trim()}>
+                            {t('common.open')}
                         </Button>
                     </Box>
                 </Box>

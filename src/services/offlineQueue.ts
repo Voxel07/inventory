@@ -56,7 +56,7 @@ function openDatabase(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error(translate('Schließen Sie ältere Inventar-Tabs und laden Sie neu, um den Offline-Speicher zu aktualisieren.', 'Close older inventory tabs and reload to upgrade offline storage.')));
+    request.onblocked = () => reject(new Error(translate('services.offlineQueue.closeOlderInventoryTabsAndReloadToUpgradeOfflineStorage')));
   });
 }
 
@@ -127,12 +127,12 @@ export async function getOfflineCatalog<T>(key: string, context = captureAuthSes
 }
 
 export async function enqueueOfflineAction(action: OfflineAction, context: AuthSessionContext = captureAuthSession()): Promise<void> {
-  if (referencesPrivateInventory(action.payload)) throw new Error(translate('Aktionen für privates Inventar erfordern eine Online-Verbindung.', 'Private inventory actions require an online connection.'));
+  if (referencesPrivateInventory(action.payload)) throw new Error(translate('services.offlineQueue.privateInventoryActionsRequireAnOnlineConnection'));
   assertAuthSession(context);
   const actionOwner = context.accountId;
   const db = await openDatabase();
   assertAuthSession(context);
-  if (!actionOwner) throw new Error(translate('Melden Sie sich an, bevor Sie eine Offline-Aktion speichern.', 'Sign in before saving an offline action'));
+  if (!actionOwner) throw new Error(translate('services.offlineQueue.signInBeforeSavingAnOfflineAction'));
   await transactionPromise(db, STORE, 'readwrite', (store) => store.put({ ...action, ownerId: actionOwner }));
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -164,7 +164,7 @@ export async function discardOfflineAction(idempotencyKey: string): Promise<void
   const db = await openDatabase();
   const action = (await getOfflineActions()).find((entry) => entry.idempotencyKey === idempotencyKey);
   assertAuthSession(context);
-  if (!action) throw new Error(translate('Vorgemerkte Aktion nicht gefunden', 'Queued action not found'));
+  if (!action) throw new Error(translate('services.offlineQueue.queuedActionNotFound'));
   await archiveAndDelete(db, STORE, action, 'discarded');
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -201,7 +201,7 @@ export async function discardSyncFailure(idempotencyKey: string): Promise<void> 
   const db = await openDatabase();
   const failure = (await getSyncFailures()).find((entry) => entry.idempotencyKey === idempotencyKey);
   assertAuthSession(context);
-  if (!failure) throw new Error(translate('Synchronisierungsfehler nicht gefunden', 'Sync failure not found'));
+  if (!failure) throw new Error(translate('services.offlineQueue.syncFailureNotFound'));
   await archiveAndDelete(db, FAILURES_STORE, failure, 'archived');
   assertAuthSession(context);
   await notifyQueueChanged();
@@ -241,7 +241,7 @@ function syncResults(payload: unknown): SyncResult[] {
   if (!Array.isArray(results) || !results.every((result) => typeof result === 'object' && result !== null
     && typeof result.idempotencyKey === 'string' && typeof result.status === 'string'
     && (result.error === undefined || result.error === null || typeof result.error === 'string'))) {
-    throw new InvalidResponseError(translate('Der Server hat eine ungültige Synchronisationsantwort geliefert', 'The server returned an invalid synchronization response'));
+    throw new InvalidResponseError(translate('services.offlineQueue.theServerReturnedAnInvalidSynchronizationResponse'));
   }
   return (results as SyncResult[]).filter((result) => ['applied', 'conflict', 'rejected'].includes(result.status));
 }
@@ -266,16 +266,16 @@ function retry(reason: Extract<SyncState, { kind: 'retrying' }>['reason'], messa
 function classifyFailure(error: unknown): number | null {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof ApiError) {
-    if (error.status === 401) return pause('auth', translate('Bitte erneut anmelden, um vorgemerkte Aktionen zu senden.', 'Sign in again to send queued actions.'), error);
-    if (error.status === 403) return pause('forbidden', translate(`Der Server verweigert die Synchronisierung: ${message}`, `The server denied synchronization: ${message}`), error);
+    if (error.status === 401) return pause('auth', translate('services.offlineQueue.signInAgainToSendQueuedActions'), error);
+    if (error.status === 403) return pause('forbidden', translate('services.offlineQueue.theServerDeniedSynchronizationMessage', { message: message }), error);
     if (error.status === 429) return retry('rate_limited', message, error, error.retryAfterSeconds);
     if (error.status === 408 || error.status >= 500) return retry('server', message, error, error.retryAfterSeconds);
-    return pause('rejected', translate(`Der Server hat die Synchronisierung abgelehnt: ${message}`, `The server rejected synchronization: ${message}`), error);
+    return pause('rejected', translate('services.offlineQueue.theServerRejectedSynchronizationMessage', { message: message }), error);
   }
   if (error instanceof InvalidResponseError) return pause('invalid_response', message, error);
   if (error instanceof TypeError || error instanceof RequestTimeoutError || isAbortError(error)) return retry('network', message, error);
   if (error instanceof SessionChangedError) return 1_000;
-  return retry('storage', translate(`Lokaler Speicher nicht verfügbar: ${message}`, `Local storage unavailable: ${message}`), error);
+  return retry('storage', translate('services.offlineQueue.localStorageUnavailableMessage', { message: message }), error);
 }
 
 /**
@@ -316,7 +316,7 @@ export async function flushOfflineQueue(options: { resume?: boolean } = {}): Pro
       try {
         payload = await response.json();
       } catch (cause) {
-        throw new InvalidResponseError(translate('Der Server hat eine unlesbare Synchronisationsantwort geliefert', 'The server returned an unreadable synchronization response'), { cause });
+        throw new InvalidResponseError(translate('services.offlineQueue.theServerReturnedAnUnreadableSynchronizationResponse'), { cause });
       }
       results = syncResults(payload);
     } finally {
@@ -416,13 +416,13 @@ async function archiveAndDelete(db: IDBDatabase, source: string, entry: OfflineA
 }
 export async function correctSyncFailure(failure: SyncFailure, payload: Record<string, unknown>, resolutionNote: string): Promise<void> {
   const context = captureAuthSession();
-  if (!context.accountId || failure.ownerId !== context.accountId) throw new Error(translate('Der Fehler gehört zu einem anderen Konto', 'Failure belongs to another account'));
-  if (!navigator.onLine) throw new Error(translate('Stellen Sie die Verbindung wieder her und prüfen Sie den aktuellen Serverstand, bevor Sie korrigieren', 'Reconnect and review current server state before correcting'));
-  if (!resolutionNote.trim()) throw new Error(translate('Bitte erläutern Sie die Korrektur', 'Explain the correction'));
-  if (flushInFlight) throw new Error(translate('Warten Sie, bis die Synchronisierung abgeschlossen ist', 'Wait for synchronization to finish'));
+  if (!context.accountId || failure.ownerId !== context.accountId) throw new Error(translate('services.offlineQueue.failureBelongsToAnotherAccount'));
+  if (!navigator.onLine) throw new Error(translate('services.offlineQueue.reconnectAndReviewCurrentServerStateBeforeCorrecting'));
+  if (!resolutionNote.trim()) throw new Error(translate('services.offlineQueue.explainTheCorrection'));
+  if (flushInFlight) throw new Error(translate('services.offlineQueue.waitForSynchronizationToFinish'));
   const stored = (await getSyncFailures()).find((entry) => entry.idempotencyKey === failure.idempotencyKey);
   assertAuthSession(context);
-  if (!stored) throw new Error(translate('Der Fehler wurde bereits behoben', 'Failure has already been resolved'));
+  if (!stored) throw new Error(translate('services.offlineQueue.failureHasAlreadyBeenResolved'));
   const db = await openDatabase();
   assertAuthSession(context);
   await new Promise<void>((resolve, reject) => {

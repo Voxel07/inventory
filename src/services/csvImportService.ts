@@ -16,7 +16,7 @@ import { createCsvOperationImporter } from './csvOperationImport';
 import { createCsvEventLogisticsImporter } from './csvEventLogisticsImport';
 import type { ParsedCheckoutRow } from '../types/csvImport';
 import type { ParsedOperationRow } from '../utils/csvOperations';
-import { translate } from '../utils/naming';
+import { translate, type Translator } from '../utils/naming';
 
 export interface CsvImportResult { successItems: number; updatedItems: number; successAssemblies: number; successEvents: number; successOrders: number; successGeneralOrders: number; successReturns: number; successCheckouts: number; successOperations: number; errors: string[] }
 
@@ -40,7 +40,7 @@ interface ImportPlan {
   validReturnsCount: number;
   validCheckoutsCount: number;
   validOperationsCount: number;
-  t: (de: string, en: string) => string;
+  t: Translator;
   setImportProgress: (value: number) => void;
   setImportStatusText: (value: string) => void;
   setImportedCounts: (value: CsvImportCounts) => void;
@@ -48,10 +48,7 @@ interface ImportPlan {
 
 export function runCsvImport(plan: ImportPlan): Promise<CsvImportResult> {
   return withApiRequestBatch(() => runCsvImportBatch(plan), (seconds) => {
-    plan.setImportStatusText(plan.t(
-      `API-Anfragelimit erreicht. Import wird in ${seconds}s fortgesetzt...`,
-      `API rate limit reached. Import resumes in ${seconds}s...`,
-    ));
+    plan.setImportStatusText(plan.t('services.csvImportService.aPIRateLimitReachedImportResumesInSecondsS', { seconds: seconds }));
   });
 }
 
@@ -111,7 +108,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
       for (const locName of missingLocNames) {
         try {
-          setImportStatusText(t(`Erstelle Lagerort "${locName}"...`, `Creating storage location "${locName}"...`));
+          setImportStatusText(t('services.csvImportService.creatingStorageLocationLocName', { locName: locName }));
           const newLoc = await createStorageLocation({ name: locName });
           locCache.set(locName.toLowerCase().trim(), newLoc.id);
         } catch (err: unknown) {
@@ -131,7 +128,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
       let itemIndex = 0;
       for (const row of itemsToProcess) {
         itemIndex++;
-        setImportStatusText(t(`Importiere Artikel ${itemIndex}/${itemsToProcess.length}: ${row.data.name}`, `Importing item ${itemIndex}/${itemsToProcess.length}: ${row.data.name}`));
+        setImportStatusText(t('services.csvImportService.importingItemItemIndexItemsToProcesCountName', { itemIndex: itemIndex, itemsToProcesCount: String(itemsToProcess.length), name: String(row.data.name) }));
 
         // Resolve location ID if created on the fly
         let locationId = row.data.storageLocation;
@@ -204,7 +201,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
       for (const row of assembliesToProcess) {
         assemIndex++;
-        setImportStatusText(t(`Erstelle Baugruppe ${assemIndex}/${assembliesToProcess.length}: ${row.data.name}`, `Creating assembly ${assemIndex}/${assembliesToProcess.length}: ${row.data.name}`));
+        setImportStatusText(t('services.csvImportService.creatingAssemblyAssemIndexAssembliesToProcesCountName', { assemIndex: assemIndex, assembliesToProcesCount: String(assembliesToProcess.length), name: String(row.data.name) }));
 
         // Re-resolve components in case some items were created in Step 2
         const finalItemIds: string[] = [];
@@ -245,10 +242,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 || parsedOperations.length > 0 ? await getEventReports() : [];
     const importEventLogistics = createCsvEventLogisticsImporter();
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
-      setImportStatusText(t(
-        `Erstelle ${row.data.eventType}-Event vom ${row.data.eventDate}...`,
-        `Creating ${row.data.eventType} event on ${row.data.eventDate}...`,
-      ));
+      setImportStatusText(t('services.csvImportService.creatingEventTypeEventOnEventDate', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate) }));
 
       const resolveQuantities = (components: ParsedEventReportRow['usedItems']) => {
         const quantities: Record<string, number> = {};
@@ -257,7 +251,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const item = (!isTempId && component.itemId)
             ? items.find((candidate) => candidate.id === component.itemId)
             : createdItemsMap.get(component.itemName.toLowerCase().trim());
-          if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
+          if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
           quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
         }
         return quantities;
@@ -286,10 +280,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           await importEventLogistics(saved.id, row);
         } catch (err: unknown) {
           assertAuthSession(context);
-          errors.push(translate(
-            `Event ${row.data.eventType} ${row.data.eventDate} gespeichert, Teilnehmer/Zeitplan unvollständig: ${(err as Error).message || err}`,
-            `Event ${row.data.eventType} ${row.data.eventDate} saved, attendees/timeline incomplete: ${(err as Error).message || err}`,
-          ));
+          errors.push(translate('services.csvImportService.eventEventTypeEventDateSavedAttendeesTimelineIncompleteMessage', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate), message: String((err as Error).message || err) }));
         }
       } catch (err: unknown) {
         assertAuthSession(context);
@@ -307,7 +298,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     const historyEnd = firstWorkflow < 0 ? operations.length : firstWorkflow;
     const importOperation = createCsvOperationImporter([...createdItemsMap.values()], locCache, existingEvents);
     async function applyOperation(row: ParsedOperationRow) {
-      setImportStatusText(t(`Importiere Aktion ${row.name}...`, `Importing action ${row.name}...`));
+      setImportStatusText(t('services.csvImportService.importingActionName', { name: String(row.name) }));
       try {
         await importOperation(row);
         successOperations++;
@@ -324,10 +315,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     const existingOrders = parsedOrders.length > 0
       ? await loadAllPages((page, size) => getFactionOrders(undefined, page, size)) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
-      setImportStatusText(t(
-        `Importiere Bestellung ${row.data.faction} für ${row.data.eventDate}...`,
-        `Importing ${row.data.faction} order for ${row.data.eventDate}...`,
-      ));
+      setImportStatusText(t('services.csvImportService.importingFactionOrderForEventDate', { faction: String(row.data.faction), eventDate: String(row.data.eventDate) }));
 
       try {
         const requestedQuantities: Record<string, number> = {};
@@ -336,7 +324,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const item = (!isTempId && component.itemId)
             ? items.find((candidate) => candidate.id === component.itemId)
             : createdItemsMap.get(component.itemName.toLowerCase().trim());
-          if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
+          if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
           requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
         }
         const data = {
@@ -368,7 +356,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
               if (item?.trackingMode !== 'serialized') continue;
               const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
-              if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
+              if (available.length < quantity) throw new Error(translate('services.csvImportService.notEnoughAssetsForName', { name: String(item.name) }));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
             finalOrder = await saveFactionOrderPreparation(
@@ -393,7 +381,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           }
         }
         if (finalOrder.status !== row.targetStatus) {
-          throw new Error(translate(`Status ${finalOrder.status} statt ${row.targetStatus}`, `Status ${finalOrder.status} instead of ${row.targetStatus}`));
+          throw new Error(translate('services.csvImportService.statusStatusInsteadOfTargetStatus', { status: String(finalOrder.status), targetStatus: String(row.targetStatus) }));
         }
         if (existing) existingOrders.splice(existingOrders.findIndex((order) => order.id === existing.id), 1, finalOrder);
         else existingOrders.push(finalOrder);
@@ -410,14 +398,14 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     const existingGeneralOrders = parsedGeneralOrders.length > 0
       ? await loadAllPages((page, size) => getOrders(undefined, page, size)) : [];
     for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
-      setImportStatusText(t(`Importiere allgemeine Bestellung ${row.data.name}...`, `Importing general order ${row.data.name}...`));
+      setImportStatusText(t('services.csvImportService.importingGeneralOrderName', { name: String(row.data.name) }));
       try {
         const resolve = (components: ParsedGeneralOrderRow['requestedItems']) => {
           const quantities: Record<string, number> = {};
           for (const component of components) {
             const item = items.find((candidate) => candidate.id === component.itemId)
               ?? createdItemsMap.get(component.itemName.toLowerCase().trim());
-            if (!item) throw new Error(translate(`Artikel "${component.itemName}" konnte nicht gefunden werden`, `Item "${component.itemName}" could not be found`));
+            if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
             quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
           }
           return quantities;
@@ -446,7 +434,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             if (item?.trackingMode === 'serialized') {
               const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
-              if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
+              if (available.length < quantity) throw new Error(translate('services.csvImportService.notEnoughAssetsForName', { name: String(item.name) }));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
             }
           }
@@ -469,32 +457,29 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
     // Step 7: Import standalone returns if any
     for (const ret of parsedReturns.filter((r) => r.status === 'valid' && r.targetStatus === 'accepted')) {
-      setImportStatusText(t(
-        `Importiere Rückgabe für ${ret.itemName}...`,
-        `Importing return for ${ret.itemName}...`,
-      ));
+      setImportStatusText(t('services.csvImportService.importingReturnForItemName', { itemName: String(ret.itemName) }));
 
       try {
         const item = items.find((candidate) => candidate.id === ret.itemId) || createdItemsMap.get(ret.itemName.toLowerCase().trim());
-        if (!item) throw new Error(translate(`Artikel "${ret.itemName}" nicht gefunden`, `Item "${ret.itemName}" not found`));
+        if (!item) throw new Error(translate('services.csvImportService.itemItemNameNotFound', { itemName: String(ret.itemName) }));
 
         if (ret.generalOrderName) {
           const order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === ret.generalOrderName?.toLowerCase()
             && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
-          if (!order) throw new Error(translate(`Allgemeine Bestellung "${ret.generalOrderName}" nicht gefunden`, `General order "${ret.generalOrderName}" not found`));
+          if (!order) throw new Error(translate('services.csvImportService.generalOrderGeneralOrderNameNotFound', { generalOrderName: String(ret.generalOrderName) }));
           if (['returned', 'closed'].includes(order.status)) continue;
           const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
           existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
         } else if (item.trackingMode === 'serialized') {
           const assets = await getAllItemAssets(item.id);
-          if (ret.assetCodes.length !== ret.quantity) throw new Error(translate('AssetCodes müssen der Menge entsprechen', 'AssetCodes must match the quantity'));
+          if (ret.assetCodes.length !== ret.quantity) throw new Error(translate('services.csvImportService.assetCodesMustMatchTheQuantity'));
           let recorded = false;
           for (const code of ret.assetCodes) {
             const asset = assets.find((candidate) => candidate.assetCode.toLowerCase() === code.toLowerCase());
-            if (!asset) throw new Error(translate(`Asset "${code}" nicht gefunden`, `Asset "${code}" not found`));
+            if (!asset) throw new Error(translate('services.csvImportService.assetCodeNotFound', { code: code }));
             if (asset.availabilityStatus === 'available') continue;
             if (!['in_field', 'in_custody', 'returned_pending_check'].includes(asset.availabilityStatus)) {
-              throw new Error(translate(`Asset "${code}" kann im Status ${asset.availabilityStatus} nicht zurückgegeben werden`, `Asset "${code}" cannot be returned in status ${asset.availabilityStatus}`));
+              throw new Error(translate('services.csvImportService.assetCodeCannotBeReturnedInStatusAvailabilityStatus', { code: code, availabilityStatus: String(asset.availabilityStatus) }));
             }
             await createTransaction({
               itemId: item.id,
@@ -515,7 +500,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           if (previous.some((tx) => tx.transactionType === 'checkin' && tx.notes?.includes(marker))) continue;
           const current = await getItem(item.id);
           if (getItemStock(current).checkedOut === 0) continue;
-          if (getItemStock(current).checkedOut < ret.quantity) throw new Error(translate('Rückgabemenge übersteigt den ausgeliehenen Bestand', 'Return quantity exceeds the checked-out stock'));
+          if (getItemStock(current).checkedOut < ret.quantity) throw new Error(translate('services.csvImportService.returnQuantityExceedsTheCheckedOutStock'));
           await createTransaction({
             itemId: item.id,
             transactionType: 'checkin',
@@ -537,10 +522,10 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
     // Step 8: Apply explicit checkout rows after item and asset creation.
     for (const row of parsedCheckouts.filter((entry) => entry.status === 'valid')) {
-      setImportStatusText(t(`Importiere Ausleihe für ${row.itemName}...`, `Importing checkout for ${row.itemName}...`));
+      setImportStatusText(t('services.csvImportService.importingCheckoutForItemName', { itemName: String(row.itemName) }));
       try {
         const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
-        if (!item) throw new Error(translate(`Artikel "${row.itemName}" nicht gefunden`, `Item "${row.itemName}" not found`));
+        if (!item) throw new Error(translate('services.csvImportService.itemItemNameNotFound', { itemName: String(row.itemName) }));
         const marker = `CSV checkout row ${row.index}`;
         const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id }, page, size));
         const imported = previous.filter((tx) => tx.transactionType === 'checkout' && tx.notes?.includes(marker));
@@ -551,7 +536,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             : assets.filter((asset) => asset.availabilityStatus === 'available').slice(0, row.quantity - imported.length);
           if ((row.assetCodes.length ? selected.length !== row.quantity : selected.length !== row.quantity - imported.length)
             || selected.some((asset) => !asset || (asset.availabilityStatus !== 'available' && !imported.some((tx) => tx.assetInstanceId === asset.id)))) {
-            throw new Error(translate('Nicht genügend passende Seriengeräte verfügbar', 'Not enough matching serialised assets available'));
+            throw new Error(translate('services.csvImportService.notEnoughMatchingSerialisedAssetsAvailable'));
           }
           for (const asset of selected) {
             if (imported.some((tx) => tx.assetInstanceId === asset!.id)) continue;
@@ -578,7 +563,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     for (const row of operations.slice(historyEnd)) await applyOperation(row);
   } catch (error) {
     assertAuthSession(context);
-    errors.push(t('Import abgebrochen: ', 'Import stopped: ') + (error instanceof Error ? error.message : String(error)));
+    errors.push(t('services.csvImportService.importStopped') + (error instanceof Error ? error.message : String(error)));
   }
 
   return { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors };

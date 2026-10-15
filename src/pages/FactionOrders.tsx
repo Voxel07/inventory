@@ -26,7 +26,7 @@ import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { EventType, FactionOrderStatus, FactionOrderSummary } from '../types';
 import { useUIStore } from '../store/uiStore';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canManageInventory, canOrder, canWriteFaction, factionKeyOf } from '../utils/access';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
@@ -52,7 +52,7 @@ function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning'
 }
 
 export function FactionOrders() {
-  const t = useLocalizedText();
+  const t = useT();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -113,15 +113,15 @@ export function FactionOrders() {
 
   function statusLabel(status: FactionOrderStatus) {
     const labels: Record<FactionOrderStatus, string> = {
-      draft: t('Entwurf', 'Draft'),
-      submitted: t('Bereit zur Bearbeitung', 'Ready for processing'),
-      preparing: t('In Vorbereitung', 'Preparing'),
-      ready: t('Abholbereit', 'Ready'),
-      picked_up: t('Abgeholt', 'Picked up'),
-      partially_returned: t('Teilweise zurück', 'Partially returned'),
-      returned: t('Zurückgegeben', 'Returned'),
-      closed: t('Abgeschlossen', 'Closed'),
-      cancelled: t('Storniert', 'Cancelled'),
+      draft: t('enum.value.draft'),
+      submitted: t('pages.factionOrders.readyForProcessing'),
+      preparing: t('enum.value.preparing'),
+      ready: t('pages.factionOrders.ready'),
+      picked_up: t('enum.value.picked_up'),
+      partially_returned: t('pages.factionOrders.partiallyReturned'),
+      returned: t('enum.value.returned'),
+      closed: t('enum.value.closed'),
+      cancelled: t('enum.value.cancelled'),
     };
     return labels[status];
   }
@@ -151,19 +151,19 @@ export function FactionOrders() {
     return {
       id: order.id,
       title: history ? `${order.faction} · ${order.orderCode}` : order.orderCode,
-      subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('verwendet', 'used') : t('vorbereitet', 'prepared')}`,
+      subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('pages.factionOrders.used') : t('pages.factionOrders.prepared')}`,
       details: <>
         {order.requestedPickupDate && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-          {t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}
+          {t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}
         </Typography>}
         <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>
-          {t('Abholort', 'Pickup location')}: {pickupLabel(order)}
+          {t('common.pickupLocation')}: {pickupLabel(order)}
         </Typography>
       </>,
       status: statusLabel(order.status),
       statusColor: statusColor(order.status),
       onOpen: () => navigate(`/orders/faction/${order.id}`),
-      actions: <Button onClick={() => navigate(`/orders?pickupOrder=${order.id}&pickupKind=faction`)}>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</Button>,
+      actions: <Button onClick={() => navigate(`/orders?pickupOrder=${order.id}&pickupKind=faction`)}>{t('pages.factionOrders.itemsPickupGroups')}</Button>,
     };
   }
 
@@ -171,16 +171,13 @@ export function FactionOrders() {
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h4">{t('Fraktions-Bestelllisten', 'Faction order lists')}</Typography>
+          <Typography variant="h4">{t('pages.factionOrders.factionOrderLists')}</Typography>
           <Typography color="text.secondary">
-            {t(
-              'Bedarf planen, Vorbereitung verfolgen und komplette Listen per QR-Code ausgeben und zurücknehmen.',
-              'Plan requirements, track preparation, and check complete lists out and back in by QR code.',
-            )}
+            {t('pages.factionOrders.planRequirementsTrackPreparationAndCheckCompleteListsOutAnd')}
           </Typography>
         </Box>
-        <Button title={translate('Eine neue Fraktionsbestellliste anlegen', 'Create a new faction order list')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!canCreateList} sx={{ alignSelf: { sm: 'flex-start' } }}>
-          {t('Neue Liste', 'New list')}
+        <Button title={translate('pages.factionOrders.createANewFactionOrderList')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!canCreateList} sx={{ alignSelf: { sm: 'flex-start' } }}>
+          {t('pages.factionOrders.newList')}
         </Button>
       </Stack>
 
@@ -194,13 +191,13 @@ export function FactionOrders() {
       >
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>
           <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-            {t('Bestellstatus der Fraktionen', 'Faction order status')}
+            {t('pages.factionOrders.factionOrderStatus')}
           </Typography>
-          {overviewOrders.isLoading ? <CircularProgress size={20} aria-label={t('Bestellstatus wird geladen', 'Loading order status')} /> : !overviewOrders.isError && (
+          {overviewOrders.isLoading ? <CircularProgress size={20} aria-label={t('pages.factionOrders.loadingOrderStatus')} /> : !overviewOrders.isError && (
             <Stack direction="row" sx={{ flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 1 }}>
               {factionOverview.map(({ faction, state }) => {
-                const label = state === 'finished' ? t('Fertig', 'Finished')
-                  : state === 'draft' ? t('Entwurf', 'Draft') : t('Keine Bestellung', 'No order');
+                const label = state === 'finished' ? t('pages.factionOrders.finished')
+                  : state === 'draft' ? t('enum.value.draft') : t('pages.factionOrders.noOrder');
                 const color = state === 'finished' ? 'success.main'
                   : state === 'draft' ? 'warning.main' : 'error.main';
                 return <Tooltip key={faction} title={label} arrow>
@@ -218,8 +215,8 @@ export function FactionOrders() {
 
 
       <OrderListSection
-        title={t('Aktive Bestellungen', 'Active orders')}
-        emptyMessage={t('Für dieses Event gibt es keine aktiven Bestellungen.', 'There are no active orders for this event.')}
+        title={t('pages.factionOrders.activeOrders')}
+        emptyMessage={t('pages.factionOrders.thereAreNoActiveOrdersForThisEvent')}
         groups={activeOrderGroups.map(({ faction, orders: factionOrders }) => ({
           label: faction,
           entries: factionOrders.map((order) => orderEntry(order)),
@@ -231,8 +228,8 @@ export function FactionOrders() {
         onRetry={() => { void active.refetch(); }}
       />
       <OrderListSection
-        title={t('Bestellverlauf', 'Order history')}
-        emptyMessage={t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}
+        title={t('pages.factionOrders.orderHistory')}
+        emptyMessage={t('pages.factionOrders.thereIsNoCompletedOrderHistoryForThisEventYet')}
         groups={[{ entries: historyOrders.map((order) => orderEntry(order, true)) }]}
         count={historyOrders.length}
         isLoading={history.isLoading}
@@ -244,7 +241,7 @@ export function FactionOrders() {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg"
         slotProps={{ transition: { onEntered: () => setDialogReady(true), onExit: () => setDialogReady(false) } }}>
         <DialogTitle sx={{ pr: 7 }}>
-          {t('Neue Fraktions-Bestellliste', 'New faction order list')}
+          {t('pages.factionOrders.newFactionOrderList')}
         </DialogTitle>
         <DialogContent dividers>
           {dialogReady && <FactionOrderForm
@@ -257,7 +254,7 @@ export function FactionOrders() {
             onSubmit={(data) => createOrder.mutate(data, {
               onSuccess: (order) => {
                 setDialogOpen(false);
-                showSnackbar(t('Bestellliste erstellt', 'Order list created'), 'success');
+                showSnackbar(t('pages.factionOrders.orderListCreated'), 'success');
                 navigate(`/orders/faction/${order.id}`);
               },
               onError: (error) => {
@@ -265,7 +262,7 @@ export function FactionOrders() {
                   setDialogOpen(false);
                   return; // The global mutation handler confirms that the order was queued.
                 }
-                showSnackbar(error instanceof Error ? error.message : t('Liste konnte nicht erstellt werden', 'Could not create list'), 'error');
+                showSnackbar(error instanceof Error ? error.message : t('pages.factionOrders.couldNotCreateList'), 'error');
               },
             })}
           />}

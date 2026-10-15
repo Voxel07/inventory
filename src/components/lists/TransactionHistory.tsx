@@ -17,7 +17,7 @@ import {
 import type { StockTransaction, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { formatDateTime } from '../../utils/dateFormat';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { Link } from 'react-router-dom';
 
 interface Props {
@@ -27,7 +27,7 @@ interface Props {
 }
 
 export function TransactionHistory({ transactions, users, isLoading }: Props) {
-    const t = useLocalizedText();
+    const t = useT();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     if (isLoading) {
@@ -43,7 +43,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
     if (!transactions?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">{t('Keine Transaktionen gefunden', 'No transactions found')}</Typography>
+                <Typography color="text.secondary">{t('lists.transactionHistory.noTransactionsFound')}</Typography>
             </Paper>
         );
     }
@@ -104,7 +104,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                 size="small"
                 variant="outlined"
                 color="primary"
-                label={order ? `${order.eventType} · ${order.faction}` : t('Fraktionsliste', 'Faction list')}
+                label={order ? `${order.eventType} · ${order.faction}` : t('lists.transactionHistory.factionList')}
                 sx={compactSx}
             />
         );
@@ -139,13 +139,13 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>{t('Datum', 'Date')}</TableCell>
-                        <TableCell>{t('Artikel', 'Item')}</TableCell>
-                        <TableCell>{t('Typ', 'Type')}</TableCell>
-                        <TableCell>{t('Benutzer', 'User')}</TableCell>
-                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                        <TableCell>{t('Grund', 'Reason')}</TableCell>
-                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                        <TableCell>{t('common.date')}</TableCell>
+                        <TableCell>{t('common.item')}</TableCell>
+                        <TableCell>{t('common.type')}</TableCell>
+                        <TableCell>{t('common.user')}</TableCell>
+                        <TableCell align="right">{t('common.quantity')}</TableCell>
+                        <TableCell>{t('common.reason')}</TableCell>
+                        <TableCell>{t('common.notes')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>

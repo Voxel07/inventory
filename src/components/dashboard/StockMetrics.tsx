@@ -4,14 +4,14 @@ import WarningIcon from '@mui/icons-material/Warning';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import type { InventorySummary } from '../../services/inventoryService';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 interface Props {
     summary: InventorySummary | undefined;
 }
 
 export function StockMetrics({ summary }: Props) {
-    const t = useLocalizedText();
+    const t = useT();
     const totalItems = summary?.items ?? 0;
     const totalStock = summary?.totalUnits ?? 0;
     const lowStockItems = summary?.lowStockItems ?? 0;
@@ -19,11 +19,11 @@ export function StockMetrics({ summary }: Props) {
     const openDamageReports = summary?.openDamageReports ?? 0;
 
     const metrics = [
-        { label: t('Artikel', 'Items'), value: totalItems, icon: <InventoryIcon />, color: 'text.secondary' },
-        { label: t('Einheiten gesamt', 'Total units'), value: totalStock, icon: <InventoryIcon />, color: 'text.secondary' },
-        { label: t('Geringer Bestand', 'Low stock'), value: lowStockItems, icon: <WarningIcon />, color: lowStockItems ? 'warning.main' : 'text.secondary' },
-        { label: t('Buchungen (7 Tage)', 'Transactions (7 days)'), value: recentTransactions, icon: <SwapHorizIcon />, color: 'text.secondary' },
-        { label: t('Offene Schadensberichte', 'Open damage reports'), value: openDamageReports, icon: <ReportProblemIcon />, color: openDamageReports ? 'error.main' : 'text.secondary' },
+        { label: t('nav.items'), value: totalItems, icon: <InventoryIcon />, color: 'text.secondary' },
+        { label: t('dashboard.stockMetrics.totalUnits'), value: totalStock, icon: <InventoryIcon />, color: 'text.secondary' },
+        { label: t('dashboard.stockMetrics.lowStock'), value: lowStockItems, icon: <WarningIcon />, color: lowStockItems ? 'warning.main' : 'text.secondary' },
+        { label: t('dashboard.stockMetrics.transactions7Days'), value: recentTransactions, icon: <SwapHorizIcon />, color: 'text.secondary' },
+        { label: t('dashboard.stockMetrics.openDamageReports'), value: openDamageReports, icon: <ReportProblemIcon />, color: openDamageReports ? 'error.main' : 'text.secondary' },
     ];
 
     return (

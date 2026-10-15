@@ -11,7 +11,7 @@ import { useItemsByIds } from '../../hooks/useItems';
 import { generalOrderCommand, generalOrderApi } from '../../services/orderService';
 import { OperationForm } from '../operations/OperationForm';
 import type { Field, Values } from '../../types/operationForm';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
@@ -21,7 +21,7 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
   const { data: items = [], isSuccess: itemsLoaded } = useItemsByIds(Object.keys(order.requestedQuantities));
   const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
-  const t = useLocalizedText(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
+  const t = useT(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
     const ids = Object.keys(order.requestedQuantities).filter((id) => items.find((item) => item.id === id)?.trackingMode === 'serialized');
     return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getAllItemAssets(id)] as const)));
@@ -32,17 +32,17 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     const item = items.find((value) => value.id === id); const name = order.itemNames?.[id] ?? item?.name ?? id;
     // No source choice: the backend takes the item's default location, or the location with free stock.
     if (action === 'prepare') return [
-      { key: `prepare:${id}`, label: `${name} · ${t('Vorbereitet', 'Prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('Angefragt', 'Requested')}: ${order.requestedQuantities[id]}` },
+      { key: `prepare:${id}`, label: `${name} · ${t('common.prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('orders.generalOrderWorkflow.requested')}: ${order.requestedQuantities[id]}` },
       ...(assets.data?.[id] ?? []).filter((asset) => (asset.availabilityStatus === 'available' && (!equipment.data?.[id] || equipment.data[id].assetIds.includes(asset.id))) || order.assetAssignments[id]?.includes(asset.id)).map((asset): Field => ({ key: `asset:${asset.id}`, label: `${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox' })),
     ];
     if (action !== 'return' || outstanding(id) <= 0) return [];
-    if (item?.trackingMode === 'serialized') return (order.assetAssignments[id] ?? []).filter((assetId) => !order.reconciledAssets?.[id]?.includes(assetId)).map((assetId): Field => ({ key: `outcome:${assetId}`, label: `${name} · ${assets.data?.[id]?.find((asset) => asset.id === assetId)?.assetCode ?? assetId}`, options: [{ value: 'missing', label: t('Vermisst (bleibt ausstehend)', 'Missing (remains outstanding)') }, { value: 'returned', label: t('Intakt zurück', 'Returned good') }, { value: 'damaged', label: t('Beschädigt zurück', 'Returned damaged') }, ...(canManageUsers(user) ? [{ value: 'writtenOff', label: t('Abschreiben', 'Write off') }] : [])], help: t('Leer lassen, wenn weiterhin ausstehend.', 'Leave empty if still outstanding.') }));
+    if (item?.trackingMode === 'serialized') return (order.assetAssignments[id] ?? []).filter((assetId) => !order.reconciledAssets?.[id]?.includes(assetId)).map((assetId): Field => ({ key: `outcome:${assetId}`, label: `${name} · ${assets.data?.[id]?.find((asset) => asset.id === assetId)?.assetCode ?? assetId}`, options: [{ value: 'missing', label: t('orders.generalOrderWorkflow.missingRemainsOutstanding') }, { value: 'returned', label: t('orders.generalOrderWorkflow.returnedGood') }, { value: 'damaged', label: t('orders.generalOrderWorkflow.returnedDamaged') }, ...(canManageUsers(user) ? [{ value: 'writtenOff', label: t('common.writeOff') }] : [])], help: t('orders.generalOrderWorkflow.leaveEmptyIfStillOutstanding') }));
     return [
-      { key: `returned:${id}`, label: `${name} · ${t('Intakt zurück', 'Returned good')}`, type: 'number', min: 0, max: outstanding(id) },
-      ...(item?.isConsumable ? [{ key: `consumed:${id}`, label: t('Verbraucht', 'Consumed'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
-      { key: `damaged:${id}`, label: t('Beschädigt zurück', 'Returned damaged'), type: 'number', min: 0, max: outstanding(id) },
-      { key: `missing:${id}`, label: t('Aktuell vermisst (Gesamtmenge)', 'Currently missing (total)'), type: 'number', min: 0, max: outstanding(id) },
-      ...(canManageUsers(user) ? [{ key: `writtenOff:${id}`, label: t('Abschreiben', 'Write off'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
+      { key: `returned:${id}`, label: `${name} · ${t('orders.generalOrderWorkflow.returnedGood')}`, type: 'number', min: 0, max: outstanding(id) },
+      ...(item?.isConsumable ? [{ key: `consumed:${id}`, label: t('enum.transactionType.consumed'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
+      { key: `damaged:${id}`, label: t('orders.generalOrderWorkflow.returnedDamaged'), type: 'number', min: 0, max: outstanding(id) },
+      { key: `missing:${id}`, label: t('orders.generalOrderWorkflow.currentlyMissingTotal'), type: 'number', min: 0, max: outstanding(id) },
+      ...(canManageUsers(user) ? [{ key: `writtenOff:${id}`, label: t('common.writeOff'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
     ];
   });
   const initial: Values = {};
@@ -50,7 +50,7 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     ids.forEach((id) => { initial[`prepare:${id}`] = order.preparedQuantities?.[id] ?? 0; });
     Object.values(order.assetAssignments).flat().forEach((asset) => { initial[`asset:${asset}`] = true; });
   }
-  return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : [...fields, { key: 'notes', label: t('Notiz / Begründung', 'Notes / reason'), multiline: true, required: action === 'return' }]} onClose={onClose} onSave={async (values) => {
+  return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : [...fields, { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' }]} onClose={onClose} onSave={async (values) => {
     if (action === 'history') return;
     if (action === 'prepare') {
       const preparedQuantities = Object.fromEntries(ids.map((id) => [id, Number(values[`prepare:${id}`] || 0)]));
@@ -75,9 +75,9 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     return generalOrderCommand(order.id, action, { notes: optionalText(values.notes), idempotencyKey: key });
   }}>
     {history.error && <Alert severity="error">{history.error.message}</Alert>}
-    {history.isLoading && <Typography>{t('Verlauf wird geladen…', 'Loading history…')}</Typography>}
+    {history.isLoading && <Typography>{t('orders.generalOrderWorkflow.loadingHistory')}</Typography>}
     {assets.error && <Alert severity="error">{assets.error.message}</Alert>}
-    {action === 'pickup' && <Alert severity="info">{t('Reservierte Artikel werden jetzt übergeben.', 'The reserved items will now be handed over.')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}
+    {action === 'pickup' && <Alert severity="info">{t('orders.generalOrderWorkflow.theReservedItemsWillNowBeHandedOver')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}
     {action === 'history' && <Stack spacing={2}>{history.data?.history.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.actorName} · {formatDateTime(entry.timestamp)}</Typography><Typography>{entry.notes}</Typography></Stack>)}</Stack>}
   </OperationForm>;
 }

@@ -12,7 +12,7 @@ function createSessionClient(generation: number): QueryClient {
       onError: (error) => {
         if (getAuthSnapshot().generation === generation && error instanceof OfflineQueuedError) {
           useUIStore.getState().showSnackbar(
-            translate('Offline gespeichert — wird bei Verbindung synchronisiert', 'Saved offline — will sync when connected'),
+            translate('services.sessionQueryClient.savedOfflineWillSyncWhenConnected'),
             'info',
           );
         }

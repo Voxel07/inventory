@@ -153,10 +153,10 @@ export function buildTheme(mode: ThemeMode) {
       MuiTablePagination: {
         defaultProps: {
           getItemAriaLabel: (type) => ({
-            first: translate('Die erste Seite anzeigen', 'Display the first page'),
-            last: translate('Die letzte Seite anzeigen', 'Display the last page'),
-            next: translate('Die nächste Seite anzeigen', 'Display the next page'),
-            previous: translate('Die vorherige Seite anzeigen', 'Display the previous page'),
+            first: translate('theme.displayTheFirstPage'),
+            last: translate('theme.displayTheLastPage'),
+            next: translate('theme.displayTheNextPage'),
+            previous: translate('theme.displayThePreviousPage'),
           })[type],
           slots: { actions: {
             firstButton: IconButton, lastButton: IconButton,
@@ -244,8 +244,8 @@ export function buildTheme(mode: ThemeMode) {
       MuiTabs: {
         defaultProps: {
           slotProps: { scrollButtons: {
-            title: translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
-            'aria-label': translate('Weitere Registerkarten anzeigen', 'Show more tabs'),
+            title: translate('theme.showMoreTabs'),
+            'aria-label': translate('theme.showMoreTabs'),
           } },
         },
       },
@@ -254,7 +254,7 @@ export function buildTheme(mode: ThemeMode) {
       },
       MuiAlert: {
         defaultProps: {
-          closeText: translate('Diese Meldung schließen', 'Dismiss this message'),
+          closeText: translate('theme.dismissThisMessage'),
           slots: { closeButton: IconButton },
         },
       },
@@ -264,9 +264,9 @@ export function buildTheme(mode: ThemeMode) {
       },
       MuiAutocomplete: {
         defaultProps: {
-          clearText: translate('Auswahl löschen', 'Clear the selection'),
-          openText: translate('Auswahlmöglichkeiten anzeigen', 'Show available options'),
-          closeText: translate('Auswahlmöglichkeiten schließen', 'Hide available options'),
+          clearText: translate('theme.clearTheSelection'),
+          openText: translate('theme.showAvailableOptions'),
+          closeText: translate('theme.hideAvailableOptions'),
         },
       },
     },

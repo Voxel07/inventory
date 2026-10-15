@@ -3,10 +3,10 @@ import { Dialog } from '../shared/ClosableDialog';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Alert, Box, CircularProgress, DialogActions, DialogContent, DialogTitle, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
 import { calculateImageCrop, decodeImage, prepareItemImage } from '../../utils/prepareItemImage';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClose: () => void; onApply: (file: File) => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   const titleId = useId();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [bitmap, setBitmap] = useState<ImageBitmap>();
@@ -16,7 +16,7 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
   const [maxDimension, setMaxDimension] = useState(512);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const loadFailure = t('Bild konnte nicht geladen werden.', 'Could not load image.');
+  const loadFailure = t('common.imageCropDialog.couldNotLoadImage');
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const ratio = aspect === 'original' ? (bitmap ? bitmap.width / bitmap.height : 1) : Number(aspect);
   const crop = bitmap ? calculateImageCrop(bitmap.width, bitmap.height, ratio, zoom, position.x, position.y) : undefined;
@@ -49,21 +49,21 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
     setSaving(true);
     setError('');
     try { onApply(await prepareItemImage(file, { crop, maxDimension })); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('Bild konnte nicht gespeichert werden.', 'Could not save image.')); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : t('common.imageCropDialog.couldNotSaveImage')); }
     finally { setSaving(false); }
   }
 
   const scale = crop ? Math.min(1, maxDimension / Math.max(crop.width, crop.height)) : 1;
   return (
     <Dialog open onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby={titleId}>
-      <DialogTitle id={titleId}>{t('Bild anpassen', 'Adjust image')}</DialogTitle>
+      <DialogTitle id={titleId}>{t('common.imageCropDialog.adjustImage')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <Typography variant="body2">{t('Wählen Sie den sichtbaren Ausschnitt. Ziehen Sie das Bild oder nutzen Sie die Regler.', 'Choose the visible area. Drag the image or use the sliders.')}</Typography>
-          {!bitmap && !error && <CircularProgress aria-label={t('Bild wird geladen', 'Loading image')} />}
+          <Typography variant="body2">{t('common.imageCropDialog.chooseTheVisibleAreaDragTheImageOrUseThe')}</Typography>
+          {!bitmap && !error && <CircularProgress aria-label={t('common.imageCropDialog.loadingImage')} />}
           <Box sx={{ display: 'grid', placeItems: 'center', bgcolor: 'grey.100', minHeight: 120, borderRadius: 1, overflow: 'hidden' }}>
-            <canvas ref={canvas} aria-label={t('Vorschau des Bildausschnitts', 'Image crop preview')}
+            <canvas ref={canvas} aria-label={t('common.imageCropDialog.imageCropPreview')}
               style={{ display: bitmap ? 'block' : 'none', maxWidth: '100%', height: 'auto', cursor: zoom > 1 ? 'grab' : 'move', touchAction: 'none' }}
               onPointerDown={(event) => {
                 if (saving) return;
@@ -82,29 +82,29 @@ export function ImageCropDialog({ file, onClose, onApply }: { file: File; onClos
               onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />
           </Box>
           <Stack direction="row" spacing={2}>
-            <TextField select fullWidth label={t('Seitenverhältnis', 'Aspect ratio')} value={aspect} disabled={saving} onChange={(event) => setAspect(event.target.value)}>
-              <MenuItem value="original">{t('Original', 'Original')}</MenuItem>
+            <TextField select fullWidth label={t('common.imageCropDialog.aspectRatio')} value={aspect} disabled={saving} onChange={(event) => setAspect(event.target.value)}>
+              <MenuItem value="original">{t('common.imageCropDialog.original')}</MenuItem>
               <MenuItem value="1">1:1</MenuItem><MenuItem value={String(4 / 3)}>4:3</MenuItem>
               <MenuItem value={String(16 / 9)}>16:9</MenuItem><MenuItem value={String(3 / 4)}>3:4</MenuItem>
             </TextField>
-            <TextField select fullWidth label={t('Maximale Größe', 'Maximum size')} value={maxDimension} disabled={saving} onChange={(event) => setMaxDimension(Number(event.target.value))}>
+            <TextField select fullWidth label={t('common.imageCropDialog.maximumSize')} value={maxDimension} disabled={saving} onChange={(event) => setMaxDimension(Number(event.target.value))}>
               {[128, 256, 512].map((size) => <MenuItem key={size} value={size}>{size} px</MenuItem>)}
             </TextField>
           </Stack>
-          <Box><Typography>{t('Zoom', 'Zoom')}: {zoom.toFixed(1)}×</Typography>
-            <Slider aria-label={t('Zoom', 'Zoom')} min={1} max={4} step={0.05} value={zoom} disabled={saving || !bitmap} onChange={(_, value) => setZoom(Number(value))} /></Box>
-          <Box><Typography>{t('Horizontaler Ausschnitt', 'Horizontal position')}</Typography>
-            <Slider aria-label={t('Horizontaler Ausschnitt', 'Horizontal position')} min={0} max={1} step={0.01} value={position.x} disabled={saving || !crop || crop.width >= (bitmap?.width ?? 0)} onChange={(_, value) => setPosition((current) => ({ ...current, x: Number(value) }))} /></Box>
-          <Box><Typography>{t('Vertikaler Ausschnitt', 'Vertical position')}</Typography>
-            <Slider aria-label={t('Vertikaler Ausschnitt', 'Vertical position')} min={0} max={1} step={0.01} value={position.y} disabled={saving || !crop || crop.height >= (bitmap?.height ?? 0)} onChange={(_, value) => setPosition((current) => ({ ...current, y: Number(value) }))} /></Box>
-          {crop && <Typography variant="caption">{t('Ausgabe', 'Output')}: {Math.max(1, Math.round(crop.width * scale))} × {Math.max(1, Math.round(crop.height * scale))} px · WebP</Typography>}
-          <Typography variant="caption" color="text.secondary">{t('Der Ausschnitt wird beim Speichern angewendet. Abgeschnittene Bereiche können danach nur durch erneutes Hochladen wiederhergestellt werden.', 'The crop is applied when saved. To restore cropped-out areas later, upload the original again.')}</Typography>
+          <Box><Typography>{t('common.imageCropDialog.zoom')}: {zoom.toFixed(1)}×</Typography>
+            <Slider aria-label={t('common.imageCropDialog.zoom')} min={1} max={4} step={0.05} value={zoom} disabled={saving || !bitmap} onChange={(_, value) => setZoom(Number(value))} /></Box>
+          <Box><Typography>{t('common.imageCropDialog.horizontalPosition')}</Typography>
+            <Slider aria-label={t('common.imageCropDialog.horizontalPosition')} min={0} max={1} step={0.01} value={position.x} disabled={saving || !crop || crop.width >= (bitmap?.width ?? 0)} onChange={(_, value) => setPosition((current) => ({ ...current, x: Number(value) }))} /></Box>
+          <Box><Typography>{t('common.imageCropDialog.verticalPosition')}</Typography>
+            <Slider aria-label={t('common.imageCropDialog.verticalPosition')} min={0} max={1} step={0.01} value={position.y} disabled={saving || !crop || crop.height >= (bitmap?.height ?? 0)} onChange={(_, value) => setPosition((current) => ({ ...current, y: Number(value) }))} /></Box>
+          {crop && <Typography variant="caption">{t('common.imageCropDialog.output')}: {Math.max(1, Math.round(crop.width * scale))} × {Math.max(1, Math.round(crop.height * scale))} px · WebP</Typography>}
+          <Typography variant="caption" color="text.secondary">{t('common.imageCropDialog.theCropIsAppliedWhenSavedToRestoreCroppedOut')}</Typography>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button title={translate('Zuschnitt, Zoom und Bildgröße zurücksetzen', 'Reset crop, zoom and image size')} disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(512); }}>{t('Zurücksetzen', 'Reset')}</Button>
-        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={saving} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button title={translate('Den Bildzuschnitt anwenden', 'Apply the image crop')} disabled={saving || !bitmap} variant="contained" onClick={() => void apply()}>{saving ? t('Wird verarbeitet…', 'Processing…') : t('Anwenden', 'Apply')}</Button>
+        <Button title={translate('common.imageCropDialog.resetCropZoomAndImageSize')} disabled={saving} onClick={() => { setAspect('original'); setZoom(1); setPosition({ x: 0.5, y: 0.5 }); setMaxDimension(512); }}>{t('enum.action.reset')}</Button>
+        <Button title={translate('common.discardChangesAndClose')} disabled={saving} onClick={onClose}>{t('common.cancel')}</Button>
+        <Button title={translate('common.imageCropDialog.applyTheImageCrop')} disabled={saving || !bitmap} variant="contained" onClick={() => void apply()}>{saving ? t('common.imageCropDialog.processing') : t('common.imageCropDialog.apply')}</Button>
       </DialogActions>
     </Dialog>
   );

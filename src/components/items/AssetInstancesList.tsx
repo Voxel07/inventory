@@ -40,7 +40,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
 import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { QrLabelDialog } from '../qr/QrLabelDialog';
 import { OperatingHoursDialog } from './OperatingHoursDialog';
@@ -67,7 +67,7 @@ const statusColorMap: Record<string, 'success' | 'warning' | 'error' | 'info' | 
 };
 
 export function AssetInstancesList({ item, canEdit = true, canReportDamage = true }: Props) {
-    const t = useLocalizedText();
+    const t = useT();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const navigate = useNavigate();
@@ -100,24 +100,24 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     function reservationNote(asset: AssetInstance, gridColumn?: string) {
         if (asset.availabilityStatus !== 'reserved' && asset.availabilityStatus !== 'staged') return null;
         const holder = asset.reservedFor;
-        if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('Keine offene Bestellung gefunden', 'No open order found')}</Typography>;
-        if (!holder.orderId) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('Für eine nicht einsehbare Bestellung reserviert', 'Reserved for an order you cannot view')}</Typography>;
+        if (!holder) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('items.assetInstancesList.noOpenOrderFound')}</Typography>;
+        if (!holder.orderId) return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>{t('items.assetInstancesList.reservedForAnOrderYouCannotView')}</Typography>;
         const to = holder.kind === 'faction_order' ? `/orders/faction/${holder.orderId}` : '/orders?tab=general';
         return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', gridColumn }}>
-            {t('Für Bestellung', 'For order')}{' '}
+            {t('items.assetInstancesList.forOrder')}{' '}
             <Link component={RouterLink} to={to} underline="hover">{holder.label}</Link>
         </Typography>;
     }
     function assetActions(asset: AssetInstance): RowAction[] {
         const assetPath = `/items/${item.id}/assets/${asset.id}`;
         return [
-            { key: 'info', label: t('Asset-Infoseite öffnen', 'Open asset info page'), icon: <InfoOutlinedIcon fontSize="small" />, onClick: () => navigate(assetPath) },
-            ...(canReportDamage ? [{ key: 'damage', label: t('Schaden an diesem Asset melden', 'Report damage to this asset'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => navigate(`${assetPath}?reportDamage=1`), color: 'error' as const }] : []),
-            { key: 'qr', label: t('QR-Code anzeigen', 'Show QR code'), icon: <QrCode2Icon fontSize="small" />, onClick: () => setQrAsset(asset) },
+            { key: 'info', label: t('items.assetInstancesList.openAssetInfoPage'), icon: <InfoOutlinedIcon fontSize="small" />, onClick: () => navigate(assetPath) },
+            ...(canReportDamage ? [{ key: 'damage', label: t('items.assetInstancesList.reportDamageToThisAsset'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => navigate(`${assetPath}?reportDamage=1`), color: 'error' as const }] : []),
+            { key: 'qr', label: t('items.assetInstancesList.showQRCode'), icon: <QrCode2Icon fontSize="small" />, onClick: () => setQrAsset(asset) },
             ...(canEdit ? [
-                { key: 'hours', label: t('Betriebsstunden erfassen', 'Log operating hours'), icon: <AvTimerIcon fontSize="small" />, onClick: () => setHoursAsset(asset) },
-                { key: 'edit', label: t('Bearbeiten', 'Edit'), icon: <EditIcon fontSize="small" />, onClick: () => handleOpenEdit(asset) },
-                { key: 'retire', label: t('Ausbuchen / Ausmustern', 'Write off / Retire'), icon: <DeleteIcon fontSize="small" />, onClick: () => setDeleteTarget(asset), color: 'error' as const },
+                { key: 'hours', label: t('items.assetInstancesList.logOperatingHours'), icon: <AvTimerIcon fontSize="small" />, onClick: () => setHoursAsset(asset) },
+                { key: 'edit', label: t('common.edit'), icon: <EditIcon fontSize="small" />, onClick: () => handleOpenEdit(asset) },
+                { key: 'retire', label: t('items.assetInstancesList.writeOffRetire'), icon: <DeleteIcon fontSize="small" />, onClick: () => setDeleteTarget(asset), color: 'error' as const },
             ] : []),
         ];
     }
@@ -259,28 +259,28 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 <Box>
                     <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <DynamicFeedIcon color="primary" fontSize="small" />
-                        {t('Einzelgeräte', 'Serialized assets')}
+                        {t('items.assetInstancesList.serializedAssets')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {t('Physisch identifizierte Einzelstücke mit individuellem Status, QR-Code und Wartungshistorie.', 'Individually identified physical units with distinct statuses, QR codes, and maintenance history.')}
+                        {t('items.assetInstancesList.individuallyIdentifiedPhysicalUnitsWithDistinctStatusesQRCodesAnd')}
                     </Typography>
                 </Box>
                 {canEdit && <Stack direction="row" spacing={1}>
-                    <Button title={translate('Mehrere Geräte auf einmal anlegen', 'Create several assets at once')}
+                    <Button title={translate('items.assetInstancesList.createSeveralAssetsAtOnce')}
                         variant="outlined"
                         size="small"
                         startIcon={<DynamicFeedIcon />}
                         onClick={handleOpenBatch}
                     >
-                        {t('Stapel generieren', 'Batch generate')}
+                        {t('items.assetInstancesList.batchGenerate')}
                     </Button>
-                    <Button title={translate('Ein einzelnes Gerät registrieren', 'Register a single asset')}
+                    <Button title={translate('items.assetInstancesList.registerASingleAsset')}
                         variant="contained"
                         size="small"
                         startIcon={<AddIcon />}
                         onClick={handleOpenAddSingle}
                     >
-                        {t('Asset hinzufügen', 'Add asset')}
+                        {t('items.assetInstancesList.addAsset')}
                     </Button>
                 </Stack>}
             </Box>
@@ -289,7 +289,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <TextField
                     size="small"
-                    placeholder={t('Nach Asset-ID, Seriennummer, Besitzer suchen...', 'Search asset ID, serial number, custodian...')}
+                    placeholder={t('items.assetInstancesList.searchAssetIDSerialNumberCustodian')}
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     sx={{ flexGrow: 1, minWidth: 200 }}
@@ -297,18 +297,18 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 <TextField
                     select
                     size="small"
-                    label={t('Status filtern', 'Filter status')}
+                    label={t('items.assetInstancesList.filterStatus')}
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                     sx={{ minWidth: 160 }}
                 >
-                    <MenuItem value="">{t('Alle Status', 'All statuses')}</MenuItem>
-                    <MenuItem value="available">{t('Verfügbar', 'Available')}</MenuItem>
-                    <MenuItem value="in_custody">{t('Ausgeliehen / Im Einsatz', 'In custody')}</MenuItem>
-                    <MenuItem value="reserved">{t('Reserviert', 'Reserved')}</MenuItem>
-                    <MenuItem value="in_maintenance">{t('In Wartung', 'In maintenance')}</MenuItem>
-                    <MenuItem value="in_repair">{t('In Reparatur', 'In repair')}</MenuItem>
-                    <MenuItem value="damaged">{t('Defekt', 'Damaged')}</MenuItem>
+                    <MenuItem value="">{t('items.assetInstancesList.allStatuses')}</MenuItem>
+                    <MenuItem value="available">{t('enum.itemStatus.available')}</MenuItem>
+                    <MenuItem value="in_custody">{t('items.assetInstancesList.inCustody')}</MenuItem>
+                    <MenuItem value="reserved">{t('enum.transactionType.reserved')}</MenuItem>
+                    <MenuItem value="in_maintenance">{t('enum.value.in_maintenance')}</MenuItem>
+                    <MenuItem value="in_repair">{t('enum.value.in_repair')}</MenuItem>
+                    <MenuItem value="damaged">{t('items.assetInstancesList.damaged')}</MenuItem>
                 </TextField>
             </Box>
 
@@ -320,15 +320,15 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             ) : filteredAssets.length === 0 ? (
                 <Box sx={{ textAlign: 'center', py: 4, bgcolor: 'action.hover', borderRadius: 1 }}>
                     <Typography color="text.secondary">
-                        {t('Keine Einzelgeräte für diesen Artikel vorhanden.', 'No asset instances recorded for this item.')}
+                        {t('items.assetInstancesList.noAssetInstancesRecordedForThisItem')}
                     </Typography>
-                    {canEdit && <Button title={translate('Das erste Gerät für diesen Artikel registrieren', 'Register the first asset for this item')}
+                    {canEdit && <Button title={translate('items.assetInstancesList.registerTheFirstAssetForThisItem')}
                         size="small"
                         sx={{ mt: 1 }}
                         startIcon={<AddIcon />}
                         onClick={handleOpenAddSingle}
                     >
-                        {t('Erstes Asset registrieren', 'Register first asset')}
+                        {t('items.assetInstancesList.registerFirstAsset')}
                     </Button>}
                 </Box>
             ) : isMobile ? (
@@ -354,13 +354,13 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     />
                                 </Box>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
-                                    <div>{t('Zustand', 'Condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
-                                    <div>{t('Lagerort', 'Location')}: <strong>{asset.currentLocationName || '—'}</strong></div>
+                                    <div>{t('items.assetInstancesList.condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
+                                    <div>{t('enum.value.location')}: <strong>{asset.currentLocationName || '—'}</strong></div>
                                     {asset.operatingHours != null && (
-                                        <div>{t('Stunden', 'Hours')}: <strong>{asset.operatingHours} h</strong></div>
+                                        <div>{t('items.assetInstancesList.hours')}: <strong>{asset.operatingHours} h</strong></div>
                                     )}
                                     {asset.currentCustodianName && (
-                                        <div>{t('Besitzer', 'Custodian')}: <strong>{asset.currentCustodianName}</strong></div>
+                                        <div>{t('items.assetInstancesList.custodian')}: <strong>{asset.currentCustodianName}</strong></div>
                                     )}
                                     {reservationNote(asset, '1 / -1')}
                                 </Box>
@@ -377,14 +377,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         <TableHead>
                             <TableRow>
                                 {canEdit && <TableCell sx={{ width: 40 }} />}
-                                <TableCell><strong>{t('Asset-Code / ID', 'Asset Code / ID')}</strong></TableCell>
-                                <TableCell><strong>{t('Seriennummer', 'Serial Number')}</strong></TableCell>
-                                <TableCell><strong>{t('Status', 'Status')}</strong></TableCell>
-                                <TableCell><strong>{t('Zustand', 'Condition')}</strong></TableCell>
-                                <TableCell><strong>{t('Lagerort', 'Location')}</strong></TableCell>
-                                <TableCell><strong>{t('Betriebsstunden', 'Operating Hours')}</strong></TableCell>
-                                <TableCell><strong>{t('Besitzer / Faktion', 'Custodian')}</strong></TableCell>
-                                <TableCell align="right"><strong>{t('Aktionen', 'Actions')}</strong></TableCell>
+                                <TableCell><strong>{t('items.assetInstancesList.assetCodeID')}</strong></TableCell>
+                                <TableCell><strong>{t('items.assetInstancesList.serialNumber')}</strong></TableCell>
+                                <TableCell><strong>{t('common.status')}</strong></TableCell>
+                                <TableCell><strong>{t('items.assetInstancesList.condition')}</strong></TableCell>
+                                <TableCell><strong>{t('enum.value.location')}</strong></TableCell>
+                                <TableCell><strong>{t('items.assetInstancesList.operatingHours')}</strong></TableCell>
+                                <TableCell><strong>{t('items.assetInstancesList.custodian2')}</strong></TableCell>
+                                <TableCell align="right"><strong>{t('common.actions')}</strong></TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -413,7 +413,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     <TableCell>{asset.currentLocationName || '—'}</TableCell>
                                     <TableCell>
                                         {canEdit ? <Link component="button" type="button" underline="hover" onClick={() => setHoursAsset(asset)}
-                                            title={t('Betriebsstunden erfassen', 'Log operating hours')}>
+                                            title={t('items.assetInstancesList.logOperatingHours')}>
                                             {`${asset.operatingHours ?? 0} h`}
                                         </Link> : asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}
                                     </TableCell>
@@ -433,50 +433,50 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
 
             {/* Dialog: Add Single Asset */}
             <Dialog open={addSingleOpen} onClose={() => setAddSingleOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('Einzelnes Asset anlegen', 'Add Single Asset')}</DialogTitle>
+                <DialogTitle>{t('items.assetInstancesList.addSingleAsset')}</DialogTitle>
                 <DialogContent sx={{ pt: '24px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <TextField
-                        label={t('Asset-Code / Identifikationsnummer', 'Asset Code / ID')}
+                        label={t('items.assetInstancesList.assetCodeID2')}
                         value={singleInput.assetCode || ''}
                         onChange={(e) => updateSingle({ assetCode: e.target.value })}
                         fullWidth
-                        helperText={t('z. B. GEN-001, WT-001 (wird bei Leerlassen generiert)', 'e.g. GEN-001, WT-001 (auto-generated if empty)')}
+                        helperText={t('items.assetInstancesList.eGGEN001WT001AutoGeneratedIfEmpty')}
                     />
                     <TextField
-                        label={t('Seriennummer des Herstellers', 'Manufacturer Serial Number')}
+                        label={t('items.assetInstancesList.manufacturerSerialNumber')}
                         value={singleInput.serialNumber || ''}
                         onChange={(e) => updateSingle({ serialNumber: e.target.value })}
                         fullWidth
                     />
                     <TextField
                         select
-                        label={t('Status', 'Status')}
+                        label={t('common.status')}
                         value={singleInput.availabilityStatus || 'available'}
                         onChange={(e) => updateSingle({ availabilityStatus: e.target.value as AssetAvailabilityStatus })}
                         fullWidth
                     >
-                        <MenuItem value="available">{t('Verfügbar', 'Available')}</MenuItem>
-                        <MenuItem value="in_custody">{t('Ausgeliehen / Im Einsatz', 'In custody')}</MenuItem>
-                        <MenuItem value="in_maintenance">{t('In Wartung', 'In maintenance')}</MenuItem>
-                        <MenuItem value="in_repair">{t('In Reparatur', 'In repair')}</MenuItem>
-                        <MenuItem value="damaged">{t('Defekt', 'Damaged')}</MenuItem>
+                        <MenuItem value="available">{t('enum.itemStatus.available')}</MenuItem>
+                        <MenuItem value="in_custody">{t('items.assetInstancesList.inCustody')}</MenuItem>
+                        <MenuItem value="in_maintenance">{t('enum.value.in_maintenance')}</MenuItem>
+                        <MenuItem value="in_repair">{t('enum.value.in_repair')}</MenuItem>
+                        <MenuItem value="damaged">{t('items.assetInstancesList.damaged')}</MenuItem>
                     </TextField>
                     <TextField
                         select
-                        label={t('Zustand', 'Condition')}
+                        label={t('items.assetInstancesList.condition')}
                         value={singleInput.conditionStatus || 'good'}
                         onChange={(e) => updateSingle({ conditionStatus: e.target.value as AssetConditionStatus })}
                         fullWidth
                     >
-                        <MenuItem value="new_condition">{t('Neu', 'New')}</MenuItem>
-                        <MenuItem value="good">{t('Gut', 'Good')}</MenuItem>
-                        <MenuItem value="fair">{t('Gebraucht', 'Fair')}</MenuItem>
-                        <MenuItem value="damaged">{t('Beschädigt', 'Damaged')}</MenuItem>
-                        <MenuItem value="unsafe">{t('Unsicher', 'Unsafe')}</MenuItem>
+                        <MenuItem value="new_condition">{t('items.assetInstancesList.new')}</MenuItem>
+                        <MenuItem value="good">{t('enum.value.good')}</MenuItem>
+                        <MenuItem value="fair">{t('items.assetInstancesList.fair')}</MenuItem>
+                        <MenuItem value="damaged">{t('enum.itemStatus.damaged')}</MenuItem>
+                        <MenuItem value="unsafe">{t('enum.value.unsafe')}</MenuItem>
                     </TextField>
                     <TextField
                         select
-                        label={t('Lagerort', 'Storage location')}
+                        label={t('common.storageLocation')}
                         value={singleInput.currentLocationId || ''}
                         onChange={(e) => updateSingle({ currentLocationId: e.target.value })}
                         fullWidth
@@ -486,14 +486,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         ))}
                     </TextField>
                     <TextField
-                        label={t('Betriebsstunden', 'Operating hours')}
+                        label={t('enum.value.operating_hours')}
                         type="number"
                         value={singleInput.operatingHours ?? ''}
                         onChange={(e) => updateSingle({ operatingHours: e.target.value ? Number(e.target.value) : undefined })}
                         fullWidth
                     />
                     <TextField
-                        label={t('Notizen', 'Notes')}
+                        label={t('items.assetInstancesList.notes')}
                         multiline
                         rows={2}
                         value={singleInput.notes || ''}
@@ -502,22 +502,22 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setAddSingleOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button title={translate('Das neue Gerät speichern', 'Save the new asset')} variant="contained" onClick={handleSaveSingle} disabled={createAsset.isPending}>
-                        {t('Anlegen', 'Create')}
+                    <Button title={translate('common.discardChangesAndClose')} onClick={() => setAddSingleOpen(false)}>{t('common.cancel')}</Button>
+                    <Button title={translate('items.assetInstancesList.saveTheNewAsset')} variant="contained" onClick={handleSaveSingle} disabled={createAsset.isPending}>
+                        {t('items.assetInstancesList.create')}
                     </Button>
                 </DialogActions>
             </Dialog>
 
             {/* Dialog: Batch Generate Assets */}
             <Dialog open={batchOpen} onClose={() => setBatchOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('Assets stapelweise generieren', 'Batch Generate Assets')}</DialogTitle>
+                <DialogTitle>{t('items.assetInstancesList.batchGenerateAssets')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                        {t('Erzeugt mehrere fortlaufend nummerierte Einheiten auf einmal (z. B. für 50 Funkgeräte oder 5 Generatoren).', 'Creates multiple consecutively numbered units at once (e.g. for 50 walkie-talkies or 5 generators).')}
+                        {t('items.assetInstancesList.createsMultipleConsecutivelyNumberedUnitsAtOnceEGFor')}
                     </Typography>
                     <TextField
-                        label={t('Anzahl zu erstellender Assets', 'Number of assets to generate')}
+                        label={t('items.assetInstancesList.numberOfAssetsToGenerate')}
                         type="number"
                         value={batchInput.batchCount}
                         onChange={(e) => setBatchInput((prev) => ({ ...prev, batchCount: Math.max(1, Number(e.target.value)) }))}
@@ -525,14 +525,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         slotProps={{ htmlInput: { min: 1, max: 200 } }}
                     />
                     <TextField
-                        label={t('Code-Präfix', 'Code prefix')}
+                        label={t('items.assetInstancesList.codePrefix')}
                         value={batchInput.codePrefix}
                         onChange={(e) => setBatchInput((prev) => ({ ...prev, codePrefix: e.target.value }))}
                         fullWidth
-                        helperText={t(`Vorschau: ${batchInput.codePrefix}${String(batchInput.startNumber).padStart(3, '0')}`, `Preview: ${batchInput.codePrefix}${String(batchInput.startNumber).padStart(3, '0')}`)}
+                        helperText={t('items.assetInstancesList.previewCodePrefixStartNumber', { codePrefix: String(batchInput.codePrefix), startNumber: String(String(batchInput.startNumber).padStart(3, '0')) })}
                     />
                     <TextField
-                        label={t('Startnummer', 'Start number')}
+                        label={t('items.assetInstancesList.startNumber')}
                         type="number"
                         value={batchInput.startNumber}
                         onChange={(e) => setBatchInput((prev) => ({ ...prev, startNumber: Math.max(1, Number(e.target.value)) }))}
@@ -541,7 +541,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                     <TextField
                         select
-                        label={t('Lagerort', 'Storage location')}
+                        label={t('common.storageLocation')}
                         value={batchInput.currentLocationId || ''}
                         onChange={(e) => setBatchInput((prev) => ({ ...prev, currentLocationId: e.target.value }))}
                         fullWidth
@@ -552,38 +552,38 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     </TextField>
                 </DialogContent>
                 <DialogActions>
-                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setBatchOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button title={translate('Die Geräte mit den eingegebenen Daten generieren', 'Generate assets using the entered details')} variant="contained" onClick={handleSaveBatch} disabled={createAsset.isPending}>
-                        {t('Generieren', 'Generate')}
+                    <Button title={translate('common.discardChangesAndClose')} onClick={() => setBatchOpen(false)}>{t('common.cancel')}</Button>
+                    <Button title={translate('items.assetInstancesList.generateAssetsUsingTheEnteredDetails')} variant="contained" onClick={handleSaveBatch} disabled={createAsset.isPending}>
+                        {t('items.assetInstancesList.generate')}
                     </Button>
                 </DialogActions>
             </Dialog>
 
             {/* Dialog: Edit Asset */}
             <Dialog open={!!editAsset} onClose={() => setEditAsset(null)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('Asset bearbeiten', 'Edit Asset')}: {editAsset?.assetCode}</DialogTitle>
+                <DialogTitle>{t('items.assetInstancesList.editAsset')}: {editAsset?.assetCode}</DialogTitle>
                 <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <TextField
-                        label={t('Asset-Code', 'Asset code')}
+                        label={t('items.assetInstancesList.assetCode')}
                         value={editInput.assetCode || ''}
                         onChange={(e) => updateEdit({ assetCode: e.target.value })}
                         fullWidth
                     />
                     <TextField
-                        label={t('Seriennummer', 'Serial number')}
+                        label={t('items.assetInstancesList.serialNumber2')}
                         value={editInput.serialNumber || ''}
                         onChange={(e) => updateEdit({ serialNumber: e.target.value })}
                         fullWidth
                     />
                     <TextField
-                        label={t('Betriebsstunden', 'Operating hours')}
+                        label={t('enum.value.operating_hours')}
                         type="number"
                         value={editInput.operatingHours ?? ''}
                         onChange={(e) => updateEdit({ operatingHours: e.target.value ? Number(e.target.value) : undefined })}
                         fullWidth
                     />
                     <TextField
-                        label={t('Notizen', 'Notes')}
+                        label={t('items.assetInstancesList.notes')}
                         multiline
                         rows={2}
                         value={editInput.notes || ''}
@@ -592,9 +592,9 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setEditAsset(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                    <Button title={translate('Änderungen am Gerät speichern', 'Save changes to this asset')} variant="contained" onClick={handleSaveEdit} disabled={updateAsset.isPending}>
-                        {t('Speichern', 'Save')}
+                    <Button title={translate('common.discardChangesAndClose')} onClick={() => setEditAsset(null)}>{t('common.cancel')}</Button>
+                    <Button title={translate('items.assetInstancesList.saveChangesToThisAsset')} variant="contained" onClick={handleSaveEdit} disabled={updateAsset.isPending}>
+                        {t('common.save')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -608,13 +608,10 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             {/* Delete / Retire Confirmation */}
             <ConfirmDialog
                 open={!!deleteTarget}
-                title={t('Asset ausbuchen / ausmustern', 'Retire / Write Off Asset')}
-                message={t(
-                    `Möchten Sie das Einzelgerät ${deleteTarget?.assetCode} wirklich ausmustern? Das Gerät wird deaktiviert und der Lagerbestand dauerhaft ausgebucht.`,
-                    `Are you sure you want to retire asset ${deleteTarget?.assetCode}? The asset will be deactivated and inventory written off.`
-                )}
-                actionLabel={t('Ausbuchen', 'Write off')}
-                actionTooltip={t('Asset dauerhaft ausbuchen', 'Permanently write off asset')}
+                title={t('items.assetInstancesList.retireWriteOffAsset')}
+                message={t('items.assetInstancesList.areYouSureYouWantToRetireAssetAssetCodeThe', { assetCode: String(deleteTarget?.assetCode) })}
+                actionLabel={t('items.assetInstancesList.writeOff')}
+                actionTooltip={t('items.assetInstancesList.permanentlyWriteOffAsset')}
                 actionColor="error"
                 onClose={() => setDeleteTarget(null)}
                 onConfirm={handleDeleteConfirm}

@@ -10,7 +10,7 @@ import { useOrders } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { LoadMore } from '../shared/LoadMore';
 import type { FactionOrderSummary, GeneralOrderSummary } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 /** Final orders the warehouse still has to pick: submitted (not started) and preparing (in progress). */
 const TO_PREPARE = ['submitted', 'preparing'] as const;
@@ -24,7 +24,7 @@ function sum(values?: Record<string, number>) {
 }
 
 export function OrderPreparationPanel() {
-  const t = useLocalizedText();
+  const t = useT();
   const navigate = useNavigate();
   const factionOrders = useFactionOrders(undefined, undefined, TO_PREPARE);
   const generalOrders = useOrders({ status: TO_PREPARE });
@@ -42,38 +42,37 @@ export function OrderPreparationPanel() {
   const loading = factionOrders.isLoading || generalOrders.isLoading;
   const error = factionOrders.error || generalOrders.error;
   const statusChip = (status: string) => status === 'preparing'
-    ? <Chip size="small" color="warning" variant="outlined" label={t('In Vorbereitung', 'Preparing')} />
-    : <Chip size="small" color="info" variant="outlined" label={t('Eingereicht', 'Submitted')} />;
+    ? <Chip size="small" color="warning" variant="outlined" label={t('enum.value.preparing')} />
+    : <Chip size="small" color="info" variant="outlined" label={t('enum.value.submitted')} />;
 
   return <Stack spacing={1.5}>
     <Typography variant="body2" color="text.secondary">
-      {t('Eingereichte Fraktions- und allgemeine Bestellungen, die noch vorbereitet werden müssen. Sortiert nach Abhol- bzw. Eventdatum.',
-        'Submitted faction and general orders that still need to be prepared, sorted by pickup or event date.')}
+      {t('operations.orderPreparationPanel.submittedFactionAndGeneralOrdersThatStillNeedToBe')}
     </Typography>
     {loading && <LinearProgress />}
     {error && <Alert severity="error">{error.message}</Alert>}
-    {!loading && !error && !entries.length && <Alert severity="success">{t('Keine Bestellungen zur Vorbereitung offen.', 'No orders waiting for preparation.')}</Alert>}
+    {!loading && !error && !entries.length && <Alert severity="success">{t('operations.orderPreparationPanel.noOrdersWaitingForPreparation')}</Alert>}
     {entries.map((entry) => entry.kind === 'faction'
       ? <OperationListEntry key={`faction-${entry.order.id}`}
           title={<Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}><span>{entry.order.orderCode}</span>{statusChip(entry.order.status)}</Stack>}
-          actions={<Button title={translate('Die Bestellliste zur Vorbereitung öffnen', 'Open the order list to prepare it')} size="small" variant="contained"
-            onClick={() => navigate(`/orders/faction/${entry.order.id}`)}>{entry.order.status === 'preparing' ? t('Weiter vorbereiten', 'Continue') : t('Vorbereiten', 'Prepare')}</Button>}>
-          <Typography>{t('Fraktion', 'Faction')} {entry.order.faction} · {entry.order.eventType === 'LS' ? 'LightSim' : entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
-          <OperationDetail label={t('Gewünschte Abholung', 'Requested pickup')}>{entry.order.requestedPickupDate ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
-          <OperationDetail label={t('Fortschritt', 'Progress')}>
-            {`${sum(entry.order.preparedQuantities) + sum(entry.order.preparedAssemblyQuantities)}/${sum(entry.order.requestedQuantities) + sum(entry.order.requestedAssemblyQuantities)} ${t('Listeneinheiten', 'list units')}`}
+          actions={<Button title={translate('operations.orderPreparationPanel.openTheOrderListToPrepareIt')} size="small" variant="contained"
+            onClick={() => navigate(`/orders/faction/${entry.order.id}`)}>{entry.order.status === 'preparing' ? t('operations.orderPreparationPanel.continue') : t('operations.orderPreparationPanel.prepare')}</Button>}>
+          <Typography>{t('common.faction')} {entry.order.faction} · {entry.order.eventType === 'LS' ? 'LightSim' : entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
+          <OperationDetail label={t('common.requestedPickup')}>{entry.order.requestedPickupDate ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
+          <OperationDetail label={t('operations.orderPreparationPanel.progress')}>
+            {`${sum(entry.order.preparedQuantities) + sum(entry.order.preparedAssemblyQuantities)}/${sum(entry.order.requestedQuantities) + sum(entry.order.requestedAssemblyQuantities)} ${t('operations.orderPreparationPanel.listUnits')}`}
           </OperationDetail>
         </OperationListEntry>
       : <OperationListEntry key={`general-${entry.order.id}`}
           title={<Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}><span>{entry.order.name}</span>{statusChip(entry.order.status)}</Stack>}
-          actions={<Button title={translate('Vorbereitete Mengen und Gerätezuordnungen erfassen', 'Enter prepared quantities and asset assignments')} size="small" variant="contained"
-            onClick={() => setPreparing(entry.order)}>{t('Vorbereiten', 'Prepare')}</Button>}>
-          <Typography>{t('Allgemeine Bestellung', 'General order')} · {(() => {
+          actions={<Button title={translate('operations.orderPreparationPanel.enterPreparedQuantitiesAndAssetAssignments')} size="small" variant="contained"
+            onClick={() => setPreparing(entry.order)}>{t('operations.orderPreparationPanel.prepare')}</Button>}>
+          <Typography>{t('operations.orderPreparationPanel.generalOrder')} · {(() => {
             const event = entry.order.eventOccurrenceId ? eventMap.get(entry.order.eventOccurrenceId) : undefined;
-            return event ? `${event.name} · ${formatDate(event.startDate)}` : t('Kein Event', 'No event');
+            return event ? `${event.name} · ${formatDate(event.startDate)}` : t('operations.orderPreparationPanel.noEvent');
           })()}</Typography>
-          <OperationDetail label={t('Zweck', 'Purpose')}>{entry.order.purpose}</OperationDetail>
-          <OperationDetail label={t('Artikel', 'Items')}>
+          <OperationDetail label={t('operations.orderPreparationPanel.purpose')}>{entry.order.purpose}</OperationDetail>
+          <OperationDetail label={t('nav.items')}>
             {Object.entries(entry.order.requestedQuantities ?? {}).map(([id, quantity]) => `${entry.order.itemNames?.[id] ?? id} × ${quantity}`).join(', ')}
           </OperationDetail>
         </OperationListEntry>)}

@@ -44,7 +44,7 @@ import { AuthPersistenceError } from '../../services/authManager';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { LanguageSelector } from './LanguageSelector';
-import { useT, useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog, canViewOrganization } from '../../utils/access';
 import type { User } from '../../types';
 
@@ -56,42 +56,41 @@ type NavGroup = { label: string; items: NavItem[] };
 /** Destinations grouped by user task; each group appears only with at least one permitted entry. */
 function useNavGroups(user: User | null | undefined): NavGroup[] {
     const t = useT();
-    const text = useLocalizedText();
     const manager = canManageInventory(user);
     const catalog = manager || canViewCatalog(user);
     const operations = canOperateWarehouse(user) || canManagePurchasing(user) || canPerformMaintenance(user);
     const organization = canViewOrganization(user);
     const groups: NavGroup[] = [
-        { label: text('Übersicht', 'Overview'), items: [
-            { label: text('Start', 'Home'), path: '/', icon: <HomeOutlinedIcon /> },
+        { label: t('common.overview'), items: [
+            { label: t('nav.home'), path: '/', icon: <HomeOutlinedIcon /> },
         ] },
-        { label: text('Inventar', 'Inventory'), items: catalog ? [
+        { label: t('header.inventory'), items: catalog ? [
             { label: t('nav.items'), path: '/items', icon: <Inventory2OutlinedIcon /> },
             { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryOutlinedIcon /> },
-            { label: text('Lagerorte', 'Locations'), path: '/storage-locations', icon: <RoomOutlinedIcon /> },
-            ...(manager ? [{ label: text('Etiketten & QR-Codes', 'Labels & QR codes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
-            { label: text('Freigabegruppen', 'Sharing groups'), path: '/sharing', icon: <GroupsOutlinedIcon /> },
+            { label: t('shared.navigation.locations'), path: '/storage-locations', icon: <RoomOutlinedIcon /> },
+            ...(manager ? [{ label: t('shared.navigation.labelsQRCodes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
+            { label: t('common.sharingGroups'), path: '/sharing', icon: <GroupsOutlinedIcon /> },
         ] : [] },
-        { label: text('Bestellungen & Rückgaben', 'Orders & returns'), items: organization ? [
+        { label: t('shared.navigation.ordersReturns'), items: organization ? [
             { label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> },
-            { label: text('Eventplanung', 'Event planning'), path: '/events', icon: <EventOutlinedIcon /> },
-            { label: text('Eventteilnehmer', 'Event attendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
-            { label: text('Eventzeitplan', 'Event timeline'), path: '/events/timeline', icon: <TimelineIcon /> },
+            { label: t('common.eventPlanning'), path: '/events', icon: <EventOutlinedIcon /> },
+            { label: t('common.eventAttendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
+            { label: t('common.eventTimeline'), path: '/events/timeline', icon: <TimelineIcon /> },
             ...(manager ? [
-                { label: text('Ausgegeben', 'Checked out'), path: '/checked-out', icon: <OutputIcon /> },
-                { label: text('Rückgaben prüfen', 'Review returns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
+                { label: t('shared.navigation.checkedOut'), path: '/checked-out', icon: <OutputIcon /> },
+                { label: t('shared.navigation.reviewReturns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
             ] : []),
         ] : [] },
-        { label: text('Betrieb', 'Operations'), items: [
-            ...(operations ? [{ label: text('Lageraufgaben', 'Warehouse tasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),
+        { label: t('shared.navigation.operations'), items: [
+            ...(operations ? [{ label: t('shared.navigation.warehouseTasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),
             ...(canAccessProcurement(user) ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartOutlinedIcon /> }] : []),
             ...(manager ? [{ label: t('nav.maintenance'), path: '/maintenance', icon: <BuildOutlinedIcon /> }] : []),
             ...(manager ? [{ label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemOutlinedIcon /> }] : []),
         ] },
-        { label: text('Berichte', 'Reports'), items: manager ? [
+        { label: t('shared.navigation.reports'), items: manager ? [
             { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         ] : [] },
-        { label: text('Verwaltung', 'Administration'), items: canManageUsers(user) ? [
+        { label: t('shared.navigation.administration'), items: canManageUsers(user) ? [
             { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsOutlinedIcon /> },
         ] : [] },
     ];
@@ -105,7 +104,6 @@ function isActivePath(pathname: string, path: string) {
 
 export function Navigation() {
     const t = useT();
-    const text = useLocalizedText();
     const navigate = useNavigate();
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -122,7 +120,7 @@ export function Navigation() {
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Toolbar />
-            <Box component="nav" aria-label={text('Hauptnavigation', 'Main navigation')} sx={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', px: 1.5, py: 1 }}>
+            <Box component="nav" aria-label={t('shared.navigation.mainNavigation')} sx={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', px: 1.5, py: 1 }}>
                 {groups.map((group) => (
                     <List key={group.label} dense disablePadding sx={{ mb: 1 }}
                         subheader={<ListSubheader disableSticky sx={{ px: 1.5 }}>{group.label}</ListSubheader>}>
@@ -189,7 +187,7 @@ export function Navigation() {
                 </Drawer>
                 <Paper
                     component="nav"
-                    aria-label={text('Schnellnavigation', 'Quick navigation')}
+                    aria-label={t('shared.navigation.quickNavigation')}
                     className="no-print"
                     sx={{
                         position: 'fixed',
@@ -214,12 +212,12 @@ export function Navigation() {
                         }}
                         sx={{ height: 64 }}
                     >
-                        <BottomNavigationAction label={text('Start', 'Home')} value="/" icon={<HomeOutlinedIcon />} />
-                        {catalog && <BottomNavigationAction label={text('Inventar', 'Inventory')} value="/items" icon={<Inventory2OutlinedIcon />} />}
+                        <BottomNavigationAction label={t('nav.home')} value="/" icon={<HomeOutlinedIcon />} />
+                        {catalog && <BottomNavigationAction label={t('header.inventory')} value="/items" icon={<Inventory2OutlinedIcon />} />}
                         {canViewOrganization(user)
                             ? <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<ReceiptLongOutlinedIcon />} />
-                            : <BottomNavigationAction label={text('Lagerorte', 'Locations')} value="/storage-locations" icon={<RoomOutlinedIcon />} />}
-                        <BottomNavigationAction label={text('Aufgaben', 'Tasks')} value="tasks" aria-haspopup="dialog"
+                            : <BottomNavigationAction label={t('shared.navigation.locations')} value="/storage-locations" icon={<RoomOutlinedIcon />} />}
+                        <BottomNavigationAction label={t('common.tasks')} value="tasks" aria-haspopup="dialog"
                             icon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>} />
                         <BottomNavigationAction label={t('nav.more')} value="more" aria-haspopup="dialog" icon={<MenuIcon />} />
                     </BottomNavigation>

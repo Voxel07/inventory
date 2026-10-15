@@ -27,7 +27,7 @@ import { useCustodyBalances } from '../../hooks/useCustodyBalances';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { getItemStock } from '../../utils/stock';
-import { translate, useNames, useLocalizedText } from '../../utils/naming';
+import { translate, useNames, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canTakeOut } from '../../utils/access';
@@ -52,7 +52,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const { user } = useAuth();
     const names = useNames();
     const lookup = useStockLookups();
-    const t = useLocalizedText();
+    const t = useT();
     const { factionNames } = useFactionCatalog();
     const { data: events = [] } = useEventReports();
     const transactionReasons = Object.values(names.reason);
@@ -193,11 +193,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
-                {commitment && eventUse && <Alert severity={checkoutAvailable > 0 ? 'info' : 'warning'}>{t('Gemäß Zusage für das gewählte Event heute ausleihbar', 'Available for pickup today under the selected event commitment')}: {checkoutAvailable}</Alert>}
-                {equipment.error && <Alert severity="warning">{t('Zusagen konnten nicht aktualisiert werden. Die Verfügbarkeit wird beim Buchen erneut geprüft.', 'Commitments could not be refreshed. Availability will be checked again when posting.')}</Alert>}
+                {commitment && eventUse && <Alert severity={checkoutAvailable > 0 ? 'info' : 'warning'}>{t('forms.transactionForm.availableForPickupTodayUnderTheSelectedEventCommitment')}: {checkoutAvailable}</Alert>}
+                {equipment.error && <Alert severity="warning">{t('forms.transactionForm.commitmentsCouldNotBeRefreshedAvailabilityWillBeCheckedAgain')}</Alert>}
                 {!preselectedItemId && <TextField
                     select
-                    label={t('Artikel', 'Item')}
+                    label={t('common.item')}
                     value={formData.itemId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined }))}
                     required
@@ -207,41 +207,41 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         const { remaining } = getItemStock(item);
                         return (
                             <MenuItem key={item.id} value={item.id}>
-                                {item.name} ({t('Verfügbar', 'Available')}: {remaining})
+                                {item.name} ({t('enum.itemStatus.available')}: {remaining})
                             </MenuItem>
                         );
                     })}
                 </TextField>}
                 <Box>
                     <Typography component="label" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                        {t('Was möchten Sie tun?', 'What would you like to do?')}
+                        {t('forms.transactionForm.whatWouldYouLikeToDo')}
                     </Typography>
                     <ToggleButtonGroup
                         exclusive
                         fullWidth
                         value={formData.transactionType}
                         onChange={(_, value: TransactionType | null) => value && changeType(value)}
-                        aria-label={t('Transaktionstyp', 'Transaction type')}
+                        aria-label={t('forms.transactionForm.transactionType')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
                     >
-                        <ToggleButton title={translate('Eine Ausleihe erfassen', 'Record a checkout')} value="checkout" disabled={!canCheckout}><LogoutIcon />{names.action.checkout}</ToggleButton>
-                        <ToggleButton title={translate('Eine Rückgabe erfassen', 'Record a check-in')} value="checkin" disabled={!canEditStock || selectedStock.checkedOut < 1}>
-                            <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('draußen', 'out')})
+                        <ToggleButton title={translate('forms.transactionForm.recordACheckout')} value="checkout" disabled={!canCheckout}><LogoutIcon />{names.action.checkout}</ToggleButton>
+                        <ToggleButton title={translate('forms.transactionForm.recordACheckIn')} value="checkin" disabled={!canEditStock || selectedStock.checkedOut < 1}>
+                            <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('forms.transactionForm.out')})
                         </ToggleButton>
-                        <ToggleButton title={translate('Eine Bestandszugabe erfassen', 'Record added stock')} value="added" disabled={!canEditStock || isSerialized}><AddBoxIcon />{t('Bestand', 'Add stock')}</ToggleButton>
+                        <ToggleButton title={translate('forms.transactionForm.recordAddedStock')} value="added" disabled={!canEditStock || isSerialized}><AddBoxIcon />{t('forms.transactionForm.addStock')}</ToggleButton>
                     </ToggleButtonGroup>
                     {isSerialized && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                            {t('Seriengeräte werden einzeln mit einem Asset-Code angelegt. Nutzen Sie „Seriengeräte“ in den Artikeldetails, um Bestand hinzuzufügen.', 'Serialized assets are added individually with an asset code. Use “Serialized assets” on the item detail page to add stock.')}
+                            {t('forms.transactionForm.serializedAssetsAreAddedIndividuallyWithAnAssetCodeUse')}
                             {(checkoutAvailable < 1 || (isCheckout && !assetsLoading && selectableAssets.length === 0))
-                                && ` ${t('Die Ausleihe ist gesperrt, bis ein verfügbares Seriengerät vorhanden ist.', 'Checkout is disabled until an available serialized asset exists.')}`}
+                                && ` ${t('forms.transactionForm.checkoutIsDisabledUntilAnAvailableSerializedAssetExists')}`}
                         </Typography>
                     )}
                 </Box>
                 {isCheckout && (
                     <Box>
                         <Typography component="label" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                            {t('Wofür wird es genutzt?', 'What is it used for?')}
+                            {t('forms.transactionForm.whatIsItUsedFor')}
                         </Typography>
                         <ToggleButtonGroup
                             exclusive
@@ -249,11 +249,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             size="small"
                             value={usage}
                             onChange={(_, value: Usage | null) => value && changeUsage(value)}
-                            aria-label={t('Nutzung', 'Usage')}
+                            aria-label={t('forms.transactionForm.usage')}
                             sx={{ '& .MuiToggleButton-root': { minHeight: 44, gap: 0.75, textTransform: 'none', fontWeight: 600 } }}
                         >
-                            <ToggleButton title={translate('Ausleihe für ein Event und eine Fraktion', 'Checkout for an event and a faction')} value="event"><EventIcon fontSize="small" />{t('Event / Spiel', 'Event / in game')}</ToggleButton>
-                            <ToggleButton title={translate('Ausleihe außerhalb des Spiels, z. B. Werkstatt, Aufbau oder Transport', 'Checkout outside the game, e.g. workshop, setup or transport')} value="general"><HandymanOutlinedIcon fontSize="small" />{t('Allgemein (nicht im Spiel)', 'General (not in game)')}</ToggleButton>
+                            <ToggleButton title={translate('forms.transactionForm.checkoutForAnEventAndAFaction')} value="event"><EventIcon fontSize="small" />{t('forms.transactionForm.eventInGame')}</ToggleButton>
+                            <ToggleButton title={translate('forms.transactionForm.checkoutOutsideTheGameEGWorkshopSetupOrTransport')} value="general"><HandymanOutlinedIcon fontSize="small" />{t('forms.transactionForm.generalNotInGame')}</ToggleButton>
                         </ToggleButtonGroup>
                     </Box>
                 )}
@@ -261,7 +261,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '3fr 2fr' }, gap: 2 }}>
                         <TextField
                             select
-                            label={t('Event', 'Event')}
+                            label={t('nav.event')}
                             value={formData.eventOccurrenceId ?? ''}
                             required
                             onChange={(event) => selectOccurrence(event.target.value)}
@@ -270,53 +270,50 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </TextField>
                         <TextField
                             select
-                            label={t('Fraktion', 'Faction')}
+                            label={t('common.faction')}
                             value={formData.faction ?? ''}
                             onChange={(e) => setFormData((prev) => ({ ...prev, faction: e.target.value }))}
                             required
                             disabled={!formData.eventOccurrenceId}
-                            helperText={formData.eventOccurrenceId ? undefined : t('Zuerst ein Event wählen', 'Choose an event first')}
+                            helperText={formData.eventOccurrenceId ? undefined : t('forms.transactionForm.chooseAnEventFirst')}
                         >
                             {factionOptions.map((faction) => <MenuItem key={faction} value={faction}>{faction}</MenuItem>)}
                         </TextField>
                     </Box>
                 )}
-                {!isSerialized && <TextField select label={isCheckout ? t('Quelllager', 'Source location') : t('Ziellager', 'Destination location')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
-                    <MenuItem value="">{formData.transactionType === 'checkin' ? t('Rückgabeort des Artikels', 'Item return location') : t('Standardlager des Artikels', 'Item default location')}</MenuItem>
+                {!isSerialized && <TextField select label={isCheckout ? t('forms.transactionForm.sourceLocation') : t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                    <MenuItem value="">{formData.transactionType === 'checkin' ? t('forms.transactionForm.itemReturnLocation') : t('forms.transactionForm.itemDefaultLocation')}</MenuItem>
                     {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
                 </TextField>}
-                {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('Charge', 'Lot')} value={formData.lotId ?? ''} required={!isCheckout} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
-                    <MenuItem value="">{t('Automatisch: frühestes Ablaufdatum', 'Automatic: earliest expiry first')}</MenuItem>
+                {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('enum.value.lot')} value={formData.lotId ?? ''} required={!isCheckout} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
+                    <MenuItem value="">{t('forms.transactionForm.automaticEarliestExpiryFirst')}</MenuItem>
                     {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status ? formatStatus(lot.status) : ''}</MenuItem>)}
                 </TextField>}
                 {formData.transactionType === 'checkin' && (
                     <>
                         <Alert severity="info">
-                            {t(
-                                `${selectedStock.checkedOut} Einheiten sind derzeit ausgeliehen.`,
-                                `${selectedStock.checkedOut} units are currently checked out.`,
-                            )}
+                            {t('forms.transactionForm.checkedOutUnitsAreCurrentlyCheckedOut', { checkedOut: String(selectedStock.checkedOut) })}
                         </Alert>
                         <TextField
                             select
                             required
-                            label={t('Ausleihe', 'Custody')}
+                            label={t('forms.transactionForm.custody')}
                             value={custodySource ? custodyKey : ''}
                             onChange={(e) => selectCustodySource(e.target.value)}
                             disabled={custody.isLoading}
                             error={!custody.isLoading && custodySources.length === 0}
                             helperText={custody.isLoading
-                                ? t('Ausleihen werden geladen …', 'Loading custody…')
+                                ? t('forms.transactionForm.loadingCustody')
                                 : custodySources.length
-                                    ? t('Die Rückgabe wird genau dieser Person, diesem Event und dieser Bestellung zugeordnet.', 'The return settles exactly this person, event and order.')
-                                    : t('Keine offene Ausleihe für diesen Artikel. Allgemeine Bestellungen werden über die Bestellung zurückgegeben.', 'No outstanding custody for this item. General orders are returned through the order.')}
+                                    ? t('forms.transactionForm.theReturnSettlesExactlyThisPersonEventAndOrder')
+                                    : t('forms.transactionForm.noOutstandingCustodyForThisItemGeneralOrdersAreReturned')}
                             fullWidth
                         >
                             {custodySources.map((row) => (
                                 <MenuItem key={row.key} value={row.key}>
-                                    {[row.person, row.event || t('Ohne Event', 'No event'),
-                                        row.factionOrderId && t('Fraktionsbestellung', 'Faction order'),
-                                        `${returnable(row)} ${t('ausstehend', 'outstanding')}`].filter(Boolean).join(' · ')}
+                                    {[row.person, row.event || t('forms.transactionForm.noEvent'),
+                                        row.factionOrderId && t('forms.transactionForm.factionOrder'),
+                                        `${returnable(row)} ${t('forms.transactionForm.outstanding')}`].filter(Boolean).join(' · ')}
                                 </MenuItem>
                             ))}
                         </TextField>
@@ -326,18 +323,18 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     <TextField
                         select
                         label={isCheckout
-                            ? t('Seriengerät auswählen', 'Select serialized asset')
-                            : t('Seriengerät zurücknehmen', 'Select returned asset')}
+                            ? t('forms.transactionForm.selectSerializedAsset')
+                            : t('forms.transactionForm.selectReturnedAsset')}
                         value={formData.assetInstanceId ?? ''}
                         onChange={(event) => setFormData((prev) => ({ ...prev, assetInstanceId: event.target.value }))}
                         required
                         disabled={assetsLoading}
                         error={!assetsLoading && assetSelectionMissing}
                         helperText={assetsLoading
-                            ? t('Seriengeräte werden geladen …', 'Loading serialized assets…')
+                            ? t('forms.transactionForm.loadingSerializedAssets')
                             : selectableAssets.length === 0
-                                ? t('Keine passenden Seriengeräte verfügbar.', 'No eligible serialized assets are available.')
-                                : t('Die Auswahl wird dauerhaft in der Nutzungshistorie gespeichert.', 'This selection is retained in the usage history.')}
+                                ? t('forms.transactionForm.noEligibleSerializedAssetsAreAvailable')
+                                : t('forms.transactionForm.thisSelectionIsRetainedInTheUsageHistory')}
                         fullWidth
                     >
                         {selectableAssets.map((asset) => (
@@ -351,26 +348,26 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     </TextField>
                 )}
                 {!isSerialized && <TextField
-                    label={t('Menge', 'Quantity')}
+                    label={t('common.quantity')}
                     type="number"
                     value={quantityInput}
                     onChange={(e) => setQuantityInput(e.target.value)}
                     required
                     fullWidth
                     helperText={quantityLimit !== undefined
-                        ? t(`Maximal ${quantityLimit}`, `Maximum ${quantityLimit}`)
+                        ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: quantityLimit })
                         : undefined}
                     error={quantityInvalid && quantityInput !== ''}
                     slotProps={{ htmlInput: { min: 1, ...(quantityLimit !== undefined ? { max: quantityLimit } : {}) } }}
                 />}
                 {isSerialized && (
                     <Alert severity="info">
-                        {t('Seriengeräte werden einzeln mit Menge 1 gebucht.', 'Serialized assets are recorded individually with quantity 1.')}
+                        {t('forms.transactionForm.serializedAssetsAreRecordedIndividuallyWithQuantity1')}
                     </Alert>
                 )}
                 <TextField
                     select
-                    label={t('Grund', 'Reason')}
+                    label={t('common.reason')}
                     value={formData.reason}
                     onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                     required
@@ -383,7 +380,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     ))}
                 </TextField>
                 <TextField
-                    label={t('Anmerkungen', 'Notes')}
+                    label={t('common.notes')}
                     value={formData.notes}
                     onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                     multiline
@@ -391,7 +388,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                 />
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-                    <Button title={translate('Die Formularfelder auf ihre Ausgangswerte zurücksetzen', 'Reset the form fields to their initial values')}
+                    <Button title={translate('forms.transactionForm.resetTheFormFieldsToTheirInitialValues')}
                         variant="outlined"
                         color="inherit"
                         onClick={() => {
@@ -403,17 +400,17 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         disabled={isLoading}
                         sx={{ minHeight: 48 }}
                     >
-                        {t('Felder zurücksetzen', 'Reset fields')}
+                        {t('forms.transactionForm.resetFields')}
                     </Button>
 
-                    <Button title={translate('Die eingegebene Bestandsbewegung buchen', 'Post the entered stock transaction')}
+                    <Button title={translate('forms.transactionForm.postTheEnteredStockTransaction')}
                         type="submit"
                         variant="contained"
                         disabled={isLoading || !formData.itemId || !formData.reason
                             || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing}
                         sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
                     >
-                        {t('Transaktion buchen', 'Post transaction')}
+                        {t('forms.transactionForm.postTransaction')}
                     </Button>
                 </Box>
             </Stack>

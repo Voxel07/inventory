@@ -20,7 +20,7 @@ import { inputNumber, inputText, optionalText, inputBoolean } from '../utils/inp
 import { useAuth } from '../hooks/useAuth';
 import { useReturnSubmissions } from '../hooks/useReturnSubmissions';
 import { canOperateWarehouse, canOrder } from '../utils/access';
-import { nameFor, translate, useAppLanguage, useLocalizedText } from '../utils/naming';
+import { nameFor, translate, useAppLanguage, useT } from '../utils/naming';
 import { SEVERITY_LEVELS } from '../utils/constants';
 import type { DamageSeverity } from '../types';
 import { OperationForm } from '../components/operations/OperationForm';
@@ -35,7 +35,7 @@ type EquipmentRow = { id: string; name: string; quantity: number; event?: string
 const SECTIONS = ['custody', 'stored', 'requests', 'returns'];
 
 export function Contributor({ embedded = false }: { embedded?: boolean }) {
-  const t = useLocalizedText(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
+  const t = useT(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
   const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
   const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
   const [returning, setReturning] = useState<NonNullable<typeof custody.data>[number] | null>(null);
@@ -60,10 +60,10 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => { if (focus) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [focus, linkedSection]);
   const myReturns = returns.data?.filter(row => row.returnedForUserId === user?.id) ?? [];
   const sections = [
-    { key: 'custody', label: t('In meiner Obhut', 'In my custody'), count: custody.data?.length, loading: custody.isLoading },
-    { key: 'stored', label: t('Bei mir gelagert', 'Stored with me'), count: stored.data?.length, loading: stored.isLoading },
-    { key: 'requests', label: t('Meldungen & Absprachen', 'Reports & coordination'), count: requests.data?.length, loading: requests.isLoading },
-    { key: 'returns', label: t('Rückgabestatus', 'Return status'), count: myReturns.length, loading: returns.isLoading },
+    { key: 'custody', label: t('pages.contributor.inMyCustody'), count: custody.data?.length, loading: custody.isLoading },
+    { key: 'stored', label: t('pages.contributor.storedWithMe'), count: stored.data?.length, loading: stored.isLoading },
+    { key: 'requests', label: t('pages.contributor.reportsCoordination'), count: requests.data?.length, loading: requests.isLoading },
+    { key: 'returns', label: t('pages.contributor.returnStatus'), count: myReturns.length, loading: returns.isLoading },
   ];
   const [search, setSearch] = useState('');
   const query = search.trim().toLocaleLowerCase();
@@ -75,7 +75,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     location: [row.location, row.assetCode].filter(Boolean).join(' · '), source: { kind: 'stored', data: row },
   })) : section === 'requests' ? (requests.data ?? []).map(row => ({
     id: row.id, name: row.item, quantity: row.quantity, status: row.status,
-    kind: row.kind === 'damage' ? t('Schaden', 'Damage') : t('Abholung', 'Pickup'), requester: row.requester,
+    kind: row.kind === 'damage' ? t('common.damage') : t('common.pickup'), requester: row.requester,
     created: formatDateTime(row.createdAt), notes: [row.notes, row.response].filter(Boolean).join(' — '),
     source: { kind: 'requests', data: row },
   })) : myReturns.map(row => ({
@@ -87,64 +87,64 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   // The linked task leads the first page.
   const rows = focus ? [...filteredRows.filter(row => row.id === focus), ...filteredRows.filter(row => row.id !== focus)] : filteredRows;
   const columns: GridColDef<EquipmentRow>[] = [
-    { field: 'name', headerName: t('Artikel', 'Item'), flex: 1.3, minWidth: 180,
+    { field: 'name', headerName: t('common.item'), flex: 1.3, minWidth: 180,
       renderCell: ({ value }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{value}</Typography> },
-    { field: 'quantity', headerName: t('Menge', 'Quantity'), type: 'number', width: 85 },
+    { field: 'quantity', headerName: t('common.quantity'), type: 'number', width: 85 },
     ...(section === 'custody' ? [
-      { field: 'pending', headerName: t('Bestätigung ausstehend', 'Awaiting acknowledgement'), type: 'number', width: 180 },
-      { field: 'event', headerName: t('Event', 'Event'), width: 140 },
+      { field: 'pending', headerName: t('pages.contributor.awaitingAcknowledgement'), type: 'number', width: 180 },
+      { field: 'event', headerName: t('nav.event'), width: 140 },
     ] satisfies GridColDef<EquipmentRow>[] : []),
     ...(['custody', 'stored'].includes(section) ? [
-      { field: 'location', headerName: section === 'custody' ? t('Rückgabeort', 'Return location') : t('Lagerort / Gerät', 'Location / asset'), flex: 1, minWidth: 180 },
+      { field: 'location', headerName: section === 'custody' ? t('common.returnLocation') : t('pages.contributor.locationAsset'), flex: 1, minWidth: 180 },
     ] satisfies GridColDef<EquipmentRow>[] : []),
     ...(section === 'requests' ? [
-      { field: 'kind', headerName: t('Typ', 'Type'), width: 100 },
-      { field: 'requester', headerName: t('Anfragende Person', 'Requester'), width: 150 },
-      { field: 'created', headerName: t('Datum', 'Date'), width: 165 },
+      { field: 'kind', headerName: t('common.type'), width: 100 },
+      { field: 'requester', headerName: t('pages.contributor.requester'), width: 150 },
+      { field: 'created', headerName: t('common.date'), width: 165 },
     ] satisfies GridColDef<EquipmentRow>[] : []),
     ...(['requests', 'returns'].includes(section) ? [
-      { field: 'status', headerName: t('Status', 'Status'), width: 120 },
-      { field: 'notes', headerName: t('Notizen / Antwort', 'Notes / response'), flex: 1.5, minWidth: 240,
+      { field: 'status', headerName: t('common.status'), width: 120 },
+      { field: 'notes', headerName: t('pages.contributor.notesResponse'), flex: 1.5, minWidth: 240,
         renderCell: ({ value }) => <Tooltip title={value ?? ''}><Typography variant="body2" noWrap>{value || '—'}</Typography></Tooltip> },
     ] satisfies GridColDef<EquipmentRow>[] : []),
     ...(section !== 'returns' && (writable || warehouse) ? [{
-      field: 'actions', headerName: t('Aktionen', 'Actions'), width: isMobile ? 160 : 125, sortable: false, filterable: false,
+      field: 'actions', headerName: t('common.actions'), width: isMobile ? 160 : 125, sortable: false, filterable: false,
       renderCell: ({ row }) => {
         const source = row.source;
         if (source.kind === 'custody' && writable) {
           const data = source.data;
           const item: Stored = { itemId: data.itemId, name: data.name, assetId: data.assetInstanceId, quantity: data.checkedOut };
           return <Stack direction="row" spacing={0.25}>
-            <IconButton size="small" title={t('Rückgabe melden', 'Submit return')} disabled={data.checkedOut <= (data.pendingQuantity ?? 0)}
+            <IconButton size="small" title={t('pages.contributor.submitReturn')} disabled={data.checkedOut <= (data.pendingQuantity ?? 0)}
               onClick={() => { setReturnCommand(crypto.randomUUID()); setReturning(data); }}><AssignmentReturnIcon fontSize="small" /></IconButton>
-            <IconButton size="small" title={t('Schaden melden', 'Report damage')} onClick={() => report(item, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
-            <IconButton size="small" title={t('Abholung koordinieren', 'Coordinate pickup')} onClick={() => report(item, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
+            <IconButton size="small" title={t('common.reportDamage')} onClick={() => report(item, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
+            <IconButton size="small" title={t('pages.contributor.coordinatePickup')} onClick={() => report(item, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
           </Stack>;
         }
         if (source.kind === 'stored' && writable) return <Stack direction="row" spacing={0.25}>
-          <IconButton size="small" title={t('Schaden melden', 'Report damage')} onClick={() => report(source.data, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title={t('Abholung koordinieren', 'Coordinate pickup')} onClick={() => report(source.data, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
+          <IconButton size="small" title={t('common.reportDamage')} onClick={() => report(source.data, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
+          <IconButton size="small" title={t('pages.contributor.coordinatePickup')} onClick={() => report(source.data, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
         </Stack>;
         if (source.kind === 'requests' && warehouse && source.data.status !== 'resolved') return <Stack direction="row" spacing={0.25}>
-          <IconButton size="small" title={t('Antworten / abschließen', 'Respond / resolve')} onClick={() => setReply(source.data)}><ReplyIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title={t('Artikel prüfen', 'Inspect item')} component={Link} to={source.data.assetId ? `/items/${source.data.itemId}/assets/${source.data.assetId}` : `/items/${source.data.itemId}`}><OpenInNewIcon fontSize="small" /></IconButton>
+          <IconButton size="small" title={t('pages.contributor.respondResolve')} onClick={() => setReply(source.data)}><ReplyIcon fontSize="small" /></IconButton>
+          <IconButton size="small" title={t('pages.contributor.inspectItem')} component={Link} to={source.data.assetId ? `/items/${source.data.itemId}/assets/${source.data.assetId}` : `/items/${source.data.itemId}`}><OpenInNewIcon fontSize="small" /></IconButton>
         </Stack>;
         return null;
       },
     } satisfies GridColDef<EquipmentRow>] : []),
   ];
   return <Stack spacing={1}>
-    {!embedded && <Typography variant="h6">{t('Meine Ausrüstung & Abholungen', 'My equipment & pickups')}</Typography>}
-    {error && <Alert severity="error" action={<Button size="small" title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>{t('Deine Ausrüstung konnte nicht vollständig geladen werden.', 'Could not load all of your equipment.')}</Alert>}
+    {!embedded && <Typography variant="h6">{t('pages.contributor.myEquipmentPickups')}</Typography>}
+    {error && <Alert severity="error" action={<Button size="small" title={translate('common.retryLoadingTheData')} onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('common.retry')}</Button>}>{t('pages.contributor.couldNotLoadAllOfYourEquipment')}</Alert>}
     <Tabs value={section} onChange={(_, value: string) => setSection(value)} variant="scrollable" scrollButtons="auto"
-      sx={{ minWidth: 0 }} aria-label={t('Ausrüstungsbereiche', 'Equipment sections')}>
+      sx={{ minWidth: 0 }} aria-label={t('pages.contributor.equipmentSections')}>
       {sections.map(entry => <Tab key={entry.key} value={entry.key} label={`${entry.label} (${entry.loading ? '…' : entry.count ?? 0})`}
         id={`equipment-tab-${entry.key}`} aria-controls={`equipment-panel-${entry.key}`} />)}
     </Tabs>
-    <TextField type="search" label={t('Ausrüstung durchsuchen', 'Search equipment')} value={search}
+    <TextField type="search" label={t('pages.contributor.searchEquipment')} value={search}
       onChange={(event) => setSearch(event.target.value)} size="small" fullWidth />
     {section === 'requests' && <Alert severity="info" sx={{ py: 0 }}>
-      {t('Schäden an einem Einzelgerät werden als Schadensbericht am Gerät erfasst und sperren nur dieses Gerät. Andere Schadensmeldungen sperren den Artikel bis zur Klärung. Abholanfragen bewegen keinen Bestand.', 'Damage to a serialized unit is filed as a damage report on that unit and blocks only that unit. Other damage reports block the item until reviewed. Pickup requests do not move stock.')}
+      {t('pages.contributor.damageToASerializedUnitIsFiledAsADamage')}
     </Alert>}
     <Box ref={panel} role="tabpanel" id={`equipment-panel-${section}`} aria-labelledby={`equipment-tab-${section}`} sx={{ scrollMarginTop: 80 }}>
       <DataGrid key={section} rows={rows} columns={columns} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight disableRowSelectionOnClick
@@ -154,9 +154,9 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
         getRowClassName={({ id }) => id === focus ? 'linked-task' : ''}
         sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' }, '& .linked-task': { bgcolor: 'action.selected' } }} />
     </Box>
-    {section === "requests" && requests.hasNextPage && <Button title={t("Weitere Meldungen laden", "Load more requests")} disabled={requests.isFetchingNextPage} onClick={() => { void requests.fetchNextPage(); }}>{t("Mehr laden", "Load more")}</Button>}
-    {request && <OperationForm title={request.kind === 'damage' ? t('Schaden melden', 'Report damage') : t('Abholung koordinieren', 'Coordinate pickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, ...(assetDamage ? [{ key: 'severity', label: t('Schweregrad', 'Severity'), required: true, options: SEVERITY_LEVELS.map(value => ({ value, label: nameFor('severity', value) })) }] : []), { key: 'notes', label: t('Beschreibung / Termin / Kontakt', 'Description / proposed time / contact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes), severity: assetDamage ? inputText(v.severity) as DamageSeverity : undefined })} />}
-    {returning && <OperationForm title={t('Rückgabe zur Prüfung melden', 'Submit return for inspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('Menge', 'Quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('Geräte-ID (nur bei serialisierter Ausrüstung)', 'Asset ID (serialized equipment only)') }] : []), { key: 'notes', label: t('Ablageort / Notiz', 'Placement / notes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}
-    {reply && <OperationForm title={t('Lagerantwort', 'Warehouse response')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('Termin / Prüfergebnis / Bestandsnachweis', 'Time / inspection result / inventory evidence'), required: true, multiline: true }, { key: 'resolved', label: t('Vorgang abgeschlossen', 'Resolved'), type: 'checkbox' }]} onSave={v => memberApi.decide(reply.id, { response: inputText(v.response), resolved: inputBoolean(v.resolved), revision: reply.revision })} />}
+    {section === "requests" && requests.hasNextPage && <Button title={t('pages.contributor.loadMoreRequests')} disabled={requests.isFetchingNextPage} onClick={() => { void requests.fetchNextPage(); }}>{t('pages.contributor.loadMore')}</Button>}
+    {request && <OperationForm title={request.kind === 'damage' ? t('common.reportDamage') : t('pages.contributor.coordinatePickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('common.quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, ...(assetDamage ? [{ key: 'severity', label: t('common.severity'), required: true, options: SEVERITY_LEVELS.map(value => ({ value, label: nameFor('severity', value) })) }] : []), { key: 'notes', label: t('pages.contributor.descriptionProposedTimeContact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes), severity: assetDamage ? inputText(v.severity) as DamageSeverity : undefined })} />}
+    {returning && <OperationForm title={t('pages.contributor.submitReturnForInspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('common.quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(returning.factionOrderId && !returning.assetInstanceId ? [{ key: 'assetId', label: t('pages.contributor.assetIDSerializedEquipmentOnly') }] : []), { key: 'notes', label: t('pages.contributor.placementNotes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}
+    {reply && <OperationForm title={t('pages.contributor.warehouseResponse')} onClose={() => setReply(null)} initial={{ response: reply.response ?? '' }} fields={[{ key: 'response', label: t('pages.contributor.timeInspectionResultInventoryEvidence'), required: true, multiline: true }, { key: 'resolved', label: t('pages.contributor.resolved'), type: 'checkbox' }]} onSave={v => memberApi.decide(reply.id, { response: inputText(v.response), resolved: inputBoolean(v.resolved), revision: reply.revision })} />}
   </Stack>;
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutationFeedback } from './useMutationFeedback';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 
 export interface MutationLike<TArgs> {
   mutate: (args: TArgs, options?: { onSuccess?: () => void; onError?: (error: unknown) => void }) => void;
@@ -16,9 +16,7 @@ export interface CrudMutations<TForm> {
 
 export interface CrudManagerOptions {
   entityName: string;
-  entityNameEnglish?: string;
   entityNamePlural?: string;
-  entityNamePluralEnglish?: string;
   createSuccessMessage?: string;
   updateSuccessMessage?: string;
   deleteSuccessMessage?: string;
@@ -28,11 +26,9 @@ export function useCrudManager<T extends { id: string }, TForm>(
   mutations: CrudMutations<TForm>,
   options: CrudManagerOptions,
 ) {
-  const t = useLocalizedText();
+  const t = useT();
   const feedback = useMutationFeedback();
-  const entityNameEnglish = options.entityNameEnglish ?? options.entityName;
   const entityNamePlural = options.entityNamePlural ?? options.entityName;
-  const entityNamePluralEnglish = options.entityNamePluralEnglish ?? entityNameEnglish;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<T | undefined>();
@@ -70,10 +66,10 @@ export function useCrudManager<T extends { id: string }, TForm>(
       onSuccess: () => {
         closeForm();
         feedback.success(options.createSuccessMessage ??
-            t(`${options.entityName} erfolgreich erstellt`, `${entityNameEnglish} created successfully`));
+            t('hooks.useCrudManager.entityNameCreatedSuccessfully', { entityName: String(options.entityName) }));
       },
       onError: () =>
-        feedback.failure(t(`Fehler beim Erstellen von ${options.entityName}`, `Could not create ${entityNameEnglish}`)),
+        feedback.failure(t('hooks.useCrudManager.couldNotCreateEntityName', { entityName: String(options.entityName) })),
     });
   };
 
@@ -85,10 +81,10 @@ export function useCrudManager<T extends { id: string }, TForm>(
         onSuccess: () => {
           closeForm();
           feedback.success(options.updateSuccessMessage ??
-              t(`${options.entityName} erfolgreich aktualisiert`, `${entityNameEnglish} updated successfully`));
+              t('hooks.useCrudManager.entityNameUpdatedSuccessfully', { entityName: String(options.entityName) }));
         },
         onError: () =>
-          feedback.failure(t(`Fehler beim Aktualisieren von ${options.entityName}`, `Could not update ${entityNameEnglish}`)),
+          feedback.failure(t('hooks.useCrudManager.couldNotUpdateEntityName', { entityName: String(options.entityName) })),
       },
     );
   };
@@ -108,20 +104,20 @@ export function useCrudManager<T extends { id: string }, TForm>(
         onSuccess: () => {
           setDeletingIds([]);
           feedback.success(options.deleteSuccessMessage ??
-              t(`${options.entityName} gelöscht`, `${entityNameEnglish} deleted`));
+              t('hooks.useCrudManager.entityNameDeleted', { entityName: String(options.entityName) }));
         },
         onError: () =>
-          feedback.failure(t(`Fehler beim Löschen von ${options.entityName}`, `Could not delete ${entityNameEnglish}`)),
+          feedback.failure(t('hooks.useCrudManager.couldNotDeleteEntityName', { entityName: String(options.entityName) })),
       });
     } else {
       mutations.deleteMany.mutate(deletingIds, {
         onSuccess: () => {
           const count = deletingIds.length;
           setDeletingIds([]);
-          feedback.success(t(`${count} ${entityNamePlural} gelöscht`, `${count} ${entityNamePluralEnglish} deleted`));
+          feedback.success(t('hooks.useCrudManager.countEntityNamePluralDeleted', { count: count, entityNamePlural: entityNamePlural }));
         },
         onError: () =>
-          feedback.failure(t(`Fehler beim Löschen der ${entityNamePlural}`, `Could not delete ${entityNamePluralEnglish}`)),
+          feedback.failure(t('hooks.useCrudManager.couldNotDeleteEntityNamePlural', { entityNamePlural: entityNamePlural })),
       });
     }
   };

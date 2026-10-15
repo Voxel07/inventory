@@ -1,21 +1,21 @@
 import { Alert, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import type { EventReport } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 export function EventQuantities({ event }: { event?: EventReport }) {
-  const t = useLocalizedText();
+  const t = useT();
   if (!event) return null;
-  const labels: Record<string, string> = { requested: t('Angefragt', 'Requested'), prepared: t('Vorbereitet', 'Prepared'), handedOver: t('Ausgegeben', 'Handed over'), returned: t('Zurück', 'Returned'), consumed: t('Verbraucht', 'Consumed'), damaged: t('Beschädigt', 'Damaged'), missing: t('Vermisst', 'Missing'), writtenOff: t('Abgeschrieben', 'Written off'), outstanding: t('Noch ausstehend (inkl. vermisst)', 'Outstanding (includes missing)') };
+  const labels: Record<string, string> = { requested: t('events.eventQuantities.requested'), prepared: t('common.prepared'), handedOver: t('events.eventQuantities.handedOver'), returned: t('events.eventQuantities.returned'), consumed: t('enum.transactionType.consumed'), damaged: t('enum.itemStatus.damaged'), missing: t('events.eventQuantities.missing'), writtenOff: t('enum.damageStatus.written_off'), outstanding: t('events.eventQuantities.outstandingIncludesMissing') };
   const ids = [...new Set([...Object.keys(event.plannedQuantities), ...Object.keys(event.usedQuantities), ...Object.values(event.quantities ?? {}).flatMap((values) => Object.keys(values))])];
   return <Stack spacing={2} sx={{ mb: 3 }}>
-    <Alert severity="info">{t('Ausgegeben bleibt als historische Menge erhalten. Vermisst ist Teil der noch ausstehenden Rückgaben.', 'Handed-over totals remain in the event history after returns. Missing equipment is included in outstanding returns.')}</Alert>
-    {!ids.length && <Typography>{t('Noch keine geplanten oder angefragten Artikel.', 'No planned or requested items yet.')}</Typography>}
+    <Alert severity="info">{t('events.eventQuantities.handedOverTotalsRemainInTheEventHistoryAfterReturns')}</Alert>
+    {!ids.length && <Typography>{t('events.eventQuantities.noPlannedOrRequestedItemsYet')}</Typography>}
     {ids.length > 0 && <TableContainer component={Paper} variant="outlined">
-      <Table size="small" aria-label={t('Eventmengen je Artikel', 'Event quantities by item')} sx={{ '& td, & th': { px: 1, py: 0.75 }, '& tr:last-child td, & tr:last-child th': { borderBottom: 0 } }}>
+      <Table size="small" aria-label={t('events.eventQuantities.eventQuantitiesByItem')} sx={{ '& td, & th': { px: 1, py: 0.75 }, '& tr:last-child td, & tr:last-child th': { borderBottom: 0 } }}>
         <TableHead><TableRow>
-          <TableCell sx={{ minWidth: 180 }}>{t('Artikel', 'Item')}</TableCell>
-          <TableCell align="right">{t('Geplant', 'Planned')}</TableCell>
+          <TableCell sx={{ minWidth: 180 }}>{t('common.item')}</TableCell>
+          <TableCell align="right">{t('common.planned')}</TableCell>
           {Object.entries(labels).map(([key, label]) => <TableCell key={key} align="right" sx={{ maxWidth: 150 }}>{label}</TableCell>)}
         </TableRow></TableHead>
         <TableBody>{ids.map((id) => <TableRow key={id} hover>

@@ -2,6 +2,9 @@ import { beforeEach, afterEach, expect, mock, test } from 'bun:test';
 import { QueryObserver } from '@tanstack/react-query';
 import type { User, UserRole } from '../src/types';
 import type { OidcTokenSet } from '../src/services/oidcClient';
+import { createInstance } from 'i18next';
+import en from '../src/i18n/en';
+import type { Translator } from '../src/utils/naming';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -38,7 +41,13 @@ mock.module('../src/services/authStorage', () => ({
 mock.module('../src/store/uiStore', () => ({ useUIStore: { getState: () => ({
   resetTransactionFilters: () => {}, hideSnackbar: () => {}, showSnackbar: () => {},
 }) } }));
-mock.module('../src/utils/naming', () => ({ translate: (_de: string, en: string) => en }));
+const translations = createInstance();
+void translations.init({
+  resources: { en: { translation: en } }, lng: 'en', initAsync: false,
+  interpolation: { escapeValue: false },
+});
+const translate: Translator = (key, options) => translations.t(key, options);
+mock.module('../src/utils/naming', () => ({ translate }));
 
 // Controllable stores make IndexedDB completion races deterministic.
 const catalogs = new Map<string, unknown>();

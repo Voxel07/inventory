@@ -33,7 +33,7 @@ import {
 } from '../hooks/useReturnSubmissions';
 import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import type { ReturnSubmission, ReturnSubmissionStatus } from '../types';
-import { useAppLanguage, useLocalizedText } from '../utils/naming';
+import { useAppLanguage, useT } from '../utils/naming';
 import { formatDateTime } from '../utils/dateFormat';
 import { formatStatus } from '../utils/formatters';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -49,7 +49,7 @@ const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'erro
  * and acknowledging it into stock (by the warehouse) stay separate steps.
  */
 export function ReturnedItemsPage() {
-  const t = useLocalizedText();
+  const t = useT();
   const language = useAppLanguage();
   const compact = useCompactCatalog();
   const [search, setSearch] = useState('');
@@ -57,40 +57,40 @@ export function ReturnedItemsPage() {
   const [status, setStatus] = useState<ReturnSubmissionStatus | ''>('pending');
   const { data = [], isLoading, isError, refetch } = useReturnSubmissions(status || undefined);
 
-  const labels = { pending: t('Wartet auf Prüfung', 'Awaiting review'), accepted: t('Eingelagert', 'Returned to stock'), rejected: t('Abgelehnt', 'Rejected') };
+  const labels = { pending: t('pages.returnedItems.awaitingReview'), accepted: t('pages.returnedItems.returnedToStock'), rejected: t('enum.value.rejected') };
   const person = (row: ReturnSubmission) => row.returnedForUserName || row.returnedForUserId;
   const columns: GridColDef<ReturnSubmission>[] = [
-    { field: 'itemName', headerName: t('Artikel', 'Item'), minWidth: 200, flex: 1.3,
+    { field: 'itemName', headerName: t('common.item'), minWidth: 200, flex: 1.3,
       renderCell: ({ row }) => <Box sx={{ minWidth: 0, py: 0.5 }}>
         <Link component={RouterLink} to={`/items/${row.itemId}`} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal' }}>{row.itemName}</Link>
         {row.assetCode && <Typography variant="body2" color="text.secondary" className="mono">{row.assetCode}</Typography>}
         {row.reportedDamage?.length > 0 && <DamageChip count={row.reportedDamage.length} />}
       </Box> },
-    { field: 'quantity', headerName: t('Menge', 'Quantity'), type: 'number', width: 90 },
-    { field: 'returnedForUserName', headerName: t('Für', 'For'), minWidth: 140, flex: 0.8, valueGetter: (_, row) => person(row) },
-    { field: 'expectedReturnLocationName', headerName: t('Rückgabeort', 'Return location'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
-    { field: 'created', headerName: t('Gemeldet', 'Submitted'), width: 170, valueFormatter: (value: string) => formatDateTime(value) },
-    { field: 'status', headerName: t('Status', 'Status'), width: 160, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
+    { field: 'quantity', headerName: t('common.quantity'), type: 'number', width: 90 },
+    { field: 'returnedForUserName', headerName: t('pages.returnedItems.for'), minWidth: 140, flex: 0.8, valueGetter: (_, row) => person(row) },
+    { field: 'expectedReturnLocationName', headerName: t('common.returnLocation'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
+    { field: 'created', headerName: t('pages.returnedItems.submitted'), width: 170, valueFormatter: (value: string) => formatDateTime(value) },
+    { field: 'status', headerName: t('common.status'), width: 160, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
     { field: 'actions', headerName: '', sortable: false, filterable: false, width: 120,
       renderCell: ({ row }) => <Button variant={row.status === 'pending' ? 'contained' : 'outlined'} size="small" aria-haspopup="dialog"
-        aria-label={t(`Rückgabe von ${row.itemName} prüfen`, `Review return of ${row.itemName}`)} onClick={() => setReviewing(row)}>
-        {row.status === 'pending' ? t('Prüfen', 'Review') : t('Details', 'Details')}
+        aria-label={t('pages.returnedItems.reviewReturnOfItemName', { itemName: String(row.itemName) })} onClick={() => setReviewing(row)}>
+        {row.status === 'pending' ? t('pages.returnedItems.review') : t('common.details')}
       </Button> },
   ];
   const rows = data.filter(row => [row.itemName, row.assetCode, row.returnedForUserName, row.returnedForUserId, row.expectedReturnLocationName, row.notes].filter(Boolean).join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
 
   const content = (() => {
-    if (isError) return <StateMessage kind="error" title={t('Rückgaben konnten nicht geladen werden', 'Could not load returns')}
-      description={t('Prüfe die Verbindung und versuche es erneut.', 'Check your connection and try again.')}
-      action={<Button variant="contained" onClick={() => void refetch()}>{t('Erneut versuchen', 'Try again')}</Button>} />;
-    if (isLoading) return <StateMessage kind="loading" title={t('Rückgaben werden geladen…', 'Loading returns…')} />;
+    if (isError) return <StateMessage kind="error" title={t('pages.returnedItems.couldNotLoadReturns')}
+      description={t('common.checkYourConnectionAndTryAgain')}
+      action={<Button variant="contained" onClick={() => void refetch()}>{t('common.tryAgain')}</Button>} />;
+    if (isLoading) return <StateMessage kind="loading" title={t('pages.returnedItems.loadingReturns')} />;
     if (!data.length) return status === 'pending'
-      ? <StateMessage kind="done" title={t('Keine Rückgaben warten auf Prüfung', 'No returns are waiting for review')}
-        description={t('Gemeldete Rückgaben erscheinen hier, bis sie eingelagert oder abgelehnt werden.', 'Reported returns appear here until they are returned to stock or rejected.')} />
-      : <StateMessage kind="empty" title={t('Keine Rückgaben', 'No returns')} />;
-    if (!rows.length) return <StateMessage kind="no-matches" title={t('Keine passenden Rückgaben', 'No matching returns')}
-      action={<Button variant="outlined" onClick={() => setSearch('')}>{t('Suche zurücksetzen', 'Clear search')}</Button>} />;
-    if (compact) return <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('Rückgaben', 'Returns')}>
+      ? <StateMessage kind="done" title={t('pages.returnedItems.noReturnsAreWaitingForReview')}
+        description={t('pages.returnedItems.reportedReturnsAppearHereUntilTheyAreReturnedToStock')} />
+      : <StateMessage kind="empty" title={t('pages.returnedItems.noReturns')} />;
+    if (!rows.length) return <StateMessage kind="no-matches" title={t('pages.returnedItems.noMatchingReturns')}
+      action={<Button variant="outlined" onClick={() => setSearch('')}>{t('pages.returnedItems.clearSearch')}</Button>} />;
+    if (compact) return <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('pages.returnedItems.returns')}>
       {rows.map((row) => <Box component="li" key={row.id} sx={{ borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
         <ButtonBase onClick={() => setReviewing(row)} aria-haspopup="dialog" sx={{ display: 'block', width: '100%', textAlign: 'left', px: 2, py: 1.5,
           '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}>
@@ -99,7 +99,7 @@ export function ReturnedItemsPage() {
             <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} sx={{ flexShrink: 0 }} />
           </Stack>
           <Typography component="span" variant="body2" sx={{ display: 'block', mt: 0.25 }}>
-            {t('Für', 'For')} {person(row)} · {row.expectedReturnLocationName || t('kein Rückgabeort', 'no return location')}
+            {t('pages.returnedItems.for')} {person(row)} · {row.expectedReturnLocationName || t('pages.returnedItems.noReturnLocation')}
           </Typography>
           <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
             {formatDateTime(row.created)}{row.assetCode ? ' · ' : ''}{row.assetCode && <span className="mono">{row.assetCode}</span>}
@@ -117,17 +117,17 @@ export function ReturnedItemsPage() {
   return (
     <Box>
       <PageHeader
-        title={t('Rückgaben prüfen', 'Review returns')}
-        description={t('Gemeldete Rückgaben zählen erst nach deiner Prüfung wieder zum verfügbaren Bestand.', 'Reported returns only count as available stock again after you review them.')}
+        title={t('pages.returnedItems.reviewReturns')}
+        description={t('pages.returnedItems.reportedReturnsOnlyCountAsAvailableStockAgainAfterYou')}
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
-        <TextField type="search" size="small" fullWidth label={t('Artikel, Person oder Rückgabeort suchen', 'Search item, person or return location')} value={search} onChange={event => setSearch(event.target.value)} />
-        <TextField select size="small" label={t('Status', 'Status')} value={status} sx={{ minWidth: 220 }}
+        <TextField type="search" size="small" fullWidth label={t('pages.returnedItems.searchItemPersonOrReturnLocation')} value={search} onChange={event => setSearch(event.target.value)} />
+        <TextField select size="small" label={t('common.status')} value={status} sx={{ minWidth: 220 }}
           onChange={(event) => setStatus(event.target.value as ReturnSubmissionStatus | '')}>
           <MenuItem value="pending">{labels.pending}</MenuItem>
           <MenuItem value="accepted">{labels.accepted}</MenuItem>
           <MenuItem value="rejected">{labels.rejected}</MenuItem>
-          <MenuItem value="">{t('Alle', 'All')}</MenuItem>
+          <MenuItem value="">{t('common.all')}</MenuItem>
         </TextField>
       </Stack>
       {content}
@@ -137,13 +137,13 @@ export function ReturnedItemsPage() {
 }
 
 function DamageChip({ count }: { count: number }) {
-  const t = useLocalizedText();
+  const t = useT();
   return <Chip component="span" size="small" color="error" icon={<ReportProblemOutlinedIcon />} sx={{ mt: 0.5 }}
-    label={count === 1 ? t('Schaden gemeldet', 'Damage reported') : t(`${count} Schäden gemeldet`, `${count} damage reports`)} />;
+    label={count === 1 ? t('pages.returnedItems.damageReported') : t('pages.returnedItems.countDamageReports', { count: count })} />;
 }
 
 function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: ReturnSubmission; statusLabel: string; onClose: () => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   const { user } = useAuth();
   const acknowledge = useAcknowledgeReturnSubmission();
   const reject = useRejectReturnSubmission();
@@ -160,7 +160,7 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
   }
 
   return <FormDialog open onClose={close}>
-    <DialogTitle>{t('Rückgabe prüfen', 'Review return')}</DialogTitle>
+    <DialogTitle>{t('pages.returnedItems.reviewReturn')}</DialogTitle>
     <DialogContent dividers>
       <Stack spacing={2.5}>
         <Box>
@@ -168,9 +168,9 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
           <Box sx={{ mt: 0.5 }}><Chip size="small" variant="outlined" color={statusColors[submission.status]} label={statusLabel} /></Box>
         </Box>
         {submission.reportedDamage?.length > 0 && <Alert severity="error" icon={<ReportProblemOutlinedIcon />}>
-          <AlertTitle>{t('Für diese Rückgabe wurde ein Schaden gemeldet', 'Damage was reported for this return')}</AlertTitle>
+          <AlertTitle>{t('pages.returnedItems.damageWasReportedForThisReturn')}</AlertTitle>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            {t('Vor dem Einlagern prüfen. Der Schaden bleibt offen, bis er repariert oder abgeschrieben ist.', 'Inspect before returning to stock. The damage stays open until it is repaired or written off.')}
+            {t('pages.returnedItems.inspectBeforeReturningToStockTheDamageStaysOpenUntil')}
           </Typography>
           <Stack component="ul" spacing={0.75} sx={{ m: 0, pl: 2.5 }}>
             {submission.reportedDamage.map((damage) => <li key={damage.id}>
@@ -181,43 +181,43 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
               <Typography variant="caption" color="text.secondary">{[damage.reportedByName, formatDateTime(damage.reportedAt)].filter(Boolean).join(' · ')}</Typography>
             </li>)}
           </Stack>
-          <Link component={RouterLink} to="/damage-reports" sx={{ display: 'inline-block', mt: 1 }}>{t('Schadensberichte öffnen', 'Open damage reports')}</Link>
+          <Link component={RouterLink} to="/damage-reports" sx={{ display: 'inline-block', mt: 1 }}>{t('pages.returnedItems.openDamageReports')}</Link>
         </Alert>}
         <FactList>
-          <Fact label={t('Zurückgegeben für', 'Returned for')}>{submission.returnedForUserName || submission.returnedForUserId}</Fact>
-          <Fact label={t('Gemeldet von', 'Submitted by')}>{submission.submittedByName || '—'}</Fact>
-          <Fact label={t('Rückgabeort', 'Return location')}>{submission.expectedReturnLocationName || '—'}</Fact>
-          <Fact label={t('Gemeldet am', 'Submitted')}>{formatDateTime(submission.created)}</Fact>
-          {submission.assetCode && <Fact label={t('Gerät', 'Asset')}><span className="mono">{submission.assetCode}</span></Fact>}
+          <Fact label={t('pages.returnedItems.returnedFor')}>{submission.returnedForUserName || submission.returnedForUserId}</Fact>
+          <Fact label={t('pages.returnedItems.submittedBy')}>{submission.submittedByName || '—'}</Fact>
+          <Fact label={t('common.returnLocation')}>{submission.expectedReturnLocationName || '—'}</Fact>
+          <Fact label={t('pages.returnedItems.submitted2')}>{formatDateTime(submission.created)}</Fact>
+          {submission.assetCode && <Fact label={t('common.asset')}><span className="mono">{submission.assetCode}</span></Fact>}
         </FactList>
         {submission.notes && <Box>
-          <Typography variant="body2" color="text.secondary">{t('Notiz zur Ablage', 'Placement notes')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('pages.returnedItems.placementNotes')}</Typography>
           <Typography sx={{ whiteSpace: 'pre-wrap' }}>{submission.notes}</Typography>
         </Box>}
         {submission.placementImage && <Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>{t('Foto der Ablage', 'Placement photo')}</Typography>
-          <MediaImage src={submission.placementImage} alt={t('Foto des abgelegten Artikels am Rückgabeort', 'Photo of the item placed at the return location')}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>{t('pages.returnedItems.placementPhoto')}</Typography>
+          <MediaImage src={submission.placementImage} alt={t('pages.returnedItems.photoOfTheItemPlacedAtTheReturnLocation')}
             sx={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
         </Box>}
         {submission.acknowledgementNotes && <Box>
-          <Typography variant="body2" color="text.secondary">{t('Prüfnotiz', 'Inspection notes')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('pages.returnedItems.inspectionNotes')}</Typography>
           <Typography sx={{ whiteSpace: 'pre-wrap' }}>{submission.acknowledgementNotes}</Typography>
         </Box>}
         {canDecide && <>
-          <Alert severity="info">{t('Einlagern macht die Menge wieder verfügbar. Ablehnen hält sie aus dem Bestand heraus und erfordert eine Begründung.', 'Returning to stock makes the quantity available again. Rejecting keeps it out of stock and needs a reason.')}</Alert>
-          <TextField label={t('Prüfnotiz / Begründung', 'Inspection notes / reason')} value={notes} multiline minRows={2}
+          <Alert severity="info">{t('pages.returnedItems.returningToStockMakesTheQuantityAvailableAgainRejectingKeeps')}</Alert>
+          <TextField label={t('pages.returnedItems.inspectionNotesReason')} value={notes} multiline minRows={2}
             onChange={(event) => setNotes(event.target.value)} error={rejectAttempted && !notes.trim()}
-            helperText={rejectAttempted && !notes.trim() ? t('Zum Ablehnen ist eine Begründung erforderlich.', 'A reason is required to reject.') : t('Optional beim Einlagern', 'Optional when returning to stock')} />
+            helperText={rejectAttempted && !notes.trim() ? t('pages.returnedItems.aReasonIsRequiredToReject') : t('pages.returnedItems.optionalWhenReturningToStock')} />
         </>}
-        {error && <Alert severity="error">{t('Die Entscheidung konnte nicht gespeichert werden. Bitte erneut versuchen.', 'The decision could not be saved. Please try again.')}</Alert>}
+        {error && <Alert severity="error">{t('pages.returnedItems.theDecisionCouldNotBeSavedPleaseTryAgain')}</Alert>}
       </Stack>
     </DialogContent>
     <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, flexWrap: 'wrap', pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', sm: 1.5 } }}>
       {canDecide ? <>
-        <Button onClick={close} disabled={pending} sx={{ mr: 'auto' }}>{t('Abbrechen', 'Cancel')}</Button>
-        <Button color="error" variant="outlined" disabled={pending} onClick={() => decide(false)}>{t('Ablehnen', 'Reject')}</Button>
-        <Button variant="contained" disabled={pending} onClick={() => decide(true)}>{t('Einlagern', 'Return to stock')}</Button>
-      </> : <Button onClick={close}>{t('Schließen', 'Close')}</Button>}
+        <Button onClick={close} disabled={pending} sx={{ mr: 'auto' }}>{t('common.cancel')}</Button>
+        <Button color="error" variant="outlined" disabled={pending} onClick={() => decide(false)}>{t('pages.returnedItems.reject')}</Button>
+        <Button variant="contained" disabled={pending} onClick={() => decide(true)}>{t('pages.returnedItems.returnToStock')}</Button>
+      </> : <Button onClick={close}>{t('common.close')}</Button>}
     </DialogActions>
   </FormDialog>;
 }

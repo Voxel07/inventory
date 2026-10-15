@@ -7,7 +7,7 @@ import CropIcon from '@mui/icons-material/Crop';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFileUrl, fetchMedia, isApiMediaUrl } from '../../services/apiClient';
 import { releaseStagedImage, stageImage } from '../../services/stagedImageService';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { ImageCropDialog } from './ImageCropDialog';
 import { MediaImage } from './MediaImage';
 
@@ -29,7 +29,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
   maxImages?: number;
   disabled?: boolean;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const [editing, setEditing] = useState<{ file: File; index?: number; key?: string }>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +57,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
     setUploadsInProgress((count) => count + 1);
     void stageImage(file)
       .catch((reason) => {
-        if (mounted.current) setError(reason instanceof Error ? reason.message : t('Bild konnte nicht hochgeladen werden.', 'Could not upload image.'));
+        if (mounted.current) setError(reason instanceof Error ? reason.message : t('common.imageAttachments.couldNotUploadImage'));
       })
       .finally(() => {
         if (mounted.current) setUploadsInProgress((count) => Math.max(0, count - 1));
@@ -101,7 +101,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
       if (isApiMediaUrl(url)) blob = await fetchMedia(url, controller.signal);
       else {
         const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(t('Bild konnte nicht geladen werden.', 'Could not load image.'));
+        if (!response.ok) throw new Error(t('common.imageAttachments.couldNotLoadImage'));
         blob = await response.blob();
       }
       if (!controller.signal.aborted) {
@@ -111,7 +111,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
         setEditing({ key, file: new File([blob], 'image', { type }) });
       }
     } catch (reason) {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : t('Bild konnte nicht geladen werden.', 'Could not load image.'));
+      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : t('common.imageAttachments.couldNotLoadImage'));
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -119,19 +119,19 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
 
   return (
     <Stack spacing={1}>
-      <Typography variant="subtitle2">{maxImages === 1 ? t('Bild', 'Image') : t('Bilder', 'Images')}</Typography>
+      <Typography variant="subtitle2">{maxImages === 1 ? t('common.imageAttachments.image') : t('common.imageAttachments.images')}</Typography>
       {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
       <Box>
-        <Button title={translate('Bilddateien auswählen und hinzufügen', 'Choose image files to attach')} component="label" disabled={busy || remaining <= 0} variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
-          {maxImages === 1 ? t('Bild hinzufügen', 'Add image') : t('Bilder hinzufügen', 'Add images')}
+        <Button title={translate('common.imageAttachments.chooseImageFilesToAttach')} component="label" disabled={busy || remaining <= 0} variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
+          {maxImages === 1 ? t('common.imageAttachments.addImage') : t('common.imageAttachments.addImages')}
           <input hidden type="file" accept="image/jpeg,image/png,image/webp" multiple={maxImages > 1} disabled={busy || remaining <= 0}
             onChange={(event) => {
               const selected = Array.from(event.target.files ?? []);
               event.target.value = '';
               if (!selected.length) return;
-              if (selected.length > remaining) { setError(t(`Es sind noch ${remaining} Bilder möglich.`, `You can add ${remaining} more images.`)); return; }
+              if (selected.length > remaining) { setError(t('common.imageAttachments.youCanAddRemainingMoreImages', { remaining: remaining })); return; }
               if (selected.some((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 20 * 1024 * 1024)) {
-                setError(t('Bitte JPEG, PNG oder WebP bis 20 MB auswählen.', 'Please select JPEG, PNG or WebP images up to 20 MB.')); return;
+                setError(t('common.imageAttachments.pleaseSelectJPEGPNGOrWebPImagesUpTo20')); return;
               }
               setError('');
               onChange((current) => ({ ...current, files: [...current.files, ...selected] }));
@@ -139,21 +139,21 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
             }} />
         </Button>
       </Box>
-      <Typography variant="caption" color="text.secondary">{t('JPEG, PNG oder WebP. Automatisch komprimiert auf maximal 512 px; 256 px und 128 px sind unter „Anpassen“ verfügbar.', 'JPEG, PNG or WebP. Automatically compressed to a maximum of 512 px; 256 px and 128 px are available under “Adjust”.')}</Typography>
-      {loading && <Typography variant="caption">{t('Bild wird geladen…', 'Loading image…')}</Typography>}
-      {uploadsInProgress > 0 && <Typography variant="caption" color="primary">{t('Bild wird im Hintergrund optimiert und hochgeladen…', 'Optimizing and uploading image in the background…')}</Typography>}
+      <Typography variant="caption" color="text.secondary">{t('common.imageAttachments.jPEGPNGOrWebPAutomaticallyCompressedToAMaximumOf')}</Typography>
+      {loading && <Typography variant="caption">{t('common.imageAttachments.loadingImage')}</Typography>}
+      {uploadsInProgress > 0 && <Typography variant="caption" color="primary">{t('common.imageAttachments.optimizingAndUploadingImageInTheBackground')}</Typography>}
       <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1 }}>
         {retained.map((key, index) => (
           <Box key={key} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
-            {value.replacements[key] ? <FilePreview file={value.replacements[key]} alt={`${t('Bild', 'Image')} ${index + 1}`} />
-              : <MediaImage src={apiFileUrl(key)} alt={`${t('Bild', 'Image')} ${index + 1}`} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />}
+            {value.replacements[key] ? <FilePreview file={value.replacements[key]} alt={`${t('common.imageAttachments.image')} ${index + 1}`} />
+              : <MediaImage src={apiFileUrl(key)} alt={`${t('common.imageAttachments.image')} ${index + 1}`} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />}
             <ImageControls label={String(index + 1)} disabled={busy} onEdit={() => void editExisting(key)} onRemove={() => removeExisting(key)} />
           </Box>
         ))}
         {value.files.map((file, index) => (
           <Box key={index} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
-            <FilePreview file={file} alt={`${t('Neues Bild', 'New image')} ${index + 1}`} />
-            <ImageControls label={`${t('neu', 'new')} ${index + 1}`} disabled={busy} onEdit={() => setEditing({ file, index })} onRemove={() => removeNew(file)} />
+            <FilePreview file={file} alt={`${t('common.imageAttachments.newImage')} ${index + 1}`} />
+            <ImageControls label={`${t('common.imageAttachments.new')} ${index + 1}`} disabled={busy} onEdit={() => setEditing({ file, index })} onRemove={() => removeNew(file)} />
           </Box>
         ))}
       </Stack>
@@ -169,11 +169,11 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
 }
 
 function ImageControls({ label, disabled, onEdit, onRemove }: { label: string; disabled: boolean; onEdit: () => void; onRemove: () => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-      <Button title={translate('Bild zuschneiden und Größe anpassen', 'Crop and resize this image')} size="small" disabled={disabled} startIcon={<CropIcon />} aria-label={`${t('Bild anpassen', 'Adjust image')} ${label}`} onClick={onEdit}>{t('Anpassen', 'Adjust')}</Button>
-      <Button title={translate('Dieses Bild entfernen', 'Remove this image')} size="small" disabled={disabled} color="error" aria-label={`${t('Bild entfernen', 'Remove image')} ${label}`} onClick={onRemove}><DeleteIcon fontSize="small" /></Button>
+      <Button title={translate('common.imageAttachments.cropAndResizeThisImage')} size="small" disabled={disabled} startIcon={<CropIcon />} aria-label={`${t('common.imageAttachments.adjustImage')} ${label}`} onClick={onEdit}>{t('common.imageAttachments.adjust')}</Button>
+      <Button title={translate('common.imageAttachments.removeThisImage')} size="small" disabled={disabled} color="error" aria-label={`${t('common.imageAttachments.removeImage')} ${label}`} onClick={onRemove}><DeleteIcon fontSize="small" /></Button>
     </Stack>
   );
 }

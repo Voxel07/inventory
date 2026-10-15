@@ -12,11 +12,11 @@ import LoginIcon from '@mui/icons-material/Login';
 import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { AUTH_CONFIGURATION_ERROR } from '../config/runtimeConfig';
 
 export function LoginPage() {
-    const t = useLocalizedText();
+    const t = useT();
     const { login, error: authError } = useAuth();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [isLoading, setIsLoading] = useState(false);
@@ -25,10 +25,10 @@ export function LoginPage() {
         setIsLoading(true);
         try {
             await login();
-            showSnackbar(t('Erfolgreich angemeldet', 'Signed in successfully'), 'success');
+            showSnackbar(t('pages.loginPage.signedInSuccessfully'), 'success');
         } catch (err: unknown) {
             console.error('OAuth2 error:', err);
-            showSnackbar(err instanceof Error ? err.message : t('OAuth2-Anmeldung fehlgeschlagen.', 'OAuth2 sign-in failed.'), 'error');
+            showSnackbar(err instanceof Error ? err.message : t('pages.loginPage.oAuth2SignInFailed'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -72,16 +72,16 @@ export function LoginPage() {
                         <ShieldIcon sx={{ fontSize: 28 }} />
                     </Box>
                     <Typography component="h1" variant="h5" sx={{ mb: 1 }}>
-                        {t('Inventarverwaltung', 'Inventory management')}
+                        {t('pages.loginPage.inventoryManagement')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 4 }}>
-                        {t('Melden Sie sich mit Ihrem Organisationskonto an, um Artikel zu verwalten und auszuleihen.', 'Sign in with your organization account to manage and check out items.')}
+                        {t('pages.loginPage.signInWithYourOrganizationAccountToManageAndCheck')}
                     </Typography>
 
                     {AUTH_CONFIGURATION_ERROR && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{AUTH_CONFIGURATION_ERROR}</Alert>}
                     {authError && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{authError}</Alert>}
 
-                    <Button title={translate('Über Authentik anmelden', 'Sign in through Authentik')}
+                    <Button title={translate('pages.loginPage.signInThroughAuthentik')}
                         variant="contained"
                         fullWidth
                         size="large"
@@ -93,7 +93,7 @@ export function LoginPage() {
                             fontWeight: 600,
                         }}
                     >
-                        {isLoading ? t('Verbindung wird hergestellt...', 'Connecting...') : t('Mit Authentik anmelden', 'Sign in with Authentik')}
+                        {isLoading ? t('pages.loginPage.connecting') : t('pages.loginPage.signInWithAuthentik')}
                     </Button>
                     <Box sx={{ mt: 3 }}><LanguageSelector compact /></Box>
                 </Paper>

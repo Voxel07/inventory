@@ -24,13 +24,13 @@ export class ErrorBoundary extends Component<Props, State> {
             return (
                 <Box sx={{ p: 4, textAlign: 'center' }}>
                     <Typography variant="h5" color="error" gutterBottom>
-                        {translate('Etwas ist schiefgelaufen', 'Something went wrong')}
+                        {translate('shared.errorBoundary.somethingWentWrong')}
                     </Typography>
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                         {this.state.error?.message}
                     </Typography>
-                    <Button title={translate('Den fehlerhaften Bildschirm erneut laden', 'Retry loading the failed screen')} variant="contained" onClick={() => this.setState({ hasError: false, error: null })}>
-                        {translate('Erneut versuchen', 'Try again')}
+                    <Button title={translate('shared.errorBoundary.retryLoadingTheFailedScreen')} variant="contained" onClick={() => this.setState({ hasError: false, error: null })}>
+                        {translate('common.tryAgain')}
                     </Button>
                 </Box>
             );

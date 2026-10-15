@@ -66,7 +66,7 @@ Dependency order is guidance; split into reviewable changes without compatibilit
 | PLAN-06 | P3 · Planned | Query persister and persisted paused mutations replacing custom cache/queue plumbing (old #26) | Coordinate with PLAN-04. Keep account ownership, private exclusions, UUID idempotency, correction chains and explicit queued UI. No last-write-wins |
 | PLAN-07 | P3 · Planned | react-hook-form + zod replacing per-field local state (old #27) | Shared form rules, client/API validation parity, media crop/attachments, accessible errors |
 | PLAN-08 | P3 · Planned | React Router 7 data router/loaders (old #28) | Keep current routes, lazy behavior, session/query boundaries, guards and denied-route feedback |
-| PLAN-09 | P3 · Partial | i18next keys only; remove inline German/English pairs (old #22) | Preserve every label/error/status, interpolation, date/money formatting and exported-document language |
+| PLAN-09 | Done (15 October 2026) | i18next keys only; inline German/English pairs removed (old #22) | 2,488 matching DE/EN resource keys; typed translators, interpolation/plural validation, PDF/import callbacks retain their selected language; date/money helpers unchanged |
 | PLAN-10 | P2 · Partial (status derived from `out_of_service` + calendar; per-asset due dates) | Maintenance state lives in schedules; remove duplicate item status/date/interval representation (old #17) | Update baseline, commands, projections, category defaults, reports and MCP together; preserve warnings and checkout blocking |
 | PLAN-11 | P3 · Planned, measurement-dependent | Cache more reference data by committed revision (old #12) | Add only after profiling; never cache dynamic stock or widen private-resource access |
 

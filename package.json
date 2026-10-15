@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "bun run typecheck && vite build",
     "typecheck": "node node_modules/typescript-native/bin/tsc -b",
-    "lint": "eslint .",
+    "lint": "eslint . && bun run check:i18n",
+    "check:i18n": "node scripts/check-translations.mjs",
     "test": "bun test",
     "preview": "vite preview"
   },

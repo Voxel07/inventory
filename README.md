@@ -103,10 +103,21 @@ The exact online/offline boundary, queue semantics, and conflict handling are do
 ## Internationalization
 
 Localization runs on [i18next](https://www.i18next.com/) with German (`de`) and
-English (`en`) catalogs in [`src/i18n`](src/i18n). Shared copy uses the
+English (`en`) catalogs in [`src/i18n`](src/i18n). Bilingual copy uses the
 key-based `useT()` hook from `src/utils/naming` (e.g.
 `t('header.queuedActions', { count })`), which supports interpolation and
-pluralization. Context-specific bilingual copy uses `useLocalizedText()`.
+pluralization. Non-React code uses `translate(key, options)`; both APIs accept
+catalog keys only. Shared labels live under `common`; feature copy follows its
+screen/component/service namespace. Keep whole sentences in the catalogs and
+use `_one` / `_other` entries with a numeric `count` for plurals.
+
+Keys and export/import translation callbacks are typed with `TranslationKey`
+and `Translator`. German must match the English catalog structure. Hook
+callbacks retain their selected language during asynchronous exports/imports;
+changing the language rerenders components with a new callback.
+
+Run `bun run check:i18n` to check catalog keys, interpolation parameters,
+plural forms and translation call sites. It also runs as part of `bun run lint`.
 
 ## Faction order workflow
 

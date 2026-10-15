@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { usePagedAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
 import { useCrudManager } from '../hooks/useCrudManager';
 import type { Assembly, AssemblyFormData } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canCreateInventory, canEditCatalog } from '../utils/access';
 
@@ -22,7 +22,7 @@ export function Assemblies() {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
     const canCreate = canCreateInventory(user);
-    const t = useLocalizedText();
+    const t = useT();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
     const [search, setSearch] = useState('');
@@ -35,7 +35,7 @@ export function Assemblies() {
 
     const crud = useCrudManager<Assembly, AssemblyFormData>(
         { create: createAssembly, update: updateAssembly, delete: deleteAssembly, deleteMany: deleteAssemblies },
-        { entityName: 'Baugruppe', entityNameEnglish: 'assembly', entityNamePlural: 'Baugruppen', entityNamePluralEnglish: 'assemblies' },
+        { entityName: t('pages.assemblies.assembly'), entityNamePlural: t('pages.assemblies.assemblies') },
     );
 
     const [importOpen, setImportOpen] = useState(false);
@@ -43,16 +43,16 @@ export function Assemblies() {
     return (
         <Box>
             <PageHeader
-                title={t('Baugruppen', 'Assemblies')}
+                title={t('nav.assemblies')}
                 actions={<>
-                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('CSV-Import', 'Import CSV')}</Button>}
-                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('Baugruppe hinzufügen', 'Add assembly')}</Button>}
+                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('pages.assemblies.importCSV')}</Button>}
+                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('pages.assemblies.addAssembly')}</Button>}
                 </>}
             />
-            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
+            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
                 onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
-                <ToggleButton value="all">{t('Alle Baugruppen', 'All assemblies')}</ToggleButton>
-                <ToggleButton value="mine">{t('Meine Baugruppen', 'My assemblies')}</ToggleButton>
+                <ToggleButton value="all">{t('pages.assemblies.allAssemblies')}</ToggleButton>
+                <ToggleButton value="mine">{t('pages.assemblies.myAssemblies')}</ToggleButton>
             </ToggleButtonGroup>
 
             <AssembliesList
@@ -67,13 +67,13 @@ export function Assemblies() {
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
-                emptyHint={mine ? t('Du hast noch keine eigenen Baugruppen.', 'You do not own any assemblies yet.') : undefined}
+                emptyHint={mine ? t('pages.assemblies.youDoNotOwnAnyAssembliesYet') : undefined}
             />
 
             <FormDialog open={crud.formOpen} onClose={crud.closeForm}>
                 <AssemblyForm
                     key={crud.editingEntity?.id ?? 'create'}
-                    title={crud.editingEntity ? t('Baugruppe bearbeiten', 'Edit assembly') : t('Neue Baugruppe', 'New assembly')}
+                    title={crud.editingEntity ? t('pages.assemblies.editAssembly') : t('pages.assemblies.newAssembly')}
                     onCancel={crud.closeForm}
                     initialData={crud.editingEntity}
                     onSubmit={crud.handleSave}
@@ -85,14 +85,11 @@ export function Assemblies() {
             <ConfirmDialog
                 open={crud.isDeleteOpen}
                 title={crud.deletingIds.length > 1
-                    ? t('Baugruppen stilllegen', 'Retire assemblies')
-                    : t('Baugruppe stilllegen', 'Retire assembly')}
-                message={t(
-                    `${crud.deletingIds.length} ${crud.deletingIds.length === 1 ? 'Baugruppe' : 'Baugruppen'} stilllegen? Sie verschwinden aus dem Katalog und können nicht mehr bestellt werden; Codes und Bestellverlauf bleiben erhalten.`,
-                    `Retire ${crud.deletingIds.length} assembl${crud.deletingIds.length === 1 ? 'y' : 'ies'}? They leave the catalog and can no longer be ordered; codes and order history are kept.`,
-                )}
-                actionLabel={t('Stilllegen', 'Retire')}
-                actionTooltip={t('Aus dem Katalog entfernen, Verlauf behalten', 'Remove from the catalog and keep history')}
+                    ? t('pages.assemblies.retireAssemblies')
+                    : t('pages.assemblies.retireAssembly')}
+                message={t('pages.assemblies.retireConfirmation', { count: crud.deletingIds.length })}
+                actionLabel={t('common.retire')}
+                actionTooltip={t('pages.assemblies.removeFromTheCatalogAndKeepHistory')}
                 actionColor="error"
                 onClose={crud.closeDelete}
                 onConfirm={crud.handleDeleteConfirm}

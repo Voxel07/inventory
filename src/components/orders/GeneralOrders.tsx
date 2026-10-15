@@ -29,7 +29,7 @@ import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { LoadMore } from '../shared/LoadMore';
 import { type GeneralOrderSummary, type Item } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
@@ -45,14 +45,14 @@ import { OrderEventFilter } from './OrderEventFilter';
 const ACTIVE_STATUSES = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'] as const;
 const HISTORY_STATUSES = ['returned', 'closed', 'cancelled'] as const;
 
-const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
-  preparing: ['In Vorbereitung', 'Preparing'], draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
-  picked_up: ['Abgeholt', 'Picked up'], partially_returned: ['Teilrückgabe', 'Partially returned'],
-  returned: ['Zurückgegeben', 'Returned'], closed: ['Abgeschlossen', 'Closed'], cancelled: ['Storniert', 'Cancelled'],
-};
+const statusLabels = {
+  preparing: 'orders.generalOrders.statusLabels.preparing', draft: 'orders.generalOrders.statusLabels.draft', submitted: 'orders.generalOrders.statusLabels.submitted', ready: 'orders.generalOrders.statusLabels.ready',
+  picked_up: 'orders.generalOrders.statusLabels.picked_up', partially_returned: 'orders.generalOrders.statusLabels.partially_returned',
+  returned: 'orders.generalOrders.statusLabels.returned', closed: 'orders.generalOrders.statusLabels.closed', cancelled: 'orders.generalOrders.statusLabels.cancelled',
+} as const;
 
 export function GeneralOrders() {
-  const t = useLocalizedText();
+  const t = useT();
   const { eventTypes } = useFactionCatalog();
   const feedback = useMutationFeedback();
   const { data: events = [] } = useEventReports();
@@ -91,7 +91,7 @@ export function GeneralOrders() {
 
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
-    return event ? `${event.name || event.eventType} · ${formatDate(event.eventDate)}` : t('Kein Event', 'No event');
+    return event ? `${event.name || event.eventType} · ${formatDate(event.eventDate)}` : t('orders.generalOrders.noEvent');
   }
   function startEditing(order?: GeneralOrderSummary) {
     setEditing(order ?? 'new');
@@ -105,21 +105,21 @@ export function GeneralOrders() {
     event.preventDefault();
     const requestedQuantities = toPositiveIntegerQuantities(quantities);
     const data = { name: name.trim(), purpose: purpose.trim(), eventOccurrenceId: eventId || undefined, requestedQuantities };
-    const callbacks = feedback.callbacks(editing === 'new' ? t('Bestellung erstellt', 'Order created') : t('Bestellung aktualisiert', 'Order updated'), () => setEditing(null));
+    const callbacks = feedback.callbacks(editing === 'new' ? t('orders.generalOrders.orderCreated') : t('orders.generalOrders.orderUpdated'), () => setEditing(null));
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
   function advance(order: GeneralOrderSummary, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel', assetAssignments?: Record<string, string[]>) {
-    transitionOrder.mutate({ id: order.id, action, assetAssignments }, feedback.callbacks(t('Bestellung aktualisiert', 'Order updated')));
+    transitionOrder.mutate({ id: order.id, action, assetAssignments }, feedback.callbacks(t('orders.generalOrders.orderUpdated')));
   }
   const editItem = (item: Item) => (
     <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-          <Typography variant="caption" color="text.secondary">{item.category} · {t('Verfügbar', 'Available')}: {item.stock?.available ?? 0}</Typography>
+          <Typography variant="caption" color="text.secondary">{item.category} · {t('enum.itemStatus.available')}: {item.stock?.available ?? 0}</Typography>
         </Box>
-        <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+        <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''}
           onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
       </Stack>
     </Paper>
@@ -136,29 +136,29 @@ export function GeneralOrders() {
       title: order.name,
       subtitle: <>{order.purpose} · {eventName(order.eventOccurrenceId)}</>,
       details: <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {t('Bestellt', 'Ordered')}: {itemCount} · {t('Vorbereitet', 'Prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
+        {t('enum.value.ordered')}: {itemCount} · {t('common.prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
       </Typography>,
-      status: t(...statusLabels[order.status ?? 'draft']),
+      status: t(statusLabels[order.status ?? 'draft']),
       statusColor,
       actions: <>
-        <Button title={t('Verantwortliche und Abholgruppen anzeigen', 'Show responsible people and pickup groups')} onClick={() => setPickupOrder(order.id)}>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</Button>
-        <Button title={translate('Den Verlauf dieser Bestellung anzeigen', 'Display the history of this order')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('Verlauf', 'History')}</Button>
-        {order.status === 'draft' && canChange(order) && <><Button title={translate('Artikel und Mengen dieser Bestellung bearbeiten', 'Edit this order\'s items and quantities')} size="small" onClick={() => startEditing(order)}>{t('Bearbeiten', 'Edit')}</Button><Button title={translate('Diese Bestellung zur Bearbeitung einreichen', 'Submit this order for processing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('Einreichen', 'Submit')}</Button></>}
-        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('Vorbereitete Mengen und Gerätezuordnungen erfassen', 'Enter prepared quantities and asset assignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('Vorbereiten', 'Prepare')}</Button>}
-        {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('Diese Bestellung abholbereit melden', 'Mark this order ready for pickup')} onClick={() => advance(order, 'ready')}>{t('Bereitstellen', 'Mark ready')}</Button>}
-        {order.status === 'ready' && canTakeOut(user) && <Button title={translate('Abholung und Verantwortlichen erfassen', 'Record pickup and the responsible person')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('Ausgeben', 'Pick up')}</Button>}
-        {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('Rückgabemengen und Zustand erfassen', 'Enter return quantities and condition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('Rückgabe erfassen', 'Record return')}</Button>}
-        {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('Diese Bestellung abschließen', 'Close this order')} size="small" onClick={() => advance(order, 'close')}>{t('Abschließen', 'Close')}</Button>}
-        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('Diese Bestellung stornieren', 'Cancel this order')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('Stornieren', 'Cancel')}</Button>}
+        <Button title={t('orders.generalOrders.showResponsiblePeopleAndPickupGroups')} onClick={() => setPickupOrder(order.id)}>{t('orders.generalOrders.itemsPickupGroups')}</Button>
+        <Button title={translate('orders.generalOrders.displayTheHistoryOfThisOrder')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('common.history')}</Button>
+        {order.status === 'draft' && canChange(order) && <><Button title={translate('orders.generalOrders.editThisOrderSItemsAndQuantities')} size="small" onClick={() => startEditing(order)}>{t('common.edit')}</Button><Button title={translate('orders.generalOrders.submitThisOrderForProcessing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('orders.generalOrders.submit')}</Button></>}
+        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.enterPreparedQuantitiesAndAssetAssignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('orders.generalOrders.prepare')}</Button>}
+        {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.markThisOrderReadyForPickup')} onClick={() => advance(order, 'ready')}>{t('orders.generalOrders.markReady')}</Button>}
+        {order.status === 'ready' && canTakeOut(user) && <Button title={translate('orders.generalOrders.recordPickupAndTheResponsiblePerson')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('orders.generalOrders.pickUp')}</Button>}
+        {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('orders.generalOrders.enterReturnQuantitiesAndCondition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('orders.generalOrders.recordReturn')}</Button>}
+        {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('orders.generalOrders.closeThisOrder')} size="small" onClick={() => advance(order, 'close')}>{t('orders.generalOrders.close')}</Button>}
+        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('orders.generalOrders.cancelThisOrder')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('orders.generalOrders.cancel')}</Button>}
       </>,
     };
   }
 
   return <Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
-      <Box><Typography variant="h4">{t('Allgemeine Bestellungen', 'General orders')}</Typography>
-        <Typography color="text.secondary">{t('Artikel für Catering, Sponsorenzelte, Bühnen und andere Zwecke.', 'Items for catering, sponsor tents, stages, and other purposes.')}</Typography></Box>
-      <Button title={translate('Eine neue allgemeine Bestellung anlegen', 'Create a new general order')} disabled={!canUseGeneralOrders(user)} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('Neue Bestellung', 'New order')}</Button>
+      <Box><Typography variant="h4">{t('common.generalOrders')}</Typography>
+        <Typography color="text.secondary">{t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')}</Typography></Box>
+      <Button title={translate('orders.generalOrders.createANewGeneralOrder')} disabled={!canUseGeneralOrders(user)} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('orders.generalOrders.newOrder')}</Button>
     </Stack>
     <OrderEventFilter
       eventTypes={eventTypes}
@@ -168,13 +168,13 @@ export function GeneralOrders() {
       selectedEventId={selectedEventId}
       onEventChange={setSelectedEventId}
     >
-      <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
+      <TextField fullWidth size="small" label={t('orders.generalOrders.searchOrders')} value={search}
         onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
         sx={{ maxWidth: 520 }} />
     </OrderEventFilter>
     <OrderListSection
-      title={t('Aktive Bestellungen', 'Active orders')}
-      emptyMessage={t('Noch keine passenden aktiven Bestellungen vorhanden.', 'No matching active orders yet.')}
+      title={t('orders.generalOrders.activeOrders')}
+      emptyMessage={t('orders.generalOrders.noMatchingActiveOrdersYet')}
       groups={[{ entries: (active.data ?? []).map(orderEntry) }]}
       count={active.data?.length ?? 0}
       isLoading={active.isLoading}
@@ -183,8 +183,8 @@ export function GeneralOrders() {
       onRetry={() => { void active.refetch(); }}
     />
     <OrderListSection
-      title={t('Bestellverlauf', 'Order history')}
-      emptyMessage={t('Noch kein abgeschlossener Bestellverlauf vorhanden.', 'No completed order history yet.')}
+      title={t('orders.generalOrders.orderHistory')}
+      emptyMessage={t('orders.generalOrders.noCompletedOrderHistoryYet')}
       groups={[{ entries: (history.data ?? []).map(orderEntry) }]}
       count={history.data?.length ?? 0}
       isLoading={history.isLoading}
@@ -194,12 +194,12 @@ export function GeneralOrders() {
     />
 
     <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg">
-      <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>
+      <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('orders.generalOrders.newOrder') : t('orders.generalOrders.editOrder')}</DialogTitle>
         <DialogContent dividers><Stack spacing={2}>
-          <TextField autoFocus required label={t('Name', 'Name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
-          <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
-          <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
-            <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
+          <TextField autoFocus required label={t('profile.name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
+          <TextField required multiline minRows={2} label={t('orders.generalOrders.purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
+          <TextField select label={t('nav.currentEvent')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
+            <MenuItem value="">{t('orders.generalOrders.selectEvent')}</MenuItem>
             {eventTypes.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
               return occurrences.length ? [
@@ -208,37 +208,37 @@ export function GeneralOrders() {
               ] : [];
             })}
           </TextField>
-          {!activeEvents.length && <Alert severity="info" action={<Button title={translate('Die Eventübersicht öffnen', 'Open the event overview')} component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
+          {!activeEvents.length && <Alert severity="info" action={<Button title={translate('orders.generalOrders.openTheEventOverview')} component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('orders.generalOrders.openEvents')}</Button>}>{t('orders.generalOrders.createAnEventFirst')}</Alert>}
           <Divider />
-          <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
-          <CatalogSearchField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={setItemSearch} />
-          {catalog.isError && <Alert severity="error">{t('Artikelsuche fehlgeschlagen', 'Item search failed')}</Alert>}
+          <Typography variant="h6">{t('orders.generalOrders.requestedItems')}</Typography>
+          <CatalogSearchField label={t('common.searchItems')} value={itemSearch} onChange={setItemSearch} />
+          {catalog.isError && <Alert severity="error">{t('orders.generalOrders.itemSearchFailed')}</Alert>}
           <Box sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{(catalog.data ?? []).map(editItem)}</Stack><LoadMore list={catalog} /></Box>
           {chosenIds.length > 0 && <Box>
             <Divider sx={{ mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktuelle Bestellung', 'Current order')}</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>{t('orders.generalOrders.currentOrder')}</Typography>
             <Stack spacing={0.5}>
               {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
-                  <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
+                  <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''}
                     onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
-                  <Button title={translate('Diesen Artikel aus der Bestellung entfernen', 'Remove this item from the order')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('Entfernen', 'Remove')}</Button>
+                  <Button title={translate('orders.generalOrders.removeThisItemFromTheOrder')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('common.remove')}</Button>
                 </Stack>
               </Paper>)}
             </Stack>
           </Box>}
-        </Stack></DialogContent><DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
+        </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
           <Button title={editing === 'new'
-            ? translate('Die Bestellung mit den eingegebenen Mengen erstellen', 'Create this order with the entered quantities')
-            : translate('Die Bestellung mit den geänderten Mengen aktualisieren', 'Update this order with the changed quantities')}
+            ? translate('orders.generalOrders.createThisOrderWithTheEnteredQuantities')
+            : translate('orders.generalOrders.updateThisOrderWithTheChangedQuantities')}
             type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>
-            {editing === 'new' ? t('Bestellung erstellen', 'Create order') : t('Bestellung aktualisieren', 'Update order')}
+            {editing === 'new' ? t('orders.generalOrders.createOrder') : t('orders.generalOrders.updateOrder')}
           </Button></DialogActions>
       </Box>
     </Dialog>
 
-    {pickupOrder && <Dialog open onClose={() => setPickupOrder(null)} fullWidth maxWidth="lg"><DialogTitle>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</DialogTitle><DialogContent><OrderPickupGroups kind="general" orderId={pickupOrder} /></DialogContent></Dialog>}
+    {pickupOrder && <Dialog open onClose={() => setPickupOrder(null)} fullWidth maxWidth="lg"><DialogTitle>{t('orders.generalOrders.itemsPickupGroups')}</DialogTitle><DialogContent><OrderPickupGroups kind="general" orderId={pickupOrder} /></DialogContent></Dialog>}
     {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} onClose={() => setWorkflow(null)} />}
   </Box>;
 }

@@ -5,7 +5,7 @@ import { searchItems } from '../../services/inventoryService';
 import { useItemsByIds } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Item } from '../../types';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 const RESULT_SIZE = 25;
 
@@ -24,7 +24,7 @@ export function ItemAutocomplete({ value, onChange, label, required, disabled, h
   size?: 'small' | 'medium';
   getOptionLabel?: (item: Item) => string;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const [input, setInput] = useState('');
   const search = useDebouncedValue(input.trim());
   const selected = useItemsByIds(value ? [value] : []);
@@ -50,10 +50,10 @@ export function ItemAutocomplete({ value, onChange, label, required, disabled, h
     isOptionEqualToValue={(option, chosen) => option.id === chosen.id}
     onInputChange={(_, next, reason) => { if (reason === 'input' || reason === 'clear') setInput(next); }}
     onChange={(_, item) => { setInput(''); onChange(item); }}
-    noOptionsText={search ? t('Keine passenden Artikel', 'No matching items') : t('Zum Suchen tippen', 'Type to search')}
+    noOptionsText={search ? t('shared.itemAutocomplete.noMatchingItems') : t('shared.itemAutocomplete.typeToSearch')}
     renderInput={(params) => <TextField {...params} label={label} required={required}
       error={results.isError}
-      helperText={results.isError ? t('Artikelsuche fehlgeschlagen', 'Item search failed')
-        : results.data?.more ? t('Weitere Treffer – Suche verfeinern', 'More matches – refine the search') : helperText} />}
+      helperText={results.isError ? t('shared.itemAutocomplete.itemSearchFailed')
+        : results.data?.more ? t('shared.itemAutocomplete.moreMatchesRefineTheSearch') : helperText} />}
   />;
 }

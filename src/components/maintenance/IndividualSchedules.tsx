@@ -8,7 +8,7 @@ import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
 import { formatDate } from '../../utils/dateFormat';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 import type { Schedule } from '../../types/operations';
 import { isDateSchedule, maintenanceTypeLabel, scheduleIsOverdue } from './maintenanceSchedules';
@@ -37,7 +37,7 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
   canEdit: boolean;
   onInspect: (schedule: Schedule) => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const item = useItemsByIds(draft.itemId ? [draft.itemId] : []).data?.[0];
@@ -72,15 +72,15 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
       return targets.length;
     },
     onSuccess: (count) => {
-      showSnackbar(count > 1 ? t(`${count} Wartungspläne gespeichert`, `${count} maintenance schedules saved`) : t('Wartungsplan gespeichert', 'Maintenance schedule saved'), 'success');
+      showSnackbar(count > 1 ? t('maintenance.individualSchedules.countMaintenanceSchedulesSaved', { count: count }) : t('maintenance.individualSchedules.maintenanceScheduleSaved'), 'success');
       setDraft(emptyDraft);
     },
-    onError: (err) => showSnackbar(err instanceof Error ? err.message : t('Fehler beim Speichern', 'Failed to save'), 'error'),
+    onError: (err) => showSnackbar(err instanceof Error ? err.message : t('common.failedToSave'), 'error'),
   });
   const retire = useMutation({
     mutationFn: (schedule: Schedule) => operationsApi.retireSchedule(schedule.id),
-    onSuccess: () => showSnackbar(t('Wartungsplan stillgelegt', 'Maintenance schedule retired'), 'success'),
-    onError: (err) => showSnackbar(err instanceof Error ? err.message : t('Fehler beim Speichern', 'Failed to save'), 'error'),
+    onSuccess: () => showSnackbar(t('maintenance.individualSchedules.maintenanceScheduleRetired'), 'success'),
+    onError: (err) => showSnackbar(err instanceof Error ? err.message : t('common.failedToSave'), 'error'),
   });
 
   function editSchedule(schedule: Schedule) {
@@ -99,43 +99,42 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
   return <Paper sx={{ p: 2.5, mb: 3 }}>
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
       <EventRepeatIcon color="primary" />
-      <Typography variant="h6">{t('Wartung je Artikel oder Gerät', 'Maintenance per item or device')}</Typography>
+      <Typography variant="h6">{t('maintenance.individualSchedules.maintenancePerItemOrDevice')}</Typography>
     </Stack>
     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-      {t('Eigenes Prüfintervall für einen einzelnen Artikel oder ein seriennummeriertes Gerät, unabhängig von der Kategorie.',
-        'Own inspection interval for a single item or a serialized device, independent of its category.')}
+      {t('maintenance.individualSchedules.ownInspectionIntervalForASingleItemOrASerialized')}
     </Typography>
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
         <Box sx={{ flex: 2 }}>
-          <ItemAutocomplete label={t('Artikel', 'Item')} required value={draft.itemId || null}
+          <ItemAutocomplete label={t('common.item')} required value={draft.itemId || null}
             onChange={(value) => setDraft((current) => ({ ...current, itemId: value?.id ?? '', assetId: '' }))} />
         </Box>
-        {serialized && <TextField select sx={{ flex: 1 }} label={t('Gerät', 'Device')} value={draft.assetId}
+        {serialized && <TextField select sx={{ flex: 1 }} label={t('maintenance.individualSchedules.device')} value={draft.assetId}
           onChange={(event) => setDraft((current) => ({ ...current, assetId: event.target.value }))}>
-          <MenuItem value="">{t(`Alle Geräte einzeln (${activeAssets.length})`, `Each device (${activeAssets.length})`)}</MenuItem>
+          <MenuItem value="">{t('maintenance.individualSchedules.eachDeviceActiveAssetCount', { activeAssetCount: String(activeAssets.length) })}</MenuItem>
           {activeAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
         </TextField>}
       </Stack>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <TextField select fullWidth label={t('Prüftyp', 'Inspection type')} value={draft.type}
+        <TextField select fullWidth label={t('common.inspectionType')} value={draft.type}
           onChange={(event) => setDraft((current) => ({ ...current, type: oneOf(event.target.value, MAINTENANCE_TYPES) }))}>
           {MAINTENANCE_TYPES.map((type) => <MenuItem key={type} value={type}>{maintenanceTypeLabel(type)}</MenuItem>)}
         </TextField>
-        <TextField fullWidth type="number" label={t('Intervall (Tage)', 'Interval (days)')} value={draft.intervalDays}
+        <TextField fullWidth type="number" label={t('maintenance.individualSchedules.intervalDays')} value={draft.intervalDays}
           onChange={(event) => setDraft((current) => ({ ...current, intervalDays: event.target.value,
             nextDue: /^\d+$/.test(event.target.value) ? daysFromToday(Number(event.target.value)) : current.nextDue }))}
           slotProps={{ htmlInput: { min: 1, step: 1 } }} />
-        <TextField fullWidth type="date" label={t('Nächste Fälligkeit', 'Next due date')} value={draft.nextDue}
+        <TextField fullWidth type="date" label={t('common.nextDueDate')} value={draft.nextDue}
           onChange={(event) => setDraft((current) => ({ ...current, nextDue: event.target.value }))}
           slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
-      {noDevices && <Alert severity="warning">{t('Dieser Artikel hat keine aktiven Geräte.', 'This item has no active devices.')}</Alert>}
+      {noDevices && <Alert severity="warning">{t('maintenance.individualSchedules.thisItemHasNoActiveDevices')}</Alert>}
       <Box>
-        <Button title={translate('Das Prüfintervall für diesen Artikel bzw. diese Geräte speichern', 'Save the inspection interval for this item or its devices')}
+        <Button title={translate('maintenance.individualSchedules.saveTheInspectionIntervalForThisItemOrItsDevices')}
           variant="contained" onClick={() => save.mutate()}
           disabled={!canEdit || !draft.itemId || !intervalValid || !draft.nextDue || noDevices || (serialized && !assetsComplete) || save.isPending}>
-          {t('Wartungsplan speichern', 'Save schedule')}
+          {t('maintenance.individualSchedules.saveSchedule')}
         </Button>
       </Box>
 
@@ -149,16 +148,16 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <Typography sx={{ fontWeight: 700 }}>{schedule.itemName}</Typography>
                     {schedule.assetCode && <Chip size="small" variant="outlined" label={schedule.assetCode} />}
-                    {overdue && <Chip size="small" color="error" label={t('Überfällig', 'Overdue')} />}
+                    {overdue && <Chip size="small" color="error" label={t('enum.value.overdue')} />}
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
-                    {maintenanceTypeLabel(schedule.maintenanceType)} · {t(`alle ${schedule.intervalValue} Tage`, `every ${schedule.intervalValue} days`)} · {t('Fällig am', 'Due on')}: {formatDate(schedule.nextDueAt)}
+                    {maintenanceTypeLabel(schedule.maintenanceType)} · {t('maintenance.individualSchedules.everyIntervalValueDays', { intervalValue: String(schedule.intervalValue) })} · {t('maintenance.individualSchedules.dueOn')}: {formatDate(schedule.nextDueAt)}
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                  <Button title={translate('Das Prüfformular für diesen Plan ausfüllen', 'Fill in the inspection form for this schedule')} size="small" onClick={() => onInspect(schedule)}>{t('Prüfen', 'Inspect')}</Button>
-                  {canEdit && <Button title={translate('Intervall und Fälligkeit bearbeiten', 'Edit interval and due date')} size="small" onClick={() => editSchedule(schedule)}>{t('Bearbeiten', 'Edit')}</Button>}
-                  {canEdit && <Button title={translate('Diesen Wartungsplan stilllegen', 'Retire this maintenance schedule')} size="small" color="error" disabled={retire.isPending} onClick={() => retire.mutate(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
+                  <Button title={translate('maintenance.individualSchedules.fillInTheInspectionFormForThisSchedule')} size="small" onClick={() => onInspect(schedule)}>{t('maintenance.individualSchedules.inspect')}</Button>
+                  {canEdit && <Button title={translate('maintenance.individualSchedules.editIntervalAndDueDate')} size="small" onClick={() => editSchedule(schedule)}>{t('common.edit')}</Button>}
+                  {canEdit && <Button title={translate('common.retireThisMaintenanceSchedule')} size="small" color="error" disabled={retire.isPending} onClick={() => retire.mutate(schedule)}>{t('common.retire')}</Button>}
                 </Stack>
               </Stack>
             </CardContent>

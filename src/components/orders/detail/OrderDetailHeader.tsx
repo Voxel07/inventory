@@ -26,7 +26,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import SaveIcon from '@mui/icons-material/Save';
 import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { FactionOrder, FactionOrderStatus, StorageLocation } from '../../../types';
-import { translate, useLocalizedText } from '../../../utils/naming';
+import { translate, useT } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
 export interface OrderDetailHeaderProps {
@@ -113,19 +113,19 @@ export function OrderDetailHeader({
   // Faction leaders withdraw their lists before preparation starts; afterwards only the warehouse cancels.
   const canCancel = (canEditOrder && ['draft', 'submitted'].includes(order.status))
     || (warehouse && ['draft', 'submitted', 'preparing', 'ready'].includes(order.status));
-  const t = useLocalizedText();
+  const t = useT();
 
   function statusLabel(status: FactionOrderStatus) {
     switch (status) {
-      case 'draft': return t('Entwurf', 'Draft');
-      case 'submitted': return t('Eingereicht', 'Submitted');
-      case 'preparing': return t('In Vorbereitung', 'Preparing');
-      case 'ready': return t('Abholbereit', 'Ready for pickup');
-      case 'picked_up': return t('Abgeholt', 'Picked up');
-      case 'partially_returned': return t('Teilweise zurückgegeben', 'Partially returned');
-      case 'returned': return t('Zurückgegeben', 'Returned');
-      case 'closed': return t('Abgeschlossen', 'Closed');
-      case 'cancelled': return t('Storniert', 'Cancelled');
+      case 'draft': return t('enum.value.draft');
+      case 'submitted': return t('enum.value.submitted');
+      case 'preparing': return t('enum.value.preparing');
+      case 'ready': return t('orders.detail.orderDetailHeader.readyForPickup');
+      case 'picked_up': return t('enum.value.picked_up');
+      case 'partially_returned': return t('enum.value.partially_returned');
+      case 'returned': return t('enum.value.returned');
+      case 'closed': return t('enum.value.closed');
+      case 'cancelled': return t('enum.value.cancelled');
       default: return status;
     }
   }
@@ -133,63 +133,63 @@ export function OrderDetailHeader({
   const usedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status);
   const workflowActions = <>
     {canEditOrder && order.status === 'draft' && (
-      <Button title={translate('Den Bedarf als vollständig einreichen', 'Submit the request as complete')}
+      <Button title={translate('orders.detail.orderDetailHeader.submitTheRequestAsComplete')}
         size="small" variant="contained" startIcon={<CheckCircleIcon />} onClick={onSubmit} disabled={isSubmitting}>
-        {t('Bedarf vollständig', 'Request complete')}
+        {t('orders.detail.orderDetailHeader.requestComplete')}
       </Button>
     )}
     {warehouse && order.status === 'submitted' && (
-      <Button title={translate('Mit der Vorbereitung dieser Bestellliste beginnen', 'Start preparing this order list')}
+      <Button title={translate('orders.detail.orderDetailHeader.startPreparingThisOrderList')}
         size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={onStartPreparation} disabled={isStartingPreparation}>
-        {t('Vorbereitung starten', 'Start preparation')}
+        {t('orders.detail.orderDetailHeader.startPreparation')}
       </Button>
     )}
     {warehouse && order.status === 'preparing' && (
       <>
-        <Button title={translate('Vorbereitete Mengen mit verfügbarem Bestand auffüllen', 'Fill prepared quantities using available stock')}
+        <Button title={translate('orders.detail.orderDetailHeader.fillPreparedQuantitiesUsingAvailableStock')}
           size="small" variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
-          {t('Verfügbare füllen', 'Fill available')}
+          {t('orders.detail.orderDetailHeader.fillAvailable')}
         </Button>
-        <Button title={translate('Die vorbereiteten Mengen speichern', 'Save the prepared quantities')}
+        <Button title={translate('orders.detail.orderDetailHeader.saveThePreparedQuantities')}
           size="small" variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
-          {t('Speichern', 'Save')}
+          {t('common.save')}
         </Button>
-        <Button title={translate('Abholort wählen und die Liste abholbereit melden', 'Choose a pickup location and mark this list ready')}
+        <Button title={translate('orders.detail.orderDetailHeader.chooseAPickupLocationAndMarkThisListReady')}
           size="small" variant="contained" color="success" startIcon={<CheckCircleIcon />} disabled={!preparationComplete} onClick={onMarkReady}>
-          {t('Abholbereit', 'Mark ready')}
+          {t('orders.detail.orderDetailHeader.markReady')}
         </Button>
       </>
     )}
     {takeout && order.status === 'ready' && (
       <>
-        <Button title={translate('Die Liste erneut zur Vorbereitung öffnen', 'Reopen this list for preparation')}
+        <Button title={translate('orders.detail.orderDetailHeader.reopenThisListForPreparation')}
           size="small" variant="outlined" startIcon={<ReplayIcon />} onClick={onReopenPreparation} disabled={isReopeningPreparation || !warehouse}>
-          {t('Zurück in Vorbereitung', 'Back to preparation')}
+          {t('orders.detail.orderDetailHeader.backToPreparation')}
         </Button>
-        <Button title={translate('Die vollständige Liste als abgeholt buchen', 'Record pickup of the complete list')}
+        <Button title={translate('orders.detail.orderDetailHeader.recordPickupOfTheCompleteList')}
           size="small" variant="contained" color="success" startIcon={<LocalShippingIcon />} onClick={onPickUp}>
-          {t('Komplette Liste abholen', 'Pick up complete list')}
+          {t('orders.detail.orderDetailHeader.pickUpCompleteList')}
         </Button>
       </>
     )}
     {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
-      <Button title={translate('Die Rückgaben der einzelnen Komponenten prüfen', 'Review returns for each component')}
+      <Button title={translate('orders.detail.orderDetailHeader.reviewReturnsForEachComponent')}
         size="small" variant="contained" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
-        {t('Komponenten-Rückgabe prüfen', 'Reconcile component return')}
+        {t('orders.detail.orderDetailHeader.reconcileComponentReturn')}
       </Button>
     )}
     {canCancel && (
-      <Button title={translate('Die Stornierung dieser Bestellliste bestätigen', 'Review cancellation of this order list')}
+      <Button title={translate('orders.detail.orderDetailHeader.reviewCancellationOfThisOrderList')}
         size="small" color="error" startIcon={<CancelIcon />} onClick={onCancel}>
-        {t('Stornieren', 'Cancel')}
+        {t('orders.detail.orderDetailHeader.cancel')}
       </Button>
     )}
   </>;
 
   return (
     <>
-      <Button title={translate('Zur Übersicht der Fraktionslisten zurückkehren', 'Return to the faction order list')} size="small" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 0.5 }}>
-        {t('Alle Fraktionslisten', 'All faction lists')}
+      <Button title={translate('orders.detail.orderDetailHeader.returnToTheFactionOrderList')} size="small" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 0.5 }}>
+        {t('orders.detail.orderDetailHeader.allFactionLists')}
       </Button>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: { md: 'flex-start' } }}>
@@ -200,15 +200,15 @@ export function OrderDetailHeader({
           </Stack>
           <Typography variant="body2" color="text.secondary">
             <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{order.orderCode}</Box>
-            {' · '}{formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('Positionen', 'lines')} · {requestedTotal} {t('Listeneinheiten', 'list units')}
-            {order.requestedPickupDate && <> · <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{t('Gewünschte Abholung', 'Requested pickup')}: {formatDate(order.requestedPickupDate)}</Box></>}
-            {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('Abholort', 'Pickup location')}: {pickupLocationLabel}</>}
+            {' · '}{formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('orders.detail.orderDetailHeader.lines')} · {requestedTotal} {t('orders.detail.orderDetailHeader.listUnits')}
+            {order.requestedPickupDate && <> · <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}</Box></>}
+            {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('common.pickupLocation')}: {pickupLocationLabel}</>}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
-          <Button title={translate('Den QR-Code dieser Bestellliste anzeigen', 'Display the QR code for this order list')} size="small" variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('QR', 'QR')}</Button>
-          <Button title={translate('Den Kommissionierschein als PDF herunterladen', 'Download the packing slip as PDF')} size="small" variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('Kommissionierschein', 'Packing slip')}</Button>
-          {canEditOrderContents && <Button title={translate('Artikel und Mengen dieser Bestellliste bearbeiten', 'Edit the items and quantities in this order list')} size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('Bearbeiten', 'Edit')}</Button>}
+          <Button title={translate('orders.detail.orderDetailHeader.displayTheQRCodeForThisOrderList')} size="small" variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('orders.detail.orderDetailHeader.qR')}</Button>
+          <Button title={translate('orders.detail.orderDetailHeader.downloadThePackingSlipAsPDF')} size="small" variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('orders.detail.orderDetailHeader.packingSlip')}</Button>
+          {canEditOrderContents && <Button title={translate('orders.detail.orderDetailHeader.editTheItemsAndQuantitiesInThisOrderList')} size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('common.edit')}</Button>}
         </Stack>
       </Stack>
 
@@ -217,10 +217,10 @@ export function OrderDetailHeader({
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={{ xs: 1, md: 2 }} sx={{ alignItems: { md: 'center' } }}>
           <Stack direction="row" spacing={1.5} sx={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
             <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-              {usedLabel ? t('Verwendet', 'Used') : t('Vorbereitet', 'Prepared')} {preparedTotal}/{requestedTotal}
+              {usedLabel ? t('common.used') : t('common.prepared')} {preparedTotal}/{requestedTotal}
             </Typography>
             <LinearProgress variant="determinate" value={progress} color={preparationComplete ? 'success' : 'primary'}
-              aria-label={t('Vorbereitungsfortschritt', 'Preparation progress')} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
+              aria-label={t('orders.detail.orderDetailHeader.preparationProgress')} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
           </Stack>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>{workflowActions}</Stack>
         </Stack>
@@ -229,15 +229,15 @@ export function OrderDetailHeader({
 
       {order.status === 'ready' && (
         <Alert severity="success" icon={<LocationOnIcon />} sx={{ mb: 1.5, py: 0.25 }}>
-          <strong>{t('Abholbereit', 'Ready for pickup')}</strong> · {t('Abholort', 'Pickup location')}: <strong>{pickupLocationLabel}</strong>
+          <strong>{t('orders.detail.orderDetailHeader.readyForPickup')}</strong> · {t('common.pickupLocation')}: <strong>{pickupLocationLabel}</strong>
         </Alert>
       )}
 
       {order.pickupLatitude != null && order.pickupLongitude != null && (
         <Paper sx={{ p: 1.5, mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Genauer Abholpunkt', 'Exact pickup point')}</Typography>
-            <Button title={translate('Den Abholort in Google Maps öffnen', 'Open the pickup location in Google Maps')}
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('orders.detail.orderDetailHeader.exactPickupPoint')}</Typography>
+            <Button title={translate('orders.detail.orderDetailHeader.openThePickupLocationInGoogleMaps')}
               size="small"
               variant="outlined"
               startIcon={<OpenInNewIcon fontSize="small" />}
@@ -245,7 +245,7 @@ export function OrderDetailHeader({
               target="_blank"
               rel="noopener noreferrer"
             >
-              {t('In Google Maps öffnen', 'Open in Google Maps')}
+              {t('orders.detail.orderDetailHeader.openInGoogleMaps')}
             </Button>
           </Stack>
           <StorageLocationMap

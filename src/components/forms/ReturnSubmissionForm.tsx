@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Alert, Box, Stack, TextField, Typography } from '@mui/material';
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
 import type { Item, ReturnSubmissionFormData } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 type Props = {
   item: Item;
@@ -26,7 +26,7 @@ export function ReturnSubmissionForm({
   onSubmit,
   isLoading,
 }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   const serialized = item.trackingMode === 'serialized';
   const [quantity, setQuantity] = useState(serialized ? 1 : Math.max(1, maxQuantity));
   const [notes, setNotes] = useState('');
@@ -54,11 +54,11 @@ export function ReturnSubmissionForm({
     <Box component="form" onSubmit={submit} sx={{ pt: 1 }}>
       <Stack spacing={2}>
         <Alert severity="info">
-          <Typography variant="subtitle2">{t('Vorgesehener Rückgabeort', 'Expected return location')}</Typography>
+          <Typography variant="subtitle2">{t('forms.returnSubmissionForm.expectedReturnLocation')}</Typography>
           <Typography variant="body2">{returnLocationLabel || '—'}</Typography>
         </Alert>
         <TextField
-          label={t('Menge', 'Quantity')}
+          label={t('common.quantity')}
           type="number"
           value={quantity}
           disabled={serialized}
@@ -66,8 +66,8 @@ export function ReturnSubmissionForm({
           slotProps={{ htmlInput: { min: 1, max: Math.max(1, maxQuantity) } }}
           required
         />
-        <Button title={translate('Ein Foto vom Rückgabeort aufnehmen oder auswählen', 'Take or select a photo of the return location')} component="label" variant="outlined" startIcon={<AddAPhotoIcon />} disabled={isLoading}>
-          {image ? image.name : t('Foto vom Ablageort hinzufügen', 'Add photo of where it was placed')}
+        <Button title={translate('forms.returnSubmissionForm.takeOrSelectAPhotoOfTheReturnLocation')} component="label" variant="outlined" startIcon={<AddAPhotoIcon />} disabled={isLoading}>
+          {image ? image.name : t('forms.returnSubmissionForm.addPhotoOfWhereItWasPlaced')}
           <input
             hidden
             type="file"
@@ -77,21 +77,21 @@ export function ReturnSubmissionForm({
           />
         </Button>
         <TextField
-          label={t('Hinweise zur Rückgabe', 'Return notes')}
+          label={t('forms.returnSubmissionForm.returnNotes')}
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           multiline
           minRows={3}
         />
-        <Button title={translate('Die Rückgabe zur Bestätigung einreichen', 'Submit the return for acknowledgement')}
+        <Button title={translate('forms.returnSubmissionForm.submitTheReturnForAcknowledgement')}
           type="submit"
           variant="contained"
           color="success"
           disabled={isLoading || quantity < 1 || quantity > maxQuantity}
         >
           {isLoading
-            ? t('Rückgabe wird gemeldet…', 'Submitting return…')
-            : t('Rückgabe zur Prüfung melden', 'Submit return for acknowledgement')}
+            ? t('forms.returnSubmissionForm.submittingReturn')
+            : t('forms.returnSubmissionForm.submitReturnForAcknowledgement')}
         </Button>
       </Stack>
     </Box>

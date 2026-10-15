@@ -15,7 +15,7 @@ import {
 } from 'react-leaflet';
 import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import type { MapBounds } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 const DEFAULT_CENTER = [52.375953, 11.826278] as const;
 const DEFAULT_ZOOM = 19;
@@ -79,7 +79,7 @@ export function StorageLocationMap({
   kind = 'storage',
   compact = false,
 }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [touchActive, setTouchActive] = useState(false);
@@ -94,8 +94,8 @@ export function StorageLocationMap({
       {editable && (
         <Typography variant="body2" color="text.secondary">
           {kind === 'pickup'
-            ? t('Klicken Sie auf die Karte, um den genauen Abholpunkt zu setzen.', 'Click the map to set the exact pickup point.')
-            : t('Klicken Sie auf die Karte, um den Lagerort zu setzen.', 'Click the map to set the storage location.')}
+            ? t('maps.storageLocationMap.clickTheMapToSetTheExactPickupPoint')
+            : t('maps.storageLocationMap.clickTheMapToSetTheStorageLocation')}
         </Typography>
       )}
       <Box sx={{ position: 'relative', height: compact ? { xs: 240, md: 300 } : { xs: 320, md: 420 }, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
@@ -115,11 +115,11 @@ export function StorageLocationMap({
           <ClickHandler onSelect={editable ? onCenterChange : undefined} />
           {resolvedOverlayUrl && <ImageOverlay url={resolvedOverlayUrl} bounds={bounds} opacity={0.62} />}
           <CircleMarker center={center} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#3949ab', fillOpacity: 1, weight: 2 }}>
-            <Popup>{kind === 'pickup' ? t('Abholpunkt', 'Pickup point') : t('Lagerort', 'Storage location')}</Popup>
+            <Popup>{kind === 'pickup' ? t('maps.storageLocationMap.pickupPoint') : t('common.storageLocation')}</Popup>
           </CircleMarker>
         </MapContainer>
         {isMobile && !editable && (
-          <Button title={translate('Die Bedienung der Karte ein- oder ausschalten', 'Enable or disable map interaction')}
+          <Button title={translate('maps.storageLocationMap.enableOrDisableMapInteraction')}
             size="small"
             variant="contained"
             color={touchActive ? 'primary' : 'inherit'}
@@ -138,7 +138,7 @@ export function StorageLocationMap({
               backdropFilter: 'blur(4px)',
             }}
           >
-            {touchActive ? t('Karte aktiv', 'Map active') : t('Karte bedienen', 'Interact')}
+            {touchActive ? t('maps.storageLocationMap.mapActive') : t('maps.storageLocationMap.interact')}
           </Button>
         )}
       </Box>

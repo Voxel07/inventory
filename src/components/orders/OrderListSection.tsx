@@ -4,7 +4,7 @@ import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { LoadMore } from '../shared/LoadMore';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 export interface OrderListEntry {
   id: string;
@@ -30,12 +30,12 @@ interface Props {
 }
 
 export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   return <Box sx={{ mb: 3 }}>
     <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>
     <Paper sx={{ overflow: 'hidden' }}>
       {!count && <Typography color="text.secondary" sx={{ p: 2 }}>
-        {isLoading ? t('Wird geladen …', 'Loading …') : emptyMessage}
+        {isLoading ? t('orders.orderListSection.loading') : emptyMessage}
       </Typography>}
       {groups.map((group, groupIndex) => <Box key={group.label ?? groupIndex} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
         {group.label && <Stack direction="row" spacing={1} sx={{ px: 2, py: 1, alignItems: 'center', bgcolor: 'action.hover' }}>
@@ -44,7 +44,7 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
           <Chip size="small" variant="outlined" label={group.entries.length} />
         </Stack>}
         {group.entries.map((entry) => <Box key={entry.id} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
-          {entry.onOpen ? <Button title={translate('Die Details dieser Bestellliste öffnen', 'Open the details of this order list')} color="inherit" onClick={entry.onOpen}
+          {entry.onOpen ? <Button title={translate('orders.orderListSection.openTheDetailsOfThisOrderList')} color="inherit" onClick={entry.onOpen}
             sx={{ width: '100%', p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
             <OrderRow entry={entry} />
           </Button> : <Box sx={{ p: 2 }}><OrderRow entry={entry} /></Box>}
@@ -52,8 +52,8 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
         </Box>)}
       </Box>)}
     </Paper>
-    {loadError && <Alert severity="error" sx={{ mt: 1 }} action={onRetry && <Button title={translate('Erneut laden', 'Load again')} onClick={onRetry}>{t('Erneut versuchen', 'Try again')}</Button>}>
-      {t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
+    {loadError && <Alert severity="error" sx={{ mt: 1 }} action={onRetry && <Button title={translate('orders.orderListSection.loadAgain')} onClick={onRetry}>{t('common.tryAgain')}</Button>}>
+      {t('orders.orderListSection.ordersCouldNotBeLoaded')}</Alert>}
     <LoadMore list={list} />
   </Box>;
 }

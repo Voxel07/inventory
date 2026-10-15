@@ -3,7 +3,7 @@ import { ToggleButton } from '../shared/ActionButtons';
 import type { ReactNode } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, ToggleButtonGroup } from '@mui/material';
 import type { EventReport, EventType } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 interface Props {
   eventTypes: EventType[];
@@ -19,7 +19,7 @@ interface Props {
 
 /** Event type toggle plus yearly occurrence, shared by faction and general orders. */
 export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eventOptions, selectedEventId, onEventChange, children }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   return <>
     {eventTypes.length > 1 && <ToggleButtonGroup
       exclusive
@@ -27,13 +27,13 @@ export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eve
       onChange={(_event, value: EventType | null) => { if (value) onEventTypeChange(value); }}
       sx={{ mb: 2, flexWrap: 'wrap' }}
     >
-      {eventTypes.map((type) => <ToggleButton title={translate('Bestellungen nach diesem Eventtyp filtern', 'Filter orders by this event type')} key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
+      {eventTypes.map((type) => <ToggleButton title={translate('orders.orderEventFilter.filterOrdersByThisEventType')} key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
     </ToggleButtonGroup>}
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
       <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
-        <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
-        <Select value={selectedEventId} label={t('Jährliches Event', 'Yearly event')} onChange={(event) => onEventChange(event.target.value)}>
-          <MenuItem value="">{t('Alle Jahre', 'All years')}</MenuItem>
+        <InputLabel>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
+        <Select value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
+          <MenuItem value="">{t('orders.orderEventFilter.allYears')}</MenuItem>
           {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
         </Select>
       </FormControl>

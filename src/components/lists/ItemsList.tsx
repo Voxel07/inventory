@@ -12,7 +12,7 @@ import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
 import { getItemStock, type StockCalculation } from '../../utils/stock';
-import { useAppLanguage, useLocalizedText } from '../../utils/naming';
+import { useAppLanguage, useT } from '../../utils/naming';
 import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useItemCategories, type ItemQuery } from '../../hooks/useItems';
@@ -70,7 +70,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
     const navigate = useNavigate();
-    const t = useLocalizedText();
+    const t = useT();
     const { eventTypes } = useFactionCatalog();
     const language = useAppLanguage();
     const theme = useTheme();
@@ -137,12 +137,12 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     /** Availability keeps its traffic-light color; damaged units always read as an error. */
     function availabilityText(row: ItemRow) {
         const base = row.availability === 'none'
-            ? t('Nicht verfügbar', 'None available')
-            : t(`${row.stock} von ${row.totalStock} verfügbar`, `${row.stock} of ${row.totalStock} available`);
-        const low = row.availability === 'low' ? ` · ${t('niedrig', 'low')}` : '';
+            ? t('lists.itemsList.noneAvailable')
+            : t('lists.itemsList.stockOfTotalStockAvailable', { stock: String(row.stock), totalStock: String(row.totalStock) });
+        const low = row.availability === 'low' ? ` · ${t('lists.itemsList.low')}` : '';
         return <>
             <Box component="span" sx={{ color: availabilityColor[row.availability] }}>{base + low}</Box>
-            {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {row.damaged} {t('defekt', 'damaged')}</Box>}
+            {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {row.damaged} {t('lists.itemsList.damaged')}</Box>}
         </>;
     }
 
@@ -156,32 +156,32 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         const editable = canEditItem(row.item);
         return [
             ...(canManage && editable ? [
-                { label: t('Bearbeiten', 'Edit'), icon: <EditIcon fontSize="small" />, onClick: () => onEdit?.(row.item) },
-                { label: t('Löschen', 'Delete'), icon: <DeleteIcon fontSize="small" />, onClick: () => onDelete?.(row.id), destructive: true },
+                { label: t('common.edit'), icon: <EditIcon fontSize="small" />, onClick: () => onEdit?.(row.item) },
+                { label: t('common.delete'), icon: <DeleteIcon fontSize="small" />, onClick: () => onDelete?.(row.id), destructive: true },
             ] : []),
-            ...(onRemoveItem ? [{ label: t('Aus Baugruppe entfernen', 'Remove from assembly'), icon: <DeleteIcon fontSize="small" />, onClick: () => onRemoveItem(row.id), destructive: true }] : []),
+            ...(onRemoveItem ? [{ label: t('lists.itemsList.removeFromAssembly'), icon: <DeleteIcon fontSize="small" />, onClick: () => onRemoveItem(row.id), destructive: true }] : []),
         ];
     }
 
     const columns: GridColDef<ItemRow>[] = [
-        { field: 'name', headerName: t('Name', 'Name'), flex: 1.5, minWidth: 200,
+        { field: 'name', headerName: t('profile.name'), flex: 1.5, minWidth: 200,
             renderCell: ({ row }) => <Box sx={{ minWidth: 0 }}>
                 <Link component={RouterLink} to={`/items/${row.id}`} onClick={(event) => event.stopPropagation()} underline="hover" color="text.primary" sx={{ fontWeight: 600, display: 'block', whiteSpace: 'normal', lineHeight: 1.3 }}>{row.name}</Link>
                 {narrowTable && row.category && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{row.category}</Typography>}
             </Box> },
-        ...(requiredQuantities ? [{ field: 'required', headerName: t('Menge je Baugruppe', 'Per assembly'), type: 'number', width: 130, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
-        { field: 'category', headerName: t('Kategorie', 'Category'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.item.category]) },
-        { field: 'stock', headerName: locationStock ? t('Verfügbar hier', 'Available here') : t('Verfügbar', 'Available'), type: 'number', width: 210,
+        ...(requiredQuantities ? [{ field: 'required', headerName: t('lists.itemsList.perAssembly'), type: 'number', width: 130, valueGetter: (_value: unknown, row: ItemRow) => requiredQuantities[row.id] ?? 1 } satisfies GridColDef<ItemRow>] : []),
+        { field: 'category', headerName: t('common.category'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.item.category]) },
+        { field: 'stock', headerName: locationStock ? t('lists.itemsList.availableHere') : t('enum.itemStatus.available'), type: 'number', width: 210,
             renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.3, textAlign: 'right' }}>
                 {availabilityText(row)}
             </Typography> },
-        ...(!locationStock ? [{ field: 'location', headerName: t('Lagerort', 'Location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.location === '—' ? undefined : row.location]) } satisfies GridColDef<ItemRow>] : []),
-        { field: 'events', headerName: t('Events', 'Events'), width: 130, ...selectFilterColumn(allRows, (row) => row.item.eventTypes ?? []) },
-        ...(canManage || onRemoveItem ? [{ field: 'actions', headerName: t('Aktionen', 'Actions'), width: canManage ? 104 : 72, sortable: false, filterable: false,
+        ...(!locationStock ? [{ field: 'location', headerName: t('enum.value.location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => [row.location === '—' ? undefined : row.location]) } satisfies GridColDef<ItemRow>] : []),
+        { field: 'events', headerName: t('nav.events'), width: 130, ...selectFilterColumn(allRows, (row) => row.item.eventTypes ?? []) },
+        ...(canManage || onRemoveItem ? [{ field: 'actions', headerName: t('common.actions'), width: canManage ? 104 : 72, sortable: false, filterable: false,
             renderCell: ({ row }: { row: ItemRow }) => <Stack direction="row">
-                {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('Bearbeiten', 'Edit')} onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>}
-                {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('Löschen', 'Delete')} color="error" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>}
-                {onRemoveItem && <IconButton title={t('Aus Baugruppe entfernen', 'Remove from assembly')} color="error" onClick={(event) => { event.stopPropagation(); onRemoveItem(row.id); }}><DeleteIcon fontSize="small" /></IconButton>}
+                {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('common.edit')} onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onEdit?.(row.item); }}><EditIcon fontSize="small" /></IconButton>}
+                {canManage && <IconButton disabled={!canEditItem(row.item)} title={t('common.delete')} color="error" onClick={(event) => { event.stopPropagation(); if (canEditItem(row.item)) onDelete?.(row.id); }}><DeleteIcon fontSize="small" /></IconButton>}
+                {onRemoveItem && <IconButton title={t('lists.itemsList.removeFromAssembly')} color="error" onClick={(event) => { event.stopPropagation(); onRemoveItem(row.id); }}><DeleteIcon fontSize="small" /></IconButton>}
             </Stack> } satisfies GridColDef<ItemRow>] : []),
     ];
 
@@ -201,22 +201,22 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     }
 
     const filterControls = <>
-        <TextField select label={t('Kategorie', 'Category')} value={category} size={compact ? 'medium' : 'small'} fullWidth
+        <TextField select label={t('common.category')} value={category} size={compact ? 'medium' : 'small'} fullWidth
             onChange={(event) => setCategory(event.target.value)}>
-            <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+            <MenuItem value="">{t('common.allCategories')}</MenuItem>
             {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
-        <TextField select label={t('Event', 'Event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
+        <TextField select label={t('nav.event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
             onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
-            <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
+            <MenuItem value="">{t('lists.itemsList.allEvents')}</MenuItem>
             {eventTypes.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
         {query && !locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
-            <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>
-            <Select multiple labelId="item-location-filter-label" label={t('Lagerorte', 'Locations')} value={locationIds}
+            <InputLabel id="item-location-filter-label">{t('lists.itemsList.locations')}</InputLabel>
+            <Select multiple labelId="item-location-filter-label" label={t('lists.itemsList.locations')} value={locationIds}
                 onChange={(event) => { const ids = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value; setLocationIds(ids.includes('') ? [] : ids); }}
                 renderValue={(ids) => ids.map((id) => locationOptions.get(id) ?? id).join(', ')}>
-                <MenuItem value="">{t('Alle Lagerorte', 'All locations')}</MenuItem>
+                <MenuItem value="">{t('lists.itemsList.allLocations')}</MenuItem>
                 {[...locationOptions].sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => <MenuItem key={id} value={id}>
                     <Checkbox checked={locationIds.includes(id)} size="small" /><ListItemText primary={name} />
                 </MenuItem>)}
@@ -230,23 +230,23 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const noMatches = !initialLoading && !initialError && !empty && rows.length === 0 && !filtersLoading;
 
     const content = (() => {
-        if (initialError) return <StateMessage kind="error" title={t('Artikel konnten nicht geladen werden', 'Could not load items')}
-            description={t('Der Katalog ist gerade nicht erreichbar. Deine Daten sind nicht verloren.', 'The catalog cannot be reached right now. Nothing has been lost.')}
-            action={onRetry && <Button variant="contained" onClick={onRetry}>{t('Erneut versuchen', 'Try again')}</Button>} />;
-        if (initialLoading) return <StateMessage kind="loading" title={t('Artikel werden geladen…', 'Loading items…')} />;
-        if (empty) return <StateMessage kind="empty" title={t('Noch keine Artikel', 'No items yet')}
-            description={emptyHint ?? t('Lege den ersten Artikel an oder importiere eine CSV-Datei.', 'Add the first item or import a CSV file.')}
-            action={onCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>{t('Artikel hinzufügen', 'Add item')}</Button>} />;
-        if (noMatches) return <StateMessage kind="no-matches" title={t('Keine passenden Artikel', 'No matching items')}
-            description={t('Prüfe die Schreibweise oder entferne Filter.', 'Check the spelling or remove filters.')}
-            action={<Button variant="outlined" onClick={() => { setSearch(''); clearFilters(); }}>{t('Suche und Filter zurücksetzen', 'Clear search and filters')}</Button>} />;
+        if (initialError) return <StateMessage kind="error" title={t('lists.itemsList.couldNotLoadItems')}
+            description={t('lists.itemsList.theCatalogCannotBeReachedRightNowNothingHasBeen')}
+            action={onRetry && <Button variant="contained" onClick={onRetry}>{t('common.tryAgain')}</Button>} />;
+        if (initialLoading) return <StateMessage kind="loading" title={t('lists.itemsList.loadingItems')} />;
+        if (empty) return <StateMessage kind="empty" title={t('lists.itemsList.noItemsYet')}
+            description={emptyHint ?? t('lists.itemsList.addTheFirstItemOrImportACSVFile')}
+            action={onCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>{t('common.addItem')}</Button>} />;
+        if (noMatches) return <StateMessage kind="no-matches" title={t('lists.itemsList.noMatchingItems')}
+            description={t('lists.itemsList.checkTheSpellingOrRemoveFilters')}
+            action={<Button variant="outlined" onClick={() => { setSearch(''); clearFilters(); }}>{t('lists.itemsList.clearSearchAndFilters')}</Button>} />;
         if (compact) return <>
-            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('Artikel', 'Items')}>
+            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('nav.items')}>
                 {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id}
                     to={`/items/${row.id}`}
                     title={row.name}
                     primary={<Box component="span" sx={{ fontWeight: 600 }}>{availabilityText(row)}</Box>}
-                    secondary={requiredQuantities ? `${requiredQuantities[row.id] ?? 1}× ${t('je Baugruppe', 'per assembly')}` : undefined}
+                    secondary={requiredQuantities ? `${requiredQuantities[row.id] ?? 1}× ${t('lists.itemsList.perAssembly2')}` : undefined}
                     selectable={selecting && canEditItem(row.item)}
                     selected={selectedIds.has(row.id)}
                     onToggleSelected={() => toggleSelected(row.id)}
@@ -254,7 +254,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 />)}
             </Paper>
             {rows.length > visibleCount && <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => setVisibleCount((count) => count + PAGE_STEP)}>
-                {t(`Weitere anzeigen (${rows.length - visibleCount} übrig)`, `Show more (${rows.length - visibleCount} remaining)`)}
+                {t('common.showMoreRemainingCountRemaining', { remainingCount: String(rows.length - visibleCount) })}
             </Button>}
         </>;
         return <DataGrid rows={rows} columns={columns}
@@ -270,37 +270,37 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
     return <Box>
         {compact ? <>
-            <CatalogSearchBar search={search} onSearch={setSearch} label={t('Artikel suchen', 'Search items')}
+            <CatalogSearchBar search={search} onSearch={setSearch} label={t('common.searchItems')}
                 activeFilters={activeFilters} onOpenFilters={() => setFiltersOpen(true)} onClearFilters={clearFilters}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
             <Drawer anchor="bottom" open={filtersOpen} onClose={() => setFiltersOpen(false)}
                 slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85dvh', pb: 'env(safe-area-inset-bottom)' } } }}>
                 <Stack spacing={2} sx={{ p: 2 }} role="group" aria-labelledby="item-filter-title">
-                    <Typography id="item-filter-title" variant="h6" component="h2">{t('Filter', 'Filters')}</Typography>
+                    <Typography id="item-filter-title" variant="h6" component="h2">{t('common.filters')}</Typography>
                     {filterControls}
                     <FilterSheetActions resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters} onDone={() => setFiltersOpen(false)} />
                 </Stack>
             </Drawer>
-        </> : <TextField type="search" label={t('Nach Name suchen', 'Search by name')} value={search}
+        </> : <TextField type="search" label={t('lists.itemsList.searchByName')} value={search}
             onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
-        {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>
-            {t('Lagerortfilter konnten nicht vollständig geladen werden.', 'Could not load all location filter data.')}
+        {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); }}>{t('common.retry')}</Button>}>
+            {t('lists.itemsList.couldNotLoadAllLocationFilterData')}
         </Alert>}
-        {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('Erneut laden', 'Retry')}</Button>}>
-            {t(`Es konnten nur ${items?.length ?? 0} Artikel geladen werden. Die Liste ist unvollständig.`, `Only ${items?.length ?? 0} items could be loaded. The list is incomplete.`)}
+        {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('common.retry')}</Button>}>
+            {t('lists.itemsList.onlyItemCountItemsCouldBeLoadedTheListIsIncomplete', { itemCount: String(items?.length ?? 0) })}
         </Alert>}
         {canManage && selectedIds.size > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, p: 1, pl: 2, mb: 1.5 }}>
-            <Typography sx={{ fontWeight: 600 }}>{t(`${selectedIds.size} Artikel ausgewählt`, `${selectedIds.size} items selected`)}</Typography>
+            <Typography sx={{ fontWeight: 600 }}>{t('lists.itemsList.selectedIdCountItemsSelected', { selectedIdCount: String(selectedIds.size) })}</Typography>
             <Button color="error" startIcon={<DeleteIcon />} onClick={() => onDeleteMany?.([...selectedIds])}>
-                {t('Auswahl löschen', 'Delete selected')}
+                {t('lists.itemsList.deleteSelected')}
             </Button>
         </Paper>}
         {content}
-        {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('lists.itemsList.loadingMoreEntries')}</Typography>}
         {server && <LoadMore list={server.list} />}
         <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
             <MenuItem component={RouterLink} to={menu ? `/items/${menu.row.id}` : '#'} onClick={() => setMenu(null)}>
-                <ListItemText>{t('Öffnen', 'Open')}</ListItemText>
+                <ListItemText>{t('common.open')}</ListItemText>
             </MenuItem>
             {menu && rowActions(menu.row).map((action) => <MenuItem key={action.label} onClick={() => { setMenu(null); action.onClick(); }} sx={action.destructive ? { color: 'error.main' } : undefined}>
                 <ListItemIcon sx={action.destructive ? { color: 'error.main' } : undefined}>{action.icon}</ListItemIcon>

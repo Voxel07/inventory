@@ -3,33 +3,33 @@ import { translate } from './naming';
 export type InputValues = Record<string, unknown>;
 export const optionalText = (value: unknown): string | null => value == null || value === '' ? null : String(value);
 export function inputText(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(translate('Ein erforderliches Textfeld fehlt', 'Required text field is missing'));
+  if (typeof value !== 'string' || !value.trim()) throw new Error(translate('utils.inputValues.requiredTextFieldIsMissing'));
   return value;
 }
 export function inputNumber(value: unknown, fallback?: number): number {
   if (value == null || value === '') {
     if (fallback !== undefined) return fallback;
-    throw new Error(translate('Ein erforderliches Zahlenfeld fehlt', 'Required numeric field is missing'));
+    throw new Error(translate('utils.inputValues.requiredNumericFieldIsMissing'));
   }
-  if (typeof value === 'boolean' || !Number.isFinite(Number(value))) throw new Error(translate('Ungültiges Zahlenfeld', 'Invalid numeric field'));
+  if (typeof value === 'boolean' || !Number.isFinite(Number(value))) throw new Error(translate('utils.inputValues.invalidNumericField'));
   return Number(value);
 }
 export const optionalNumber = (value: unknown): number | null => value == null || value === '' ? null : inputNumber(value);
 export const inputBoolean = (value: unknown): boolean => value === true || value === 'true';
 export function inputChoice<const T extends readonly string[]>(value: unknown, choices: T): T[number] {
   const choice = choices.find((candidate) => candidate === value);
-  if (!choice) throw new Error(translate(`Ungültige Auswahl: ${String(value)}`, `Invalid choice: ${String(value)}`));
+  if (!choice) throw new Error(translate('utils.inputValues.invalidChoiceValue', { value: String(String(value)) }));
   return choice;
 }
 export function inputRows(value: unknown): InputValues[] {
-  if (!Array.isArray(value)) throw new Error(translate('Erforderliche Eingabezeilen fehlen', 'Required input rows are missing'));
+  if (!Array.isArray(value)) throw new Error(translate('utils.inputValues.requiredInputRowsAreMissing'));
   return value.map((entry) => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(translate('Ungültige Eingabezeile', 'Invalid input row'));
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(translate('utils.inputValues.invalidInputRow'));
     return entry as InputValues;
   });
 }
 export function inputStrings(value: unknown): string[] {
   if (value == null) return [];
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) throw new Error(translate('Ungültige Textliste', 'Invalid text list'));
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) throw new Error(translate('utils.inputValues.invalidTextList'));
   return value;
 }

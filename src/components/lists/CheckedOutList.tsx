@@ -9,7 +9,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { Link } from 'react-router-dom';
 import type { Assembly, Item } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { ListPagination } from '../shared/ListPagination';
 import { useClientPagination } from '../../hooks/useClientPagination';
 
@@ -50,7 +50,7 @@ export function CheckedOutList({
   linkToItem,
   returnPending,
 }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -99,7 +99,7 @@ export function CheckedOutList({
   if (isLoading) {
     return (
       <Paper sx={{ p: 2 }}>
-        <Typography color="text.secondary">{t('Lade…', 'Loading…')}</Typography>
+        <Typography color="text.secondary">{t('lists.checkedOutList.loading')}</Typography>
       </Paper>
     );
   }
@@ -107,7 +107,7 @@ export function CheckedOutList({
   if (!rows.length) {
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">{t('Derzeit sind keine Artikel ausgeliehen.', 'No items are currently checked out.')}</Typography>
+        <Typography color="text.secondary">{t('lists.checkedOutList.noItemsAreCurrentlyCheckedOut')}</Typography>
       </Paper>
     );
   }
@@ -132,10 +132,10 @@ export function CheckedOutList({
                     <Typography sx={{ fontWeight: 700 }}>{group.assembly.name}</Typography>
                     {showPerson && <Typography variant="caption" color="text.secondary">{group.rows[0]?.person}</Typography>}
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      {group.rows[0]?.event} · {group.rows.length} {t('Artikel', 'items')}
+                      {group.rows[0]?.event} · {group.rows.length} {t('common.items')}
                     </Typography>
                   </Box>
-                  <IconButton title={translate('Die ausgeliehenen Artikel dieser Gruppe ein- oder ausblenden', 'Show or hide this group\'s checked-out items')} size="small" onClick={() => toggleGroup(groupKey)}>
+                  <IconButton title={translate('lists.checkedOutList.showOrHideThisGroupSCheckedOutItems')} size="small" onClick={() => toggleGroup(groupKey)}>
                     {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                   </IconButton>
                 </Stack>
@@ -169,13 +169,13 @@ export function CheckedOutList({
       <Table size="small" sx={{ width: '100%', minWidth: 900 }}>
         <TableHead>
           <TableRow>
-            <TableCell>{t('Name', 'Name')}</TableCell>
-            <TableCell>{t('Kategorie', 'Category')}</TableCell>
-            <TableCell>{t('Lagerort', 'Storage location')}</TableCell>
-            {showPerson && <TableCell>{t('Person', 'Person')}</TableCell>}
-            <TableCell>{t('Event', 'Event')}</TableCell>
-            <TableCell align="right">{t('Ausgeliehen', 'Checked out')}</TableCell>
-            {hasActions && <TableCell align="right">{t('Aktion', 'Action')}</TableCell>}
+            <TableCell>{t('profile.name')}</TableCell>
+            <TableCell>{t('common.category')}</TableCell>
+            <TableCell>{t('common.storageLocation')}</TableCell>
+            {showPerson && <TableCell>{t('enum.value.person')}</TableCell>}
+            <TableCell>{t('nav.event')}</TableCell>
+            <TableCell align="right">{t('nav.checkedOut')}</TableCell>
+            {hasActions && <TableCell align="right">{t('common.action')}</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -195,7 +195,7 @@ export function CheckedOutList({
                         {group.assembly.name}
                       </Typography>
                       {group.rows[0]?.factionOrderId && (
-                        <Chip title={translate('Die zugehörige Fraktionsbestellung öffnen', 'Open the related faction order')}
+                        <Chip title={translate('lists.checkedOutList.openTheRelatedFactionOrder')}
                           component={Link}
                           to={`/orders/faction/${group.rows[0].factionOrderId}`}
                           clickable
@@ -208,7 +208,7 @@ export function CheckedOutList({
                         />
                       )}
                       <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                        {group.rows.length} {t('Positionen', 'items')}
+                        {group.rows.length} {t('lists.checkedOutList.items')}
                       </Typography>
                       {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                     </Stack>
@@ -240,19 +240,19 @@ export function CheckedOutList({
           </Box>
           <Box sx={{ textAlign: 'center', flexShrink: 0 }}>
             <Typography variant="h5" component="p" color="warning.main">{row.checkedOut}</Typography>
-            {!!row.pendingQuantity && <Chip color="info" size="small" label={`${t('Wartet auf Prüfung', 'Pending inspection')}: ${row.pendingQuantity}`} />}
-            <Typography variant="caption" color="text.secondary">{t('draußen', 'out')}</Typography>
+            {!!row.pendingQuantity && <Chip color="info" size="small" label={`${t('lists.checkedOutList.pendingInspection')}: ${row.pendingQuantity}`} />}
+            <Typography variant="caption" color="text.secondary">{t('lists.checkedOutList.out')}</Typography>
           </Box>
         </Box>
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
           {onQuickReturn && (
-            <Button title={translate('Eine Rückgabe für diesen Artikel melden', 'Submit a return for this item')} fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut} sx={{ minHeight: 44 }}>
-              {t('Zurückgeben', 'Return')}
+            <Button title={translate('lists.checkedOutList.submitAReturnForThisItem')} fullWidth variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut} sx={{ minHeight: 44 }}>
+              {t('enum.action.checkin')}
             </Button>
           )}
           {onDamageReport && (
-            <Button title={translate('Einen Schaden an diesem Artikel melden', 'Report damage to this item')} fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)} sx={{ minHeight: 44 }}>
-              {t('Schaden', 'Damage')}
+            <Button title={translate('lists.checkedOutList.reportDamageToThisItem')} fullWidth variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)} sx={{ minHeight: 44 }}>
+              {t('common.damage')}
             </Button>
           )}
         </Stack>
@@ -276,21 +276,21 @@ export function CheckedOutList({
             ? <Chip component={Link} to={`/orders/faction/${row.factionOrderId}`} clickable size="small" variant="outlined" color="primary" label={row.event} />
             : row.event}
         </TableCell>
-        <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{row.checkedOut}{!!row.pendingQuantity && <Typography variant="caption" sx={{ display: 'block' }}>{t('Wartet auf Prüfung', 'Pending inspection')}: {row.pendingQuantity}</Typography>}</TableCell>
+        <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{row.checkedOut}{!!row.pendingQuantity && <Typography variant="caption" sx={{ display: 'block' }}>{t('lists.checkedOutList.pendingInspection')}: {row.pendingQuantity}</Typography>}</TableCell>
         {(onQuickReturn || onDamageReport) && (
           <TableCell align="right">
             <Stack direction="row" spacing={0.75} sx={{ justifyContent: 'flex-end' }}>
               {onQuickReturn && (
 
-                    <Button title={translate('Eine Rückgabe für diesen Artikel melden', 'Submit a return for this item')} size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut}>
-                      {t('Schnellrückgabe', 'Quick return')}
+                    <Button title={translate('lists.checkedOutList.submitAReturnForThisItem')} size="small" variant="contained" color="success" startIcon={<AssignmentReturnIcon />} onClick={() => onQuickReturn(row)} disabled={returnPending || (row.pendingQuantity ?? 0) >= row.checkedOut}>
+                      {t('lists.checkedOutList.quickReturn')}
                     </Button>
 
               )}
               {onDamageReport && (
 
-                <Button title={t('Schaden melden', 'Report damage')} size="small" variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)}>
-                  {t('Schaden', 'Damage')}
+                <Button title={t('common.reportDamage')} size="small" variant="outlined" color="error" startIcon={<ReportProblemIcon />} onClick={() => onDamageReport(row)}>
+                  {t('common.damage')}
                 </Button>
 
               )}

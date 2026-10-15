@@ -61,7 +61,7 @@ import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import { ItemDamageReports } from '../components/items/ItemDamageReports';
 import type { ItemFormData, TransactionFormData } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canOperateWarehouse, canPerformCustody, canTakeOut } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -87,7 +87,7 @@ export function ItemDetail() {
 
 
     const canReportDamage = canPerformCustody(user);
-    const t = useLocalizedText();
+    const t = useT();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { itemId } = useParams<{ itemId: string }>();
@@ -154,9 +154,9 @@ export function ItemDetail() {
             {
                 onSuccess: () => {
                     setEditOpen(false);
-                    showSnackbar(t('Artikel erfolgreich aktualisiert', 'Item updated successfully'), 'success');
+                    showSnackbar(t('pages.itemDetail.itemUpdatedSuccessfully'), 'success');
                 },
-                onError: () => showSnackbar(t('Fehler beim Aktualisieren des Artikels', 'Could not update item'), 'error'),
+                onError: () => showSnackbar(t('pages.itemDetail.couldNotUpdateItem'), 'error'),
             },
         );
     }
@@ -169,11 +169,11 @@ export function ItemDetail() {
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);
-                        showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
+                        showSnackbar(t('pages.itemDetail.returnIsAwaitingAcknowledgement'), 'success');
                     },
                     onError: (error) => {
                         if (isOfflineQueuedError(error)) return;
-                        showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error');
+                        showSnackbar(t('pages.itemDetail.couldNotSubmitReturn'), 'error');
                     },
                 },
             );
@@ -182,11 +182,11 @@ export function ItemDetail() {
         createTransaction.mutate(data, {
             onSuccess: () => {
                 setCheckoutOpen(false);
-                showSnackbar(t('Transaktion abgeschlossen', 'Transaction completed'), 'success');
+                showSnackbar(t('pages.itemDetail.transactionCompleted'), 'success');
             },
             onError: (error) => {
                 if (isOfflineQueuedError(error)) return;
-                showSnackbar(t('Transaktion fehlgeschlagen', 'Transaction failed'), 'error');
+                showSnackbar(t('pages.itemDetail.transactionFailed'), 'error');
             },
         });
     }
@@ -201,28 +201,28 @@ export function ItemDetail() {
     }
 
     if (itemError) return <Box>
-        <Typography variant="h4" component="h1" sx={{ mb: 2 }}>{t('Artikel', 'Item')}</Typography>
-        <StateMessage kind="error" title={t('Artikel konnte nicht geladen werden', 'Could not load this item')}
-            description={t('Prüfe die Verbindung und versuche es erneut.', 'Check your connection and try again.')}
-            action={<><Button variant="contained" onClick={() => void refetchItem()}>{t('Erneut versuchen', 'Try again')}</Button>
-                <Button onClick={() => navigate('/items')}>{t('Zur Artikelliste', 'Go to items')}</Button></>} />
+        <Typography variant="h4" component="h1" sx={{ mb: 2 }}>{t('common.item')}</Typography>
+        <StateMessage kind="error" title={t('pages.itemDetail.couldNotLoadThisItem')}
+            description={t('common.checkYourConnectionAndTryAgain')}
+            action={<><Button variant="contained" onClick={() => void refetchItem()}>{t('common.tryAgain')}</Button>
+                <Button onClick={() => navigate('/items')}>{t('pages.itemDetail.goToItems')}</Button></>} />
     </Box>;
 
     if (!item) {
         return (
             <Box>
-                <Typography variant="h4" component="h1" sx={{ mb: 2 }}>{t('Artikel nicht gefunden', 'Item not found')}</Typography>
-                <StateMessage kind="no-matches" title={t('Diesen Artikel gibt es nicht (mehr)', 'This item does not exist (any more)')}
-                    description={t('Er wurde eventuell gelöscht oder du hast keinen Zugriff.', 'It may have been deleted, or you may not have access.')}
-                    action={<Button variant="contained" startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')}>{t('Zur Artikelliste', 'Go to items')}</Button>} />
+                <Typography variant="h4" component="h1" sx={{ mb: 2 }}>{t('pages.itemDetail.itemNotFound')}</Typography>
+                <StateMessage kind="no-matches" title={t('pages.itemDetail.thisItemDoesNotExistAnyMore')}
+                    description={t('pages.itemDetail.itMayHaveBeenDeletedOrYouMayNotHave')}
+                    action={<Button variant="contained" startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')}>{t('pages.itemDetail.goToItems')}</Button>} />
             </Box>
         );
     }
 
     const physicalTotal = item.stock ? item.stock.onHand + item.stock.checkedOut + item.stock.inTransit : totalStock;
     const totalValue = (item.value ?? 0) * physicalTotal;
-    const ownershipLabels = { organization: t('Organisation', 'Organization'), private_owner: t('Privat', 'Private'), external: t('Extern', 'External') };
-    const policyLabels = { available: t('Verfügbar', 'Available'), commitment_required: t('Zusage erforderlich', 'Commitment required'), unavailable: t('Nicht verfügbar', 'Unavailable') };
+    const ownershipLabels = { organization: t('enum.value.organization'), private_owner: t('pages.itemDetail.private'), external: t('enum.value.external') };
+    const policyLabels = { available: t('enum.itemStatus.available'), commitment_required: t('enum.value.commitment_required'), unavailable: t('enum.value.unavailable') };
     const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 5) ? 'low' : 'ok';
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' }[availability];
     const location = item.expand?.storageLocation;
@@ -236,9 +236,9 @@ export function ItemDetail() {
     const txColor = (type: string) => type === 'checkout' ? 'warning' : type === 'added' ? 'info' : 'success';
 
     const historyChart = stockHistory.length <= 1 && itemTransactions.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">{t('Noch kein Transaktionsverlauf vorhanden.', 'No transaction history yet.')}</Typography>
+        <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noTransactionHistoryYet')}</Typography>
     ) : (
-        <Box role="img" aria-label={t('Diagramm des Bestandsverlaufs', 'Chart of stock over time')}>
+        <Box role="img" aria-label={t('pages.itemDetail.chartOfStockOverTime')}>
             <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
@@ -251,7 +251,7 @@ export function ItemDetail() {
                         labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
                         itemStyle={{ color: theme.palette.primary.main }}
                     />
-                    <Line type="monotone" dataKey="stock" name={t('Bestand', 'Stock')} stroke={theme.palette.primary.main} strokeWidth={2}
+                    <Line type="monotone" dataKey="stock" name={t('common.stock')} stroke={theme.palette.primary.main} strokeWidth={2}
                         dot={{ fill: theme.palette.primary.main, r: 2 }} activeDot={{ r: 4, fill: theme.palette.primary.main }} />
                 </LineChart>
             </ResponsiveContainer>
@@ -259,7 +259,7 @@ export function ItemDetail() {
     );
 
     const transactionList = itemTransactions.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">{t('Noch keine Transaktionen vorhanden.', 'No transactions yet.')}</Typography>
+        <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noTransactionsYet')}</Typography>
     ) : isMobile ? (
         <Stack component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
             {sortedTransactions.map((tx) => (
@@ -280,15 +280,15 @@ export function ItemDetail() {
         </Stack>
     ) : (
         <TableContainer sx={{ maxHeight: 360 }}>
-            <Table size="small" stickyHeader aria-label={t('Transaktionen', 'Transactions')} sx={denseTable}>
+            <Table size="small" stickyHeader aria-label={t('pages.itemDetail.transactions')} sx={denseTable}>
                 <TableHead>
                     <TableRow>
-                        <TableCell>{t('Datum', 'Date')}</TableCell>
-                        <TableCell>{t('Typ', 'Type')}</TableCell>
-                        <TableCell>{t('Benutzer', 'User')}</TableCell>
-                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                        <TableCell>{t('Grund', 'Reason')}</TableCell>
-                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                        <TableCell>{t('common.date')}</TableCell>
+                        <TableCell>{t('common.type')}</TableCell>
+                        <TableCell>{t('common.user')}</TableCell>
+                        <TableCell align="right">{t('common.quantity')}</TableCell>
+                        <TableCell>{t('common.reason')}</TableCell>
+                        <TableCell>{t('common.notes')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -315,7 +315,7 @@ export function ItemDetail() {
     return (
         <Box>
             <Button variant="text" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/items')} sx={{ ...compactButton, mb: 0.5, ml: -1 }}>
-                {t('Artikel', 'Items')}
+                {t('nav.items')}
             </Button>
 
             {/* What it is, whether it is available, where to find it, and what to do next. */}
@@ -332,9 +332,9 @@ export function ItemDetail() {
                         </Stack>
                     </Box>
                     <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => { setLotRequest(undefined); setCheckoutOpen(true); }}>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</Button>}
-                        {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
-                        <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Etikett drucken', 'Print label')}</Button>
+                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => { setLotRequest(undefined); setCheckoutOpen(true); }}>{canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</Button>}
+                        {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Button>}
+                        <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('pages.itemDetail.printLabel')}</Button>
                     </Stack>
                 </Box>
                 {item.hint && <Alert severity="info" icon={false} sx={{ mt: 1, py: 0, px: 1.5, '& .MuiAlert-message': { py: 0.5 } }}>
@@ -342,38 +342,38 @@ export function ItemDetail() {
                         <Box component="span" sx={{ fontWeight: 600 }}></Box>{item.hint}
                     </Typography>
                 </Alert>}
-                {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0 }}>{t('Der private Lagerort wurde nicht für dich freigegeben. Bitte den Eigentümer um eine Lagerortfreigabe.', 'The private storage location is not shared with you. Ask its owner for location access.')}</Alert>}
+                {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0 }}>{t('pages.itemDetail.thePrivateStorageLocationIsNotSharedWithYouAsk')}</Alert>}
             </Paper>
 
             <Stack spacing={1.5}>
-                <DetailPanel title={t('Bestand', 'Stock')}>
+                <DetailPanel title={t('common.stock')}>
                     <MetricList minWidth={170}>
-                        <Metric label={t('Verfügbar', 'Available')} color={availabilityColor}>{remaining}</Metric>
-                        <Metric label={t('Gesamt', 'Total')}>{physicalTotal}</Metric>
-                        <Metric label={t('Ausgeliehen', 'Checked out')}>{checkedOut}</Metric>
-                        <Metric label={t('Im Transfer', 'In transit')}>{inTransit}</Metric>
-                        <Metric label={t('Defekt', 'Damaged')} color={damaged > 0 ? 'error.main' : undefined}>{damaged}</Metric>
-                        <Metric label={t('Bestellt', 'Ordered')}>{item.stock?.ordered ?? 0}</Metric>
-                        <Metric label={t('Mindestbestand', 'Minimum stock')}>{item.minStock ?? 5}</Metric>
-                        <Metric label={t('Einzelwert', 'Unit value')}>{formatMoney(item.value ?? 0)}</Metric>
-                        <Metric label={t('Gesamtwert', 'Total value')}>{formatMoney(totalValue)}</Metric>
+                        <Metric label={t('enum.itemStatus.available')} color={availabilityColor}>{remaining}</Metric>
+                        <Metric label={t('pages.itemDetail.total')}>{physicalTotal}</Metric>
+                        <Metric label={t('nav.checkedOut')}>{checkedOut}</Metric>
+                        <Metric label={t('pages.itemDetail.inTransit')}>{inTransit}</Metric>
+                        <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{damaged}</Metric>
+                        <Metric label={t('enum.value.ordered')}>{item.stock?.ordered ?? 0}</Metric>
+                        <Metric label={t('pages.itemDetail.minimumStock')}>{item.minStock ?? 5}</Metric>
+                        <Metric label={t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
+                        <Metric label={t('pages.itemDetail.totalValue')}>{formatMoney(totalValue)}</Metric>
                         {(item.containerSize ?? 0) > 0 && <>
-                            <Metric label={t('Einheiten je Behälter', 'Units per container')}>{item.containerSize}</Metric>
-                            <Metric label={t('Behälter', 'Containers')}>{item.containerCount ?? 0}</Metric>
-                            <Metric label={t('Geöffnet', 'Opened')}>{item.containersOpened ?? 0}</Metric>
-                            <Metric label={t('Geöffneter Behälter', 'Opened container')}>{t(`${item.containerRemainingPercent ?? 100} % verbleibend`, `${item.containerRemainingPercent ?? 100}% remaining`)}</Metric>
+                            <Metric label={t('pages.itemDetail.unitsPerContainer')}>{item.containerSize}</Metric>
+                            <Metric label={t('pages.itemDetail.containers')}>{item.containerCount ?? 0}</Metric>
+                            <Metric label={t('pages.itemDetail.opened')}>{item.containersOpened ?? 0}</Metric>
+                            <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.containerRemainingPercentRemaining', { containerRemainingPercent: String(item.containerRemainingPercent ?? 100) })}</Metric>
                         </>}
                     </MetricList>
                     <ItemStockLocations key={item.id} item={item} />
                     {item.trackingMode === 'serialized' && (
                         <Box sx={{ mt: 1.5 }}>
-                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Einheiten', 'Units')}</Typography>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('pages.itemDetail.units')}</Typography>
                             <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
                         </Box>
                     )}
                     {item.trackingMode === 'lot_tracked' && (
                         <Box sx={{ mt: 1.5 }}>
-                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Chargen', 'Lots')}</Typography>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('pages.itemDetail.lots')}</Typography>
                             <LotsPanel itemId={item.id} canEdit={canEdit} />
                         </Box>
                     )}
@@ -382,62 +382,62 @@ export function ItemDetail() {
                 <ItemDamageReports item={item} />
 
             <Box sx={{ display: 'grid', gap: 1.5, alignItems: 'start', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' } }}>
-                <DetailPanel title={t('Übersicht', 'Overview')}>
+                <DetailPanel title={t('common.overview')}>
                     <FieldGrid>
-                        <Field label={t('Kategorie', 'Category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
-                        <Field label={t('Lagerort', 'Storage location')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location?.name || item.storageLocation}</Link> : '—'}</Field>
-                        <Field label={t('Genauer Ort', 'Exact location')}>{exactLocation || '—'}</Field>
-                        <Field label={t('Rückgabeort', 'Return location')}>{item.expand?.returnLocation?.name || (!item.returnLocation || item.returnLocation === item.storageLocation ? location?.name : undefined) || '—'}</Field>
-                        <Field label={t('Eigentümer / Anbieter', 'Owner / provider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
-                        <Field label={t('Verwahrer / Kontakt', 'Keeper / contact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
-                        <Field label={item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}>{item.stock?.totalOwned ?? 0}</Field>
-                        <Field label={t('Bestandsführung', 'Tracking mode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
-                        {item.supplier && <Field label={t('Lieferant', 'Supplier')}>{item.supplier}</Field>}
-                        <Field label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : t('Organisation', 'Organization')}</Field>
-                        <Field label={t('Erstellt', 'Created')}>{formatDate(item.created)}</Field>
-                        {isVehicle && <Field label={t('Kraftstoffverbrauch', 'Fuel consumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
-                        {isVehicle && <Field label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
-                        {isGenerator && <Field label={t('Betriebsstunden', 'Running hours')}>{item.currentOperatingHours ?? 0}</Field>}
-                        {isGenerator && <Field label={t('Nächste Wartung', 'Next maintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
-                        {isFood && <Field label={t('Mindestens haltbar bis', 'Best before date')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
-                        <Field label={t('Artikel-ID', 'Item ID')}><span className="mono">{item.id}</span></Field>
-                        <Field wide label={t('Freigegebene Event-Nutzung', 'Approved event use')}>
+                        <Field label={t('common.category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
+                        <Field label={t('common.storageLocation')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location?.name || item.storageLocation}</Link> : '—'}</Field>
+                        <Field label={t('pages.itemDetail.exactLocation')}>{exactLocation || '—'}</Field>
+                        <Field label={t('common.returnLocation')}>{item.expand?.returnLocation?.name || (!item.returnLocation || item.returnLocation === item.storageLocation ? location?.name : undefined) || '—'}</Field>
+                        <Field label={t('pages.itemDetail.ownerProvider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
+                        <Field label={t('pages.itemDetail.keeperContact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
+                        <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{item.stock?.totalOwned ?? 0}</Field>
+                        <Field label={t('pages.itemDetail.trackingMode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
+                        {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
+                        <Field label={t('common.visibility')}>{item.access?.privateResource ? t('pages.itemDetail.private') : t('enum.value.organization')}</Field>
+                        <Field label={t('pages.itemDetail.created')}>{formatDate(item.created)}</Field>
+                        {isVehicle && <Field label={t('pages.itemDetail.fuelConsumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
+                        {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
+                        {isGenerator && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
+                        {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
+                        {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
+                        <Field label={t('pages.itemDetail.itemID')}><span className="mono">{item.id}</span></Field>
+                        <Field wide label={t('pages.itemDetail.approvedEventUse')}>
                             <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
                                 {item.eventTypes?.length
                                     ? item.eventTypes.map(event => <Chip key={event} size="small" variant="outlined" sx={tinyChip} label={event === 'LS' ? 'LightSim' : event} />)
-                                    : <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>— {t('keine', 'none')}</Box>}
-                                <Tooltip arrow enterTouchDelay={0} title={t('Die Event-Zuordnung beschreibt die Nutzung. Verfügbarkeit und erforderliche Zusagen werden getrennt geprüft.', 'Event assignments describe intended use. Availability and required commitments are checked separately.')}>
-                                    <IconButton size="small" sx={{ p: 0.25 }} aria-label={t('Information zur Event-Nutzung', 'About event use')}><InfoOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
+                                    : <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>— {t('pages.itemDetail.none')}</Box>}
+                                <Tooltip arrow enterTouchDelay={0} title={t('pages.itemDetail.eventAssignmentsDescribeIntendedUseAvailabilityAndRequiredCommitmentsAre')}>
+                                    <IconButton size="small" sx={{ p: 0.25 }} aria-label={t('pages.itemDetail.aboutEventUse')}><InfoOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
                                 </Tooltip>
                             </Stack>
                         </Field>
-                        {item.description && <Field wide label={t('Beschreibung', 'Description')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{item.description}</Box></Field>}
+                        {item.description && <Field wide label={t('common.description')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{item.description}</Box></Field>}
                     </FieldGrid>
                 </DetailPanel>
 
                 <Stack spacing={1.5}>
-                    <DetailPanel title={t('Eigentum & Verwahrung', 'Ownership & keeper')}>
+                    <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}>
                         <EquipmentOwnership item={item} canEdit={canEdit} embedded showSummary={false} />
                     </DetailPanel>
                     <InventorySharing kind="items" id={item.id} access={item.access} />
                 </Stack>
             </Box>
 
-                <DetailPanel title={`${t('Verlauf', 'History')} (${itemTransactions.length})`}>
+                <DetailPanel title={`${t('common.history')} (${itemTransactions.length})`}>
                     <Stack spacing={1.5}>
                         <Box>
-                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Bestandsverlauf', 'Stock history')}</Typography>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('pages.itemDetail.stockHistory')}</Typography>
                             {historyChart}
                         </Box>
                         <Box>
-                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Transaktionen', 'Transactions')}</Typography>
+                            <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('pages.itemDetail.transactions')}</Typography>
                             {transactionList}
                         </Box>
                     </Stack>
                     {isGenerator && <>
-                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontSize: '0.8125rem' }}>{t('Wartungsprotokoll', 'Maintenance log')}</Typography>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontSize: '0.8125rem' }}>{t('pages.itemDetail.maintenanceLog')}</Typography>
                         {maintenanceRecords.length === 0 ? (
-                            <Typography variant="body2" color="text.secondary">{t('Noch keine Wartungseinträge.', 'No maintenance records yet.')}</Typography>
+                            <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noMaintenanceRecordsYet')}</Typography>
                         ) : (
                             <Stack>
                                 {maintenanceRecords.map((record) => (
@@ -452,7 +452,7 @@ export function ItemDetail() {
                 </DetailPanel>
 
                 {!!item.images?.length && (
-                    <DetailPanel title={`${t('Bilder', 'Images')} (${item.images.length})`}>
+                    <DetailPanel title={`${t('pages.itemDetail.images')} (${item.images.length})`}>
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1 }}>
                             {item.images.map((filename) => (
                                 <MediaImage key={filename} src={itemImageUrl(item, filename, '900x600')} alt={item.name} sx={{ width: '100%', height: 160, objectFit: 'contain', borderRadius: 1, border: 1, borderColor: 'divider' }} />
@@ -464,7 +464,7 @@ export function ItemDetail() {
 
             <FormDialog open={editOpen} onClose={() => setEditOpen(false)}>
                 <ItemForm
-                    title={t('Artikel bearbeiten', 'Edit item')}
+                    title={t('pages.itemDetail.editItem')}
                     onCancel={() => setEditOpen(false)}
                     initialData={item}
                     onSubmit={handleUpdate}
@@ -474,7 +474,7 @@ export function ItemDetail() {
                 />
             </FormDialog>
 
-            <QrLabelDialog label={qrOpen ? { title: t('Etikett', 'Label'), itemId: item.id, itemName: item.name } : null}
+            <QrLabelDialog label={qrOpen ? { title: t('pages.itemDetail.label'), itemId: item.id, itemName: item.name } : null}
                 onClose={() => setQrOpen(false)} />
 
             <Dialog
@@ -485,7 +485,7 @@ export function ItemDetail() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</DialogTitle>
+                <DialogTitle>{canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</DialogTitle>
                 <DialogContent dividers>
                     <TransactionForm
                         items={[item]}

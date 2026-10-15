@@ -31,7 +31,7 @@ import { useItemsByIds, usePagedItems } from '../hooks/useItems';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadMore } from '../components/shared/LoadMore';
 import type { EventReportStatus, EventType } from '../types';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { toNonNegativeQuantities, toQuantityInputs, type QuantityInputs } from '../utils/quantityMaps';
 import { formatDate } from '../utils/dateFormat';
@@ -40,7 +40,7 @@ export function EventDetail() {
   const { reportId = '' } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const t = useLocalizedText();
+  const t = useT();
   const { eventTypes } = useFactionCatalog();
   const { user } = useAuth();
   const canEdit = canEditEvents(user);
@@ -136,10 +136,10 @@ export function EventDetail() {
     }, {
       onSuccess: () => {
         setEditing(false);
-        showSnackbar(t('Eventbericht korrigiert', 'Event report corrected'), 'success');
+        showSnackbar(t('pages.eventDetail.eventReportCorrected'), 'success');
       },
       onError: (error) => showSnackbar(
-        error instanceof Error ? error.message : t('Eventbericht konnte nicht gespeichert werden', 'Could not save event report'),
+        error instanceof Error ? error.message : t('pages.eventDetail.couldNotSaveEventReport'),
         'error',
       ),
     });
@@ -148,8 +148,8 @@ export function EventDetail() {
   if (isLoading) return <LinearProgress />;
   if (isError || !report) {
     return (
-      <Alert severity="error" action={<Button title={translate('Zur Eventübersicht zurückkehren', 'Return to the event overview')} color="inherit" onClick={() => navigate('/events')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
-        {t('Eventbericht nicht gefunden.', 'Event report not found.')}
+      <Alert severity="error" action={<Button title={translate('pages.eventDetail.returnToTheEventOverview')} color="inherit" onClick={() => navigate('/events')}>{t('pages.eventDetail.backToOverview')}</Button>}>
+        {t('pages.eventDetail.eventReportNotFound')}
       </Alert>
     );
   }
@@ -157,8 +157,8 @@ export function EventDetail() {
 
   return (
     <Box>
-      <Button title={translate('Zum Eventverlauf zurückkehren', 'Return to the event history')} startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')} sx={{ mb: 1 }}>
-        {t('Zum Eventverlauf', 'Back to event history')}
+      <Button title={translate('pages.eventDetail.returnToTheEventHistory')} startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')} sx={{ mb: 1 }}>
+        {t('pages.eventDetail.backToEventHistory')}
       </Button>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
@@ -168,64 +168,61 @@ export function EventDetail() {
             <Chip
               size="small"
               color={report.status === 'completed' ? 'success' : 'info'}
-              label={report.status === 'completed' ? t('Abgeschlossen', 'Completed') : t('Geplant', 'Planned')}
+              label={report.status === 'completed' ? t('common.completed') : t('common.planned')}
             />
           </Stack>
           <Typography color="text.secondary">{formatDate(report.eventDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}</Typography>
         </Box>
         {!editing ? (
-          <Button title={translate('Die Daten dieses Events bearbeiten', 'Edit this event\'s details')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
-            {t('Event korrigieren', 'Correct event')}
+          <Button title={translate('pages.eventDetail.editThisEventSDetails')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
+            {t('pages.eventDetail.correctEvent')}
           </Button>
         ) : (
           <Stack direction="row" spacing={1}>
-            <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} startIcon={<CloseIcon />} onClick={cancelEditing}>{t('Abbrechen', 'Cancel')}</Button>
-            <Button title={translate('Die Änderungen an diesem Event speichern', 'Save changes to this event')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
-              {t('Änderungen speichern', 'Save changes')}
+            <Button title={translate('common.discardChangesAndClose')} startIcon={<CloseIcon />} onClick={cancelEditing}>{t('common.cancel')}</Button>
+            <Button title={translate('pages.eventDetail.saveChangesToThisEvent')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending || !eventDate || !endDate || endDate < eventDate || !name.trim()}>
+              {t('pages.eventDetail.saveChanges')}
             </Button>
           </Stack>
         )}
       </Stack>
 
       {!editing && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
-        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('Teilnehmer & Essensmarken', 'Attendees & food stamps')}</Button>
-        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('Eventzeitplan', 'Event timeline')}</Button>
+        <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('pages.eventDetail.attendeesFoodStamps')}</Button>
+        <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('common.eventTimeline')}</Button>
       </Stack>}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Positionen verwendet', 'Lines used')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt geplant', 'Total planned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
-        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('Gesamt verwendet', 'Total used')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
+        <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
       </Box>
 
       {editing && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          {t(
-            'Planmengen können korrigiert werden. Verwendete Mengen werden aus Bestellungen und Rückgaben berechnet.',
-            'Planned quantities can be corrected. Used quantities are calculated from orders and returns.',
-          )}
+          {t('pages.eventDetail.plannedQuantitiesCanBeCorrectedUsedQuantitiesAreCalculatedFrom')}
         </Alert>
       )}
 
       {editing && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack spacing={2}>
-            <TextField fullWidth label={t('Eventname', 'Event name')} value={name} onChange={(event) => setName(event.target.value)} required />
+            <TextField fullWidth label={t('pages.eventDetail.eventName')} value={name} onChange={(event) => setName(event.target.value)} required />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField select fullWidth label={t('Event', 'Event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
+              <TextField select fullWidth label={t('nav.event')} value={eventType} onChange={(event) => setEventType(event.target.value as EventType)}>
                 {eventTypes.map((type) => <MenuItem key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</MenuItem>)}
               </TextField>
-              <TextField fullWidth type="date" label={t('Startdatum', 'Start date')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
-              <TextField fullWidth type="date" label={t('Enddatum', 'End date')} value={endDate} onChange={(event) => setEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(endDate && endDate < eventDate)} required />
-              <TextField select fullWidth label={t('Status', 'Status')} value={status} onChange={(event) => setStatus(event.target.value as EventReportStatus)}>
-                <MenuItem value="planned">{t('Geplant', 'Planned')}</MenuItem>
-                <MenuItem value="completed">{t('Abgeschlossen', 'Completed')}</MenuItem>
+              <TextField fullWidth type="date" label={t('common.startDate')} value={eventDate} onChange={(event) => setEventDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} required />
+              <TextField fullWidth type="date" label={t('common.endDate')} value={endDate} onChange={(event) => setEndDate(event.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: eventDate } }} error={Boolean(endDate && endDate < eventDate)} required />
+              <TextField select fullWidth label={t('common.status')} value={status} onChange={(event) => setStatus(event.target.value as EventReportStatus)}>
+                <MenuItem value="planned">{t('common.planned')}</MenuItem>
+                <MenuItem value="completed">{t('common.completed')}</MenuItem>
               </TextField>
             </Stack>
             <TextField
               fullWidth
-              label={t('Artikel zum Event hinzufügen', 'Add an item to the event')}
-              placeholder={t('Name, Kategorie oder Unterkategorie suchen', 'Search name, category, or subcategory')}
+              label={t('pages.eventDetail.addAnItemToTheEvent')}
+              placeholder={t('pages.eventDetail.searchNameCategoryOrSubcategory')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -238,10 +235,10 @@ export function EventDetail() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>{t('Artikel', 'Item')}</TableCell>
-              <TableCell>{t('Kategorie', 'Category')}</TableCell>
-              <TableCell align="right">{t('Geplant', 'Planned')}</TableCell>
-              <TableCell align="right">{t('Verwendet', 'Used')}</TableCell>
+              <TableCell>{t('common.item')}</TableCell>
+              <TableCell>{t('common.category')}</TableCell>
+              <TableCell align="right">{t('common.planned')}</TableCell>
+              <TableCell align="right">{t('common.used')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -270,7 +267,7 @@ export function EventDetail() {
               </TableRow>
             ))}
             {!visibleItems.length && !missingItemIds.length && (
-              <TableRow><TableCell colSpan={4}>{t('Für dieses Event wurden keine Artikel erfasst.', 'No items were recorded for this event.')}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4}>{t('pages.eventDetail.noItemsWereRecordedForThisEvent')}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -278,11 +275,11 @@ export function EventDetail() {
       {editing && <LoadMore list={candidates} />}
 
       <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>{t('Anmerkungen', 'Notes')}</Typography>
+        <Typography variant="h6" sx={{ mb: 1 }}>{t('common.notes')}</Typography>
         {editing ? (
           <TextField fullWidth multiline minRows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
         ) : (
-          <Typography color={report.notes ? 'text.primary' : 'text.secondary'}>{report.notes || t('Keine Anmerkungen.', 'No notes.')}</Typography>
+          <Typography color={report.notes ? 'text.primary' : 'text.secondary'}>{report.notes || t('pages.eventDetail.noNotes')}</Typography>
         )}
       </Paper>
     </Box>

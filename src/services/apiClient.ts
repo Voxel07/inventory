@@ -48,7 +48,7 @@ export async function initializeAuth(): Promise<void> {
   } catch (error) {
     if (context.generation !== getAuthSnapshot().generation) return;
     console.error('OIDC login failed', error);
-    clearAuth(error instanceof Error ? error.message : translate('OIDC-Anmeldung fehlgeschlagen', 'OIDC sign-in failed'));
+    clearAuth(error instanceof Error ? error.message : translate('services.apiClient.oIDCSignInFailed'));
   }
 }
 
@@ -278,7 +278,7 @@ async function apiRequestResult<T>(path: string, options: RequestOptions): Promi
   const offlineAction = options.offline && !referencesPrivateInventory([path, options.body, options.offline.payload])
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
-  if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error(translate('Diese Aktion erfordert eine Online-Verbindung. Sie wurde nicht vorgemerkt.', 'This action requires an online connection. It has not been queued.'));
+  if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error(translate('services.apiClient.thisActionRequiresAnOnlineConnectionItHasNotBeen'));
   if (offlineAction && !navigator.onLine) return { value: await queueOffline<T>(offlineAction, context), hasMore: null };
   try {
     for (let attempt = 0; ; attempt++) {
@@ -328,7 +328,7 @@ export function isApiMediaUrl(value: string): boolean {
 }
 
 export async function fetchMedia(url: string, signal?: AbortSignal, context = captureAuthSession()): Promise<Blob> {
-  if (!isApiMediaUrl(url)) throw new Error(translate('Ungültige Medien-URL', 'Invalid media URL'));
+  if (!isApiMediaUrl(url)) throw new Error(translate('services.apiClient.invalidMediaURL'));
   return withSessionRequest(context, async (sessionSignal) => {
     const response = await authorizedFetch(url, { signal: signal ? AbortSignal.any([signal, sessionSignal]) : sessionSignal }, context);
     if (!response.ok) throw await responseError(response);
@@ -350,7 +350,7 @@ export function uploadMedia(file: File, context = captureAuthSession()): Promise
 
 export function deleteMedia(key: string, context = captureAuthSession()): Promise<void> {
   const url = apiFileUrl(key);
-  if (!url || !isApiMediaUrl(url)) throw new Error(translate('Ungültiger Medien-Schlüssel', 'Invalid media key'));
+  if (!url || !isApiMediaUrl(url)) throw new Error(translate('services.apiClient.invalidMediaKey'));
   return withSessionRequest(context, async (signal) => {
     const response = await authorizedFetch(url, { method: 'DELETE', signal }, context);
     if (!response.ok) throw await responseError(response);

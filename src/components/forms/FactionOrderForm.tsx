@@ -37,7 +37,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Dialog } from '../shared/ClosableDialog';
 import { DialogContent, DialogTitle } from '@mui/material';
 import type { Assembly, EventType, FactionOrder, FactionOrderSummary, FactionOrderFormData, StorageLocation } from '../../types';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { useEventReports } from '../../hooks/useEvents';
 import {
   factionOrderAssemblyBaseline,
@@ -86,7 +86,7 @@ export function FactionOrderForm({
   isLoading,
   onSubmit,
 }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
@@ -276,9 +276,9 @@ export function FactionOrderForm({
       <Stack spacing={2.5}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
           <FormControl fullWidth>
-            <InputLabel>{t('Event', 'Event')}</InputLabel>
+            <InputLabel>{t('nav.event')}</InputLabel>
             <Select
-              label={t('Event', 'Event')}
+              label={t('nav.event')}
               value={eventType}
               onChange={(event) => {
                 const value = event.target.value as EventType;
@@ -292,46 +292,46 @@ export function FactionOrderForm({
             </Select>
           </FormControl>
           <FormControl fullWidth>
-            <InputLabel>{t('Fraktion', 'Faction')}</InputLabel>
-            <Select label={t('Fraktion', 'Faction')} value={faction} onChange={(event) => setFaction(event.target.value)}>
+            <InputLabel>{t('common.faction')}</InputLabel>
+            <Select label={t('common.faction')} value={faction} onChange={(event) => setFaction(event.target.value)}>
               {allowedFactions(eventType).map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl fullWidth required>
-            <InputLabel>{t('Jährliches Event', 'Yearly event')}</InputLabel>
-            <Select label={t('Jährliches Event', 'Yearly event')} value={selectedEvent?.id ?? ''} onChange={(event) => setEventOccurrenceId(event.target.value)}>
+            <InputLabel>{t('forms.factionOrderForm.yearlyEvent')}</InputLabel>
+            <Select label={t('forms.factionOrderForm.yearlyEvent')} value={selectedEvent?.id ?? ''} onChange={(event) => setEventOccurrenceId(event.target.value)}>
               {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)} {entry.endDate !== entry.startDate ? `– ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
             </Select>
           </FormControl>
-          {!eventOptions.length && <Alert severity="info" action={<Button title={translate('Die Eventübersicht öffnen', 'Open the event overview')} component={RouterLink} to="/events">{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event für diesen Eventtyp an.', 'Create an event for this event type first.')}</Alert>}
-          <TextField fullWidth label={t('Eventzeitraum', 'Event dates')} value={selectedEvent ? `${formatDate(selectedEvent.startDate)} – ${formatDate(selectedEvent.endDate)}` : ''} slotProps={{ input: { readOnly: true } }} />
+          {!eventOptions.length && <Alert severity="info" action={<Button title={translate('forms.factionOrderForm.openTheEventOverview')} component={RouterLink} to="/events">{t('forms.factionOrderForm.openEvents')}</Button>}>{t('forms.factionOrderForm.createAnEventForThisEventTypeFirst')}</Alert>}
+          <TextField fullWidth label={t('forms.factionOrderForm.eventDates')} value={selectedEvent ? `${formatDate(selectedEvent.startDate)} – ${formatDate(selectedEvent.endDate)}` : ''} slotProps={{ input: { readOnly: true } }} />
           <TextField
             fullWidth
             type="date"
-            label={t('Gewünschtes Abholdatum (optional)', 'Requested pickup date (optional)')}
+            label={t('forms.factionOrderForm.requestedPickupDateOptional')}
             value={requestedPickupDate}
             onChange={(event) => setRequestedPickupDate(event.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}
-            helperText={t('Wann möchtest du die Bestellung abholen?', 'When would you like to collect the order?')}
+            helperText={t('forms.factionOrderForm.whenWouldYouLikeToCollectTheOrder')}
           />
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
-          <Button title={translate('Mengen aus der vorherigen Liste übernehmen', 'Copy quantities from the previous list')}
+          <Button title={translate('forms.factionOrderForm.copyQuantitiesFromThePreviousList')}
             variant="outlined"
             startIcon={<ContentCopyIcon />}
             onClick={copyPrevious}
             disabled={!previousOrder}
           >
             {previousOrder
-              ? t(`${new Date(previousOrder.eventDate).getUTCFullYear()} als Basis übernehmen`, `Use ${new Date(previousOrder.eventDate).getUTCFullYear()} as baseline`)
-              : t('Vorjahr als Basis übernehmen', 'Use previous year as baseline')}
+              ? t('forms.factionOrderForm.useYearAsBaseline', { year: String(new Date(previousOrder.eventDate).getUTCFullYear()) })
+              : t('forms.factionOrderForm.usePreviousYearAsBaseline')}
           </Button>
           {previousOrder && (
             <Typography variant="body2" color="text.secondary">
               {['picked_up', 'returned'].includes(previousOrder.status)
-                ? t('Tatsächlich verwendete Mengen vom', 'Actual quantities used on')
-                : t('Geplante Mengen vom', 'Planned quantities from')}{' '}
+                ? t('forms.factionOrderForm.actualQuantitiesUsedOn')
+                : t('forms.factionOrderForm.plannedQuantitiesFrom')}{' '}
               {formatDate(previousOrder.eventDate)}
             </Typography>
           )}
@@ -341,8 +341,8 @@ export function FactionOrderForm({
           <Alert severity={changes.length ? 'info' : 'success'}>
             <Typography variant="subtitle2">
               {changes.length
-                ? t(`${changes.length} Änderungen zur vorherigen Liste`, `${changes.length} changes from the previous list`)
-                : t('Keine Änderungen zur vorherigen Liste', 'No changes from the previous list')}
+                ? t('forms.factionOrderForm.changeCountChangesFromThePreviousList', { changeCount: String(changes.length) })
+                : t('forms.factionOrderForm.noChangesFromThePreviousList')}
             </Typography>
             {changes.length > 0 && (
               <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
@@ -361,20 +361,17 @@ export function FactionOrderForm({
 
         <Divider />
         <Box>
-          <Typography variant="h6">{t('Baugruppen und Artikel', 'Assemblies and items')}</Typography>
+          <Typography variant="h6">{t('forms.factionOrderForm.assembliesAndItems')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {t(
-              'Für dieses Event markierte Einträge werden direkt angezeigt. Nur Einträge mit einer Menge größer als 0 werden bestellt.',
-              'Entries tagged for this event are shown directly. Only entries with a quantity greater than 0 are ordered.',
-            )}
+            {t('forms.factionOrderForm.entriesTaggedForThisEventAreShownDirectlyOnlyEntries')}
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
-            <CatalogSearchField label={t('Baugruppen oder Artikel suchen', 'Search assemblies or items')}
+            <CatalogSearchField label={t('forms.factionOrderForm.searchAssembliesOrItems')}
               value={search} onChange={(value) => { setSearch(value); setItemPage(1); setAssemblyPage(1); }} />
             <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-              <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
-              <Select label={t('Kategorie', 'Category')} value={category} onChange={(event) => { setCategory(event.target.value); setItemPage(1); }}>
-                <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+              <InputLabel>{t('common.category')}</InputLabel>
+              <Select label={t('common.category')} value={category} onChange={(event) => { setCategory(event.target.value); setItemPage(1); }}>
+                <MenuItem value="">{t('common.allCategories')}</MenuItem>
                 {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
               </Select>
             </FormControl>
@@ -387,11 +384,11 @@ export function FactionOrderForm({
                 setViewMode(value);
                 window.localStorage.setItem('faction-order-resource-view', value);
               }}
-              aria-label={t('Ansicht', 'View')}
+              aria-label={t('forms.factionOrderForm.view')}
               sx={{ flexShrink: 0 }}
             >
-              <ToggleButton title={translate('Den Katalog als Liste anzeigen', 'Display the catalog as a list')} value="list" aria-label={t('Listenansicht', 'List view')}><ViewListIcon /></ToggleButton>
-              <ToggleButton title={translate('Den Katalog als Kacheln anzeigen', 'Display the catalog as tiles')} value="tiles" aria-label={t('Kachelansicht', 'Tile view')}><GridViewIcon /></ToggleButton>
+              <ToggleButton title={translate('forms.factionOrderForm.displayTheCatalogAsAList')} value="list" aria-label={t('forms.factionOrderForm.listView')}><ViewListIcon /></ToggleButton>
+              <ToggleButton title={translate('forms.factionOrderForm.displayTheCatalogAsTiles')} value="tiles" aria-label={t('forms.factionOrderForm.tileView')}><GridViewIcon /></ToggleButton>
             </ToggleButtonGroup>
           </Stack>
         </Box>
@@ -400,7 +397,7 @@ export function FactionOrderForm({
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
             <CategoryIcon color="primary" />
             <Typography variant="h6">
-              {isMobile ? t('Baugruppen auswählen', 'Choose assemblies') : t('Benötigte Baugruppen', 'Requested assemblies')}
+              {isMobile ? t('forms.factionOrderForm.chooseAssemblies') : t('forms.factionOrderForm.requestedAssemblies')}
             </Typography>
           </Stack>
           {viewMode === 'tiles' ? (
@@ -416,15 +413,15 @@ export function FactionOrderForm({
                   >
                     {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: '100%', height: 64, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 64, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><CategoryIcon color="primary" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{assembly.name}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')}</Typography>
-                    <Typography variant="caption" color={available ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {available}</Typography>
-                  <IconButton title={t('Baugruppe anzeigen', 'Show assembly contents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('Inhalt anzeigen', 'Show contents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('forms.factionOrderForm.components')}</Typography>
+                    <Typography variant="caption" color={available ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {available}</Typography>
+                  <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <QuantityControl label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
+                      <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
                     </Stack>
                     {isSelected && !isMobile && (
 
-                      <IconButton title={t('Alle entfernen', 'Remove all')} size="small" color="error" onClick={() => removeItem(assembly.id, true)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
+                      <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(assembly.id, true)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
 
                     )}
                   </Paper>
@@ -442,16 +439,16 @@ export function FactionOrderForm({
                        {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} /> : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{assembly.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('Komponenten', 'components')} · {t('Verfügbar', 'Available')}: {available}</Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('forms.factionOrderForm.components')} · {t('enum.itemStatus.available')}: {available}</Typography>
                       </Box>
-                    <IconButton title={t('Baugruppe anzeigen', 'Show assembly contents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('Inhalt anzeigen', 'Show contents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
+                    <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-                        <QuantityControl label={`${assembly.name} ${t('Menge', 'quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
+                        <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
                         {!isMobile && (
                           <Box sx={{ width: 34, flexShrink: 0 }}>
                             {quantity > 0 && (
 
-                              <IconButton title={t('Alle entfernen', 'Remove all')} size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
+                              <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
 
                             )}
                           </Box>
@@ -463,13 +460,13 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!visibleAssemblies.length && <Typography color="text.secondary">{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          {!visibleAssemblies.length && <Typography color="text.secondary">{t('common.noMatchingAssemblies')}</Typography>}
           <OrderCatalogPager count={visibleAssemblies.length} page={currentAssemblyPage} onPageChange={setAssemblyPage} />
         </Box>
 
         <Box>
           <Typography variant="h6">
-            {isMobile ? t('Artikel auswählen', 'Choose items') : t('Benötigte Artikel', 'Requested items')}
+            {isMobile ? t('forms.factionOrderForm.chooseItems') : t('forms.factionOrderForm.requestedItems')}
           </Typography>
           {viewMode === 'tiles' ? (
             <Box key={currentItemPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
@@ -486,17 +483,17 @@ export function FactionOrderForm({
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
-                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('Verfügbar', 'Available')}: {available}</Typography>
+                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {available}</Typography>
                     {/* Always reserve the line so the tile does not grow when the item is added. */}
                     <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
-                      {t('Nach Bestellung', 'After order')}: {projected}
+                      {t('forms.factionOrderForm.afterOrder')}: {projected}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <QuantityControl label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
+                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                     </Stack>
                     {isSelected && !isMobile && (
 
-                      <IconButton title={t('Alle entfernen', 'Remove all')} size="small" color="error" onClick={() => removeItem(item.id)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
+                      <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(item.id)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
 
                     )}
                   </Paper>
@@ -519,21 +516,21 @@ export function FactionOrderForm({
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                          {item.category} · {t('Verfügbar', 'Available')}: {available}
+                          {item.category} · {t('enum.itemStatus.available')}: {available}
                           {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
                             <Box component="span" sx={{ fontWeight: 700, color: projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main' }}>
-                              {' · '}{t('Nach Bestellung', 'After order')}: {projected}
+                              {' · '}{t('forms.factionOrderForm.afterOrder')}: {projected}
                             </Box>
                           )}
                         </Typography>
                       </Box>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-                        <QuantityControl label={`${item.name} ${t('Menge', 'quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
+                        <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
                         {!isMobile && (
                           <Box sx={{ width: 34, flexShrink: 0 }}>
                             {quantity > 0 && (
 
-                              <IconButton title={t('Alle entfernen', 'Remove all')} size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
+                              <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
 
                             )}
                           </Box>
@@ -545,7 +542,7 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!visibleItems.length && <Typography color="text.secondary">{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+          {!visibleItems.length && <Typography color="text.secondary">{t('common.noMatchingItems')}</Typography>}
           <OrderCatalogPager count={visibleItems.length} page={currentItemPage} onPageChange={setItemPage} />
         </Box>
 
@@ -553,33 +550,30 @@ export function FactionOrderForm({
           <Box>
             <Divider sx={{ mb: 2 }} />
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="h6">{t('Aktuelle Bestellung', 'Current order')}</Typography>
+              <Typography variant="h6">{t('forms.factionOrderForm.currentOrder')}</Typography>
               <Chip
                 size="small"
                 color="primary"
                 label={selectedEntryCount === 1
-                  ? t('1 Position', '1 entry')
-                  : t(`${selectedEntryCount} Positionen`, `${selectedEntryCount} entries`)}
+                  ? t('forms.factionOrderForm.1Entry')
+                  : t('forms.factionOrderForm.selectedEntryCountEntries', { selectedEntryCount: selectedEntryCount })}
               />
             </Stack>
             {shortageCount > 0 && (
               <Alert severity="warning" sx={{ mb: 1 }}>
-                {t(
-                  `Die Bestellung überschreitet den verfügbaren Bestand um ${shortageCount} Einheiten. Die Lieferung ist nicht garantiert; die Fehlmenge wird in der Beschaffung als „zu bestellen" angezeigt.`,
-                  `This order exceeds available stock by ${shortageCount} units. Delivery is not guaranteed; the shortage will appear in Procurement as needing to be ordered.`,
-                )}
+                {t('forms.factionOrderForm.thisOrderExceedsAvailableStockByShortageCountUnitsDeliveryIs', { shortageCount: shortageCount })}
               </Alert>
             )}
             <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
               {[
                 ...selectedAssemblies.map((assembly) => ({
                   key: `selected-assembly-${assembly.id}`, id: assembly.id, name: assembly.name, assembly: true,
-                  detail: `${t('Baugruppe', 'Assembly')} · ${Object.keys(assembly.itemQuantities ?? {}).length} ${t('Komponenten', 'components')}`,
+                  detail: `${t('enum.value.assembly')} · ${Object.keys(assembly.itemQuantities ?? {}).length} ${t('forms.factionOrderForm.components')}`,
                   value: assemblyQuantities[assembly.id] ?? '',
                 })),
                 ...selectedItems.map((item) => ({
                   key: `selected-item-${item.id}`, id: item.id, name: item.name, assembly: false,
-                  detail: `${item.category} · ${t('Verfügbar', 'Available')}: ${availableByItem.get(item.id) ?? 0}`,
+                  detail: `${item.category} · ${t('enum.itemStatus.available')}: ${availableByItem.get(item.id) ?? 0}`,
                   value: quantities[item.id] ?? '',
                 })),
               ].map((entry) => (
@@ -589,11 +583,11 @@ export function FactionOrderForm({
                     <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{entry.name}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{entry.detail}</Typography>
                   </Box>
-                  <QuantityControl label={`${entry.name} ${t('Menge', 'quantity')}`} value={entry.value} onChange={(value) => setQuantity(entry.id, value, entry.assembly)} />
+                  <QuantityControl label={`${entry.name} ${t('forms.factionOrderForm.quantity')}`} value={entry.value} onChange={(value) => setQuantity(entry.id, value, entry.assembly)} />
                   <IconButton
                     title={entry.assembly
-                      ? translate('Diese Baugruppe aus der Bestellliste entfernen', 'Remove this assembly from the order list')
-                      : translate('Diesen Artikel aus der Bestellliste entfernen', 'Remove this item from the order list')}
+                      ? translate('forms.factionOrderForm.removeThisAssemblyFromTheOrderList')
+                      : translate('forms.factionOrderForm.removeThisItemFromTheOrderList')}
                     size="small" color="error" onClick={() => removeItem(entry.id, entry.assembly)}>
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -604,29 +598,29 @@ export function FactionOrderForm({
         )}
 
         <TextField
-          label={t('Anmerkungen', 'Notes')}
+          label={t('common.notes')}
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           multiline
           minRows={2}
         />
         <Button title={initialData
-          ? translate('Die Bestellliste mit den geänderten Mengen aktualisieren', 'Update the order list with the changed quantities')
-          : translate('Die Bestellliste mit den eingegebenen Mengen erstellen', 'Create the order list with these quantities')}
+          ? translate('forms.factionOrderForm.updateTheOrderListWithTheChangedQuantities')
+          : translate('forms.factionOrderForm.createTheOrderListWithTheseQuantities')}
           type="submit"
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
           disabled={isLoading || !selectedEvent || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
         >
-          {submitLabel ?? (initialData ? t('Bestellliste aktualisieren', 'Update order list') : t('Bestellliste erstellen', 'Create order list'))}
+          {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('forms.factionOrderForm.createOrderList'))}
         </Button>
       </Stack>
       <Dialog open={Boolean(infoAssembly)} onClose={() => setInfoAssembly(null)} fullWidth maxWidth="sm">
         <DialogTitle>{infoAssembly?.name}</DialogTitle>
         <DialogContent dividers>
           {infoAssembly?.description && <Typography sx={{ mb: 2 }}>{infoAssembly.description}</Typography>}
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Enthaltene Artikel', 'Included items')}</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('forms.factionOrderForm.includedItems')}</Typography>
           <Stack spacing={0.75}>
             {Object.entries(infoAssembly?.itemQuantities ?? {}).map(([itemId, quantity]) => <Typography key={itemId}>{quantity} × {items.find((item) => item.id === itemId)?.name ?? itemId}</Typography>)}
           </Stack>

@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { generalOrderApi } from '../services/orderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { CheckedOutList } from '../components/lists/CheckedOutList';
 import type { CheckedOutRow } from '../types/custody';
 import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
@@ -27,7 +27,7 @@ import type { ReturnSubmissionFormData } from '../types';
 import { GeneralOrderWorkflow } from '../components/orders/GeneralOrderWorkflow';
 
 export function CheckedOutItemsPage() {
-    const t = useLocalizedText();
+    const t = useT();
     const custody = useCustodyBalances();
     const { data: assemblies } = useAssemblies();
     const createReturn = useCreateReturnSubmission();
@@ -64,16 +64,16 @@ export function CheckedOutItemsPage() {
         createReturn.mutate(data, {
             onSuccess: () => {
                 setReturnRow(undefined);
-                showSnackbar(t('Rückgabe wartet auf Bestätigung', 'Return is awaiting acknowledgement'), 'success');
+                showSnackbar(t('pages.checkedOutItems.returnIsAwaitingAcknowledgement'), 'success');
             },
-            onError: () => showSnackbar(t('Rückgabe konnte nicht gemeldet werden', 'Could not submit return'), 'error'),
+            onError: () => showSnackbar(t('pages.checkedOutItems.couldNotSubmitReturn'), 'error'),
         });
     }
 
     if (custody.isError) {
         return <Paper sx={{ p: 3 }}>
-            <Typography>{t('Die vollständige Ausleihliste konnte nicht geladen werden.', 'Could not load the complete checkout list.')}</Typography>
-            <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+            <Typography>{t('pages.checkedOutItems.couldNotLoadTheCompleteCheckoutList')}</Typography>
+            <Button title={translate('common.retryLoadingTheData')} onClick={() => { void custody.refetch(); }}>{t('pages.checkedOutItems.retry')}</Button>
         </Paper>;
     }
 
@@ -90,18 +90,18 @@ export function CheckedOutItemsPage() {
     return (
         <Box>
             <Typography variant="h4" sx={{ mb: 3 }}>
-                {t('Ausgeliehene Artikel', 'Checked-out items')}
+                {t('pages.checkedOutItems.checkedOutItems')}
             </Typography>
 
             <Paper sx={{ p: 2, mb: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField fullWidth size="small" label={t('Artikel, Person oder Event suchen', 'Search item, person, or event')} value={search} onChange={(event) => setSearch(event.target.value)} />
-                    <TextField select size="small" label={t('Person', 'Person')} value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} sx={{ minWidth: 190 }}>
-                        <MenuItem value="">{t('Alle Personen', 'All people')}</MenuItem>
+                    <TextField fullWidth size="small" label={t('pages.checkedOutItems.searchItemPersonOrEvent')} value={search} onChange={(event) => setSearch(event.target.value)} />
+                    <TextField select size="small" label={t('enum.value.person')} value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} sx={{ minWidth: 190 }}>
+                        <MenuItem value="">{t('pages.checkedOutItems.allPeople')}</MenuItem>
                         {people.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
                     </TextField>
-                    <TextField select size="small" label={t('Event', 'Event')} value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} sx={{ minWidth: 220 }}>
-                        <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
+                    <TextField select size="small" label={t('nav.event')} value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} sx={{ minWidth: 220 }}>
+                        <MenuItem value="">{t('pages.checkedOutItems.allEvents')}</MenuItem>
                         {events.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
                     </TextField>
                 </Stack>
@@ -117,7 +117,7 @@ export function CheckedOutItemsPage() {
                 returnPending={createReturn.isPending}
             />
             <Dialog open={Boolean(returnRow)} onClose={() => setReturnRow(undefined)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Rückgabe melden', 'Submit return')}</DialogTitle>
+                <DialogTitle>{t('pages.checkedOutItems.submitReturn')}</DialogTitle>
                 <DialogContent>
                     {returnRow && returnItem && (
                         <ReturnSubmissionForm
@@ -134,12 +134,12 @@ export function CheckedOutItemsPage() {
                 </DialogContent>
             </Dialog>
             {generalReturnRow && !generalReturnOrder && <Dialog open onClose={() => setGeneralReturnRow(undefined)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Rückgabe erfassen', 'Record return')}</DialogTitle>
+                <DialogTitle>{t('pages.checkedOutItems.recordReturn')}</DialogTitle>
                 <DialogContent>
                     <Typography color={generalOrder.isError ? 'error' : 'text.secondary'}>
                         {generalOrder.isError
-                            ? t('Die zugehörige Bestellung konnte nicht geladen werden.', 'Could not load the related order.')
-                            : t('Bestellung wird geladen…', 'Loading order…')}
+                            ? t('pages.checkedOutItems.couldNotLoadTheRelatedOrder')
+                            : t('pages.checkedOutItems.loadingOrder')}
                     </Typography>
                 </DialogContent>
             </Dialog>}

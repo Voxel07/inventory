@@ -17,7 +17,7 @@ export function createCsvEventLogisticsImporter() {
       // Resolve every name before writing so an ambiguous name leaves the event untouched.
       const resolved = row.attendees.map((input) => {
         const matches = known.filter((person) => person.name.toLowerCase().trim() === input.personName.toLowerCase());
-        if (matches.length > 1) throw new Error(translate(`Mehrere Personen heißen ${input.personName}`, `Multiple people are named ${input.personName}`));
+        if (matches.length > 1) throw new Error(translate('services.csvEventLogisticsImport.multiplePeopleAreNamedPersonName', { personName: String(input.personName) }));
         return { input, person: matches.at(0) };
       });
       const attendees = await apiRequest<EventAttendee[]>(`${base}/attendees`);

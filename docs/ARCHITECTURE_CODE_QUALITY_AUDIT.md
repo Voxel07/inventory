@@ -4,9 +4,9 @@ Date: 15 October 2026 · Source revision: `e4af25f` · Status: **remediated in t
 
 ## Remediation status (15 October 2026, uncommitted working tree)
 
-Verification (all run against the final working tree): backend `mvn test` against PostgreSQL 18, frontend `tsc -b` (app, node and the new fixtures project, all `strict`) with TS 7 and TS 6, `eslint .`, `bun test`. Results are listed under "Verification" below. The browser previews were rendered headlessly (Firefox) against the Vite dev server.
+Verification of the earlier remediations: backend `mvn test` against PostgreSQL 18, frontend `tsc -b` (app, node and the new fixtures project, all `strict`) with TS 7 and TS 6, `eslint .`, `bun test`. Results are listed under "Verification" below. The browser previews were rendered headlessly (Firefox) against the Vite dev server. The subsequent L13 translation migration has its own static verification below; builds and test suites were not rerun, per `AGENTS.md`.
 
-Ordered by priority. Every finding was fixed except the remainder listed as "Open" under H12 and L13.
+Ordered by priority. Every finding was fixed except the remainder listed as "Open" under H12.
 
 | Finding | Status | Evidence |
 |---|---|---|
@@ -30,7 +30,7 @@ Ordered by priority. Every finding was fixed except the remainder listed as "Ope
 | L10 | Done | `unique nulls not distinct` on positions |
 | L11 | Done | `AvailabilityEligibility` evaluates item/asset eligibility for the read model and planning snapshot; `PlanningStockOrm.SnapshotRow` replaces positional `Object[]` access |
 | L12 | Done | `codeResolver` treats only 404 as absence; other errors propagate |
-| L13 | Partly done | Business windows named (`CALENDAR_WARNING_DAYS` backend + frontend, `LOT_EXPIRY_WARNING_DAYS`). **Open:** migrating ~2,500 inline DE/EN pairs to i18next keys (PLAN-09, P3) |
+| L13 | Done | Business windows named (`CALENDAR_WARNING_DAYS` backend + frontend, `LOT_EXPIRY_WARNING_DAYS`). Inline DE/EN pairs moved to i18next keys (PLAN-09): 2,488 matching resource keys, typed `useT`/`translate`/`Translator`, whole-message interpolation and plural forms; PDF/import callbacks retain their selected language; `check:i18n` validates catalog/call-site consistency |
 | L15 | Done | Dev H2 profile and `skipITs` removed; two-engine TS setup documented |
 | L16 | Done | Prefix-scoped cache cleanup, `waitUntil` writes |
 | L17 | Done | Browser previews converted to TSX on typed builders (`tests/fixtures/dto.ts`) and a paged mock transport (`tests/fixtures/api.ts`); type-checked by `tsconfig.fixtures.json` in `tsc -b` |
@@ -41,7 +41,15 @@ Found and fixed along the way:
 - The browser previews used removed hooks, list props and roles (`hq_admin`).
 - `tests/refactoring.sample-smoke.ts` still sent the removed `consumable` input.
 
-### Verification
+### L13 completion (15 October 2026)
+
+- [x] Migrate inline pairs across screens, components, services, accessibility labels, CSV progress and PDF documents; replace bilingual status/report/operation maps with keys.
+- [x] Remove `useLocalizedText` and the bilingual `translate` signature; use typed keys and a shared translator callback contract. CRUD entity labels now come from the catalogs.
+- [x] Preserve DE/EN copy and interpolation; move conditional word fragments into complete plural/message variants. Keep selected-language callbacks stable during asynchronous imports/exports.
+- [x] Add `check:i18n` to lint; enforce matching locale keys, placeholders and plural forms, valid static call-site keys and required interpolation arguments.
+- [x] Static verification: `check:i18n` (2,488 keys, 3,079 calls), TypeScript 7 and TypeScript 6 `--noEmit` checks (app, fixtures, node), `eslint .`, and `git diff --check`. No app builds or test suites run for this refactor, per `AGENTS.md`.
+
+### Verification of earlier remediations
 
 | Check | Result |
 |---|---|
@@ -58,7 +66,7 @@ Found and fixed along the way:
 - Used the existing graph for orientation, then verified findings in current source. Its historical memories and line references are not current evidence. Graph traversal/extraction used no additional LLM tokens; no graph artifacts were rewritten.
 - Read-only ESLint check: `node node_modules/eslint/bin/eslint.js src vite.config.ts --no-cache` **passed**. It used the installed dependencies, which differ from some current manifest versions. No TypeScript compilation or backend compilation was performed.
 - **Confirmed** means the cited source demonstrates the pattern or missing guard. Failure scenarios below are reasoned from source, not reproduced in a browser/database. Query counts, concurrency effects and deployment behavior still need measurement.
-- All findings are **Open**. The commit checklist below tracks future work in this same file. Existing backlog equivalents are noted to avoid treating previously documented drift as a newly discovered bug.
+- The findings below describe the original audited revision. The remediation status above and commit checklist below track completed work and remaining scope. Existing backlog equivalents are noted to avoid treating previously documented drift as a newly discovered bug.
 
 ## Critical
 
@@ -232,9 +240,9 @@ Implemented in the uncommitted working tree (15 October 2026); `[x]` done, `[~]`
 | [x] | 23 `refactor: tighten UI and input boundaries` | L06..08, L12; separate tooltip typing from lookup/error cleanup | Polymorphic controls/ref behavior; malformed command fields; network/session errors distinct from absence. |
 | [x] | 24 `chore: consolidate config and tooling` | L14/L15; separate Compose, logging and Maven/frontend tooling commits | Documented variables reach both deployment modes; test H2 retained; intentional compiler requirements recorded. |
 | [x] | 25 `fix: track service worker cache operations` | L16 | Worker shutdown/quota behavior and cache-prefix-only activation cleanup. |
-| [~] | 26 `chore: align fixtures and translation ownership` | L13/L17; one fixture/screen family per commit | Typed fixtures match DTOs; adversarial inputs remain explicit; DE/EN and export labels preserved. |
+| [x] | 26 `chore: align fixtures and translation ownership` | L13/L17; fixtures typed, DE/EN pairs migrated to typed i18next keys | Typed fixtures match DTOs; adversarial inputs remain explicit; DE/EN and export labels preserved; catalog parity/interpolation checks run with lint. |
 
-Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. Open: 19 (PLAN-02 aggregate convergence) and the i18next migration in 26 (PLAN-09).
+Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. Open: 19 (PLAN-02 aggregate convergence).
 
 ## Focused follow-up: lot-to-item handling
 

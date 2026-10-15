@@ -23,7 +23,7 @@ import { useDamageReports } from '../hooks/useDamageReports';
 import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { formatStatus } from '../utils/formatters';
 import { formatDateTime } from '../utils/dateFormat';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformCustody, canPerformMaintenance } from '../utils/access';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
@@ -43,7 +43,7 @@ const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'de
 export function AssetDetail() {
     const { user } = useAuth();
     const canReportDamage = canPerformCustody(user);
-    const t = useLocalizedText();
+    const t = useT();
     const navigate = useNavigate();
     const { itemId, assetId } = useParams<{ itemId: string; assetId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -86,7 +86,7 @@ export function AssetDetail() {
             .map((report) => ({
                 id: `damage:${report.id}`,
                 timestamp: report.timestamp,
-                title: t(`Schadensbericht · ${formatStatus(report.status)}`, `Damage report · ${formatStatus(report.status)}`),
+                title: t('pages.assetDetail.damageReportStatus', { status: String(formatStatus(report.status)) }),
                 detail: report.description,
                 color: 'error.main',
             }));
@@ -103,12 +103,12 @@ export function AssetDetail() {
     }
 
     if (itemLoading || assetsLoading) return <Box><Skeleton height={70} /><Skeleton height={240} /><Skeleton height={240} /></Box>;
-    if (!item || !asset) return <Alert severity="error">{t('Asset nicht gefunden', 'Asset not found')}</Alert>;
+    if (!item || !asset) return <Alert severity="error">{t('pages.assetDetail.assetNotFound')}</Alert>;
 
     return (
         <Box>
-            <Button title={translate('Zur Detailseite des Artikels zurückkehren', 'Return to the item details')} startIcon={<ArrowBackIcon />} onClick={() => navigate(`/items/${item.id}`)} sx={{ mb: 2 }}>
-                {t('Zurück zum Artikel', 'Back to item')}
+            <Button title={translate('pages.assetDetail.returnToTheItemDetails')} startIcon={<ArrowBackIcon />} onClick={() => navigate(`/items/${item.id}`)} sx={{ mb: 2 }}>
+                {t('pages.assetDetail.backToItem')}
             </Button>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <Box>
@@ -118,38 +118,38 @@ export function AssetDetail() {
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
-                    {canReportDamage && <Button title={translate('Einen Schaden an diesem Gerät melden', 'Report damage to this asset')} variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
-                        {t('Schaden melden', 'Report damage')}
+                    {canReportDamage && <Button title={translate('pages.assetDetail.reportDamageToThisAsset')} variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
+                        {t('common.reportDamage')}
                     </Button>}
                 </Stack>
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(260px, 0.8fr) minmax(0, 1.7fr)' }, gap: 3 }}>
                 <Paper sx={{ p: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>{t('Asset-Informationen', 'Asset information')}</Typography>
+                    <Typography variant="h6" sx={{ mb: 2 }}>{t('pages.assetDetail.assetInformation')}</Typography>
                     <Stack spacing={1.5} divider={<Divider flexItem />}>
-                        <InfoRow label={t('Zustand', 'Condition')} value={formatStatus(asset.conditionStatus)} />
-                        <InfoRow label={t('Hersteller / Modell', 'Manufacturer / model')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
+                        <InfoRow label={t('pages.assetDetail.condition')} value={formatStatus(asset.conditionStatus)} />
+                        <InfoRow label={t('pages.assetDetail.manufacturerModel')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
-                            <InfoRow label={t('Betriebsstunden', 'Operating hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
-                            {canEditAsset && <Button title={translate('Gelaufene Stunden oder einen neuen Zählerstand erfassen', 'Log hours run or a new meter reading')} size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>
-                                {t('Erfassen', 'Log')}
+                            <InfoRow label={t('enum.value.operating_hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
+                            {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>
+                                {t('pages.assetDetail.log')}
                             </Button>}
                         </Box>
-                        <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('Aktueller Ort', 'Current location')} value={asset.currentLocationName || '—'} />
-                        <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('Aktueller Entleiher', 'Current custodian')} value={asset.currentCustodianName || '—'} />
-                        <InfoRow label={t('Notizen', 'Notes')} value={asset.notes || '—'} />
-                        <InfoRow label={t('Registriert', 'Registered')} value={formatDateTime(asset.createdAt)} />
+                        <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')} value={asset.currentLocationName || '—'} />
+                        <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('pages.assetDetail.currentCustodian')} value={asset.currentCustodianName || '—'} />
+                        <InfoRow label={t('pages.assetDetail.notes')} value={asset.notes || '—'} />
+                        <InfoRow label={t('pages.assetDetail.registered')} value={formatDateTime(asset.createdAt)} />
                     </Stack>
                 </Paper>
 
                 <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}><HistoryIcon />{t('Nutzung & Verlauf', 'Usage & history')}</Typography>
+                    <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}><HistoryIcon />{t('pages.assetDetail.usageHistory')}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {t('Zeigt Ausgaben, Rückgaben, Events, Fraktionen, Reparaturen und Schadensmeldungen dieses Einzelgeräts.', 'Shows checkouts, returns, events, factions, repairs, and damage reports for this exact unit.')}
+                        {t('pages.assetDetail.showsCheckoutsReturnsEventsFactionsRepairsAndDamageReportsFor')}
                     </Typography>
                     {(transactionsLoading || reportsLoading) ? <Skeleton height={180} /> : activity.length === 0 ? (
-                        <Alert severity="info">{t('Für dieses Asset wurde noch keine Nutzung protokolliert.', 'No usage has been recorded for this asset yet.')}</Alert>
+                        <Alert severity="info">{t('pages.assetDetail.noUsageHasBeenRecordedForThisAssetYet')}</Alert>
                     ) : (
                         <Stack spacing={0}>
                             {activity.map((entry) => (
@@ -169,12 +169,12 @@ export function AssetDetail() {
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                     <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ReportProblemOutlinedIcon color={openReports.length ? 'error' : undefined} />
-                        {t('Gemeldete Schäden', 'Reported damage')} ({assetReports.length})
+                        {t('pages.assetDetail.reportedDamage')} ({assetReports.length})
                     </Typography>
-                    {openReports.length > 0 && <Chip size="small" color="error" label={t(`${openReports.length} offen`, `${openReports.length} open`)} />}
+                    {openReports.length > 0 && <Chip size="small" color="error" label={t('pages.assetDetail.openReportCountOpen', { openReportCount: String(openReports.length) })} />}
                 </Stack>
                 {reportsLoading ? <Skeleton height={80} /> : assetReports.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">{t('Für dieses Gerät wurde noch kein Schaden gemeldet.', 'No damage has been reported for this asset.')}</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noDamageHasBeenReportedForThisAsset')}</Typography>
                 ) : (
                     <Stack spacing={1}>
                         {assetReports.map((report) => {
@@ -188,7 +188,7 @@ export function AssetDetail() {
                                     </Typography>
                                 </Stack>
                                 <Typography sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{report.description}</Typography>
-                                {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}
+                                {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{t('pages.assetDetail.actionTaken')}: {report.resolutionNotes}</Typography>}
                             </Box>;
                         })}
                     </Stack>
@@ -199,21 +199,21 @@ export function AssetDetail() {
 
             <EquipmentOwnership item={item} canEdit={canEditPrivate} />
             {canEditPrivate && <Stack direction="row" spacing={1} sx={{ my: 2 }}>
-                <Button title={t('Gerät an einen anderen Lagerort verschieben', 'Move asset to another storage location')} onClick={() => setPrivateAction('relocate')}>{t('Gerät verschieben', 'Move asset')}</Button>
-                <Button title={t('Zustand des eigenen Geräts aktualisieren', 'Update private asset condition')} onClick={() => setPrivateAction('condition')}>{t('Zustand aktualisieren', 'Update condition')}</Button>
+                <Button title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} onClick={() => setPrivateAction('relocate')}>{t('pages.assetDetail.moveAsset')}</Button>
+                <Button title={t('pages.assetDetail.updatePrivateAssetCondition')} onClick={() => setPrivateAction('condition')}>{t('pages.assetDetail.updateCondition')}</Button>
             </Stack>}
-            {canEditPrivate && privateAction && <OperationForm title={privateAction === 'relocate' ? t('Gerät verschieben', 'Move asset') : t('Zustand aktualisieren', 'Update condition')}
+            {canEditPrivate && privateAction && <OperationForm title={privateAction === 'relocate' ? t('pages.assetDetail.moveAsset') : t('pages.assetDetail.updateCondition')}
                 onClose={() => setPrivateAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
                 fields={privateAction === 'relocate'
-                    ? [{ key: 'locationId', label: t('Lagerort', 'Location'), required: true, options: locations.filter(l => l.active).map(l => ({ value: l.id, label: l.name })) }]
-                    : [{ key: 'conditionStatus', label: t('Zustand', 'Condition'), required: true, options: ['new_condition', 'good', 'fair', 'damaged', 'unsafe'].map(value => ({ value, label: formatStatus(value) })) }]}
+                    ? [{ key: 'locationId', label: t('enum.value.location'), required: true, options: locations.filter(l => l.active).map(l => ({ value: l.id, label: l.name })) }]
+                    : [{ key: 'conditionStatus', label: t('pages.assetDetail.condition'), required: true, options: ['new_condition', 'good', 'fair', 'damaged', 'unsafe'].map(value => ({ value, label: formatStatus(value) })) }]}
                 onSave={values => apiRequest(`/api/items/${item.id}/assets/${asset.id}/${privateAction}`, { method: 'POST', body: { expectedVersion: asset.version, ...(privateAction === 'relocate' ? { locationId: values.locationId } : { conditionStatus: values.conditionStatus }) } })} />}
             <OperatingHoursDialog itemId={item.id} asset={hoursOpen ? asset : null} onClose={() => setHoursOpen(false)} />
             <DamageReportDialog
                 key={asset.id}
                 open={damageOpen}
                 onClose={closeDamageDialog}
-                title={t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}
+                title={t('pages.assetDetail.reportDamageToAssetCode', { assetCode: String(asset.assetCode) })}
                 preselectedItemId={item.id}
                 preselectedAssetId={asset.id}
                 preselectedAsset={asset}

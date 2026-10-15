@@ -43,7 +43,7 @@ import { useUIStore } from '../store/uiStore';
 import type { AssemblyFormData, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
 import { ItemsList } from '../components/lists/ItemsList';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canOperateWarehouse } from '../utils/access';
 import { InventorySharing } from '../components/items/InventorySharing';
@@ -53,7 +53,7 @@ export function AssemblyDetail() {
     const { user } = useAuth();
     const canTransact = canOperateWarehouse(user);
 
-    const t = useLocalizedText();
+    const t = useT();
     const { eventTypes, factionNames } = useFactionCatalog();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -85,9 +85,9 @@ export function AssemblyDetail() {
             {
                 onSuccess: () => {
                     setEditOpen(false);
-                    showSnackbar(t('Baugruppe aktualisiert', 'Assembly updated'), 'success');
+                    showSnackbar(t('pages.assemblyDetail.assemblyUpdated'), 'success');
                 },
-                onError: () => showSnackbar(t('Fehler beim Aktualisieren der Baugruppe', 'Could not update assembly'), 'error'),
+                onError: () => showSnackbar(t('pages.assemblyDetail.couldNotUpdateAssembly'), 'error'),
             },
         );
     }
@@ -119,11 +119,11 @@ export function AssemblyDetail() {
                     setCheckoutAmount(1);
                     setCheckoutEventType('');
                     setCheckoutFaction('');
-                    showSnackbar(t('Baugruppe erfolgreich ausgeliehen', 'Assembly checked out successfully'), 'success');
+                    showSnackbar(t('pages.assemblyDetail.assemblyCheckedOutSuccessfully'), 'success');
                 },
                 onError: (error) => {
                     if (isOfflineQueuedError(error)) return;
-                    showSnackbar(t('Fehler beim Ausleihen der Baugruppe', 'Could not check out assembly'), 'error');
+                    showSnackbar(t('pages.assemblyDetail.couldNotCheckOutAssembly'), 'error');
                 },
             },
         );
@@ -145,8 +145,8 @@ export function AssemblyDetail() {
                 },
             },
             {
-                onSuccess: () => showSnackbar(t('Artikel zur Baugruppe hinzugefügt', 'Item added to assembly'), 'success'),
-                onError: () => showSnackbar(t('Fehler beim Hinzufügen des Artikels', 'Could not add item'), 'error'),
+                onSuccess: () => showSnackbar(t('pages.assemblyDetail.itemAddedToAssembly'), 'success'),
+                onError: () => showSnackbar(t('pages.assemblyDetail.couldNotAddItem'), 'error'),
             }
         );
     }
@@ -165,8 +165,8 @@ export function AssemblyDetail() {
                 },
             },
             {
-                onSuccess: () => showSnackbar(t('Artikel aus der Baugruppe entfernt', 'Item removed from assembly'), 'success'),
-                onError: () => showSnackbar(t('Fehler beim Entfernen des Artikels', 'Could not remove item'), 'error'),
+                onSuccess: () => showSnackbar(t('pages.assemblyDetail.itemRemovedFromAssembly'), 'success'),
+                onError: () => showSnackbar(t('pages.assemblyDetail.couldNotRemoveItem'), 'error'),
             }
         );
     }
@@ -190,14 +190,14 @@ export function AssemblyDetail() {
         return (
             <Box>
                 <TooltipButton
-                    tooltipText={t('Zurück zur Baugruppenübersicht', 'Back to assemblies')}
+                    tooltipText={t('pages.assemblyDetail.backToAssemblies')}
                     icon={<ArrowBackIcon />}
-                    label={t('Zurück zu den Baugruppen', 'Back to assemblies')}
+                    label={t('pages.assemblyDetail.backToAssemblies2')}
                     variant="text"
                     onClick={() => navigate('/assemblies')}
                 />
                 <Typography variant="h5" sx={{ mt: 2 }}>
-                    {t('Baugruppe nicht gefunden', 'Assembly not found')}
+                    {t('pages.assemblyDetail.assemblyNotFound')}
                 </Typography>
             </Box>
         );
@@ -236,7 +236,7 @@ export function AssemblyDetail() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
                 <TooltipButton
                     variant="icon"
-                    tooltipText={t('Zurück zur Baugruppenübersicht', 'Back to assemblies')}
+                    tooltipText={t('pages.assemblyDetail.backToAssemblies')}
                     icon={<ArrowBackIcon />}
                     onClick={() => navigate('/assemblies')}
                 />
@@ -245,22 +245,22 @@ export function AssemblyDetail() {
                 </Typography>
                 {canEdit && <TooltipButton
                     variant="icon"
-                    tooltipText={t('Baugruppendetails bearbeiten', 'Edit assembly details')}
+                    tooltipText={t('pages.assemblyDetail.editAssemblyDetails')}
                     icon={<EditIcon />}
                     onClick={() => setEditOpen(true)}
                 />}
                 {canTransact && <TooltipButton
-                    tooltipText={t('Schaden an dieser Baugruppe melden', 'Report damage to this assembly')}
+                    tooltipText={t('pages.assemblyDetail.reportDamageToThisAssembly')}
                     icon={<ReportProblemOutlinedIcon />}
-                    label={t('Schaden melden', 'Report damage')}
+                    label={t('common.reportDamage')}
                     variant="outlined"
                     color="error"
                     onClick={() => setDamageOpen(true)}
                 />}
                 {canTransact && <TooltipButton
-                    tooltipText={t('Alle Artikel dieser Baugruppe ausleihen', 'Check out all items in this assembly')}
+                    tooltipText={t('pages.assemblyDetail.checkOutAllItemsInThisAssembly')}
                     icon={<ShoppingCartCheckoutIcon />}
-                    label={t('Ausleihen', 'Check out')}
+                    label={t('enum.action.checkout')}
                     variant="contained"
                     onClick={() => setCheckoutOpen(true)}
                     disabled={!canCheckout}
@@ -291,7 +291,7 @@ export function AssemblyDetail() {
                     <Stack spacing={2} sx={{ minWidth: 0 }}>
                         <Box>
                             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
-                                {t('Event-Nutzung', 'Event use')}
+                                {t('pages.assemblyDetail.eventUse')}
                             </Typography>
                             {assembly.eventTypes?.length ? (
                                 <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -300,7 +300,7 @@ export function AssemblyDetail() {
                                     ))}
                                 </Stack>
                             ) : (
-                                <Typography variant="body2" color="text.secondary">{t('Keinem Event zugeordnet', 'Not assigned to an event')}</Typography>
+                                <Typography variant="body2" color="text.secondary">{t('pages.assemblyDetail.notAssignedToAnEvent')}</Typography>
                             )}
                         </Box>
 
@@ -308,7 +308,7 @@ export function AssemblyDetail() {
 
                         {assembly.hint && (
                             <Alert severity="info" sx={{ py: 0.75 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Montagehinweis', 'Assembly instruction')}</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('pages.assemblyDetail.assemblyInstruction')}</Typography>
                                 <Typography variant="body2">{assembly.hint}</Typography>
                             </Alert>
                         )}
@@ -322,10 +322,10 @@ export function AssemblyDetail() {
                             mt: 'auto !important',
                         }}>
                             {[
-                                [t('Komponenten', 'Components'), String(assemblyItems.length), 'text.primary'],
-                                [t('Gesamtwert', 'Total value'), formatMoney(totalValue), 'text.primary'],
-                                [t('Verfügbar', 'Available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
-                                [t('Erstellt', 'Created'), formatDate(assembly.created), 'text.primary'],
+                                [t('pages.assemblyDetail.components'), String(assemblyItems.length), 'text.primary'],
+                                [t('pages.assemblyDetail.totalValue'), formatMoney(totalValue), 'text.primary'],
+                                [t('enum.itemStatus.available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
+                                [t('pages.assemblyDetail.created'), formatDate(assembly.created), 'text.primary'],
                             ].map(([label, value, color]) => (
                                 <Box key={label} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
@@ -339,20 +339,20 @@ export function AssemblyDetail() {
 
             {insufficientItems.length > 0 && (
                 <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
-                    {t('Unzureichender Bestand für', 'Insufficient stock for')}: {insufficientItems.map((i) => {
+                    {t('pages.assemblyDetail.insufficientStockFor')}: {insufficientItems.map((i) => {
                         const needed = assembly.itemQuantities?.[i.id] ?? 1;
                         const available = stockInfo.get(i.id) ?? 0;
-                        return t(`${i.name} (benötigt: ${needed}, vorhanden: ${available})`, `${i.name} (needed: ${needed}, available: ${available})`);
+                        return t('pages.assemblyDetail.nameNeededNeededAvailableAvailable', { name: String(i.name), needed: needed, available: available });
                     }).join(', ')}
                 </Alert>
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6">
-                    {t('Komponenten in dieser Baugruppe', 'Items in this assembly')}
+                    {t('pages.assemblyDetail.itemsInThisAssembly')}
                 </Typography>
                 {canEdit && <Box sx={{ minWidth: 250, maxWidth: 350, flex: 1 }}>
-                    <ItemAutocomplete size="small" label={t('Artikel schnell hinzufügen', 'Quickly add item')} value={null}
+                    <ItemAutocomplete size="small" label={t('pages.assemblyDetail.quicklyAddItem')} value={null}
                         filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
                         onChange={(newItem) => { if (newItem) handleAddItem(newItem.id); }} />
                 </Box>}
@@ -365,17 +365,17 @@ export function AssemblyDetail() {
 
             {/* Checkout Dialog */}
             <Dialog open={checkoutOpen} fullScreen={isMobile} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('Baugruppe ausleihen', 'Check out assembly')}</DialogTitle>
+                <DialogTitle>{t('pages.assemblyDetail.checkOutAssembly')}</DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{ mb: 2 }}>
-                        {t(`Dies leiht alle Artikel in „${assembly.name}“ mit den angegebenen Mengen aus.`, `This checks out every item in “${assembly.name}” in the specified quantities.`)}
+                        {t('pages.assemblyDetail.thisChecksOutEveryItemInNameInTheSpecified', { name: String(assembly.name) })}
                     </DialogContentText>
-                    <TextField select fullWidth required label={t('Eventtermin', 'Event occurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
+                    <TextField select fullWidth required label={t('pages.assemblyDetail.eventOccurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
                         {checkoutEvents.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
                     </TextField>
                     <TextField
                         select
-                        label={t('Event', 'Event')}
+                        label={t('nav.event')}
                         value={checkoutEventType}
                         onChange={(e) => {
                             setCheckoutEventType(e.target.value as EventType); setCheckoutEventId('');
@@ -391,7 +391,7 @@ export function AssemblyDetail() {
                     </TextField>
                     <TextField
                         select
-                        label={t('Fraktion', 'Faction')}
+                        label={t('common.faction')}
                         value={checkoutFaction}
                         onChange={(e) => setCheckoutFaction(e.target.value)}
                         required
@@ -404,7 +404,7 @@ export function AssemblyDetail() {
                         ))}
                     </TextField>
                     <TextField
-                        label={t('Auszuleihende Menge', 'Quantity to check out')}
+                        label={t('pages.assemblyDetail.quantityToCheckOut')}
                         type="number"
                         value={checkoutAmount}
                         onChange={(e) => {
@@ -416,14 +416,14 @@ export function AssemblyDetail() {
                         slotProps={{ htmlInput: { min: 1, max: maxAssembliesPossible } }}
                     />
                     <TextField
-                        label={t('Grund', 'Reason')}
+                        label={t('common.reason')}
                         value={checkoutReason}
                         onChange={(e) => setCheckoutReason(e.target.value)}
                         fullWidth
                         sx={{ mb: 2 }}
                     />
                     <TextField
-                        label={t('Anmerkungen (optional)', 'Notes (optional)')}
+                        label={t('pages.assemblyDetail.notesOptional')}
                         value={checkoutNotes}
                         onChange={(e) => setCheckoutNotes(e.target.value)}
                         fullWidth
@@ -433,14 +433,14 @@ export function AssemblyDetail() {
                 </DialogContent>
                 <DialogActions>
 
-                    <Button title={t('Ausleihvorgang abbrechen', 'Cancel checkout')} onClick={() => setCheckoutOpen(false)}>{t('Abbrechen', 'Cancel')}</Button>
+                    <Button title={t('pages.assemblyDetail.cancelCheckout')} onClick={() => setCheckoutOpen(false)}>{t('common.cancel')}</Button>
 
-                    <Button title={t('Alle Artikel in dieser Baugruppe dauerhaft ausleihen', 'Check out all items in this assembly')}
+                    <Button title={t('pages.assemblyDetail.checkOutAllItemsInThisAssembly2')}
                         variant="contained"
                         onClick={handleCheckout}
                         disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction || !checkoutEventId}
                     >
-                        {t('Alle Artikel ausleihen', 'Check out all items')}
+                        {t('pages.assemblyDetail.checkOutAllItems')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -448,7 +448,7 @@ export function AssemblyDetail() {
             {/* Edit Dialog */}
             <FormDialog open={editOpen} onClose={() => setEditOpen(false)}>
                 <AssemblyForm
-                    title={t('Baugruppe bearbeiten', 'Edit assembly')}
+                    title={t('pages.assemblyDetail.editAssembly')}
                     onCancel={() => setEditOpen(false)}
                     initialData={assembly}
                     onSubmit={handleUpdate}
@@ -459,7 +459,7 @@ export function AssemblyDetail() {
                 key={assembly.id}
                 open={damageOpen}
                 onClose={() => setDamageOpen(false)}
-                title={t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}
+                title={t('pages.assemblyDetail.reportDamageToName', { name: String(assembly.name) })}
                 assemblies={[assembly]}
                 preselectedAssemblyId={assembly.id}
             />

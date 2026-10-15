@@ -19,7 +19,7 @@ import { timelineHooks } from '../hooks/useEventLogistics';
 import { useEventWorkspace } from '../hooks/useEventWorkspace';
 import { useAuth } from '../hooks/useAuth';
 import { canEditEvents } from '../utils/access';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { useUIStore } from '../store/uiStore';
 import type { EventTimelineEntry, EventTimelineInput, TimelineCategory, TimelineStatus } from '../types/eventLogistics';
@@ -27,25 +27,22 @@ import type { EventTimelineEntry, EventTimelineInput, TimelineCategory, Timeline
 const statusColors = { planned: 'default', in_progress: 'info', completed: 'success' } as const;
 
 function useStatusLabels(): Record<TimelineStatus, string> {
-  const t = useLocalizedText();
-  return { planned: t('Geplant', 'Planned'), in_progress: t('In Arbeit', 'In progress'), completed: t('Abgeschlossen', 'Completed') };
+  const t = useT();
+  return { planned: t('common.planned'), in_progress: t('pages.eventTimeline.inProgress'), completed: t('common.completed') };
 }
 
 export function EventTimeline() {
-  const t = useLocalizedText();
+  const t = useT();
   const workspace = useEventWorkspace();
   return <Box>
-    <PageHeader title={t('Eventzeitplan', 'Event timeline')} description={t(
-      'Spielaktionen und Aufbau im Überblick — zwei Zeitpläne für ein gemeinsames Event.',
-      'Game actions and event preparation at a glance — two schedules for one event.',
-    )} />
+    <PageHeader title={t('common.eventTimeline')} description={t('pages.eventTimeline.gameActionsAndEventPreparationAtAGlanceTwoSchedules')} />
     <EventWorkspace workspace={workspace} page="timeline" />
     {workspace.event && !workspace.query.error && <TimelineSchedule key={workspace.event.id} eventId={workspace.event.id} startDate={workspace.event.startDate} />}
   </Box>;
 }
 
 function TimelineSchedule({ eventId, startDate }: { eventId: string; startDate: string }) {
-  const t = useLocalizedText();
+  const t = useT();
   const statusLabels = useStatusLabels();
   const { user } = useAuth();
   const canEdit = canEditEvents(user);
@@ -78,44 +75,44 @@ function TimelineSchedule({ eventId, startDate }: { eventId: string; startDate: 
     save.mutate({ id: editing && editing !== 'new' ? editing.id : undefined, data }, {
       onSuccess: () => {
         setEditing(null);
-        showSnackbar(t('Zeitplaneintrag gespeichert', 'Timeline entry saved'), 'success');
+        showSnackbar(t('pages.eventTimeline.timelineEntrySaved'), 'success');
       },
     });
   }
 
   return <>
     <Paper sx={{ mb: 3 }}>
-      <Tabs value={category} onChange={(_, value: TimelineCategory) => changeCategory(value)} variant="scrollable" scrollButtons="auto" aria-label={t('Eventzeitpläne', 'Event schedules')}>
+      <Tabs value={category} onChange={(_, value: TimelineCategory) => changeCategory(value)} variant="scrollable" scrollButtons="auto" aria-label={t('pages.eventTimeline.eventSchedules')}>
         <Tab value="in_game" id="timeline-tab-in_game" aria-controls="timeline-panel-in_game" icon={<SportsEsportsOutlinedIcon />} iconPosition="start"
-          label={t(`Im Spiel (${entries.filter((entry) => entry.category === 'in_game').length})`, `In game (${entries.filter((entry) => entry.category === 'in_game').length})`)} />
+          label={t('pages.eventTimeline.inGameValueCount', { valueCount: String(entries.filter((entry) => entry.category === 'in_game').length) })} />
         <Tab value="preparation" id="timeline-tab-preparation" aria-controls="timeline-panel-preparation" icon={<ConstructionOutlinedIcon />} iconPosition="start"
-          label={t(`Aufbau & Vorbereitung (${entries.filter((entry) => entry.category === 'preparation').length})`, `Setup & preparation (${entries.filter((entry) => entry.category === 'preparation').length})`)} />
+          label={t('pages.eventTimeline.setupPreparationValueCount', { valueCount: String(entries.filter((entry) => entry.category === 'preparation').length) })} />
       </Tabs>
     </Paper>
     <Box role="tabpanel" id={`timeline-panel-${category}`} aria-labelledby={`timeline-tab-${category}`}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
         <Box>
-          <Typography variant="h5" component="h2">{category === 'in_game' ? t('Was passiert im Spiel?', 'What happens in game?') : t('Alles bereit für das Event', 'Getting the event ready')}</Typography>
+          <Typography variant="h5" component="h2">{category === 'in_game' ? t('pages.eventTimeline.whatHappensInGame') : t('pages.eventTimeline.gettingTheEventReady')}</Typography>
           <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>{category === 'in_game'
-            ? t('Briefings, Missionen und geplante Spielaktionen in zeitlicher Reihenfolge.', 'Briefings, missions and planned game actions in chronological order.')
-            : t('Aufbau, Vorbereitung und Abbau — auch vor und nach den Eventtagen.', 'Setup, preparation and teardown — including before and after the event dates.')}</Typography>
+            ? t('pages.eventTimeline.briefingsMissionsAndPlannedGameActionsInChronologicalOrder')
+            : t('pages.eventTimeline.setupPreparationAndTeardownIncludingBeforeAndAfterTheEvent')}</Typography>
         </Box>
         {canEdit && <Button variant="contained" startIcon={<AddIcon />} disabled={!ready}
-          onClick={() => { save.reset(); setEditing('new'); }}>{category === 'in_game' ? t('Aktion hinzufügen', 'Add action') : t('Aufgabe hinzufügen', 'Add task')}</Button>}
+          onClick={() => { save.reset(); setEditing('new'); }}>{category === 'in_game' ? t('pages.eventTimeline.addAction') : t('pages.eventTimeline.addTask')}</Button>}
       </Stack>
       <QueryFeedback isLoading={query.isLoading} error={query.error} />
       {ready && <>
         {!!schedule.length && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 3 }}>
-          <EventMetric label={t('Geplante Einträge', 'Scheduled entries')} value={schedule.length} detail={t(`An ${days.length} Tagen`, `Across ${days.length} days`)} />
-          <EventMetric label={t('Fortschritt', 'Progress')} value={`${completed} / ${schedule.length}`} detail={t('Einträge abgeschlossen', 'Entries completed')} />
-          <EventMetric label={t('Erster Termin', 'First scheduled day')} value={formatDate(schedule[0].startsAt)} detail={t(`Bis ${formatDate(lastEnd)}`, `Through ${formatDate(lastEnd)}`)} />
+          <EventMetric label={t('pages.eventTimeline.scheduledEntries')} value={schedule.length} detail={t('pages.eventTimeline.acrossDayCountDays', { dayCount: String(days.length) })} />
+          <EventMetric label={t('pages.eventTimeline.progress')} value={`${completed} / ${schedule.length}`} detail={t('pages.eventTimeline.entriesCompleted')} />
+          <EventMetric label={t('pages.eventTimeline.firstScheduledDay')} value={formatDate(schedule[0].startsAt)} detail={t('pages.eventTimeline.throughLastEnd', { lastEnd: String(formatDate(lastEnd)) })} />
         </Box>}
         {!schedule.length ? <Paper sx={{ p: { xs: 3, sm: 5 }, textAlign: 'center', borderStyle: 'dashed' }}>
           {category === 'in_game' ? <SportsEsportsOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} /> : <ConstructionOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} />}
-          <Typography variant="h6" component="h3">{category === 'in_game' ? t('Die Spielplanung beginnt hier', 'Start planning the game') : t('Die Eventvorbereitung beginnt hier', 'Start preparing the event')}</Typography>
+          <Typography variant="h6" component="h3">{category === 'in_game' ? t('pages.eventTimeline.startPlanningTheGame') : t('pages.eventTimeline.startPreparingTheEvent')}</Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>{category === 'in_game'
-            ? t('Plane die erste Aktion mit Uhrzeit, Ort und verantwortlicher Person.', 'Schedule the first action with a time, location and responsible person.')
-            : t('Plane, wann die einzelnen Eventbereiche aufgebaut und vorbereitet werden.', 'Plan when each part of the event will be built and prepared.')}</Typography>
+            ? t('pages.eventTimeline.scheduleTheFirstActionWithATimeLocationAndResponsible')
+            : t('pages.eventTimeline.planWhenEachPartOfTheEventWillBeBuilt')}</Typography>
         </Paper> : days.map((day) => <Box component="section" key={day} aria-label={formatDate(day)} sx={{ mb: 3 }}>
           <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center' }}>
             <Chip label={formatDate(day)} color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
@@ -139,8 +136,8 @@ function TimelineSchedule({ eventId, startDate }: { eventId: string; startDate: 
                     <Typography variant="h6" component="h3" sx={{ overflowWrap: 'anywhere' }}>{entry.title}</Typography>
                   </Box>
                   {canEdit && <Stack direction="row" sx={{ flexShrink: 0 }}>
-                    <IconButton size="small" title={t(`${entry.title} bearbeiten`, `Edit ${entry.title}`)} onClick={() => { save.reset(); setEditing(entry); }}><EditOutlinedIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" title={t(`${entry.title} entfernen`, `Remove ${entry.title}`)} onClick={() => setDeleting(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" title={t('pages.eventTimeline.editTitle', { title: String(entry.title) })} onClick={() => { save.reset(); setEditing(entry); }}><EditOutlinedIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" title={t('pages.eventTimeline.removeTitle', { title: String(entry.title) })} onClick={() => setDeleting(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>
                   </Stack>}
                 </Stack>
                 <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -159,11 +156,11 @@ function TimelineSchedule({ eventId, startDate }: { eventId: string; startDate: 
       {editing && <TimelineForm entry={editing === 'new' ? undefined : editing} category={category} startDate={startDate} pending={save.isPending}
         error={save.error?.message} onSubmit={submit} onCancel={() => setEditing(null)} />}
     </FormDialog>
-    <ConfirmDialog open={Boolean(deleting)} title={t('Zeitplaneintrag entfernen', 'Remove timeline entry')}
-      message={t(`„${deleting?.title ?? ''}“ aus dem Zeitplan entfernen?`, `Remove “${deleting?.title ?? ''}” from the timeline?`)}
-      actionLabel={t('Entfernen', 'Remove')} actionColor="error" pending={remove.isPending} onClose={() => { if (!remove.isPending) setDeleting(null); }}
+    <ConfirmDialog open={Boolean(deleting)} title={t('pages.eventTimeline.removeTimelineEntry')}
+      message={t('pages.eventTimeline.removeTitleFromTheTimeline', { title: String(deleting?.title ?? '') })}
+      actionLabel={t('common.remove')} actionColor="error" pending={remove.isPending} onClose={() => { if (!remove.isPending) setDeleting(null); }}
       onConfirm={() => { if (deleting) remove.mutate(deleting.id, {
-        onSuccess: () => { setDeleting(null); showSnackbar(t('Zeitplaneintrag entfernt', 'Timeline entry removed'), 'success'); },
+        onSuccess: () => { setDeleting(null); showSnackbar(t('pages.eventTimeline.timelineEntryRemoved'), 'success'); },
         onError: (error) => showSnackbar(error.message, 'error'),
       }); }} />
   </>;
@@ -173,7 +170,7 @@ function TimelineForm({ entry, category, startDate, pending, error, onSubmit, on
   entry?: EventTimelineEntry; category: TimelineCategory; startDate: string; pending: boolean; error?: string;
   onSubmit: (data: EventTimelineInput) => void; onCancel: () => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const statusLabels = useStatusLabels();
   const [title, setTitle] = useState(entry?.title ?? '');
   const [startsAt, setStartsAt] = useState(entry?.startsAt.slice(0, 16) ?? `${startDate.slice(0, 10)}T09:00`);
@@ -183,28 +180,28 @@ function TimelineForm({ entry, category, startDate, pending, error, onSubmit, on
   const [status, setStatus] = useState<TimelineStatus>(entry?.status ?? 'planned');
   const [description, setDescription] = useState(entry?.description ?? '');
   const invalidRange = Boolean(startsAt && endsAt && endsAt < startsAt);
-  return <DialogForm title={entry ? t('Zeitplaneintrag bearbeiten', 'Edit timeline entry') : category === 'in_game' ? t('Spielaktion hinzufügen', 'Add game action') : t('Vorbereitungsaufgabe hinzufügen', 'Add preparation task')}
+  return <DialogForm title={entry ? t('pages.eventTimeline.editTimelineEntry') : category === 'in_game' ? t('pages.eventTimeline.addGameAction') : t('pages.eventTimeline.addPreparationTask')}
     pending={pending} error={error} onCancel={onCancel} submitDisabled={!title.trim() || !startsAt || invalidRange}
     onSubmit={() => onSubmit({ category: entry?.category ?? category, title: title.trim(), startsAt, endsAt: endsAt || null, owner: owner.trim(), location: location.trim(), status, description: description.trim() })}>
     <Stack spacing={2}>
-      <TextField autoFocus fullWidth required label={t('Titel', 'Title')} value={title} onChange={(e) => setTitle(e.target.value)}
-        placeholder={category === 'in_game' ? t('z. B. Einsatzbesprechung', 'e.g. Mission briefing') : t('z. B. Funknetz aufbauen', 'e.g. Set up radio network')}
+      <TextField autoFocus fullWidth required label={t('pages.eventTimeline.title')} value={title} onChange={(e) => setTitle(e.target.value)}
+        placeholder={category === 'in_game' ? t('pages.eventTimeline.eGMissionBriefing') : t('pages.eventTimeline.eGSetUpRadioNetwork')}
         slotProps={{ htmlInput: { maxLength: 255 } }} />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField fullWidth required type="datetime-local" label={t('Beginn', 'Start')} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField fullWidth type="datetime-local" label={t('Ende (optional)', 'End (optional)')} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} error={invalidRange}
-          helperText={invalidRange ? t('Das Ende muss nach dem Beginn liegen.', 'End must be at or after start.') : t('Ohne Endzeit als Zeitpunkt geplant.', 'Leave empty for a point-in-time action.')}
+        <TextField fullWidth required type="datetime-local" label={t('pages.eventTimeline.start')} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField fullWidth type="datetime-local" label={t('pages.eventTimeline.endOptional')} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} error={invalidRange}
+          helperText={invalidRange ? t('pages.eventTimeline.endMustBeAtOrAfterStart') : t('pages.eventTimeline.leaveEmptyForAPointInTimeAction')}
           slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: startsAt || undefined } }} />
       </Stack>
-      <Alert severity="info">{t('Ortszeit am Event. Vorbereitung und Abbau dürfen vor oder nach den Eventtagen liegen.', 'Local time at the event. Preparation and teardown can fall before or after the event dates.')}</Alert>
+      <Alert severity="info">{t('pages.eventTimeline.localTimeAtTheEventPreparationAndTeardownCanFall')}</Alert>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField fullWidth label={t('Verantwortliche Person / Team', 'Responsible person / team')} value={owner} onChange={(e) => setOwner(e.target.value)} slotProps={{ htmlInput: { maxLength: 255 } }} />
-        <TextField fullWidth label={t('Ort / Eventbereich', 'Location / event area')} value={location} onChange={(e) => setLocation(e.target.value)} slotProps={{ htmlInput: { maxLength: 255 } }} />
+        <TextField fullWidth label={t('pages.eventTimeline.responsiblePersonTeam')} value={owner} onChange={(e) => setOwner(e.target.value)} slotProps={{ htmlInput: { maxLength: 255 } }} />
+        <TextField fullWidth label={t('pages.eventTimeline.locationEventArea')} value={location} onChange={(e) => setLocation(e.target.value)} slotProps={{ htmlInput: { maxLength: 255 } }} />
       </Stack>
-      <TextField select fullWidth label={t('Status', 'Status')} value={status} onChange={(e) => setStatus(e.target.value as TimelineStatus)}>
+      <TextField select fullWidth label={t('common.status')} value={status} onChange={(e) => setStatus(e.target.value as TimelineStatus)}>
         {(Object.keys(statusLabels) as TimelineStatus[]).map((value) => <MenuItem key={value} value={value}>{statusLabels[value]}</MenuItem>)}
       </TextField>
-      <TextField fullWidth multiline minRows={3} label={t('Beschreibung', 'Description')} value={description} onChange={(e) => setDescription(e.target.value)} slotProps={{ htmlInput: { maxLength: 2000 } }} />
+      <TextField fullWidth multiline minRows={3} label={t('common.description')} value={description} onChange={(e) => setDescription(e.target.value)} slotProps={{ htmlInput: { maxLength: 2000 } }} />
     </Stack>
   </DialogForm>;
 }
