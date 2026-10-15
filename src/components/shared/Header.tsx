@@ -40,12 +40,13 @@ export function Header() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isCompact = useMediaQuery(theme.breakpoints.down('md'));
-    const { online, queued, syncIssues, cachedAt } = useOfflineStatus();
+    const { online, queued, syncIssues, cachedAt, sync } = useOfflineStatus();
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
     const [quickScanOpen, setQuickScanOpen] = useState(false);
     const [quickScanInput, setQuickScanInput] = useState('');
-    const syncAttention = !online || queued > 0 || Boolean(cachedAt);
+    const syncPaused = sync.kind === 'paused';
+    const syncAttention = !online || queued > 0 || Boolean(cachedAt) || syncPaused;
 
     function openSyncIssues() {
         setSyncIssuesOpen(true);
@@ -188,7 +189,7 @@ export function Header() {
                 )}
                 {isMobile ? (
                     <IconButton title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
-                        color={!online ? 'error' : syncAttention ? 'warning' : 'inherit'}
+                        color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'inherit'}
                         onClick={openQueuedActions}
                         aria-label={t('header.viewQueuedActions')}
                         sx={{ ml: 0.5 }}
@@ -201,9 +202,9 @@ export function Header() {
                     <Chip title={translate('Vorgemerkte Offline-Aktionen anzeigen', 'Display queued offline actions')}
                         size="small"
                         variant={syncAttention ? 'filled' : 'outlined'}
-                        color={!online ? 'error' : syncAttention ? 'warning' : 'default'}
+                        color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'default'}
                         icon={!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
-                        label={cachedAt ? t('header.cachedData') : online
+                        label={syncPaused ? translate('Synchronisierung angehalten', 'Sync paused') : cachedAt ? t('header.cachedData') : online
                             ? (queued ? t('header.queuedActions', { count: queued }) : translate('Synchronisiert', 'In sync'))
                             : t('header.offlineQueued', { count: queued })}
                         onClick={openQueuedActions}

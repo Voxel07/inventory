@@ -2,13 +2,14 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
-import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
+import type { Assembly, FactionOrder, FactionOrderSummary, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
 import { translate, useLocalizedText } from '../../../utils/naming';
 import { factionOrderAssemblyBaseline, factionOrderItemBaseline, findPreviousFactionOrder } from '../../../utils/factionOrderHistory';
 
 interface OrderTraceabilityProps {
   order: FactionOrder;
-  allOrders: FactionOrder[];
+  /** Orders of the same faction and event type; the previous one is compared. */
+  allOrders: FactionOrderSummary[];
   itemMap: Map<string, Item>;
   assemblyMap: Map<string, Assembly>;
   onOpenOrder: (id: string) => void;

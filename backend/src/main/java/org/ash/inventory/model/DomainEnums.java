@@ -14,7 +14,6 @@ public final class DomainEnums {
     }
     public enum TrackingMode { bulk, serialized, lot_tracked }
     public enum InventoryRole { consumable, returnable }
-    public enum ItemVisibilityScope { global, event, person, group }
     public enum AssetState { available, reserved, staged, in_transit, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }
     public enum ConditionStatus { new_condition, good, fair, damaged, unsafe, lost }
     public enum LocationType { warehouse, bin, staging, event_site, vehicle, in_custody, quarantine, repair, scrap }

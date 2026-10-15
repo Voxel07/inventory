@@ -82,10 +82,15 @@ public class StockManagementService {
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public InventoryLot createLot(StockDtos.LotInput input) {
-
+    public InventoryLot createLot(StockDtos.LotCreateInput input) {
+        var item = orm.requireLocked(Item.class, input.itemId(), "Item");
+        actors.requireItemEdit(item);
+        if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked) {
+            throw ApiException.badRequest("Inventory lots require an item with lot_tracked tracking mode");
+        }
         var lot = new InventoryLot();
-        apply(lot, input, null);
+        lot.item = item;
+        apply(lot, input.metadata(), null);
         orm.persist(lot);
         events.record("inventory_lot.created", "inventory_lot", lot.id, actors.current().id, null,
                 Map.of("itemId", lot.item.id.toString(), "lotNumber", lot.lotNumber));
@@ -94,8 +99,7 @@ public class StockManagementService {
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public InventoryLot updateLot(UUID id, StockDtos.LotInput input) {
-
+    public InventoryLot updateLot(UUID id, StockDtos.LotUpdateInput input) {
         var lot = orm.requireLocked(InventoryLot.class, id, "Inventory lot");
         actors.requireItemEdit(lot.item);
         var previousStatus = lot.status;
@@ -106,14 +110,11 @@ public class StockManagementService {
         return lot;
     }
 
-    private void apply(InventoryLot lot, StockDtos.LotInput input, UUID excluding) {
-        var item = orm.requireLocked(Item.class, input.itemId(), "Item");
-        actors.requireItemEdit(item);
-        if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked) {
-            throw ApiException.badRequest("Inventory lots require an item with lot_tracked tracking mode");
-        }
-        if (orm.lotNumberExists(item.id, input.lotNumber(), excluding)) throw ApiException.conflict("Lot number already exists for item");
-        lot.item = item;
+    /** Metadata only; {@code lot.item} is fixed at creation and positions, ledger and lines reference the pair. */
+    private void apply(InventoryLot lot, StockDtos.LotUpdateInput input, UUID excluding) {
+        if (input.itemId() != null && !input.itemId().equals(lot.item.id))
+            throw ApiException.badRequest("A lot belongs to its item; create a new lot for another item");
+        if (orm.lotNumberExists(lot.item.id, input.lotNumber(), excluding)) throw ApiException.conflict("Lot number already exists for item");
         lot.lotNumber = input.lotNumber().trim();
         lot.supplierLot = input.supplierLot();
         lot.manufactureDate = input.manufactureDate();

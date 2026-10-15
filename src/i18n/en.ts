@@ -23,6 +23,7 @@ export default {
     return: 'Return',
     more: 'More',
     signOutProviderFailed: 'Signed out locally, but Authentik could not be reached',
+    signOutPersistFailed: "Signed out, but the saved session on this device could not be removed. Clear this app's site data",
   },
   header: {
     inventory: 'Inventory',

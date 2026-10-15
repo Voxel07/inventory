@@ -1,11 +1,10 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
-import { itemApi, getItemAssets, createItemAssets, updateItemAsset, deleteItemAsset } from '../services/inventoryService';
-import { useProgressiveList } from './useProgressiveList';
+import { itemApi, getItemAssets, getItemCategories, createItemAssets, updateItemAsset, deleteItemAsset } from '../services/inventoryService';
+import { useCompleteList, usePagedList } from './usePagedList';
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
 
 export const {
-  useList: usePagedItems,
   useDetail: useItem,
   useCreate: useCreateItem,
   useUpdate: useUpdateItem,
@@ -13,16 +12,34 @@ export const {
   useDeleteMany: useDeleteItems,
 } = createResourceHooks<Item, ItemFormData>(itemApi, 'items');
 
-export function useItems() {
-  return useProgressiveList<Item>(['items'], (page, size) => itemApi.getAll({ page, size }));
+/** Server-side catalog filters; every list screen pages these on demand. */
+export type ItemQuery = { search?: string; category?: string; eventType?: string; includeUntagged?: boolean; locationId?: readonly string[]; id?: readonly string[]; mine?: boolean; sort?: string; maintenanceAttention?: boolean };
+
+export function usePagedItems(query: ItemQuery = {}, options?: { enabled?: boolean; size?: number }) {
+  return usePagedList<Item>(['items', 'page', query], (page, size) => itemApi.getPage(query, page, size), options);
 }
 
+/** Exactly the requested items (names, stock and detail for rows that reference them); one request per 100 ids. */
+export function useItemsByIds(ids: readonly string[]) {
+  const unique = [...new Set(ids)].sort();
+  return useQuery({
+    queryKey: ['items', 'ids', unique],
+    enabled: unique.length > 0,
+    networkMode: 'offlineFirst',
+    queryFn: async () => (await Promise.all(chunks(unique, 100).map((id) => itemApi.getPage({ id }, 0, 100)))).flatMap((page) => page.rows),
+  });
+}
+
+function chunks<T>(values: readonly T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+/** Every asset of one item: asset pickers and location tables decide over the whole (per-item bounded) set. */
 export function useItemAssets(itemId: string | undefined) {
-  return useProgressiveList<AssetInstance>(
-    ['items', itemId, 'assets'],
-    (page, size) => getItemAssets(itemId!, { page, size }),
-    { enabled: Boolean(itemId) },
-  );
+  return useCompleteList<AssetInstance>(['items', itemId, 'assets'], (page, size) => getItemAssets(itemId!, page, size),
+    { enabled: Boolean(itemId) });
 }
 
 export function useCreateItemAsset(itemId: string | undefined) {
@@ -42,4 +59,9 @@ export function useDeleteItemAsset(itemId: string | undefined) {
   return useMutation({
     mutationFn: (assetId: string) => deleteItemAsset(itemId!, assetId),
   });
+}
+
+/** Categories of the items visible to the caller, read without the catalog. */
+export function useItemCategories() {
+  return useQuery({ queryKey: ['items', 'categories'], queryFn: getItemCategories, networkMode: 'offlineFirst', staleTime: 60_000 });
 }

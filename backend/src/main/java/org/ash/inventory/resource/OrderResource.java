@@ -36,13 +36,15 @@ public class OrderResource {
         this.queries = queries;
     }
 
-    @GET
+    @Paged @GET
     public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") String eventType,
             @QueryParam("faction") String faction,
             @QueryParam("orderCode") String orderCode,
+            @QueryParam("status") List<org.ash.inventory.model.DomainEnums.OrderStatus> statuses,
+            @QueryParam("eventId") UUID eventId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.orders(eventType, faction, orderCode, page, size);
+        return queries.orders(eventType, faction, orderCode, statuses, eventId, page, size);
     }
 
     @GET

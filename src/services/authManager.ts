@@ -1,20 +1,17 @@
 import type { User } from '../types';
 import { isOidcSessionRejected, refreshOidcTokens, type OidcTokenSet } from './oidcClient';
-import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession } from './authStorage';
+import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession, signedOutRevision } from './authStorage';
+import { decodeAuthSession, emptyAuthSession, type PersistedAuthSession } from './authSession';
+import { abortable, isAbortError } from './abort';
 
 const SESSION_KEY = 'ash.inventory.authSession';
 const REFRESH_EARLY_MS = 30_000;
 const SESSION_LOCK = 'ash-inventory-auth-session';
-
-type StoredAuthSession = {
-  accessToken: string;
-  refreshToken: string;
-  idToken: string;
-  expiresAt: number | null;
-  /** Monotonic per browser: a login or refresh writes a revision above every stored one. */
-  tokenRevision: number;
-  user: User | null;
-};
+/**
+ * Longest wait for the cross-tab session lock. A holder is itself bounded (two provider requests plus storage),
+ * so a longer wait means a stuck tab; the waiter then keeps its current token instead of hanging.
+ */
+const SESSION_LOCK_WAIT_MS = 45_000;
 
 export type AuthSnapshot = {
   generation: number;
@@ -29,6 +26,14 @@ export class SessionChangedError extends Error {
   constructor() { super('Session changed during the request. Please try again.'); this.name = 'SessionChangedError'; }
 }
 
+/** The local sign-out happened, but this device could not record it durably; a cold start may restore the session. */
+export class AuthPersistenceError extends Error {
+  constructor(cause: unknown) {
+    super('Signed out, but the saved session on this device could not be removed. Clear the site data of this app.', { cause });
+    this.name = 'AuthPersistenceError';
+  }
+}
+
 export function captureAuthSession(): AuthSessionContext {
   return { generation, accountId: session.user?.id,
     catalogScope: `${session.user?.id ?? 'signed-out'}:${JSON.stringify([session.user?.role, [...(session.user?.faction ?? [])].sort()])}` };
@@ -38,15 +43,14 @@ export function assertAuthSession(context: AuthSessionContext): void {
   if (context.generation !== generation || context.accountId !== session.user?.id) throw new SessionChangedError();
 }
 
-function emptySession(): StoredAuthSession {
-  return { accessToken: '', refreshToken: '', idToken: '', expiresAt: null, tokenRevision: 0, user: null };
-}
+const emptySession = emptyAuthSession;
 
-function loadSession(): StoredAuthSession {
+function loadSession(): PersistedAuthSession {
   try {
     const stored = sessionStorage.getItem(SESSION_KEY);
-    if (stored) return { ...emptySession(), ...JSON.parse(stored) as Partial<StoredAuthSession> };
-    return emptySession();
+    const decoded = stored ? decodeAuthSession(JSON.parse(stored)) : null;
+    if (stored && !decoded) sessionStorage.removeItem(SESSION_KEY);
+    return decoded ?? emptySession();
   } catch {
     return emptySession();
   }
@@ -65,34 +69,45 @@ function publish(error: string | null = null): void {
 }
 
 function nextRevision(): number {
-  return Math.max(Date.now(), session.tokenRevision + 1);
+  return Math.max(Date.now(), session.tokenRevision + 1, signedOutRevision() + 1);
 }
 
 /** Serializes every write to the shared durable session (and refresh rotation) across the tabs of this browser. */
 function withSessionLock<T>(action: () => Promise<T>): Promise<T> {
   const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
-  return locks ? locks.request(SESSION_LOCK, action) : action();
+  return locks ? locks.request(SESSION_LOCK, { signal: AbortSignal.timeout(SESSION_LOCK_WAIT_MS) }, action) : action();
 }
 
-/** Never lets an older token snapshot overwrite a newer generation another tab already stored. */
-async function writeDurable(snapshot: StoredAuthSession): Promise<void> {
-  if (!snapshot.accessToken && !snapshot.refreshToken) return clearStoredAuthSession();
-  const current = await loadStoredAuthSession();
-  if (current && (current.tokenRevision ?? 0) > snapshot.tokenRevision) {
-    // Keep the newer tokens; only a same-account profile update may still apply.
-    if ((current.user as User | null)?.id === snapshot.user?.id) await saveStoredAuthSession({ ...current, user: snapshot.user });
-    return;
+/**
+ * Never lets an older token snapshot overwrite a newer generation another tab already stored. An ended session
+ * ({@code endedRevision}) is removed durably and that failure propagates; failing to mirror a live session only
+ * loses the cold-start restore, so it is logged.
+ */
+async function writeDurable(snapshot: PersistedAuthSession, endedRevision: number): Promise<void> {
+  if (!snapshot.accessToken && !snapshot.refreshToken) return clearStoredAuthSession(endedRevision);
+  try {
+    const current = await loadStoredAuthSession();
+    if (current && current.tokenRevision > snapshot.tokenRevision) {
+      // Keep the newer tokens; only a same-account profile update may still apply.
+      if (current.user?.id === snapshot.user?.id) await saveStoredAuthSession({ ...current, user: snapshot.user });
+      return;
+    }
+    await saveStoredAuthSession(snapshot);
+  } catch (error) {
+    console.warn('Failed to persist the auth session for offline use', error);
   }
-  await saveStoredAuthSession(snapshot);
 }
 
-/** {@code locked}: the caller already holds the session lock (Web Locks are not re-entrant). */
-function persist(locked = false): Promise<void> {
+/**
+ * {@code locked}: the caller already holds the session lock (Web Locks are not re-entrant).
+ * {@code endedRevision}: the generation an ending session closes; required when the session is empty.
+ */
+function persist(locked = false, endedRevision = 0): Promise<void> {
   if (session.accessToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   else sessionStorage.removeItem(SESSION_KEY);
 
   const stored = { ...session };
-  const write = () => writeDurable(stored);
+  const write = () => writeDurable(stored, endedRevision);
   persistence = persistence.catch(() => {}).then(() => locked ? write() : withSessionLock(write));
   return persistence;
 }
@@ -116,12 +131,7 @@ export async function restorePersistedSession(): Promise<void> {
   assertAuthSession(context);
   if (!stored) return;
   advanceSession();
-  session = {
-    ...emptySession(),
-    ...stored,
-    tokenRevision: stored.tokenRevision ?? 0,
-    user: (stored.user as User | null) ?? null,
-  };
+  session = stored;
   if (session.accessToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   publish();
   const needsRefresh = !session.refreshToken
@@ -154,9 +164,9 @@ function replaceTokens(tokens: OidcTokenSet, revision: number, durable: 'write' 
 async function adoptRotatedSession(): Promise<boolean> {
   await persistence;
   const stored = await loadStoredAuthSession();
-  if (!stored?.refreshToken || (stored.tokenRevision ?? 0) <= session.tokenRevision) return false;
-  if ((stored.user as User | null)?.id !== session.user?.id) return false;
-  replaceTokens(stored, stored.tokenRevision ?? 0, 'none');
+  if (!stored?.refreshToken || stored.tokenRevision <= session.tokenRevision) return false;
+  if (stored.user?.id !== session.user?.id) return false;
+  replaceTokens(stored, stored.tokenRevision, 'none');
   return true;
 }
 
@@ -200,12 +210,25 @@ export function setAuthError(error: string | null): void {
   publish(error);
 }
 
-export async function clearAuth(error: string | null = null): Promise<void> {
+/**
+ * Ends the session in memory immediately and durably on this device. Resolves {@code false} (and publishes the
+ * failure) when the durable removal failed, so a cold start could restore the session.
+ */
+export async function clearAuth(error: string | null = null): Promise<boolean> {
   advanceSession();
+  const endedRevision = nextRevision();
   session = emptySession();
-  const persisted = persist();
+  const persisted = persist(false, endedRevision);
   publish(error);
-  await persisted;
+  try {
+    await persisted;
+    return true;
+  } catch (cause) {
+    const failure = new AuthPersistenceError(cause);
+    console.error(failure.message, cause);
+    publish(failure.message);
+    return false;
+  }
 }
 
 export function getRevocableTokens(): { accessToken: string; refreshToken: string } {
@@ -272,24 +295,30 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
         if (isOidcSessionRejected(error)) {
           if (await adoptRotatedSession()) return session.accessToken;
           advanceSession();
+          const endedRevision = nextRevision();
           session = emptySession();
-          await persist(true);
+          await persist(true, endedRevision).catch((cause: unknown) => console.error(new AuthPersistenceError(cause).message, cause));
           publish('Your session has expired. Please sign in again.');
           throw error;
         }
-        // Discovery/network/server failures are temporary. Keep the durable
-        // session and let API requests use their normal offline fallback.
+        // Discovery/network/server failures and provider timeouts are temporary. Keep the
+        // durable session and let API requests use their normal offline fallback.
         return session.accessToken;
       }
+    }).catch((error: unknown) => {
+      // Another tab held the lock past its bound; keep the current token rather than wait indefinitely.
+      if (isAbortError(error)) return session.accessToken;
+      throw error;
     }).finally(() => { if (refreshPromise === pending) refreshPromise = null; });
     refreshPromise = pending;
   }
   return refreshPromise;
 }
 
-export async function getAuthorizationHeaders(): Promise<Record<string, string>> {
+/** {@code signal}: the request's own deadline; waiting for a shared refresh never outlives it. */
+export async function getAuthorizationHeaders(signal?: AbortSignal): Promise<Record<string, string>> {
   const context = captureAuthSession();
-  const token = await getValidAccessToken();
+  const token = await abortable(getValidAccessToken(), signal);
   assertAuthSession(context);
   if (!token) return {};
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };

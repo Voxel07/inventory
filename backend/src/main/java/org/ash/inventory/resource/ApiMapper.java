@@ -23,7 +23,9 @@ import org.ash.inventory.model.SyncCommandAudit;
 import org.ash.inventory.model.StorageLocation;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.resource.dto.ApiResponses;
+import org.ash.inventory.helper.BusinessTime;
 import org.ash.inventory.service.InventoryOperationsService;
+import org.ash.inventory.service.MaintenancePolicy;
 import org.ash.inventory.service.OrderQuantities;
 
 import java.math.BigDecimal;
@@ -72,24 +74,24 @@ public class ApiMapper {
                 value.createdBy.id.toString(),
                 value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
                 value.status,
-                value.requestedQuantities,
-                value.handedOverQuantities,
-                value.returnedQuantities,
-                value.consumedQuantities,
-                value.assetAssignments,
+                value.quantities(line -> line.requestedQuantity),
+                value.quantities(line -> line.handedOverQuantity),
+                value.quantities(line -> line.returnedQuantity),
+                value.quantities(line -> line.consumedQuantity),
+                value.perItem(org.ash.inventory.model.GeneralOrderLine::assetIds),
                 itemNames,
-                value.preparedQuantities,
-                value.damagedQuantities,
-                value.missingQuantities,
-                value.writtenOffQuantities,
-                value.reconciledAssets,
+                value.quantities(line -> line.preparedQuantity),
+                value.quantities(line -> line.damagedQuantity),
+                value.quantities(line -> line.missingQuantity),
+                value.quantities(line -> line.writtenOffQuantity),
+                value.perItem(org.ash.inventory.model.GeneralOrderLine::reconciledAssetIds),
                 history.stream().map(h -> {
                             var row = new LinkedHashMap<String, Object>();
                             row.put("id", h.id); row.put("actorName", h.actor.name); row.put("actorId", h.actor.id);
                             row.put("timestamp", h.occurredAt); row.put("action", h.action); row.put("notes", h.notes); row.put("delta", h.delta);
                             return (Map<String, Object>) row;
                         }).toList(),
-                Map.of("createdBy", user(value.createdBy)), value.sourceLocations
+                Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
 
@@ -103,18 +105,18 @@ public class ApiMapper {
                 value.createdBy.id.toString(),
                 value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
                 value.status,
-                value.requestedQuantities,
-                value.handedOverQuantities,
-                value.returnedQuantities,
-                value.consumedQuantities,
-                value.assetAssignments,
+                value.quantities(line -> line.requestedQuantity),
+                value.quantities(line -> line.handedOverQuantity),
+                value.quantities(line -> line.returnedQuantity),
+                value.quantities(line -> line.consumedQuantity),
+                value.perItem(org.ash.inventory.model.GeneralOrderLine::assetIds),
                 itemNames,
-                value.preparedQuantities,
-                value.damagedQuantities,
-                value.missingQuantities,
-                value.writtenOffQuantities,
-                value.reconciledAssets,
-                Map.of("createdBy", user(value.createdBy)), value.sourceLocations
+                value.quantities(line -> line.preparedQuantity),
+                value.quantities(line -> line.damagedQuantity),
+                value.quantities(line -> line.missingQuantity),
+                value.quantities(line -> line.writtenOffQuantity),
+                value.perItem(org.ash.inventory.model.GeneralOrderLine::reconciledAssetIds),
+                Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
 
@@ -153,7 +155,6 @@ public class ApiMapper {
         Map<String, Object> expand = new LinkedHashMap<>();
         if (canViewLocation(value.storageLocation)) expand.put("storageLocation", location(value.storageLocation));
         if (canViewLocation(value.returnLocation)) expand.put("returnLocation", location(value.returnLocation));
-        if (value.assignedUser != null) expand.put("assignedUser", user(value.assignedUser));
 
         ApiResponses.StockDto stockDto = state == null ? null : new ApiResponses.StockDto(
                 value.accessPolicy != null || value.ownershipType == Item.Ownership.organization ? state.totalOwned() : 0,
@@ -178,12 +179,8 @@ public class ApiMapper {
                 value.category,
                 value.subcategory,
                 value.supplier,
-                value.visibilityScope == null ? DomainEnums.ItemVisibilityScope.global.name() : value.visibilityScope.name(),
-                value.assignedUser == null ? null : value.assignedUser.id.toString(),
-                value.assignedUser == null ? null : value.assignedUser.name,
-                value.assignedGroup,
                 value.eventTags == null ? List.of() : value.eventTags,
-                value.consumable,
+                value.consumable(),
                 value.trackingMode.name(),
                 value.inventoryRole.name(),
                 canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
@@ -202,7 +199,7 @@ public class ApiMapper {
                 value.fuelConsumptionLitersPer100Km,
                 value.batteryReplacementDue,
                 value.bestBeforeDate,
-                value.maintenanceStatus == null ? null : value.maintenanceStatus.name(),
+                MaintenancePolicy.itemStatus(value, BusinessTime.today()).name(),
                 stockDto,
                 expand, accessPolicies.projection(value.accessPolicy), !canViewLocation(value.storageLocation) && value.storageLocation != null
         );
@@ -307,6 +304,7 @@ public class ApiMapper {
                 value.createdAt,
                 value.updatedAt,
                 value.item.id.toString(),
+                value.item.name,
                 value.user.id.toString(),
                 value.type.name(),
                 value.quantity,
@@ -469,6 +467,7 @@ public class ApiMapper {
                 value.createdAt,
                 value.updatedAt,
                 value.item == null ? null : value.item.id.toString(),
+                value.item == null ? null : value.item.name,
                 value.assembly == null ? null : value.assembly.id.toString(),
                 value.assembly == null ? null : value.assembly.name,
                 value.quantity,
@@ -494,6 +493,7 @@ public class ApiMapper {
         return new ApiResponses.MaintenanceResponse(
                 value.id,
                 value.item.id.toString(),
+                value.item.name,
                 value.type.name(),
                 value.inspector.id.toString(),
                 value.performedAt,
@@ -562,7 +562,8 @@ public class ApiMapper {
                 value.model,
                 value.conditionStatus == null ? "good" : value.conditionStatus.name(),
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
-                value.serviceStatus == null ? null : value.serviceStatus.name(),
+                MaintenancePolicy.assetStatus(value, BusinessTime.today()).name(),
+                MaintenancePolicy.assetDue(value.item, value),
                 value.operatingHours,
                 canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
                 canViewLocation(value.currentLocation) ? value.currentLocation.name : null,

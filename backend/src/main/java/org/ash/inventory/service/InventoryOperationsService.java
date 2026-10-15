@@ -12,7 +12,6 @@ import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.CustodyHandover;
 import org.ash.inventory.model.FactionOrder;
-import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.MaintenanceSchedule;
@@ -25,7 +24,6 @@ import org.ash.inventory.orm.PurchasingOrm;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -298,10 +296,9 @@ public class InventoryOperationsService {
             throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its condition is "
                     + asset.conditionStatus);
         }
-        if (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue
-                || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
+        if (MaintenancePolicy.blocksAsset(asset, BusinessTime.today())) {
             throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its service status is "
-                    + asset.serviceStatus);
+                    + MaintenancePolicy.assetStatus(asset, BusinessTime.today()));
         }
         assertNoBlockingScheduleIsDue(asset.item, asset);
     }
@@ -437,10 +434,9 @@ public class InventoryOperationsService {
 
     public void assertCheckoutAllowed(Item item) {
         if (equipment.hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
-        refreshMaintenanceStatus(item);
-        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.today())) {
+        if (MaintenancePolicy.blocksItem(item, BusinessTime.today())) {
             throw ApiException.conflict("Item " + item.name + " is blocked from checkout because maintenance status is "
-                    + item.maintenanceStatus);
+                    + MaintenancePolicy.itemStatus(item, BusinessTime.today()));
         }
         assertNoBlockingScheduleIsDue(item, null);
     }
@@ -490,8 +486,8 @@ public class InventoryOperationsService {
             report.assetInstance = asset;
             asset.conditionStatus = input.safetyImpact()
                     ? DomainEnums.ConditionStatus.unsafe : DomainEnums.ConditionStatus.damaged;
-            // A checked-out asset stays in custody so it can still be returned; the condition blocks re-checkout.
-            if (!StockPolicy.checkedOut(asset)) asset.availabilityStatus = DomainEnums.AssetState.damaged;
+            // Custody, reservation and transit keep their state so their workflows can finish; the condition blocks reuse.
+            asset.availabilityStatus = StockPolicy.conditionedState(asset);
         } else if (report.item != null && report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
         }
@@ -618,8 +614,7 @@ public class InventoryOperationsService {
                 report.assetInstance.active = false;
             } else {
                 report.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
-                if (!StockPolicy.checkedOut(report.assetInstance))
-                    report.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+                report.assetInstance.availabilityStatus = StockPolicy.conditionedState(report.assetInstance);
             }
         }
         transaction.availabilityAfter = stock(report.item).available();
@@ -670,8 +665,9 @@ public class InventoryOperationsService {
         record.inspector = actors.current();
         record.type = input.type();
         record.performedAt = input.performedAt() == null ? Instant.now() : input.performedAt();
+        // A schedule inspection advances only its schedule; a calendar inspection advances the item or asset calendar.
         record.nextDueAt = input.nextDueAt() != null ? input.nextDueAt()
-                : item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
+                : record.schedule == null && item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
                     ? record.performedAt.plus(java.time.Duration.ofDays(item.maintenanceIntervalDays)) : null;
         record.operatingHours = input.operatingHours();
         record.result = input.result();
@@ -681,22 +677,25 @@ public class InventoryOperationsService {
         orm.persist(record);
         if (input.certificateObjectKey() != null)
             record.certificateObjectKey = media.attachToMaintenance(input.certificateObjectKey(), record.id);
-        if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
-            item.currentOperatingHours = input.operatingHours();
-        item.nextMaintenanceDue = record.nextDueAt == null ? null
-                : BusinessTime.date(record.nextDueAt);
-        item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
-                ? DomainEnums.MaintenanceStatus.in_service
-                : deriveStatus(item.nextMaintenanceDue);
-        if (record.assetInstance != null) {
-            record.assetInstance.operatingHours = input.operatingHours() == null
-                    ? record.assetInstance.operatingHours : input.operatingHours();
-            record.assetInstance.serviceStatus = input.result() == DomainEnums.MaintenanceResult.failed
-                    ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
-            if (input.result() == DomainEnums.MaintenanceResult.failed) {
-                record.assetInstance.availabilityStatus = DomainEnums.AssetState.in_maintenance;
-            } else if (record.assetInstance.availabilityStatus == DomainEnums.AssetState.in_maintenance) {
-                record.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+        boolean failed = input.result() == DomainEnums.MaintenanceResult.failed;
+        var calendarDue = record.nextDueAt == null ? null : BusinessTime.date(record.nextDueAt);
+        var asset = record.assetInstance;
+        if (asset == null) {
+            if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
+                item.currentOperatingHours = input.operatingHours();
+            if (record.schedule == null && !failed) item.nextMaintenanceDue = calendarDue;
+            item.outOfService = failed;
+        } else {
+            // The result belongs to this asset only; the item calendar and sibling assets are untouched.
+            if (input.operatingHours() != null && input.operatingHours().compareTo(asset.operatingHours) > 0)
+                asset.operatingHours = input.operatingHours();
+            if (record.schedule == null && !failed) asset.nextMaintenanceDue = calendarDue;
+            asset.outOfService = failed;
+            // Only an idle warehouse asset changes physical state; custody, reservation and transit keep theirs.
+            if (failed && asset.availabilityStatus == DomainEnums.AssetState.available) {
+                asset.availabilityStatus = DomainEnums.AssetState.in_maintenance;
+            } else if (!failed && asset.availabilityStatus == DomainEnums.AssetState.in_maintenance) {
+                asset.availabilityStatus = StockPolicy.returnedState(asset);
             }
         }
         events.record("maintenance.recorded", "item", item.id, record.inspector.id, null,
@@ -740,22 +739,6 @@ public class InventoryOperationsService {
                         + " maintenance");
             }
         }
-    }
-
-    public void refreshMaintenanceStatus(Item item) {
-        if (item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service)
-            return;
-        item.maintenanceStatus = deriveStatus(item.nextMaintenanceDue);
-    }
-
-    private DomainEnums.MaintenanceStatus deriveStatus(LocalDate due) {
-        if (due == null)
-            return DomainEnums.MaintenanceStatus.certified;
-        if (due.isBefore(BusinessTime.today()))
-            return DomainEnums.MaintenanceStatus.overdue;
-        if (!due.isAfter(BusinessTime.today().plusDays(30)))
-            return DomainEnums.MaintenanceStatus.due_soon;
-        return DomainEnums.MaintenanceStatus.certified;
     }
 
     private Item lockedItem(UUID id) {

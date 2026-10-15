@@ -59,7 +59,7 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `delete_item` | `itemId` | Retires while preserving history; subsequent active reads return not found |
 | `create_assembly` | `input: AssemblyInput` | Requires name and nonempty `itemQuantities` map of item UUIDs to positive integers |
 | `get_assembly_details` | `assemblyId` | Authorized detail including component projection |
-| `list_assemblies` | Optional `eventTag` | Scoped assemblies filtered by event tag; components projected in a batch |
+| `list_assemblies` | Optional `eventTag`, `page`, `limit` | Scoped assemblies filtered by event tag, paged in SQL (default limit 20, maximum 100); components projected in a batch |
 | `update_assembly` | `assemblyId`, `input: AssemblyInput` | Replaces metadata/composition with REST semantics |
 | `delete_assembly` | `assemblyId` | Retires the assembly; it leaves the catalog and can no longer be ordered, while codes and order history are kept |
 | `create_event` | `input: EventInput` | Requires eventType/startDate; supplied item quota IDs must be visible |

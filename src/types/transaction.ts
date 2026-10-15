@@ -5,6 +5,7 @@ import type { AssetInstance } from './item';
 export interface StockTransaction {
   id: string;
   itemId: string;
+  itemName: string;
   transactionType: TransactionType;
   quantityChanged: number;
   assetInstanceId?: string;

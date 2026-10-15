@@ -54,15 +54,15 @@ public class OperationsResource {
         this.domainEvents = domainEvents;
     }
 
-    @GET
+    @Paged @GET
     @Path("/transactions")
     public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("userId") UUID userId,
             @QueryParam("transactionType") String type, @QueryParam("startDate") Instant start,
-            @QueryParam("endDate") Instant end,
+            @QueryParam("endDate") Instant end, @QueryParam("search") String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.transactions(itemId, assetInstanceId, userId, type, start, end, page, size);
+        return queries.transactions(itemId, assetInstanceId, userId, type, start, end, search, page, size);
     }
 
     @POST @Path("/transactions/batch") @Transactional
@@ -77,13 +77,14 @@ public class OperationsResource {
         return mapper.transaction(service.transact(input));
     }
 
-    @GET
+    @Paged @GET
     @Path("/damage-reports")
     public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("assemblyId") UUID assemblyId,
+            @QueryParam("status") List<org.ash.inventory.model.DomainEnums.DamageStatus> statuses,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.damageReports(itemId, assetInstanceId, assemblyId, page, size);
+        return queries.damageReports(itemId, assetInstanceId, assemblyId, statuses, page, size);
     }
 
     @POST
@@ -100,7 +101,7 @@ public class OperationsResource {
         return mapper.damage(service.resolveDamageReport(id, input));
     }
 
-    @GET
+    @Paged @GET
     @Path("/maintenance")
     public List<ApiResponses.MaintenanceResponse> maintenance(@QueryParam("itemId") UUID itemId,
             @QueryParam("page") @DefaultValue("0") int page,
@@ -129,7 +130,7 @@ public class OperationsResource {
         return new ApiResponses.OutboxStatusResponse(counts);
     }
 
-    @GET
+    @Paged @GET
     @Path("/outbox/dead-letters")
     public List<ApiResponses.OutboxEventResponse> deadLetters(
             @QueryParam("page") @DefaultValue("0") int page,

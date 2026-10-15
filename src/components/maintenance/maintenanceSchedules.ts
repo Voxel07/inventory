@@ -1,8 +1,8 @@
 import { translate } from '../../utils/naming';
-import type { Schedule, ScheduleInput } from '../../types/operations';
+import type { Schedule } from '../../types/operations';
 
-export type MaintenanceType = ScheduleInput['maintenanceType'];
-export const MAINTENANCE_TYPES: MaintenanceType[] = ['dguv_v3', 'generator_service', 'battery_test', 'chrono_fps'];
+/** Calendar inspections due within this many days need attention; mirrors `MaintenancePolicy.CALENDAR_WARNING_DAYS`. */
+export const CALENDAR_WARNING_DAYS = 30;
 
 export function maintenanceTypeLabel(type: string): string {
   switch (type) {

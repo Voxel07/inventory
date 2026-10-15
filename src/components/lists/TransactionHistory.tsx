@@ -14,7 +14,7 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
-import type { StockTransaction, Item, User } from '../../types';
+import type { StockTransaction, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { formatDateTime } from '../../utils/dateFormat';
 import { useLocalizedText } from '../../utils/naming';
@@ -22,12 +22,11 @@ import { Link } from 'react-router-dom';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
-    items: Item[] | undefined;
     users?: User[] | undefined;
     isLoading: boolean;
 }
 
-export function TransactionHistory({ transactions, items, users, isLoading }: Props) {
+export function TransactionHistory({ transactions, users, isLoading }: Props) {
     const t = useLocalizedText();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -47,10 +46,6 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                 <Typography color="text.secondary">{t('Keine Transaktionen gefunden', 'No transactions found')}</Typography>
             </Paper>
         );
-    }
-
-    function getItemName(itemId: string) {
-        return items?.find((i) => i.id === itemId)?.name ?? itemId;
     }
 
     function getUserName(tx: StockTransaction) {
@@ -121,7 +116,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                 <Paper key={tx.id} sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{getItemName(tx.itemId)}</Typography>
+                            <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{tx.itemName}</Typography>
                             {assetChip(tx)}
                             <Typography variant="caption" color="text.secondary">
                                 {formatDateTime(tx.timestamp)} · {getUserName(tx)}
@@ -159,7 +154,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                             <TableCell>{formatDateTime(tx.timestamp)}</TableCell>
                             <TableCell>
                                 <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                                    <span>{getItemName(tx.itemId)}</span>
+                                    <span>{tx.itemName}</span>
                                     {assetChip(tx)}
                                 </Stack>
                             </TableCell>

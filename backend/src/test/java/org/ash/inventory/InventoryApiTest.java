@@ -11,6 +11,7 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.service.DomainEventService;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -700,7 +701,7 @@ class InventoryApiTest {
                         "latitude", 52.5, "longitude", 13.4, "locationType", "event_site"))
                 .post("/api/storage-locations").then().statusCode(200).extract().path("id");
         String itemId = request().body(Map.of("sku", "CONSUMABLE-RETURN-001", "name", "Returnable boxes",
-                        "category", "Test", "amount", 4, "value", 0, "consumable", true,
+                        "category", "Test", "amount", 4, "value", 0, "inventoryRole", "consumable",
                         "storageLocation", warehouseId))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         var orderBody = new java.util.HashMap<String, Object>();
@@ -1021,7 +1022,7 @@ class InventoryApiTest {
         for (var lot : java.util.List.of(late, early)) request().body(Map.of("itemId", item, "transactionType", "added", "quantityChanged", 3, "lotId", lot, "locationId", location)).post("/api/transactions").then().statusCode(200);
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 2, "eventType", "DE", "faction", "KGG")).post("/api/transactions").then().statusCode(200);
         request().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200).body("find { it.lotId == '" + early + "' }.quantityOnHand", equalTo(1)).body("find { it.lotId == '" + late + "' }.quantityOnHand", equalTo(3));
-        request().body(Map.of("itemId", item, "lotNumber", "LATE", "expiryDate", "2041-01-01", "status", "hold")).put("/api/inventory-lots/" + late).then().statusCode(200);
+        request().body(Map.of("lotNumber", "LATE", "expiryDate", "2041-01-01", "status", "hold")).put("/api/inventory-lots/" + late).then().statusCode(200);
         request().get("/api/items/" + item).then().statusCode(200).body("stock.available", equalTo(1));
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 2, "eventType", "DE", "faction", "KGG")).post("/api/transactions").then().statusCode(409);
     }
@@ -1227,7 +1228,7 @@ class InventoryApiTest {
                 .body(Map.of(
                         "sku", "TEST-001", "name", "Test Generator", "category", "Infrastructure",
                         "amount", 2, "minStock", 1, "value", 250, "storageLocation", locationId,
-                        "maintenanceStatus", "certified", "nextMaintenanceDue", LocalDate.now().minusDays(1).toString()))
+                        "nextMaintenanceDue", LocalDate.now().minusDays(1).toString()))
                 .post("/api/items")
                 .then().statusCode(200).body("name", equalTo("Test Generator"))
                 .extract().path("id");
@@ -1693,20 +1694,20 @@ class InventoryApiTest {
         item.put("category", "Vehicles");
         item.put("amount", 1);
         item.put("value", 0);
-        item.put("visibilityScope", "person");
-        item.put("assignedUserId", assigneeId);
+        item.put("privateResource", true);
         item.put("returnLocation", returnLocationId);
         item.put("fuelConsumptionLitersPer100Km", 8.5);
         item.put("batteryReplacementDue", "2027-03-01");
         String itemId = request().body(item).post("/api/items").then().statusCode(200)
                 .body("description", equalTo("Vehicle details visible to its assigned crew member."))
-                .body("visibilityScope", equalTo("person"))
-                .body("assignedUserId", equalTo(assigneeId))
+                .body("access.privateResource", equalTo(true))
                 .body("returnLocation", equalTo(returnLocationId))
                 .body("fuelConsumptionLitersPer100Km", equalTo(8.5f))
                 .body("batteryReplacementDue", equalTo("2027-03-01"))
                 .extract().path("id");
 
+        request().body(Map.of("revision", 0, "grants", List.of(Map.of("userId", assigneeId, "canEdit", false)), "reason", "Crew vehicle"))
+                .put("/api/access/items/" + itemId).then().statusCode(200);
         factionLeaderRequest().get("/api/items/" + itemId).then().statusCode(200);
         otherFactionLeaderRequest().get("/api/items/" + itemId).then().statusCode(404);
         otherFactionLeaderRequest().get("/api/items").then().statusCode(200)

@@ -1,8 +1,56 @@
 # Architecture and code-quality audit
 
-Date: 15 October 2026 · Source revision: `e4af25f` · Status: **audit complete; all remediation pending**.
+Date: 15 October 2026 · Source revision: `e4af25f` · Status: **remediated in the working tree on branch `review_1` (uncommitted); see "Remediation status"**.
 
-Application code, configuration, dependencies and schemas were not changed. No builds, packaging commands, test suites or live CRUD operations were run. The only new file is this report.
+## Remediation status (15 October 2026, uncommitted working tree)
+
+Verification (all run against the final working tree): backend `mvn test` against PostgreSQL 18, frontend `tsc -b` (app, node and the new fixtures project, all `strict`) with TS 7 and TS 6, `eslint .`, `bun test`. Results are listed under "Verification" below. The browser previews were rendered headlessly (Firefox) against the Vite dev server.
+
+Ordered by priority. Every finding was fixed except the remainder listed as "Open" under H12 and L13.
+
+| Finding | Status | Evidence |
+|---|---|---|
+| H01 | Done | `StockPolicy.conditionedState` used by condition changes, damage reports and damage resolution; `AuditFixesApiTest` |
+| H02 | Done | `out_of_service` flags, per-asset `next_maintenance_due`, status derived by `MaintenancePolicy`; `recordMaintenance` scoped to item or asset; `AuditFixesApiTest` |
+| H03 | Done | Typed references only (whole-UUID values and UUID keys, free-text fields skipped), nested redaction, no 404 after committed writes, legacy `visibilityScope`/assigned user/group removed; `PrivacyProjectionServiceTest`, `AuditFixesApiTest` |
+| H04 + L05 | Done | Shared `authSession.ts` schema + decoder, errors propagate, sign-out marker, `AuthPersistenceError`; `tests/authStorage.test.ts` |
+| H05 + L14 | Done | `${DB_PASSWORD:?}` in both compose files (checked with `docker compose config`), cluster env anchors, rate-limit settings forwarded, INFO log default |
+| H06 | Done | `@Paged` endpoints send `X-Has-More`; `Page<T>` envelope survives mapping and the offline cache; `pageCompleteness.ts`/`X-Filtered-Rows` removed; `sessionIsolation.test.ts` |
+| H07 | Done | Server filters/sort for items, locations, assemblies, orders, general orders, transactions, damage; `usePagedList` loads pages on demand with "Load more"; `ItemAutocomplete` (server search), `useItemsByIds`, `/api/inventory-summary`, `/api/item-categories`; complete reads only for bounded per-item sets, exports, imports and the offline snapshot |
+| H08 | Done | `PositionOrm.reservedByLocation`, `PositionService.Capacity`; `P2StorageRegressionTest.sourceSelectionStatementsStayBoundedAsLocationsGrow` |
+| H09 | Done | `strict` explicit in every tsconfig (0 diagnostics with TS 7 and TS 6); `Item.storageLocation`/`returnLocation`/`stock` nullable, `Item.barcode` removed, `isConsumable` a required read-only projection; realtime payloads decoded (`decodeServerChange`), stored OIDC transaction decoded. Generated OpenAPI contracts remain PLAN-04 |
+| H10 | Done | `apiTransport.ts`, `SyncState` idle/retrying/paused, `Retry-After`; `sessionIsolation.test.ts` |
+| H11 | Done | 15 s provider timeout, 45 s lock wait, abort signal passed into token acquisition |
+| H12 | Parts 1–2 done, part 3 open | Part 1: `general_order_lines` + `general_order_line_assets` replace the JSON maps. Part 2: `OrderReturnPolicy` holds the shared return rules (consumable check, admin + reason for write-offs, outstanding bound, return-damage severity) for both aggregates. **Open:** part 3, one `orders` aggregate by kind (PLAN-02); a schema/API/UI convergence that needs its own change |
+| L01–L04 | Done | Dead helpers, listeners and 26 imports removed; unused `ash-api-event` dispatch and `personalItems` util removed |
+| L06 | Done | `OfflineCommand` discriminated union (no payload casts); shared `MaintenanceType`/`MaintenanceResult` unions; `oneOf()` validates generic form values |
+| L07 | Done | `ActionButtons` forwards every prop/ref unchanged; contract documented; inner ref no longer claims `HTMLElement` |
+| L08 | Done | `useOrderMutation` inlined; `ResourceQuery`/`Query` aliases replaced by `ApiQuery`; form types in `types/operationForm.ts` |
+| L09 | Done | `inventory_role` is the only consumable authority (`is_consumable` column and `consumable` input removed, `Item.consumable()` derived); unwritten `quantity_reserved` column removed (reservations computed live) |
+| L10 | Done | `unique nulls not distinct` on positions |
+| L11 | Done | `AvailabilityEligibility` evaluates item/asset eligibility for the read model and planning snapshot; `PlanningStockOrm.SnapshotRow` replaces positional `Object[]` access |
+| L12 | Done | `codeResolver` treats only 404 as absence; other errors propagate |
+| L13 | Partly done | Business windows named (`CALENDAR_WARNING_DAYS` backend + frontend, `LOT_EXPIRY_WARNING_DAYS`). **Open:** migrating ~2,500 inline DE/EN pairs to i18next keys (PLAN-09, P3) |
+| L15 | Done | Dev H2 profile and `skipITs` removed; two-engine TS setup documented |
+| L16 | Done | Prefix-scoped cache cleanup, `waitUntil` writes |
+| L17 | Done | Browser previews converted to TSX on typed builders (`tests/fixtures/dto.ts`) and a paged mock transport (`tests/fixtures/api.ts`); type-checked by `tsconfig.fixtures.json` in `tsc -b` |
+| LOT-H01/H02, LOT-L01–L04 | Done | Create/update DTO split (item immutable), composite `(lot_id, item_id)` FKs, lot item identity and per-location stock, explicit batch choice with full metadata on receiving, item-scoped `LotsPanel` visible to viewers; `AuditFixesApiTest` |
+
+Found and fixed along the way:
+- `ArchitectureApiCoverageTest.sseDispatchesOnlyPublicEventClassification` could hang the whole suite: it broadcast once (possibly before the stream subscribed), and on timeout the executor waited on a blocked read. It now retries the broadcast and closes the stream first.
+- The browser previews used removed hooks, list props and roles (`hq_admin`).
+- `tests/refactoring.sample-smoke.ts` still sent the removed `consumable` input.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Backend `mvn test` (PostgreSQL 18 test container) | 203 tests, 0 failures, 0 errors |
+| `tsc -b` with TS 7 (app, node, fixtures; `strict`) | 0 diagnostics |
+| `tsc -p tsconfig.app.json` / `tsconfig.fixtures.json` / `tsconfig.node.json` with TS 6 | 0 diagnostics |
+| `eslint .` | 0 problems |
+| `bun test` | 92 pass, 0 fail |
+| Browser previews (`tests/*.browser.html`, headless Firefox via Vite dev server) | All four TSX previews mount without module or runtime errors |
 
 ## Scope and evidence
 
@@ -155,42 +203,42 @@ Line numbers apply to the current source; grouped entries list each unused impor
 
 ## Refactoring plan and progress
 
-**Nothing below has been implemented or executed.** Each unchecked row is a proposed commit. Acceptance checks describe future validation; builds/tests require a later request or the applicable bugfix authorization. Use existing regression suites where suitable and add focused cases only for uncovered behavior. Change contracts in place; no shims, dual writes or incremental migrations. Schema edits target the disposable baseline/entities.
+Implemented in the uncommitted working tree (15 October 2026); `[x]` done, `[~]` partly done. The rows remain useful as commit boundaries when the work tree is committed. Contracts changed in place; no shims, dual writes or incremental migrations; schema edits target the disposable baseline/entities.
 
 | Progress | Commit | Scope | Acceptance for that commit |
 |---|---|---|---|
-| [ ] | 01 `fix: preserve asset custody during condition changes` | H01; guarded condition changes, shared lifecycle rule | Available/reserved/custody/transit/repair cases; stale-version rejection; ledger/custody unchanged by metadata-only edits. |
-| [ ] | 02 `fix: scope maintenance results to their target` | H02; asset versus item updates and state guards | Two assets with conflicting inspection outcomes; inspection during custody; item and asset schedule independence. |
-| [ ] | 03 `fix: make durable logout failures visible` | H04 | Failed IndexedDB deletion/abort, offline logout, cold restore, cross-tab logout. |
-| [ ] | 04 `fix: bound OIDC discovery and refresh requests` | H11 | Stalled provider, timeout, session switch and another tab waiting for the lock. |
-| [ ] | 05 `fix: classify offline replay failures` | H10; shared auth/error request primitive | 401 refresh/pause, 403 visible denial, 429 retry timing, 5xx backoff, UUID-safe replay. |
-| [ ] | 06 `fix: require production database credentials` | H05 | Resolved Compose rejects missing/empty values and accepts supplied secrets; no secret output. |
-| [ ] | 07 `refactor: make page metadata explicit` | H06; page envelope, honest faction summary type | Filtered full page, empty filtered page, next-page discovery, persisted metadata. |
-| [ ] | 08 `refactor: batch source capacity facts` | H08 | SQL count stays bounded per item batch as locations grow; FEFO, excluded-own reservations and deterministic locks retained. |
-| [ ] | 09 `refactor: model typed privacy references` | First part of H03; replace free-text UUID inference on one DTO family | Denied nested IDs redacted; unrelated UUID in notes has no authorization effect; unauthorized IDs still rejected. |
-| [ ] | 10 `refactor: scope catalog privacy before paging` | Remaining H03 catalog scope/legacy visibility | Owner/grantee/admin/tenant matrix; accurate pages and REST/MCP parity; no hidden metadata leakage. |
-| [ ] | 11 `refactor: scope operational privacy projections` | Remaining H03 order/history/media families | Explicit historical-reference redaction, access revocation and successful-write response consistency; remove replaced graph paths only after parity. |
-| [ ] | 12 `refactor: correct transport nullability and shared types` | H09, L05/L06; session decoder, command/status unions | Source type analysis catches nullable-location misuse; malformed persisted data rejected; no forced command casts. |
-| [ ] | 13 `refactor: enable strict TypeScript checking` | Remaining H09; transport/hooks first, then forms/pages as separate commits if needed | Each enabled group has no strict diagnostics; no suppression or broad unknown-to-DTO cast introduced. |
-| [ ] | 14 `refactor: page the item catalog on demand` | First part of H07; API filters, page metadata, item screen | First screen fetches one page; filters/sort operate over server data; selected details and offline indicators remain correct. |
-| [ ] | 15 `refactor: page orders and operations on demand` | Remaining paged H07 readers, one screen per commit | Page changes request only needed data; invalidation does not drain collections; exports remain explicitly exhaustive. |
-| [ ] | 16 `refactor: page locations and assemblies` | Unpaged H07 endpoints and consumers | Large location/assembly datasets; component lookup, import and hierarchy workflows retain complete explicit reads. |
-| [ ] | 17 `refactor: normalize general order lines` | First part of H12; baseline/model/query/contracts together | General preparation/pickup/return/reservation results equivalent; references enforced by schema; reset disposable data. |
-| [ ] | 18 `refactor: share order reconciliation and history` | Next part of H12; extract one policy responsibility per commit | Faction/general permission differences, cancellation, missing/write-off and idempotency preserved. |
+| [x] | 01 `fix: preserve asset custody during condition changes` | H01; guarded condition changes, shared lifecycle rule | Available/reserved/custody/transit/repair cases; stale-version rejection; ledger/custody unchanged by metadata-only edits. |
+| [x] | 02 `fix: scope maintenance results to their target` | H02; asset versus item updates and state guards | Two assets with conflicting inspection outcomes; inspection during custody; item and asset schedule independence. |
+| [x] | 03 `fix: make durable logout failures visible` | H04 | Failed IndexedDB deletion/abort, offline logout, cold restore, cross-tab logout. |
+| [x] | 04 `fix: bound OIDC discovery and refresh requests` | H11 | Stalled provider, timeout, session switch and another tab waiting for the lock. |
+| [x] | 05 `fix: classify offline replay failures` | H10; shared auth/error request primitive | 401 refresh/pause, 403 visible denial, 429 retry timing, 5xx backoff, UUID-safe replay. |
+| [x] | 06 `fix: require production database credentials` | H05 | Resolved Compose rejects missing/empty values and accepts supplied secrets; no secret output. |
+| [x] | 07 `refactor: make page metadata explicit` | H06; page envelope, honest faction summary type | Filtered full page, empty filtered page, next-page discovery, persisted metadata. |
+| [x] | 08 `refactor: batch source capacity facts` | H08 | SQL count stays bounded per item batch as locations grow; FEFO, excluded-own reservations and deterministic locks retained. |
+| [x] | 09 `refactor: model typed privacy references` | First part of H03; replace free-text UUID inference on one DTO family | Denied nested IDs redacted; unrelated UUID in notes has no authorization effect; unauthorized IDs still rejected. |
+| [x] | 10 `refactor: scope catalog privacy before paging` | Remaining H03 catalog scope/legacy visibility | Owner/grantee/admin/tenant matrix; accurate pages and REST/MCP parity; no hidden metadata leakage. |
+| [x] | 11 `refactor: scope operational privacy projections` | Remaining H03 order/history/media families | Explicit historical-reference redaction, access revocation and successful-write response consistency; remove replaced graph paths only after parity. |
+| [x] | 12 `refactor: correct transport nullability and shared types` | H09, L05/L06; session decoder, command/status unions | Source type analysis catches nullable-location misuse; malformed persisted data rejected; no forced command casts. |
+| [x] | 13 `refactor: enable strict TypeScript checking` | Remaining H09; transport/hooks first, then forms/pages as separate commits if needed | Each enabled group has no strict diagnostics; no suppression or broad unknown-to-DTO cast introduced. |
+| [x] | 14 `refactor: page the item catalog on demand` | First part of H07; API filters, page metadata, item screen | First screen fetches one page; filters/sort operate over server data; selected details and offline indicators remain correct. |
+| [x] | 15 `refactor: page orders and operations on demand` | Remaining paged H07 readers, one screen per commit | Page changes request only needed data; invalidation does not drain collections; exports remain explicitly exhaustive. |
+| [x] | 16 `refactor: page locations and assemblies` | Unpaged H07 endpoints and consumers | Large location/assembly datasets; component lookup, import and hierarchy workflows retain complete explicit reads. |
+| [x] | 17 `refactor: normalize general order lines` | First part of H12; baseline/model/query/contracts together | General preparation/pickup/return/reservation results equivalent; references enforced by schema; reset disposable data. |
+| [x] | 18 `refactor: share order reconciliation and history` | Next part of H12; extract one policy responsibility per commit | Faction/general permission differences, cancellation, missing/write-off and idempotency preserved. |
 | [ ] | 19 `refactor: unify orders by kind` | Final H12 storage/service convergence | End-to-end faction/general scenarios and REST/MCP/replay parity; remove replaced aggregates directly. |
-| [ ] | 20 `refactor: derive maintenance and reservation state` | L09/L11 and remaining PLAN-10; split consumable authority, reservation field and maintenance authority into separate commits | Checkout/planning/report agreement; asset-specific blocking; no second source of derived state. |
-| [ ] | 21 `refactor: enforce bulk position uniqueness` | L10; baseline constraint and mapping | Duplicate null-lot position rejected; distinct lots accepted; normal stock commands unaffected. |
-| [ ] | 22 `chore: remove verified dead code and imports` | L01..04, pass-through part of L08 | Reference inventory/lint clean; no removed endpoint, CDI entrypoint or used support bean. |
-| [ ] | 23 `refactor: tighten UI and input boundaries` | L06..08, L12; separate tooltip typing from lookup/error cleanup | Polymorphic controls/ref behavior; malformed command fields; network/session errors distinct from absence. |
-| [ ] | 24 `chore: consolidate config and tooling` | L14/L15; separate Compose, logging and Maven/frontend tooling commits | Documented variables reach both deployment modes; test H2 retained; intentional compiler requirements recorded. |
-| [ ] | 25 `fix: track service worker cache operations` | L16 | Worker shutdown/quota behavior and cache-prefix-only activation cleanup. |
-| [ ] | 26 `chore: align fixtures and translation ownership` | L13/L17; one fixture/screen family per commit | Typed fixtures match DTOs; adversarial inputs remain explicit; DE/EN and export labels preserved. |
+| [x] | 20 `refactor: derive maintenance and reservation state` | L09/L11 and remaining PLAN-10; split consumable authority, reservation field and maintenance authority into separate commits | Checkout/planning/report agreement; asset-specific blocking; no second source of derived state. |
+| [x] | 21 `refactor: enforce bulk position uniqueness` | L10; baseline constraint and mapping | Duplicate null-lot position rejected; distinct lots accepted; normal stock commands unaffected. |
+| [x] | 22 `chore: remove verified dead code and imports` | L01..04, pass-through part of L08 | Reference inventory/lint clean; no removed endpoint, CDI entrypoint or used support bean. |
+| [x] | 23 `refactor: tighten UI and input boundaries` | L06..08, L12; separate tooltip typing from lookup/error cleanup | Polymorphic controls/ref behavior; malformed command fields; network/session errors distinct from absence. |
+| [x] | 24 `chore: consolidate config and tooling` | L14/L15; separate Compose, logging and Maven/frontend tooling commits | Documented variables reach both deployment modes; test H2 retained; intentional compiler requirements recorded. |
+| [x] | 25 `fix: track service worker cache operations` | L16 | Worker shutdown/quota behavior and cache-prefix-only activation cleanup. |
+| [~] | 26 `chore: align fixtures and translation ownership` | L13/L17; one fixture/screen family per commit | Typed fixtures match DTOs; adversarial inputs remain explicit; DE/EN and export labels preserved. |
 
-Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. Update each finding's status and record actual acceptance evidence here when implementation is later authorized.
+Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. Open: 19 (PLAN-02 aggregate convergence) and the i18next migration in 26 (PLAN-09).
 
 ## Focused follow-up: lot-to-item handling
 
-15 October 2026 · **Analysis only; all findings Open.** User clarification: choosing/managing the linked item is awkward; a multi-item lot is not the requested concept. No application changes, builds or tests were made for this follow-up.
+15 October 2026 · **All findings Done** (see the remediation status). User clarification: choosing/managing the linked item is awkward; a multi-item lot is not the requested concept.
 
 ### Current relationship
 
@@ -204,26 +252,26 @@ Lot creation only saves metadata ([StockManagementService.java:85](D:/Code/ASH/i
 
 | ID / status | Finding | Resolution |
 |---|---|---|
-| LOT-H01 · Open | Editing can reassign an existing lot to another item. The global form exposes the item selector on edit ([StockOperations.tsx:208](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:208)); the backend unconditionally assigns `lot.item = item` ([StockManagementService.java:109](D:/Code/ASH/inventory/backend/src/main/java/org/ash/inventory/service/StockManagementService.java:109)). Existing positions, transactions, count/transfer/receipt lines retain their old item IDs. Independent foreign keys do not require those item IDs to match the lot's item. This can leave item A's stock referencing a lot now owned by B, and subsequent lot validation rejects normal A operations. | Make the parent item immutable on update in both API and UI. Use a distinct create DTO containing itemId and metadata-only update DTO. Check that a populated/historical lot cannot move to another product; assess composite database constraints for the same invariant. |
-| LOT-H02 · Open | Receiving automatically chooses the first matching lot with `status === 'available'` ([PurchasingOperations.tsx:102](D:/Code/ASH/inventory/src/components/operations/PurchasingOperations.tsx:102)). That does not establish supplier-batch identity, stock quantity, or date usability. The picker shows only lot numbers at line 119. New-lot creation collects only a number and supplies no expiry, manufacture date or supplier lot at line 139. | Require explicit existing-batch selection or explicit new-batch creation. Include batch dates/supplier identity and stock context in choices; capture full lot metadata inline when receiving a new batch. Do not infer identical batch identity merely from the same item. |
+| LOT-H01 · Done | Editing can reassign an existing lot to another item. The global form exposes the item selector on edit ([StockOperations.tsx:208](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:208)); the backend unconditionally assigns `lot.item = item` ([StockManagementService.java:109](D:/Code/ASH/inventory/backend/src/main/java/org/ash/inventory/service/StockManagementService.java:109)). Existing positions, transactions, count/transfer/receipt lines retain their old item IDs. Independent foreign keys do not require those item IDs to match the lot's item. This can leave item A's stock referencing a lot now owned by B, and subsequent lot validation rejects normal A operations. | Make the parent item immutable on update in both API and UI. Use a distinct create DTO containing itemId and metadata-only update DTO. Check that a populated/historical lot cannot move to another product; assess composite database constraints for the same invariant. |
+| LOT-H02 · Done | Receiving automatically chooses the first matching lot with `status === 'available'` ([PurchasingOperations.tsx:102](D:/Code/ASH/inventory/src/components/operations/PurchasingOperations.tsx:102)). That does not establish supplier-batch identity, stock quantity, or date usability. The picker shows only lot numbers at line 119. New-lot creation collects only a number and supplies no expiry, manufacture date or supplier lot at line 139. | Require explicit existing-batch selection or explicit new-batch creation. Include batch dates/supplier identity and stock context in choices; capture full lot metadata inline when receiving a new batch. Do not infer identical batch identity merely from the same item. |
 
 ### Low/Cosmetic
 
 | ID / status | Finding | Resolution |
 |---|---|---|
-| LOT-L01 · Open | The Item page already passes `itemId` ([ItemDetail.tsx:370](D:/Code/ASH/inventory/src/pages/ItemDetail.tsx:370)), but the embedded form still renders an item autocomplete with one eligible option ([StockOperations.tsx:209](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:209)). | Show fixed item name/SKU on item-scoped creation; skip item selection. For global creation, choose the item once, then enter batch details. |
-| LOT-L02 · Open | Lot rows contain an item ID but no item name/SKU or stock summary ([StockDtos.java:22](D:/Code/ASH/inventory/backend/src/main/java/org/ash/inventory/resource/dto/StockDtos.java:22)). The UI resolves names by searching the entire downloaded item catalog ([StockOperations.tsx:204](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:204)). `useStockLookups` also downloads unrelated locations ([useStockLookups.ts:5](D:/Code/ASH/inventory/src/hooks/useStockLookups.ts:5)). Lookup loading/errors are not displayed by LotsPanel; its feedback covers only lots. Retired items are omitted from the item catalog, although the lot query does not filter them out. | Return a scoped item summary with each lot. Use targeted item search for global creation; avoid full catalog/location dependencies. Display lookup failures and explicit loading; distinguish retired parent items from missing data. |
-| LOT-L03 · Open | Lot cards show dates/status/notes but no quantity or location ([StockOperations.tsx:204](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:204)). The separate item location table merges all lots at a location ([ItemStockLocations.tsx:28](D:/Code/ASH/inventory/src/components/items/ItemStockLocations.tsx:28)). An empty metadata record can remain `available`; no automatic writer of `LotStatus.depleted` was found. | Show a per-lot stock breakdown by location with on-hand, available, held/damaged and transit quantities. Distinguish eligibility status from computed emptiness. Link stock addition/receiving from the lot so creating metadata does not imply adding stock. |
-| LOT-L04 · Open | The Item page hides the entire lot panel unless `canEdit` ([ItemDetail.tsx:370](D:/Code/ASH/inventory/src/pages/ItemDetail.tsx:370)); LotsPanel itself assumes editable actions. Global lot rows also have no direct item/lot detail link. | Separate view permission from edit permission. Allow authorized viewers to inspect lots/stock; gate mutations individually. Add direct item navigation and lot detail/expanded stock context. |
+| LOT-L01 · Done | The Item page already passes `itemId` ([ItemDetail.tsx:370](D:/Code/ASH/inventory/src/pages/ItemDetail.tsx:370)), but the embedded form still renders an item autocomplete with one eligible option ([StockOperations.tsx:209](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:209)). | Show fixed item name/SKU on item-scoped creation; skip item selection. For global creation, choose the item once, then enter batch details. |
+| LOT-L02 · Done | Lot rows contain an item ID but no item name/SKU or stock summary ([StockDtos.java:22](D:/Code/ASH/inventory/backend/src/main/java/org/ash/inventory/resource/dto/StockDtos.java:22)). The UI resolves names by searching the entire downloaded item catalog ([StockOperations.tsx:204](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:204)). `useStockLookups` also downloads unrelated locations ([useStockLookups.ts:5](D:/Code/ASH/inventory/src/hooks/useStockLookups.ts:5)). Lookup loading/errors are not displayed by LotsPanel; its feedback covers only lots. Retired items are omitted from the item catalog, although the lot query does not filter them out. | Return a scoped item summary with each lot. Use targeted item search for global creation; avoid full catalog/location dependencies. Display lookup failures and explicit loading; distinguish retired parent items from missing data. |
+| LOT-L03 · Done | Lot cards show dates/status/notes but no quantity or location ([StockOperations.tsx:204](D:/Code/ASH/inventory/src/components/operations/StockOperations.tsx:204)). The separate item location table merges all lots at a location ([ItemStockLocations.tsx:28](D:/Code/ASH/inventory/src/components/items/ItemStockLocations.tsx:28)). An empty metadata record can remain `available`; no automatic writer of `LotStatus.depleted` was found. | Show a per-lot stock breakdown by location with on-hand, available, held/damaged and transit quantities. Distinguish eligibility status from computed emptiness. Link stock addition/receiving from the lot so creating metadata does not imply adding stock. |
+| LOT-L04 · Done | The Item page hides the entire lot panel unless `canEdit` ([ItemDetail.tsx:370](D:/Code/ASH/inventory/src/pages/ItemDetail.tsx:370)); LotsPanel itself assumes editable actions. Global lot rows also have no direct item/lot detail link. | Separate view permission from edit permission. Allow authorized viewers to inspect lots/stock; gate mutations individually. Add direct item navigation and lot detail/expanded stock context. |
 
 ### Proposed small commits
 
 | Progress | Commit | Acceptance |
 |---|---|---|
-| [ ] | `fix: make lot parent item immutable` — LOT-H01 | Reassignment rejected after creation; metadata edits still work; original stock/history associations remain valid. |
-| [ ] | `refactor: project lot item identity and stock context` — LOT-L02/L03 | Item/SKU visible without catalog draining; quantities agree with positions; privacy/location redaction preserved. |
-| [ ] | `refactor: make lot management item-scoped` — LOT-L01/L04 | New lot from Item A fixes A as parent; global creation searches eligible products; edit never exposes parent selection; viewers can inspect without mutation buttons. |
-| [ ] | `feat: expose per-lot stock and receiving actions` — LOT-L03 | Multiple lots in one location and one lot across locations are distinguishable; creating metadata alone clearly creates zero stock. |
-| [ ] | `fix: require explicit batch identity on receiving` — LOT-H02 | New delivery does not silently reuse an existing batch; full metadata captured for new batches; explicit same-batch partial deliveries remain possible. |
+| [x] | `fix: make lot parent item immutable` — LOT-H01 | Reassignment rejected after creation; metadata edits still work; original stock/history associations remain valid. |
+| [x] | `refactor: project lot item identity and stock context` — LOT-L02/L03 | Item/SKU visible without catalog draining; quantities agree with positions; privacy/location redaction preserved. |
+| [x] | `refactor: make lot management item-scoped` — LOT-L01/L04 | New lot from Item A fixes A as parent; global creation searches eligible products; edit never exposes parent selection; viewers can inspect without mutation buttons. |
+| [x] | `feat: expose per-lot stock and receiving actions` — LOT-L03 | Multiple lots in one location and one lot across locations are distinguishable; creating metadata alone clearly creates zero stock. |
+| [x] | `fix: require explicit batch identity on receiving` — LOT-H02 | New delivery does not silently reuse an existing batch; full metadata captured for new batches; explicit same-batch partial deliveries remain possible. |
 
 Example target flow: **Item → Lots → New lot** (item fixed) → enter batch identity/dates → save metadata or receive stock. From global Operations: **New lot → search item by name/SKU → confirm item → same batch form**. Keep the current one-item/many-lots model; no many-to-many join table is needed for the clarified workflow.

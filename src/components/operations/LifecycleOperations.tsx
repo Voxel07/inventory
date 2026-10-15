@@ -7,8 +7,8 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useAssignableUsers } from '../../hooks/useUsers';
 import { getVendors } from '../../services/procurementService';
 import { createMaintenanceRecord } from '../../services/maintenanceService';
-import { useStockLookups } from '../../hooks/useStockLookups';
-import { optionalValues } from '../../utils/operationForm';
+import { LoadMore } from '../shared/LoadMore';
+import { oneOf, optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
 import { Alert, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
@@ -16,14 +16,15 @@ import { useItemAssets } from '../../hooks/useItems';
 import { useDamageReports } from '../../hooks/useDamageReports';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
-import type { Repair, Schedule } from '../../types/operations';
-import { OperationForm, type Values } from './OperationForm';
+import { MAINTENANCE_RESULTS, type Repair, type Schedule } from '../../types/operations';
+import { OperationForm } from './OperationForm';
+import type { Values } from '../../types/operationForm';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
 export function SchedulesPanel() {
-  const t = useLocalizedText(); const lookup = useStockLookups();
+  const t = useLocalizedText();
   const people = useAssignableUsers();
   const schedules = useOperationList('schedules', operationsApi.schedules());
   const [chooseItem, setChooseItem] = useState(false);
@@ -40,14 +41,15 @@ export function SchedulesPanel() {
         <Button title={translate('Gerätedetails und Wartungsnachweise öffnen', 'Open asset details and maintenance records')} component={Link} to={schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}`}>{t('Gerät / Wartungsnachweis', 'Asset / maintenance records')}</Button>
         {schedule.active && <Button title={translate('Die durchgeführte Wartung dokumentieren', 'Record completed maintenance')} variant="contained" onClick={() => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); }}>{t('Wartung dokumentieren', 'Record maintenance')}</Button>}
         {schedule.active && <Button title={translate('Diesen Wartungsplan stilllegen', 'Retire this maintenance schedule')} onClick={() => setRetire(schedule)}>{t('Stilllegen', 'Retire')}</Button>}
-       </>} title={lookup.items.find((item) => item.id === schedule.itemId)?.name} status={schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')}>
+       </>} title={schedule.itemName} status={schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')}>
       <Typography color="text.secondary">{formatStatus(schedule.maintenanceType)}</Typography>
       <Typography>{formatStatus(schedule.intervalType)} · {schedule.intervalValue} · {t('Nächste Fälligkeit', 'Next due')}: {schedule.nextDueAt ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}</Typography>
       <Typography>{schedule.active ? t('Aktiv', 'Active') : t('Stillgelegt', 'Retired')} · {schedule.checkoutBlocking ? t('Sperrt Ausgabe bei Fälligkeit', 'Blocks checkout when due') : t('Hinweis', 'Advisory')}</Typography>
       {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
 
     </OperationListEntry>)}
-    {chooseItem && <OperationForm title={t('Wartung planen', 'Schedule maintenance')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
+    <LoadMore list={schedules} />
+    {chooseItem && <OperationForm title={t('Wartung planen', 'Schedule maintenance')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), type: 'item', required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
     {edit && <OperationForm title={t('Wartungsplan', 'Maintenance schedule')} initial={edit.schedule ? Object.fromEntries(Object.entries(edit.schedule).filter(([, value]) => value != null).map(([key, value]) => [key, key === 'nextDueAt' ? String(value).slice(0, 16) : value])) as Values : { maintenanceType: 'generator_service', intervalType: 'date', intervalValue: 365, warningWindow: 14, active: true, checkoutBlocking: true }} onClose={() => setEdit(null)} fields={(values) => [
       { key: 'assetInstanceId', label: t('Gerät (leer = gesamter Artikel)', 'Asset (empty = entire item)'), options: (assets.data ?? []).map((asset) => ({ value: asset.id, label: asset.assetCode })) },
       { key: 'responsiblePersonId', label: t('Verantwortlich', 'Responsible person'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
@@ -65,14 +67,14 @@ export function SchedulesPanel() {
       { key: 'operatingHours', label: t('Betriebsstunden', 'Operating hours'), type: 'number', min: 0, step: 0.1, required: complete.intervalType === 'operating_hours' },
       { key: 'certificateNumber', label: t('Zertifikatsnummer', 'Certificate number') },
       { key: 'notes', label: t('Prüfpunkte und Ergebnisse', 'Checklist observations and results'), required: Boolean(complete.requiredChecklist), multiline: true, help: complete.requiredChecklist },
-    ]} onSave={(values) => createMaintenanceRecord({ itemId: complete.itemId, assetInstanceId: complete.assetInstanceId, scheduleId: complete.id, type: complete.maintenanceType as 'dguv_v3', performedAt: new Date(String(values.performedAt)).toISOString(), result: values.result as 'passed' | 'failed' | 'advisory', operatingHours: values.operatingHours === undefined || values.operatingHours === '' ? undefined : Number(values.operatingHours), certificateNumber: String(values.certificateNumber || ''), notes: String(values.notes || '') })} />}
+    ]} onSave={(values) => createMaintenanceRecord({ itemId: complete.itemId, assetInstanceId: complete.assetInstanceId, scheduleId: complete.id, type: complete.maintenanceType, performedAt: new Date(String(values.performedAt)).toISOString(), result: oneOf(values.result, MAINTENANCE_RESULTS), operatingHours: values.operatingHours === undefined || values.operatingHours === '' ? undefined : Number(values.operatingHours), certificateNumber: String(values.certificateNumber || ''), notes: String(values.notes || '') })} />}
     {retire && <OperationForm title={t('Wartungsplan stilllegen', 'Retire maintenance schedule')} fields={[]} onClose={() => setRetire(null)} onSave={() => operationsApi.retireSchedule(retire.id)}><Alert severity="warning">{t('Dieser Plan wird nicht mehr für die Ausgabe geprüft.', 'This schedule will no longer be checked at checkout.')}</Alert></OperationForm>}
   </Stack>;
 }
 
 const repairNext: Record<string, string> = { reported: 'triaged', triaged: 'awaiting_repair', awaiting_repair: 'in_repair', in_repair: 'repaired', repaired: 'verified', verified: 'returned_to_service' };
 export function RepairsPanel() {
-  const t = useLocalizedText(); const { user } = useAuth(); const lookup = useStockLookups();
+  const t = useLocalizedText(); const { user } = useAuth();
   const people = useAssignableUsers();
   const vendors = useOperationList('repair-vendors', getVendors);
   const repairs = useOperationList('repairs', operationsApi.repairs); const damage = useDamageReports();
@@ -82,12 +84,11 @@ export function RepairsPanel() {
   const openRepairs = (repairs.data ?? []).filter((repair) => !closed(repair));
   const closedRepairs = (repairs.data ?? []).filter(closed);
   const repairEntry = (repair: Repair) => {
-    const report = damage.data?.find((value) => value.id === repair.damageReportId);
     return <OperationListEntry key={repair.id} actions={closed(repair) ? undefined : <>
         {repairNext[repair.status] && <Button title={translate('Den Reparaturfall in den nächsten Status überführen', 'Move this repair case to its next status')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
         {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('Eine Abschreibung für diesen Reparaturfall erfassen', 'Record a write-off for this repair case')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
-       </>} title={<>{lookup.items.find((item) => item.id === report?.itemId)?.name ?? report?.assemblyName} {report?.assetCode}</>} status={repair.status}>
-      <OperationDetail label={t('Schaden', 'Damage')}>{report?.description}</OperationDetail>
+       </>} title={<>{repair.itemName ?? repair.assemblyName} {repair.assetCode}</>} status={repair.status}>
+      <OperationDetail label={t('Schaden', 'Damage')}>{repair.damageDescription}</OperationDetail>
       <OperationDetail label={t('Teile und Kosten', 'Parts and costs')}>{repair.partsAndCostNotes}</OperationDetail>
       <OperationDetail label={t('Notiz', 'Notes')}>{repair.notes}</OperationDetail>
       <OperationDetail label={t('Prüfergebnis', 'Verification')}>{repair.verificationResult}</OperationDetail>
@@ -101,8 +102,9 @@ export function RepairsPanel() {
     {openRepairs.length > 0 && <Typography variant="h6" component="h2">{t('Offene Reparaturen', 'Open repairs')} ({openRepairs.length})</Typography>}
     {openRepairs.map(repairEntry)}
     <OperationHistory title={t('Reparaturhistorie', 'Repair history')} count={closedRepairs.length}>{closedRepairs.map(repairEntry)}</OperationHistory>
+    <LoadMore list={repairs} />
     {create && <OperationForm title={t('Reparatur anlegen', 'New repair case')} fields={[
-      { key: 'damageReportId', label: t('Schadensmeldung', 'Damage report'), required: true, options: (damage.data ?? []).filter((report) => !['resolved', 'written_off'].includes(report.status)).map((report) => ({ value: report.id, label: `${lookup.items.find((item) => item.id === report.itemId)?.name ?? report.assemblyName ?? ''} ${report.assetCode ?? ''} · ${report.description}` })) },
+      { key: 'damageReportId', label: t('Schadensmeldung', 'Damage report'), required: true, options: (damage.data ?? []).filter((report) => !['resolved', 'written_off'].includes(report.status)).map((report) => ({ value: report.id, label: `${report.itemName ?? report.assemblyName ?? ''} ${report.assetCode ?? ''} · ${report.description}` })) },
       { key: 'repairOwnerId', label: t('Verantwortlich', 'Repair owner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
       { key: 'vendorId', label: t('Reparaturfirma', 'Repair vendor'), options: (vendors.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
       { key: 'partsAndCostNotes', label: t('Teile und Kosten', 'Parts and cost notes'), multiline: true }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },

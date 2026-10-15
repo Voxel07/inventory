@@ -1,17 +1,17 @@
-import type { EventType, FactionOrder } from '../types';
+import type { EventType, FactionOrderSummary } from '../types';
 
 function hasValues(values: Record<string, number> | undefined): values is Record<string, number> {
   return Boolean(values && Object.keys(values).length);
 }
 
-export function factionOrderItemBaseline(order: FactionOrder): Record<string, number> {
+export function factionOrderItemBaseline(order: FactionOrderSummary): Record<string, number> {
   if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && hasValues(order.preparedQuantities)) {
     return order.preparedQuantities;
   }
   return order.requestedQuantities;
 }
 
-export function factionOrderAssemblyBaseline(order: FactionOrder): Record<string, number> {
+export function factionOrderAssemblyBaseline(order: FactionOrderSummary): Record<string, number> {
   if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && hasValues(order.preparedAssemblyQuantities)) {
     return order.preparedAssemblyQuantities;
   }
@@ -19,9 +19,9 @@ export function factionOrderAssemblyBaseline(order: FactionOrder): Record<string
 }
 
 export function findPreviousFactionOrder(
-  orders: FactionOrder[],
+  orders: FactionOrderSummary[],
   values: { eventType: EventType; faction: string; eventDate: string; excludeId?: string },
-): FactionOrder | undefined {
+): FactionOrderSummary | undefined {
   const targetTime = new Date(values.eventDate).getTime();
   if (!Number.isFinite(targetTime)) return undefined;
   const targetYear = new Date(values.eventDate).getUTCFullYear();

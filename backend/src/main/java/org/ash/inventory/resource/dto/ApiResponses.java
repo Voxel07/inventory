@@ -127,10 +127,6 @@ public final class ApiResponses {
             String category,
             String subcategory,
             String supplier,
-            String visibilityScope,
-            String assignedUserId,
-            String assignedUserName,
-            String assignedGroup,
             List<String> eventTypes,
             @com.fasterxml.jackson.annotation.JsonProperty("isConsumable") boolean isConsumable,
             String trackingMode,
@@ -238,11 +234,16 @@ public final class ApiResponses {
             Boolean active
     ) {}
 
+    /** Overview metrics computed on the server over every item visible to the caller. */
+    public record InventorySummaryResponse(long items, long totalUnits, long lowStockItems, long transactionsLast7Days,
+            long openDamageReports) {}
+
     public record TransactionResponse(
             UUID id,
             Instant created,
             Instant updated,
             String itemId,
+            String itemName,
             String userId,
             String transactionType,
             int quantityChanged,
@@ -376,6 +377,7 @@ public final class ApiResponses {
             Instant created,
             Instant updated,
             String itemId,
+            String itemName,
             String assemblyId,
             String assemblyName,
             int amount,
@@ -399,6 +401,7 @@ public final class ApiResponses {
     public record MaintenanceResponse(
             UUID id,
             String itemId,
+            String itemName,
             String type,
             String inspectorUserId,
             Instant performedAt,
@@ -425,6 +428,7 @@ public final class ApiResponses {
             String conditionStatus,
             String availabilityStatus,
             String serviceStatus,
+            LocalDate nextMaintenanceDue,
             BigDecimal operatingHours,
             String currentLocationId,
             String currentLocationName,

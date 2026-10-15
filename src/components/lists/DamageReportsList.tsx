@@ -26,21 +26,21 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
-import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
+import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { formatDateTime } from '../../utils/dateFormat';
-import { useClientPagination } from '../../hooks/useClientPagination';
+import { useItemsByIds } from '../../hooks/useItems';
 import { translate, nameFor, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
-import { ListPagination } from '../shared/ListPagination';
+import { LoadMore } from '../shared/LoadMore';
 
+/** `reports` are filtered on the server; `list` loads further pages on demand. */
 interface Props {
     reports: DamageReport[] | undefined;
-    items: Item[] | undefined;
+    list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
     assemblies?: Assembly[];
     users?: User[];
     isLoading: boolean;
-    loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
     view?: 'open' | 'history';
@@ -53,16 +53,14 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
     low: 'info', medium: 'warning', high: 'error', critical: 'error',
 };
 
-export function DamageReportsList({ reports, items, assemblies, users, isLoading, loadingMore, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
+export function DamageReportsList({ reports, list, assemblies, users, isLoading, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
     const t = useLocalizedText();
     const { user } = useAuth();
     const canMaintain = canPerformMaintenance(user);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const visibleReports = (reports ?? []).filter((report) => view === 'history'
-        ? true
-        : report.status === 'reported' || report.status === 'in_review');
-    const { pageItems: pageReports, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(visibleReports);
+    const visibleReports = reports ?? [];
+    const pageReports = visibleReports;
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -70,14 +68,13 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const [editing, setEditing] = useState<DamageReport | null>(null);
     const [editDescription, setEditDescription] = useState('');
     const [editSeverity, setEditSeverity] = useState<DamageSeverity>('medium');
+    const resolutionItem = useItemsByIds(resolution?.report.itemId ? [resolution.report.itemId] : []).data?.[0];
 
     if (isLoading) return <Paper sx={{ p: 2 }}>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={48} />)}</Paper>;
     if (!visibleReports.length) return (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography color="text.secondary">
-                {loadingMore
-                    ? t('Weitere Berichte werden geladen…', 'Loading more reports…')
-                    : view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
+                {view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
             </Typography>
             {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
         </Paper>
@@ -85,7 +82,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
 
     const getTargetName = (report: DamageReport) => {
         if (report.assemblyId) return report.assemblyName ?? assemblies?.find((assembly) => assembly.id === report.assemblyId)?.name ?? report.assemblyId;
-        const itemName = report.itemId ? items?.find((item) => item.id === report.itemId)?.name ?? report.itemId : t('Unbekanntes Ziel', 'Unknown target');
+        const itemName = report.itemId ? report.itemName ?? report.itemId : t('Unbekanntes Ziel', 'Unknown target');
         return report.assetCode ? `${itemName} · ${report.assetCode}` : itemName;
     };
     const getUserName = (userId?: string, expanded?: User) => {
@@ -154,7 +151,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 {resolution?.report.itemId && <TextField
                     fullWidth multiline minRows={2} sx={{ mt: 2 }}
                     label={t('Artikelhinweis aktualisieren (optional)', 'Update item hint (optional)')}
-                    helperText={items?.find((item) => item.id === resolution.report.itemId)?.hint || t('Dieser Hinweis erscheint beim Artikel.', 'This hint appears on the item.')}
+                    helperText={resolutionItem?.hint || t('Dieser Hinweis erscheint beim Artikel.', 'This hint appears on the item.')}
                     value={itemHint} onChange={(event) => setItemHint(event.target.value)}
                     slotProps={{ htmlInput: { maxLength: 255 } }}
                 />}
@@ -226,7 +223,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 </Paper>
             ))}
         </Stack>
-        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <LoadMore list={list} />
         {resolutionDialog}
         {editDialog}
         </>
@@ -262,7 +259,7 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                 ))}</TableBody>
             </Table>
         </TableContainer>
-        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <LoadMore list={list} />
         {resolutionDialog}
         {editDialog}
         </>

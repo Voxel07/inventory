@@ -1,13 +1,13 @@
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Autocomplete, Box, Chip, createFilterOptions, MenuItem, Stack, TextField,  Typography } from '@mui/material';
+import { Autocomplete, Box, Chip, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import type { Assembly, AssetInstance, DamageReportFormData, DamageSeverity, Item } from '../../types';
-import { useItemAssets } from '../../hooks/useItems';
+import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
 import { translate, nameFor, useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
 
 export interface DamageReportFormProps {
-    items: Item[];
     assemblies?: Assembly[];
     preselectedItemId?: string;
     preselectedAssetId?: string;
@@ -18,27 +18,15 @@ export interface DamageReportFormProps {
     maxAmount?: number;
 }
 
-type DamageTarget =
-    | { key: string; type: 'item'; item: Item }
-    | { key: string; type: 'assembly'; assembly: Assembly };
-
-const filterDamageTargets = createFilterOptions<DamageTarget>({
-    stringify: (target) => target.type === 'item'
-        ? [target.item.name, target.item.sku, target.item.category, target.item.subcategory].filter(Boolean).join(' ')
-        : [target.assembly.name, target.assembly.description].filter(Boolean).join(' '),
-});
-
+/** Items are found by server search; assemblies come from the caller's explicit complete list. */
 export function DamageReportForm({
-    items, assemblies = [], preselectedItemId, preselectedAssetId, preselectedAssemblyId,
+    assemblies = [], preselectedItemId, preselectedAssetId, preselectedAssemblyId,
     preselectedAsset, onSubmit, isLoading, maxAmount,
 }: DamageReportFormProps) {
     useAppLanguage();
     const t = useLocalizedText();
     const severities: { value: DamageSeverity; label: string }[] = SEVERITY_LEVELS.map((value) => ({ value, label: nameFor('severity', value) }));
-    const initialTargetKey = preselectedAssemblyId
-        ? `assembly:${preselectedAssemblyId}`
-        : preselectedItemId ? `item:${preselectedItemId}` : '';
-    const [targetKey, setTargetKey] = useState(initialTargetKey);
+    const [targetType, setTargetType] = useState<'item' | 'assembly'>(preselectedAssemblyId ? 'assembly' : 'item');
     const [formData, setFormData] = useState<DamageReportFormData>({
         itemId: preselectedItemId,
         assemblyId: preselectedAssemblyId,
@@ -48,30 +36,21 @@ export function DamageReportForm({
         severity: 'medium',
     });
     const [amountInput, setAmountInput] = useState('1');
-    const targets: DamageTarget[] = [
-        ...items.map((item) => ({ key: `item:${item.id}`, type: 'item' as const, item })),
-        ...assemblies.map((assembly) => ({ key: `assembly:${assembly.id}`, type: 'assembly' as const, assembly })),
-    ];
-    const selectedTarget = targets.find((target) => target.key === targetKey) ?? null;
-    const selectedItem = selectedTarget?.type === 'item'
-        ? selectedTarget.item
-        : items.find((item) => item.id === preselectedItemId);
+    const selectedItem = useItemsByIds(formData.itemId ? [formData.itemId] : []).data?.[0];
     const needsAsset = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(needsAsset ? selectedItem?.id : undefined);
     const activeAssets = itemAssets.filter((asset) => asset.active);
     const selectedAsset = preselectedAsset ?? activeAssets.find((asset) => asset.id === formData.assetInstanceId) ?? null;
     const effectiveMaxAmount = needsAsset ? 1 : maxAmount;
 
-    function selectTarget(target: DamageTarget | null) {
-        setTargetKey(target?.key ?? '');
+    function selectItem(item: Item | null) {
         setAmountInput('1');
-        if (target?.type === 'item') {
-            setFormData((previous) => ({ ...previous, itemId: target.item.id, assemblyId: undefined, assetInstanceId: undefined, amount: 1 }));
-        } else if (target?.type === 'assembly') {
-            setFormData((previous) => ({ ...previous, itemId: undefined, assemblyId: target.assembly.id, assetInstanceId: undefined, amount: 1 }));
-        } else {
-            setFormData((previous) => ({ ...previous, itemId: undefined, assemblyId: undefined, assetInstanceId: undefined }));
-        }
+        setFormData((previous) => ({ ...previous, itemId: item?.id, assemblyId: undefined, assetInstanceId: undefined, amount: 1 }));
+    }
+
+    function selectAssembly(assembly: Assembly | null) {
+        setAmountInput('1');
+        setFormData((previous) => ({ ...previous, itemId: undefined, assemblyId: assembly?.id, assetInstanceId: undefined, amount: 1 }));
     }
 
     function handleSubmit(event: React.FormEvent) {
@@ -88,28 +67,19 @@ export function DamageReportForm({
     return (
         <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
-                {!preselectedItemId && !preselectedAssemblyId && (
-                    <Autocomplete
-                        options={targets}
-                        filterOptions={filterDamageTargets}
-                        value={selectedTarget}
-                        onChange={(_, target) => selectTarget(target)}
-                        isOptionEqualToValue={(option, value) => option.key === value.key}
-                        getOptionLabel={(target) => target.type === 'item' ? target.item.name : target.assembly.name}
-                        groupBy={(target) => target.type === 'item' ? t('Artikel', 'Items') : t('Baugruppen', 'Assemblies')}
-                        renderOption={(props, target) => (
-                            <li {...props} key={target.key}>
-                                <Box sx={{ minWidth: 0 }}>
-                                    <Typography>{target.type === 'item' ? target.item.name : target.assembly.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {target.type === 'item' ? [target.item.sku, target.item.category].filter(Boolean).join(' · ') : t('Baugruppe', 'Assembly')}
-                                    </Typography>
-                                </Box>
-                            </li>
-                        )}
-                        renderInput={(params) => <TextField {...params} label={t('Artikel oder Baugruppe suchen', 'Search item or assembly')} placeholder={t('Name, SKU oder Kategorie eingeben…', 'Type a name, SKU, or category…')} required />}
-                    />
-                )}
+                {!preselectedItemId && !preselectedAssemblyId && <>
+                    <ToggleButtonGroup exclusive size="small" value={targetType} aria-label={t('Schadensobjekt', 'Damage target')}
+                        onChange={(_, value: 'item' | 'assembly' | null) => { if (value) { setTargetType(value); selectItem(null); } }}>
+                        <ToggleButton value="item">{t('Artikel', 'Item')}</ToggleButton>
+                        <ToggleButton value="assembly">{t('Baugruppe', 'Assembly')}</ToggleButton>
+                    </ToggleButtonGroup>
+                    {targetType === 'item'
+                        ? <ItemAutocomplete label={t('Artikel suchen', 'Search item')} required value={formData.itemId} onChange={selectItem} />
+                        : <Autocomplete options={assemblies} value={assemblies.find((assembly) => assembly.id === formData.assemblyId) ?? null}
+                            onChange={(_, assembly) => selectAssembly(assembly)} isOptionEqualToValue={(option, value) => option.id === value.id}
+                            getOptionLabel={(assembly) => assembly.name}
+                            renderInput={(params) => <TextField {...params} label={t('Baugruppe suchen', 'Search assembly')} required />} />}
+                </>}
 
                 {(preselectedItemId || preselectedAssemblyId) && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

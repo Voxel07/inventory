@@ -23,6 +23,7 @@ export default {
     return: 'Rückgabe',
     more: 'Mehr',
     signOutProviderFailed: 'Lokal abgemeldet, aber Authentik konnte nicht erreicht werden',
+    signOutPersistFailed: 'Abgemeldet, aber die gespeicherte Sitzung auf diesem Gerät konnte nicht gelöscht werden. Bitte die Websitedaten dieser App löschen',
   },
   header: {
     inventory: 'Inventar',

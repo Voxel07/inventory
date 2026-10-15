@@ -13,19 +13,19 @@ import {
   submitFactionOrder,
   updateFactionOrder,
 } from '../services/factionOrderService';
-import type { EventType, FactionOrder, FactionOrderFormData } from '../types';
+import type { EventType, FactionOrder, FactionOrderFormData, FactionOrderStatus, FactionOrderSummary } from '../types';
 import type { AssetReturnOutcome, ReturnLineInput } from '../services/factionOrderService';
-import { useProgressiveList } from './useProgressiveList';
+import { usePagedList } from './usePagedList';
 import { useAuth } from './useAuth';
 import { canViewOrganization } from '../utils/access';
 
 
-export function useFactionOrders(eventType?: EventType, faction?: string) {
+export function useFactionOrders(eventType?: EventType, faction?: string, status?: readonly FactionOrderStatus[], eventId?: string) {
   const { user } = useAuth();
   // Tenants have no access to organization orders; skip the request instead of failing.
-  return useProgressiveList<FactionOrder>(
-    ['faction-orders', eventType, faction],
-    (page, size) => getFactionOrders({ eventType, faction, page, size }),
+  return usePagedList<FactionOrderSummary>(
+    ['faction-orders', eventType, faction, status, eventId],
+    (page, size) => getFactionOrders({ eventType, faction, status, eventId }, page, size),
     { enabled: canViewOrganization(user) },
   );
 }
@@ -40,30 +40,24 @@ export function useFactionOrder(id: string) {
   });
 }
 
-function useOrderMutation<TVariables, TResult>(mutationFn: (variables: TVariables) => Promise<TResult>) {
-  return useMutation({
-    mutationFn,
-  });
-}
-
 export function useCreateFactionOrder() {
-  return useOrderMutation((data: FactionOrderFormData) => createFactionOrder(data));
+  return useMutation({ mutationFn: (data: FactionOrderFormData) => createFactionOrder(data) });
 }
 
 export function useUpdateFactionOrder() {
-  return useOrderMutation(({ id, data }: { id: string; data: FactionOrderFormData }) => updateFactionOrder(id, data));
+  return useMutation({ mutationFn: ({ id, data }: { id: string; data: FactionOrderFormData }) => updateFactionOrder(id, data) });
 }
 
 export function useStartFactionOrderPreparation() {
-  return useOrderMutation((id: string) => startFactionOrderPreparation(id));
+  return useMutation({ mutationFn: (id: string) => startFactionOrderPreparation(id) });
 }
 
 export function useSubmitFactionOrder() {
-  return useOrderMutation((id: string) => submitFactionOrder(id));
+  return useMutation({ mutationFn: (id: string) => submitFactionOrder(id) });
 }
 
 export function useSaveFactionOrderPreparation() {
-  return useOrderMutation(({
+  return useMutation({ mutationFn: ({
     order,
     values,
     assemblyValues,
@@ -75,11 +69,11 @@ export function useSaveFactionOrderPreparation() {
     assemblyValues: Record<string, number>;
     assetAssignments: Record<string, string[]>;
     sourceLocations?: Record<string, string>;
-  }) => saveFactionOrderPreparation(order, values, assemblyValues, assetAssignments, sourceLocations));
+  }) => saveFactionOrderPreparation(order, values, assemblyValues, assetAssignments, sourceLocations) });
 }
 
 export function useMarkFactionOrderReady() {
-  return useOrderMutation(({
+  return useMutation({ mutationFn: ({
     id,
     note,
     pickupLocation,
@@ -91,25 +85,25 @@ export function useMarkFactionOrderReady() {
     pickupLocation?: string;
     pickupLatitude?: number;
     pickupLongitude?: number;
-  }) => markFactionOrderReady(id, note, pickupLocation, pickupLatitude, pickupLongitude));
+  }) => markFactionOrderReady(id, note, pickupLocation, pickupLatitude, pickupLongitude) });
 }
 
 export function useReopenFactionOrderPreparation() {
-  return useOrderMutation(({ id, note }: { id: string; note?: string }) => reopenFactionOrderPreparation(id, note));
+  return useMutation({ mutationFn: ({ id, note }: { id: string; note?: string }) => reopenFactionOrderPreparation(id, note) });
 }
 
 export function usePickUpFactionOrder() {
-  return useOrderMutation((id: string) => pickUpFactionOrder(id));
+  return useMutation({ mutationFn: (id: string) => pickUpFactionOrder(id) });
 }
 
 export function useReturnFactionOrderItems() {
-  return useOrderMutation(({ id, lines, assets }: {
+  return useMutation({ mutationFn: ({ id, lines, assets }: {
     id: string;
     lines: Record<string, ReturnLineInput>;
     assets?: Record<string, AssetReturnOutcome>;
-  }) => returnFactionOrderItems(id, lines, assets));
+  }) => returnFactionOrderItems(id, lines, assets) });
 }
 
 export function useCancelFactionOrder() {
-  return useOrderMutation((id: string) => cancelFactionOrder(id));
+  return useMutation({ mutationFn: (id: string) => cancelFactionOrder(id) });
 }

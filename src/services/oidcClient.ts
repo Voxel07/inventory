@@ -1,8 +1,11 @@
 import { OIDC_CONFIG } from '../config/runtimeConfig';
 import { translate } from '../utils/naming';
+import { abortable, isAbortError } from './abort';
 
 const TRANSACTION_KEY = 'ash.inventory.oidc.transaction';
 const TRANSACTION_MAX_AGE_MS = 10 * 60 * 1000;
+/** Upper bound of one provider request; refreshes hold the cross-tab session lock while they wait. */
+export const OIDC_REQUEST_TIMEOUT_MS = 15_000;
 
 type OidcMetadata = {
   issuer: string;
@@ -19,6 +22,17 @@ type OidcTransaction = {
   redirectUri: string;
   createdAt: number;
 };
+
+function decodeTransaction(raw: string): OidcTransaction {
+  const value: unknown = JSON.parse(raw);
+  const record = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+  const { state, nonce, verifier, redirectUri, createdAt } = record;
+  if (typeof state !== 'string' || typeof nonce !== 'string' || typeof verifier !== 'string' || typeof redirectUri !== 'string'
+    || typeof createdAt !== 'number') {
+    throw new Error(translate('Der gespeicherte OIDC-Anmeldevorgang ist ungültig', 'The stored OIDC login transaction is invalid'));
+  }
+  return { state, nonce, verifier, redirectUri, createdAt };
+}
 
 type TokenResponse = {
   access_token?: string;
@@ -49,6 +63,25 @@ export class OidcTokenRequestError extends Error {
     this.name = 'OidcTokenRequestError';
     this.status = status;
     this.code = code;
+  }
+}
+
+/** The provider did not answer in time; a temporary failure like any other network error. */
+export class OidcTimeoutError extends Error {
+  constructor(what: string) {
+    super(translate(`Der OIDC-Anbieter hat nicht rechtzeitig geantwortet (${what})`, `OIDC provider did not respond in time (${what})`));
+    this.name = 'OidcTimeoutError';
+  }
+}
+
+/** One provider request, bounded by {@link OIDC_REQUEST_TIMEOUT_MS} and cancellable by the caller. */
+async function providerFetch(what: string, url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  const timeout = AbortSignal.timeout(OIDC_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: signal ? AbortSignal.any([timeout, signal]) : timeout });
+  } catch (error) {
+    if (timeout.aborted && isAbortError(error)) throw new OidcTimeoutError(what);
+    throw error;
   }
 }
 
@@ -121,10 +154,11 @@ function expiry(response: TokenResponse): number | null {
   }
 }
 
-async function metadata(): Promise<OidcMetadata> {
+/** Discovery is shared by every caller, so only its own timeout cancels it; a caller abort only stops waiting. */
+async function metadata(signal?: AbortSignal): Promise<OidcMetadata> {
   if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
   if (!metadataPromise) {
-    metadataPromise = fetch(`${OIDC_CONFIG.authority}/.well-known/openid-configuration`, {
+    metadataPromise = providerFetch('discovery', `${OIDC_CONFIG.authority}/.well-known/openid-configuration`, {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     }).then(async (response) => {
@@ -139,16 +173,16 @@ async function metadata(): Promise<OidcMetadata> {
       throw error;
     });
   }
-  return metadataPromise;
+  return abortable(metadataPromise, signal);
 }
 
-async function tokenRequest(parameters: URLSearchParams): Promise<TokenResponse> {
-  const provider = await metadata();
-  const response = await fetch(provider.token_endpoint, {
+async function tokenRequest(parameters: URLSearchParams, signal?: AbortSignal): Promise<TokenResponse> {
+  const provider = await metadata(signal);
+  const response = await providerFetch('token', provider.token_endpoint, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: parameters,
-  });
+  }, signal);
   const result = await response.json().catch(() => ({})) as TokenResponse;
   if (!response.ok || result.error) {
     if (result.error === 'invalid_client' || response.status === 401) {
@@ -223,7 +257,7 @@ export async function completeOidcLogin(): Promise<OidcTokenSet | null> {
   try {
     if (providerError) throw new Error(url.searchParams.get('error_description') || providerError);
     if (!code || !rawTransaction) throw new Error(translate('Zum OIDC-Rückruf gibt es keinen passenden Anmeldevorgang', 'OIDC callback has no matching login transaction'));
-    const transaction = JSON.parse(rawTransaction) as OidcTransaction;
+    const transaction = decodeTransaction(rawTransaction);
     if (Date.now() - transaction.createdAt > TRANSACTION_MAX_AGE_MS) throw new Error(translate('Der OIDC-Anmeldevorgang ist abgelaufen', 'OIDC login transaction expired'));
     if (url.searchParams.get('state') !== transaction.state) throw new Error(translate('Die State-Prüfung des OIDC-Rückrufs ist fehlgeschlagen', 'OIDC callback state validation failed'));
 
@@ -242,13 +276,13 @@ export async function completeOidcLogin(): Promise<OidcTokenSet | null> {
   }
 }
 
-export async function refreshOidcTokens(refreshToken: string): Promise<OidcTokenSet> {
+export async function refreshOidcTokens(refreshToken: string, signal?: AbortSignal): Promise<OidcTokenSet> {
   if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
   const response = await tokenRequest(new URLSearchParams({
     grant_type: 'refresh_token',
     client_id: OIDC_CONFIG.clientId,
     refresh_token: refreshToken,
-  }));
+  }), signal);
   return toTokenSet(response, refreshToken);
 }
 
@@ -257,7 +291,7 @@ export async function revokeOidcToken(token: string, hint: 'refresh_token' | 'ac
   if (!OIDC_CONFIG || !token) return;
   const provider = await metadata();
   if (!provider.revocation_endpoint) return;
-  const response = await fetch(provider.revocation_endpoint, {
+  const response = await providerFetch('revocation', provider.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ token, token_type_hint: hint, client_id: OIDC_CONFIG.clientId }),

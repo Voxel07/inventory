@@ -91,10 +91,6 @@ public class InventoryAccessOrm extends EntityOrm {
         entityManager.createQuery("select k.ancestor from InventoryAccessLink k where k.policy = :policy order by k.ancestor.id", InventoryAccessPolicy.class)
                 .setParameter("policy", policy).getResultList().forEach(this::lock);
     }
-    public List<UUID> ancestorPolicyIds(InventoryAccessPolicy policy) {
-        return entityManager.createQuery("select k.ancestor.id from InventoryAccessLink k where k.policy = :policy", UUID.class)
-                .setParameter("policy", policy).getResultList();
-    }
     /** Replaces the inheritance links of {@code policy}. */
     public void replaceLinks(InventoryAccessPolicy policy, Collection<InventoryAccessPolicy> ancestors) {
         entityManager.createQuery("delete from InventoryAccessLink k where k.policy = :policy").setParameter("policy", policy).executeUpdate();
@@ -231,14 +227,9 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select purchase_order_id as source, id as target from vendor_documents where purchase_order_id is not null
                 union all select goods_receipt_id as source, id as target from vendor_documents where goods_receipt_id is not null
                 union all select purchase_order_id as source, id as target from goods_receipts where purchase_order_id is not null
-                union all select value::uuid as source, o.id as target from general_orders o,
-                lateral jsonb_each_text(o.source_locations) as source_location
-                where value ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-                union all select key::uuid as source, o.id as target from general_orders o,
-                lateral jsonb_object_keys(o.requested_quantities || o.prepared_quantities || o.handed_over_quantities
-                    || o.returned_quantities || o.consumed_quantities || o.damaged_quantities || o.missing_quantities
-                    || o.written_off_quantities || o.asset_assignments || o.source_locations) as key
-                where key ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                union all select item_id as source, id as target from general_order_lines where item_id is not null
+                union all select source_location_id as source, id as target from general_order_lines where source_location_id is not null
+                union all select id as source, general_order_id as target from general_order_lines where id is not null
             """;
 
     /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly. */

@@ -4,7 +4,6 @@ import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   CircularProgress,
   DialogContent,
@@ -19,11 +18,13 @@ import { OrderEventFilter } from '../components/orders/OrderEventFilter';
 import AddIcon from '@mui/icons-material/Add';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { useCreateFactionOrder, useFactionOrders } from '../hooks/useFactionOrders';
-import { useItems } from '../hooks/useItems';
+import { useQuery } from '@tanstack/react-query';
+import { loadAllPages } from '../services/apiPagination';
+import { getFactionOrders } from '../services/factionOrderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useEventReports } from '../hooks/useEvents';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import type { EventType, FactionOrder, FactionOrderStatus } from '../types';
+import type { EventType, FactionOrderStatus, FactionOrderSummary } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
@@ -32,14 +33,11 @@ import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
-import { useClientPagination } from '../hooks/useClientPagination';
 import { useOrderEventSelection } from '../hooks/useOrderEventSelection';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
-
-function isHistoricalOrder(order: FactionOrder) {
-  return HISTORY_ORDER_STATUSES.includes(order.status);
-}
+const ACTIVE_ORDER_STATUSES: readonly FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'];
+const COUNTED_ORDER_STATUSES: readonly FactionOrderStatus[] = [...ACTIVE_ORDER_STATUSES, 'returned', 'closed'];
 
 function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error' {
   if (status === 'draft') return 'default';
@@ -74,42 +72,35 @@ export function FactionOrders() {
   const selectableEvents = catalog.eventTypes.filter((type) => accessibleFactions(type).length > 0);
   const visibleFactions = accessibleFactions(eventType);
   const selectedFaction = visibleFactions.includes(chosenFaction) ? chosenFaction : visibleFactions[0] ?? '';
-  const { data: items = [] } = useItems();
   const { data: assemblies = [] } = useAssemblies();
   const { data: events = [] } = useEventReports();
   const { selectedEventId, setSelectedEventId, eventOptions } = useOrderEventSelection(events);
   const { data: storageLocations = [] } = useStorageLocations();
-  const { data: allOrders = [], isLoading, isError, isComplete, hasNextPage, isFetchingNextPage, refetch } = useFactionOrders();
+  // Event type, event and the active/history split are server filters; both lists page on demand.
+  const eventId = selectedEventId || undefined;
+  const active = useFactionOrders(eventType, undefined, ACTIVE_ORDER_STATUSES, eventId);
+  const history = useFactionOrders(eventType, undefined, HISTORY_ORDER_STATUSES, eventId);
+  // The per-faction status row is an explicit complete read of the non-cancelled orders in this scope.
+  const overviewOrders = useQuery({ queryKey: ['faction-orders', 'overview', eventType, eventId], networkMode: 'offlineFirst',
+    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType, eventId, status: COUNTED_ORDER_STATUSES }, page, size)) });
   const createOrder = useCreateFactionOrder();
-  const orders = allOrders.filter((order) => order.eventType === eventType
-    && (!selectedEventId || order.eventOccurrenceId === selectedEventId));
-
-  const activeOrders = orders.filter((order) => !isHistoricalOrder(order));
+  const activeOrders = active.data ?? [];
   const factionOverview = visibleFactions.map((faction) => {
-    const factionOrders = orders.filter((order) => order.faction === faction && order.status !== 'cancelled');
+    const factionOrders = (overviewOrders.data ?? []).filter((order) => order.faction === faction);
     const state = factionOrders.some((order) => order.status !== 'draft')
       ? 'finished'
       : factionOrders.length ? 'draft' : 'none';
     return { faction, state };
   });
-  const { pageItems: pageActiveOrders, page: currentActivePage, setPage: setActivePage, pageSize: activePageSize, onPageSizeChange: onActivePageSizeChange } = useClientPagination(activeOrders);
-  const activeOrderGroups = [...new Set(pageActiveOrders
-    .map((order) => order.faction))]
-    .map((faction) => ({
-      faction,
-      orders: pageActiveOrders.filter((order) => order.faction === faction),
-    }));
-  const activeOrderCount = activeOrders.length;
-  const historyOrders = orders.filter(isHistoricalOrder);
-  const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
+  const activeOrderGroups = [...new Set(activeOrders.map((order) => order.faction))]
+    .map((faction) => ({ faction, orders: activeOrders.filter((order) => order.faction === faction) }));
+  const historyOrders = history.data ?? [];
 
   useEffect(() => {
     if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);
   }, [eventType, selectableEvents, setEventType]);
 
   function selectEvent(value: EventType) {
-    setActivePage(1);
-    setHistoryPage(1);
     setEventType(value);
     const firstFaction = accessibleFactions(value)[0];
     if (firstFaction) setSelectedFaction(firstFaction);
@@ -135,7 +126,7 @@ export function FactionOrders() {
     return labels[status];
   }
 
-  function progress(order: FactionOrder) {
+  function progress(order: FactionOrderSummary) {
     const requested = Object.values(order.requestedQuantities).reduce((sum, value) => sum + value, 0);
     const prepared = Object.values(order.preparedQuantities ?? {}).reduce((sum, value) => sum + value, 0);
     const requestedAssemblies = Object.values(order.requestedAssemblyQuantities ?? {}).reduce((sum, value) => sum + value, 0);
@@ -143,7 +134,7 @@ export function FactionOrders() {
     return { requested: requested + requestedAssemblies, prepared: prepared + preparedAssemblies };
   }
 
-  function pickupLabel(order: FactionOrder) {
+  function pickupLabel(order: FactionOrderSummary) {
     const location = order.expand?.pickupLocation
       ?? storageLocations.find((candidate) => candidate.id === order.pickupLocation);
     const point = order.pickupLatitude != null && order.pickupLongitude != null
@@ -154,7 +145,7 @@ export function FactionOrders() {
       : point ?? '—';
   }
 
-  function orderEntry(order: FactionOrder, history = false): OrderListEntry {
+  function orderEntry(order: FactionOrderSummary, history = false): OrderListEntry {
     const totals = progress(order);
     const date = formatDate(order.eventDate);
     return {
@@ -199,13 +190,13 @@ export function FactionOrders() {
         onEventTypeChange={selectEvent}
         eventOptions={eventOptions}
         selectedEventId={selectedEventId}
-        onEventChange={(id) => { setSelectedEventId(id); setActivePage(1); setHistoryPage(1); }}
+        onEventChange={setSelectedEventId}
       >
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>
           <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
             {t('Bestellstatus der Fraktionen', 'Faction order status')}
           </Typography>
-          {isLoading || (!isComplete && !isError) ? <CircularProgress size={20} aria-label={t('Bestellstatus wird geladen', 'Loading order status')} /> : !isError && (
+          {overviewOrders.isLoading ? <CircularProgress size={20} aria-label={t('Bestellstatus wird geladen', 'Loading order status')} /> : !overviewOrders.isError && (
             <Stack direction="row" sx={{ flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 1 }}>
               {factionOverview.map(({ faction, state }) => {
                 const label = state === 'finished' ? t('Fertig', 'Finished')
@@ -225,7 +216,6 @@ export function FactionOrders() {
         {!isManager && canOrder(currentUser) && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
       </OrderEventFilter>
 
-      {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestelllisten konnten nicht geladen werden.', 'Order lists could not be loaded.')}</Alert>}
 
       <OrderListSection
         title={t('Aktive Bestellungen', 'Active orders')}
@@ -234,26 +224,21 @@ export function FactionOrders() {
           label: faction,
           entries: factionOrders.map((order) => orderEntry(order)),
         }))}
-        count={activeOrderCount}
-        isLoading={isLoading}
-        page={currentActivePage}
-        pageSize={activePageSize}
-        onPageChange={setActivePage}
-        onPageSizeChange={onActivePageSizeChange}
-        loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-        loadError={isError}
-        onRetry={() => { void refetch(); }}
+        count={activeOrders.length}
+        isLoading={active.isLoading}
+        list={active}
+        loadError={active.isError}
+        onRetry={() => { void active.refetch(); }}
       />
       <OrderListSection
         title={t('Bestellverlauf', 'Order history')}
         emptyMessage={t('Für dieses Event gibt es noch keinen abgeschlossenen Verlauf.', 'There is no completed order history for this event yet.')}
-        groups={[{ entries: pageHistoryOrders.map((order) => orderEntry(order, true)) }]}
+        groups={[{ entries: historyOrders.map((order) => orderEntry(order, true)) }]}
         count={historyOrders.length}
-        isLoading={isLoading}
-        page={currentHistoryPage}
-        pageSize={historyPageSize}
-        onPageChange={setHistoryPage}
-        onPageSizeChange={onHistoryPageSizeChange}
+        isLoading={history.isLoading}
+        list={history}
+        loadError={history.isError}
+        onRetry={() => { void history.refetch(); }}
       />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg"
@@ -263,10 +248,8 @@ export function FactionOrders() {
         </DialogTitle>
         <DialogContent dividers>
           {dialogReady && <FactionOrderForm
-            items={items}
             assemblies={assemblies}
             storageLocations={storageLocations}
-            orders={allOrders}
             defaultEventType={eventType}
             defaultEventOccurrenceId={selectedEventId}
             defaultFaction={selectedFaction}

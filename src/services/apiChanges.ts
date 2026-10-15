@@ -4,6 +4,22 @@ export type ApiChangeDetail = {
   source?: 'local' | 'server'; changes?: ApiChangeDetail[];
 };
 
+const CHANGE_TEXT_FIELDS = ['type', 'resource', 'id', 'itemId', 'orderId', 'eventId', 'idempotencyKey', 'status'] as const;
+
+/**
+ * Decodes one realtime payload. Only string fields are kept, nesting is bounded, and every decoded change is marked as
+ * a server change: a stream message can neither claim to be a local write nor inject non-string identifiers.
+ */
+export function decodeServerChange(value: unknown, depth = 0): ApiChangeDetail {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return { type: String(value), source: 'server' };
+  const record = value as Record<string, unknown>;
+  const change: ApiChangeDetail = { source: 'server' };
+  for (const field of CHANGE_TEXT_FIELDS) if (typeof record[field] === 'string') change[field] = record[field];
+  if ('quantity' in record) change.quantity = record.quantity;
+  if (depth < 2 && Array.isArray(record.changes)) change.changes = record.changes.map((nested) => decodeServerChange(nested, depth + 1));
+  return change;
+}
+
 type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated' | 'order.changed'
   | 'general_order.changed' | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'

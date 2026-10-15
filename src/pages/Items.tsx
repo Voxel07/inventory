@@ -11,16 +11,13 @@ import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
-import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
-import { useAssemblies } from '../hooks/useAssemblies';
+import { usePagedItems, useItemCategories, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems, type ItemQuery } from '../hooks/useItems';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useAssignableUsers } from '../hooks/useUsers';
 import { useCrudManager } from '../hooks/useCrudManager';
-import { useMember } from '../hooks/useMember';
 import type { Item, ItemFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { personalItems } from '../utils/personalItems';
 import { canCreateInventory, canEditCatalog } from '../utils/access';
 
 export function Items() {
@@ -30,11 +27,12 @@ export function Items() {
     const t = useLocalizedText();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
-    const { data: items, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: itemsComplete } = useItems();
-    const { data: assemblies, isComplete: assembliesComplete, isError: assembliesError } = useAssemblies();
+    // Search, filters and the "mine" scope run on the server; further pages load on demand.
+    const [query, setQuery] = useState<ItemQuery>({});
+    const debouncedSearch = useDebouncedValue(query.search);
+    const catalog = usePagedItems({ ...query, search: debouncedSearch, mine: mine || undefined });
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers(catalogManager);
-    const { custody } = useMember();
+    const { data: categories = [] } = useItemCategories();
 
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
@@ -49,9 +47,6 @@ export function Items() {
     const [importOpen, setImportOpen] = useState(false);
     const [qrItem, setQrItem] = useState<Item | undefined>();
 
-    const visibleItems = mine && items ? personalItems(items, user?.id, custody.data ?? []) : items;
-    const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
-    const allNames = items?.map((i) => i.name) ?? [];
 
     return (
         <Box>
@@ -73,11 +68,11 @@ export function Items() {
             </ToggleButtonGroup>
 
             <ItemsList
-                items={visibleItems}
-                isLoading={isLoading || (mine && custody.isLoading)}
-                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-                loadError={isError}
-                onRetry={() => { void refetch(); }}
+                items={catalog.data}
+                server={{ query, onQueryChange: setQuery, list: catalog }}
+                isLoading={catalog.isLoading}
+                loadError={catalog.isError}
+                onRetry={() => { void catalog.refetch(); }}
                 onCreate={canCreate ? crud.openCreate : undefined}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
@@ -95,8 +90,6 @@ export function Items() {
                     isLoading={createItem.isPending || updateItem.isPending}
                     storageLocations={storageLocations ?? []}
                     categories={categories}
-                    existingNames={allNames.filter((name) => name !== crud.editingEntity?.name)}
-                    assignableUsers={assignableUsers ?? []}
                 />
             </FormDialog>
 
@@ -122,10 +115,6 @@ export function Items() {
                 open={importOpen}
                 initialType="items"
                 onClose={() => setImportOpen(false)}
-                items={items ?? []}
-                assemblies={assemblies ?? []}
-                storageLocations={storageLocations ?? []}
-                catalogComplete={itemsComplete && assembliesComplete && !isError && !assembliesError && !!items && !!assemblies}
             />
         </Box>
     );

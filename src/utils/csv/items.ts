@@ -1,7 +1,7 @@
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
 import type { CsvReference } from './reference';
-import { catalogRowKind, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, MAINTENANCE_STATUS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
+import { catalogRowKind, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
   if (!val) return undefined;
@@ -15,18 +15,6 @@ export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized
   if (['bulk', 'masse', 'mengenbasiert', 'menge'].includes(lower)) {
     return 'bulk';
   }
-  return undefined;
-}
-
-export function parseMaintenanceStatus(
-  val: string | undefined,
-): 'certified' | 'due_soon' | 'overdue' | 'in_service' | undefined {
-  if (!val) return undefined;
-  const lower = val.toLowerCase().trim();
-  if (['certified', 'freigegeben', 'geprüft', 'geprueft'].includes(lower)) return 'certified';
-  if (['due_soon', 'bald_fällig', 'bald_faellig', 'bald fällig', 'bald faellig'].includes(lower)) return 'due_soon';
-  if (['overdue', 'überfällig', 'ueberfaellig'].includes(lower)) return 'overdue';
-  if (['in_service', 'in wartung', 'wartung'].includes(lower)) return 'in_service';
   return undefined;
 }
 
@@ -100,8 +88,7 @@ export function parseItemsFromCsv(
       amount = assetCodes.length;
     }
 
-    const rawIsConsumable = parseBoolean(getField(raw, CONSUMABLE_ALIASES));
-    const isConsumable = trackingMode === 'serialized' ? false : rawIsConsumable;
+    const isConsumable = trackingMode !== 'serialized' && parseBoolean(getField(raw, CONSUMABLE_ALIASES));
 
     const locInput = getField(raw, LOCATION_ALIASES);
     let storageLocationId = '';
@@ -124,7 +111,6 @@ export function parseItemsFromCsv(
     const maintenanceDaysStr = getField(raw, MAINTENANCE_DAYS_ALIASES);
     const nextMaintenanceDue = getField(raw, NEXT_MAINTENANCE_DUE_ALIASES) || undefined;
     const currentOperatingHoursStr = getField(raw, CURRENT_OPERATING_HOURS_ALIASES);
-    const maintenanceStatus = parseMaintenanceStatus(getField(raw, MAINTENANCE_STATUS_ALIASES));
     const fuelConsumptionStr = getField(raw, FUEL_CONSUMPTION_ALIASES);
     const batteryReplacementDue = getField(raw, BATTERY_REPLACEMENT_DUE_ALIASES) || undefined;
     const bestBeforeDate = getField(raw, BEST_BEFORE_DATE_ALIASES) || undefined;
@@ -139,16 +125,14 @@ export function parseItemsFromCsv(
       subcategory,
       supplier,
       hint,
-      isConsumable,
       trackingMode: trackingMode || 'bulk',
-      inventoryRole: trackingMode === 'serialized' ? 'returnable' : (isConsumable ? 'consumable' : 'returnable'),
+      inventoryRole: isConsumable ? 'consumable' : 'returnable',
       eventTypes,
       containerSize: containerSizeStr ? parseNumber(containerSizeStr, 0) : undefined,
       containerCount: containerCountStr ? Math.round(parseNumber(containerCountStr, 0)) : undefined,
       maintenanceIntervalDays: maintenanceDaysStr ? Math.round(parseNumber(maintenanceDaysStr, 0)) : undefined,
       nextMaintenanceDue,
       currentOperatingHours: currentOperatingHoursStr ? parseNumber(currentOperatingHoursStr, 0) : undefined,
-      maintenanceStatus,
       fuelConsumptionLitersPer100Km: fuelConsumptionStr ? parseNumber(fuelConsumptionStr, 0) : undefined,
       batteryReplacementDue,
       bestBeforeDate,

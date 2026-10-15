@@ -2,21 +2,14 @@
 // authentication (and refresh the access token) even when the sessionStorage
 // copy is gone. The access token remains in memory/sessionStorage for normal
 // requests; only the refresh-capable session is mirrored to IndexedDB.
-
-export type StoredAuthSession = {
-  accessToken: string;
-  refreshToken: string;
-  idToken: string;
-  expiresAt: number | null;
-  /** Monotonic token generation; absent on sessions stored before revisions existed. */
-  tokenRevision?: number;
-  user: unknown;
-};
+import { decodeAuthSession, type PersistedAuthSession } from './authSession';
 
 const DB_NAME = 'ash-auth';
 const DB_VERSION = 1;
 const STORE = 'session';
 const KEY = 'oidc-session';
+/** Highest token revision ended by a sign-out; a cold start never restores a generation at or below it. */
+const SIGNED_OUT_REVISION = 'ash.inventory.signedOutRevision';
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -27,48 +20,76 @@ function openDatabase(): Promise<IDBDatabase> {
         db.createObjectStore(STORE);
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      // Another tab upgrading the schema must not be blocked by this connection.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => reject(request.error ?? new Error('Opening the auth session store failed'));
+    request.onblocked = () => reject(new Error('The auth session store is blocked by another tab'));
   });
 }
 
-export async function saveStoredAuthSession(session: StoredAuthSession): Promise<void> {
+/** Runs one request in its own transaction and closes the connection; aborts and errors reject. */
+async function run<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const db = await openDatabase();
   try {
-    const db = await openDatabase();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE, 'readwrite');
-      transaction.objectStore(STORE).put(session, KEY);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+    return await new Promise<T>((resolve, reject) => {
+      const transaction = db.transaction(STORE, mode);
+      const request = operation(transaction.objectStore(STORE));
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onerror = () => reject(transaction.error ?? request.error ?? new Error('Auth session transaction failed'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('Auth session transaction was aborted'));
     });
-  } catch (error) {
-    console.warn('Failed to persist auth session for offline use', error);
+  } finally {
+    db.close();
   }
 }
 
-export async function loadStoredAuthSession(): Promise<StoredAuthSession | null> {
+export function signedOutRevision(): number {
   try {
-    const db = await openDatabase();
-    return await new Promise((resolve) => {
-      const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
-      request.onsuccess = () => resolve(request.result ? (request.result as StoredAuthSession) : null);
-      request.onerror = () => resolve(null);
-    });
+    return Number(localStorage.getItem(SIGNED_OUT_REVISION)) || 0;
   } catch {
+    return 0;
+  }
+}
+
+export async function saveStoredAuthSession(session: PersistedAuthSession): Promise<void> {
+  await run('readwrite', (store) => store.put(session, KEY));
+}
+
+export async function loadStoredAuthSession(): Promise<PersistedAuthSession | null> {
+  let stored: PersistedAuthSession | null;
+  try {
+    stored = decodeAuthSession(await run('readonly', (store) => store.get(KEY)));
+  } catch (error) {
+    console.warn('Failed to read the persisted auth session', error);
     return null;
   }
+  if (stored && stored.tokenRevision > signedOutRevision()) return stored;
+  // Ended or malformed: retry the deletion an earlier sign-out may not have completed.
+  await run('readwrite', (store) => store.delete(KEY)).catch(() => {});
+  return null;
 }
 
-export async function clearStoredAuthSession(): Promise<void> {
+/**
+ * Ends every stored generation up to {@code revision}. The synchronous sign-out marker is written first, so a
+ * failed or aborted IndexedDB deletion can no longer restore the session on a cold start. Rejects only when
+ * neither the marker nor the deletion could be stored.
+ */
+export async function clearStoredAuthSession(revision: number): Promise<void> {
+  let marked = false;
   try {
-    const db = await openDatabase();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE, 'readwrite');
-      transaction.objectStore(STORE).delete(KEY);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
+    localStorage.setItem(SIGNED_OUT_REVISION, String(Math.max(revision, signedOutRevision())));
+    marked = true;
   } catch (error) {
-    console.warn('Failed to clear persisted auth session', error);
+    console.warn('Failed to record the sign-out marker', error);
+  }
+  try {
+    await run('readwrite', (store) => store.delete(KEY));
+  } catch (error) {
+    if (!marked) throw error;
+    console.warn('Failed to delete the persisted auth session; the sign-out marker prevents its restoration', error);
   }
 }

@@ -50,7 +50,7 @@ public class MaintenanceEvaluationService {
     }
 
     public boolean itemUsable(Item item, Instant now) {
-        return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.date(now))
+        return !MaintenancePolicy.blocksItem(item, BusinessTime.date(now))
                 && operations.blockingSchedules(item, null).stream().noneMatch(s -> MaintenancePolicy.blocksCheckout(status(s, now)));
     }
 }

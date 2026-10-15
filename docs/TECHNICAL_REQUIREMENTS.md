@@ -29,7 +29,7 @@ Source: [package.json](../package.json), [Vite configuration](../vite.config.ts)
 |---|---|---|
 | Runtime | React / React DOM `^19.3.0`; React Compiler `^1.0.0` | Use the compiler; avoid redundant manual memoization |
 | Tooling | Bun with `bun.lock`; Vite `^8.3.4`, React plugin `^6.1.2` | Bun manages frontend dependencies and scripts |
-| Language | TypeScript `~6.0.3`; `typescript-native` aliases TypeScript `~7.0.2` | TS 7 performs build typechecking; TS 6 supports lint tooling |
+| Language | TypeScript `~6.0.3`; `typescript-native` aliases TypeScript `~7.0.2` | Intentional two-engine setup: TS 7 (native) performs build typechecking; `typescript-eslint` requires the JavaScript compiler API with a `typescript` peer `<6.1`, so TS 6 stays for lint until typescript-eslint supports TS 7 |
 | UI | MUI Material/icons `^9.5.0`, DataGrid `^9.15.0`, Emotion `^11.14.x` | Reuse theme and shared controls; see [Design Brief](DESIGN_BRIEF.md) |
 | Server state | TanStack React Query `^5.104.2` | Session-scoped QueryClient; selective query invalidation |
 | UI state | Zustand `^5.0.15` | Keep UI preferences separate from server state |
@@ -80,7 +80,7 @@ Source: [Maven project](../backend/pom.xml), [runtime configuration](../backend/
 | AI integration | `quarkus-mcp-server-http:2.0.1`; 21 tools, 3 resources, 2 prompts |
 | Verification libraries | Quarkus JUnit and REST Assured; configured tests use PostgreSQL |
 
-The POM still declares H2 in test/development dependencies. `application.properties` selects PostgreSQL for the actual schema/test path; H2 is not the documented production or acceptance database.
+H2 is a test-scoped dependency only, used by `TelemetryExportTest`; every profile (dev, test, prod) uses PostgreSQL. There is no integration-test (Failsafe) suite; the `native` profile only builds the native image.
 
 ```text
 resource/  HTTP routes, validation, explicit DTO mapping and status codes
@@ -95,7 +95,7 @@ mcp/       MCP adapters calling services
 
 Stock-affecting operations must authenticate/authorize, deduplicate the command UUID, lock relevant state, validate current stock/lifecycle, update ledger and projections, append audit/outbox evidence, then commit once. Replay is atomic per command. Cached availability cannot authorize a command.
 
-Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Privacy-shortened pages advertise `X-Filtered-Rows` so clients do not treat them as complete.
+Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Paged endpoints (`@Paged`) send `X-Has-More`: whether the page query returned a full page before privacy filtering, so a privacy-shortened page never ends a listing early. Clients load further pages on demand; only explicit exports/imports read every page.
 
 The outbox is written in the business transaction. After commit, dispatch is woken locally; a default 5-second poll handles other nodes and recovery. Rows are claimed under a lease with `SKIP LOCKED`. Delivery is at least once, consumers deduplicate by event ID, 10 failed attempts cause dead letter, and published events default to 30-day retention. Operator retries require authorization.
 

@@ -12,7 +12,6 @@ import org.ash.inventory.resource.dto.TransferDtos;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;

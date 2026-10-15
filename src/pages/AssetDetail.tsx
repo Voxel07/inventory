@@ -17,6 +17,7 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import { useItem, useItemAssets } from '../hooks/useItems';
+import { LoadMore } from '../components/shared/LoadMore';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { DamageReportDialog } from '../components/forms/DamageReportDialog';
@@ -54,8 +55,9 @@ export function AssetDetail() {
     const canEditAsset = item ? (item.access?.privateResource ? Boolean(item.access.canEdit) : canEditCatalog(user)) : false;
     const [hoursOpen, setHoursOpen] = useState(false);
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
-    const { data: transactions, isLoading: transactionsLoading } = useTransactions({ assetInstanceId: assetId, size: 200 });
-    const { data: reports, isLoading: reportsLoading } = useDamageReports(undefined, { assetInstanceId: assetId, size: 200 });
+    const transactionPages = useTransactions({ assetInstanceId: assetId }, 200);
+    const { data: transactions, isLoading: transactionsLoading } = transactionPages;
+    const { data: reports, isLoading: reportsLoading } = useDamageReports(undefined, { assetInstanceId: assetId }, 200);
     const asset = assets?.find((candidate) => candidate.id === assetId);
     const assetReports = [...(reports ?? [])]
         .filter((report) => report.assetInstanceId === assetId)
@@ -159,6 +161,7 @@ export function AssetDetail() {
                             ))}
                         </Stack>
                     )}
+                    <LoadMore list={transactionPages} />
                 </Paper>
             </Box>
 
@@ -211,7 +214,6 @@ export function AssetDetail() {
                 open={damageOpen}
                 onClose={closeDamageDialog}
                 title={t(`Schaden an ${asset.assetCode} melden`, `Report damage to ${asset.assetCode}`)}
-                items={[item]}
                 preselectedItemId={item.id}
                 preselectedAssetId={asset.id}
                 preselectedAsset={asset}

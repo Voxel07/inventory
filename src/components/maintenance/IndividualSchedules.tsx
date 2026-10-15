@@ -1,16 +1,19 @@
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Alert, Autocomplete, Box, Card, CardContent, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
-import { useItemAssets } from '../../hooks/useItems';
+import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
+import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
 import { formatDate } from '../../utils/dateFormat';
 import { translate, useLocalizedText } from '../../utils/naming';
-import type { Item } from '../../types';
+
 import type { Schedule } from '../../types/operations';
-import { isDateSchedule, MAINTENANCE_TYPES, maintenanceTypeLabel, scheduleIsOverdue, type MaintenanceType } from './maintenanceSchedules';
+import { isDateSchedule, maintenanceTypeLabel, scheduleIsOverdue } from './maintenanceSchedules';
+import { MAINTENANCE_TYPES, type MaintenanceType } from '../../types/operations';
+import { oneOf } from '../../utils/operationForm';
 
 function dateInputValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -29,8 +32,7 @@ const emptyDraft: Draft = { itemId: '', assetId: '', type: 'dguv_v3', intervalDa
  * Inspection intervals for a single item, or for serialized items per device. "All devices" creates one
  * schedule per device so inspecting one device never moves the due date of the others.
  */
-export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
-  items: Item[];
+export function IndividualSchedules({ schedules, canEdit, onInspect }: {
   schedules: Schedule[];
   canEdit: boolean;
   onInspect: (schedule: Schedule) => void;
@@ -38,12 +40,11 @@ export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
   const t = useLocalizedText();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const item = items.find((candidate) => candidate.id === draft.itemId);
+  const item = useItemsByIds(draft.itemId ? [draft.itemId] : []).data?.[0];
   const serialized = item?.trackingMode === 'serialized';
   const { data: assets = [], isComplete: assetsComplete } = useItemAssets(serialized ? draft.itemId : undefined);
   const activeAssets = assets.filter((asset) => asset.active);
   const dateSchedules = schedules.filter(isDateSchedule);
-  const itemName = (id: string) => items.find((candidate) => candidate.id === id)?.name ?? id;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -86,7 +87,7 @@ export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
     setDraft({
       itemId: schedule.itemId,
       assetId: schedule.assetInstanceId ?? '',
-      type: schedule.maintenanceType as MaintenanceType,
+      type: schedule.maintenanceType,
       intervalDays: String(schedule.intervalValue),
       nextDue: schedule.nextDueAt ? dateInputValue(new Date(schedule.nextDueAt)) : daysFromToday(Number(schedule.intervalValue) || 0),
     });
@@ -106,14 +107,10 @@ export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
     </Typography>
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <Autocomplete
-          sx={{ flex: 2 }}
-          options={items}
-          getOptionLabel={(option) => option.name}
-          value={item ?? null}
-          onChange={(_, value) => setDraft((current) => ({ ...current, itemId: value?.id ?? '', assetId: '' }))}
-          renderInput={(params) => <TextField {...params} label={t('Artikel', 'Item')} required />}
-        />
+        <Box sx={{ flex: 2 }}>
+          <ItemAutocomplete label={t('Artikel', 'Item')} required value={draft.itemId || null}
+            onChange={(value) => setDraft((current) => ({ ...current, itemId: value?.id ?? '', assetId: '' }))} />
+        </Box>
         {serialized && <TextField select sx={{ flex: 1 }} label={t('Gerät', 'Device')} value={draft.assetId}
           onChange={(event) => setDraft((current) => ({ ...current, assetId: event.target.value }))}>
           <MenuItem value="">{t(`Alle Geräte einzeln (${activeAssets.length})`, `Each device (${activeAssets.length})`)}</MenuItem>
@@ -122,7 +119,7 @@ export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
       </Stack>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
         <TextField select fullWidth label={t('Prüftyp', 'Inspection type')} value={draft.type}
-          onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as MaintenanceType }))}>
+          onChange={(event) => setDraft((current) => ({ ...current, type: oneOf(event.target.value, MAINTENANCE_TYPES) }))}>
           {MAINTENANCE_TYPES.map((type) => <MenuItem key={type} value={type}>{maintenanceTypeLabel(type)}</MenuItem>)}
         </TextField>
         <TextField fullWidth type="number" label={t('Intervall (Tage)', 'Interval (days)')} value={draft.intervalDays}
@@ -150,7 +147,7 @@ export function IndividualSchedules({ items, schedules, canEdit, onInspect }: {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Typography sx={{ fontWeight: 700 }}>{itemName(schedule.itemId)}</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>{schedule.itemName}</Typography>
                     {schedule.assetCode && <Chip size="small" variant="outlined" label={schedule.assetCode} />}
                     {overdue && <Chip size="small" color="error" label={t('Überfällig', 'Overdue')} />}
                   </Stack>

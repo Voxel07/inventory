@@ -98,6 +98,9 @@ export interface FactionOrder {
   };
 }
 
+/** List projection of GET /api/orders: no history, asset assignments, lines, source locations or actor fields. */
+export type FactionOrderSummary = Omit<FactionOrder, 'history' | 'assetAssignments' | 'sourceLocations' | 'createdBy' | 'preparedBy' | 'readyBy' | 'pickedUpBy' | 'returnedBy'>;
+
 export interface FactionOrderFormData {
   eventType: EventType;
   faction: string;

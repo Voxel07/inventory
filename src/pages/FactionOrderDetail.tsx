@@ -21,7 +21,6 @@ import { generateOrderPdfSlip } from '../components/orders/detail/OrderPdfSlip';
 import {
   useCancelFactionOrder,
   useFactionOrder,
-  useFactionOrders,
   useMarkFactionOrderReady,
   usePickUpFactionOrder,
   useReopenFactionOrderPreparation,
@@ -31,7 +30,9 @@ import {
   useSubmitFactionOrder,
   useUpdateFactionOrder,
 } from '../hooks/useFactionOrders';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds } from '../hooks/useItems';
+import { loadAllPages } from '../services/apiPagination';
+import { getFactionOrders } from '../services/factionOrderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { Assembly, FactionOrder, Item } from '../types';
@@ -67,9 +68,14 @@ export function FactionOrderDetail() {
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const pickupGroups = useQuery({ queryKey: ['order-pickup-groups', 'faction', orderId], queryFn: () => orderPickupApi.get('faction', orderId), enabled: Boolean(orderId) });
   const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
-  const { data: allOrders = [] } = useFactionOrders();
-  const { data: items = [] } = useItems();
+  // Exactly this order's items (lines and assembly components) and this faction's orders, never the catalog.
+  const { data: allOrders = [] } = useQuery({ queryKey: ['faction-orders', 'faction', order?.eventType, order?.faction],
+    enabled: Boolean(order), networkMode: 'offlineFirst',
+    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType: order!.eventType, faction: order!.faction }, page, size)) });
   const { data: assemblies = [] } = useAssemblies();
+  const lineIds = [...Object.keys(order?.requestedQuantities ?? {}), ...(order?.expand?.assemblyIds ?? []).flatMap((assembly) => Object.keys(assembly.itemQuantities ?? {}))];
+  const { data: lineLookup = [] } = useItemsByIds(lineIds);
+  const items = [...new Map([...(order?.expand?.itemIds ?? []), ...lineLookup].map((item) => [item.id, item])).values()];
   const { data: storageLocations = [] } = useStorageLocations();
 
   const updateOrder = useUpdateFactionOrder();
@@ -115,7 +121,7 @@ export function FactionOrderDetail() {
   // Every item on an order line, including assembly components. Serialized pickers and returns work on these.
   const lineItems = (() => {
     if (!order) return [];
-    return (order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter(Boolean)) as Item[];
+    return order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter((item): item is Item => Boolean(item));
   })();
   // Only items ordered on their own; assembly components are listed under their assembly.
   const orderItems = lineItems.filter((item) => item.id in (order?.requestedQuantities ?? {}));
@@ -369,10 +375,8 @@ export function FactionOrderDetail() {
         <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
           {editReady && <FactionOrderForm
             initialData={order}
-            items={items}
             assemblies={assemblies}
             storageLocations={storageLocations}
-            orders={allOrders}
             submitLabel={t('Bestellliste aktualisieren', 'Update order list')}
             onSubmit={(data) => {
               updateOrder.mutate(

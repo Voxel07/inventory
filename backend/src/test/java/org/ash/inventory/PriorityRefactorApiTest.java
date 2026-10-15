@@ -83,16 +83,21 @@ class PriorityRefactorApiTest {
                 .setParameter("id", UUID.fromString(count)).getSingleResult()));
     }
 
+    /** An admin-owned private item shared with one person. */
+    private String sharedPrivateItem(String prefix, String name, String userId) {
+        String item = admin().body(Map.of("sku", prefix + UUID.randomUUID(), "name", name, "category", "Priority", "amount", 1, "privateResource", true))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        admin().body(Map.of("revision", 0, "grants", List.of(Map.of("userId", userId, "canEdit", true)), "reason", "Shared component"))
+                .put("/api/access/items/" + item).then().statusCode(200);
+        return item;
+    }
+
     @Test void privateAssembliesAreScopedOnRepeatedListsDetailsAndCommands() {
         String ownerId = actor("priority-owner", "faction_leader").get("/api/auth/me")
                 .then().statusCode(200).extract().path("id");
         QuarkusTransaction.requiringNew().run(() -> em.find(UserAccount.class, UUID.fromString(ownerId)).factions = List.of("DE:priority", "Secret"));
-        String person = admin().body(Map.of("sku", "PERSON-" + UUID.randomUUID(), "name", "Private component",
-                "category", "Priority", "amount", 1, "visibilityScope", "person", "assignedUserId", ownerId))
-                .post("/api/items").then().statusCode(200).extract().path("id");
-        String group = admin().body(Map.of("sku", "GROUP-" + UUID.randomUUID(), "name", "Group component",
-                "category", "Priority", "amount", 1, "visibilityScope", "group", "assignedGroup", "Secret"))
-                .post("/api/items").then().statusCode(200).extract().path("id");
+        String person = sharedPrivateItem("PERSON-", "Private component", ownerId);
+        String group = sharedPrivateItem("GROUP-", "Group component", ownerId);
         String assembly = admin().body(Map.of("name", "Private assembly", "itemQuantities", Map.of(person, 1, group, 1)))
                 .post("/api/assemblies").then().statusCode(200).extract().path("id");
         for (int pass = 0; pass < 2; pass++) {
@@ -111,10 +116,11 @@ class PriorityRefactorApiTest {
         admin().body(Map.of("eventType", "DE", "name", "Priority")).post("/api/factions").then().statusCode(200);
         String order = actor("priority-owner", "faction_leader").body(orderBody)
                 .post("/api/orders").then().statusCode(200).extract().path("id");
-        admin().body(Map.of("name", "Private component", "category", "Priority", "visibilityScope", "group", "assignedGroup", "Other"))
-                .patch("/api/items/" + person).then().statusCode(200);
-        actor("priority-owner", "faction_leader").get("/api/orders/" + order).then().statusCode(200)
-                .body("expand.assemblyIds.id", not(hasItem(assembly))).body("expand.itemIds.id", not(hasItem(person)));
+        admin().body(Map.of("revision", 1, "grants", List.of(), "reason", "Access revoked"))
+                .put("/api/access/items/" + person).then().statusCode(200);
+        // Item visibility is the access policy alone: an order holding a revoked private item reveals it, so it is hidden.
+        actor("priority-owner", "faction_leader").get("/api/orders/" + order).then().statusCode(404);
+        admin().get("/api/orders/" + order).then().statusCode(200).body("expand.assemblyIds.id", hasItem(assembly));
         actor("priority-owner", "faction_leader").body(Map.of("eventType", "DE", "faction", "Priority",
                 "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1)))
                 .post("/api/orders").then().statusCode(404);

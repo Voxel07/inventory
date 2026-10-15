@@ -17,16 +17,26 @@ public class GeneralOrderOrm {
 
     public GeneralOrderOrm(EntityManager entityManager) { this.entityManager = entityManager; }
 
-    public List<GeneralOrder> orders(int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
-        return InventoryAccessOrm.bindDenied(entityManager.createQuery("from GeneralOrder orderEntry where 1=1" + InventoryAccessOrm.excluding("orderEntry", denied) + " order by orderEntry.createdAt desc", GeneralOrder.class), denied)
-                .setFirstResult(offset).setMaxResults(limit).getResultList();
-    }
+    /**
+     * Server-side list filters. {@code eventId} selects one event; otherwise {@code eventType} selects orders of
+     * that event type and orders without an event. {@code search} matches name and purpose.
+     */
+    public record Filter(java.util.Collection<String> statuses, UUID eventId, String eventType, String search) {}
 
-    public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, int offset, int limit) {
+    public List<GeneralOrder> orders(org.ash.inventory.model.UserAccount actor, Filter filter, int offset, int limit) {
         var denied = privacyScopes.deniedReferences(actor);
         // Organization members read all general orders; changes are limited to owners and warehouse.
-        var query = entityManager.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence where 1=1" + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc", GeneralOrder.class);
+        var jpql = new StringBuilder("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence event where 1=1");
+        if (!filter.statuses().isEmpty()) jpql.append(" and o.status in :statuses");
+        if (filter.eventId() != null) jpql.append(" and event.id = :eventId");
+        else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
+        boolean searching = filter.search() != null && !filter.search().isBlank();
+        if (searching) jpql.append(" and (lower(o.name) like :search or lower(o.purpose) like :search)");
+        var query = entityManager.createQuery(jpql + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc", GeneralOrder.class);
+        if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
+        if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());
+        else if (filter.eventType() != null && !filter.eventType().isBlank()) query.setParameter("eventType", filter.eventType());
+        if (searching) query.setParameter("search", "%" + filter.search().trim().toLowerCase(java.util.Locale.ROOT) + "%");
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

@@ -77,10 +77,12 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "List assemblies whose active components are all visible to the caller")
+    @Tool(description = "List assemblies whose active components are all visible to the caller, with bounded pagination")
     public List<ApiResponses.AssemblyResponse> list_assemblies(
-            @ToolArg(description = "Optional event tag", required = false) String eventTag) {
-        return call("list_assemblies", () -> service.assemblies(eventTag));
+            @ToolArg(description = "Optional event tag", required = false) String eventTag,
+            @ToolArg(description = "Zero-based page; default 0", required = false) Integer page,
+            @ToolArg(description = "Results per page, 1–100; default 20", required = false) Integer limit) {
+        return call("list_assemblies", () -> service.assemblies(eventTag, page, limit));
     }
 
     @Blocking

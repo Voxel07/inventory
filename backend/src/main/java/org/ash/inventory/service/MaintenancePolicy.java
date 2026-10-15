@@ -1,6 +1,8 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceSchedule;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -48,7 +50,45 @@ public final class MaintenancePolicy {
 
     public static boolean blocksCheckout(Status status) { return status == Status.due || status == Status.unknown; }
 
-    public static boolean blocksItem(boolean active, DomainEnums.MaintenanceStatus status, LocalDate due, LocalDate today) {
-        return !active || status == DomainEnums.MaintenanceStatus.in_service || (due != null && due.isBefore(today));
+    /** Days before a calendar due date in which item and asset calendars report {@code due_soon}. */
+    public static final int CALENDAR_WARNING_DAYS = 30;
+
+    /** Calendar status derived from the out-of-service flag and the due date of one scope. */
+    public static DomainEnums.MaintenanceStatus calendarStatus(boolean outOfService, LocalDate due, LocalDate today) {
+        if (outOfService) return DomainEnums.MaintenanceStatus.in_service;
+        if (due == null) return DomainEnums.MaintenanceStatus.certified;
+        if (due.isBefore(today)) return DomainEnums.MaintenanceStatus.overdue;
+        if (!due.isAfter(today.plusDays(CALENDAR_WARNING_DAYS))) return DomainEnums.MaintenanceStatus.due_soon;
+        return DomainEnums.MaintenanceStatus.certified;
+    }
+
+    private static boolean calendarBlocks(boolean outOfService, LocalDate due, LocalDate today) {
+        return outOfService || (due != null && due.isBefore(today));
+    }
+
+    /** An individually inspected asset follows its own calendar; an asset never inspected follows its item's. */
+    public static LocalDate assetDue(Item item, AssetInstance asset) {
+        return asset.nextMaintenanceDue != null ? asset.nextMaintenanceDue : item.nextMaintenanceDue;
+    }
+
+    public static DomainEnums.MaintenanceStatus itemStatus(Item item, LocalDate today) {
+        return calendarStatus(item.outOfService, item.nextMaintenanceDue, today);
+    }
+
+    public static DomainEnums.MaintenanceStatus assetStatus(AssetInstance asset, LocalDate today) {
+        return calendarStatus(asset.outOfService, assetDue(asset.item, asset), today);
+    }
+
+    /**
+     * Item-wide calendar block. Serialized items are inspected per asset, so their calendar blocks each asset
+     * through {@link #blocksAsset} instead of the whole item.
+     */
+    public static boolean blocksItem(Item item, LocalDate today) {
+        if (!item.active || item.outOfService) return true;
+        return item.trackingMode != DomainEnums.TrackingMode.serialized && calendarBlocks(false, item.nextMaintenanceDue, today);
+    }
+
+    public static boolean blocksAsset(AssetInstance asset, LocalDate today) {
+        return calendarBlocks(asset.outOfService, assetDue(asset.item, asset), today);
     }
 }

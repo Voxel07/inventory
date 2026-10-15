@@ -3,25 +3,29 @@ import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Stack, Typography } from '@mui/material';
-import type { GeneralOrderSummary, Item } from '../../types';
+import type { GeneralOrderSummary } from '../../types';
 import type { GeneralOrderReturnInput } from '../../types/order';
 import { optionalText } from '../../utils/inputValues';
-import { getItemAssets } from '../../services/inventoryService';
+import { getAllItemAssets } from '../../services/inventoryService';
+import { useItemsByIds } from '../../hooks/useItems';
 import { generalOrderCommand, generalOrderApi } from '../../services/orderService';
-import { OperationForm, type Field, type Values } from '../operations/OperationForm';
+import { OperationForm } from '../operations/OperationForm';
+import type { Field, Values } from '../../types/operationForm';
 import { useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 
 /** `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. */
-export function GeneralOrderWorkflow({ order, action, items, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; items: Item[]; itemIds?: string[]; onClose: () => void }) {
+export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; itemIds?: string[]; onClose: () => void }) {
+  // Only this order's items are read, never the catalog.
+  const { data: items = [], isSuccess: itemsLoaded } = useItemsByIds(Object.keys(order.requestedQuantities));
   const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
   const t = useLocalizedText(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
     const ids = Object.keys(order.requestedQuantities).filter((id) => items.find((item) => item.id === id)?.trackingMode === 'serialized');
-    return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getItemAssets(id)] as const)));
-  }, enabled: action !== 'history' });
+    return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getAllItemAssets(id)] as const)));
+  }, enabled: action !== 'history' && itemsLoaded });
   const ids = Object.keys(action === 'return' ? order.handedOverQuantities : order.requestedQuantities).filter((id) => !itemIds || itemIds.includes(id));
   const outstanding = (id: string) => (order.handedOverQuantities[id] ?? 0) - (order.returnedQuantities[id] ?? 0) - (order.consumedQuantities[id] ?? 0) - (order.damagedQuantities?.[id] ?? 0) - (order.writtenOffQuantities?.[id] ?? 0);
   const fields: Field[] = ids.flatMap((id): Field[] => {

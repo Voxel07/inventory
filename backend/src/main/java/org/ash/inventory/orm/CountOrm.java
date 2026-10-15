@@ -1,14 +1,12 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.*;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 @ApplicationScoped
 public class CountOrm extends EntityOrm {

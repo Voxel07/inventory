@@ -29,7 +29,7 @@ public class CustodyBalanceService {
         var rows = new LinkedHashMap<String, Balance>();
         var factionLines = orm.factionLines(recipient);
         var generalOrders = orm.generalOrders(recipient);
-        var generalItems = orm.items(generalOrders.stream().flatMap(o -> o.handedOverQuantities.keySet().stream()).map(UUID::fromString).distinct().toList());
+        var generalItems = orm.items(generalOrders.stream().flatMap(o -> o.lines.stream()).filter(line -> line.handedOverQuantity > 0).map(line -> line.item.id).distinct().toList());
         var direct = orm.directBalances(recipient);
         var items = new ArrayList<Item>(generalItems.values());
         factionLines.forEach(line -> items.add(line.item)); direct.forEach(tx -> items.add(tx.item()));
@@ -50,14 +50,14 @@ public class CustodyBalanceService {
             }
         }
         for (var order : generalOrders) {
-            for (var entry : order.handedOverQuantities.entrySet()) {
-                var id = entry.getKey(); var item = generalItems.get(UUID.fromString(id));
-                int outstanding = CustodyQuantities.outstanding(order, id);
-                if (outstanding <= 0) continue;
+            for (var line : order.lines) {
+                var item = generalItems.get(line.item.id);
+                int outstanding = CustodyQuantities.outstanding(line);
+                if (line.handedOverQuantity <= 0 || outstanding <= 0) continue;
                 if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-                    for (var asset : order.assetAssignments.getOrDefault(id, List.of())) {
-                        if (order.reconciledAssets.getOrDefault(id, List.of()).contains(asset)) continue;
-                        var row = balance(item, order.createdBy, order.eventOccurrence, null, order.id, UUID.fromString(asset), 1, null);
+                    for (var assignment : line.assets) {
+                        if (assignment.reconciled) continue;
+                        var row = balance(item, order.createdBy, order.eventOccurrence, null, order.id, assignment.assetInstance.id, 1, null);
                         rows.put(row.key(), row);
                     }
                 } else {

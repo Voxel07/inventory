@@ -33,7 +33,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
-import { useItems } from '../hooks/useItems';
+import { itemApi } from '../services/inventoryService';
+import { useQuery } from '@tanstack/react-query';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
 import type { EventReportStatus, EventType, Item } from '../types';
 import { getItemStock } from '../utils/stock';
@@ -61,7 +62,9 @@ export function Events() {
   const [newEndDate, setNewEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [planned, setPlanned] = useState<QuantityInputs>({});
   const [notes, setNotes] = useState('');
-  const { data: items, isLoading: itemsLoading } = useItems();
+  // Planning an event type needs every item tagged for it: an explicit complete read of that subset only.
+  const { data: items, isLoading: itemsLoading } = useQuery({ queryKey: ['items', 'all', 'event-type', eventType],
+    queryFn: () => itemApi.getAll({ eventType, sort: 'name' }), networkMode: 'offlineFirst' });
   const { data: reports, isLoading: reportsLoading } = useEventReports(eventType);
   const createReport = useCreateEventReport();
   const updateReport = useUpdateEventReport();

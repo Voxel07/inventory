@@ -25,22 +25,25 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
-import { useItems } from '../../hooks/useItems';
+import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { LoadMore } from '../shared/LoadMore';
 import { type GeneralOrderSummary, type Item } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
-import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
+import { ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityControl } from './QuantityControl';
 import { OrderPickupGroups } from './OrderPickupGroups';
 import { CatalogSearchField } from './CatalogSearchField';
-import { catalogPage, filterCatalogItems } from '../../utils/orderCatalog';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
-import { useClientPagination } from '../../hooks/useClientPagination';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 import { useUIStore } from '../../store/uiStore';
 import { OrderEventFilter } from './OrderEventFilter';
+
+const ACTIVE_STATUSES = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'] as const;
+const HISTORY_STATUSES = ['returned', 'closed', 'cancelled'] as const;
 
 const statusLabels: Record<GeneralOrderSummary['status'], [string, string]> = {
   preparing: ['In Vorbereitung', 'Preparing'], draft: ['Entwurf', 'Draft'], submitted: ['Eingereicht', 'Submitted'], ready: ['Bereit', 'Ready'],
@@ -52,12 +55,16 @@ export function GeneralOrders() {
   const t = useLocalizedText();
   const { eventTypes } = useFactionCatalog();
   const feedback = useMutationFeedback();
-  const { data: orders = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useOrders();
   const { data: events = [] } = useEventReports();
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
   const { currentEvent, selectedEventId, setSelectedEventId, eventOptions } = useOrderEventSelection(events);
-  const { data: items = [] } = useItems();
+  const [search, setSearch] = useState('');
+  const orderSearch = useDebouncedValue(search.trim());
+  // Event, search and the active/history split are server filters: each list pages on demand.
+  const orderQuery = { eventId: selectedEventId || undefined, eventType: selectedEventId ? undefined : eventType, search: orderSearch || undefined };
+  const active = useOrders({ ...orderQuery, status: ACTIVE_STATUSES });
+  const history = useOrders({ ...orderQuery, status: HISTORY_STATUSES });
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const transitionOrder = useTransitionOrder();
@@ -72,30 +79,15 @@ export function GeneralOrders() {
   const [eventId, setEventId] = useState('');
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [itemSearch, setItemSearch] = useState('');
-  const [itemPage, setItemPage] = useState(1);
-  const [catalogReady, setCatalogReady] = useState(false);
-  const [search, setSearch] = useState('');
 
-  const sortedItems = catalogReady ? [...items].sort((a, b) => a.name.localeCompare(b.name)) : [];
   const eventMap = new Map(events.map((event) => [event.id, event]));
   const activeEvents = events;
-  const visibleOrders = (() => {
-    const term = search.trim().toLocaleLowerCase();
-    return orders.filter((order) => {
-      // Orders without an event stay visible under every event type until one is chosen.
-      const orderEvent = order.eventOccurrenceId ? eventMap.get(order.eventOccurrenceId) : undefined;
-      const matchesEvent = selectedEventId ? order.eventOccurrenceId === selectedEventId : !orderEvent || orderEvent.eventType === eventType;
-      return matchesEvent && (!term || `${order.name} ${order.purpose}`.toLocaleLowerCase().includes(term));
-    });
-  })();
-  const activeOrders = visibleOrders.filter((order) => !['returned', 'closed', 'cancelled'].includes(order.status));
-  const historyOrders = visibleOrders.filter((order) => ['returned', 'closed', 'cancelled'].includes(order.status));
-  const { pageItems: pageOrders, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(activeOrders);
-  const { pageItems: pageHistoryOrders, page: currentHistoryPage, setPage: setHistoryPage, pageSize: historyPageSize, onPageSizeChange: onHistoryPageSizeChange } = useClientPagination(historyOrders);
   const selectedEvent = eventMap.get(eventId);
-  const catalogItems = filterCatalogItems(sortedItems, itemSearch, '', (item) => !selectedEvent
-    || !item.eventTypes?.length || item.eventTypes.includes(selectedEvent.eventType) || Number(quantities[item.id]) > 0);
-  const { page: currentItemPage, entries: pageItems } = catalogPage(catalogItems, itemPage, ORDER_CATALOG_PAGE_SIZE);
+  // The editor searches the catalog on the server; items usable for every event (untagged) stay offered.
+  const catalog = usePagedItems({ search: useDebouncedValue(itemSearch.trim()) || undefined, eventType: selectedEvent?.eventType,
+    includeUntagged: true, sort: 'name' }, { enabled: editing !== null, size: ORDER_CATALOG_PAGE_SIZE });
+  const chosenIds = Object.entries(quantities).filter(([, value]) => Number(value) > 0).map(([id]) => id);
+  const chosen = useItemsByIds(chosenIds);
 
   function eventName(id?: string) {
     const event = id ? eventMap.get(id) : undefined;
@@ -108,8 +100,6 @@ export function GeneralOrders() {
     setEventId(order ? order.eventOccurrenceId ?? '' : selectedEventId || currentEvent?.id || '');
     setQuantities(Object.fromEntries(Object.entries(order?.requestedQuantities ?? {}).map(([id, quantity]) => [id, String(quantity)])));
     setItemSearch('');
-    setItemPage(1);
-    setCatalogReady(false);
   }
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -173,49 +163,42 @@ export function GeneralOrders() {
     <OrderEventFilter
       eventTypes={eventTypes}
       eventType={eventType}
-      onEventTypeChange={(value) => { setEventType(value); setPage(1); setHistoryPage(1); }}
+      onEventTypeChange={setEventType}
       eventOptions={eventOptions}
       selectedEventId={selectedEventId}
-      onEventChange={(id) => { setSelectedEventId(id); setPage(1); setHistoryPage(1); }}
+      onEventChange={setSelectedEventId}
     >
       <TextField fullWidth size="small" label={t('Bestellungen durchsuchen', 'Search orders')} value={search}
-        onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoryPage(1); }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
+        onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
         sx={{ maxWidth: 520 }} />
     </OrderEventFilter>
-    {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
     <OrderListSection
       title={t('Aktive Bestellungen', 'Active orders')}
       emptyMessage={t('Noch keine passenden aktiven Bestellungen vorhanden.', 'No matching active orders yet.')}
-      groups={[{ entries: pageOrders.map(orderEntry) }]}
-      count={activeOrders.length}
-      isLoading={isLoading}
-      page={currentPage}
-      pageSize={pageSize}
-      onPageChange={setPage}
-      onPageSizeChange={onPageSizeChange}
-      loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-      loadError={isError}
-      onRetry={() => { void refetch(); }}
+      groups={[{ entries: (active.data ?? []).map(orderEntry) }]}
+      count={active.data?.length ?? 0}
+      isLoading={active.isLoading}
+      list={active}
+      loadError={active.isError}
+      onRetry={() => { void active.refetch(); }}
     />
     <OrderListSection
       title={t('Bestellverlauf', 'Order history')}
       emptyMessage={t('Noch kein abgeschlossener Bestellverlauf vorhanden.', 'No completed order history yet.')}
-      groups={[{ entries: pageHistoryOrders.map(orderEntry) }]}
-      count={historyOrders.length}
-      isLoading={isLoading}
-      page={currentHistoryPage}
-      pageSize={historyPageSize}
-      onPageChange={setHistoryPage}
-      onPageSizeChange={onHistoryPageSizeChange}
+      groups={[{ entries: (history.data ?? []).map(orderEntry) }]}
+      count={history.data?.length ?? 0}
+      isLoading={history.isLoading}
+      list={history}
+      loadError={history.isError}
+      onRetry={() => { void history.refetch(); }}
     />
 
-    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg"
-      slotProps={{ transition: { onEntered: () => setCatalogReady(true), onExit: () => setCatalogReady(false) } }}>
+    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg">
       <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('Neue Bestellung', 'New order') : t('Bestellung bearbeiten', 'Edit order')}</DialogTitle>
         <DialogContent dividers><Stack spacing={2}>
           <TextField autoFocus required label={t('Name', 'Name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
           <TextField required multiline minRows={2} label={t('Zweck', 'Purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
-          <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => { setEventId(event.target.value); setItemPage(1); }}>
+          <TextField select label={t('Aktuelles Event', 'Current event')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
             <MenuItem value="">{t('Event wählen', 'Select event')}</MenuItem>
             {eventTypes.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
@@ -228,16 +211,14 @@ export function GeneralOrders() {
           {!activeEvents.length && <Alert severity="info" action={<Button title={translate('Die Eventübersicht öffnen', 'Open the event overview')} component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('Events öffnen', 'Open events')}</Button>}>{t('Legen Sie zuerst ein Event an.', 'Create an event first.')}</Alert>}
           <Divider />
           <Typography variant="h6">{t('Benötigte Artikel', 'Requested items')}</Typography>
-          <CatalogSearchField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={(value) => { setItemSearch(value); setItemPage(1); }} />
-          {catalogReady && <>
-            <Box key={currentItemPage} sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{pageItems.map(editItem)}</Stack></Box>
-            <OrderCatalogPager count={catalogItems.length} page={currentItemPage} onPageChange={setItemPage} />
-          </>}
-          {catalogReady && Object.values(quantities).some((value) => Number(value) > 0) && <Box>
+          <CatalogSearchField label={t('Artikel suchen', 'Search items')} value={itemSearch} onChange={setItemSearch} />
+          {catalog.isError && <Alert severity="error">{t('Artikelsuche fehlgeschlagen', 'Item search failed')}</Alert>}
+          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{(catalog.data ?? []).map(editItem)}</Stack><LoadMore list={catalog} /></Box>
+          {chosenIds.length > 0 && <Box>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="h6" sx={{ mb: 1 }}>{t('Aktuelle Bestellung', 'Current order')}</Typography>
             <Stack spacing={0.5}>
-              {items.filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
+              {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
                   <QuantityControl label={`${item.name} ${t('Menge', 'Quantity')}`} value={quantities[item.id] ?? ''}
@@ -258,6 +239,6 @@ export function GeneralOrders() {
     </Dialog>
 
     {pickupOrder && <Dialog open onClose={() => setPickupOrder(null)} fullWidth maxWidth="lg"><DialogTitle>{t('Artikel & Abholgruppen', 'Items & pickup groups')}</DialogTitle><DialogContent><OrderPickupGroups kind="general" orderId={pickupOrder} /></DialogContent></Dialog>}
-    {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} items={items} onClose={() => setWorkflow(null)} />}
+    {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} onClose={() => setWorkflow(null)} />}
   </Box>;
 }

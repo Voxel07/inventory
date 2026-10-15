@@ -54,15 +54,16 @@ public class EventMetricsService {
             quantities.get("missing").merge(id, line.missingQuantity, Integer::sum);
             quantities.get("writtenOff").merge(id, line.writtenOffQuantity, Integer::sum);
         }
-        for (var order : generalOrders) {
-            order.requestedQuantities.forEach((id, qty) -> quantities.get("requested").merge(id, qty, Integer::sum));
-            order.handedOverQuantities.forEach((id, qty) -> quantities.get("handedOver").merge(id, qty, Integer::sum));
-            order.returnedQuantities.forEach((id, qty) -> quantities.get("returned").merge(id, qty, Integer::sum));
-            order.consumedQuantities.forEach((id, qty) -> quantities.get("consumed").merge(id, qty, Integer::sum));
-            order.preparedQuantities.forEach((id, qty) -> quantities.get("prepared").merge(id, qty, Integer::sum));
-            order.damagedQuantities.forEach((id, qty) -> quantities.get("damaged").merge(id, qty, Integer::sum));
-            order.missingQuantities.forEach((id, qty) -> quantities.get("missing").merge(id, qty, Integer::sum));
-            order.writtenOffQuantities.forEach((id, qty) -> quantities.get("writtenOff").merge(id, qty, Integer::sum));
+        for (var line : generalOrders.stream().flatMap(order -> order.lines.stream()).toList()) {
+            String id = line.item.id.toString();
+            quantities.get("requested").merge(id, line.requestedQuantity, Integer::sum);
+            quantities.get("handedOver").merge(id, line.handedOverQuantity, Integer::sum);
+            quantities.get("returned").merge(id, line.returnedQuantity, Integer::sum);
+            quantities.get("consumed").merge(id, line.consumedQuantity, Integer::sum);
+            quantities.get("prepared").merge(id, line.preparedQuantity, Integer::sum);
+            quantities.get("damaged").merge(id, line.damagedQuantity, Integer::sum);
+            quantities.get("missing").merge(id, line.missingQuantity, Integer::sum);
+            quantities.get("writtenOff").merge(id, line.writtenOffQuantity, Integer::sum);
         }
         for (var tx : direct) {
             String metric = switch (tx.type) { case checkout -> "handedOver"; case checkin -> "returned"; case consumed -> "consumed"; case written_off -> tx.custodyWriteOff ? "writtenOff" : null; default -> null; };

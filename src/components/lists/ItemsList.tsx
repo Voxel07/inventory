@@ -15,8 +15,8 @@ import { getItemStock, type StockCalculation } from '../../utils/stock';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
-import { useOperationList } from '../../hooks/useOperations';
-import { operationsApi } from '../../services/operationsService';
+import { useItemCategories, type ItemQuery } from '../../hooks/useItems';
+import { LoadMore } from '../shared/LoadMore';
 import { locationPath } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
@@ -41,6 +41,11 @@ interface Props {
     locationStock?: ReadonlyMap<string, StockCalculation>;
     /** Explains an empty list in the context it is shown in. */
     emptyHint?: string;
+    /**
+     * Catalog mode: `items` are server pages already filtered by `query`; filter controls edit the query and
+     * `list` loads further pages on demand. Without it, `items` is a bounded set filtered here.
+     */
+    server?: { query: ItemQuery; onQueryChange: (query: ItemQuery) => void; list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown } };
 }
 
 type Availability = 'none' | 'low' | 'ok';
@@ -60,7 +65,7 @@ type ItemRow = {
 
 const PAGE_STEP = 30;
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint, server }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -71,34 +76,38 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const theme = useTheme();
     const compact = useCompactCatalog();
     const narrowTable = useMediaQuery(theme.breakpoints.down('lg'));
-    const [eventType, setEventType] = useState<EventType | ''>('');
-    const [search, setSearch] = useState('');
+    const [localEventType, setLocalEventType] = useState<EventType | ''>('');
+    const [localSearch, setLocalSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [selecting, setSelecting] = useState(false);
-    const [locationIds, setLocationIds] = useState<string[]>([]);
-    const [category, setCategory] = useState('');
+    const [localCategory, setLocalCategory] = useState('');
+    // Catalog mode keeps the filters in the server query; a bounded list filters its own rows.
+    const query = server?.query;
+    const update = (patch: ItemQuery) => server?.onQueryChange({ ...server.query, ...patch });
+    const eventType = (query ? query.eventType ?? '' : localEventType) as EventType | '';
+    const setEventType = (value: EventType | '') => query ? update({ eventType: value || undefined }) : setLocalEventType(value);
+    const search = query ? query.search ?? '' : localSearch;
+    const setSearch = (value: string) => query ? update({ search: value || undefined }) : setLocalSearch(value);
+    const category = query ? query.category ?? '' : localCategory;
+    const setCategory = (value: string) => query ? update({ category: value || undefined }) : setLocalCategory(value);
+    const locationIds: string[] = [...(query?.locationId ?? [])];
+    const setLocationIds = (ids: string[]) => update({ locationId: ids.length ? ids : undefined });
+    const serverCategories = useItemCategories();
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
     const [menu, setMenu] = useState<{ anchor: HTMLElement; row: ItemRow } | null>(null);
     const locations = useStorageLocations({ includeInactive: true });
-    const positions = useOperationList('positions:item-list', operationsApi.positions(), !locationStock && locationIds.length > 0);
-    const assets = useOperationList('assets:item-list', operationsApi.assets(), !locationStock && locationIds.length > 0);
-    const eventItems = (items ?? []).filter((item) => !eventType || item.eventTypes?.includes(eventType));
-    const categories = [...new Set(eventItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const eventItems = (items ?? []).filter((item) => query || !eventType || item.eventTypes?.includes(eventType));
+    const categories = query ? serverCategories.data ?? []
+        : [...new Set(eventItems.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const locationOptions = new Map((locations.data ?? []).map((location) => [location.id, locationPath(location, locations.data ?? [])]));
     for (const item of eventItems) {
         if (item.storageLocation && !locationOptions.has(item.storageLocation)) {
             locationOptions.set(item.storageLocation, item.expand?.storageLocation?.name ?? item.storageLocation);
         }
     }
-    const matchingItemIds = new Set([
-        ...(positions.data ?? []).filter((position) => locationIds.includes(position.locationId) && position.quantityOnHand > 0).map((position) => position.itemId),
-        ...(assets.data ?? []).filter((asset) => asset.active && asset.currentLocationId && locationIds.includes(asset.currentLocationId)
-            && !['lost', 'written_off'].includes(asset.availabilityStatus)).map((asset) => asset.itemId),
-    ]);
-    const filterError = !locationStock && (locations.error || (locationIds.length > 0 && (positions.error || assets.error)));
-    const filtersLoading = !locationStock && locationIds.length > 0 && (positions.isLoading || assets.isLoading ||
-        (!positions.isError && !positions.isComplete) || (!assets.isError && !assets.isComplete));
+    const filterError = !locationStock && query && locations.error;
+    const filtersLoading = false;
     const activeFilters = (category ? 1 : 0) + (eventType ? 1 : 0) + (locationIds.length ? 1 : 0);
 
     const allRows: ItemRow[] = eventItems
@@ -120,10 +129,9 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             };
         });
     // Search applies everywhere; the compact layout's filter sheet adds category, event and location filters.
-    const rows = allRows
+    const rows = query ? allRows : allRows
         .filter((row) => row.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
-        .filter((row) => !category || row.item.category === category)
-        .filter((row) => locationStock || locationIds.length === 0 || locationIds.includes(row.item.storageLocation) || matchingItemIds.has(row.id));
+        .filter((row) => !category || row.item.category === category);
 
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' } as const;
     /** Availability keeps its traffic-light color; damaged units always read as an error. */
@@ -139,9 +147,9 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     }
 
     function clearFilters() {
+        if (query) { update({ category: undefined, eventType: undefined, locationId: undefined }); return; }
         setCategory('');
         setEventType('');
-        setLocationIds([]);
     }
 
     function rowActions(row: ItemRow): RowAction[] {
@@ -203,7 +211,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             <MenuItem value="">{t('Alle Events', 'All events')}</MenuItem>
             {eventTypes.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
-        {!locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
+        {query && !locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
             <InputLabel id="item-location-filter-label">{t('Lagerorte', 'Locations')}</InputLabel>
             <Select multiple labelId="item-location-filter-label" label={t('Lagerorte', 'Locations')} value={locationIds}
                 onChange={(event) => { const ids = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value; setLocationIds(ids.includes('') ? [] : ids); }}
@@ -275,7 +283,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             </Drawer>
         </> : <TextField type="search" label={t('Nach Name suchen', 'Search by name')} value={search}
             onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
-        {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); void positions.refetch(); void assets.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>
+        {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>}>
             {t('Lagerortfilter konnten nicht vollständig geladen werden.', 'Could not load all location filter data.')}
         </Alert>}
         {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('Erneut laden', 'Retry')}</Button>}>
@@ -289,6 +297,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         </Paper>}
         {content}
         {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        {server && <LoadMore list={server.list} />}
         <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
             <MenuItem component={RouterLink} to={menu ? `/items/${menu.row.id}` : '#'} onClick={() => setMenu(null)}>
                 <ListItemText>{t('Öffnen', 'Open')}</ListItemText>

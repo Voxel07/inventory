@@ -76,9 +76,12 @@ class ReviewFixesApiTest {
                 .body("status", equalTo("awaiting_approval")).body("lines[0].expectedQuantity", equalTo(5));
     }
 
-    @Test void consumableFlagMustMatchInventoryRole() { // REV-13
+    @Test void inventoryRoleIsTheConsumableAuthority() { // REV-13, L09
         admin().body(Map.of("sku", "REV-" + UUID.randomUUID(), "name", "Serialized consumable", "category", "Review", "value", 0,
-                "consumable", true, "trackingMode", "serialized", "inventoryRole", "returnable"))
+                "trackingMode", "serialized", "inventoryRole", "consumable"))
                 .post("/api/items").then().statusCode(400);
+        admin().body(Map.of("sku", "REV-" + UUID.randomUUID(), "name", "Bulk consumable", "category", "Review", "value", 0,
+                "inventoryRole", "consumable"))
+                .post("/api/items").then().statusCode(200).body("isConsumable", equalTo(true)).body("inventoryRole", equalTo("consumable"));
     }
 }

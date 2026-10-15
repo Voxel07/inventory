@@ -71,6 +71,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             eventOccurrenceId: initialData?.eventOccurrenceId,
             faction: initialData?.faction ?? '',
             factionOrderId: initialData?.factionOrderId,
+            lotId: initialData?.lotId,
         };
     };
     const [formData, setFormData] = useState<TransactionFormData>(initialForm);
@@ -111,7 +112,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             return asset.availabilityStatus === 'available'
                 && (!commitment || (commitment.pickupAllowed && commitment.assetIds.includes(asset.id)))
                 && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
-                && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified');
+                && !['overdue', 'in_service'].includes(asset.serviceStatus);
         }
         if (isCheckin) {
             return ['in_field', 'in_custody'].includes(asset.availabilityStatus)

@@ -13,7 +13,8 @@ import {
     MenuItem,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import { useItems } from '../hooks/useItems';
+import { useQuery } from '@tanstack/react-query';
+import { itemApi } from '../services/inventoryService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { generateQRCodeDataURL } from '../utils/qrCode';
 import { translate, useLocalizedText } from '../utils/naming';
@@ -78,7 +79,8 @@ function QRCodeThumbnail({ id, type, name }: { id: string; type: 'item' | 'assem
 
 export function PrintQRCodesPage() {
     const t = useLocalizedText();
-    const { data: items, isLoading: itemsLoading } = useItems();
+    // Label printing is an explicit export: it reads every visible item once, on this page only.
+    const { data: items, isLoading: itemsLoading } = useQuery({ queryKey: ['items', 'all', 'labels'], queryFn: () => itemApi.getAll(), networkMode: 'offlineFirst' });
     const { data: assemblies, isLoading: assembliesLoading } = useAssemblies();
     const [pdfGenerating, setPdfGenerating] = useState(false);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');

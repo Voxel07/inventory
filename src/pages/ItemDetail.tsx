@@ -54,7 +54,6 @@ import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useAssignableUsers } from '../hooks/useUsers';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
@@ -104,7 +103,6 @@ export function ItemDetail() {
     const createTransaction = useCreateTransaction();
     const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers(canEditCatalog(user));
     const showSnackbar = useUIStore((s) => s.showSnackbar);
 
     const [editOpen, setEditOpen] = useState(false);
@@ -121,16 +119,22 @@ export function ItemDetail() {
     });
 
     const checkoutRequest = `${itemId}:${searchParams.get('transaction')}:${canTransact || canCheckout}`;
+    // "Add stock" from a lot opens the booking form with that lot preselected.
+    const [lotRequest, setLotRequest] = useState<string | undefined>();
     const [handledCheckoutRequest, setHandledCheckoutRequest] = useState('');
     if (handledCheckoutRequest !== checkoutRequest) {
         setHandledCheckoutRequest(checkoutRequest);
-        if ((canTransact || canCheckout) && searchParams.get('transaction') === '1') setCheckoutOpen(true);
+        if ((canTransact || canCheckout) && searchParams.get('transaction') === '1') {
+            setLotRequest(searchParams.get('lotId') ?? undefined);
+            setCheckoutOpen(true);
+        }
     }
 
     useEffect(() => {
         if (searchParams.get('transaction') !== '1') return;
         const next = new URLSearchParams(searchParams);
         next.delete('transaction');
+        next.delete('lotId');
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams, canTransact]);
 
@@ -328,7 +332,7 @@ export function ItemDetail() {
                         </Stack>
                     </Box>
                     <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => setCheckoutOpen(true)}>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</Button>}
+                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => { setLotRequest(undefined); setCheckoutOpen(true); }}>{canTransact ? t('Ausgabe / Rückgabe', 'Check out / return') : t('Ausgabe', 'Check out')}</Button>}
                         {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('Bearbeiten', 'Edit')}</Button>}
                         <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('Etikett drucken', 'Print label')}</Button>
                     </Stack>
@@ -367,10 +371,10 @@ export function ItemDetail() {
                             <AssetInstancesList item={item} canEdit={canEdit} canReportDamage={canReportDamage} />
                         </Box>
                     )}
-                    {canEdit && item.trackingMode === 'lot_tracked' && (
+                    {item.trackingMode === 'lot_tracked' && (
                         <Box sx={{ mt: 1.5 }}>
                             <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('Chargen', 'Lots')}</Typography>
-                            <LotsPanel itemId={item.id} />
+                            <LotsPanel itemId={item.id} canEdit={canEdit} />
                         </Box>
                     )}
                 </DetailPanel>
@@ -389,9 +393,7 @@ export function ItemDetail() {
                         <Field label={item.access?.privateResource ? t('Privates Eigentum', 'Privately owned') : t('Organisationseigentum', 'Organization owned')}>{item.stock?.totalOwned ?? 0}</Field>
                         <Field label={t('Bestandsführung', 'Tracking mode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
                         {item.supplier && <Field label={t('Lieferant', 'Supplier')}>{item.supplier}</Field>}
-                        {item.assignedUserName && <Field label={t('Zugeordnete Person', 'Assigned person')}>{item.assignedUserName}</Field>}
-                        {item.assignedGroup && <Field label={t('Zugeordnete Gruppe', 'Assigned group')}>{item.assignedGroup}</Field>}
-                        <Field label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : item.visibilityScope || 'global'}</Field>
+                        <Field label={t('Sichtbarkeit', 'Visibility')}>{item.access?.privateResource ? t('Privat', 'Private') : t('Organisation', 'Organization')}</Field>
                         <Field label={t('Erstellt', 'Created')}>{formatDate(item.created)}</Field>
                         {isVehicle && <Field label={t('Kraftstoffverbrauch', 'Fuel consumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
                         {isVehicle && <Field label={t('Batteriewechsel fällig', 'Battery replacement due')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
@@ -469,7 +471,6 @@ export function ItemDetail() {
                     isLoading={updateItem.isPending}
                     storageLocations={storageLocations ?? []}
                     categories={categories}
-                    assignableUsers={assignableUsers ?? []}
                 />
             </FormDialog>
 
@@ -479,7 +480,7 @@ export function ItemDetail() {
             <Dialog
                 open={checkoutOpen}
                 fullScreen={isMobile}
-                onClose={() => setCheckoutOpen(false)}
+                onClose={() => { setCheckoutOpen(false); setLotRequest(undefined); }}
                 keepMounted
                 maxWidth="sm"
                 fullWidth
@@ -489,6 +490,7 @@ export function ItemDetail() {
                     <TransactionForm
                         items={[item]}
                         preselectedItemId={item.id}
+                        initialData={lotRequest ? { itemId: item.id, transactionType: 'added', quantityChanged: 1, reason: '', notes: '', lotId: lotRequest } : undefined}
                         onSubmit={handleTransaction}
                         isLoading={createTransaction.isPending || createReturn.isPending}
                     />

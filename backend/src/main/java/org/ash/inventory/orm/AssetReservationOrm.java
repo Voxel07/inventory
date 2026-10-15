@@ -32,18 +32,13 @@ public class AssetReservationOrm {
                 .setParameter("ids", assetIds).setParameter("open", OPEN_ORDER).getResultList()
                 .forEach(assignment -> result.put(assignment.assetInstance.id, new Holder("faction_order", assignment.order.id,
                         assignment.order.orderCode + " · " + assignment.order.faction.name)));
-        var wanted = assetIds.stream().filter(id -> !result.containsKey(id)).map(UUID::toString).toList();
+        var wanted = assetIds.stream().filter(id -> !result.containsKey(id)).toList();
         if (wanted.isEmpty()) return result;
-        // Filter the jsonb assignments in SQL so only orders holding a wanted asset are read.
-        for (var value : entityManager.createNativeQuery("""
-                select o.id, o.name, a.value from general_orders o
-                cross join lateral jsonb_each(o.asset_assignments) e
-                cross join lateral jsonb_array_elements_text(e.value) a
-                where o.status in ('preparing', 'ready') and lower(a.value) in (:ids)
+        for (var row : entityManager.createQuery("""
+                select o.id, o.name, a.assetInstance.id from GeneralOrderLineAsset a join a.line l join l.order o
+                where o.status in ('preparing', 'ready') and a.assetInstance.id in :ids
                 """, Object[].class).setParameter("ids", wanted).getResultList()) {
-            var row = (Object[]) value;
-            result.putIfAbsent(UUID.fromString(row[2].toString()),
-                    new Holder("general_order", UUID.fromString(row[0].toString()), row[1].toString()));
+            result.putIfAbsent((UUID) row[2], new Holder("general_order", (UUID) row[0], (String) row[1]));
         }
         return result;
     }

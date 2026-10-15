@@ -77,27 +77,28 @@ Every remaining file in `tests/` has one of these roles:
 
 | File(s) | Disposition and purpose |
 |---|---|
-| `apiChanges.test.ts` | Keep: mutation domains, safe SSE classification and burst coalescing |
+| `apiChanges.test.ts` | Keep: mutation domains, safe SSE classification, realtime payload decoding and burst coalescing |
 | `catalogWorkflows.test.ts` | Added: authoritative stock, assembly capacity, historical comparison, hierarchy, crop math and CSV dependencies/validation |
 | `dateFormat.test.ts` | Keep: date/time formatting and invalid/missing values |
 | `locationStock.test.ts` | Keep: local positions and serialized-state aggregation |
-| `pagination.test.ts` | Keep: privacy-shortened pages; extended asynchronous checks live in the session harness |
-| `personalItems.test.ts` | Keep: ownership/custody catalog selection |
 | `privateInventory.test.ts` | Keep: private projection tracking, command guards and revocation cache resets |
 | `sampleOrders.test.ts` | Keep: shipped CSV validity and historical/open order coverage |
-| `sessionIsolation.test.ts` | Extend pagination, exact read-only code resolution, report generations and offline replay; keep account/token/cache/queue race tests |
+| `sessionIsolation.test.ts` | Extend pagination (server `X-Has-More` continuation), exact read-only code resolution, report generations and offline replay; keep account/token/cache/queue race tests |
 | `stockHistory.test.ts` | Keep: receipt history, opening balances and signed movements |
 | `media.browser.html`, `media.browser.js` | Update 512 px expectations and canonical role; keep 21 browser assertions for images, metadata, crop pixels, upload/authentication and logout cleanup |
-| `image-editor.browser.html`, `image-editor.browser.jsx` | Update canonical role; keep manual item/assembly crop, removal, image-order and save-payload preview |
-| `layout.browser.html`, `layout.browser.jsx` | Update authoritative stock and removed props; keep grouped custody/assembly layout preview |
-| `orderPreparation.browser.html`, `orderPreparation.browser.jsx` | Keep: faction/general preparation and warehouse queue preview |
-| `ui-cleanup.browser.html`, `ui-cleanup.browser.jsx` | Keep: consolidated navigation, task tabs, catalog, inbox, returns and sharing preview |
+| `image-editor.browser.html`, `image-editor.browser.tsx` | Keep: manual item/assembly crop, removal, image-order and save-payload preview |
+| `layout.browser.html`, `layout.browser.tsx` | Keep: grouped custody/assembly layout preview |
+| `orderPreparation.browser.html`, `orderPreparation.browser.tsx` | Keep: faction/general preparation and warehouse queue preview |
+| `ui-cleanup.browser.html`, `ui-cleanup.browser.tsx` | Keep: consolidated navigation, task tabs, catalog, inbox, returns and sharing preview |
+| `fixtures/dto.ts`, `fixtures/api.ts` | Added: typed DTO builders and a paged mock transport (`X-Has-More`) shared by the previews |
 | `refactoring.browser.html`, `refactoring.browser.jsx` | **Removed:** older operations/catalog/inbox preview superseded by `ui-cleanup.browser.*` |
 | `refactoring.sample-smoke.ts` | Keep opt-in live REST/MCP sample import; use DB reference data, finish count posting and new-lot receipt assertions instead of leaving a browser exercise |
 | `tools/endpoint_coverage.py` | Added: repeatable REST handler audit and detailed Markdown evidence |
 | `README.md` | Added: inventory, execution instructions, requirement mapping and acceptance limits |
 
-The `.browser.*` files are browser fixtures, not Bun-discovered tests. Run
+The `.browser.*` files are browser fixtures, not Bun-discovered tests. The TSX previews and `fixtures/` are
+type-checked against the current DTOs by `tsc -b` (`tsconfig.fixtures.json`), so a stale fixture shape fails the
+typecheck. Run
 `bun run dev --host 127.0.0.1`, then open the corresponding HTML under `/tests/`.
 `media.browser.html` runs its own assertions; the other previews require UI checks.
 The image editor selects the item form with `?item`.

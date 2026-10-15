@@ -1,3 +1,5 @@
+import { useItemsByIds } from '../../hooks/useItems';
+import { LoadMore } from '../shared/LoadMore';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
@@ -9,7 +11,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import type { Assembly, Item } from '../../types';
+import type { Assembly } from '../../types';
 import { useAppLanguage, useLocalizedText } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { getItemStock } from '../../utils/stock';
@@ -20,11 +22,13 @@ import { CatalogRow, CatalogSearchBar, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { selectFilterColumn } from '../../utils/catalogFilters';
 
+/** `assemblies` are server pages filtered by `search`; `list` loads further pages on demand. */
 interface Props {
     assemblies: Assembly[] | undefined;
-    items: Item[] | undefined;
+    search: string;
+    onSearch: (search: string) => void;
+    list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
     isLoading: boolean;
-    loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
     onCreate?: () => void;
@@ -44,7 +48,6 @@ type AssemblyRow = {
     location: string;
     locations: string[];
     events: string;
-    components: string;
     stock: number;
     totalStock: number;
     stockReady: boolean;
@@ -52,7 +55,7 @@ type AssemblyRow = {
 
 const PAGE_STEP = 30;
 
-export function AssembliesList({ assemblies, items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, emptyHint }: Props) {
+export function AssembliesList({ assemblies, search, onSearch: setSearch, list, isLoading, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, emptyHint }: Props) {
     const { user } = useAuth();
     const canEditAssembly = (assembly: Assembly) => assembly.access?.privateResource ? assembly.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -62,7 +65,8 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
     const compact = useCompactCatalog();
     const narrowTable = useMediaQuery(theme.breakpoints.down('lg'));
     const navigate = useNavigate();
-    const [search, setSearch] = useState('');
+    // Only the components of the loaded assemblies, for availability, categories and locations.
+    const { data: items } = useItemsByIds((assemblies ?? []).flatMap((assembly) => [...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})]));
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [selecting, setSelecting] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
@@ -89,14 +93,13 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
                 location: locations.join(', ') || '—',
                 locations,
                 events: assembly.eventTypes?.join(', ') || '—',
-                components: search.trim() ? componentIds.map((id, index) => componentItems[index]?.name ?? id).join(' ') : '',
                 stockReady: componentIds.every(id => itemById.has(id)),
                 stock: assemblyAvailability(assembly, (id) => stockById.get(id)?.remaining ?? 0),
                 totalStock: assemblyAvailability(assembly, (id) => stockById.get(id)?.totalStock ?? 0),
             };
         });
     })();
-    const rows = allRows.filter((row) => `${row.name} ${row.components}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const rows = allRows;
 
     const availabilityText = (row: AssemblyRow) => !row.stockReady ? t('Bestand wird berechnet…', 'Calculating stock…')
         : row.stock > 0 ? t(`${row.stock} von ${row.totalStock} baubar`, `${row.stock} of ${row.totalStock} buildable`)
@@ -144,7 +147,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
         });
     }
 
-    const initialLoading = !assemblies && (isLoading || (!loadError && loadingMore));
+    const initialLoading = !assemblies && isLoading;
     const initialError = !assemblies?.length && loadError && !isLoading;
     const empty = !initialLoading && !initialError && (assemblies?.length ?? 0) === 0;
     const noMatches = !initialLoading && !initialError && !empty && rows.length === 0;
@@ -184,9 +187,9 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
 
     return <Box>
         {compact
-            ? <CatalogSearchBar search={search} onSearch={setSearch} label={t('Name oder Komponente suchen', 'Search name or component')}
+            ? <CatalogSearchBar search={search} onSearch={setSearch} label={t('Baugruppe suchen', 'Search assemblies')}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
-            : <TextField type="search" label={t('Nach Name oder Komponente suchen', 'Search by name or component')} value={search}
+            : <TextField type="search" label={t('Nach Name suchen', 'Search by name')} value={search}
                 onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
         {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('Erneut laden', 'Retry')}</Button>}>
             {t(`Es konnten nur ${assemblies?.length ?? 0} Baugruppen geladen werden. Die Liste ist unvollständig.`, `Only ${assemblies?.length ?? 0} assemblies could be loaded. The list is incomplete.`)}
@@ -198,7 +201,7 @@ export function AssembliesList({ assemblies, items, isLoading, loadingMore, load
             </Button>
         </Paper>}
         {content}
-        {loadingMore && !initialLoading && <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>{t('Weitere Einträge werden geladen…', 'Loading more entries…')}</Typography>}
+        <LoadMore list={list} />
         <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
             <MenuItem component={RouterLink} to={menu ? `/assemblies/${menu.row.id}` : '#'} onClick={() => setMenu(null)}>
                 <ListItemText>{t('Öffnen', 'Open')}</ListItemText>

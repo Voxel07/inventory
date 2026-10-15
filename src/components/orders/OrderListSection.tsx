@@ -1,9 +1,9 @@
 import { Button } from '../shared/ActionButtons';
 import type { ReactNode } from 'react';
-import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import GroupsIcon from '@mui/icons-material/Groups';
-import { ListPagination } from '../shared/ListPagination';
+import { LoadMore } from '../shared/LoadMore';
 import { translate, useLocalizedText } from '../../utils/naming';
 
 export interface OrderListEntry {
@@ -17,23 +17,19 @@ export interface OrderListEntry {
   onOpen?: () => void;
 }
 
+/** `list`: the server pages behind the entries; further pages load on demand. */
 interface Props {
   title: string;
   emptyMessage: string;
   groups: { label?: string; entries: OrderListEntry[] }[];
   count: number;
   isLoading: boolean;
-  page: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
-  loadingMore?: boolean;
+  list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
   loadError?: boolean;
   onRetry?: () => void;
 }
 
-export function OrderListSection({ title, emptyMessage, groups, count, isLoading, page, pageSize,
-  onPageChange, onPageSizeChange, loadingMore, loadError, onRetry }: Props) {
+export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }: Props) {
   const t = useLocalizedText();
   return <Box sx={{ mb: 3 }}>
     <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>
@@ -56,8 +52,9 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
         </Box>)}
       </Box>)}
     </Paper>
-    <ListPagination count={count} page={page} onChange={onPageChange} pageSize={pageSize}
-      onPageSizeChange={onPageSizeChange} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+    {loadError && <Alert severity="error" sx={{ mt: 1 }} action={onRetry && <Button title={translate('Erneut laden', 'Load again')} onClick={onRetry}>{t('Erneut versuchen', 'Try again')}</Button>}>
+      {t('Bestellungen konnten nicht geladen werden.', 'Orders could not be loaded.')}</Alert>}
+    <LoadMore list={list} />
   </Box>;
 }
 

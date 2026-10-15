@@ -192,8 +192,7 @@ public class OrderPickupService {
         if (!"general".equals(kind)) throw ApiException.badRequest("Unknown order kind");
         var o = lock ? orm.requireLocked(GeneralOrder.class, id, "Order") : orm.require(GeneralOrder.class, id, "Order");
         var requested = new LinkedHashMap<UUID, Integer>(); var prepared = new LinkedHashMap<UUID, Integer>();
-        o.requestedQuantities.forEach((k, v) -> requested.put(UUID.fromString(k), v));
-        o.preparedQuantities.forEach((k, v) -> prepared.put(UUID.fromString(k), v));
+        o.lines.forEach(line -> { requested.put(line.item.id, line.requestedQuantity); if (line.preparedQuantity > 0) prepared.put(line.item.id, line.preparedQuantity); });
         return new OrderData(o, id, o.name, o.status, o.createdBy, o.pickupAssignments, null, orm.items(new ArrayList<>(requested.keySet())), requested, prepared);
     }
 

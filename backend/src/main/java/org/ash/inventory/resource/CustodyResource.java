@@ -22,7 +22,7 @@ public class CustodyResource {
         this.service = service;
     }
 
-    @GET
+    @Paged @GET
     @Path("/handovers")
     public List<CustodyDtos.HandoverResponse> handovers(@PathParam("orderId") UUID orderId,
             @QueryParam("page") @DefaultValue("0") int page,
@@ -30,7 +30,7 @@ public class CustodyResource {
         return service.handovers(orderId, page, size);
     }
 
-    @GET
+    @Paged @GET
     @Path("/reconciliations")
     public List<CustodyDtos.ReconciliationResponse> reconciliations(@PathParam("orderId") UUID orderId,
             @QueryParam("page") @DefaultValue("0") int page,

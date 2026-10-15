@@ -1,7 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItem;
@@ -26,7 +25,7 @@ public class OrderOrm extends EntityOrm {
 
     /** {@code factionKeys} ({@code EVENT:slug}) restricts the result to those factions; {@code null} means unrestricted. */
     public List<FactionOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
-            int offset, int limit) {
+            Collection<org.ash.inventory.model.DomainEnums.OrderStatus> statuses, UUID eventId, int offset, int limit) {
         if (factionKeys != null && factionKeys.isEmpty()) return List.of();
         var denied = privacyScopes.deniedReferences(accessActor.current());
         var jpql = new StringBuilder("select o from FactionOrder o "
@@ -35,12 +34,16 @@ public class OrderOrm extends EntityOrm {
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
         if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
         if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
+        if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
+        if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
         jpql.append(InventoryAccessOrm.excluding("o", denied)).append(" order by o.eventOccurrence.startDate desc");
         var query = entityManager.createQuery(jpql.toString(), FactionOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
         if (factionKeys != null) query.setParameter("factionKeys", factionKeys);
+        if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
+        if (eventId != null) query.setParameter("eventId", eventId);
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -56,7 +59,7 @@ public class OrderOrm extends EntityOrm {
         if (orders.isEmpty()) return List.of();
         return entityManager.createQuery(
                 "select line from FactionOrderLine line "
-                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser left join fetch line.sourceAssembly "
+                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch line.sourceAssembly "
                         + "where line.order in :orders",
                 FactionOrderLine.class)
                 .setParameter("orders", orders).getResultList();

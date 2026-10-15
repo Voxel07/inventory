@@ -55,9 +55,13 @@ public class PlanningService {
         for (var order : orm.generalOrders(selectedIds)) {
             var map = demand.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
             var handed = handedOver.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
-            order.handedOverQuantities.forEach((id, quantity) -> handed.merge(UUID.fromString(id), quantity, Integer::sum));
-            if (List.of("draft", "submitted", "preparing", "ready").contains(order.status)) order.requestedQuantities.forEach((id, quantity) -> map.merge(UUID.fromString(id), quantity, Integer::sum));
-            if (List.of("preparing", "ready").contains(order.status)) order.preparedQuantities.forEach((id, quantity) -> reservations.merge(UUID.fromString(id), quantity, Integer::sum));
+            boolean open = List.of("draft", "submitted", "preparing", "ready").contains(order.status);
+            boolean reserving = List.of("preparing", "ready").contains(order.status);
+            for (var line : order.lines) {
+                if (line.handedOverQuantity > 0) handed.merge(line.item.id, line.handedOverQuantity, Integer::sum);
+                if (open) map.merge(line.item.id, line.requestedQuantity, Integer::sum);
+                if (reserving && line.preparedQuantity > 0) reservations.merge(line.item.id, line.preparedQuantity, Integer::sum);
+            }
         }
         var overrides = new HashMap<String, PlanningOverride>();
         var overrideEventIds = new HashSet<>(selectedIds);
@@ -85,7 +89,7 @@ public class PlanningService {
                 int capacity = physical.available() + creditedReservations;
                 for (var event : scope) {
                     // Reusable equipment is assumed ready the day after the event ends.
-                    if (event.startDate.isAfter(date) || (!item.consumable && event.endDate.plusDays(1).isBefore(date))) continue;
+                    if (event.startDate.isAfter(date) || (!item.consumable() && event.endDate.plusDays(1).isBefore(date))) continue;
                     var override = overrides.get(event.id + ":" + item.id);
                     int forecast = override == null ? (event.plannedQuantities == null ? 0 : event.plannedQuantities.getOrDefault(item.id.toString(), 0)) : override.quantity;
                     forecast = Math.max(0, forecast - handedOver.getOrDefault(event.id, Map.of()).getOrDefault(item.id, 0));
@@ -105,7 +109,7 @@ public class PlanningService {
             }
             if (grossAtPeak == 0) continue;
             var override = selected == null ? null : overrides.get(selected.id + ":" + item.id);
-            result.add(new ApiResponses.DeficitResponse(item.id, item.sku, item.name, item.category, item.supplier == null ? "Unassigned" : item.supplier, item.consumable ? "consumable" : "asset", demandAtPeak, stock.onHand(), stock.inTransit(), item.ownershipType == Item.Ownership.organization ? stock.totalOwned() : 0, stock.available(), stock.reserved(), usable + committedAtPeak - demandAtPeak, grossAtPeak, receiptAtPeak, conditional ? "obtain_commitment" : item.consumable ? "purchase" : "rent_or_purchase", requiredDate, Math.max(0, allIncoming - receiptAtPeak), item.minStock, override == null ? null : override.reason, override == null ? null : override.actor.name, committedAtPeak));
+            result.add(new ApiResponses.DeficitResponse(item.id, item.sku, item.name, item.category, item.supplier == null ? "Unassigned" : item.supplier, item.consumable() ? "consumable" : "asset", demandAtPeak, stock.onHand(), stock.inTransit(), item.ownershipType == Item.Ownership.organization ? stock.totalOwned() : 0, stock.available(), stock.reserved(), usable + committedAtPeak - demandAtPeak, grossAtPeak, receiptAtPeak, conditional ? "obtain_commitment" : item.consumable() ? "purchase" : "rent_or_purchase", requiredDate, Math.max(0, allIncoming - receiptAtPeak), item.minStock, override == null ? null : override.reason, override == null ? null : override.actor.name, committedAtPeak));
         }
         result.sort(Comparator.comparingInt((ApiResponses.DeficitResponse row) -> row.netDeficit() - row.orderedStock()).reversed());
         return result;

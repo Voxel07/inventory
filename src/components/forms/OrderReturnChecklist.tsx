@@ -163,8 +163,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       }
       const matchedItem = items.find((i) =>
         i.id.toLowerCase() === scannedCode ||
-        (i.sku && i.sku.toLowerCase() === scannedCode) ||
-        (i.barcode && i.barcode.toLowerCase() === scannedCode)
+        (i.sku && i.sku.toLowerCase() === scannedCode)
       );
       if (matchedItem && outstanding[matchedItem.id]) {
         e.preventDefault();

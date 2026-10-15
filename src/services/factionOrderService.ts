@@ -1,14 +1,15 @@
-import type { FactionOrder, FactionOrderFormData } from '../types';
-import { apiRequest, ApiError } from './apiClient';
+import type { FactionOrder, FactionOrderFormData, FactionOrderStatus, FactionOrderSummary } from '../types';
+import { apiPage, apiRequest, ApiError } from './apiClient';
+import type { Page } from './apiPagination';
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import { containsPrivateInventory } from './privateInventoryCache';
 
-type FactionOrderSummaryResponse = Omit<FactionOrder, 'history'>;
+export type FactionOrderFilters = { eventType?: string; faction?: string; orderCode?: string; status?: readonly FactionOrderStatus[]; eventId?: string };
 
-export async function getFactionOrders(filters?: { eventType?: string; faction?: string; orderCode?: string; page?: number; size?: number }): Promise<FactionOrder[]> {
-  const orders = await apiRequest<FactionOrderSummaryResponse[]>('/api/orders', { query: filters });
-  return orders.map((order) => ({ ...order, history: [] }));
+/** List rows are summaries: they carry no history, and nothing pretends otherwise. */
+export function getFactionOrders(filters: FactionOrderFilters | undefined, page: number, size: number): Promise<Page<FactionOrderSummary>> {
+  return apiPage<FactionOrderSummary>('/api/orders', page, size, { query: filters });
 }
 const orderDetailKey = (id: string) => `faction-orders:detail:${encodeURIComponent(id)}`;
 
@@ -41,7 +42,7 @@ export function createFactionOrder(data: FactionOrderFormData): Promise<FactionO
   return apiRequest('/api/orders', {
     method: 'POST',
     body,
-    offline: { type: 'order.create', payload: data as unknown as Record<string, unknown>, idempotencyKey },
+    offline: { type: 'order.create', payload: data, idempotencyKey },
   });
 }
 export function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> {

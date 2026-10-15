@@ -66,7 +66,7 @@ erDiagram
     EQUIPMENT_COMMITMENTS ||--o| LOAN_ARRANGEMENTS : agreement
 ```
 
-General orders form a separate aggregate: creator and optional event are relational; line quantities/source locations/asset assignments are JSON maps rather than `general_order_lines`. Damage can target an item **or** an assembly (XOR), so the item relationship shown above is optional for assembly incidents.
+General orders form a separate aggregate: creator and optional event are relational; lines are relational too (`general_order_lines` with requested/prepared/handed-over/returned/consumed/damaged/missing/written-off quantities and source location, `general_order_line_assets` for serialized assignments). Damage can target an item **or** an assembly (XOR), so the item relationship shown above is optional for assembly incidents.
 
 ## 4. Table inventory
 
@@ -82,7 +82,7 @@ General orders form a separate aggregate: creator and optional event are relatio
 | `inventory_access_links` | Materialized grant inheritance: policy FK and ancestor policy FK (cascade), unique pair, ancestor index. A private item links to the policies of its private home location and that location's private ancestors; a private location to its private ancestors |
 | `inventory_media_objects` | Unique object key; uploader FK; optional resource type/ID pair; both absent means staged |
 
-Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; legacy item `visibility_scope`, assigned user/group and event scopes still coexist (PLAN-01). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
+Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; it is the only item visibility rule (the former `visibility_scope` and assigned user/group columns were removed). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
 
 ### Catalog and storage geography (6 tables)
 
@@ -105,7 +105,7 @@ Location services enforce no cycles and same-warehouse parentage. Item tracking 
 |---|---|
 | `asset_instances` | UUID; item/current location/current custodian FKs; unique asset code; availability/condition/service state, hours, serial/manufacturer, active flag and version |
 | `inventory_lots` | UUID; item FK; unique `(item_id, lot_number)`; expiry/best-before/manufacture, supplier lot, requirements and status |
-| `inventory_positions` | UUID; item/location/optional lot FKs; on-hand, reserved, damaged, quarantined and transit quantities; last count; version |
+| `inventory_positions` | UUID; item/location/optional lot FKs (lot composite with item); on-hand, damaged, quarantined and transit quantities; last count; version. One row per item/location/lot (`unique nulls not distinct`). Reservations are not stored here: they are computed from live order reservations |
 | `stock_transactions` | UUID; item/actor FKs plus optional asset/lot/order/event/damage/locations; movement type, quantity, UTC time, reason/notes, before/after availability, idempotency UUID, position map and related-entity reference |
 | `stock_reservations` | UUID; item/asset/order/line/location/creator links; requested/reserved/released quantities and status; version; unique active asset reservation key |
 | `inventory_transfers` | UUID; source/destination locations, requester/receiver, unique transfer number and idempotency key, status, dispatch/receipt times |

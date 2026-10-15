@@ -22,7 +22,6 @@ import {
     TextField,
     MenuItem,
 
-    Autocomplete,
     Stack,
     useTheme,
     useMediaQuery,
@@ -34,7 +33,8 @@ import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds } from '../hooks/useItems';
+import { ItemAutocomplete } from '../components/shared/ItemAutocomplete';
 import { useAssemblyCheckout } from '../hooks/useTransactions';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { FormDialog } from '../components/shared/FormDialog';
@@ -61,7 +61,8 @@ export function AssemblyDetail() {
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
     const canEdit = assembly?.access?.privateResource ? assembly.access.canEdit : canEditCatalog(user);
-    const itemsQuery = useItems();
+    // Exactly this assembly's components, never the catalog.
+    const itemsQuery = useItemsByIds([...(assembly?.itemIds ?? []), ...Object.keys(assembly?.itemQuantities ?? {})]);
     const items = itemsQuery.data;
     const updateAssembly = useUpdateAssembly();
     const checkoutAssembly = useAssemblyCheckout();
@@ -230,11 +231,6 @@ export function AssemblyDetail() {
         return minPossible === Infinity ? 0 : minPossible;
     })();
 
-    const availableItemsToAdd = (() => {
-        if (!items || !assembly) return [];
-        return items.filter((item) => !(assembly.itemIds ?? []).includes(item.id));
-    })();
-
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
@@ -355,23 +351,16 @@ export function AssemblyDetail() {
                 <Typography variant="h6">
                     {t('Komponenten in dieser Baugruppe', 'Items in this assembly')}
                 </Typography>
-                {canEdit && <Autocomplete
-                    options={availableItemsToAdd}
-                    getOptionLabel={(option) => option.name}
-                    onChange={(_e, newItem) => {
-                        if (newItem) handleAddItem(newItem.id);
-                    }}
-                    renderInput={(params) => (
-                        <TextField {...params} label={t('Artikel schnell hinzufügen', 'Quickly add item')} size="small" />
-                    )}
-                    sx={{ minWidth: 250, maxWidth: 350 }}
-                    value={null}
-                />}
+                {canEdit && <Box sx={{ minWidth: 250, maxWidth: 350, flex: 1 }}>
+                    <ItemAutocomplete size="small" label={t('Artikel schnell hinzufügen', 'Quickly add item')} value={null}
+                        filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
+                        onChange={(newItem) => { if (newItem) handleAddItem(newItem.id); }} />
+                </Box>}
             </Box>
 
             <ItemsList items={assemblyItems} isLoading={itemsQuery.isLoading && !assemblyItems.length}
                 requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit ? handleRemoveItem : undefined}
-                loadingMore={itemsQuery.hasNextPage || itemsQuery.isFetchingNextPage} loadError={itemsQuery.isError}
+                loadingMore={false} loadError={itemsQuery.isError}
                 onRetry={() => { void itemsQuery.refetch(); }} />
 
             {/* Checkout Dialog */}
@@ -462,7 +451,6 @@ export function AssemblyDetail() {
                     title={t('Baugruppe bearbeiten', 'Edit assembly')}
                     onCancel={() => setEditOpen(false)}
                     initialData={assembly}
-                    items={items ?? []}
                     onSubmit={handleUpdate}
                     isLoading={updateAssembly.isPending}
                 />
@@ -472,7 +460,6 @@ export function AssemblyDetail() {
                 open={damageOpen}
                 onClose={() => setDamageOpen(false)}
                 title={t(`Schaden an ${assembly.name} melden`, `Report damage to ${assembly.name}`)}
-                items={items ?? []}
                 assemblies={[assembly]}
                 preselectedAssemblyId={assembly.id}
             />

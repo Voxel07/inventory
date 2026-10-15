@@ -42,12 +42,28 @@ public class CatalogResource {
         this.queries = queries;
     }
 
-    @GET @Path("/items")
+    @Paged @GET @Path("/items")
     public List<ApiResponses.ItemResponse> items(@QueryParam("search") String search,
+            @QueryParam("category") String category,
+            @QueryParam("eventType") String eventType,
+            @QueryParam("includeUntagged") @DefaultValue("false") boolean includeUntagged,
+            @QueryParam("locationId") List<UUID> locationIds,
+            @QueryParam("id") List<UUID> ids,
+            @QueryParam("mine") @DefaultValue("false") boolean mine,
+            @QueryParam("sort") String sort,
+            @QueryParam("maintenanceAttention") @DefaultValue("false") boolean maintenanceAttention,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.items(search, page, size);
+        return queries.items(search, category, eventType, includeUntagged, locationIds, ids, mine, sort, maintenanceAttention, page, size);
     }
+
+    /** Overview metrics over the caller's visible inventory. */
+    @GET @Path("/inventory-summary")
+    public ApiResponses.InventorySummaryResponse inventorySummary() { return queries.summary(); }
+
+    /** Distinct categories of the items visible to the caller, for filters without reading the catalog. */
+    @GET @Path("/item-categories") @Transactional
+    public List<String> itemCategories() { return service.getVisibleCategories(); }
 
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
@@ -55,7 +71,7 @@ public class CatalogResource {
     @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { return queries.projectItem(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { service.retireItem(id); return Response.noContent().build(); }
 
-    @GET @Path("/items/{id}/assets")
+    @Paged @GET @Path("/items/{id}/assets")
     public List<ApiResponses.AssetInstanceResponse> itemAssets(@PathParam("id") UUID id,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         return queries.itemAssets(id, page, size);
@@ -94,11 +110,12 @@ public class CatalogResource {
         return Response.noContent().build();
     }
 
-    @GET @Path("/storage-locations") @Transactional
-    public Response locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive) {
-        actor.current();
-        if (includeInactive) return Response.ok(mapper.locations(service.getAllLocations())).build();
-        return Response.ok(mapper.locations(service.getLocations())).build();
+    @Paged @GET @Path("/storage-locations") @Transactional
+    public List<ApiResponses.StorageLocationResponse> locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive,
+            @QueryParam("search") String search, @QueryParam("warehouseId") UUID warehouseId,
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        var bounds = org.ash.inventory.helper.PageBounds.of(page, size);
+        return mapper.locations(service.getLocations(includeInactive, search, warehouseId, bounds.offset(), bounds.limit()));
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }
@@ -106,8 +123,12 @@ public class CatalogResource {
     @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.updateLocation(id, input)); }
     @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { service.deleteLocation(id); return Response.noContent().build(); }
 
-    @GET @Path("/assemblies")
-    public List<ApiResponses.AssemblyResponse> assemblies() { return queries.assemblies(); }
+    @Paged @GET @Path("/assemblies")
+    public List<ApiResponses.AssemblyResponse> assemblies(@QueryParam("search") String search,
+            @QueryParam("mine") @DefaultValue("false") boolean mine,
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.assemblies(search, null, mine, page, size);
+    }
     @GET @Path("/assemblies/{id}")
     public ApiResponses.AssemblyResponse assembly(@PathParam("id") UUID id) { return queries.assembly(id); }
     @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.createAssembly(input)); }

@@ -40,6 +40,7 @@ import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
+import { AuthPersistenceError } from '../../services/authManager';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { LanguageSelector } from './LanguageSelector';
@@ -154,9 +155,9 @@ export function Navigation() {
                             .then((redirectingToProvider) => {
                                 if (!redirectingToProvider) navigate('/');
                             })
-                            .catch(() => {
+                            .catch((error: unknown) => {
                                 navigate('/');
-                                showSnackbar(t('nav.signOutProviderFailed'), 'error');
+                                showSnackbar(t(error instanceof AuthPersistenceError ? 'nav.signOutPersistFailed' : 'nav.signOutProviderFailed'), 'error');
                             });
                     }}
                 >

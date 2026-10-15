@@ -1,3 +1,4 @@
+import { LoadMore } from '../shared/LoadMore';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -14,7 +15,8 @@ import { isOpenDamage } from '../../utils/damage';
 export function ItemDamageReports({ item }: { item: Item }) {
     const t = useLocalizedText();
     const [showClosed, setShowClosed] = useState(false);
-    const { data: reports = [], isLoading } = useDamageReports(item.id, { size: 200 });
+    const damage = useDamageReports(item.id, undefined, 200);
+    const { data: reports = [], isLoading } = damage;
     const sorted = [...reports].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const open = sorted.filter(isOpenDamage);
     const closed = sorted.filter((report) => !isOpenDamage(report));
@@ -48,6 +50,7 @@ export function ItemDamageReports({ item }: { item: Item }) {
                     })}
                 </Stack>
             )}
+            <LoadMore list={damage} />
         </DetailPanel>
     );
 }

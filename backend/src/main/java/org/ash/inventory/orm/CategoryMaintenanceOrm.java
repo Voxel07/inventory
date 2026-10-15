@@ -28,6 +28,12 @@ public class CategoryMaintenanceOrm {
                 .setParameter("name", category).getResultList();
     }
 
+    public void clearAssetCalendars(List<Item> items) {
+        if (items.isEmpty()) return;
+        entityManager.createQuery("update versioned AssetInstance a set a.nextMaintenanceDue = null where a.item in :items")
+                .setParameter("items", items).executeUpdate();
+    }
+
     public void persist(CategoryMaintenancePolicy policy) { entityManager.persist(policy); }
     public void remove(CategoryMaintenancePolicy policy) { entityManager.remove(policy); }
 }

@@ -1,8 +1,10 @@
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
-import { apiRequest } from './apiClient';
+import { apiPage, apiRequest, ApiError } from './apiClient';
+import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+import { loadAllPages, type Page } from './apiPagination';
 import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
-import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
+import { assertAuthSession, type AuthSessionContext } from './authManager';
 
 async function uploadItemImages(files: File[] = [], context: AuthSessionContext): Promise<string[]> {
   assertAuthSession(context);
@@ -14,7 +16,7 @@ function payload(data: Partial<ItemFormData>) {
   delete fields.imageFiles;
   delete fields.imageReplacements;
   delete fields.removeImages;
-  return { ...fields, consumable: Boolean((data as Partial<ItemFormData> & { isConsumable?: boolean }).isConsumable) };
+  return fields;
 }
 
 export const itemApi = createCrudResourceApi<Item, ItemFormData>(
@@ -44,23 +46,55 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
   },
 );
 
-export const getItems = itemApi.getAll;
 export const getItem = itemApi.getById;
+
+const OFFLINE_ITEM_SNAPSHOT = 'items:offline-snapshot';
+
+/** Overview metrics over the caller's visible inventory, computed on the server. */
+export type InventorySummary = { items: number; totalUnits: number; lowStockItems: number; transactionsLast7Days: number; openDamageReports: number };
+export function getInventorySummary(): Promise<InventorySummary> {
+  return apiRequest<InventorySummary>('/api/inventory-summary');
+}
+
+export function getItemCategories(): Promise<string[]> {
+  return apiRequest<string[]>('/api/item-categories');
+}
+
+/**
+ * Server item search for pickers. Offline, it searches the explicit catalog snapshot taken by
+ * {@link snapshotItemCatalog}; that snapshot (with its download time) is the defined offline completeness.
+ */
+export async function searchItems(search: string, size: number): Promise<Page<Item>> {
+  try {
+    return await itemApi.getPage({ search: search || undefined, sort: 'name' }, 0, size);
+  } catch (error) {
+    if (error instanceof ApiError && error.status < 500) throw error;
+    const snapshot = await getOfflineCatalog<Item[]>(OFFLINE_ITEM_SNAPSHOT);
+    if (!snapshot) throw error;
+    const needle = search.toLocaleLowerCase();
+    const rows = snapshot.filter((item) => [item.name, item.sku, item.category].some((value) => value?.toLocaleLowerCase().includes(needle)));
+    return { rows: rows.slice(0, size), page: 0, size, more: rows.length > size };
+  }
+}
+
+/** Explicit exhaustive read that refreshes the offline item snapshot. */
+export async function snapshotItemCatalog(context: AuthSessionContext): Promise<void> {
+  const items = await itemApi.getAll();
+  assertAuthSession(context);
+  await setOfflineCatalog(OFFLINE_ITEM_SNAPSHOT, items, context);
+}
 export const createItem = itemApi.create;
 export const updateItem = itemApi.update;
 export const deleteItem = itemApi.delete;
 export const deleteItems = itemApi.deleteMany;
 
-export async function getItemAssets(itemId: string, query?: { page?: number; size?: number }): Promise<AssetInstance[]> {
-  if (query) return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query });
-  const context = captureAuthSession();
-  const assets: AssetInstance[] = [];
-  for (let page = 0; ; page++) {
-    const rows = await apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, { query: { page, size: 200 }, session: context });
-    assertAuthSession(context);
-    assets.push(...rows);
-    if (rows.length < 200) return assets;
-  }
+export function getItemAssets(itemId: string, page: number, size: number): Promise<Page<AssetInstance>> {
+  return apiPage<AssetInstance>(`/api/items/${itemId}/assets`, page, size);
+}
+
+/** Explicit exhaustive read of one item's assets (asset pickers, imports). */
+export function getAllItemAssets(itemId: string): Promise<AssetInstance[]> {
+  return loadAllPages((page, size) => getItemAssets(itemId, page, size), 200);
 }
 
 export function getAssetByCode(code: string): Promise<AssetInstance> {

@@ -61,7 +61,8 @@ create table asset_instances (
     model varchar(255),
     notes varchar(255),
     serial_number varchar(255),
-    service_status varchar(255) not null check ((service_status in ('certified','due_soon','overdue','in_service'))),
+    out_of_service boolean not null,
+    next_maintenance_due date,
     primary key (id)
 );
 
@@ -286,17 +287,6 @@ create table factions (
 );
 
 create table general_orders (
-    source_locations JSONB NOT NULL DEFAULT '{}',
-    reconciled_assets jsonb default '{}'::jsonb,
-    written_off_quantities jsonb default '{}'::jsonb,
-    missing_quantities jsonb default '{}'::jsonb,
-    damaged_quantities jsonb default '{}'::jsonb,
-    prepared_quantities jsonb default '{}'::jsonb,
-    asset_assignments jsonb not null default '{}'::jsonb,
-    consumed_quantities jsonb not null default '{}'::jsonb,
-    returned_quantities jsonb not null default '{}'::jsonb,
-    handed_over_quantities jsonb not null default '{}'::jsonb,
-    requested_quantities jsonb not null default '{}'::jsonb,
     status varchar(255) not null default 'draft',
     event_occurrence_id uuid,
     created_at timestamp(6) with time zone not null,
@@ -306,6 +296,35 @@ create table general_orders (
     name varchar(160) not null,
     purpose varchar(4000) not null,
     primary key (id)
+);
+
+create table general_order_lines (
+    id uuid not null primary key,
+    general_order_id uuid not null,
+    item_id uuid not null,
+    source_location_id uuid,
+    line_number integer not null,
+    requested_quantity integer not null check (requested_quantity >= 0),
+    prepared_quantity integer not null check (prepared_quantity >= 0),
+    handed_over_quantity integer not null check (handed_over_quantity >= 0),
+    returned_quantity integer not null check (returned_quantity >= 0),
+    consumed_quantity integer not null check (consumed_quantity >= 0),
+    damaged_quantity integer not null check (damaged_quantity >= 0),
+    missing_quantity integer not null check (missing_quantity >= 0),
+    written_off_quantity integer not null check (written_off_quantity >= 0),
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone not null,
+    constraint uq_general_order_line_item unique (general_order_id, item_id)
+);
+
+create table general_order_line_assets (
+    id uuid not null primary key,
+    line_id uuid not null,
+    asset_instance_id uuid not null,
+    reconciled boolean not null,
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone not null,
+    constraint uq_general_order_line_asset unique (line_id, asset_instance_id)
 );
 
 create table goods_receipt_lines (
@@ -394,7 +413,9 @@ create table inventory_lots (
     storage_requirements varchar(255),
     supplier_lot varchar(255),
     primary key (id),
-    constraint uq_item_lot_number unique (item_id, lot_number)
+    constraint uq_item_lot_number unique (item_id, lot_number),
+    -- Target of the composite (lot_id, item_id) references: a lot never serves another item's stock or history.
+    constraint uq_lot_item unique (id, item_id)
 );
 
 create table inventory_positions (
@@ -402,7 +423,6 @@ create table inventory_positions (
     quantity_in_transit integer not null,
     quantity_on_hand integer not null,
     quantity_quarantined integer not null,
-    quantity_reserved integer not null,
     created_at timestamp(6) with time zone not null,
     last_counted_at timestamp(6) with time zone,
     updated_at timestamp(6) with time zone not null,
@@ -412,7 +432,8 @@ create table inventory_positions (
     location_id uuid not null,
     lot_id uuid,
     primary key (id),
-    constraint uq_position_item_location_lot unique (item_id, location_id, lot_id)
+    -- One bulk (lot-less) position per item and location as well: NULL lots are not distinct.
+    constraint uq_position_item_location_lot unique nulls not distinct (item_id, location_id, lot_id)
 );
 
 create table inventory_transfer_lines (
@@ -473,30 +494,26 @@ create table items (
     containers_opened integer,
     current_operating_hours numeric(38,2) not null,
     fuel_consumption_l_100km numeric(38,2),
-    is_consumable boolean not null,
     maintenance_interval_days integer,
     min_stock integer not null,
     next_maintenance_due date,
     unit_value_cents integer not null,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
-    assigned_user_id uuid,
     id uuid not null,
     return_location_id uuid,
     storage_location_id uuid,
-    assigned_group varchar(255),
     category varchar(255) not null,
     description varchar(255),
     hint varchar(255),
     inventory_role varchar(255) not null check ((inventory_role in ('consumable','returnable'))),
-    maintenance_status varchar(255) not null check ((maintenance_status in ('certified','due_soon','overdue','in_service'))),
+    out_of_service boolean not null,
     name varchar(255) not null,
     position_details varchar(255),
     sku varchar(255) not null unique,
     subcategory varchar(255),
     supplier varchar(255),
     tracking_mode varchar(255) not null check ((tracking_mode in ('bulk','serialized','lot_tracked'))),
-    visibility_scope varchar(255) not null check ((visibility_scope in ('global','event','person','group'))),
     event_tags jsonb not null,
     primary key (id),
     constraint equipment_owner_policy check (
@@ -972,7 +989,7 @@ alter table if exists faction_orders add constraint FKkbn5273g707e8yf109ojf87s2 
 alter table if exists general_orders add constraint FKnds7vh9hn1pdumptqskl1vtje foreign key (created_by) references app_users;
 alter table if exists goods_receipt_lines add constraint FK911tv4c70yqo1u58rdfa0pf5w foreign key (goods_receipt_id) references goods_receipts;
 alter table if exists goods_receipt_lines add constraint FKkyb5k22b0wc8r6o8uw81nkugt foreign key (item_id) references items;
-alter table if exists goods_receipt_lines add constraint FK39tw1j6m41ac7g3lou50xp30w foreign key (lot_id) references inventory_lots;
+alter table goods_receipt_lines add constraint fk_goods_receipt_lines_lot_item foreign key (lot_id, item_id) references inventory_lots (id, item_id);
 alter table if exists goods_receipt_lines add constraint FK4ugxcd2dc6mmqesx8kf2c3eu4 foreign key (purchase_order_line_id) references purchase_order_lines;
 alter table if exists goods_receipts add constraint FK31kyyaqb354qfc4pssihmmry5 foreign key (purchase_order_id) references purchase_orders;
 alter table if exists goods_receipts add constraint FK849cwywob3l2tupw9cnu7r8ga foreign key (received_by) references app_users;
@@ -981,7 +998,7 @@ alter table if exists inventory_count_lines add constraint FKps7uwiauss8l57s3wru
 alter table if exists inventory_count_lines add constraint FKq3vr36dh6twtvyifqpm643xhh foreign key (counted_by) references app_users;
 alter table if exists inventory_count_lines add constraint FKg0ynx17o9jg1wv4wwh50ka88e foreign key (item_id) references items;
 alter table if exists inventory_count_lines add constraint FKhwrk5v2ffem3mfp2g9rk1npjg foreign key (location_id) references storage_locations;
-alter table if exists inventory_count_lines add constraint FKangp2c31tm2djxkqwo68vpju8 foreign key (lot_id) references inventory_lots;
+alter table inventory_count_lines add constraint fk_inventory_count_lines_lot_item foreign key (lot_id, item_id) references inventory_lots (id, item_id);
 alter table if exists inventory_count_lines add constraint FKep49tbtx3vctk9d95atoj6fvo foreign key (count_session_id) references inventory_count_sessions;
 alter table if exists inventory_count_sessions add constraint FKnwlssfgd3c4qy2ts6812115uv foreign key (approved_by) references app_users;
 alter table if exists inventory_count_sessions add constraint FKjtgetwus8ico71elk512fjkjq foreign key (created_by) references app_users;
@@ -991,10 +1008,10 @@ alter table if exists inventory_count_sessions add constraint FKacnvwdevsytaj328
 alter table if exists inventory_lots add constraint FK4h0x1nou1xh6hmxr3021qlg4h foreign key (item_id) references items;
 alter table if exists inventory_positions add constraint FKfyqp6h4cmoxv0g7qgk9v4ljjr foreign key (item_id) references items;
 alter table if exists inventory_positions add constraint FKpme5x3av41i391twhp89f1tqe foreign key (location_id) references storage_locations;
-alter table if exists inventory_positions add constraint FK9r7yj4056os2wwgug82jn97u9 foreign key (lot_id) references inventory_lots;
+alter table inventory_positions add constraint fk_inventory_positions_lot_item foreign key (lot_id, item_id) references inventory_lots (id, item_id);
 alter table if exists inventory_transfer_lines add constraint FKxwdnm94flcfw3r7iukw6unie foreign key (asset_instance_id) references asset_instances;
 alter table if exists inventory_transfer_lines add constraint FKkx5o8ralvpydn43n06x78y6wh foreign key (item_id) references items;
-alter table if exists inventory_transfer_lines add constraint FKqtmu0c8sapq21n2n1bgvc5qt1 foreign key (lot_id) references inventory_lots;
+alter table inventory_transfer_lines add constraint fk_inventory_transfer_lines_lot_item foreign key (lot_id, item_id) references inventory_lots (id, item_id);
 alter table if exists inventory_transfer_lines add constraint FK10tml7en4mig2i87hlvapxift foreign key (transfer_id) references inventory_transfers;
 alter table if exists inventory_transfers add constraint FKqatdnmn6jcp5lqprn6dagpv5p foreign key (destination_location_id) references storage_locations;
 alter table if exists inventory_transfers add constraint FKa27ocp24r656l2oskq3o1rb3j foreign key (received_by) references app_users;
@@ -1002,7 +1019,6 @@ alter table if exists inventory_transfers add constraint FK8inh7jqflxtcmeiqfjfh8
 alter table if exists inventory_transfers add constraint FK63vf9w6brlkkuqsmqhbftopk2 foreign key (source_location_id) references storage_locations;
 alter table if exists item_images add constraint FK31vykiuqi6nfw2rmvw37qlydy foreign key (item_id) references items;
 alter table if exists items add constraint FK862l4eg9xtjse2qhfvkvfwmah foreign key (storage_location_id) references storage_locations;
-alter table if exists items add constraint fk_items_assigned_user foreign key (assigned_user_id) references app_users;
 alter table if exists items add constraint fk_items_return_location foreign key (return_location_id) references storage_locations;
 alter table if exists maintenance_records add constraint FKe918boimdlhepwro1scll3nmo foreign key (asset_instance_id) references asset_instances;
 alter table if exists maintenance_records add constraint FKripmhtkxfmlhnf0ltbw7mt6y7 foreign key (inspector_user_id) references app_users;
@@ -1076,15 +1092,21 @@ create index ix_reservation_location on stock_reservations (location_id) where l
 create index ix_handover_lines_item on custody_handover_lines (item_id);
 -- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
 create index ix_asset_code_lower on asset_instances (lower(asset_code));
-alter table items add constraint ck_items_consumable_role check (is_consumable = (inventory_role = 'consumable'));
 alter table items add constraint ck_items_serialized_returnable check (tracking_mode <> 'serialized' or inventory_role = 'returnable');
 create index ix_items_name_trgm on items using gin (lower(name) public.gin_trgm_ops);
 create index ix_items_sku_trgm on items using gin (lower(sku) public.gin_trgm_ops);
 create index ix_items_category_trgm on items using gin (lower(category) public.gin_trgm_ops);
 alter table general_orders add constraint general_orders_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
+alter table general_order_lines add constraint general_order_lines_order_fkey foreign key (general_order_id) references general_orders(id);
+alter table general_order_lines add constraint general_order_lines_item_fkey foreign key (item_id) references items(id);
+alter table general_order_lines add constraint general_order_lines_source_location_fkey foreign key (source_location_id) references storage_locations(id);
+alter table general_order_line_assets add constraint general_order_line_assets_line_fkey foreign key (line_id) references general_order_lines(id) on delete cascade;
+alter table general_order_line_assets add constraint general_order_line_assets_asset_fkey foreign key (asset_instance_id) references asset_instances(id);
+create index ix_general_order_lines_item on general_order_lines (item_id);
+create index ix_general_order_line_assets_asset on general_order_line_assets (asset_instance_id);
 alter table return_submissions add constraint return_submissions_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table return_submissions add constraint return_submissions_general_order_id_fkey foreign key (general_order_id) references general_orders(id);
-alter table stock_transactions add constraint stock_transactions_lot_id_fkey foreign key (lot_id) references inventory_lots(id);
+alter table stock_transactions add constraint fk_stock_transactions_lot_item foreign key (lot_id, item_id) references inventory_lots (id, item_id);
 alter table stock_transactions add constraint stock_transactions_event_occurrence_id_fkey foreign key (event_occurrence_id) references event_occurrences(id);
 alter table storage_locations add constraint storage_locations_parent_location_id_fkey foreign key (parent_location_id) references storage_locations(id);
 alter table storage_locations add constraint storage_locations_keeper_user_id_fkey foreign key (keeper_user_id) references app_users(id);
@@ -1192,6 +1214,8 @@ INSERT INTO source_revisions (name, shard) SELECT 'faction_order_lines', shard F
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON faction_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'general_orders', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON general_orders FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+INSERT INTO source_revisions (name, shard) SELECT 'general_order_lines', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON general_order_lines FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'app_users', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON app_users FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'vendors', shard FROM generate_series(0, 15) AS shard;

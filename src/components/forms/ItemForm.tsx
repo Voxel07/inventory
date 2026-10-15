@@ -24,7 +24,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
-import { type ItemFormData, type Item, type StorageLocation, type User } from '../../types';
+import { type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useLocalizedText } from '../../utils/naming';
 
 interface Props {
@@ -34,7 +34,6 @@ interface Props {
     storageLocations?: StorageLocation[];
     categories?: string[];
     existingNames?: string[];
-    assignableUsers?: User[];
     onSubmit: (data: ItemFormData) => void;
     isLoading?: boolean;
 }
@@ -46,7 +45,6 @@ export function ItemForm({
     storageLocations = [],
     categories = [],
     existingNames = [],
-    assignableUsers = [],
     onSubmit,
     isLoading,
 }: Props) {
@@ -65,16 +63,12 @@ export function ItemForm({
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
         supplier: initialData?.supplier ?? '',
-        visibilityScope: initialData?.visibilityScope ?? 'global',
-        assignedUserId: initialData?.assignedUserId ?? '',
-        assignedGroup: initialData?.assignedGroup ?? '',
         eventTypes: initialData ? (initialData.eventTypes ?? []) : [...eventTypes],
         storageLocation: initialData?.storageLocation ?? '',
         returnLocation: initialData?.returnLocation ?? initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
-        isConsumable: initialData?.isConsumable ?? false,
         trackingMode: initialData?.trackingMode ?? 'bulk',
-        inventoryRole: initialData?.inventoryRole ?? (initialData?.isConsumable ? 'consumable' : 'returnable'),
+        inventoryRole: initialData?.inventoryRole ?? 'returnable',
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
@@ -84,7 +78,6 @@ export function ItemForm({
         maintenanceIntervalDays: initialData?.maintenanceIntervalDays,
         nextMaintenanceDue: initialData?.nextMaintenanceDue ?? '',
         currentOperatingHours: initialData?.currentOperatingHours,
-        maintenanceStatus: initialData?.maintenanceStatus ?? 'certified',
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
         batteryReplacementDue: initialData?.batteryReplacementDue ?? '',
         bestBeforeDate: initialData?.bestBeforeDate ?? '',
@@ -186,11 +179,8 @@ export function ItemForm({
         || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
         && numericInputs.value !== '' && Number(numericInputs.value) >= 0;
-    const assignmentValid = formData.visibilityScope !== 'person' || Boolean(formData.assignedUserId);
-    const groupValid = formData.visibilityScope !== 'group' || Boolean(formData.assignedGroup?.trim());
-    const eventScopeValid = formData.visibilityScope !== 'event' || Boolean(formData.eventTypes?.length);
     const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid
-        || !requiredNumbersValid || !assignmentValid || !groupValid || !eventScopeValid;
+        || !requiredNumbersValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
@@ -258,41 +248,6 @@ export function ItemForm({
                             {initialData ? ` ${t('Die Sichtbarkeit kann nach dem Anlegen nicht geändert werden.', 'Visibility cannot be changed after creation.')}` : ''}
                         </FormHelperText>
                     </Box>
-                    {!formData.privateResource && <>
-                        <TextField
-                            select
-                            label={t('Zuordnung', 'Assignment')}
-                            value={formData.visibilityScope ?? 'global'}
-                            onChange={(event) => setFormData((prev) => ({
-                                ...prev,
-                                visibilityScope: event.target.value as ItemFormData['visibilityScope'],
-                            }))}
-                        >
-                            <MenuItem value="global">{t('Allgemeiner Bestand', 'Shared inventory')}</MenuItem>
-                            <MenuItem value="event">{t('Eventbezogen', 'Event driven')}</MenuItem>
-                            <MenuItem value="person">{t('Nur für eine Person', 'Assigned to one person')}</MenuItem>
-                            <MenuItem value="group">{t('Nur für eine Gruppe', 'Assigned to one group')}</MenuItem>
-                        </TextField>
-                        {formData.visibilityScope === 'person' && (
-                            <Autocomplete
-                                options={assignableUsers}
-                                getOptionLabel={(user) => user.name || user.email}
-                                isOptionEqualToValue={(option, value) => option.id === value.id}
-                                value={assignableUsers.find((user) => user.id === formData.assignedUserId) || null}
-                                onChange={(_event, user) => setFormData((prev) => ({ ...prev, assignedUserId: user?.id ?? '' }))}
-                                renderInput={(params) => <TextField {...params} required label={t('Zugeordnete Person', 'Assigned person')} />}
-                            />
-                        )}
-                        {formData.visibilityScope === 'group' && (
-                            <TextField
-                                required
-                                label={t('Zugeordnete Gruppe', 'Assigned group')}
-                                value={formData.assignedGroup ?? ''}
-                                onChange={handleChange('assignedGroup')}
-                                helperText={t('Zum Beispiel eine Fraktion oder ein lokales Team', 'For example a faction or local team')}
-                            />
-                        )}
-                    </>}
                 </FormSection>
 
                 <FormSection title={t('Bestand & Nachverfolgung', 'Stock & tracking')}>
@@ -313,7 +268,6 @@ export function ItemForm({
                                     trackingMode,
                                     inventoryRole: trackingMode === 'serialized' && prev.inventoryRole === 'consumable'
                                         ? 'returnable' : prev.inventoryRole,
-                                    isConsumable: trackingMode === 'serialized' ? false : prev.isConsumable,
                                 }));
                                 if (trackingMode === 'serialized') setIsBulkPackage(false);
                             }}
@@ -336,7 +290,6 @@ export function ItemForm({
                                 setFormData((prev) => ({
                                     ...prev,
                                     inventoryRole,
-                                    isConsumable: inventoryRole === 'consumable',
                                     trackingMode: inventoryRole === 'consumable' && prev.trackingMode === 'serialized'
                                         ? 'bulk' : prev.trackingMode,
                                 }));

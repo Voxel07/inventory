@@ -23,7 +23,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MapIcon from '@mui/icons-material/Map';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds } from '../hooks/useItems';
+import { useCompleteList } from '../hooks/usePagedList';
+import { queryKeys } from '../utils/queryKeys';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { translate, useLocalizedText } from '../utils/naming';
@@ -48,7 +50,6 @@ export function StorageLocations() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = useStorageLocations({ includeInactive: true });
-    const itemQuery = useItems();
 
     const createMutation = useCreateStorageLocation();
     const updateMutation = useUpdateStorageLocation();
@@ -102,14 +103,15 @@ export function StorageLocations() {
     })();
     const { pageItems: pageLocations, page: currentLocationPage, setPage: setLocationPage, pageSize: locationPageSize, onPageSizeChange: onLocationPageSizeChange } = useClientPagination(filteredLocations);
 
-    const positions = useOperationList(`storage-positions:${selectedLocId}`, operationsApi.positions({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
-
-    const locatedAssets = useOperationList(`storage-assets:${selectedLocId}`, operationsApi.assets({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
+    // One location's stock is bounded: read all of it, then exactly the items stored there.
+    const positions = useCompleteList(queryKeys.operations(`storage-positions:${selectedLocId}`), operationsApi.positions({ locationId: selectedLocId ?? undefined }), { enabled: Boolean(selectedLocId) });
+    const locatedAssets = useCompleteList(queryKeys.operations(`storage-assets:${selectedLocId}`), operationsApi.assets({ locationId: selectedLocId ?? undefined }), { enabled: Boolean(selectedLocId) });
+    const itemQuery = useItemsByIds([...(positions.data ?? []).map((position) => position.itemId), ...(locatedAssets.data ?? []).map((asset) => asset.itemId)]);
 
     const inventory = getLocationInventory(itemQuery.data ?? [], positions.data ?? [], locatedAssets.data ?? [], selectedLocId);
     const inventoryLoading = itemQuery.isLoading || positions.isLoading || locatedAssets.isLoading;
     const inventoryError = itemQuery.error || positions.error || locatedAssets.error;
-    const inventoryLoadingMore = [itemQuery, positions, locatedAssets].some(query => query.hasNextPage || query.isFetchingNextPage);
+    const inventoryLoadingMore = false;
     function retryInventory() {
         void itemQuery.refetch();
         void positions.refetch();

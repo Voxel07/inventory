@@ -1,7 +1,23 @@
 import { API_URL } from '../config/runtimeConfig';
 import { containsPrivateInventory, referencesPrivateInventory } from './privateInventoryCache';
-import { assertAuthSession, captureAuthSession, getAuthSnapshot, getAuthorizationHeaders, type AuthSessionContext } from './authManager';
+import { assertAuthSession, captureAuthSession, getAuthSnapshot, SessionChangedError, type AuthSessionContext } from './authManager';
 import { translate } from '../utils/naming';
+import type { DamageReportFormData, FactionOrderFormData, TransactionFormData } from '../types';
+import { isAbortError } from './abort';
+import { ApiError, authorizedFetch, InvalidResponseError, REQUEST_TIMEOUT_MS, RequestTimeoutError, responseError } from './apiTransport';
+
+/**
+ * Commands that may be queued offline and replayed through /api/sync; each type names its payload shape.
+ * Stored actions keep the generic JSON form because they are read back from browser storage and edited in the
+ * conflict-correction UI.
+ */
+export type OfflineCommand =
+  | { type: 'transaction'; payload: TransactionFormData }
+  | { type: 'damage.create'; payload: DamageReportFormData }
+  | { type: 'order.create'; payload: FactionOrderFormData }
+  | { type: 'order.transition'; payload: { orderId: string; status: string; notes?: string; [field: string]: unknown } }
+  | { type: 'order.prepare'; payload: { orderId: string; input: Record<string, unknown> } }
+  | { type: 'order.return'; payload: { orderId: string; input: Record<string, unknown> } };
 
 export type OfflineAction = {
   idempotencyKey: string;
@@ -191,6 +207,21 @@ export async function discardSyncFailure(idempotencyKey: string): Promise<void> 
   await notifyQueueChanged();
 }
 
+/**
+ * Replay state. Transient failures (network, timeout, 5xx, 429, local storage) retry with backoff or
+ * {@code Retry-After}; terminal failures pause replay until the user acts. Queued commands keep their UUIDs.
+ */
+export type SyncState =
+  | { kind: 'idle' }
+  | { kind: 'retrying'; reason: 'network' | 'server' | 'rate_limited' | 'storage'; message: string; retryAt: string }
+  | { kind: 'paused'; reason: 'auth' | 'forbidden' | 'rejected' | 'invalid_response'; message: string };
+
+let syncState: SyncState = { kind: 'idle' };
+/** Session token that the server rejected; replay resumes by itself once the token changes. */
+let pausedToken: string | null = null;
+let pausedGeneration = -1;
+export const getSyncState = (): SyncState => syncState;
+
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let flushInFlight = false;
 let flushAttempt = 0;
@@ -203,100 +234,149 @@ function scheduleFlush(delayMs: number): void {
   }, delayMs);
 }
 
-export async function flushOfflineQueue(): Promise<void> {
+type SyncResult = { idempotencyKey: string; status: 'applied' | 'conflict' | 'rejected'; error?: string };
+
+function syncResults(payload: unknown): SyncResult[] {
+  const results = typeof payload === 'object' && payload !== null ? (payload as { results?: unknown }).results : undefined;
+  if (!Array.isArray(results) || !results.every((result) => typeof result === 'object' && result !== null
+    && typeof result.idempotencyKey === 'string' && typeof result.status === 'string'
+    && (result.error === undefined || result.error === null || typeof result.error === 'string'))) {
+    throw new InvalidResponseError(translate('Der Server hat eine ungültige Synchronisationsantwort geliefert', 'The server returned an invalid synchronization response'));
+  }
+  return (results as SyncResult[]).filter((result) => ['applied', 'conflict', 'rejected'].includes(result.status));
+}
+
+function pause(reason: Extract<SyncState, { kind: 'paused' }>['reason'], message: string, cause: unknown): null {
+  console.warn(`Offline replay paused (${reason})`, cause);
+  syncState = { kind: 'paused', reason, message };
+  pausedToken = getAuthSnapshot().token;
+  pausedGeneration = getAuthSnapshot().generation;
+  return null;
+}
+
+function retry(reason: Extract<SyncState, { kind: 'retrying' }>['reason'], message: string, cause: unknown, retryAfterSeconds?: number): number {
+  console.warn(`Offline replay will retry (${reason})`, cause);
+  flushAttempt += 1;
+  const delay = retryAfterSeconds !== undefined ? retryAfterSeconds * 1000 : Math.min(60_000, 2_000 * 2 ** flushAttempt);
+  syncState = { kind: 'retrying', reason, message, retryAt: new Date(Date.now() + delay).toISOString() };
+  return delay;
+}
+
+/** Maps one failed replay to its retry delay, or {@code null} when it paused. */
+function classifyFailure(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof ApiError) {
+    if (error.status === 401) return pause('auth', translate('Bitte erneut anmelden, um vorgemerkte Aktionen zu senden.', 'Sign in again to send queued actions.'), error);
+    if (error.status === 403) return pause('forbidden', translate(`Der Server verweigert die Synchronisierung: ${message}`, `The server denied synchronization: ${message}`), error);
+    if (error.status === 429) return retry('rate_limited', message, error, error.retryAfterSeconds);
+    if (error.status === 408 || error.status >= 500) return retry('server', message, error, error.retryAfterSeconds);
+    return pause('rejected', translate(`Der Server hat die Synchronisierung abgelehnt: ${message}`, `The server rejected synchronization: ${message}`), error);
+  }
+  if (error instanceof InvalidResponseError) return pause('invalid_response', message, error);
+  if (error instanceof TypeError || error instanceof RequestTimeoutError || isAbortError(error)) return retry('network', message, error);
+  if (error instanceof SessionChangedError) return 1_000;
+  return retry('storage', translate(`Lokaler Speicher nicht verfügbar: ${message}`, `Local storage unavailable: ${message}`), error);
+}
+
+/**
+ * Sends queued actions. {@code resume}: an explicit user request that also lifts a terminal pause; automatic
+ * triggers leave a pause in place unless the session that caused it has changed.
+ */
+export async function flushOfflineQueue(options: { resume?: boolean } = {}): Promise<void> {
   if (!navigator.onLine || flushInFlight) return;
+  if (syncState.kind === 'paused' && !options.resume) {
+    const auth = getAuthSnapshot();
+    const sessionChanged = auth.generation !== pausedGeneration || (syncState.reason === 'auth' && auth.token !== pausedToken);
+    if (!sessionChanged) return;
+  }
   const context = captureAuthSession();
   flushInFlight = true;
-  let actions: OfflineAction[];
-  try {
-    actions = (await getOfflineActions()).slice(0, 100);
-  } catch {
-    flushInFlight = false;
-    scheduleFlush(10_000);
-    return;
-  }
-  if (!actions.length) {
-    flushAttempt = 0;
-    flushInFlight = false;
-    return;
-  }
-  let authorizationHeaders: Record<string, string>;
-  try {
-    authorizationHeaders = await getAuthorizationHeaders();
-    assertAuthSession(context);
-    if (!context.accountId || actions.some((action) => action.ownerId !== context.accountId)) throw new Error(translate('Das Konto hat sich während der Synchronisierung geändert', 'Account changed during sync'));
-  } catch {
-    flushInFlight = false;
-    scheduleFlush(10_000);
-    return;
-  }
   let retryDelay: number | null = null;
+  let paused = false;
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...authorizationHeaders,
-    };
-    const response = await fetch(`${API_URL}/api/sync`, { method: 'POST', headers, body: JSON.stringify({ actions }), signal: AbortSignal.timeout(20_000) });
-    if (!response.ok) {
-      flushAttempt += 1;
-      retryDelay = Math.min(60_000, 2_000 * 2 ** flushAttempt);
-    } else {
+    const actions = (await getOfflineActions()).slice(0, 100);
+    if (!actions.length) {
       flushAttempt = 0;
-      const payload = await response.json() as { results: Array<{ idempotencyKey: string; status: string; error?: string }> };
-      const db = await openDatabase();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction([STORE, FAILURES_STORE, HISTORY_STORE], 'readwrite');
-        const queueStore = tx.objectStore(STORE);
-        const failuresStore = tx.objectStore(FAILURES_STORE);
-
-        for (const result of payload.results) {
-          const original = actions.find((action) => action.idempotencyKey === result.idempotencyKey);
-          if (!original || !['applied', 'conflict', 'rejected'].includes(result.status)) continue;
-          queueStore.delete(result.idempotencyKey);
-          tx.objectStore(HISTORY_STORE).put({ ...original, status: result.status, error: result.error, timestamp: new Date().toISOString() });
-          if (result.status === 'applied') {
-            failuresStore.delete(result.idempotencyKey);
-          } else {
-            const action = actions.find((candidate) => candidate.idempotencyKey === result.idempotencyKey);
-            if (action) {
-              failuresStore.put({
-                idempotencyKey: result.idempotencyKey,
-                ownerId: action.ownerId,
-                localTimestamp: action.localTimestamp,
-                type: action.type,
-                payload: action.payload,
-                status: result.status === 'conflict' ? 'conflict' : 'rejected',
-                error: result.error || result.status,
-                timestamp: new Date().toISOString(),
-              } satisfies SyncFailure);
-            }
-          }
-        }
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-      if (context.generation === getAuthSnapshot().generation) {
-        await notifyQueueChanged();
-        window.dispatchEvent(new CustomEvent('ash-api-change', { detail: { type: 'sync.completed' } }));
-      }
+      syncState = { kind: 'idle' };
+      return;
     }
-  } catch {
-    flushAttempt += 1;
-    retryDelay = Math.min(60_000, 2_000 * 2 ** flushAttempt);
+    if (!context.accountId || actions.some((action) => action.ownerId !== context.accountId)) throw new SessionChangedError();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let results: SyncResult[];
+    try {
+      const response = await authorizedFetch(`${API_URL}/api/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ actions }),
+        signal: controller.signal,
+      }, context);
+      if (!response.ok) throw await responseError(response);
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch (cause) {
+        throw new InvalidResponseError(translate('Der Server hat eine unlesbare Synchronisationsantwort geliefert', 'The server returned an unreadable synchronization response'), { cause });
+      }
+      results = syncResults(payload);
+    } finally {
+      clearTimeout(timeout);
+    }
+    await storeResults(actions, results);
+    flushAttempt = 0;
+    syncState = { kind: 'idle' };
+    if (context.generation === getAuthSnapshot().generation) {
+      window.dispatchEvent(new CustomEvent('ash-api-change', { detail: { type: 'sync.completed' } }));
+    }
+  } catch (error) {
+    retryDelay = classifyFailure(error);
+    paused = retryDelay === null;
   } finally {
     flushInFlight = false;
   }
+  if (context.generation === getAuthSnapshot().generation) await notifyQueueChanged().catch(() => {});
+  if (paused) return;
   if (retryDelay !== null) scheduleFlush(retryDelay);
-  else if (await getOfflineQueueCount()) scheduleFlush(1000);
+  else if (await getOfflineQueueCount().catch(() => 0)) scheduleFlush(1000);
+}
+
+async function storeResults(actions: OfflineAction[], results: SyncResult[]): Promise<void> {
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([STORE, FAILURES_STORE, HISTORY_STORE], 'readwrite');
+    const queueStore = tx.objectStore(STORE);
+    const failuresStore = tx.objectStore(FAILURES_STORE);
+    for (const result of results) {
+      const original = actions.find((action) => action.idempotencyKey === result.idempotencyKey);
+      if (!original) continue;
+      queueStore.delete(result.idempotencyKey);
+      tx.objectStore(HISTORY_STORE).put({ ...original, status: result.status, error: result.error, timestamp: new Date().toISOString() });
+      if (result.status === 'applied') {
+        failuresStore.delete(result.idempotencyKey);
+      } else {
+        failuresStore.put({
+          idempotencyKey: result.idempotencyKey,
+          ownerId: original.ownerId,
+          localTimestamp: original.localTimestamp,
+          type: original.type,
+          payload: original.payload,
+          status: result.status,
+          error: result.error || result.status,
+          timestamp: new Date().toISOString(),
+        } satisfies SyncFailure);
+      }
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error('Storing synchronization results was aborted'));
+  });
 }
 
 async function notifyQueueChanged() {
   const context = captureAuthSession();
   const [queued, failures] = await Promise.all([getOfflineQueueCount(), getSyncFailureCount()]);
   assertAuthSession(context);
-  window.dispatchEvent(new CustomEvent('ash-offline-queue', { detail: { queued, failures } }));
+  window.dispatchEvent(new CustomEvent('ash-offline-queue', { detail: { queued, failures, sync: syncState } }));
 }
 
 function transactionPromise(db: IDBDatabase, storeName: string, mode: IDBTransactionMode, operation: (store: IDBObjectStore) => void): Promise<void> {
@@ -353,5 +433,5 @@ export async function correctSyncFailure(failure: SyncFailure, payload: Record<s
     tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
   assertAuthSession(context);
-  await notifyQueueChanged(); void flushOfflineQueue();
+  await notifyQueueChanged(); void flushOfflineQueue({ resume: true });
 }

@@ -10,13 +10,13 @@ export const damageReportApi = createCreateResourceApi<DamageReport, DamageRepor
       apiRequest('/api/damage-reports', {
         method: 'POST',
         body: { ...data, idempotencyKey: crypto.randomUUID() },
-        offline: { type: 'damage.create', payload: data as unknown as Record<string, unknown> },
+        offline: { type: 'damage.create', payload: data },
       }),
   },
 );
 
-export const getDamageReports = (filters?: { itemId?: string; assetInstanceId?: string; assemblyId?: string; page?: number; size?: number }) => damageReportApi.getAll(filters);
-export const createDamageReport = damageReportApi.create;
+export type DamageReportFilters = { itemId?: string; assetInstanceId?: string; assemblyId?: string; status?: readonly DamageStatus[] };
+export const getDamageReports = (filters: DamageReportFilters | undefined, page: number, size: number) => damageReportApi.getPage(filters, page, size);
 export function updateDamageReportStatus(id: string, status: DamageStatus, amount = 1, notes?: string, itemHint?: string): Promise<DamageReport> {
   return apiRequest(`/api/damage-reports/${id}`, { method: 'PATCH', body: { status, amount, notes, itemHint } });
 }

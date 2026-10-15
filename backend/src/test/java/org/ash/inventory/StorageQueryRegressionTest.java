@@ -112,7 +112,7 @@ class StorageQueryRegressionTest {
     }
 
     @Test @TestTransaction
-    void scopedReverseTraversalMatchesForwardPrivacyIncludingJsonAndSharedRoots() {
+    void scopedReverseTraversalMatchesForwardPrivacyIncludingOrderLinesAndSharedRoots() {
         var owner = person();
         var outsider = person();
         var privateItem = item(policy(owner));
@@ -126,11 +126,14 @@ class StorageQueryRegressionTest {
         asset.assetCode = UUID.randomUUID().toString();
         em.persist(asset);
         var order = new GeneralOrder();
-        order.name = "JSON privacy provenance";
+        order.name = "Order line privacy provenance";
         order.purpose = "regression";
         order.createdBy = owner;
-        order.requestedQuantities.put(privateItem.id.toString().toUpperCase(Locale.ROOT), 1);
-        order.sourceLocations.put(publicItem.id.toString(), location.id.toString());
+        var requested = new org.ash.inventory.model.GeneralOrderLine();
+        requested.order = order; requested.item = privateItem; requested.lineNumber = 1; requested.requestedQuantity = 1;
+        var sourced = new org.ash.inventory.model.GeneralOrderLine();
+        sourced.order = order; sourced.item = publicItem; sourced.lineNumber = 2; sourced.requestedQuantity = 1; sourced.sourceLocation = location;
+        order.lines.addAll(List.of(requested, sourced));
         em.persist(order);
         em.flush();
         em.clear();

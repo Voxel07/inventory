@@ -2,6 +2,7 @@ import { FormDialog } from '../components/shared/FormDialog';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
 import { useState } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { Box, ToggleButtonGroup } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -10,15 +11,12 @@ import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
-import { useAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
-import { useItems } from '../hooks/useItems';
-import { useStorageLocations } from '../hooks/useStorageLocations';
+import { usePagedAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
 import { useCrudManager } from '../hooks/useCrudManager';
 import type { Assembly, AssemblyFormData } from '../types';
 import { useLocalizedText } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canCreateInventory, canEditCatalog } from '../utils/access';
-import { personalAssemblies } from '../utils/personalItems';
 
 export function Assemblies() {
     const { user } = useAuth();
@@ -27,10 +25,8 @@ export function Assemblies() {
     const t = useLocalizedText();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
-    const { data: assemblies, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: assembliesComplete } = useAssemblies();
-    const { data: items, isComplete: itemsComplete, isError: itemsError } = useItems();
-    const { data: storageLocations } = useStorageLocations();
-    const visibleAssemblies = mine && assemblies ? personalAssemblies(assemblies, user?.id) : assemblies;
+    const [search, setSearch] = useState('');
+    const assemblies = usePagedAssemblies({ search: useDebouncedValue(search.trim()) || undefined, mine: mine || undefined });
 
     const createAssembly = useCreateAssembly();
     const updateAssembly = useUpdateAssembly();
@@ -60,12 +56,13 @@ export function Assemblies() {
             </ToggleButtonGroup>
 
             <AssembliesList
-                assemblies={visibleAssemblies}
-                items={items}
-                isLoading={isLoading}
-                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-                loadError={isError}
-                onRetry={() => { void refetch(); }}
+                assemblies={assemblies.data}
+                search={search}
+                onSearch={setSearch}
+                list={assemblies}
+                isLoading={assemblies.isLoading}
+                loadError={assemblies.isError}
+                onRetry={() => { void assemblies.refetch(); }}
                 onCreate={canCreate ? crud.openCreate : undefined}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
@@ -79,7 +76,6 @@ export function Assemblies() {
                     title={crud.editingEntity ? t('Baugruppe bearbeiten', 'Edit assembly') : t('Neue Baugruppe', 'New assembly')}
                     onCancel={crud.closeForm}
                     initialData={crud.editingEntity}
-                    items={items ?? []}
                     onSubmit={crud.handleSave}
                     isLoading={createAssembly.isPending || updateAssembly.isPending}
                 />
@@ -108,10 +104,6 @@ export function Assemblies() {
                 open={importOpen}
                 initialType="assemblies"
                 onClose={() => setImportOpen(false)}
-                items={items ?? []}
-                assemblies={assemblies ?? []}
-                storageLocations={storageLocations ?? []}
-                catalogComplete={itemsComplete && assembliesComplete && !isError && !itemsError && !!items && !!assemblies}
             />
         </Box>
     );

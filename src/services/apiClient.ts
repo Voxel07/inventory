@@ -1,24 +1,26 @@
 import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
 import type { User } from '../types';
 import { API_URL, AUTH_CONFIGURATION_ERROR, OIDC_CONFIG } from '../config/runtimeConfig';
-import { enqueueOfflineAction, flushOfflineQueue, setOfflineCatalog } from './offlineQueue';
+import { enqueueOfflineAction, flushOfflineQueue, type OfflineCommand } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
-import { localWriteChange, type ApiChangeDetail } from './apiChanges';
-import { recordFilteredRows } from './pageCompleteness';
+import { decodeServerChange, localWriteChange, type ApiChangeDetail } from './apiChanges';
+import type { Page } from './apiPagination';
 import { translate } from '../utils/naming';
+import { isAbortError } from './abort';
+import { ApiError, authorizedFetch, REQUEST_TIMEOUT_MS, RequestTimeoutError, responseError } from './apiTransport';
+export { ApiError, RequestTimeoutError } from './apiTransport';
 export type { ApiChangeDetail } from './apiChanges';
 import {
   announceLogout,
   assertAuthSession,
+  AuthPersistenceError,
   captureAuthSession,
   type AuthSessionContext,
-  canRefreshAuth,
   clearAuth,
   getAuthorizationHeaders,
   getAuthSnapshot,
   getOidcIdToken,
   getRevocableTokens,
-  getValidAccessToken,
   restorePersistedSession,
   setAuthError,
   setDevelopmentSession,
@@ -41,7 +43,7 @@ export async function initializeAuth(): Promise<void> {
     if (getAuthSnapshot().token) {
       await refreshCurrentUser();
       void startRealtimeEvents();
-      void precacheCatalogForOfflineUse();
+      precacheCatalogForOfflineUse();
     }
   } catch (error) {
     if (context.generation !== getAuthSnapshot().generation) return;
@@ -64,7 +66,12 @@ export async function login(): Promise<void> {
   assertAuthSession(context);
   setDevelopmentSession(response.token, response.user);
   void startRealtimeEvents();
-  void precacheCatalogForOfflineUse();
+  precacheCatalogForOfflineUse();
+}
+
+/** Ends the local session; throws {@link AuthPersistenceError} when this device could not record the sign-out. */
+async function endLocalSession(): Promise<void> {
+  if (!(await clearAuth())) throw new AuthPersistenceError(getAuthSnapshot().error);
 }
 
 export async function logout(): Promise<boolean> {
@@ -72,7 +79,7 @@ export async function logout(): Promise<boolean> {
   stopRealtimeEvents();
   announceLogout();
   if (!OIDC_CONFIG) {
-    await clearAuth();
+    await endLocalSession();
     return false;
   }
 
@@ -86,12 +93,12 @@ export async function logout(): Promise<boolean> {
     providerLogoutUrl = await oidcLogoutUrl(getOidcIdToken());
   } catch (error) {
     assertAuthSession(context);
-    await clearAuth();
+    await endLocalSession();
     throw error;
   }
 
   assertAuthSession(context);
-  await clearAuth();
+  await endLocalSession();
   window.location.assign(providerLogoutUrl);
   return true;
 }
@@ -110,43 +117,24 @@ export async function refreshCurrentUser(): Promise<User | null> {
   }
 }
 
+/** A repeated value (`readonly string[]`) becomes one query parameter per element. */
+export type QueryValue = string | number | boolean | undefined | readonly string[];
+export type ApiQuery = Record<string, QueryValue>;
+
 type RequestOptions = {
   session?: AuthSessionContext;
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
-  query?: Record<string, string | number | boolean | undefined>;
+  query?: ApiQuery;
   anonymous?: boolean;
-  offline?: { type: string; payload: Record<string, unknown>; idempotencyKey?: string };
+  offline?: OfflineCommand & { idempotencyKey?: string };
 };
-
-export class ApiError extends Error {
-  status: number;
-  details?: unknown;
-  retryAfterSeconds?: number;
-  constructor(status: number, message: string, details?: unknown) { super(message); this.status = status; this.details = details; }
-}
 
 export class OfflineQueuedError extends Error {
   idempotencyKey: string;
   constructor(idempotencyKey: string) { super('Action saved offline and will sync automatically'); this.idempotencyKey = idempotencyKey; }
 }
 
-export class RequestTimeoutError extends Error {
-  constructor() { super('Request timed out'); this.name = 'RequestTimeoutError'; }
-}
-
-const REQUEST_TIMEOUT_MS = 20_000;
-
-async function responseError(response: Response): Promise<ApiError> {
-  const payload = await response.json().catch(() => ({})) as { error?: string; message?: string; details?: unknown; retryAfterSeconds?: number };
-  const error = new ApiError(response.status, payload.error || payload.message || `API request failed (${response.status})`, payload.details);
-  const retryAfter = response.headers.get('Retry-After');
-  const seconds = retryAfter === null ? payload.retryAfterSeconds
-    : /^\d+(\.\d+)?$/.test(retryAfter) ? Number(retryAfter)
-      : (Date.parse(retryAfter) - Date.now()) / 1000;
-  if (seconds !== undefined && Number.isFinite(seconds)) error.retryAfterSeconds = Math.max(1, Math.ceil(seconds));
-  return error;
-}
 
 type ApiBatchState = { depth: number; changes: Map<string, ApiChangeDetail>; rateLimitListener?: (seconds: number) => void };
 const apiBatches = new Map<number, ApiBatchState>();
@@ -197,7 +185,7 @@ async function withSessionRequest<T>(context: AuthSessionContext, operation: (si
     return result;
   } catch (error) {
     assertAuthSession(context);
-    if (error instanceof DOMException && error.name === 'AbortError') throw new RequestTimeoutError();
+    if (isAbortError(error)) throw new RequestTimeoutError();
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -205,30 +193,32 @@ async function withSessionRequest<T>(context: AuthSessionContext, operation: (si
   }
 }
 
-async function apiRequestAttempt<T>(path: string, options: RequestOptions, retried: boolean, context: AuthSessionContext): Promise<T> {
+/** {@code hasMore}: the server's page continuation (X-Has-More), {@code null} for unpaged responses. */
+type ApiResult<T> = { value: T; hasMore: boolean | null };
+
+function continuation(headers: Headers): boolean | null {
+  const value = headers.get('X-Has-More');
+  return value === null ? null : value === 'true';
+}
+
+async function apiRequestAttempt<T>(path: string, options: RequestOptions, context: AuthSessionContext): Promise<ApiResult<T>> {
   return withSessionRequest(context, async (signal) => {
     const url = new URL(`${API_URL}${path}`);
     const method = options.method || 'GET';
     for (const [key, value] of Object.entries(options.query || {})) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
+      if (value === undefined) continue;
+      if (Array.isArray(value)) value.forEach((entry) => url.searchParams.append(key, entry));
+      else url.searchParams.set(key, String(value));
     }
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-    if (!options.anonymous) Object.assign(headers, await getAuthorizationHeaders());
-    assertAuthSession(context);
     const cacheKey = `${url.toString()}#session=${context.generation}#actor=${encodeURIComponent(context.accountId ?? 'anonymous')}`;
     const cached = method === 'GET' ? conditionalGetCache.get(cacheKey) : undefined;
     if (cached) headers['If-None-Match'] = cached.etag;
-    const response = await fetch(url, {
-      method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), signal,
-    });
+    const init = { method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), signal };
+    const response = options.anonymous ? await fetch(url, init) : await authorizedFetch(url, init, context);
     assertAuthSession(context);
-    if (response.status === 401 && !options.anonymous && !retried && canRefreshAuth()) {
-      await getValidAccessToken(true);
-      assertAuthSession(context);
-      return apiRequestAttempt<T>(path, options, true, context);
-    }
-    if (response.status === 304 && cached) return cached.value as T;
+    if (response.status === 304 && cached) return { value: cached.value as T, hasMore: cached.hasMore };
     if (!response.ok) {
       const error = await responseError(response);
       assertAuthSession(context);
@@ -239,17 +229,17 @@ async function apiRequestAttempt<T>(path: string, options: RequestOptions, retri
       throw error;
     }
     const result = response.status === 204 ? undefined as T : await response.json() as T;
+    const hasMore = continuation(response.headers);
     if (response.headers.get('X-Private-Inventory') === 'true') markPrivateInventoryResponse(result);
-    recordFilteredRows(result, Number(response.headers.get('X-Filtered-Rows') ?? 0));
     assertAuthSession(context);
     if (method === 'GET') {
       const etag = response.headers.get('ETag');
-      if (etag && response.headers.get('X-Private-Inventory') !== 'true') conditionalGetCache.set(cacheKey, { etag, value: result });
+      if (etag && response.headers.get('X-Private-Inventory') !== 'true') conditionalGetCache.set(cacheKey, { etag, value: result, hasMore });
     } else {
       invalidateConditionalCacheFor(path);
       publishApiChange(localWriteChange(path), context);
     }
-    return result;
+    return { value: result, hasMore };
   });
 }
 
@@ -272,6 +262,16 @@ function invalidateConditionalCacheFor(path: string): void {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return (await apiRequestResult<T>(path, options)).value;
+}
+
+/** One page of a paged list endpoint; the continuation comes from the server, never from the row count. */
+export async function apiPage<T>(path: string, page: number, size: number, options: Omit<RequestOptions, 'method' | 'body' | 'offline'> = {}): Promise<Page<T>> {
+  const result = await apiRequestResult<T[]>(path, { ...options, query: { ...options.query, page, size } });
+  return { rows: result.value, page, size, more: result.hasMore ?? false };
+}
+
+async function apiRequestResult<T>(path: string, options: RequestOptions): Promise<ApiResult<T>> {
   const context = options.session ?? captureAuthSession();
   assertAuthSession(context);
   const rateLimitListener = apiBatches.get(context.generation)?.rateLimitListener;
@@ -279,11 +279,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     ? { ...options.offline, idempotencyKey: options.offline.idempotencyKey ?? bodyIdempotencyKey(options.body) }
     : undefined;
   if (!navigator.onLine && options.method && options.method !== 'GET' && !offlineAction) throw new Error(translate('Diese Aktion erfordert eine Online-Verbindung. Sie wurde nicht vorgemerkt.', 'This action requires an online connection. It has not been queued.'));
-  if (offlineAction && !navigator.onLine) return queueOffline<T>(offlineAction, context);
+  if (offlineAction && !navigator.onLine) return { value: await queueOffline<T>(offlineAction, context), hasMore: null };
   try {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await apiRequestAttempt<T>(path, options, false, context);
+        return await apiRequestAttempt<T>(path, options, context);
       } catch (error) {
         // A 429 is rejected before executing the command, so retrying writes is safe.
         // Network failures remain errors: their writes may already have committed.
@@ -296,7 +296,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
   } catch (error) {
     assertAuthSession(context);
-    if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return queueOffline<T>(offlineAction, context);
+    if (offlineAction && (error instanceof TypeError || error instanceof RequestTimeoutError || !navigator.onLine)) return { value: await queueOffline<T>(offlineAction, context), hasMore: null };
     throw error;
   }
 }
@@ -307,9 +307,9 @@ function bodyIdempotencyKey(body: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-async function queueOffline<T>(action: { type: string; payload: Record<string, unknown>; idempotencyKey?: string }, context: AuthSessionContext): Promise<T> {
+async function queueOffline<T>(action: OfflineCommand & { idempotencyKey?: string }, context: AuthSessionContext): Promise<T> {
   const idempotencyKey = action.idempotencyKey ?? crypto.randomUUID();
-  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: action.payload, localTimestamp: new Date().toISOString() }, context);
+  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: { ...action.payload }, localTimestamp: new Date().toISOString() }, context);
   assertAuthSession(context);
   throw new OfflineQueuedError(idempotencyKey);
 }
@@ -327,36 +327,20 @@ export function isApiMediaUrl(value: string): boolean {
   return url.origin === base.origin && url.pathname.startsWith(base.pathname);
 }
 
-export async function fetchMedia(url: string, signal?: AbortSignal, retried = false, context = captureAuthSession()): Promise<Blob> {
+export async function fetchMedia(url: string, signal?: AbortSignal, context = captureAuthSession()): Promise<Blob> {
   if (!isApiMediaUrl(url)) throw new Error(translate('Ungültige Medien-URL', 'Invalid media URL'));
   return withSessionRequest(context, async (sessionSignal) => {
-    const headers = await getAuthorizationHeaders();
-    assertAuthSession(context);
-    const response = await fetch(url, { headers, signal: signal ? AbortSignal.any([signal, sessionSignal]) : sessionSignal });
-    assertAuthSession(context);
-    if (response.status === 401 && !retried && canRefreshAuth()) {
-      await getValidAccessToken(true);
-      assertAuthSession(context);
-      return fetchMedia(url, signal, true, context);
-    }
+    const response = await authorizedFetch(url, { signal: signal ? AbortSignal.any([signal, sessionSignal]) : sessionSignal }, context);
     if (!response.ok) throw await responseError(response);
     return response.blob();
   });
 }
 
-async function uploadMediaAttempt(file: File, retried: boolean, context: AuthSessionContext): Promise<string> {
+export function uploadMedia(file: File, context = captureAuthSession()): Promise<string> {
   return withSessionRequest(context, async (signal) => {
     const body = new FormData();
     body.append('file', file);
-    const headers = await getAuthorizationHeaders();
-    assertAuthSession(context);
-    const response = await fetch(`${API_URL}/api/media`, { method: 'POST', headers, body, signal });
-    assertAuthSession(context);
-    if (response.status === 401 && !retried && canRefreshAuth()) {
-      await getValidAccessToken(true);
-      assertAuthSession(context);
-      return uploadMediaAttempt(file, true, context);
-    }
+    const response = await authorizedFetch(`${API_URL}/api/media`, { method: 'POST', body, signal }, context);
     if (!response.ok) throw await responseError(response);
     const stored = await response.json() as { key: string; url?: string };
     assertAuthSession(context);
@@ -364,29 +348,13 @@ async function uploadMediaAttempt(file: File, retried: boolean, context: AuthSes
   });
 }
 
-export function uploadMedia(file: File, context = captureAuthSession()): Promise<string> {
-  return uploadMediaAttempt(file, false, context);
-}
-
-async function deleteMediaAttempt(key: string, retried: boolean, context: AuthSessionContext): Promise<void> {
+export function deleteMedia(key: string, context = captureAuthSession()): Promise<void> {
   const url = apiFileUrl(key);
   if (!url || !isApiMediaUrl(url)) throw new Error(translate('Ungültiger Medien-Schlüssel', 'Invalid media key'));
   return withSessionRequest(context, async (signal) => {
-    const headers = await getAuthorizationHeaders();
-    assertAuthSession(context);
-    const response = await fetch(url, { method: 'DELETE', headers, signal });
-    assertAuthSession(context);
-    if (response.status === 401 && !retried && canRefreshAuth()) {
-      await getValidAccessToken(true);
-      assertAuthSession(context);
-      return deleteMediaAttempt(key, true, context);
-    }
+    const response = await authorizedFetch(url, { method: 'DELETE', signal }, context);
     if (!response.ok) throw await responseError(response);
   });
-}
-
-export function deleteMedia(key: string, context = captureAuthSession()): Promise<void> {
-  return deleteMediaAttempt(key, false, context);
 }
 
 export function subscribeToApiChanges(callback: (detail?: ApiChangeDetail) => void) {
@@ -399,7 +367,7 @@ export function subscribeToApiChanges(callback: (detail?: ApiChangeDetail) => vo
   };
 }
 
-const conditionalGetCache = new Map<string, { etag: string; value: unknown }>();
+const conditionalGetCache = new Map<string, { etag: string; value: unknown; hasMore: boolean | null }>();
 let sseAbortController: AbortController | null = null;
 let sseRetryTimer: ReturnType<typeof setTimeout> | null = null;
 const seenEventIds = new Map<string, number>();
@@ -425,10 +393,8 @@ function handleSseBlock(block: string): void {
   } catch {
     // Non-JSON data still signals that API state changed.
   }
-  if (typeof detail === 'object' && detail !== null && 'type' in detail && detail.type === 'heartbeat') return;
-  const changeDetail: ApiChangeDetail = typeof detail === 'object' && detail !== null
-    ? detail as ApiChangeDetail
-    : { type: String(detail) };
+  const changeDetail = decodeServerChange(detail);
+  if (changeDetail.type === 'heartbeat') return;
   const now = Date.now();
   for (const [id, timestamp] of seenEventIds) {
     if (now - timestamp > 600_000) seenEventIds.delete(id);
@@ -438,7 +404,6 @@ function handleSseBlock(block: string): void {
     seenEventIds.set(changeDetail.eventId, now);
     if (seenEventIds.size > 2048) seenEventIds.delete(seenEventIds.keys().next().value!);
   }
-  window.dispatchEvent(new CustomEvent('ash-api-event', { detail }));
   publishApiChange(changeDetail);
   if (changeDetail.type === 'user.changed') void refreshCurrentUser();
 }
@@ -451,7 +416,7 @@ export async function startRealtimeEvents(): Promise<void> {
   const controller = new AbortController();
   sseAbortController = controller;
   try {
-    const headers = await getAuthorizationHeaders();
+    const headers = await getAuthorizationHeaders(controller.signal);
     assertAuthSession(context);
     if (controller.signal.aborted) return;
     const response = await fetch(`${API_URL}/api/events/stream`, {
@@ -503,29 +468,15 @@ export function stopRealtimeEvents(): void {
   }
 }
 
-async function precacheCatalogForOfflineUse(): Promise<void> {
-  const context = captureAuthSession();
-  if (!navigator.onLine || !context.accountId) return;
-  const catalogs = [
-    // Item pages/details cache themselves as they are read; a page-zero
-    // precache is neither a complete catalog nor needed for detail fallback.
-    { key: 'assemblies', path: '/api/assemblies' },
-    { key: 'storageLocations', path: '/api/storage-locations' },
-    { key: 'events', path: '/api/events' },
-    { key: 'factions', path: '/api/factions' },
-    { key: 'eventTypes', path: '/api/event-types' },
-  ];
-  await Promise.allSettled(catalogs.map(async ({ key, path }) => {
-    const data = await apiRequest<unknown[]>(path, { session: context });
-    assertAuthSession(context);
-    await setOfflineCatalog(key, data, context);
-  }));
+/** Handled by offlineSnapshot.ts, which owns the explicit exhaustive catalog snapshots. */
+function precacheCatalogForOfflineUse(): void {
+  window.dispatchEvent(new Event('ash-offline-snapshot'));
 }
 
 window.addEventListener('online', () => {
   void flushOfflineQueue();
   void startRealtimeEvents();
-  void precacheCatalogForOfflineUse();
+  precacheCatalogForOfflineUse();
 });
 window.addEventListener('offline', stopRealtimeEvents);
 
@@ -548,7 +499,7 @@ subscribeAuth(() => {
   stopRealtimeEvents();
   if (getAuthSnapshot().token && getAuthSnapshot().user) {
     void startRealtimeEvents();
-    void precacheCatalogForOfflineUse();
+    precacheCatalogForOfflineUse();
     void flushOfflineQueue();
   }
 });

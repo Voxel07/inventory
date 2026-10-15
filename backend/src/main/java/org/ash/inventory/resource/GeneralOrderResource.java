@@ -35,11 +35,15 @@ public class GeneralOrderResource {
         this.queries = queries;
     }
 
-    @GET
+    @Paged @GET
     public List<ApiResponses.GeneralOrderSummaryResponse> orders(
+            @QueryParam("status") List<String> statuses,
+            @QueryParam("eventId") UUID eventId,
+            @QueryParam("eventType") String eventType,
+            @QueryParam("search") String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.generalOrders(page, size);
+        return queries.generalOrders(new org.ash.inventory.orm.GeneralOrderOrm.Filter(statuses, eventId, eventType, search), page, size);
     }
 
     @GET

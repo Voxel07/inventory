@@ -1,7 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.*;
 

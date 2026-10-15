@@ -59,7 +59,6 @@ class InventoryMcpTest {
             position.item = bulk;
             position.location = location;
             position.quantityOnHand = 10;
-            position.quantityReserved = 1;
             em.persist(position);
             serialized = item("MCP Radio", DomainEnums.TrackingMode.serialized);
             serialized.minStock = 5;
@@ -86,13 +85,11 @@ class InventoryMcpTest {
             em.persist(opening);
             privateItem = item("MCP private radio", DomainEnums.TrackingMode.serialized);
             privateItem.category = "MCP private category " + UUID.randomUUID();
-            privateItem.visibilityScope = DomainEnums.ItemVisibilityScope.person;
-            privateItem.assignedUser = owner;
+            privateItem.accessPolicy = ownedPolicy(owner);
             em.persist(privateItem);
             asset(privateItem);
             groupItem = item("MCP group radio", DomainEnums.TrackingMode.serialized);
-            groupItem.visibilityScope = DomainEnums.ItemVisibilityScope.group;
-            groupItem.assignedGroup = owner.factions.getFirst();
+            groupItem.accessPolicy = ownedPolicy(owner);
             em.persist(groupItem);
             asset(groupItem);
             var assembly = new Assembly();
@@ -113,6 +110,10 @@ class InventoryMcpTest {
             event.plannedQuantities = Map.of(privateItem.id.toString(), 4, bulk.id.toString(), 2);
             em.persist(event);
         });
+    }
+
+    private InventoryAccessPolicy ownedPolicy(UserAccount owner) {
+        var policy = new InventoryAccessPolicy(); policy.owner = owner; em.persist(policy); return policy;
     }
 
     /** Reads every page of the bounded MCP low-stock evaluation. */
@@ -202,7 +203,7 @@ class InventoryMcpTest {
         var created = tools.create_assembly(input);
         assertEquals(2, created.itemQuantities().get(bulk.id.toString()));
         assertEquals(created.id(), tools.get_assembly_details(created.id()).id());
-        assertTrue(tools.list_assemblies("MILSIM").stream().anyMatch(a -> a.id().equals(created.id())));
+        assertTrue(tools.list_assemblies("MILSIM", null, null).stream().anyMatch(a -> a.id().equals(created.id())));
         var updated = tools.update_assembly(created.id(), new ApiModels.AssemblyInput(input.name(), "Updated", null,
                 input.eventTypes(), Map.of(bulk.id, 4), null, false, null));
         assertEquals(4, updated.itemQuantities().get(bulk.id.toString()));
@@ -265,13 +266,15 @@ class InventoryMcpTest {
             order.purpose = "Position availability regression";
             order.createdBy = em.find(UserAccount.class, owner.id);
             order.status = "ready";
-            order.preparedQuantities = Map.of(bulk.id.toString(), 3);
-            order.sourceLocations = Map.of(bulk.id.toString(), location.id.toString());
+            var line = new org.ash.inventory.model.GeneralOrderLine();
+            line.order = order; line.item = em.find(Item.class, bulk.id); line.lineNumber = 1;
+            line.requestedQuantity = 3; line.preparedQuantity = 3; line.sourceLocation = em.find(StorageLocation.class, location.id);
+            order.lines.add(line);
             em.persist(order);
         });
         var position = tools.get_inventory_positions(bulk.id).getFirst();
-        assertEquals(4, position.quantityReserved());
-        assertEquals(6, position.availableQuantity());
+        assertEquals(3, position.quantityReserved());
+        assertEquals(7, position.availableQuantity());
         QuarkusTransaction.requiringNew().run(() -> {
             var faction = new Faction();
             faction.name = "MCP faction " + UUID.randomUUID();
@@ -302,8 +305,8 @@ class InventoryMcpTest {
             reservation.status = DomainEnums.ReservationStatus.partially_released;
             em.persist(reservation);
         });
-        assertEquals(6, tools.get_inventory_positions(bulk.id).getFirst().quantityReserved());
-        assertEquals(4, tools.get_inventory_positions(bulk.id).getFirst().availableQuantity());
+        assertEquals(5, tools.get_inventory_positions(bulk.id).getFirst().quantityReserved());
+        assertEquals(5, tools.get_inventory_positions(bulk.id).getFirst().availableQuantity());
         QuarkusTransaction.requiringNew().run(() -> {
             var request = new MemberRequest();
             request.requester = em.find(UserAccount.class, owner.id);

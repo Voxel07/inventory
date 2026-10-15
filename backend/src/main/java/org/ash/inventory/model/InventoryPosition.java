@@ -12,7 +12,10 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 
-/** Materialized quantity state for bulk or lot stock at one location. The ledger remains authoritative. */
+/**
+ * Materialized quantity state for bulk or lot stock at one location. The ledger remains authoritative. Reservations are
+ * not stored here: they are computed from live order reservations ({@code PositionOrm.reservedByLocation}).
+ */
 @Entity
 @Table(name = "inventory_positions", uniqueConstraints =
         @UniqueConstraint(name = "uq_position_item_location_lot", columnNames = {"item_id", "location_id", "lot_id"}))
@@ -21,7 +24,6 @@ public class InventoryPosition extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "location_id") public StorageLocation location;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "lot_id") public InventoryLot lot;
     @Column(name = "quantity_on_hand", nullable = false) public int quantityOnHand;
-    @Column(name = "quantity_reserved", nullable = false) public int quantityReserved;
     @Column(name = "quantity_damaged", nullable = false) public int quantityDamaged;
     @Column(name = "quantity_quarantined", nullable = false) public int quantityQuarantined;
     @Column(name = "quantity_in_transit", nullable = false) public int quantityInTransit;
@@ -30,6 +32,6 @@ public class InventoryPosition extends BaseEntity {
 
     public int availableQuantity() {
         if ((lot != null && !lot.usableOn(BusinessTime.today())) || (item != null && item.trackingMode == DomainEnums.TrackingMode.lot_tracked && lot == null)) return 0;
-        return Math.max(0, quantityOnHand - quantityReserved - quantityQuarantined - quantityDamaged);
+        return Math.max(0, quantityOnHand - quantityQuarantined - quantityDamaged);
     }
 }

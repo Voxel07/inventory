@@ -10,6 +10,7 @@ export interface DamageStatusHistoryEntry {
 export interface DamageReport {
   id: string;
   itemId?: string;
+  itemName?: string;
   assemblyId?: string;
   assemblyName?: string;
   assetInstanceId?: string;
@@ -36,7 +37,10 @@ export interface DamageReport {
 
 export type DamageSeverity = 'low' | 'medium' | 'high' | 'critical' | 'total_loss';
 
-export type DamageStatus = 'reported' | 'in_review' | 'repaired' | 'written_off' | 'resolved';
+/** Mirrors the backend DamageStatus enum. */
+export type DamageStatus = 'reported' | 'triaged' | 'awaiting_repair' | 'in_review' | 'in_repair' | 'repaired' | 'verified' | 'returned_to_service' | 'written_off' | 'resolved';
+/** Damage that still blocks stock: everything before return to service, write-off or resolution. */
+export const OPEN_DAMAGE_STATUSES: readonly DamageStatus[] = ['reported', 'triaged', 'awaiting_repair', 'in_review', 'in_repair', 'repaired', 'verified'];
 
 export interface DamageReportFormData {
   occurredAt?: string;

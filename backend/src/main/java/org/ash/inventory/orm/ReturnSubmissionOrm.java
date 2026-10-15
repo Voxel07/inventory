@@ -1,8 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.Item;
@@ -87,15 +85,4 @@ public class ReturnSubmissionOrm extends EntityOrm {
                 .getSingleResult();
     }
 
-    public long checkedOutQuantity(Item item, UserAccount user) {
-        return entityManager.createQuery(
-                "select coalesce(sum(case when tx.type = :checkout then tx.quantity"
-                        + " when tx.type = :checkin then -tx.quantity else 0 end), 0)"
-                        + " from StockTransaction tx where tx.item = :item and tx.user = :user", Long.class)
-                .setParameter("item", item)
-                .setParameter("user", user)
-                .setParameter("checkout", DomainEnums.TransactionType.checkout)
-                .setParameter("checkin", DomainEnums.TransactionType.checkin)
-                .getSingleResult();
-    }
 }

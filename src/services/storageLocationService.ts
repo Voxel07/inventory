@@ -28,5 +28,4 @@ export const storageLocationApi = createCrudResourceApi<StorageLocation, Storage
   { transformPayload: transformLocationPayload },
 );
 
-export const getStorageLocations = storageLocationApi.getAll;
 export const createStorageLocation = storageLocationApi.create;

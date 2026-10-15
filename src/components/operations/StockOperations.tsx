@@ -4,19 +4,23 @@ import { CollapsibleOperationLines, OperationLines } from './OperationLines';
 import { OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
-import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
+import { transferInput, countInput, lotCreateInput, lotUpdateInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
 import { Alert, Card, CardContent, DialogActions, DialogContent, DialogTitle, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { useItemAssets } from '../../hooks/useItems';
+import { useItemAssets, useItemCategories, useItemsByIds } from '../../hooks/useItems';
+import { useCompleteList } from '../../hooks/usePagedList';
+import { queryKeys } from '../../utils/queryKeys';
+import { LoadMore } from '../shared/LoadMore';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import type { Item } from '../../types';
 import type { Count, Lot, Transfer } from '../../types/operations';
-import { Fields, OperationForm, type Field, type Values } from './OperationForm';
+import { Fields, OperationForm } from './OperationForm';
+import type { Field, Values } from '../../types/operationForm';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
@@ -24,19 +28,19 @@ import { formatStatus } from '../../utils/formatters';
 
 export function StockPositions({ itemId, locationId }: { itemId?: string; locationId?: string }) {
   const t = useLocalizedText();
-  const lookup = useStockLookups();
   const [filters, setFilters] = useState<Values>({ itemId: itemId ?? '', locationId: locationId ?? '' });
   const selectedItem = itemId ?? String(filters.itemId || '');
   const selectedLocation = locationId ?? String(filters.locationId || '');
   const positions = useOperationList(`positions:${selectedItem}:${selectedLocation}`, operationsApi.positions({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const assets = useOperationList(`assets:${selectedItem}:${selectedLocation}`, operationsApi.assets({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
-  const lots = useOperationList(`stock-lot-labels:${itemId ?? ''}`, operationsApi.lots({ itemId }));
+  const lots = useOperationList(`stock-lot-labels:${itemId ?? ''}`, operationsApi.lots({ itemId }), Boolean(itemId));
+  const lookup = useStockLookups(itemId ? [] : (positions.data ?? []).map((position) => position.itemId));
   return <Stack spacing={1}>
     <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}>
       <Typography variant="h6">{t('Bestand nach Lagerort', 'Stock by location')}</Typography>
     </Stack>
     {!itemId && <Fields values={filters} onChange={setFilters} fields={[
-      ...(!itemId ? [{ key: 'itemId', label: t('Artikel / Geräte anzeigen', 'Item / show individual assets'), options: lookup.itemOptions }] : []),
+      ...(!itemId ? [{ key: 'itemId', label: t('Artikel / Geräte anzeigen', 'Item / show individual assets'), type: 'item' as const }] : []),
       ...(!locationId ? [{ key: 'locationId', label: t('Lagerort', 'Location'), options: lookup.locationOptions }] : []),
     ]} />}
     <QueryFeedback isLoading={positions.isLoading || assets.isLoading} error={positions.error || assets.error || lookup.error} isEmpty={!positions.data?.length && !assets.data?.length} emptyMessage={t('Kein lokalisierter Bestand für diese Auswahl.', 'No located stock for this selection.')} />
@@ -49,7 +53,7 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
         <TableBody>{positions.data.map((position) => <TableRow key={position.id} hover>
           <TableCell component="th" scope="row">
             {itemId ? <Link component={RouterLink} to={`/storage-locations?locationId=${position.locationId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.locationOptions.find((location) => location.value === position.locationId)?.label ?? t('Ohne Lagerort', 'Unassigned location')}</Link>
-              : <Link component={RouterLink} to={`/items/${position.itemId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.items.find((item) => item.id === position.itemId)?.name ?? position.itemId}</Link>}
+              : <Link component={RouterLink} to={`/items/${position.itemId}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{lookup.itemName(position.itemId)}</Link>}
             {(!itemId || position.lotId) && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               {!itemId && (lookup.locationOptions.find((location) => location.value === position.locationId)?.label ?? t('Ohne Lagerort', 'Unassigned location'))}
               {position.lotId ? `${!itemId ? ' · ' : ''}${t('Charge', 'Lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}
@@ -60,20 +64,22 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
         </TableRow>)}</TableBody>
       </Table>
     </TableContainer>}
+    <LoadMore list={positions} />
     {assets.data?.filter((asset) => !selectedLocation || asset.currentLocationId === selectedLocation).map((asset) => <Card key={asset.id}><CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
       <Link component={RouterLink} to={`/items/${asset.itemId}/assets/${asset.id}`} color="text.primary" underline="hover" sx={{ fontWeight: 600 }}>{asset.assetCode}</Link>
       <Typography variant="body2" color="text.secondary">{asset.currentLocationName ?? t('Ohne Lagerort', 'Unassigned location')} · {formatStatus(asset.availabilityStatus)} · {formatStatus(asset.conditionStatus)}{asset.currentCustodianName && ` · ${t('Bei', 'Held by')}: ${asset.currentCustodianName}`}</Typography>
     </CardContent></Card>)}
+    <LoadMore list={assets} />
   </Stack>;
 }
 
 export function TransfersPanel() {
   const [params] = useSearchParams();
   const t = useLocalizedText();
-  const lookup = useStockLookups();
   const transfers = useOperationList('transfers', operationsApi.transfers);
   const [chooseItem, setChooseItem] = useState(false);
   const [itemId, setItemId] = useState('');
+  const lookup = useStockLookups(itemId ? [itemId] : []);
   const item = lookup.items.find((value) => value.id === itemId);
   const [action, setAction] = useState<{ transfer: Transfer; type: 'dispatch' | 'receive' | 'cancel'; key: string } | null>(null);
   const [createKey, setCreateKey] = useState('');
@@ -89,7 +95,8 @@ export function TransfersPanel() {
       {transfer.notes && <Typography>{transfer.notes}</Typography>}
 
     </OperationListEntry>)}
-    {chooseItem && <OperationForm title={t('Artikel umlagern', 'Transfer item')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => { setChooseItem(false); setItemId(String(values.itemId)); setCreateKey(crypto.randomUUID()); }} />}
+    <LoadMore list={transfers} />
+    {chooseItem && <OperationForm title={t('Artikel umlagern', 'Transfer item')} fields={[{ key: 'itemId', label: t('Artikel', 'Item'), type: 'item', required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('Weiter', 'Next')} onSave={async (values) => { setChooseItem(false); setItemId(String(values.itemId)); setCreateKey(crypto.randomUUID()); }} />}
     {item && <TransferItemForm item={item} sourceLocationId={params.get('sourceLocationId') ?? ''} idempotencyKey={createKey} onClose={() => setItemId('')} />}
     {action && <OperationForm title={`${action.transfer.transferNumber} · ${action.type}`} onClose={() => setAction(null)}
       initial={Object.fromEntries(action.transfer.lines.flatMap(line => [[`received:${line.id}`, Math.max(0, line.pickedQuantity - line.receivedQuantity - line.discrepancyQuantity)], [`discrepancy:${line.id}`, 0], [`reason:${line.id}`, '']]))} fields={[
@@ -104,9 +111,10 @@ export function TransfersPanel() {
 
 function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: { item: Item; sourceLocationId: string; idempotencyKey: string; onClose: () => void }) {
   const t = useLocalizedText(); const lookup = useStockLookups();
-  const positions = useOperationList(`positions:transfer:${item.id}`, operationsApi.positions({ itemId: item.id }), item.trackingMode !== 'serialized');
+  // Choosing a source needs every position, asset and lot of this one item.
+  const positions = useCompleteList(queryKeys.operations(`positions:transfer:${item.id}`), operationsApi.positions({ itemId: item.id }), { enabled: item.trackingMode !== 'serialized' });
   const assets = useItemAssets(item.trackingMode === 'serialized' ? item.id : undefined);
-  const lots = useOperationList(`lots:${item.id}`, operationsApi.lots({ itemId: item.id }), item.trackingMode === 'lot_tracked');
+  const lots = useCompleteList(queryKeys.operations(`lots:${item.id}`), operationsApi.lots({ itemId: item.id }), { enabled: item.trackingMode === 'lot_tracked' });
   const [today] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10));
   const usableLots = (lots.data ?? []).filter(lot => lot.status === 'available' && (!lot.expiryDate || lot.expiryDate >= today) && (!lot.bestBeforeDate || lot.bestBeforeDate >= today));
   const availableAssets = (assets.data ?? []).filter(asset => asset.active && asset.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus));
@@ -145,7 +153,7 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
 }
 
 export function CountsPanel() {
-  const t = useLocalizedText(); const lookup = useStockLookups(); const { user } = useAuth();
+  const t = useLocalizedText(); const lookup = useStockLookups(); const { user } = useAuth(); const categories = useItemCategories();
   const counts = useOperationList('counts', operationsApi.counts);
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ count: Count; type: 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
@@ -173,10 +181,11 @@ export function CountsPanel() {
     <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('Noch keine Inventuren.', 'No stock counts yet.')} />
     {activeCounts.map(countEntry)}
     <OperationHistory title={t('Abgeschlossene Inventuren', 'Completed stock counts')} count={finishedCounts.length}>{finishedCounts.map(countEntry)}</OperationHistory>
+    <LoadMore list={counts} />
     {create && <OperationForm title={t('Neue Inventur', 'New stock count')} initial={{ blindCount: false }} fields={[
       { key: 'locationId', label: t('Lagerort (leer = alle)', 'Location (empty = all)'), options: lookup.locationOptions },
-      { key: 'itemId', label: t('Artikel (leer = alle)', 'Item (empty = all)'), options: lookup.itemOptions },
-      { key: 'category', label: t('Kategorie (leer = alle)', 'Category (empty = all)'), options: [...new Set(lookup.items.map((item) => item.category))].map((value) => ({ value, label: value })) },
+      { key: 'itemId', label: t('Artikel (leer = alle)', 'Item (empty = all)'), type: 'item' },
+      { key: 'category', label: t('Kategorie (leer = alle)', 'Category (empty = all)'), options: (categories.data ?? []).map((value) => ({ value, label: value })) },
       { key: 'blindCount', label: t('Blindzählung', 'Blind count'), type: 'checkbox' },
     ]} onSave={(values) => operationsApi.createCount(countInput(optionalValues(values)))} onClose={() => setCreate(false)} />}
     {action && <OperationForm title={`${action.count.sessionNumber} · ${action.type}`} onClose={() => setAction(null)}
@@ -195,23 +204,51 @@ export function CountsPanel() {
   </Stack>;
 }
 
-export function LotsPanel({ itemId }: { itemId?: string } = {}) {
-  const t = useLocalizedText(); const lookup = useStockLookups(); const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
-  const [edit, setEdit] = useState<Lot | 'new' | null>(null);
+/**
+ * Lots of one item (`itemId`: the parent is fixed and never chosen) or of every lot-tracked item. A lot's item is
+ * chosen once at creation; editing changes batch metadata only. `canEdit` gates mutations; viewers still see
+ * each lot's stock by location.
+ */
+export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit?: boolean } = {}) {
+  const t = useLocalizedText();
+  const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
+  const fixedItem = useItemsByIds(itemId ? [itemId] : []).data?.[0];
+  const [edit, setEdit] = useState<Lot | { itemId: string } | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const creating = edit !== null && !('id' in edit);
+  const parentName = edit === null ? '' : 'id' in edit ? edit.itemName : fixedItem?.id === edit.itemId ? fixedItem.name : '';
   return <Stack spacing={2}>
-    <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained" onClick={() => setEdit('new')}>{t('Charge anlegen', 'New lot')}</Button>
+    {canEdit && <Button title={translate('Eine neue Bestandscharge anlegen', 'Create a new inventory lot')} variant="contained"
+      onClick={() => itemId ? setEdit({ itemId }) : setChoosing(true)}>{t('Charge anlegen', 'New lot')}</Button>}
     <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('Noch keine Chargen.', 'No lots yet.')} />
-    {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={<Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>} title={<>{lookup.items.find((item) => item.id === lot.itemId)?.name} · {lot.lotNumber}</>}>
-      <Typography>{t('Ablauf', 'Expiry')}: {formatDate(lot.expiryDate)} · {t('MHD', 'Best before')}: {formatDate(lot.bestBeforeDate)}</Typography>
-      <Typography>{lot.storageRequirements} {lot.notes}</Typography>
+    {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={canEdit ? <>
+        <Button title={translate('Bestand für diese Charge buchen', 'Book stock for this lot')} component={RouterLink} to={`/items/${lot.itemId}?transaction=1&lotId=${lot.id}`}>{t('Bestand buchen', 'Add stock')}</Button>
+        <Button title={translate('Chargendaten oder Sperrstatus bearbeiten', 'Edit lot details or hold status')} onClick={() => setEdit(lot)}>{t('Bearbeiten / sperren', 'Edit / hold')}</Button>
+      </> : undefined} title={<>
+        {!itemId && <><Link component={RouterLink} to={`/items/${lot.itemId}`} underline="hover">{lot.itemName}</Link>{lot.itemSku ? ` (${lot.itemSku})` : ''}{!lot.itemActive && ` · ${t('ausgemustert', 'retired')}`} · </>}{lot.lotNumber}
+        {lot.empty && <Typography component="span" variant="caption" color="text.secondary"> · {t('kein Bestand', 'no stock')}</Typography>}
+      </>}>
+      <Typography>{t('Ablauf', 'Expiry')}: {formatDate(lot.expiryDate)} · {t('MHD', 'Best before')}: {formatDate(lot.bestBeforeDate)}{lot.supplierLot ? ` · ${t('Lieferantencharge', 'Supplier lot')}: ${lot.supplierLot}` : ''}</Typography>
+      {lot.storageRequirements || lot.notes ? <Typography>{lot.storageRequirements} {lot.notes}</Typography> : null}
+      {lot.stock.length > 0 && <OperationLines label={t('Bestand dieser Charge', 'Stock of this lot')}
+        headers={[t('Lagerort', 'Location'), t('Vor Ort', 'On hand'), t('Verfügbar', 'Available'), t('Reserviert', 'Reserved'), t('Beschädigt', 'Damaged'), t('Quarantäne', 'Quarantine'), t('Unterwegs', 'In transit')]}
+        rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('Eingeschränkter Lagerort', 'Restricted location'), row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit] }))} />}
     </OperationListEntry>)}
-    {edit && <OperationForm title={t('Charge', 'Lot')} initial={edit === 'new' ? { status: 'available', itemId: itemId ?? '' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))} onClose={() => setEdit(null)} fields={[
-      { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions.filter((option) => (!itemId || option.value === itemId) && lookup.items.find((item) => item.id === option.value)?.trackingMode === 'lot_tracked'), required: true },
+    <LoadMore list={lots} />
+    {choosing && <OperationForm title={t('Charge anlegen', 'New lot')} submitLabel={t('Weiter', 'Next')} onClose={() => setChoosing(false)}
+      fields={[{ key: 'itemId', label: t('Artikel (chargengeführt)', 'Item (lot tracked)'), type: 'item', itemFilter: (item) => item.trackingMode === 'lot_tracked', required: true }]}
+      onSave={async (values) => { setChoosing(false); setEdit({ itemId: String(values.itemId) }); }} />}
+    {edit && <OperationForm title={creating ? t('Neue Charge', 'New lot') : `${t('Charge', 'Lot')} ${'lotNumber' in edit ? edit.lotNumber : ''}`}
+      initial={creating ? { status: 'available' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))}
+      onClose={() => setEdit(null)} fields={[
       { key: 'lotNumber', label: t('Chargennummer', 'Lot number'), required: true }, { key: 'supplierLot', label: t('Lieferantencharge', 'Supplier lot') },
       { key: 'manufactureDate', label: t('Herstellungsdatum', 'Manufactured'), type: 'date' }, { key: 'expiryDate', label: t('Ablaufdatum', 'Expiry date'), type: 'date' }, { key: 'bestBeforeDate', label: t('Mindesthaltbarkeit', 'Best before'), type: 'date' },
-      { key: 'status', label: t('Status', 'Status'), required: true, options: ['available', 'hold', 'recalled', 'expired', 'depleted'].map((value) => ({ value, label: value })) },
+      { key: 'status', label: t('Status', 'Status'), required: true, options: ['available', 'hold', 'recalled', 'expired', 'depleted'].map((value) => ({ value, label: formatStatus(value) })) },
       { key: 'storageRequirements', label: t('Lagerbedingungen', 'Storage requirements'), multiline: true }, { key: 'notes', label: t('Notiz', 'Notes'), multiline: true },
-    ]} onSave={(values) => operationsApi.saveLot(lotInput(optionalValues(values)), edit === 'new' ? undefined : edit.id)} />}
+    ]} onSave={(values) => 'id' in edit
+      ? operationsApi.updateLot(edit.id, lotUpdateInput(optionalValues(values)))
+      : operationsApi.createLot(lotCreateInput(optionalValues({ ...values, itemId: edit.itemId })))}>
+      {parentName && <Alert severity="info">{t('Artikel', 'Item')}: {parentName}{creating ? ` · ${t('Eine Charge legt keinen Bestand an; Bestand entsteht durch Wareneingang oder Buchung.', 'A lot holds no stock until it is received or booked.')}` : ''}</Alert>}
+    </OperationForm>}
   </Stack>;
 }
-

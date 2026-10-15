@@ -4,7 +4,7 @@ import { withApiRequestBatch } from './apiClient';
 import type { CsvImportCounts } from '../types/csvImport';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../types/csvImport';
 import type { Item, StorageLocation } from '../types';
-import { createItem, updateItem, createItemAssets, getItemAssets, getItem } from './inventoryService';
+import { createItem, updateItem, createItemAssets, getAllItemAssets, getItem } from './inventoryService';
 import { createAssembly } from './assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from './eventService';
 import { createFactionOrder, getFactionOrders, getFactionOrder, submitFactionOrder, updateFactionOrder, saveFactionOrderPreparation, markFactionOrderReady, pickUpFactionOrder, returnFactionOrder, closeFactionOrder } from './factionOrderService';
@@ -155,7 +155,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             createdItemsMap.set(updated.name.toLowerCase().trim(), updated);
 
             if (hasCustomAssets && row.assetCodes) {
-              const existingAssets = await loadAllPages((page, size) => getItemAssets(row.existingId!, { page, size }));
+              const existingAssets = await getAllItemAssets(row.existingId!);
               for (const code of row.assetCodes) {
                 if (existingAssets.some((asset) => asset.assetCode.toLowerCase() === code.toLowerCase())) continue;
                 try {
@@ -322,7 +322,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
     // Step 5: Import faction orders after their event occurrences and stock exist.
     const existingOrders = parsedOrders.length > 0
-      ? await loadAllPages((page, size) => getFactionOrders({ page, size })) : [];
+      ? await loadAllPages((page, size) => getFactionOrders(undefined, page, size)) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
       setImportStatusText(t(
         `Importiere Bestellung ${row.data.faction} für ${row.data.eventDate}...`,
@@ -366,7 +366,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
             for (const [id, quantity] of Object.entries(finalOrder.requestedQuantities || {})) {
               const item = [...createdItemsMap.values()].find((candidate) => candidate.id === id);
               if (item?.trackingMode !== 'serialized') continue;
-              const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
+              const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
               if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
@@ -408,7 +408,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
 
     // Step 6: Simulate general orders using the same lifecycle as the order page.
     const existingGeneralOrders = parsedGeneralOrders.length > 0
-      ? await loadAllPages((page, size) => getOrders({ page, size })) : [];
+      ? await loadAllPages((page, size) => getOrders(undefined, page, size)) : [];
     for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
       setImportStatusText(t(`Importiere allgemeine Bestellung ${row.data.name}...`, `Importing general order ${row.data.name}...`));
       try {
@@ -444,7 +444,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           for (const [id, quantity] of Object.entries(requestedQuantities)) {
             const item = items.find((candidate) => candidate.id === id) ?? [...createdItemsMap.values()].find((candidate) => candidate.id === id);
             if (item?.trackingMode === 'serialized') {
-              const available = (await loadAllPages((page, size) => getItemAssets(id, { page, size })))
+              const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
               if (available.length < quantity) throw new Error(translate(`Nicht genügend Assets für ${item.name}`, `Not enough assets for ${item.name}`));
               assetAssignments[id] = available.slice(0, quantity).map((asset) => asset.id);
@@ -486,7 +486,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
           existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
         } else if (item.trackingMode === 'serialized') {
-          const assets = await loadAllPages((page, size) => getItemAssets(item.id, { page, size }));
+          const assets = await getAllItemAssets(item.id);
           if (ret.assetCodes.length !== ret.quantity) throw new Error(translate('AssetCodes müssen der Menge entsprechen', 'AssetCodes must match the quantity'));
           let recorded = false;
           for (const code of ret.assetCodes) {
@@ -511,7 +511,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
           if (!recorded) continue;
         } else {
           const marker = `CSV return row ${ret.index}`;
-          const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id, page, size }));
+          const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id }, page, size));
           if (previous.some((tx) => tx.transactionType === 'checkin' && tx.notes?.includes(marker))) continue;
           const current = await getItem(item.id);
           if (getItemStock(current).checkedOut === 0) continue;
@@ -542,10 +542,10 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
         const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
         if (!item) throw new Error(translate(`Artikel "${row.itemName}" nicht gefunden`, `Item "${row.itemName}" not found`));
         const marker = `CSV checkout row ${row.index}`;
-        const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id, page, size }));
+        const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id }, page, size));
         const imported = previous.filter((tx) => tx.transactionType === 'checkout' && tx.notes?.includes(marker));
         if (item.trackingMode === 'serialized') {
-          const assets = await loadAllPages((page, size) => getItemAssets(item.id, { page, size }));
+          const assets = await getAllItemAssets(item.id);
           const selected = row.assetCodes.length
             ? row.assetCodes.map((code) => assets.find((asset) => asset.assetCode === code))
             : assets.filter((asset) => asset.availabilityStatus === 'available').slice(0, row.quantity - imported.length);

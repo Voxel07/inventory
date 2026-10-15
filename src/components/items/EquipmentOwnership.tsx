@@ -11,7 +11,8 @@ import type { EquipmentCommitment, EquipmentProfile } from '../../types/equipmen
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { translate, useLocalizedText } from '../../utils/naming';
-import { OperationForm, type Field } from '../operations/OperationForm';
+import { OperationForm } from '../operations/OperationForm';
+import type { Field } from '../../types/operationForm';
 import { ItemResponsiblePerson } from './ItemResponsiblePerson';
 
 /** `showSummary` repeats owner, keeper and stock facts; hide it where the page already shows them. */

@@ -24,6 +24,8 @@ import java.util.UUID;
 @Path("/api")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+/** Responses are mapped inside the command transaction: they read the damaged item through the repair. */
+@jakarta.transaction.Transactional
 public class LifecycleResource {
     private final LifecycleService service;
 
@@ -31,7 +33,7 @@ public class LifecycleResource {
         this.service = service;
     }
 
-    @GET
+    @Paged @GET
     @Path("/maintenance-schedules")
     public List<LifecycleDtos.ScheduleResponse> schedules(
             @QueryParam("itemId") UUID itemId,
@@ -63,7 +65,7 @@ public class LifecycleResource {
         return Response.noContent().build();
     }
 
-    @GET
+    @Paged @GET
     @Path("/repairs")
     public List<LifecycleDtos.RepairResponse> repairs(
             @QueryParam("status") String status,
@@ -88,7 +90,7 @@ public class LifecycleResource {
     }
 
     private LifecycleDtos.ScheduleResponse schedule(MaintenanceSchedule value) {
-        return new LifecycleDtos.ScheduleResponse(value.id, value.item.id,
+        return new LifecycleDtos.ScheduleResponse(value.id, value.item.id, value.item.name, value.item.sku,
                 value.assetInstance == null ? null : value.assetInstance.id,
                 value.assetInstance == null ? null : value.assetInstance.assetCode,
                 value.maintenanceType.name(), value.intervalType.name(), value.intervalValue,
@@ -98,7 +100,11 @@ public class LifecycleResource {
     }
 
     private LifecycleDtos.RepairResponse repair(RepairCase value) {
-        return new LifecycleDtos.RepairResponse(value.id, value.damageReport.id,
+        var report = value.damageReport;
+        return new LifecycleDtos.RepairResponse(value.id, report.id,
+                report.item == null ? null : report.item.id, report.item == null ? null : report.item.name,
+                report.assembly == null ? null : report.assembly.name,
+                value.assetInstance == null ? null : value.assetInstance.assetCode, report.description,
                 value.assetInstance == null ? null : value.assetInstance.id,
                 value.handover == null ? null : value.handover.id, value.status.name(),
                 value.repairOwner == null ? null : value.repairOwner.id,

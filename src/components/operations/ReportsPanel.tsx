@@ -7,7 +7,8 @@ import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
 import type { ReportFilters } from '../../types/report';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
-import { useItems } from '../../hooks/useItems';
+import { useItemsByIds } from '../../hooks/useItems';
+import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useEventReports } from '../../hooks/useEvents';
 import { getWarehouses } from '../../services/warehouseService';
@@ -24,7 +25,7 @@ export function ReportsPanel() {
   const t = useLocalizedText(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReportFilters>({}); const command = useOperationCommand();
   const definitions = useReportDefinitions();
-  const items = useItems(); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useOperationList('warehouses', getWarehouses);
+  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useOperationList('warehouses', getWarehouses);
   const report = useOperationalReport(name, filters, page);
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));
@@ -32,7 +33,7 @@ export function ReportsPanel() {
   /** Readable active filters for the PDF header. */
   function filterLabels(): string[] {
     const named: [string, string | undefined][] = [
-      [t('Artikel', 'Item'), items.data?.find((item) => item.id === filters.itemId)?.name ?? filters.itemId],
+      [t('Artikel', 'Item'), selectedItem.data?.[0]?.name ?? filters.itemId],
       [t('Veranstaltung', 'Event'), events.data?.find((event) => event.id === filters.eventId)?.name ?? filters.eventId],
       [t('Standort', 'Warehouse'), warehouses.data?.find((w) => w.id === filters.warehouseId)?.name ?? filters.warehouseId],
       [t('Lagerort', 'Location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
@@ -69,7 +70,7 @@ export function ReportsPanel() {
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('Erstellt', 'Generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('Quelldaten oder Zeitbezug haben sich geändert. Neu berechnen.', 'Sources or time reference changed. Rebuild required.') : t('Stand der letzten Berechnung', 'As of the last rebuild')}</> : t('Noch kein Bericht erstellt. Jetzt aus den Quelldaten neu berechnen.', 'No report built yet. Rebuild from source records now.')}</Alert>
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('Diesen Bericht mit aktuellen Daten neu berechnen', 'Recalculate this report using current data')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button title={translate('Die gefilterten Berichtsdaten als CSV herunterladen', 'Download the filtered report data as CSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('csv'); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button title={translate('Den gefilterten Bericht als PDF herunterladen', 'Download the filtered report as PDF')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('pdf'); }}>{t('Gefilterter Bericht als PDF', 'Export filtered PDF')}</Button><Button title={translate('Alle Berichtsfilter zurücksetzen', 'Reset all report filters')} onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-      <TextField select fullWidth label={t('Artikel', 'Item')} value={filters.itemId ?? ''} onChange={(e) => change('itemId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{items.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
+      <ItemAutocomplete label={t('Artikel (leer = alle)', 'Item (empty = all)')} value={filters.itemId} onChange={(item) => change('itemId', item?.id ?? '')} />
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('Veranstaltung', 'Event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}
       {['availability', 'repairs', 'maintenance', 'counts', 'movements'].includes(name) && <>
         <TextField select fullWidth label={t('Standort', 'Warehouse')} value={filters.warehouseId ?? ''} onChange={(e) => change('warehouseId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>

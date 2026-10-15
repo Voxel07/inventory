@@ -4,7 +4,11 @@ import { formatCents } from '../../utils/money';
 import { OperationLines } from './OperationLines';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
-import { lotInput, receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
+import { lotCreateInput, receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../../utils/queryKeys';
+import { loadAllPages } from '../../services/apiPagination';
+import type { Lot } from '../../types/operations';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
@@ -18,7 +22,8 @@ import { canOperateWarehouse } from '../../utils/access';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type ProcurementDeficit, type PurchaseOrder, type Vendor } from '../../services/procurementService';
 import { operationsApi } from '../../services/operationsService';
-import { Fields, OperationForm, type Field, type Values } from './OperationForm';
+import { Fields, OperationForm } from './OperationForm';
+import type { Field, Values } from '../../types/operationForm';
 import { formatStatus } from '../../utils/formatters';
 
 export function PurchasingPanel() {
@@ -52,7 +57,7 @@ export function PurchasingPanel() {
 }
 
 export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose }: { order?: PurchaseOrder; selected?: ProcurementDeficit; selectedRows?: ProcurementDeficit[]; eventId: string; onClose: () => void }) {
-  const t = useLocalizedText(); const lookup = useStockLookups(); const vendors = useOperationList('vendors', getVendors); const events = useEventReports(); const command = useOperationCommand();
+  const t = useLocalizedText(); const vendors = useOperationList('vendors', getVendors); const events = useEventReports(); const command = useOperationCommand();
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? selectedRows?.map((row) => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock), price: 0 })) ?? [{ itemId: selected?.itemId ?? '', orderedQuantity: selected ? Math.max(1, selected.netDeficit - selected.orderedStock) : 1, price: 0 }]);
   const [newVendor, setNewVendor] = useState(false);
@@ -69,7 +74,7 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
     ]} />
     <Button title={translate('Einen neuen Lieferanten anlegen', 'Create a new supplier')} onClick={() => setNewVendor(true)}>{t('Neuer Lieferant', 'New supplier')}</Button>
     {lines.map((line, index) => <Card key={index}><CardContent><Stack spacing={1}><Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
-      { key: 'itemId', label: t('Artikel', 'Item'), options: lookup.itemOptions, required: true }, { key: 'orderedQuantity', label: t('Menge', 'Quantity'), type: 'number', min: 1, required: true }, { key: 'price', label: t('Einzelpreis (€)', 'Unit price (€)'), type: 'number', min: 0, step: 0.01, required: true },
+      { key: 'itemId', label: t('Artikel', 'Item'), type: 'item', required: true }, { key: 'orderedQuantity', label: t('Menge', 'Quantity'), type: 'number', min: 1, required: true }, { key: 'price', label: t('Einzelpreis (€)', 'Unit price (€)'), type: 'number', min: 0, step: 0.01, required: true },
     ]} /><Button title={translate('Diese Position aus dem Einkaufsentwurf entfernen', 'Remove this line from the purchase draft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('Zeile entfernen', 'Remove line')}</Button></Stack></CardContent></Card>)}
     <Button title={translate('Eine Artikelposition zum Einkaufsentwurf hinzufügen', 'Add an item line to the purchase draft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1, price: 0 }])}>{t('Artikel hinzufügen', 'Add item')}</Button>
   </Stack></DialogContent><DialogActions><Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} disabled={command.isPending} onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button><Button title={translate('Den Einkaufsentwurf speichern', 'Save the purchase draft')} variant="contained" type="submit" disabled={command.isPending}>{t('Entwurf speichern', 'Save draft')}</Button></DialogActions></Box>
@@ -77,16 +82,30 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
   </Dialog>;
 }
 
+/** Choice label of an existing batch: identity, dates and current stock, so a delivery is matched deliberately. */
+function lotChoiceLabel(lot: Lot, t: (de: string, en: string) => string): string {
+  const onHand = lot.stock.reduce((sum, row) => sum + row.onHand, 0);
+  return [lot.lotNumber, lot.supplierLot && `${t('Lieferant', 'Supplier')}: ${lot.supplierLot}`,
+    lot.expiryDate && `${t('Ablauf', 'Expiry')}: ${formatDate(lot.expiryDate)}`, lot.bestBeforeDate && `${t('MHD', 'Best before')}: ${formatDate(lot.bestBeforeDate)}`,
+    `${t('Bestand', 'Stock')}: ${onHand}`, lot.status !== 'available' && formatStatus(lot.status)].filter(Boolean).join(' · ');
+}
+
 function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => void }) {
-  const t = useLocalizedText(); const lookup = useStockLookups();
-  const lots = useOperationList('lots', operationsApi.lots());
+  const t = useLocalizedText();
+  const lines = order.lines.filter(line => line.remainingQuantity > 0);
+  const itemIds = [...new Set(lines.map(line => line.itemId))];
+  const lookup = useStockLookups(itemIds);
+  const trackingOf = (itemId: string) => lookup.items.find(item => item.id === itemId)?.trackingMode;
+  const lotItemIds = itemIds.filter(id => trackingOf(id) === 'lot_tracked');
+  // Every batch of the delivered lot-tracked items; batches are matched explicitly, never by default.
+  const lots = useQuery({ queryKey: queryKeys.operations(`receive-lots:${lotItemIds.join(',')}`), enabled: lookup.complete,
+    queryFn: async () => (await Promise.all(lotItemIds.map(itemId => loadAllPages(operationsApi.lots({ itemId }))))).flat() });
   const [key] = useState(() => crypto.randomUUID());
   const createdLots = useRef(new Map<string, string>());
   const [receivedAt] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
   const [ready, setReady] = useState(false);
-  if (!ready && !lookup.error && !lots.error && lookup.complete && lots.isComplete) setReady(true);
-  if (!ready && (lookup.error || lots.error || !lookup.complete || !lots.isComplete)) return <Dialog open fullWidth onClose={onClose}><DialogTitle>{t('Wareneingang', 'Receive delivery')}</DialogTitle><DialogContent><QueryFeedback isLoading={!lookup.error && !lots.error} error={lookup.error || lots.error} /></DialogContent><DialogActions><Button onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button></DialogActions></Dialog>;
-  const lines = order.lines.filter(line => line.remainingQuantity > 0);
+  if (!ready && !lookup.error && !lots.error && lookup.complete && lots.isSuccess) setReady(true);
+  if (!ready) return <Dialog open fullWidth onClose={onClose}><DialogTitle>{t('Wareneingang', 'Receive delivery')}</DialogTitle><DialogContent><QueryFeedback isLoading={!lookup.error && !lots.error} error={lookup.error || lots.error} /></DialogContent><DialogActions><Button onClick={onClose}>{t('Abbrechen', 'Cancel')}</Button></DialogActions></Dialog>;
   const initial: Values = {
     receivingLocationId: lookup.items.find(item => item.id === lines[0]?.itemId)?.storageLocation || lookup.locationOptions[0]?.value || '',
     receiptNumber: `GR-${key.slice(0, 8).toUpperCase()}`,
@@ -94,49 +113,59 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     notes: '',
   };
   lines.forEach((line, index) => {
-    const item = lookup.items.find(item => item.id === line.itemId);
     initial[`accepted:${line.id}`] = line.remainingQuantity;
     initial[`damaged:${line.id}`] = 0;
     initial[`rejected:${line.id}`] = 0;
     initial[`notes:${line.id}`] = '';
-    initial[`lot:${line.id}`] = lots.data?.find(lot => lot.itemId === line.itemId && lot.status === 'available')?.id ?? '__new__';
-    initial[`lotNumber:${line.id}`] = `LOT-${key.slice(0, 8).toUpperCase()}-${index + 1}`;
-    if (item?.trackingMode === 'serialized') initial[`codes:${line.id}`] = Array.from({ length: line.remainingQuantity }, (_, unit) => `ASSET-${key.slice(0, 8).toUpperCase()}-${index + 1}-${unit + 1}`).join('\n');
+    initial[`lot:${line.id}`] = '';
+    if (trackingOf(line.itemId) === 'serialized') initial[`codes:${line.id}`] = Array.from({ length: line.remainingQuantity }, (_, unit) => `ASSET-${key.slice(0, 8).toUpperCase()}-${index + 1}-${unit + 1}`).join('\n');
   });
   return <OperationForm title={`${t('Wareneingang', 'Receive delivery')} · ${order.orderNumber}`} initial={initial} onClose={onClose} fields={values => [
     { key: 'receivingLocationId', label: t('Empfangsort', 'Receiving location'), options: lookup.locationOptions, required: true },
     { key: 'receiptNumber', label: t('Lieferscheinreferenz', 'Delivery reference') },
     { key: 'receivedAt', label: t('Empfangen am', 'Received at'), type: 'datetime-local', required: true },
     ...lines.flatMap((line): Field[] => {
-      const item = lookup.items.find(value => value.id === line.itemId);
+      const tracking = trackingOf(line.itemId);
       const received = Number(values[`accepted:${line.id}`] || 0) + Number(values[`damaged:${line.id}`] || 0);
+      const newLot = values[`lot:${line.id}`] === '__new__';
       return [
         { key: `accepted:${line.id}`, label: `${line.itemName} · ${t('Angenommen', 'Accepted')}`, type: 'number', min: 0, max: line.remainingQuantity, required: true, help: `${t('Noch offen', 'Outstanding')}: ${line.remainingQuantity}` },
         { key: `damaged:${line.id}`, label: t('Beschädigt', 'Damaged'), type: 'number', min: 0, max: line.remainingQuantity, required: true },
         { key: `rejected:${line.id}`, label: t('Abgelehnt', 'Rejected'), type: 'number', min: 0, max: line.remainingQuantity, required: true },
-        ...(item?.trackingMode === 'serialized' ? [{ key: `codes:${line.id}`, label: t('Gerätecodes: zuerst intakte, dann beschädigte (einer pro Zeile)', 'Asset codes: accepted first, damaged last (one per line)'), multiline: true, required: received > 0 }] : []),
-        ...(item?.trackingMode === 'lot_tracked' ? [
-          { key: `lot:${line.id}`, label: t('Charge', 'Lot'), options: [{ value: '__new__', label: t('Neue Charge', 'New lot') }, ...(lots.data ?? []).filter(lot => lot.itemId === line.itemId && lot.status === 'available').map(lot => ({ value: lot.id, label: lot.lotNumber }))], required: received > 0 },
-          ...(values[`lot:${line.id}`] === '__new__' ? [{ key: `lotNumber:${line.id}`, label: t('Chargennummer', 'Lot number'), required: received > 0 }] : []),
+        ...(tracking === 'serialized' ? [{ key: `codes:${line.id}`, label: t('Gerätecodes: zuerst intakte, dann beschädigte (einer pro Zeile)', 'Asset codes: accepted first, damaged last (one per line)'), multiline: true, required: received > 0 }] : []),
+        ...(tracking === 'lot_tracked' ? [
+          { key: `lot:${line.id}`, label: t('Charge dieser Lieferung', 'Batch of this delivery'), required: received > 0,
+            help: t('Neue Charge erfassen oder die gelieferte bestehende Charge ausdrücklich wählen.', 'Record a new batch or explicitly choose the existing batch that was delivered.'),
+            options: [{ value: '__new__', label: t('Neue Charge erfassen', 'Record a new batch') }, ...(lots.data ?? []).filter(lot => lot.itemId === line.itemId).map(lot => ({ value: lot.id, label: lotChoiceLabel(lot, t) }))] },
+          ...(newLot ? [
+            { key: `lotNumber:${line.id}`, label: t('Chargennummer', 'Lot number'), required: received > 0 },
+            { key: `supplierLot:${line.id}`, label: t('Lieferantencharge', 'Supplier lot') },
+            { key: `manufactureDate:${line.id}`, label: t('Herstellungsdatum', 'Manufactured'), type: 'date' as const },
+            { key: `expiryDate:${line.id}`, label: t('Ablaufdatum', 'Expiry date'), type: 'date' as const },
+            { key: `bestBeforeDate:${line.id}`, label: t('Mindesthaltbarkeit', 'Best before'), type: 'date' as const },
+          ] : []),
         ] : []),
         { key: `notes:${line.id}`, label: t('Prüfnotiz (optional)', 'Inspection notes (optional)') },
       ];
     }), { key: 'notes', label: t('Notiz (optional)', 'Notes (optional)'), multiline: true },
   ]} onSave={async values => {
-    const receiptLines = lines.map(line => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`]), damagedQuantity: Number(values[`damaged:${line.id}`]), rejectedQuantity: Number(values[`rejected:${line.id}`]), lotId: lookup.items.find(item => item.id === line.itemId)?.trackingMode === 'lot_tracked' && values[`lot:${line.id}`] !== '__new__' ? String(values[`lot:${line.id}`] || '') || null : null, assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map(code => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null }));
+    const receiptLines = lines.map(line => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`]), damagedQuantity: Number(values[`damaged:${line.id}`]), rejectedQuantity: Number(values[`rejected:${line.id}`]), lotId: trackingOf(line.itemId) === 'lot_tracked' && values[`lot:${line.id}`] !== '__new__' ? String(values[`lot:${line.id}`] || '') || null : null, assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map(code => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null }));
     for (const [index, line] of receiptLines.entries()) {
       if (line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > lines[index].remainingQuantity) return Promise.reject(new Error(t('Die Summe überschreitet die offene Bestellmenge.', 'The total exceeds the outstanding order quantity.')));
-      if (lookup.items.find(item => item.id === lines[index].itemId)?.trackingMode === 'serialized' && line.assetCodes.length !== line.acceptedQuantity + line.damagedQuantity) return Promise.reject(new Error(t('Für jedes angenommene oder beschädigte Gerät genau einen Code eingeben.', 'Enter exactly one code for each accepted or damaged asset.')));
+      if (trackingOf(lines[index].itemId) === 'serialized' && line.assetCodes.length !== line.acceptedQuantity + line.damagedQuantity) return Promise.reject(new Error(t('Für jedes angenommene oder beschädigte Gerät genau einen Code eingeben.', 'Enter exactly one code for each accepted or damaged asset.')));
+      if (trackingOf(lines[index].itemId) === 'lot_tracked' && line.acceptedQuantity + line.damagedQuantity > 0 && !values[`lot:${lines[index].id}`]) return Promise.reject(new Error(t('Für jede gelieferte Charge eine neue oder bestehende Charge wählen.', 'Choose a new or an existing batch for every delivered lot-tracked line.')));
     }
     if (!receiptLines.some(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0)) return Promise.reject(new Error(t('Mindestens eine Liefermenge eingeben.', 'Enter at least one delivered quantity.')));
     for (const [index, line] of receiptLines.entries()) {
       const ordered = lines[index];
-      if (lookup.items.find(item => item.id === ordered.itemId)?.trackingMode !== 'lot_tracked' || values[`lot:${ordered.id}`] !== '__new__' || line.acceptedQuantity + line.damagedQuantity === 0) continue;
+      if (trackingOf(ordered.itemId) !== 'lot_tracked' || values[`lot:${ordered.id}`] !== '__new__' || line.acceptedQuantity + line.damagedQuantity === 0) continue;
       const lotNumber = String(values[`lotNumber:${ordered.id}`]).trim();
       const cacheKey = `${ordered.itemId}:${lotNumber}`;
       let lotId = createdLots.current.get(cacheKey);
       if (!lotId) {
-        const lot = await operationsApi.saveLot(lotInput({ itemId: ordered.itemId, lotNumber, status: 'available' }));
+        const lot = await operationsApi.createLot(lotCreateInput({ itemId: ordered.itemId, lotNumber, status: 'available',
+          supplierLot: values[`supplierLot:${ordered.id}`] ?? '', manufactureDate: values[`manufactureDate:${ordered.id}`] ?? '',
+          expiryDate: values[`expiryDate:${ordered.id}`] ?? '', bestBeforeDate: values[`bestBeforeDate:${ordered.id}`] ?? '' }));
         lotId = lot.id;
         createdLots.current.set(cacheKey, lotId);
       }
@@ -145,7 +174,6 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     return operationsApi.receive(receiptInput({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber, receivedAt: new Date(String(values.receivedAt)).toISOString(), notes: values.notes || null, idempotencyKey: key, lines: receiptLines.filter(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) }));
   }}>
     <Typography variant="body2" color="text.secondary">{t('Alle offenen Mengen sind als intakt vorbelegt. Mengen, Codes und Empfangsort bei Abweichungen anpassen.', 'All outstanding quantities default to accepted. Adjust quantities, asset codes and receiving location as needed.')}</Typography>
-    {lines.some(line => lookup.items.find(item => item.id === line.itemId)?.trackingMode === 'lot_tracked') && <Typography variant="caption">{t('Neue Chargen werden beim Speichern mit der vorbelegten Chargennummer angelegt.', 'New lots are created on save using the prefilled lot number.')}</Typography>}
   </OperationForm>;
 }
 

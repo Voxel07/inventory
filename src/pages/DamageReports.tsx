@@ -7,9 +7,9 @@ import AddIcon from '@mui/icons-material/Add';
 import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { DamageReportsList } from '../components/lists/DamageReportsList';
 import { useDamageReports, useUpdateDamageReport, useUpdateDamageReportStatus } from '../hooks/useDamageReports';
-import { useItems } from '../hooks/useItems';
 import { useAssemblies } from '../hooks/useAssemblies';
-import { useUsers } from '../hooks/useUsers';
+import { useAllUsers } from '../hooks/useUsers';
+import { OPEN_DAMAGE_STATUSES } from '../types/damageReport';
 import { useUIStore } from '../store/uiStore';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import type { DamageReportUpdateData, DamageStatus } from '../types';
@@ -18,15 +18,15 @@ import { translate, useLocalizedText } from '../utils/naming';
 export function DamageReportsPage() {
     const t = useLocalizedText();
     const { user } = useAuth();
-    const { data: reports, isLoading, isFetchingNextPage, hasNextPage, isError, refetch } = useDamageReports();
-    const { data: items } = useItems();
+    const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
+    // The open/history split is a server filter; history lists every report.
+    const reports = useDamageReports(undefined, activeTab === 'open' ? { status: OPEN_DAMAGE_STATUSES } : undefined);
     const { data: assemblies } = useAssemblies();
-    const { data: users } = useUsers();
+    const { data: users } = useAllUsers();
     const updateStatus = useUpdateDamageReportStatus();
     const updateReport = useUpdateDamageReport();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [formOpen, setFormOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
 
     function handleStatusUpdate(id: string, status: DamageStatus, amount?: number, notes?: string, itemHint?: string) {
         updateStatus.mutate(
@@ -73,14 +73,13 @@ export function DamageReportsPage() {
 
             <DamageReportsList
                 key={activeTab}
-                reports={reports}
-                items={items}
+                reports={reports.data}
+                list={reports}
                 assemblies={assemblies}
                 users={users}
-                isLoading={isLoading}
-                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-                loadError={isError}
-                onRetry={() => { void refetch(); }}
+                isLoading={reports.isLoading}
+                loadError={reports.isError}
+                onRetry={() => { void reports.refetch(); }}
                 view={activeTab}
                 isUpdating={updateStatus.isPending || updateReport.isPending}
                 onUpdateStatus={handleStatusUpdate}
@@ -88,7 +87,7 @@ export function DamageReportsPage() {
             />
 
             <DamageReportDialog open={formOpen} onClose={() => setFormOpen(false)} title={t('Schaden melden', 'Report damage')}
-                items={items ?? []} assemblies={assemblies ?? []} />
+                assemblies={assemblies ?? []} />
         </Box>
     );
 }

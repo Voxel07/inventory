@@ -23,14 +23,14 @@ import { generateSampleItemsCsv, generateSampleAssembliesCsv, generateSampleComb
 import { EMPTY_CSV_IMPORT_COUNTS, type CsvImportCounts, type CsvImportType } from '../../types/csvImport';
 
 import type { Item, Assembly, StorageLocation } from '../../types';
+import { useQuery } from '@tanstack/react-query';
+import { itemApi } from '../../services/inventoryService';
+import { assemblyApi } from '../../services/assemblyService';
+import { storageLocationApi } from '../../services/storageLocationService';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  items: Item[];
-  assemblies: Assembly[];
-  storageLocations: StorageLocation[];
-  catalogComplete: boolean;
   /** Preselected tab; the user's tab choice decides what gets imported. */
   initialType: CsvImportType;
 }
@@ -38,13 +38,20 @@ interface Props {
 export function CsvImportDialog({
   open,
   onClose,
-  items,
-  assemblies,
-  storageLocations,
-  catalogComplete,
   initialType,
 }: Props) {
   const t = useLocalizedText();
+  // Import is an explicit exhaustive workflow: while the dialog is open it reads the complete catalog
+  // once, so duplicates and references are matched against every item, assembly and location.
+  const catalog = useQuery({ queryKey: ['items', 'all', 'csv-import'], enabled: open, networkMode: 'offlineFirst', staleTime: 0,
+    queryFn: async () => {
+      const [items, assemblies, storageLocations] = await Promise.all([itemApi.getAll(), assemblyApi.getAll(), storageLocationApi.getAll()]);
+      return { items, assemblies, storageLocations };
+    } });
+  const items: Item[] = useMemo(() => catalog.data?.items ?? [], [catalog.data]);
+  const assemblies: Assembly[] = useMemo(() => catalog.data?.assemblies ?? [], [catalog.data]);
+  const storageLocations: StorageLocation[] = useMemo(() => catalog.data?.storageLocations ?? [], [catalog.data]);
+  const catalogComplete = catalog.isSuccess;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const showSnackbar = useUIStore((s) => s.showSnackbar);

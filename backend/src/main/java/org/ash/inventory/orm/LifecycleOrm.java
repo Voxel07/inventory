@@ -1,8 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.RepairCase;
 
@@ -25,7 +23,7 @@ public class LifecycleOrm extends EntityOrm {
     }
 
     public List<RepairCase> repairs(String status, int offset, int limit) {
-        var jpql = "select repair from RepairCase repair join fetch repair.damageReport report left join report.item reportItem left join fetch repair.assetInstance left join fetch repair.repairOwner left join fetch repair.repairVendor left join fetch repair.approvedBy where "
+        var jpql = "select repair from RepairCase repair join fetch repair.damageReport report left join fetch report.item reportItem left join fetch report.assembly left join fetch repair.assetInstance left join fetch repair.repairOwner left join fetch repair.repairVendor left join fetch repair.approvedBy where "
                 + "(reportItem is null or " + InventoryAccessOrm.visible("reportItem.accessPolicy") + ")"
                 + (status == null || status.isBlank() ? "" : " and repair.status = :status") + " order by repair.createdAt desc";
         var query = entityManager.createQuery(jpql, RepairCase.class);

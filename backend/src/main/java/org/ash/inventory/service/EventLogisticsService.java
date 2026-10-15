@@ -5,7 +5,6 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.ash.inventory.helper.Inputs;
 import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventAttendee;
 import org.ash.inventory.model.EventAttendeeRole;
 import org.ash.inventory.model.EventOccurrence;
@@ -21,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 

@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { getUnreadNotificationCount, getUnreadNotifications, markAllNotificationsRead, markNotificationRead, NOTICE_PAGE_SIZE, type AppNotification } from '../services/notificationService';
+import { getUnreadNotificationCount, getUnreadNotifications, markAllNotificationsRead, markNotificationRead, type AppNotification } from '../services/notificationService';
+import type { Page } from '../services/apiPagination';
 import { useUIStore } from '../store/uiStore';
 import { translate } from '../utils/naming';
 import { useActionInbox } from './useActionInbox';
@@ -18,11 +19,11 @@ export function usePickupNotifications() {
   const query = useInfiniteQuery({
     queryKey: NOTIFICATIONS_KEY, initialPageParam: 0, refetchInterval: 60_000,
     queryFn: ({ pageParam }) => getUnreadNotifications(pageParam),
-    getNextPageParam: (last, pages) => last.length === NOTICE_PAGE_SIZE ? pages.length : undefined,
+    getNextPageParam: (last) => last.more ? last.page + 1 : undefined,
   });
   const count = useUnreadNoticeCount();
   // Pages can overlap after a notice is read between page loads; keep one row per notice.
-  const unread = [...new Map((query.data?.pages ?? []).flat().filter((notification) => !notification.readAt)
+  const unread = [...new Map((query.data?.pages ?? []).flatMap((page) => page.rows).filter((notification) => !notification.readAt)
     .map((notification) => [notification.id, notification])).values()];
   // Total unread on the server; the list holds the newest page of them.
   const unreadTotal = Math.max(unread.length, count.data ?? 0);
@@ -30,11 +31,11 @@ export function usePickupNotifications() {
     mutationFn: (ids: string[]) => Promise.all(ids.map(markNotificationRead)),
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
-      const previous = queryClient.getQueryData<InfiniteData<AppNotification[], number>>(NOTIFICATIONS_KEY);
+      const previous = queryClient.getQueryData<InfiniteData<Page<AppNotification>, number>>(NOTIFICATIONS_KEY);
       const readAt = new Date().toISOString();
-      queryClient.setQueryData<InfiniteData<AppNotification[], number>>(NOTIFICATIONS_KEY, (current) => current && ({
+      queryClient.setQueryData<InfiniteData<Page<AppNotification>, number>>(NOTIFICATIONS_KEY, (current) => current && ({
         ...current,
-        pages: current.pages.map((page) => page.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification)),
+        pages: current.pages.map((page) => ({ ...page, rows: page.rows.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification) })),
       }));
       return { previous };
     },

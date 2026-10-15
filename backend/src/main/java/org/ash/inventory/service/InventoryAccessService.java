@@ -8,7 +8,6 @@ import org.ash.inventory.helper.security.*;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.InventoryAccessOrm;
 import org.ash.inventory.resource.ApiException;
-import java.time.Instant;
 import java.util.*;
 
 @ApplicationScoped @Transactional

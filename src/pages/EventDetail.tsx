@@ -27,7 +27,9 @@ import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import { useEventReport, useUpdateEventReport } from '../hooks/useEvents';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds, usePagedItems } from '../hooks/useItems';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { LoadMore } from '../components/shared/LoadMore';
 import type { EventReportStatus, EventType } from '../types';
 import { translate, useLocalizedText } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
@@ -44,7 +46,6 @@ export function EventDetail() {
   const canEdit = canEditEvents(user);
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const { data: report, isLoading, isError } = useEventReport(reportId);
-  const { data: items = [] } = useItems();
   const updateReport = useUpdateEventReport();
   const [editing, setEditing] = useState(() => canEdit && searchParams.get('edit') === '1');
   const [eventType, setEventType] = useState<EventType>('DE');
@@ -76,24 +77,27 @@ export function EventDetail() {
     resetForm();
   }
 
-  const itemMap = new Map(items.map((item) => [item.id, item]));
   const recordedIds = new Set([
     ...Object.keys(planned),
     ...Object.keys(used),
   ]);
+  // Recorded items by id; while editing, server matches for the search (or the event type's tagged items).
+  const recorded = useItemsByIds([...recordedIds]);
+  const term = useDebouncedValue(search.trim());
+  const candidates = usePagedItems(term ? { search: term, sort: 'name' } : { eventType, sort: 'name' }, { enabled: editing });
+  const items = [...new Map([...(recorded.data ?? []), ...(editing ? candidates.data ?? [] : [])].map((item) => [item.id, item])).values()];
+  const itemMap = new Map(items.map((item) => [item.id, item]));
   const missingItemIds = [...recordedIds].filter((id) => !itemMap.has(id) && (
       Number(used[id]) > 0 || Number(planned[id]) > 0
     ));
   const visibleItems = (() => {
-    const term = search.trim().toLocaleLowerCase();
     return items
       .filter((item) => {
         const isRecorded = Number(used[item.id]) > 0
           || Number(planned[item.id]) > 0;
         if (isRecorded) return true;
         if (!editing) return false;
-        if (term) return `${item.name} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase().includes(term);
-        return item.eventTypes?.includes(eventType);
+        return candidates.data?.some((candidate) => candidate.id === item.id) ?? false;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   })();
@@ -271,6 +275,7 @@ export function EventDetail() {
           </TableBody>
         </Table>
       </TableContainer>)}
+      {editing && <LoadMore list={candidates} />}
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>{t('Anmerkungen', 'Notes')}</Typography>

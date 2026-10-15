@@ -23,7 +23,7 @@ public class OperationalReportResource {
         }
         return reports.export(name, filters, generation);
     }
-    @GET @Path("/{name}") public OperationalReportService.View report(@PathParam("name") String name,
+    @Paged @GET @Path("/{name}") public OperationalReportService.View report(@PathParam("name") String name,
             @QueryParam("itemId") String itemId, @QueryParam("eventId") String eventId, @QueryParam("locationId") String locationId,
             @QueryParam("warehouseId") String warehouseId, @QueryParam("category") String category, @QueryParam("status") String status,
             @QueryParam("from") String from, @QueryParam("to") String to, @QueryParam("search") String search,

@@ -3,7 +3,7 @@ import { apiRequest } from './apiClient';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
 import { equipmentProfileInput, equipmentCommitmentInput } from './equipmentInputs';
-import { lotInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
+import { lotCreateInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
 import { loanApi } from './loanService';
 import { memberApi } from './memberService';
 import { inputChoice, inputText } from '../utils/inputValues';
@@ -95,7 +95,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'lot': {
         const existing = (await loadAllPages(operationsApi.lots({ itemId }))).find((lot) => lot.lotNumber === data.lotNumber);
-        result = existing ?? await operationsApi.saveLot(lotInput(data));
+        result = existing ?? await operationsApi.createLot(lotCreateInput(data));
         break;
       }
       case 'maintenance': {

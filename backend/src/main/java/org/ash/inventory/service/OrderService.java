@@ -194,11 +194,12 @@ public class OrderService {
                 throw ApiException.conflict("Only " + availableIncludingThisOrder + " units of " + entry.getKey().name
                         + " can be reserved");
             }
+            var capacity = allocation.capacity(lockedItem, order.id, null);
             var source = input.sourceLocations() == null || input.sourceLocations().get(lockedItem.id) == null
-                    ? allocation.defaultSource(lockedItem, prepared, order.id, null)
+                    ? allocation.defaultSource(lockedItem, capacity, prepared)
                     : positions.location(input.sourceLocations().get(lockedItem.id));
             if (source != null) sources.put(lockedItem.id, source.id);
-            availableIncludingThisOrder = Math.min(availableIncludingThisOrder, allocation.sourceCapacity(lockedItem, source, order.id, null, prepared));
+            availableIncludingThisOrder = Math.min(availableIncludingThisOrder, allocation.sourceCapacity(lockedItem, capacity, source, prepared));
             if (prepared > availableIncludingThisOrder && !input.acknowledgeShortages()) throw ApiException.conflict("Insufficient stock at source for " + lockedItem.name);
             int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
             distributePrepared(lines, lockedItem, actualPrepared);
@@ -296,16 +297,8 @@ public class OrderService {
             var relevant = lines.stream().filter(line -> line.item.id.equals(item.id)).toList();
             int outstanding = relevant.stream().mapToInt(this::outstandingQuantity).sum();
             var outcome = entry.getValue();
-            if (!item.consumable && outcome.consumed() > 0)
-                throw ApiException.badRequest("Only consumable items can be recorded as consumed");
-            if (outcome.writtenOff() > 0) {
-                actors.requireAdmin();
-                if (outcome.notes() == null || outcome.notes().isBlank())
-                    throw ApiException.badRequest("Write-off reason is required for " + item.name);
-            }
-            int reconciled = outcome.returned() + outcome.consumed() + outcome.damaged() + outcome.writtenOff();
-            if (reconciled + outcome.missing() > outstanding)
-                throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
+            OrderReturnPolicy.validate(item, new OrderReturnPolicy.Outcome(outcome.returned(), outcome.consumed(), outcome.damaged(),
+                    outcome.writtenOff(), outcome.missing(), outcome.notes()), outstanding, actors);
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 applySerializedAssetOutcomes(item, order, actor, outcome, input.idempotencyKey(), assetOutcomes,
                         assignmentsByAsset, handoverDetails);
@@ -332,8 +325,8 @@ public class OrderService {
                 damage.reporter = actor;
                 damage.factionOrder = order;
                 damage.quantity = outcome.damaged();
-                damage.severity = DomainEnums.DamageSeverity.high;
-                damage.description = outcome.notes() == null ? "Damage recorded during order return" : outcome.notes();
+                damage.severity = OrderReturnPolicy.RETURN_DAMAGE_SEVERITY;
+                damage.description = OrderReturnPolicy.damageDescription(outcome.notes(), order.orderCode);
                 orm.persist(damage);
             }
             if (outcome.operatingHours() != null

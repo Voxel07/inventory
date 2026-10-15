@@ -59,7 +59,6 @@ export interface Item {
   locationRestricted?: boolean;
   id: string;
   sku?: string;
-  barcode?: string;
   name: string;
   description?: string;
   minStock?: number;
@@ -67,17 +66,15 @@ export interface Item {
   category: string;
   subcategory?: string;
   supplier?: string;
-  visibilityScope?: 'global' | 'event' | 'person' | 'group';
-  assignedUserId?: string;
-  assignedUserName?: string;
-  assignedGroup?: string;
   eventTypes?: EventType[];
-  storageLocation: string;
-  returnLocation?: string;
+  /** Null when the item has no storage location or the caller may not see it (`locationRestricted`). */
+  storageLocation: string | null;
+  returnLocation: string | null;
   status: ItemStatus;
   images?: string[];
   hint?: string;
-  isConsumable?: boolean;
+  /** Read-only projection of `inventoryRole === 'consumable'`; the role is the stored authority. */
+  isConsumable: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
   containerSize?: number;
@@ -90,18 +87,20 @@ export interface Item {
   fuelConsumptionLitersPer100Km?: number;
   batteryReplacementDue?: string;
   bestBeforeDate?: string;
-  maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
+  /** Derived by the server from the out-of-service flag and the item calendar. */
+  maintenanceStatus: MaintenanceStatus;
   created: string;
   updated: string;
-  stock?: ItemStock;
+  /** Null when no stock projection was computed for this response. */
+  stock: ItemStock | null;
   expand?: {
     storageLocation?: StorageLocation;
     returnLocation?: StorageLocation;
-    assignedUser?: User;
   };
 }
 
 export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
+export type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_service';
 
 export interface ItemFormData {
   privateResource?: boolean;
@@ -113,14 +112,10 @@ export interface ItemFormData {
   category: string;
   subcategory?: string;
   supplier?: string;
-  visibilityScope?: 'global' | 'event' | 'person' | 'group';
-  assignedUserId?: string;
-  assignedGroup?: string;
   eventTypes?: EventType[];
   storageLocation: string;
   returnLocation?: string;
   hint?: string;
-  isConsumable?: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
   imageFiles?: File[];
@@ -136,7 +131,6 @@ export interface ItemFormData {
   fuelConsumptionLitersPer100Km?: number;
   batteryReplacementDue?: string;
   bestBeforeDate?: string;
-  maintenanceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
 }
 
 export type ReturnSubmissionStatus = 'pending' | 'accepted' | 'rejected';
@@ -205,7 +199,10 @@ export interface AssetInstance {
   model?: string;
   conditionStatus: AssetConditionStatus;
   availabilityStatus: AssetAvailabilityStatus;
-  serviceStatus?: 'certified' | 'due_soon' | 'overdue' | 'in_service';
+  /** Derived from the asset's out-of-service flag and its own or its item's calendar. */
+  serviceStatus: MaintenanceStatus;
+  /** The asset's calendar date; it follows the item calendar until the asset is inspected individually. */
+  nextMaintenanceDue?: string;
   operatingHours?: number;
   currentLocationId?: string;
   currentLocationName?: string;
@@ -237,4 +234,3 @@ export interface AssetInstanceInput {
 }
 
 import type { EventType } from './event';
-import type { User } from './user';

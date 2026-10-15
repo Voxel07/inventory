@@ -8,15 +8,15 @@ import { GeneralOrderWorkflow } from '../orders/GeneralOrderWorkflow';
 import { useFactionOrders } from '../../hooks/useFactionOrders';
 import { useOrders } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
-import { useItems } from '../../hooks/useItems';
-import type { FactionOrder, GeneralOrderSummary } from '../../types';
+import { LoadMore } from '../shared/LoadMore';
+import type { FactionOrderSummary, GeneralOrderSummary } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 
 /** Final orders the warehouse still has to pick: submitted (not started) and preparing (in progress). */
-const TO_PREPARE = ['submitted', 'preparing'];
+const TO_PREPARE = ['submitted', 'preparing'] as const;
 
 type Entry =
-  | { kind: 'faction'; order: FactionOrder; due: string }
+  | { kind: 'faction'; order: FactionOrderSummary; due: string }
   | { kind: 'general'; order: GeneralOrderSummary; due: string };
 
 function sum(values?: Record<string, number>) {
@@ -26,17 +26,16 @@ function sum(values?: Record<string, number>) {
 export function OrderPreparationPanel() {
   const t = useLocalizedText();
   const navigate = useNavigate();
-  const factionOrders = useFactionOrders();
-  const generalOrders = useOrders();
+  const factionOrders = useFactionOrders(undefined, undefined, TO_PREPARE);
+  const generalOrders = useOrders({ status: TO_PREPARE });
   const { data: events = [] } = useEventReports();
-  const { data: items = [] } = useItems();
   const [preparing, setPreparing] = useState<GeneralOrderSummary | null>(null);
   const eventMap = new Map(events.map((event) => [event.id, event]));
 
   const entries: Entry[] = [
-    ...(factionOrders.data ?? []).filter((order) => TO_PREPARE.includes(order.status))
+    ...(factionOrders.data ?? [])
       .map((order): Entry => ({ kind: 'faction', order, due: order.requestedPickupDate ?? order.eventDate })),
-    ...(generalOrders.data ?? []).filter((order) => TO_PREPARE.includes(order.status))
+    ...(generalOrders.data ?? [])
       .map((order): Entry => ({ kind: 'general', order, due: (order.eventOccurrenceId && eventMap.get(order.eventOccurrenceId)?.startDate) || '' })),
   ].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
 
@@ -75,9 +74,10 @@ export function OrderPreparationPanel() {
           })()}</Typography>
           <OperationDetail label={t('Zweck', 'Purpose')}>{entry.order.purpose}</OperationDetail>
           <OperationDetail label={t('Artikel', 'Items')}>
-            {Object.entries(entry.order.requestedQuantities ?? {}).map(([id, quantity]) => `${entry.order.itemNames?.[id] ?? items.find((item) => item.id === id)?.name ?? id} × ${quantity}`).join(', ')}
+            {Object.entries(entry.order.requestedQuantities ?? {}).map(([id, quantity]) => `${entry.order.itemNames?.[id] ?? id} × ${quantity}`).join(', ')}
           </OperationDetail>
         </OperationListEntry>)}
-    {preparing && <GeneralOrderWorkflow order={preparing} action="prepare" items={items} onClose={() => setPreparing(null)} />}
+    <LoadMore list={factionOrders} /><LoadMore list={generalOrders} />
+    {preparing && <GeneralOrderWorkflow order={preparing} action="prepare" onClose={() => setPreparing(null)} />}
   </Stack>;
 }

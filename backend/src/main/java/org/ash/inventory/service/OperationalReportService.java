@@ -259,14 +259,34 @@ public class OperationalReportService {
                     "responsible", s.responsiblePerson == null ? null : s.responsiblePerson.name);
             item(row, s.item); if (s.assetInstance != null) location(row, s.assetInstance.currentLocation); rows.add(row);
         }
+        var today = BusinessTime.today();
         for (var item : items) {
-            if (!item.active || scheduledItems.contains(item.id) || (item.nextMaintenanceDue == null && item.maintenanceStatus != DomainEnums.MaintenanceStatus.in_service)) continue;
-            String status = item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service ? "in_service"
-                    : item.nextMaintenanceDue.isBefore(BusinessTime.today()) ? "due" : !item.nextMaintenanceDue.isAfter(BusinessTime.today().plusDays(30)) ? "warning" : "healthy";
-            var row = row("id", item.id + ":calendar", "date", item.nextMaintenanceDue, "status", status, "type", "item_calendar", "interval", "date", "warningWindow", 30, "blocking", true);
-            item(row, item); location(row, item.storageLocation); rows.add(row);
+            if (!item.active) continue;
+            if (!scheduledItems.contains(item.id) && (item.nextMaintenanceDue != null || item.outOfService)) {
+                var row = row("id", item.id + ":calendar", "date", item.nextMaintenanceDue,
+                        "status", calendarReportStatus(MaintenancePolicy.itemStatus(item, today)), "type", "item_calendar",
+                        "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true);
+                item(row, item); location(row, item.storageLocation); rows.add(row);
+            }
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized) continue;
+            for (var asset : facts.get(item.id).policy().assets()) {
+                if (asset.nextMaintenanceDue == null && !asset.outOfService) continue;
+                var row = row("id", asset.id + ":calendar", "date", MaintenancePolicy.assetDue(item, asset),
+                        "status", calendarReportStatus(MaintenancePolicy.assetStatus(asset, today)), "type", "asset_calendar",
+                        "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true,
+                        "asset", asset.assetCode);
+                item(row, item); location(row, asset.currentLocation); rows.add(row);
+            }
         }
         return rows;
+    }
+    private static String calendarReportStatus(DomainEnums.MaintenanceStatus status) {
+        return switch (status) {
+            case in_service -> "in_service";
+            case overdue -> "due";
+            case due_soon -> "warning";
+            case certified -> "healthy";
+        };
     }
     private List<Map<String, Object>> purchases() {
         var rows = new ArrayList<Map<String, Object>>();

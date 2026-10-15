@@ -1,11 +1,13 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { CreateResourceApi, CrudResourceApi, MutableResourceApi } from '../services/resourceFactory';
+import type { ApiQuery } from '../services/apiClient';
 
 // Successful writes broadcast through apiClient; hooks do not invalidate a second time.
 export function createCreateResourceHooks<T extends { id: string }, TForm>(api: CreateResourceApi<T, TForm>, queryKey: string) {
   return {
-    useList(query?: Record<string, string | number | boolean | undefined>) {
-      return useQuery({ queryKey: [queryKey, query], queryFn: () => api.getAll(query), networkMode: 'offlineFirst' });
+    /** Explicit exhaustive read for reference data that must be complete (location hierarchy, event lists). */
+    useAll(query?: ApiQuery) {
+      return useQuery({ queryKey: [queryKey, 'all', query], queryFn: () => api.getAll(query), networkMode: 'offlineFirst' });
     },
     useCreate() { return useMutation({ mutationFn: (data: TForm) => api.create(data) }); },
   };

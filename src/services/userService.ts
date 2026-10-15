@@ -1,9 +1,10 @@
 import type { User, UserRole } from '../types';
-import { apiRequest } from './apiClient';
+import { apiPage, apiRequest } from './apiClient';
+import type { Page } from './apiPagination';
 
-export function getUsers(query?: { page?: number; size?: number }): Promise<User[]> { return apiRequest('/api/users', { query }); }
+export function getUsers(page: number, size: number): Promise<Page<User>> { return apiPage('/api/users', page, size); }
 /** Inventory admin only: role and faction memberships are managed in the app; Authentik only grants access. */
 export function updateUserAccess(id: string, data: { roles: UserRole[]; factions: string[]; revision: number; reason: string }): Promise<User> {
   return apiRequest(`/api/users/${id}`, { method: 'PATCH', body: data });
 }
-export function getAssignableUsers(query?: { page?: number; size?: number }): Promise<User[]> { return apiRequest('/api/users/assignable', { query }); }
+export function getAssignableUsers(page: number, size: number): Promise<Page<User>> { return apiPage('/api/users/assignable', page, size); }

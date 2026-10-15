@@ -13,7 +13,9 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds } from '../hooks/useItems';
+import { useQuery } from '@tanstack/react-query';
+import { generalOrderApi } from '../services/orderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useUIStore } from '../store/uiStore';
 import { translate, useLocalizedText } from '../utils/naming';
@@ -22,23 +24,24 @@ import type { CheckedOutRow } from '../types/custody';
 import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 import type { ReturnSubmissionFormData } from '../types';
-import { useOrders } from '../hooks/useOrders';
 import { GeneralOrderWorkflow } from '../components/orders/GeneralOrderWorkflow';
 
 export function CheckedOutItemsPage() {
     const t = useLocalizedText();
     const custody = useCustodyBalances();
-    const { data: items, isLoading: itemsPending, isComplete: itemsComplete, isError: itemsError, refetch: refetchItems } = useItems();
     const { data: assemblies } = useAssemblies();
     const createReturn = useCreateReturnSubmission();
-    const generalOrders = useOrders();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [search, setSearch] = useState('');
     const [personFilter, setPersonFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [returnRow, setReturnRow] = useState<CheckedOutRow>();
     const [generalReturnRow, setGeneralReturnRow] = useState<CheckedOutRow>();
-    const generalReturnOrder = generalReturnRow && generalOrders.data?.find((order) => order.id === generalReturnRow.generalOrderId);
+    // Exactly the item and order a quick return needs, never the catalog or every order page.
+    const returnItem = useItemsByIds(returnRow ? [returnRow.itemId] : []).data?.[0];
+    const generalOrder = useQuery({ queryKey: ['general-orders', 'detail', generalReturnRow?.generalOrderId],
+        queryFn: () => generalOrderApi.getById(generalReturnRow!.generalOrderId!), enabled: Boolean(generalReturnRow?.generalOrderId) });
+    const generalReturnOrder = generalReturnRow && generalOrder.data;
 
     const checkedOutRows: CheckedOutRow[] = custody.data ?? [];
 
@@ -67,14 +70,14 @@ export function CheckedOutItemsPage() {
         });
     }
 
-    if (itemsError || custody.isError) {
+    if (custody.isError) {
         return <Paper sx={{ p: 3 }}>
             <Typography>{t('Die vollständige Ausleihliste konnte nicht geladen werden.', 'Could not load the complete checkout list.')}</Typography>
-            <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void refetchItems(); void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
+            <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={() => { void custody.refetch(); }}>{t('Erneut versuchen', 'Retry')}</Button>
         </Paper>;
     }
 
-    if (itemsPending || !itemsComplete || custody.isLoading) {
+    if (custody.isLoading) {
         return (
             <Paper sx={{ p: 2 }}>
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -116,9 +119,9 @@ export function CheckedOutItemsPage() {
             <Dialog open={Boolean(returnRow)} onClose={() => setReturnRow(undefined)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Rückgabe melden', 'Submit return')}</DialogTitle>
                 <DialogContent>
-                    {returnRow && items?.find((item) => item.id === returnRow.itemId) && (
+                    {returnRow && returnItem && (
                         <ReturnSubmissionForm
-                            item={items.find((item) => item.id === returnRow.itemId)!}
+                            item={returnItem}
                             maxQuantity={returnRow.checkedOut - (returnRow.pendingQuantity ?? 0)}
                             eventOccurrenceId={returnRow.eventOccurrenceId}
                             assetInstanceId={returnRow.assetInstanceId}
@@ -133,14 +136,14 @@ export function CheckedOutItemsPage() {
             {generalReturnRow && !generalReturnOrder && <Dialog open onClose={() => setGeneralReturnRow(undefined)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('Rückgabe erfassen', 'Record return')}</DialogTitle>
                 <DialogContent>
-                    <Typography color={generalOrders.isError ? 'error' : 'text.secondary'}>
-                        {generalOrders.isError || generalOrders.isComplete
+                    <Typography color={generalOrder.isError ? 'error' : 'text.secondary'}>
+                        {generalOrder.isError
                             ? t('Die zugehörige Bestellung konnte nicht geladen werden.', 'Could not load the related order.')
                             : t('Bestellung wird geladen…', 'Loading order…')}
                     </Typography>
                 </DialogContent>
             </Dialog>}
-            {generalReturnRow && generalReturnOrder && items && <GeneralOrderWorkflow order={generalReturnOrder} action="return" items={items}
+            {generalReturnRow && generalReturnOrder && <GeneralOrderWorkflow order={generalReturnOrder} action="return"
                 itemIds={[generalReturnRow.itemId]} onClose={() => setGeneralReturnRow(undefined)} />}
         </Box>
     );

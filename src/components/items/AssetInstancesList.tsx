@@ -72,7 +72,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const navigate = useNavigate();
 
-    const { data: assets, isLoading, hasNextPage, isFetchingNextPage, isError, refetch } = useItemAssets(item.id);
+    const { data: assets, isLoading, isError, refetch } = useItemAssets(item.id);
     const { data: storageLocations } = useStorageLocations();
 
     const createAsset = useCreateItemAsset(item.id);
@@ -140,7 +140,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         model: '',
         conditionStatus: 'good',
         availabilityStatus: 'available',
-        currentLocationId: item.storageLocation,
+        currentLocationId: item.storageLocation ?? undefined,
         operatingHours: undefined,
         notes: '',
     });
@@ -158,7 +158,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         startNumber: 1,
         conditionStatus: 'good',
         availabilityStatus: 'available',
-        currentLocationId: item.storageLocation,
+        currentLocationId: item.storageLocation ?? undefined,
     });
 
     const [editInput, setEditInput] = useState<AssetInstanceInput>({});
@@ -177,7 +177,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             model: '',
             conditionStatus: 'good',
             availabilityStatus: 'available',
-            currentLocationId: item.storageLocation,
+            currentLocationId: item.storageLocation ?? undefined,
             operatingHours: undefined,
             notes: '',
         });
@@ -192,7 +192,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             startNumber: nextNum,
             conditionStatus: 'good',
             availabilityStatus: 'available',
-            currentLocationId: item.storageLocation,
+            currentLocationId: item.storageLocation ?? undefined,
         });
         setBatchOpen(true);
     }
@@ -429,7 +429,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             )}
 
             <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={filteredAssets.length} page={currentPage} onChange={setPage}
-                loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
+                loadingMore={false} loadError={isError} onRetry={() => { void refetch(); }} />
 
             {/* Dialog: Add Single Asset */}
             <Dialog open={addSingleOpen} onClose={() => setAddSingleOpen(false)} maxWidth="xs" fullWidth>

@@ -84,7 +84,7 @@ function SerializedAssetPicker({
     || (asset.availabilityStatus === 'available'
       && (!commitment || commitment.assetIds.includes(asset.id))
       && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
-      && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified'))
+      && !['overdue', 'in_service'].includes(asset.serviceStatus))
   ));
   const selected = knownAssets.filter((asset) => selectedIds.includes(asset.id));
 

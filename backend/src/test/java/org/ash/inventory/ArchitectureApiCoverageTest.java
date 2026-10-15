@@ -309,15 +309,21 @@ class ArchitectureApiCoverageTest {
         try (var client = HttpClient.newHttpClient()) {
             var response = client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream()).get(10, TimeUnit.SECONDS);
             assertEquals(200, response.statusCode());
-            try (var body = response.body(); var lines = new BufferedReader(new InputStreamReader(body));
-                    var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            // The executor is declared first so it closes last: closing the stream first unblocks the reader on failure.
+            try (var executor = Executors.newVirtualThreadPerTaskExecutor(); var body = response.body();
+                    var lines = new BufferedReader(new InputStreamReader(body))) {
                 var data = executor.submit(() -> {
                     String line;
                     while ((line = lines.readLine()) != null) if (line.startsWith("data:") && line.contains("access.changed")) return line;
                     throw new AssertionError("SSE closed without an access event");
                 });
-                broadcaster.broadcast("access.revoked", Map.of("aggregateId", UUID.randomUUID(), "actorId", "secret-actor", "quantity", 99));
-                String line = data.get(5, TimeUnit.SECONDS);
+                // The response headers can precede the stream subscription; repeat until the subscriber receives it.
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (!data.isDone() && System.nanoTime() < deadline) {
+                    broadcaster.broadcast("access.revoked", Map.of("aggregateId", UUID.randomUUID(), "actorId", "secret-actor", "quantity", 99));
+                    try { data.get(200, TimeUnit.MILLISECONDS); } catch (java.util.concurrent.TimeoutException retry) { /* not yet subscribed */ }
+                }
+                String line = data.get(1, TimeUnit.SECONDS);
                 assertEquals(Map.of("type", "access.changed"), new com.fasterxml.jackson.databind.ObjectMapper().readValue(
                         line.substring(5).trim(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}));
             }

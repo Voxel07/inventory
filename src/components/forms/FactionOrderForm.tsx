@@ -1,3 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
+import { itemApi } from '../../services/inventoryService';
+import { useItemsByIds } from '../../hooks/useItems';
+import { loadAllPages } from '../../services/apiPagination';
+import { getFactionOrders } from '../../services/factionOrderService';
 import { formatDate } from '../../utils/dateFormat';
 import { Button, ToggleButton, IconButton } from '../shared/ActionButtons';
 import { MediaImage } from '../common/MediaImage';
@@ -31,7 +36,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Dialog } from '../shared/ClosableDialog';
 import { DialogContent, DialogTitle } from '@mui/material';
-import type { Assembly, EventType, FactionOrder, FactionOrderFormData, Item, StorageLocation } from '../../types';
+import type { Assembly, EventType, FactionOrder, FactionOrderSummary, FactionOrderFormData, StorageLocation } from '../../types';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useEventReports } from '../../hooks/useEvents';
 import {
@@ -55,11 +60,13 @@ import { catalogPage, filterCatalogItems, filterCatalogAssemblies } from '../../
 
 type ResourceViewMode = 'list' | 'tiles';
 
+/**
+ * The order editor compares stock across everything orderable for the event type, so it reads that catalog
+ * explicitly while open (plus the items already on the order); the previous order comes from this faction only.
+ */
 interface Props {
-  items: Item[];
   assemblies: Assembly[];
   storageLocations: StorageLocation[];
-  orders: FactionOrder[];
   initialData?: FactionOrder;
   defaultEventType?: EventType;
   defaultEventOccurrenceId?: string;
@@ -70,9 +77,7 @@ interface Props {
 }
 
 export function FactionOrderForm({
-  items,
   assemblies,
-  orders,
   initialData,
   defaultEventType = 'DE',
   defaultEventOccurrenceId,
@@ -124,8 +129,14 @@ export function FactionOrderForm({
     const saved = window.localStorage.getItem('faction-order-resource-view');
     return saved === 'tiles' ? 'tiles' : 'list';
   });
-  const [comparison, setComparison] = useState<FactionOrder | undefined>();
+  const [comparison, setComparison] = useState<FactionOrderSummary | undefined>();
   const [infoAssembly, setInfoAssembly] = useState<Assembly | null>(null);
+  const orderable = useQuery({ queryKey: ['items', 'all', 'orderable', eventType], networkMode: 'offlineFirst',
+    queryFn: () => itemApi.getAll({ eventType, includeUntagged: true, sort: 'name' }) });
+  const onOrder = useItemsByIds(Object.keys(quantities));
+  const items = [...new Map([...(orderable.data ?? []), ...(onOrder.data ?? [])].map((item) => [item.id, item])).values()];
+  const { data: orders = [] } = useQuery({ queryKey: ['faction-orders', 'faction', eventType, faction], enabled: Boolean(faction), networkMode: 'offlineFirst',
+    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType, faction }, page, size)) });
   const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
   const sortedAssemblies = [...assemblies].sort((a, b) => a.name.localeCompare(b.name));

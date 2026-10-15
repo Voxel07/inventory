@@ -10,7 +10,9 @@ import { formatDate } from '../../utils/dateFormat';
 import { translate, useLocalizedText } from '../../utils/naming';
 import type { AssetInstance, Item } from '../../types';
 import type { Schedule, ScheduleInput } from '../../types/operations';
-import { MAINTENANCE_TYPES, maintenanceTypeLabel, scheduleIsOverdue, type MaintenanceType } from './maintenanceSchedules';
+import { maintenanceTypeLabel, scheduleIsOverdue } from './maintenanceSchedules';
+import { MAINTENANCE_TYPES, type MaintenanceType } from '../../types/operations';
+import { oneOf } from '../../utils/operationForm';
 
 type IntervalType = ScheduleInput['intervalType'];
 type Draft = { id?: string; type: MaintenanceType; intervalType: IntervalType; intervalValue: string; nextDueDate: string; nextDueValue: string; checkoutBlocking: boolean };
@@ -54,7 +56,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
     const intervalValue = from ? String(from.intervalValue) : '365';
     setDraft({
       id: ownSchedule ? from?.id : undefined,
-      type: (from?.maintenanceType ?? 'dguv_v3') as MaintenanceType,
+      type: from?.maintenanceType ?? 'dguv_v3',
       intervalType,
       intervalValue,
       nextDueDate: from?.nextDueAt ? dateInputValue(new Date(from.nextDueAt)) : daysFromToday(Number(intervalValue) || 0),
@@ -165,7 +167,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
         <Stack spacing={2} sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             <TextField select fullWidth label={t('Prüftyp', 'Inspection type')} value={draft.type} disabled={Boolean(draft.id)}
-              onChange={(event) => setDraft({ ...draft, type: event.target.value as MaintenanceType })}
+              onChange={(event) => setDraft({ ...draft, type: oneOf(event.target.value, MAINTENANCE_TYPES) })}
               error={Boolean(duplicateType)} helperText={duplicateType ? t('Für diesen Prüftyp gibt es bereits ein Intervall.', 'This inspection type already has an interval.') : undefined}>
               {MAINTENANCE_TYPES.map((type) => <MenuItem key={type} value={type}>{maintenanceTypeLabel(type)}</MenuItem>)}
             </TextField>

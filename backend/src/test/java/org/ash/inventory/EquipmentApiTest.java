@@ -44,10 +44,10 @@ class EquipmentApiTest {
         var profile = profile(0); profile.put("ownershipType", "organization"); profile.put("availabilityPolicy", "available");
         reader().body(profile).put(path(item)).then().statusCode(403);
         admin().body(profile).put(path(item)).then().statusCode(200).body("keeperName", equalTo("Garage keeper"));
-        admin().get("/api/items/" + item).then().statusCode(200).body("stock.totalOwned", equalTo(3)).body("stock.available", equalTo(3)).body("visibilityScope", equalTo("global"));
+        admin().get("/api/items/" + item).then().statusCode(200).body("stock.totalOwned", equalTo(3)).body("stock.available", equalTo(3)).body("access.privateResource", equalTo(false));
         admin().body(profile(0)).put(path(item)).then().statusCode(409);
         admin().body(profile(1)).put(path(item)).then().statusCode(200);
-        admin().get("/api/items/" + item).then().statusCode(200).body("stock.totalOwned", equalTo(0)).body("stock.onHand", equalTo(3)).body("stock.available", equalTo(0)).body("visibilityScope", equalTo("global"));
+        admin().get("/api/items/" + item).then().statusCode(200).body("stock.totalOwned", equalTo(0)).body("stock.onHand", equalTo(3)).body("stock.available", equalTo(0)).body("access.privateResource", equalTo(false));
         admin().body(checkout(item, null, 1)).post("/api/transactions").then().statusCode(409);
     }
 
@@ -174,7 +174,7 @@ class EquipmentApiTest {
     }
 
     @Test void catalogScopeAlsoProtectsEquipmentDetailsAndAvailability() {
-        String item = admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "Scoped private stock", "category", "F19", "amount", 1, "visibilityScope", "group", "assignedGroup", "F19-secret"))
+        String item = admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "Scoped private stock", "category", "F19", "amount", 1, "privateResource", true))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         makePrivate(item);
         reader().get(path(item)).then().statusCode(404);

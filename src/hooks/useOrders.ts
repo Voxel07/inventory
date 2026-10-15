@@ -1,16 +1,21 @@
 import type { GeneralOrderSummary, GeneralOrderFormData } from '../types';
 import { generalOrderApi, transitionOrder } from '../services/orderService';
-import { createMutableResourceHooks } from './useResourceApi';
 import { useMutation } from '@tanstack/react-query';
-import { useProgressiveList } from './useProgressiveList';
+import { usePagedList } from './usePagedList';
 
-export const {
-  useCreate: useCreateOrder,
-  useUpdate: useUpdateOrder,
-} = createMutableResourceHooks<GeneralOrderSummary, GeneralOrderFormData>(generalOrderApi, 'general-orders');
+export function useCreateOrder() {
+  return useMutation({ mutationFn: (data: GeneralOrderFormData) => generalOrderApi.create(data) });
+}
 
-export function useOrders() {
-  return useProgressiveList<GeneralOrderSummary>(['general-orders'], (page, size) => generalOrderApi.getAll({ page, size }));
+export function useUpdateOrder() {
+  return useMutation({ mutationFn: ({ id, data }: { id: string; data: Partial<GeneralOrderFormData> }) => generalOrderApi.update(id, data) });
+}
+
+export type GeneralOrderQuery = { status?: readonly GeneralOrderSummary['status'][]; eventId?: string; eventType?: string; search?: string };
+
+/** Every filter runs on the server, so a screen never pages through orders it does not show. */
+export function useOrders(query: GeneralOrderQuery = {}) {
+  return usePagedList<GeneralOrderSummary>(['general-orders', query], (page, size) => generalOrderApi.getPage(query, page, size));
 }
 
 export function useTransitionOrder() {

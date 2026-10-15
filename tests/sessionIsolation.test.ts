@@ -33,7 +33,7 @@ mock.module('../src/services/oidcClient', () => ({
   beginOidcLogin: async () => {}, completeOidcLogin: async () => null, oidcLogoutUrl: async () => '', revokeOidcToken: async () => {},
 }));
 mock.module('../src/services/authStorage', () => ({
-  loadStoredAuthSession: () => loadSession(), saveStoredAuthSession: async () => {}, clearStoredAuthSession: async () => {},
+  loadStoredAuthSession: () => loadSession(), saveStoredAuthSession: async () => {}, clearStoredAuthSession: async () => {}, signedOutRevision: () => 0,
 }));
 mock.module('../src/store/uiStore', () => ({ useUIStore: { getState: () => ({
   resetTransactionFilters: () => {}, hideSnackbar: () => {}, showSnackbar: () => {},
@@ -491,16 +491,27 @@ test('a queue write committed during account switching keeps its original owner 
   expect(await offline.getOfflineHistory()).toEqual([]);
 });
 
-test('pagination preserves filtered-page ordering and stops fetching after an account switch', async () => {
+test('pagination follows the server continuation, not the row count, and stops after an account switch', async () => {
   signIn('A');
-  const calls: number[] = [];
-  const first = [{ id: 'one' }];
-  const completeness = await import('../src/services/pageCompleteness');
-  completeness.recordFilteredRows(first, 1);
-  const rows = await pagination.loadAllPages(async page => { calls.push(page); return page === 0 ? first : [{ id: 'two' }]; }, 2);
-  expect(rows).toEqual([{ id: 'one' }, { id: 'two' }]);
-  expect(calls).toEqual([0, 1]);
-  await expect(pagination.loadAllPages(async () => { signIn('B'); return first; }, 2)).rejects.toBeInstanceOf(auth.SessionChangedError);
+  connectivity.onLine = true;
+  const requested: string[] = [];
+  fetchRequest = (async (url) => {
+    requested.push(String(url));
+    const page = new URL(String(url)).searchParams.get('page');
+    // Page 0 lost a row to privacy filtering (1 of 2 rows) but the server still reports more rows.
+    return page === '0'
+      ? new Response(JSON.stringify([{ id: 'one' }]), { headers: { 'Content-Type': 'application/json', 'X-Has-More': 'true' } })
+      : new Response(JSON.stringify([{ id: 'two' }, { id: 'three' }]), { headers: { 'Content-Type': 'application/json', 'X-Has-More': 'false' } });
+  }) as typeof fetch;
+  const first = await api.apiPage<{ id: string }>('/api/paged-test', 0, 2);
+  expect(first).toEqual({ rows: [{ id: 'one' }], page: 0, size: 2, more: true });
+  const rows = await pagination.loadAllPages((page, size) => api.apiPage<{ id: string }>('/api/paged-test', page, size), 2);
+  expect(rows).toEqual([{ id: 'one' }, { id: 'two' }, { id: 'three' }]);
+  expect(requested.map((url) => new URL(url).searchParams.get('page'))).toEqual(['0', '0', '1']);
+  expect(pagination.mapPage(first, (row) => row.id)).toEqual({ rows: ['one'], page: 0, size: 2, more: true });
+  await expect(pagination.loadAllPages(async () => { signIn('B'); return { rows: [{ id: 'one' }], page: 0, size: 2, more: true }; }, 2))
+    .rejects.toBeInstanceOf(auth.SessionChangedError);
+  connectivity.onLine = false;
 });
 
 test('QR links resolve exact assets and locations without making a request or changing stock', async () => {
@@ -569,4 +580,43 @@ test('offline replay archives each outcome without requeueing applied or conflic
   expect((await offline.getSyncFailures()).map(row => row.status).sort()).toEqual(['conflict', 'rejected']);
   await offline.flushOfflineQueue();
   expect(sent).toBe(1);
+});
+
+test('offline replay pauses on terminal failures, honours Retry-After and resumes with the same command UUIDs', async () => {
+  signIn('replay');
+  await offline.enqueueOfflineAction({ idempotencyKey: 'cmd-1', type: 'transaction', payload: { itemId: 'public-item' }, localTimestamp: '1' });
+  connectivity.onLine = true;
+  const sentKeys: string[] = [];
+  let respond: () => Response = () => new Response('', { status: 403 });
+  fetchRequest = async (_input, options) => {
+    sentKeys.push(...JSON.parse(String(options?.body)).actions.map((action: { idempotencyKey: string }) => action.idempotencyKey));
+    return respond();
+  };
+
+  await offline.flushOfflineQueue();
+  expect(offline.getSyncState()).toMatchObject({ kind: 'paused', reason: 'forbidden' });
+  await offline.flushOfflineQueue();
+  expect(sentKeys).toEqual(['cmd-1']);
+
+  respond = () => new Response(JSON.stringify({ error: 'Slow down' }), { status: 429, headers: { 'Retry-After': '7' } });
+  const before = Date.now();
+  await offline.flushOfflineQueue({ resume: true });
+  const state = offline.getSyncState();
+  expect(state).toMatchObject({ kind: 'retrying', reason: 'rate_limited' });
+  expect(Date.parse((state as { retryAt: string }).retryAt) - before).toBeGreaterThanOrEqual(7000);
+
+  respond = () => new Response('<html>proxy</html>', { status: 200 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toMatchObject({ kind: 'paused', reason: 'invalid_response' });
+
+  respond = () => new Response('', { status: 503 });
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toMatchObject({ kind: 'retrying', reason: 'server' });
+
+  respond = () => Response.json({ results: [{ idempotencyKey: 'cmd-1', status: 'applied' }] });
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toEqual({ kind: 'idle' });
+  expect(new Set(sentKeys)).toEqual(new Set(['cmd-1']));
+  expect(await offline.getOfflineActions()).toEqual([]);
 });

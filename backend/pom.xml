@@ -14,7 +14,6 @@
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.version>3.39.5</quarkus.platform.version>
-        <skipITs>true</skipITs>
         <surefire-plugin.version>3.5.6</surefire-plugin.version>
     </properties>
 
@@ -91,23 +90,9 @@
 
     <profiles>
         <profile>
-            <id>dev</id>
-            <activation>
-                <property>
-                    <name>dev</name>
-                </property>
-            </activation>
-            <dependencies>
-                <dependency>
-                    <groupId>io.quarkus</groupId>
-                    <artifactId>quarkus-jdbc-h2</artifactId>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
             <id>native</id>
             <activation><property><name>native</name></property></activation>
-            <properties><quarkus.package.jar.enabled>false</quarkus.package.jar.enabled><skipITs>false</skipITs><quarkus.native.enabled>true</quarkus.native.enabled></properties>
+            <properties><quarkus.package.jar.enabled>false</quarkus.package.jar.enabled><quarkus.native.enabled>true</quarkus.native.enabled></properties>
         </profile>
     </profiles>
 </project>

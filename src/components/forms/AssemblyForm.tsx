@@ -6,7 +6,10 @@ import { useState } from 'react';
 import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete, FormControlLabel, FormHelperText, Switch } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
-import { type AssemblyFormData, type Assembly, type Item } from '../../types';
+import { type AssemblyFormData, type Assembly } from '../../types';
+import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { LoadMore } from '../shared/LoadMore';
 import { translate, useLocalizedText } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
@@ -14,13 +17,13 @@ import { canEditCatalog } from '../../utils/access';
 interface Props {
     title: string;
     initialData?: Assembly;
-    items: Item[];
     onSubmit: (data: AssemblyFormData) => void;
     onCancel: () => void;
     isLoading?: boolean;
 }
 
-export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, isLoading }: Props) {
+/** Components are found by server search; selected components are resolved by id. */
+export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading }: Props) {
     const t = useLocalizedText();
     const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
@@ -37,16 +40,9 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
     const [search, setSearch] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
 
-    const filteredItems = (() => {
-        if (!search.trim()) return items;
-        const lower = search.toLowerCase();
-        return items.filter(
-            (item) =>
-                item.name.toLowerCase().includes(lower) ||
-                (item.category && item.category.toLowerCase().includes(lower)) ||
-                (item.storageLocation && item.storageLocation.toLowerCase().includes(lower)),
-        );
-    })();
+    const results = usePagedItems({ search: useDebouncedValue(search.trim()) || undefined, sort: 'name' }, { size: 25 });
+    const filteredItems = results.data ?? [];
+    const selected = useItemsByIds(formData.itemIds);
 
     function handleToggle(itemId: string) {
         setFormData((prev) => {
@@ -75,7 +71,7 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
         onSubmit({ ...formData, imageFile: images.files[0] ?? (initialData?.image && !images.removed.includes(initialData.image) ? images.replacements[initialData.image] : undefined), removeImage: Boolean(initialData?.image && images.removed.includes(initialData.image)) });
     }
 
-    const selectedItems = items.filter((i) => formData.itemIds.includes(i.id));
+    const selectedItems = (selected.data ?? []).filter((i) => formData.itemIds.includes(i.id));
 
     return (
         <DialogForm title={title} onSubmit={handleSubmit} onCancel={onCancel} noValidate pending={isLoading} submitDisabled={!formData.name.trim()}
@@ -171,6 +167,7 @@ export function AssemblyForm({ title, initialData, items, onSubmit, onCancel, is
                             ))}
                         </List>
                     )}
+                    <LoadMore list={results} />
                 </Paper>
             </FormSection>
 

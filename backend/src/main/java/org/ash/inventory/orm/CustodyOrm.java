@@ -20,11 +20,9 @@ public class CustodyOrm {
     public List<GeneralOrder> generalOrders(UUID actor) {
         var idsQuery = em.createNativeQuery("""
                 select o.id from general_orders o where o.status in ('picked_up', 'partially_returned')
-                and exists (select 1 from jsonb_each_text(o.handed_over_quantities) q
-                    where q.value::bigint - coalesce((o.returned_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.consumed_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.damaged_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.written_off_quantities ->> q.key)::bigint, 0) > 0)
+                and exists (select 1 from general_order_lines l where l.general_order_id = o.id
+                    and l.handed_over_quantity - l.returned_quantity - l.consumed_quantity
+                        - l.damaged_quantity - l.written_off_quantity > 0)
                 """ + (actor == null ? "" : " and o.created_by = :actor"), UUID.class);
         if (actor != null) idsQuery.setParameter("actor", actor);
         var ids = idsQuery.getResultList();
@@ -110,13 +108,10 @@ public class CustodyOrm {
                 .setParameter("checkout", DomainEnums.HandoverType.checkout)
                 .setParameter("missing", DomainEnums.ReconciliationOutcome.missing).getSingleResult();
         if (faction > 0) return true;
-        return (Boolean) em.createNativeQuery("""
-                select exists (select 1 from general_orders o
-                    cross join lateral jsonb_each(o.asset_assignments) assignment
-                    cross join lateral jsonb_array_elements_text(assignment.value) asset
-                    where o.status in ('picked_up', 'partially_returned') and asset.value = :asset
-                    and not coalesce(o.reconciled_assets -> assignment.key, '[]'::jsonb) @> jsonb_build_array(cast(:asset as text)))
-                """, Boolean.class).setParameter("asset", assetId.toString()).getSingleResult();
+        return em.createQuery("""
+                select count(a) from GeneralOrderLineAsset a
+                where a.assetInstance.id = :asset and a.reconciled = false and a.line.order.status in ('picked_up', 'partially_returned')
+                """, Long.class).setParameter("asset", assetId).getSingleResult() > 0;
     }
     public List<CustodyHandover> handovers(UUID orderId, int offset, int limit) {
         return em.createQuery("""
