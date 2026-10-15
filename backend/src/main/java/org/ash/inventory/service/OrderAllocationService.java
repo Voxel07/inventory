@@ -5,7 +5,7 @@ import jakarta.inject.Inject;
 import org.ash.inventory.model.*;
 import java.util.UUID;
 
-/** Shared preparation policy. Aggregate services own item/asset locks, reservations and histories. */
+/** Preparation policy; OrderService owns item/asset locks, reservations and history for both kinds. */
 @ApplicationScoped
 public class OrderAllocationService {
     @Inject InventoryOperationsService inventory;
@@ -13,8 +13,8 @@ public class OrderAllocationService {
     @Inject PositionService positions;
 
     /** Source facts of one item for one preparation, excluding the order's own previous reservation. */
-    public PositionService.Capacity capacity(Item item, UUID factionOrderId, UUID generalOrderId) {
-        return positions.capacity(item, factionOrderId, generalOrderId);
+    public PositionService.Capacity capacity(Item item, UUID orderId) {
+        return positions.capacity(item, orderId);
     }
 
     public int sourceCapacity(Item item, PositionService.Capacity capacity, StorageLocation source, int preparedQuantity) {

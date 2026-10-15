@@ -19,10 +19,10 @@ import java.util.Map;
 import java.util.UUID;
 
 @Entity
-@Table(name = "faction_order_history")
-public class FactionOrderHistory {
+@Table(name = "order_history")
+public class OrderHistory {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) public Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_order_id") public FactionOrder order;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_id") public InventoryOrder order;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "actor_id") public UserAccount actor;
     @Column(nullable = false) public String action;
     @Column(name = "occurred_at", nullable = false, updatable = false) public Instant occurredAt;
@@ -30,6 +30,6 @@ public class FactionOrderHistory {
     @Column(name = "to_status") public String toStatus;
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "delta_snapshot", columnDefinition = "jsonb", nullable = false) public Map<String, Object> deltaSnapshot = new LinkedHashMap<>();
     @Column(name = "idempotency_key", unique = true) public UUID idempotencyKey;
-    public String notes;
+    @Column(length = 4000) public String notes;
     @PrePersist void prePersist() { if (occurredAt == null) occurredAt = Instant.now(); }
 }

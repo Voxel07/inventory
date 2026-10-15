@@ -1,12 +1,14 @@
 import { apiRequest } from './apiClient';
+import { orderPath } from './orderCommands';
+import type { OrderKind } from '../types/orderCommands';
 
-export type OrderKind = 'faction' | 'general';
+export type { OrderKind } from '../types/orderCommands';
 export type PickupAssignment = { responsiblePersonId: string | null; groupName: string; pickupLocationId: string | null };
 export type PickupLine = { itemId: string; name: string; ordered: number; prepared: number };
 export type PickupGroup = { key: string; name: string; responsiblePersonId?: string; responsiblePersonName?: string; pickupLocationId?: string; pickupLocationName?: string; items: PickupLine[] };
 export type PickupPlan = { orderName: string; status: string; canEdit: boolean; pickupPointsComplete: boolean; groups: PickupGroup[] };
 export type ItemResponsibility = { responsiblePersonId?: string; responsiblePersonName?: string };
-const path = (kind: OrderKind, id: string) => `/api/${kind === 'faction' ? 'orders' : 'general-orders'}/${id}/pickup-groups`;
+const path = (kind: OrderKind, id: string) => `${orderPath(kind, id)}/pickup-groups`;
 export const orderPickupApi = {
   get: (kind: OrderKind, id: string): Promise<PickupPlan> => apiRequest(path(kind, id)),
   save: (kind: OrderKind, id: string, assignments: Record<string, PickupAssignment>): Promise<PickupPlan> => apiRequest(path(kind, id), { method: 'PATCH', body: { assignments } }),

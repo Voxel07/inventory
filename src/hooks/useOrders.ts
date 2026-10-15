@@ -1,10 +1,10 @@
 import type { GeneralOrderSummary, GeneralOrderFormData } from '../types';
-import { generalOrderApi, transitionOrder } from '../services/orderService';
+import { createOrder, generalOrderApi, transitionOrder } from '../services/orderService';
 import { useMutation } from '@tanstack/react-query';
 import { usePagedList } from './usePagedList';
 
 export function useCreateOrder() {
-  return useMutation({ mutationFn: (data: GeneralOrderFormData) => generalOrderApi.create(data) });
+  return useMutation({ mutationFn: (data: GeneralOrderFormData) => createOrder(data) });
 }
 
 export function useUpdateOrder() {
@@ -20,7 +20,6 @@ export function useOrders(query: GeneralOrderQuery = {}) {
 
 export function useTransitionOrder() {
   return useMutation({
-    mutationFn: ({ id, action, assetAssignments }: { id: string; action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel'; assetAssignments?: Record<string, string[]> }) => transitionOrder(id, action, assetAssignments),
+    mutationFn: ({ id, action }: { id: string; action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel' }) => transitionOrder(id, action),
   });
 }
-

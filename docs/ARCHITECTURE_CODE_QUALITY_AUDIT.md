@@ -6,7 +6,7 @@ Date: 15 October 2026 · Source revision: `e4af25f` · Status: **remediated in t
 
 Verification of the earlier remediations: backend `mvn test` against PostgreSQL 18, frontend `tsc -b` (app, node and the new fixtures project, all `strict`) with TS 7 and TS 6, `eslint .`, `bun test`. Results are listed under "Verification" below. The browser previews were rendered headlessly (Firefox) against the Vite dev server. The subsequent L13 translation migration has its own static verification below; builds and test suites were not rerun, per `AGENTS.md`.
 
-Ordered by priority. Every finding was fixed except the remainder listed as "Open" under H12.
+Ordered by priority. Every finding is implemented, including H12 part 3; its static verification and runtime acceptance limits are recorded below.
 
 | Finding | Status | Evidence |
 |---|---|---|
@@ -21,7 +21,7 @@ Ordered by priority. Every finding was fixed except the remainder listed as "Ope
 | H09 | Done | `strict` explicit in every tsconfig (0 diagnostics with TS 7 and TS 6); `Item.storageLocation`/`returnLocation`/`stock` nullable, `Item.barcode` removed, `isConsumable` a required read-only projection; realtime payloads decoded (`decodeServerChange`), stored OIDC transaction decoded. Generated OpenAPI contracts remain PLAN-04 |
 | H10 | Done | `apiTransport.ts`, `SyncState` idle/retrying/paused, `Retry-After`; `sessionIsolation.test.ts` |
 | H11 | Done | 15 s provider timeout, 45 s lock wait, abort signal passed into token acquisition |
-| H12 | Parts 1–2 done, part 3 open | Part 1: `general_order_lines` + `general_order_line_assets` replace the JSON maps. Part 2: `OrderReturnPolicy` holds the shared return rules (consumable check, admin + reason for write-offs, outstanding bound, return-damage severity) for both aggregates. **Open:** part 3, one `orders` aggregate by kind (PLAN-02); a schema/API/UI convergence that needs its own change |
+| H12 | Done | `InventoryOrder.kind=faction/general`, `orders`, `order_lines`, one asset-assignment/history/reservation model and `OrderService` lifecycle. Removed both replaced entity families and `GeneralOrderService`/`GeneralOrderOrm`; shared REST command contracts, MCP commands, replay and UI history/evidence. See H12 completion for verification limits |
 | L01–L04 | Done | Dead helpers, listeners and 26 imports removed; unused `ash-api-event` dispatch and `personalItems` util removed |
 | L06 | Done | `OfflineCommand` discriminated union (no payload casts); shared `MaintenanceType`/`MaintenanceResult` unions; `oneOf()` validates generic form values |
 | L07 | Done | `ActionButtons` forwards every prop/ref unchanged; contract documented; inner ref no longer claims `HTMLElement` |
@@ -40,6 +40,16 @@ Found and fixed along the way:
 - `ArchitectureApiCoverageTest.sseDispatchesOnlyPublicEventClassification` could hang the whole suite: it broadcast once (possibly before the stream subscribed), and on timeout the executor waited on a blocked read. It now retries the broadcast and closes the stream first.
 - The browser previews used removed hooks, list props and roles (`hq_admin`).
 - `tests/refactoring.sample-smoke.ts` still sent the removed `consumable` input.
+
+### H12 part 3 completion (15 October 2026)
+
+- [x] High: converge the disposable baseline and entities on `orders`/`order_lines` with an immutable kind discriminator, optional general-order event and required faction metadata; remove the replaced tables/entities directly.
+- [x] High: use one preparation/pickup/return/cancellation implementation, stock reservations, serialized assignments, custody handovers, reconciliation records and append-only `order_history`. Keep faction membership, general-order ownership/draft editing, warehouse/takeout permissions and shortage behavior explicit.
+- [x] High: converge stock, source capacity, planning, event metrics, custody and privacy queries; general reservations no longer need a second summation path. Settled serialized assignments remain marked reconciled even if an asset is later reused.
+- [x] High: expose kind-specific views under `/api/orders/faction` and `/api/orders/general` with shared preparation/transition/return payloads, history and custody evidence. Both clients use shared command helpers; `order.create` carries a kind, and replay projects the stored kind. MCP order commands call the same service and response privacy policy.
+- [x] Integration findings: remove the general-order direct-stock bypass and second return-submission association; both kinds use the same pending-return decision path. Preserve unresolved missing totals when accepting partial returns, locate bulk return damage in positions as well as stock totals, and skip zero-prepared items during pickup.
+- [x] Low: align existing fixtures/API scenarios, transaction order links, replication instructions and product/schema/plan documentation. No compatibility routes or incremental migrations added; recreate disposable databases for the changed baseline.
+- Static verification: Java analysis of 247 main/test sources (annotation processing and code generation disabled), 198 literal HQL queries parsed (dynamic queries excluded), baseline structure (57 tables, 144 ALTER foreign keys), TypeScript 7 and 6 `--noEmit` (app, fixtures, node), ESLint, translation consistency (2,488 keys/3,079 calls) and `git diff --check`: all pass. No application builds or test suites run, per `AGENTS.md`; the updated REST/MCP/replay scenarios still require runtime acceptance against a recreated PostgreSQL database.
 
 ### L13 completion (15 October 2026)
 
@@ -233,7 +243,7 @@ Implemented in the uncommitted working tree (15 October 2026); `[x]` done, `[~]`
 | [x] | 16 `refactor: page locations and assemblies` | Unpaged H07 endpoints and consumers | Large location/assembly datasets; component lookup, import and hierarchy workflows retain complete explicit reads. |
 | [x] | 17 `refactor: normalize general order lines` | First part of H12; baseline/model/query/contracts together | General preparation/pickup/return/reservation results equivalent; references enforced by schema; reset disposable data. |
 | [x] | 18 `refactor: share order reconciliation and history` | Next part of H12; extract one policy responsibility per commit | Faction/general permission differences, cancellation, missing/write-off and idempotency preserved. |
-| [ ] | 19 `refactor: unify orders by kind` | Final H12 storage/service convergence | End-to-end faction/general scenarios and REST/MCP/replay parity; remove replaced aggregates directly. |
+| [x] | 19 `refactor: unify orders by kind` | Final H12 storage/service convergence; implementation and static checks complete | Shared lifecycle/contracts and replaced aggregates removed; updated faction/general scenarios still need runtime acceptance (see H12 completion). |
 | [x] | 20 `refactor: derive maintenance and reservation state` | L09/L11 and remaining PLAN-10; split consumable authority, reservation field and maintenance authority into separate commits | Checkout/planning/report agreement; asset-specific blocking; no second source of derived state. |
 | [x] | 21 `refactor: enforce bulk position uniqueness` | L10; baseline constraint and mapping | Duplicate null-lot position rejected; distinct lots accepted; normal stock commands unaffected. |
 | [x] | 22 `chore: remove verified dead code and imports` | L01..04, pass-through part of L08 | Reference inventory/lint clean; no removed endpoint, CDI entrypoint or used support bean. |
@@ -242,7 +252,7 @@ Implemented in the uncommitted working tree (15 October 2026); `[x]` done, `[~]`
 | [x] | 25 `fix: track service worker cache operations` | L16 | Worker shutdown/quota behavior and cache-prefix-only activation cleanup. |
 | [x] | 26 `chore: align fixtures and translation ownership` | L13/L17; fixtures typed, DE/EN pairs migrated to typed i18next keys | Typed fixtures match DTOs; adversarial inputs remain explicit; DE/EN and export labels preserved; catalog parity/interpolation checks run with lint. |
 
-Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. Open: 19 (PLAN-02 aggregate convergence).
+Commit 22 can run early as an independent cleanup. Keep fixes 01..08 ahead of broad aggregate/schema redesign. Large families in 11, 13, 15, 18, 20 and 24 should expand into the explicitly listed smaller commits rather than one broad rewrite. All listed implementations are complete; H12 part 3 has static verification only.
 
 ## Focused follow-up: lot-to-item handling
 

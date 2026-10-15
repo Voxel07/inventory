@@ -61,8 +61,7 @@ public class EquipmentOrm extends EntityOrm {
 
     /** Faction and general order lines that still report missing units of the item. */
     public long missingOrderLines(Item item) {
-        return entityManager.createQuery("select count(l) from FactionOrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult()
-                + entityManager.createQuery("select count(l) from GeneralOrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult();
+        return entityManager.createQuery("select count(l) from OrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult();
     }
 
     public Long inTransitPositions(Item item) {

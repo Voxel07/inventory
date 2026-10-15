@@ -23,6 +23,40 @@ public class InventoryMcpTools {
     @Inject McpInventoryService service;
     @Inject InventoryTelemetry telemetry;
 
+    @Blocking @Tool(description = "Read either kind of order, with the same scoped detail projection as REST")
+    public com.fasterxml.jackson.databind.JsonNode get_order_details(@ToolArg(description = "Order UUID", required = true) UUID orderId) {
+        return call("get_order_details", () -> service.order(orderId));
+    }
+
+    @Blocking @Tool(description = "Create a faction order using the REST OrderInput contract and faction permissions")
+    public com.fasterxml.jackson.databind.JsonNode create_faction_order(@ToolArg(description = "OrderInput", required = true) ApiModels.OrderInput input) {
+        return call("create_faction_order", () -> service.createFactionOrder(input));
+    }
+
+    @Blocking @Tool(description = "Create a general order using the REST GeneralOrderInput contract; ASH crew or warehouse access required")
+    public com.fasterxml.jackson.databind.JsonNode create_general_order(@ToolArg(description = "GeneralOrderInput", required = true) ApiModels.GeneralOrderInput input) {
+        return call("create_general_order", () -> service.createGeneralOrder(input));
+    }
+
+    @Blocking @Tool(description = "Prepare either order kind with the shared REST PreparationInput; warehouse access required")
+    public com.fasterxml.jackson.databind.JsonNode prepare_order(@ToolArg(description = "Order UUID", required = true) UUID orderId,
+            @ToolArg(description = "PreparationInput: preparedQuantities, assetAssignments, sourceLocations and idempotencyKey", required = true) ApiModels.PreparationInput input) {
+        return call("prepare_order", () -> service.prepareOrder(orderId, input));
+    }
+
+    @Blocking @Tool(description = "Transition either order kind using the shared REST status and TransitionInput; kind-specific permissions and lifecycle rules apply")
+    public com.fasterxml.jackson.databind.JsonNode transition_order(@ToolArg(description = "Order UUID", required = true) UUID orderId,
+            @ToolArg(description = "Target order status", required = true) DomainEnums.OrderStatus status,
+            @ToolArg(description = "TransitionInput, including idempotencyKey", required = true) ApiModels.TransitionInput input) {
+        return call("transition_order", () -> service.transitionOrder(orderId, status, input));
+    }
+
+    @Blocking @Tool(description = "Reconcile either order kind with the shared REST ReturnInput; missing remains outstanding, write-offs require admin and a reason")
+    public com.fasterxml.jackson.databind.JsonNode return_order(@ToolArg(description = "Order UUID", required = true) UUID orderId,
+            @ToolArg(description = "ReturnInput: lines by item UUID, assets by asset UUID and idempotencyKey", required = true) ApiModels.ReturnInput input) {
+        return call("return_order", () -> service.returnOrder(orderId, input));
+    }
+
     @Blocking
     @Tool(description = "Create an item using the REST ItemInput contract. Manager access required; initial stock uses the canonical ledger and asset/position rules.")
     public ApiResponses.ItemResponse create_item(

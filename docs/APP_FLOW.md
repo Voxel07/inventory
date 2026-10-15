@@ -113,7 +113,7 @@ This is the main business lifecycle. Specialized edits, preparation reopening an
 6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
 7. Units that will not come back are written off by an inventory admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations; faction leaders may withdraw their lists while draft or submitted, afterwards only the warehouse cancels. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
 
-Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
+Faction and general workflows use one order aggregate distinguished by kind (PLAN-02). The kind-specific forms use shared preparation, transition, return, history and custody contracts under `/api/orders/faction` and `/api/orders/general`. Faction membership and general-order ownership remain separate permissions; general orders are editable only in draft.
 
 ## 6. Member self-service and two-stage returns
 
@@ -152,7 +152,7 @@ Private/external equipment lending starts with owner consent and a commitment wi
 
 1. Download organizational catalog data while online. Offline reads can only show data previously cached for this access context; freshness and incomplete lists must remain visible.
 2. While disconnected, supported stock transactions, media-free damage reports and faction-order create/prepare/transition/reconcile commands are saved with a UUID and account owner.
-3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, general orders and other operations need connectivity.
+3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, order edits and other operations need connectivity; both order kinds can queue creation, preparation, transitions and reconciliation.
 4. Reconnect under the original account and replay `/api/sync` batches. Each command rechecks rights and current stock.
 5. Applied entries leave the queue and enter history. Rejected/conflicting entries open Sync Issues with preserved evidence.
 6. Correct online using an edited payload, note and new command ID linked to the original; archive keeps history. Do not overwrite the failed command or use last-write-wins.

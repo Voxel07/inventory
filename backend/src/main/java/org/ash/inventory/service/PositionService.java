@@ -79,23 +79,23 @@ public class PositionService {
         }
     }
 
-    public Capacity capacity(Item item, UUID exceptFaction, UUID exceptGeneral) {
+    public Capacity capacity(Item item, UUID exceptOrder) {
         return new Capacity(orm.positions(item),
-                orm.reservedByLocation(List.of(item.id), exceptFaction, exceptGeneral).getOrDefault(item.id, Map.of()));
+                orm.reservedByLocation(List.of(item.id), exceptOrder).getOrDefault(item.id, Map.of()));
     }
 
-    public int availableAt(Item item, StorageLocation source, UUID exceptFaction, UUID exceptGeneral) {
+    public int availableAt(Item item, StorageLocation source, UUID exceptOrder) {
         if (source == null) return Integer.MAX_VALUE;
-        return capacity(item, exceptFaction, exceptGeneral).availableAt(source);
+        return capacity(item, exceptOrder).availableAt(source);
     }
 
     public int reservedAt(InventoryPosition position) {
-        return capacity(position.item, null, null).reservedAt(position);
+        return capacity(position.item, null).reservedAt(position);
     }
 
     /** Same FEFO allocation as reservedAt(position), materialized once for a report batch. */
     public Map<UUID, Integer> reservedAt(List<Item> items, List<InventoryPosition> orderedPositions) {
-        var reserved = orm.reservedByLocation(items.stream().map(item -> item.id).toList(), null, null);
+        var reserved = orm.reservedByLocation(items.stream().map(item -> item.id).toList(), null);
         var remaining = new HashMap<String, Integer>();
         reserved.forEach((itemId, byLocation) -> byLocation.forEach((locationId, quantity) -> remaining.put(itemId + ":" + locationId, quantity)));
         var result = new LinkedHashMap<UUID, Integer>();
@@ -166,7 +166,7 @@ public class PositionService {
         if (tx.type == DomainEnums.TransactionType.checkout) equipment.assertSource(tx.item, source);
         var all = orm.positions(tx.item);
         if (tx.type == DomainEnums.TransactionType.checkout && source != null
-                && tx.quantity > availableAt(tx.item, source, tx.factionOrder == null ? null : tx.factionOrder.id, null)) {
+                && tx.quantity > availableAt(tx.item, source, tx.order == null ? null : tx.order.id)) {
             throw ApiException.conflict("Stock at the source is reserved or unavailable");
         }
         if (source == null && all.isEmpty() && tx.item.trackingMode != DomainEnums.TrackingMode.lot_tracked) return;

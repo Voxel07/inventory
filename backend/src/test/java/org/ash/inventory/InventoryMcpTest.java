@@ -261,16 +261,22 @@ class InventoryMcpTest {
     @Test
     void positionsIncludePreparedReservationsAndWholePoolContributorHold() {
         QuarkusTransaction.requiringNew().run(() -> {
-            var order = new GeneralOrder();
+            var order = new InventoryOrder();
             order.name = "MCP reserved " + UUID.randomUUID();
+            order.kind = InventoryOrder.Kind.general;
             order.purpose = "Position availability regression";
             order.createdBy = em.find(UserAccount.class, owner.id);
-            order.status = "ready";
-            var line = new org.ash.inventory.model.GeneralOrderLine();
+            order.status = DomainEnums.OrderStatus.ready;
+            var line = new org.ash.inventory.model.OrderLine();
             line.order = order; line.item = em.find(Item.class, bulk.id); line.lineNumber = 1;
             line.requestedQuantity = 3; line.preparedQuantity = 3; line.sourceLocation = em.find(StorageLocation.class, location.id);
             order.lines.add(line);
             em.persist(order);
+            var reservation = new StockReservation();
+            reservation.order = order; reservation.orderLine = line; reservation.item = line.item;
+            reservation.location = line.sourceLocation; reservation.createdBy = order.createdBy;
+            reservation.requestedQuantity = 3; reservation.reservedQuantity = 3;
+            em.persist(reservation);
         });
         var position = tools.get_inventory_positions(bulk.id).getFirst();
         assertEquals(3, position.quantityReserved());
@@ -281,14 +287,14 @@ class InventoryMcpTest {
             faction.slug = UUID.randomUUID().toString();
             faction.eventType = "MILSIM";
             em.persist(faction);
-            var order = new FactionOrder();
+            var order = new InventoryOrder();
             order.orderCode = "MCP-ORDER-" + UUID.randomUUID();
             order.eventOccurrence = em.find(EventOccurrence.class, event.id);
             order.faction = faction;
             order.createdBy = em.find(UserAccount.class, owner.id);
             order.status = DomainEnums.OrderStatus.ready;
             em.persist(order);
-            var line = new FactionOrderLine();
+            var line = new OrderLine();
             line.order = order;
             line.item = em.find(Item.class, bulk.id);
             line.requestedQuantity = 3;

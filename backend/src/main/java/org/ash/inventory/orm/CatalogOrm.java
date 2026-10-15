@@ -164,8 +164,7 @@ public class CatalogOrm extends EntityOrm {
     /** Orders, movements, returns and owner commitments are history that must keep their event. */
     public boolean hasEventHistory(UUID eventId) {
         for (String query : List.of(
-                "select o.id from FactionOrder o where o.eventOccurrence.id = :id",
-                "select o.id from GeneralOrder o where o.eventOccurrence.id = :id",
+                "select o.id from InventoryOrder o where o.eventOccurrence.id = :id",
                 "select o.id from PurchaseOrder o where o.eventOccurrence.id = :id",
                 "select t.id from StockTransaction t where t.eventOccurrence.id = :id",
                 "select r.id from ReturnSubmission r where r.eventOccurrence.id = :id",
@@ -308,22 +307,18 @@ public class CatalogOrm extends EntityOrm {
         var row = (Object[]) entityManager.createNativeQuery("""
                 select
                     exists (select 1 from stock_transactions t
-                        where t.item_id = :item and t.faction_order_id is null and t.related_entity_type is null
+                        where t.item_id = :item and t.order_id is null and t.related_entity_type is null
                             and (t.type in ('checkout', 'checkin', 'consumed') or (t.type = 'written_off' and t.custody_write_off))
                         group by t.user_id, t.event_occurrence_id, t.asset_instance_id
                         having sum(case when t.type = 'checkout' then t.quantity else -t.quantity end) > 0),
-                    exists (select 1 from faction_order_lines l join faction_orders o on o.id = l.faction_order_id
-                        where l.item_id = :item and (o.status not in ('returned', 'closed', 'cancelled')
-                            or l.handed_over_quantity - l.returned_quantity - l.consumed_quantity
-                                - l.damaged_quantity - l.written_off_quantity > 0)),
-                    exists (select 1 from general_order_lines l join general_orders o on o.id = l.general_order_id
+                    exists (select 1 from order_lines l join orders o on o.id = l.order_id
                         where l.item_id = :item and (o.status not in ('returned', 'closed', 'cancelled')
                             or l.handed_over_quantity - l.returned_quantity - l.consumed_quantity
                                 - l.damaged_quantity - l.written_off_quantity > 0)),
                     exists (select 1 from return_submissions r where r.item_id = :item and r.status = 'pending'),
                     exists (select 1 from stock_reservations r where r.item_id = :item and r.status in ('active', 'partially_released'))
                 """).setParameter("item", item.id).getSingleResult();
-        var labels = List.of("outstanding direct custody", "open faction orders", "open general orders",
+        var labels = List.of("outstanding direct custody", "open orders",
                 "pending returns", "active reservations");
         var result = new ArrayList<String>();
         for (int i = 0; i < labels.size(); i++) if (Boolean.TRUE.equals(row[i])) result.add(labels.get(i));

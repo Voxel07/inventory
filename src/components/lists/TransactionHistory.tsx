@@ -84,7 +84,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
             fontSize: '0.7rem',
             '& .MuiChip-label': { px: 0.75 },
         } : undefined;
-        if (!tx.factionOrderId) {
+        if (!tx.orderId) {
             if (!tx.eventType || !tx.faction) return null;
             return (
                 <Chip
@@ -95,16 +95,16 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                 />
             );
         }
-        const order = tx.expand?.factionOrderId;
+        const order = tx.expand?.order;
         return (
             <Chip
                 component={Link}
                 clickable
-                to={`/orders/faction/${tx.factionOrderId}`}
+                to={order?.kind === 'general' ? `/orders?pickupOrder=${tx.orderId}&pickupKind=general` : `/orders/faction/${tx.orderId}`}
                 size="small"
                 variant="outlined"
                 color="primary"
-                label={order ? `${order.eventType} · ${order.faction}` : t('lists.transactionHistory.factionList')}
+                label={order?.orderCode ?? t('lists.transactionHistory.factionList')}
                 sx={compactSx}
             />
         );
@@ -128,7 +128,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
-                    {(tx.factionOrderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
+                    {(tx.orderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
                 </Paper>
             ))}
         </Stack>

@@ -29,6 +29,25 @@ public class McpInventoryService {
     @Inject Validator validator;
     @Inject org.ash.inventory.resource.ApiRateLimitFilter rateLimit;
     @Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
+    @Inject OrderService orders;
+    @Inject PrivacyProjectionService privacy;
+
+    public com.fasterxml.jackson.databind.JsonNode order(UUID id) { return privacy.filter(queries.orderDetail(id), true).value(); }
+    public com.fasterxml.jackson.databind.JsonNode createFactionOrder(ApiModels.OrderInput input) {
+        return privacy.filter(queries.projectOrder(orders.create(valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode createGeneralOrder(ApiModels.GeneralOrderInput input) {
+        return privacy.filter(queries.projectGeneralOrder(orders.createGeneral(valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode prepareOrder(UUID id, ApiModels.PreparationInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.prepare(id, valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode transitionOrder(UUID id, DomainEnums.OrderStatus status, ApiModels.TransitionInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.transition(id, status, valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode returnOrder(UUID id, ApiModels.ReturnInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.returnItems(id, valid(input))), false).value();
+    }
 
     /** MCP serves organization data only; tenant accounts manage their private items in the app. */
     public void authenticate() {

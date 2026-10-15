@@ -48,7 +48,7 @@ class TenantAccessApiTest {
     }
 
     @Test void tenantsCannotReachOrganizationApis() {
-        for (String path : List.of("/api/orders", "/api/general-orders", "/api/events", "/api/factions", "/api/warehouses",
+        for (String path : List.of("/api/orders/faction", "/api/orders/general", "/api/events", "/api/factions", "/api/warehouses",
                 "/api/transactions", "/api/custody-balances", "/api/member/custody", "/api/sync/audit", "/api/users",
                 "/api/reports", "/api/purchase-orders"))
             tenant().get(path).then().statusCode(403);

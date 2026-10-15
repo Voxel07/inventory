@@ -16,6 +16,8 @@ import java.util.UUID;
 public final class ApiResponses {
     private ApiResponses() {}
 
+    public sealed interface OrderDetail permits OrderResponse, GeneralOrderResponse {}
+
     public record StockDto(
             int totalOwned,
             int onHand,
@@ -41,6 +43,7 @@ public final class ApiResponses {
     ) {}
 
     public record GeneralOrderResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -60,11 +63,12 @@ public final class ApiResponses {
             Map<String, Integer> missingQuantities,
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
-            List<Map<String, Object>> history,
+            List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
-    ) {}
+    ) implements OrderDetail {}
 
     public record GeneralOrderSummaryResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -166,7 +170,7 @@ public final class ApiResponses {
             String returnedForUserName,
             String submittedById,
             String submittedByName,
-            String factionOrderId,
+            String orderId,
             String expectedReturnLocationId,
             String expectedReturnLocationName,
             String placementImage,
@@ -252,7 +256,7 @@ public final class ApiResponses {
             String destinationLocationId,
             Integer availabilityBefore,
             Integer availabilityAfter,
-            String factionOrderId,
+            String orderId,
             String eventType,
             String faction,
             String damageReportId,
@@ -282,6 +286,7 @@ public final class ApiResponses {
     ) {}
 
     public record OrderHistoryResponse(
+            String id,
             String action,
             String userId,
             String userName,
@@ -293,6 +298,7 @@ public final class ApiResponses {
     ) {}
 
     public record OrderResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -334,10 +340,11 @@ public final class ApiResponses {
             List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
             , Map<String, String> sourceLocations
-    ) {}
+    ) implements OrderDetail {}
 
     /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */
     public record OrderSummaryResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -385,7 +392,7 @@ public final class ApiResponses {
             int writtenOffAmount,
             String reportedBy,
             String handledBy,
-            String factionOrderId,
+            String orderId,
             String description,
             String severity,
             String status,

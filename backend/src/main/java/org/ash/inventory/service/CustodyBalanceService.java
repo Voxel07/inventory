@@ -27,43 +27,31 @@ public class CustodyBalanceService {
         boolean all = !mine && actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
         UUID recipient = all ? null : actor.id;
         var rows = new LinkedHashMap<String, Balance>();
-        var factionLines = orm.factionLines(recipient);
-        var generalOrders = orm.generalOrders(recipient);
-        var generalItems = orm.items(generalOrders.stream().flatMap(o -> o.lines.stream()).filter(line -> line.handedOverQuantity > 0).map(line -> line.item.id).distinct().toList());
+        var lines = orm.orderLines(recipient);
         var direct = orm.directBalances(recipient);
-        var items = new ArrayList<Item>(generalItems.values());
-        factionLines.forEach(line -> items.add(line.item)); direct.forEach(tx -> items.add(tx.item()));
+        var items = new ArrayList<Item>();
+        lines.forEach(line -> items.add(line.item)); direct.forEach(tx -> items.add(tx.item()));
         var policies = new ArrayList<InventoryAccessPolicy>();
         for (var item : items) {
             var location = item.returnLocation == null ? item.storageLocation : item.returnLocation;
             if (location != null) policies.add(location.accessPolicy);
         }
         accessViews.prepare(policies);
-        for (var line : factionLines) {
+        for (var line : lines) {
             var order = line.order;
+            boolean faction = order.kind == InventoryOrder.Kind.faction;
             int outstanding = CustodyQuantities.outstanding(line);
-            if (outstanding > 0) {
-                var row = balance(line.item, order.createdBy, order.eventOccurrence, order.id, null, null, outstanding,
-                        order.collectorName == null ? order.faction.name : order.collectorName);
-                var prior = rows.get(row.key());
-                rows.put(row.key(), copy(row, outstanding + (prior == null ? 0 : prior.checkedOut()), 0));
-            }
-        }
-        for (var order : generalOrders) {
-            for (var line : order.lines) {
-                var item = generalItems.get(line.item.id);
-                int outstanding = CustodyQuantities.outstanding(line);
-                if (line.handedOverQuantity <= 0 || outstanding <= 0) continue;
-                if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-                    for (var assignment : line.assets) {
-                        if (assignment.reconciled) continue;
-                        var row = balance(item, order.createdBy, order.eventOccurrence, null, order.id, assignment.assetInstance.id, 1, null);
-                        rows.put(row.key(), row);
-                    }
-                } else {
-                    var row = balance(item, order.createdBy, order.eventOccurrence, null, order.id, null, outstanding, null);
+            if (!faction && line.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+                for (var assignment : line.assets) {
+                    if (assignment.reconciled) continue;
+                    var row = balance(line.item, order.createdBy, order.eventOccurrence, null, order.id, assignment.assetInstance.id, 1, null);
                     rows.put(row.key(), row);
                 }
+            } else {
+                var row = balance(line.item, order.createdBy, order.eventOccurrence, faction ? order.id : null, faction ? null : order.id,
+                        null, outstanding, faction ? (order.collectorName == null ? order.factionLabel() : order.collectorName) : null);
+                var prior = rows.get(row.key());
+                rows.put(row.key(), copy(row, outstanding + (prior == null ? 0 : prior.checkedOut()), 0));
             }
         }
         for (var tx : direct) {

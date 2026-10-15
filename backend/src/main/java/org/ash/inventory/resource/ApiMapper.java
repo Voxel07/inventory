@@ -10,10 +10,10 @@ import org.ash.inventory.model.DomainEvent;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Faction;
-import org.ash.inventory.model.FactionOrder;
-import org.ash.inventory.model.FactionOrderHistory;
-import org.ash.inventory.model.FactionOrderLine;
-import org.ash.inventory.model.GeneralOrder;
+
+import org.ash.inventory.model.OrderHistory;
+import org.ash.inventory.model.OrderLine;
+import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.Notification;
@@ -63,9 +63,10 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.GeneralOrderResponse generalOrder(GeneralOrder value, Map<String, String> itemNames,
-            List<org.ash.inventory.model.GeneralOrderHistory> history) {
+    public ApiResponses.GeneralOrderResponse generalOrder(InventoryOrder value, Map<String, String> itemNames,
+            List<org.ash.inventory.model.OrderHistory> history) {
         return new ApiResponses.GeneralOrderResponse(
+                value.kind.name(),
                 value.id,
                 value.createdAt,
                 value.updatedAt,
@@ -73,30 +74,26 @@ public class ApiMapper {
                 value.purpose,
                 value.createdBy.id.toString(),
                 value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
-                value.status,
+                value.status.name(),
                 value.quantities(line -> line.requestedQuantity),
                 value.quantities(line -> line.handedOverQuantity),
                 value.quantities(line -> line.returnedQuantity),
                 value.quantities(line -> line.consumedQuantity),
-                value.perItem(org.ash.inventory.model.GeneralOrderLine::assetIds),
+                value.perItem(org.ash.inventory.model.OrderLine::assetIds),
                 itemNames,
                 value.quantities(line -> line.preparedQuantity),
                 value.quantities(line -> line.damagedQuantity),
                 value.quantities(line -> line.missingQuantity),
                 value.quantities(line -> line.writtenOffQuantity),
-                value.perItem(org.ash.inventory.model.GeneralOrderLine::reconciledAssetIds),
-                history.stream().map(h -> {
-                            var row = new LinkedHashMap<String, Object>();
-                            row.put("id", h.id); row.put("actorName", h.actor.name); row.put("actorId", h.actor.id);
-                            row.put("timestamp", h.occurredAt); row.put("action", h.action); row.put("notes", h.notes); row.put("delta", h.delta);
-                            return (Map<String, Object>) row;
-                        }).toList(),
+                value.perItem(org.ash.inventory.model.OrderLine::reconciledAssetIds),
+                history.stream().map(this::history).toList(),
                 Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
 
-    public ApiResponses.GeneralOrderSummaryResponse generalOrderSummary(GeneralOrder value, Map<String, String> itemNames) {
+    public ApiResponses.GeneralOrderSummaryResponse generalOrderSummary(InventoryOrder value, Map<String, String> itemNames) {
         return new ApiResponses.GeneralOrderSummaryResponse(
+                value.kind.name(),
                 value.id,
                 value.createdAt,
                 value.updatedAt,
@@ -104,18 +101,18 @@ public class ApiMapper {
                 value.purpose,
                 value.createdBy.id.toString(),
                 value.eventOccurrence == null ? null : value.eventOccurrence.id.toString(),
-                value.status,
+                value.status.name(),
                 value.quantities(line -> line.requestedQuantity),
                 value.quantities(line -> line.handedOverQuantity),
                 value.quantities(line -> line.returnedQuantity),
                 value.quantities(line -> line.consumedQuantity),
-                value.perItem(org.ash.inventory.model.GeneralOrderLine::assetIds),
+                value.perItem(org.ash.inventory.model.OrderLine::assetIds),
                 itemNames,
                 value.quantities(line -> line.preparedQuantity),
                 value.quantities(line -> line.damagedQuantity),
                 value.quantities(line -> line.missingQuantity),
                 value.quantities(line -> line.writtenOffQuantity),
-                value.perItem(org.ash.inventory.model.GeneralOrderLine::reconciledAssetIds),
+                value.perItem(org.ash.inventory.model.OrderLine::reconciledAssetIds),
                 Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
@@ -220,7 +217,7 @@ public class ApiMapper {
                 value.returnedFor.name,
                 value.submittedBy.id.toString(),
                 value.submittedBy.name,
-                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.order == null ? null : value.order.id.toString(),
                 value.expectedReturnLocation == null ? null : value.expectedReturnLocation.id.toString(),
                 value.expectedReturnLocation == null ? null : value.expectedReturnLocation.name,
                 media.mediaReference(value.placementImageObjectKey),
@@ -296,8 +293,8 @@ public class ApiMapper {
         expand.put("userId", user(value.user));
         if (value.assetInstance != null)
             expand.put("assetInstanceId", asset(value.assetInstance));
-        if (value.factionOrder != null) {
-            expand.put("factionOrderId", orderSummary(value.factionOrder));
+        if (value.order != null) {
+            expand.put("order", orderSummary(value.order));
         }
         return new ApiResponses.TransactionResponse(
                 value.id,
@@ -313,7 +310,7 @@ public class ApiMapper {
                 value.destinationLocation == null ? null : value.destinationLocation.id.toString(),
                 value.availabilityBefore,
                 value.availabilityAfter,
-                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.order == null ? null : value.order.id.toString(),
                 value.eventType,
                 value.faction,
                 value.damageReport == null ? null : value.damageReport.id.toString(),
@@ -325,7 +322,7 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.OrderResponse order(FactionOrder value, List<FactionOrderLine> lines,
+    public ApiResponses.OrderResponse order(InventoryOrder value, List<OrderLine> lines,
             Map<AssemblyItemId, Integer> componentQuantities, List<ApiResponses.ItemResponse> itemViews,
             List<ApiResponses.AssemblyResponse> assemblyViews, List<ApiResponses.OrderHistoryResponse> history,
             Map<String, List<ApiResponses.AssetInstanceResponse>> assetAssignments, Map<String, String> sourceLocations) {
@@ -381,6 +378,7 @@ public class ApiMapper {
             expand.put("pickupLocation", location(value.pickupLocation));
 
         return new ApiResponses.OrderResponse(
+                value.kind.name(),
                 value.id,
                 value.createdAt,
                 value.updatedAt,
@@ -425,7 +423,7 @@ public class ApiMapper {
         );
     }
 
-    public ApiResponses.OrderSummaryResponse orderSummary(FactionOrder value, List<FactionOrderLine> lines,
+    public ApiResponses.OrderSummaryResponse orderSummary(InventoryOrder value, List<OrderLine> lines,
             Map<AssemblyItemId, Integer> componentQuantities) {
         var quantities = OrderQuantities.from(lines, componentQuantities);
         var requested = quantities.requested();
@@ -445,6 +443,7 @@ public class ApiMapper {
                 ? Map.of()
                 : Map.of("pickupLocation", location(value.pickupLocation));
         return new ApiResponses.OrderSummaryResponse(
+                value.kind.name(),
                 value.id, value.createdAt, value.updatedAt, value.orderCode,
                 value.eventOccurrence.eventType, value.eventOccurrence.id, value.eventOccurrence.startDate,
                 value.requestedPickupDate, value.faction.name, value.faction.id,
@@ -475,7 +474,7 @@ public class ApiMapper {
                 value.writtenOffQuantity,
                 value.reporter.id.toString(),
                 value.handler == null ? null : value.handler.id.toString(),
-                value.factionOrder == null ? null : value.factionOrder.id.toString(),
+                value.order == null ? null : value.order.id.toString(),
                 value.description,
                 value.severity.name(),
                 value.status.name(),
@@ -516,11 +515,12 @@ public class ApiMapper {
                 value.payload,
                 value.createdAt,
                 value.readAt,
-                value.factionOrder == null ? null : value.factionOrder.id);
+                value.order == null ? null : value.order.id);
     }
 
-    public ApiResponses.OrderHistoryResponse history(FactionOrderHistory value) {
+    public ApiResponses.OrderHistoryResponse history(OrderHistory value) {
         return new ApiResponses.OrderHistoryResponse(
+                value.id.toString(),
                 value.action,
                 value.actor.id.toString(),
                 value.actor.name,
@@ -532,17 +532,20 @@ public class ApiMapper {
         );
     }
 
-    public Map<String, Object> orderSummary(FactionOrder value) {
+    public Map<String, Object> orderSummary(InventoryOrder value) {
         var result = new LinkedHashMap<String, Object>();
         result.put("id", value.id.toString());
-        result.put("orderCode", value.orderCode);
-        result.put("eventType", value.eventOccurrence.eventType);
-        result.put("eventOccurrenceId", value.eventOccurrence.id.toString());
-        result.put("eventDate", value.eventOccurrence.startDate);
+        result.put("kind", value.kind.name());
+        result.put("orderCode", value.label());
+        if (value.eventOccurrence != null) {
+            result.put("eventType", value.eventOccurrence.eventType);
+            result.put("eventOccurrenceId", value.eventOccurrence.id.toString());
+            result.put("eventDate", value.eventOccurrence.startDate);
+        }
         if (value.requestedPickupDate != null)
             result.put("requestedPickupDate", value.requestedPickupDate);
-        result.put("faction", value.faction.name);
-        result.put("factionId", value.faction.id.toString());
+        result.put("faction", value.factionLabel());
+        if (value.faction != null) result.put("factionId", value.faction.id.toString());
         result.put("status", value.status.name());
         return result;
     }

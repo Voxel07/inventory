@@ -8,6 +8,7 @@ export interface DamageStatusHistoryEntry {
 }
 
 export interface DamageReport {
+  orderId?: string;
   id: string;
   itemId?: string;
   itemName?: string;

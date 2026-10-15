@@ -16,7 +16,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "custody_handovers")
 public class CustodyHandover extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_order_id") public FactionOrder order;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_id") public InventoryOrder order;
     @Enumerated(EnumType.STRING) @Column(name = "handover_type", nullable = false) public DomainEnums.HandoverType type;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "marshal_id") public UserAccount marshal;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "collector_id") public UserAccount collector;

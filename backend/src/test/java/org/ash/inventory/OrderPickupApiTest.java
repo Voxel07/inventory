@@ -27,7 +27,7 @@ class OrderPickupApiTest {
     }
     private String faction(Map<String, Integer> items, Map<String, Integer> assemblies) {
         return admin().body(Map.of("eventType", "DE", "faction", "Pickup " + UUID.randomUUID(), "eventDate", "2041-06-12", "requestedQuantities", items, "requestedAssemblyQuantities", assemblies))
-                .post("/api/orders").then().statusCode(200).extract().path("id");
+                .post("/api/orders/faction").then().statusCode(200).extract().path("id");
     }
     private Map<String, Object> assignment(String person, String name, String location) {
         var result = new LinkedHashMap<String, Object>(); result.put("responsiblePersonId", person); result.put("groupName", name); result.put("pickupLocationId", location); return result;
@@ -39,13 +39,13 @@ class OrderPickupApiTest {
         String light = item("Lighting", "Lighting", tech), table = item("Tables", "Furniture", general), chair = item("Chairs", "Furniture", general);
         responsible(light, alice); responsible(table, bob); responsible(chair, bob);
         admin().get("/api/items/" + light + "/responsibility").then().statusCode(200).body("responsiblePersonName", equalTo(aliceSubject));
-        String order = faction(Map.of(light, 2, table, 3, chair, 4), Map.of()), path = "/api/orders/" + order + "/pickup-groups";
+        String order = faction(Map.of(light, 2, table, 3, chair, 4), Map.of()), path = "/api/orders/faction/" + order + "/pickup-groups";
         admin().get(path).then().statusCode(200).body("groups.size()", equalTo(2));
         admin().body(Map.of("assignments", Map.of(light, assignment(alice, "Lighting", tech), table, assignment(bob, "General event equipment", general), chair, assignment(bob, "General event equipment", general))))
                 .patch(path).then().statusCode(200).body("groups.size()", equalTo(2)).body("groups.pickupLocationId", containsInAnyOrder(tech, general));
         UUID key = UUID.randomUUID();
-        admin().body(Map.of("idempotencyKey", key)).post("/api/orders/" + order + "/transitions/submitted").then().statusCode(200);
-        admin().body(Map.of("idempotencyKey", key)).post("/api/orders/" + order + "/transitions/submitted").then().statusCode(200);
+        admin().body(Map.of("idempotencyKey", key)).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
+        admin().body(Map.of("idempotencyKey", key)).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
         actor(aliceSubject, "faction_leader").get("/api/notifications").then().statusCode(200)
                 .body("findAll { it.type == 'order_items_assigned' }.size()", equalTo(1))
                 .body("[0].payload.groupCount", equalTo(1)).body("[0].payload.groups", nullValue())
@@ -62,8 +62,8 @@ class OrderPickupApiTest {
         actor(bobSubject, "faction_leader").body(Map.of("assignments", Map.of())).patch(path).then().statusCode(403);
         admin().post(path + "/notify").then().statusCode(200).body(equalTo("2"));
         actor(bobSubject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(2));
-        admin().body(Map.of("preparedQuantities", Map.of(light, 2, table, 3, chair, 4))).post("/api/orders/" + order + "/prepare").then().statusCode(200);
-        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post("/api/orders/" + order + "/transitions/ready").then().statusCode(200);
+        admin().body(Map.of("preparedQuantities", Map.of(light, 2, table, 3, chair, 4))).post("/api/orders/faction/" + order + "/prepare").then().statusCode(200);
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
         admin().get(path).then().statusCode(200).body("pickupPointsComplete", equalTo(true)).body("groups.pickupLocationId", containsInAnyOrder(tech, general));
     }
 
@@ -73,7 +73,7 @@ class OrderPickupApiTest {
         responsible(generator, keeper); responsible(cable, keeper);
         String assembly = admin().body(Map.of("name", "Lighting kit", "itemQuantities", Map.of(generator, 1, cable, 2)))
                 .post("/api/assemblies").then().statusCode(200).extract().path("id");
-        String order = faction(Map.of(cable, 1), Map.of(assembly, 2)), path = "/api/orders/" + order;
+        String order = faction(Map.of(cable, 1), Map.of(assembly, 2)), path = "/api/orders/faction/" + order;
         admin().body(Map.of()).post(path + "/transitions/submitted").then().statusCode(200);
         admin().body(Map.of("preparedQuantities", Map.of(generator, 2, cable, 5))).post(path + "/prepare").then().statusCode(200);
         // Reopening preparation re-enters "submitted" without a second notice.
@@ -95,7 +95,7 @@ class OrderPickupApiTest {
         String subject = "public-keeper-" + UUID.randomUUID(), keeper = user(subject), publicPoint = location("Public pickup");
         String light = item("Public light", "Lighting", publicPoint), table = item("Public table", "Furniture", publicPoint);
         String privatePoint = admin().body(Map.of("name", "Private pickup", "privateResource", true)).post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String order = faction(Map.of(light, 1, table, 1), Map.of()), path = "/api/orders/" + order + "/pickup-groups";
+        String order = faction(Map.of(light, 1, table, 1), Map.of()), path = "/api/orders/faction/" + order + "/pickup-groups";
         admin().body(Map.of("assignments", Map.of(light, assignment(keeper, "Lighting", publicPoint), table, assignment(null, "Furniture", privatePoint))))
                 .patch(path).then().statusCode(200);
         // The keeper reads the whole plan, but the private pickup point stays hidden.
@@ -114,7 +114,7 @@ class OrderPickupApiTest {
         String event = admin().body(Map.of("name", "Pickup event", "eventType", "DE", "startDate", "2042-06-01", "endDate", "2042-06-02"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         String order = admin().body(Map.of("name", "General pickup", "purpose", "Event setup", "eventOccurrenceId", event, "requestedQuantities", Map.of(light, 2, table, 1)))
-                .post("/api/general-orders").then().statusCode(200).extract().path("id"), path = "/api/general-orders/" + order;
+                .post("/api/orders/general").then().statusCode(200).extract().path("id"), path = "/api/orders/general/" + order;
         var assignments = Map.of(light, assignment(keeper, "Lighting", first), table, assignment(keeper, "Tables and chairs", second));
         admin().body(Map.of("assignments", assignments)).patch(path + "/pickup-groups").then().statusCode(200).body("groups.size()", equalTo(2));
         admin().body(Map.of("assignments", Map.of(outside, assignment(keeper, "Other", first)))).patch(path + "/pickup-groups").then().statusCode(400);
@@ -124,11 +124,11 @@ class OrderPickupApiTest {
         actor("pickup-reader", "read_only").body(Map.of("assignments", assignments)).patch(path + "/pickup-groups").then().statusCode(403);
         actor("pickup-reader", "read_only").post(path + "/pickup-groups/notify").then().statusCode(403);
         actor("pickup-reader", "read_only").body(Map.of("responsiblePersonId", keeper)).patch("/api/items/" + light + "/responsibility").then().statusCode(403);
-        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post(path + "/submit").then().statusCode(200);
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post(path + "/transitions/submitted").then().statusCode(200);
         actor(subject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(1)).body("[0].payload.groupCount", equalTo(2));
         admin().post(path + "/pickup-groups/notify").then().statusCode(200).body(equalTo("1"));
         admin().body(Map.of("preparedQuantities", Map.of(light, 2, table, 1), "idempotencyKey", UUID.randomUUID())).post(path + "/prepare").then().statusCode(200);
-        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post(path + "/ready").then().statusCode(200);
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID())).post(path + "/transitions/ready").then().statusCode(200);
         actor(subject, "faction_leader").get(path + "/pickup-groups").then().statusCode(200).body("groups.items.flatten().prepared", containsInAnyOrder(2, 1));
         actor(subject, "faction_leader").get("/api/notifications").then().statusCode(200).body("findAll { it.type == 'order_group_ready' }.size()", equalTo(1));
         admin().get("/api/notifications").then().statusCode(200).body("find { it.type == 'order_ready' && it.payload.path.contains('" + order + "') }.payload.path", containsString("pickupKind=general"));

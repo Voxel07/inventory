@@ -100,17 +100,17 @@ class RemainingP1ApiTest {
         var owner = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-owner").header("X-Actor-Role", "ash");
         var other = given().contentType(ContentType.JSON).header("X-Actor-Id", "p02-order-other").header("X-Actor-Role", "ash");
         String id = owner.body(Map.of("name", "P02 summary", "purpose", "History on demand"))
-                .post("/api/general-orders").then().statusCode(200).extract().path("id");
+                .post("/api/orders/general").then().statusCode(200).extract().path("id");
         owner.body(Map.of("name", "P02 summary updated", "purpose", "History on demand"))
-                .patch("/api/general-orders/" + id).then().statusCode(200);
-        Map<String, Object> summary = owner.get("/api/general-orders").then().statusCode(200)
+                .patch("/api/orders/general/" + id).then().statusCode(200);
+        Map<String, Object> summary = owner.get("/api/orders/general").then().statusCode(200)
                 .extract().path("find { it.id == '" + id + "' }");
         org.junit.jupiter.api.Assertions.assertFalse(summary.containsKey("history"));
-        owner.get("/api/general-orders/" + id).then().statusCode(200)
+        owner.get("/api/orders/general/" + id).then().statusCode(200)
                 .body("name", equalTo("P02 summary updated")).body("history.action", hasItems("created", "updated"));
-        other.get("/api/general-orders").then().statusCode(200).body("id", hasItem(id));
+        other.get("/api/orders/general").then().statusCode(200).body("id", hasItem(id));
         other.body(Map.of("name", "Not mine", "purpose", "History on demand"))
-                .patch("/api/general-orders/" + id).then().statusCode(403);
-        admin().get("/api/general-orders/" + id).then().statusCode(200).body("history.size()", equalTo(2));
+                .patch("/api/orders/general/" + id).then().statusCode(403);
+        admin().get("/api/orders/general/" + id).then().statusCode(200).body("history.size()", equalTo(2));
     }
 }

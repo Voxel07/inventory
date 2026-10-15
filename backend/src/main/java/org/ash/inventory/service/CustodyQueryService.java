@@ -26,8 +26,8 @@ public class CustodyQueryService {
     }
 
     @Transactional
-    public List<CustodyDtos.HandoverResponse> handovers(UUID orderId, int page, int size) {
-        authorize(orderId);
+    public List<CustodyDtos.HandoverResponse> handovers(org.ash.inventory.model.InventoryOrder.Kind kind, UUID orderId, int page, int size) {
+        authorize(kind, orderId);
         var values = custody.handovers(orderId, PageBounds.of(page, size).offset(), size);
         var linesByHandover = new LinkedHashMap<UUID, List<CustodyDtos.HandoverLineResponse>>();
         for (var line : custody.lines(values)) {
@@ -46,8 +46,8 @@ public class CustodyQueryService {
     }
 
     @Transactional
-    public List<CustodyDtos.ReconciliationResponse> reconciliations(UUID orderId, int page, int size) {
-        authorize(orderId);
+    public List<CustodyDtos.ReconciliationResponse> reconciliations(org.ash.inventory.model.InventoryOrder.Kind kind, UUID orderId, int page, int size) {
+        authorize(kind, orderId);
         return custody.reconciliations(orderId, PageBounds.of(page, size).offset(), size).stream().map(value ->
                 new CustodyDtos.ReconciliationResponse(value.id, value.order.id, value.orderLine.id,
                         value.item.id, value.item.name,
@@ -59,9 +59,9 @@ public class CustodyQueryService {
                         value.recordedBy.id, value.idempotencyKey, value.notes, value.createdAt)).toList();
     }
 
-    private void authorize(UUID orderId) {
+    private void authorize(org.ash.inventory.model.InventoryOrder.Kind kind, UUID orderId) {
         var order = orders.findOrder(orderId);
-        if (order == null) throw ApiException.notFound("Faction order not found");
+        if (order == null || order.kind != kind) throw ApiException.notFound("Order not found");
         orderService.assertCanView(order);
     }
 

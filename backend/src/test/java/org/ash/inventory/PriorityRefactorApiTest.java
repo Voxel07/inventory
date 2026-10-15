@@ -64,7 +64,7 @@ class PriorityRefactorApiTest {
     private String submitReturn(String item, String asset, String order) {
         var input = new java.util.HashMap<String, Object>();
         input.put("itemId", item); input.put("assetInstanceId", asset); input.put("quantity", 1);
-        if (order != null) input.put("factionOrderId", order);
+        if (order != null) input.put("orderId", order);
         return admin().body(input).post("/api/returns").then().statusCode(200).extract().path("id");
     }
     private void reject(String submission) {
@@ -111,19 +111,19 @@ class PriorityRefactorApiTest {
         var orderBody = Map.of("eventType", "DE", "faction", "Priority",
                 "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1));
         // Orders reference existing events and factions; only the admin catalog command creates them.
-        actor("priority-owner", "faction_leader").body(orderBody).post("/api/orders").then().statusCode(404);
+        actor("priority-owner", "faction_leader").body(orderBody).post("/api/orders/faction").then().statusCode(404);
         admin().body(Map.of("eventType", "DE", "startDate", "2039-09-10")).post("/api/events").then().statusCode(200);
         admin().body(Map.of("eventType", "DE", "name", "Priority")).post("/api/factions").then().statusCode(200);
         String order = actor("priority-owner", "faction_leader").body(orderBody)
-                .post("/api/orders").then().statusCode(200).extract().path("id");
+                .post("/api/orders/faction").then().statusCode(200).extract().path("id");
         admin().body(Map.of("revision", 1, "grants", List.of(), "reason", "Access revoked"))
                 .put("/api/access/items/" + person).then().statusCode(200);
         // Item visibility is the access policy alone: an order holding a revoked private item reveals it, so it is hidden.
-        actor("priority-owner", "faction_leader").get("/api/orders/" + order).then().statusCode(404);
-        admin().get("/api/orders/" + order).then().statusCode(200).body("expand.assemblyIds.id", hasItem(assembly));
+        actor("priority-owner", "faction_leader").get("/api/orders/faction/" + order).then().statusCode(404);
+        admin().get("/api/orders/faction/" + order).then().statusCode(200).body("expand.assemblyIds.id", hasItem(assembly));
         actor("priority-owner", "faction_leader").body(Map.of("eventType", "DE", "faction", "Priority",
                 "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1)))
-                .post("/api/orders").then().statusCode(404);
+                .post("/api/orders/faction").then().statusCode(404);
     }
 
     @Test void unchangedSerializedCountsPostZeroAndOneObservations() {
@@ -207,18 +207,18 @@ class PriorityRefactorApiTest {
             String item = item(location(), 1), asset = asset(item);
             String order = admin().body(Map.of("eventType", "DE", "faction", "Priority " + UUID.randomUUID(),
                     "eventDate", "2039-09-10", "requestedQuantities", Map.of(item, 1)))
-                    .post("/api/orders").then().statusCode(200).extract().path("id");
-            admin().body(Map.of()).post("/api/orders/" + order + "/transitions/submitted").then().statusCode(200);
+                    .post("/api/orders/faction").then().statusCode(200).extract().path("id");
+            admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
             admin().body(Map.of("preparedQuantities", Map.of(item, 1), "assetAssignments", Map.of(item, List.of(asset)), "acknowledgeShortages", false))
-                    .post("/api/orders/" + order + "/prepare").then().statusCode(200);
+                    .post("/api/orders/faction/" + order + "/prepare").then().statusCode(200);
             admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
-                    .post("/api/orders/" + order + "/transitions/ready").then().statusCode(200);
-            admin().body(Map.of()).post("/api/orders/" + order + "/transitions/picked_up").then().statusCode(200);
+                    .post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
+            admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
             String submission = submitReturn(item, asset, order);
             if (reconcile) admin().body(Map.of("idempotencyKey", UUID.randomUUID(),
                     "lines", Map.of(item, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0)),
                     "assets", Map.of(asset, Map.of("outcome", "returned_good"))))
-                    .post("/api/orders/" + order + "/return").then().statusCode(200);
+                    .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
             reject(submission); state(item, asset, reconcile ? "available" : "in_field");
         }
     }
@@ -232,10 +232,10 @@ class PriorityRefactorApiTest {
         String count = approvedCount(item, 1);
         String order = admin().body(Map.of("name", "Reserved bulk order", "purpose", "Count safety",
                 "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 2)))
-                .post("/api/general-orders").then().statusCode(200).extract().path("id");
-        admin().body(Map.of()).post("/api/general-orders/" + order + "/submit").then().statusCode(200);
+                .post("/api/orders/general").then().statusCode(200).extract().path("id");
+        admin().body(Map.of()).post("/api/orders/general/" + order + "/transitions/submitted").then().statusCode(200);
         admin().body(Map.of("preparedQuantities", Map.of(item, 2)))
-                .post("/api/general-orders/" + order + "/prepare").then().statusCode(200);
+                .post("/api/orders/general/" + order + "/prepare").then().statusCode(200);
         post(count, 409);
         admin().get("/api/items/" + item).then().statusCode(200).body("stock.onHand", equalTo(3));
         noAdjustments(count);

@@ -14,8 +14,8 @@ import { ApiError, authorizedFetch, InvalidResponseError, REQUEST_TIMEOUT_MS, Re
 export type OfflineCommand =
   | { type: 'transaction'; payload: TransactionFormData }
   | { type: 'damage.create'; payload: DamageReportFormData }
-  | { type: 'order.create'; payload: FactionOrderFormData }
-  | { type: 'order.transition'; payload: { orderId: string; status: string; notes?: string; [field: string]: unknown } }
+  | { type: 'order.create'; payload: ({ kind: 'faction' } & FactionOrderFormData) | ({ kind: 'general' } & import('../types').GeneralOrderFormData) }
+  | { type: 'order.transition'; payload: { orderId: string; status: string; notes?: string | null; [field: string]: unknown } }
   | { type: 'order.prepare'; payload: { orderId: string; input: Record<string, unknown> } }
   | { type: 'order.return'; payload: { orderId: string; input: Record<string, unknown> } };
 

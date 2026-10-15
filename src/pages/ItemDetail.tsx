@@ -165,7 +165,7 @@ export function ItemDetail() {
         if (data.transactionType === 'checkin') {
             // The form names the exact custody source; the return submission is checked against it.
             createReturn.mutate(
-                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, factionOrderId: data.factionOrderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, orderId: data.factionOrderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);

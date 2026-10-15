@@ -25,7 +25,7 @@ public class OrderPickupService {
                         UUID pickupLocationId, String pickupLocationName, List<Line> items) {}
     public record Plan(String orderName, String status, boolean canEdit, boolean pickupPointsComplete, List<Group> groups) {}
 
-    private record OrderData(Object entity, UUID id, String name, String status, UserAccount creator,
+    private record OrderData(InventoryOrder entity, UUID id, String name, String status, UserAccount creator,
                              Map<String, PickupAssignment> assignments, StorageLocation defaultPickup,
                              List<Item> items, Map<UUID, Integer> ordered, Map<UUID, Integer> prepared) {}
 
@@ -89,8 +89,7 @@ public class OrderPickupService {
             if (name.length() > 160) throw ApiException.badRequest("Pickup group name must be at most 160 characters");
             safe.put(entry.getKey(), new PickupAssignment(a.responsiblePersonId(), name, a.pickupLocationId()));
         }
-        if (data.entity instanceof FactionOrder o) o.pickupAssignments = safe;
-        else ((GeneralOrder) data.entity).pickupAssignments = safe;
+        data.entity.pickupAssignments = safe;
         // Later changes only show on the order page; the manual notify action re-sends on request.
         events.record("order.pickup_groups_changed", kind + "_order", id, actors.current().id, null, Map.of());
         return get(kind, id);
@@ -182,18 +181,14 @@ public class OrderPickupService {
     }
 
     private OrderData load(String kind, UUID id, boolean lock) {
-        if ("faction".equals(kind)) {
-            var o = lock ? orm.requireLocked(FactionOrder.class, id, "Order") : orm.require(FactionOrder.class, id, "Order");
-            var lines = orm.lines(o); var requested = new LinkedHashMap<UUID, Integer>(); var prepared = new LinkedHashMap<UUID, Integer>();
-            lines.forEach(l -> { requested.merge(l.item.id, l.requestedQuantity, Integer::sum); prepared.merge(l.item.id, l.preparedQuantity, Integer::sum); });
-            return new OrderData(o, id, o.orderCode, o.status.name(), o.createdBy, o.pickupAssignments, o.pickupLocation,
-                    lines.stream().map(l -> l.item).distinct().toList(), requested, prepared);
-        }
-        if (!"general".equals(kind)) throw ApiException.badRequest("Unknown order kind");
-        var o = lock ? orm.requireLocked(GeneralOrder.class, id, "Order") : orm.require(GeneralOrder.class, id, "Order");
+        if (!List.of("faction", "general").contains(kind)) throw ApiException.badRequest("Unknown order kind");
+        var o = lock ? orm.requireLocked(InventoryOrder.class, id, "Order") : orm.require(InventoryOrder.class, id, "Order");
+        if (!o.kind.name().equals(kind)) throw ApiException.notFound("Order not found");
+        var lines = orm.lines(o);
         var requested = new LinkedHashMap<UUID, Integer>(); var prepared = new LinkedHashMap<UUID, Integer>();
-        o.lines.forEach(line -> { requested.put(line.item.id, line.requestedQuantity); if (line.preparedQuantity > 0) prepared.put(line.item.id, line.preparedQuantity); });
-        return new OrderData(o, id, o.name, o.status, o.createdBy, o.pickupAssignments, null, orm.items(new ArrayList<>(requested.keySet())), requested, prepared);
+        lines.forEach(l -> { requested.merge(l.item.id, l.requestedQuantity, Integer::sum); prepared.merge(l.item.id, l.preparedQuantity, Integer::sum); });
+        return new OrderData(o, id, o.label(), o.status.name(), o.createdBy, o.pickupAssignments, o.pickupLocation,
+                lines.stream().map(l -> l.item).distinct().toList(), requested, prepared);
     }
 
     private boolean canViewAll(OrderData data, UserAccount actor) {
@@ -204,7 +199,7 @@ public class OrderPickupService {
         if (!List.of("draft", "submitted", "preparing", "ready").contains(data.status)) return false;
         if (actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)) return true;
         if (!data.creator.id.equals(actor.id)) return false;
-        if (data.entity instanceof FactionOrder o) return actors.canWriteFaction(actor, o.faction);
+        if (data.entity.kind == InventoryOrder.Kind.faction) return actors.canWriteFaction(actor, data.entity.faction);
         return actor.role.atLeast(DomainEnums.UserRole.ash);
     }
     private void requireEdit(OrderData data) {

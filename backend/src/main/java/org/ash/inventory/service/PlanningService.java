@@ -52,17 +52,6 @@ public class PlanningService {
                 demand.computeIfAbsent(line.order.eventOccurrence.id, ignored -> new HashMap<>()).merge(line.item.id, line.requestedQuantity, Integer::sum);
             reservations.merge(line.item.id, line.reservedQuantity, Integer::sum);
         }
-        for (var order : orm.generalOrders(selectedIds)) {
-            var map = demand.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
-            var handed = handedOver.computeIfAbsent(order.eventOccurrence.id, ignored -> new HashMap<>());
-            boolean open = List.of("draft", "submitted", "preparing", "ready").contains(order.status);
-            boolean reserving = List.of("preparing", "ready").contains(order.status);
-            for (var line : order.lines) {
-                if (line.handedOverQuantity > 0) handed.merge(line.item.id, line.handedOverQuantity, Integer::sum);
-                if (open) map.merge(line.item.id, line.requestedQuantity, Integer::sum);
-                if (reserving && line.preparedQuantity > 0) reservations.merge(line.item.id, line.preparedQuantity, Integer::sum);
-            }
-        }
         var overrides = new HashMap<String, PlanningOverride>();
         var overrideEventIds = new HashSet<>(selectedIds);
         if (selected != null) overrideEventIds.add(selected.id);

@@ -77,7 +77,7 @@ Source: [Maven project](../backend/pom.xml), [runtime configuration](../backend/
 | Reference caching | Quarkus Cache / Caffeine, committed revision keys |
 | Cluster support | Quarkus Redis client communicating with Valkey |
 | Media | Quarkus Amazon S3, AWS SDK URL connection client, or local filesystem |
-| AI integration | `quarkus-mcp-server-http:2.0.1`; 21 tools, 3 resources, 2 prompts |
+| AI integration | `quarkus-mcp-server-http:2.0.1`; 27 tools (including shared order commands), 3 resources, 2 prompts |
 | Verification libraries | Quarkus JUnit and REST Assured; configured tests use PostgreSQL |
 
 H2 is a test-scoped dependency only, used by `TelemetryExportTest`; every profile (dev, test, prod) uses PostgreSQL. There is no integration-test (Failsafe) suite; the `native` profile only builds the native image.
@@ -95,13 +95,15 @@ mcp/       MCP adapters calling services
 
 Stock-affecting operations must authenticate/authorize, deduplicate the command UUID, lock relevant state, validate current stock/lifecycle, update ledger and projections, append audit/outbox evidence, then commit once. Replay is atomic per command. Cached availability cannot authorize a command.
 
+Order kinds share `/api/orders/{kind}` command contracts and `OrderService`; kind-specific list/detail projections include `kind`. Offline `order.create` payloads also require the kind.
+
 Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Paged endpoints (`@Paged`) send `X-Has-More`: whether the page query returned a full page before privacy filtering, so a privacy-shortened page never ends a listing early. Clients load further pages on demand; only explicit exports/imports read every page.
 
 The outbox is written in the business transaction. After commit, dispatch is woken locally; a default 5-second poll handles other nodes and recovery. Rows are claimed under a lease with `SKIP LOCKED`. Delivery is at least once, consumers deduplicate by event ID, 10 failed attempts cause dead letter, and published events default to 30-day retention. Operator retries require authorization.
 
 SSE sends change families and catalog resource kind, without IDs, actors, quantities or event payloads. The stream ends at token expiry. The frontend coalesces invalidations for 300 ms; reconnect and `access.changed` reset private inventory queries and private media references. SSE is a refresh signal, not a durable client ledger.
 
-Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `general_order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `loan.*`, `equipment.*`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
+Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `loan.*`, `equipment.*`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
 
 ## 5. Identity and privacy requirements
 

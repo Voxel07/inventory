@@ -20,7 +20,7 @@ public class DamageReport extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reporter_id") public UserAccount reporter;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handler_id") public UserAccount handler;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "faction_order_id") public FactionOrder factionOrder;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "order_id") public InventoryOrder order;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "handover_id") public CustodyHandover handover;
     @Column(nullable = false) public int quantity;
     @Column(name = "repaired_quantity", nullable = false) public int repairedQuantity;

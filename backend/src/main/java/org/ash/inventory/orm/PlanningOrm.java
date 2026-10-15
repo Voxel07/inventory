@@ -20,15 +20,10 @@ public class PlanningOrm {
         return query.getResultList();
     }
     public List<Item> items() { return em.createQuery("from Item i where i.active = true", Item.class).getResultList(); }
-    public List<FactionOrderLine> lines(Collection<UUID> eventIds) {
+    public List<OrderLine> lines(Collection<UUID> eventIds) {
         if (eventIds.isEmpty()) return List.of();
-        return em.createQuery("from FactionOrderLine l join fetch l.order o join fetch o.eventOccurrence join fetch l.item where o.eventOccurrence.id in :eventIds and o.status in :states", FactionOrderLine.class)
+        return em.createQuery("from OrderLine l join fetch l.order o join fetch o.eventOccurrence join fetch l.item where o.eventOccurrence.id in :eventIds and o.status in :states", OrderLine.class)
                 .setParameter("eventIds", eventIds).setParameter("states", List.of(DomainEnums.OrderStatus.draft, DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.preparing, DomainEnums.OrderStatus.ready, DomainEnums.OrderStatus.picked_up, DomainEnums.OrderStatus.partially_returned, DomainEnums.OrderStatus.returned, DomainEnums.OrderStatus.closed)).getResultList();
-    }
-    public List<GeneralOrder> generalOrders(Collection<UUID> eventIds) {
-        if (eventIds.isEmpty()) return List.of();
-        return em.createQuery("from GeneralOrder o join fetch o.eventOccurrence where o.eventOccurrence.id in :eventIds and o.status in ('draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned', 'returned', 'closed')", GeneralOrder.class)
-                .setParameter("eventIds", eventIds).getResultList();
     }
     public List<PurchaseOrderLine> incoming(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();

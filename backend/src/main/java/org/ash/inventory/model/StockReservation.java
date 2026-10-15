@@ -19,11 +19,11 @@ import java.time.Instant;
         @UniqueConstraint(name = "uq_active_asset_reservation", columnNames = {"asset_instance_id", "active_asset_key"}),
         indexes = {
                 @Index(name = "ix_reservation_item_status", columnList = "item_id,status"),
-                @Index(name = "ix_reservation_order", columnList = "faction_order_id")
+                @Index(name = "ix_reservation_order", columnList = "order_id")
         })
 public class StockReservation extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_order_id") public FactionOrder order;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_line_id") public FactionOrderLine orderLine;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_id") public InventoryOrder order;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_line_id") public OrderLine orderLine;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "location_id") public StorageLocation location;

@@ -39,7 +39,7 @@ const events = [
   event('de-2026', 'DE', 'Demo DE 2026', '2026-09-12', '2026-09-13', 'completed'),
 ];
 const factionOrder = (id: string, faction: string, status: FactionOrderStatus, extra: Partial<FactionOrder> = {}): FactionOrder => ({
-  id, orderCode: `LS27-${faction}-01`, factionKey: `LS:${faction.toLowerCase()}`, eventType: 'LS', faction, eventDate: '2027-06-12', eventOccurrenceId: 'ls-2027',
+  kind: 'faction', id, orderCode: `LS27-${faction}-01`, factionKey: `LS:${faction.toLowerCase()}`, eventType: 'LS', faction, eventDate: '2027-06-12', eventOccurrenceId: 'ls-2027',
   requestedPickupDate: '2027-06-10', status, itemIds: ['seal', 'fence'], requestedQuantities: { seal: 2, fence: 6 }, preparedQuantities: {},
   assemblyIds: ['power'], requestedAssemblyQuantities: { power: 1 }, preparedAssemblyQuantities: {}, assetAssignments: {}, reservedQuantities: {},
   notes: 'Bitte Zaunelemente gebündelt bereitstellen.', createdBy: 'preview', history: [], created: FIXTURE_TIME, updated: FIXTURE_TIME,
@@ -52,7 +52,7 @@ const factionOrders = [
   factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: '2026-06-13', requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, preparedAssemblyQuantities: { power: 1 } }),
 ];
 const generalOrder = (id: string, name: string, purpose: string, eventOccurrenceId: string, status: GeneralOrder['status'], extra: Partial<GeneralOrder>): GeneralOrder => ({
-  id, name, purpose, eventOccurrenceId, status, requestedQuantities: {}, preparedQuantities: {}, handedOverQuantities: {}, returnedQuantities: {},
+  kind: 'general', id, name, purpose, eventOccurrenceId, status, requestedQuantities: {}, preparedQuantities: {}, handedOverQuantities: {}, returnedQuantities: {},
   consumedQuantities: {}, damagedQuantities: {}, missingQuantities: {}, writtenOffQuantities: {}, reconciledAssets: {}, assetAssignments: {},
   itemNames: { table: 'Biertisch' }, history: [], createdBy: 'preview', created: FIXTURE_TIME, updated: FIXTURE_TIME, ...extra,
 });
@@ -110,9 +110,9 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/events') return events;
   if (path === '/api/event-types') return ['LS', 'DE'];
   if (path === '/api/factions') return factions;
-  if (path === '/api/orders') return factionOrders;
+  if (path === '/api/orders/faction') return factionOrders;
   if (/^\/api\/orders\/[^/]+$/.test(path)) return factionOrders.find((order) => order.id === path.split('/')[3]);
-  if (path === '/api/general-orders') return generalOrders;
+  if (path === '/api/orders/general') return generalOrders;
   if (path === '/api/equipment-availability') return {};
   return [];
 });

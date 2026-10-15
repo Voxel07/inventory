@@ -102,7 +102,7 @@ public class TransferService {
                 long requested = requestedByPosition.merge(positionKey, (long) lineInput.quantity(), Long::sum);
                 long itemRequested = requestedByItem.merge(item.id, (long) lineInput.quantity(), Long::sum);
                 if (position == null || requested > Math.max(0, position.availableQuantity() - positions.reservedAt(position))
-                        || itemRequested > Math.min(inventory.physicalStock(item).available(), positions.availableAt(item, source, null, null))) {
+                        || itemRequested > Math.min(inventory.physicalStock(item).available(), positions.availableAt(item, source, null))) {
                     throw ApiException.conflict("Insufficient available source stock for " + item.name);
                 }
             }
@@ -141,7 +141,7 @@ public class TransferService {
             } else {
                 var lockedItem = orm.requireLocked(Item.class, line.item.id, "Item");
                 if (!PositionService.usable(line.lot)) throw ApiException.conflict("Lot is held, recalled or expired");
-                if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null, null))) throw ApiException.conflict("Stock is reserved or unavailable");
+                if (line.requestedQuantity > Math.min(inventory.physicalStock(lockedItem).available(), positions.availableAt(lockedItem, transfer.sourceLocation, null))) throw ApiException.conflict("Stock is reserved or unavailable");
                 var position = orm.lockedPosition(line.item, transfer.sourceLocation, line.lot);
                 if (position == null || Math.max(0, position.availableQuantity() - positions.reservedAt(position)) < line.requestedQuantity) {
                     throw ApiException.conflict("Insufficient source stock for " + line.item.name);

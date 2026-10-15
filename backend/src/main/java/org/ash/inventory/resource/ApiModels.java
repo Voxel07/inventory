@@ -29,10 +29,10 @@ public final class ApiModels {
 
     public record ReturnSubmissionInput(
             @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
-            UUID returnedForUserId, UUID factionOrderId, String placementImage, String notes, UUID eventOccurrenceId) {
+            UUID returnedForUserId, UUID orderId, String placementImage, String notes, UUID eventOccurrenceId) {
         public ReturnSubmissionInput(UUID itemId, int quantity, UUID assetInstanceId, UUID returnedForUserId,
-                UUID factionOrderId, String placementImage, String notes) {
-            this(itemId, quantity, assetInstanceId, returnedForUserId, factionOrderId, placementImage, notes, null);
+                UUID orderId, String placementImage, String notes) {
+            this(itemId, quantity, assetInstanceId, returnedForUserId, orderId, placementImage, notes, null);
         }
     }
 
@@ -80,23 +80,12 @@ public final class ApiModels {
             Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities,
             UUID idempotencyKey) {}
 
-    public record GeneralOrderInput(@NotBlank String name, @NotBlank String purpose,
-            UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities) {}
-    public record GeneralOrderReturnInput(Map<UUID, Integer> returnedQuantities,
-            Map<UUID, Integer> consumedQuantities, Map<UUID, Integer> damagedQuantities,
-            Map<UUID, Integer> missingQuantities, Map<UUID, Integer> writtenOffQuantities,
-            Map<UUID, List<UUID>> returnedAssets, Map<UUID, List<UUID>> damagedAssets,
-            Map<UUID, List<UUID>> writtenOffAssets, UUID idempotencyKey, String notes, Map<UUID, List<UUID>> missingAssets) {
-        public GeneralOrderReturnInput(Map<UUID, Integer> returned, Map<UUID, Integer> consumed) {
-            this(returned, consumed, null, null, null, null, null, null, null, null, null);
-        }
-    }
-    public record GeneralOrderPickupInput(Map<UUID, List<UUID>> assetAssignments,
-            Map<UUID, Integer> preparedQuantities, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {
-        public GeneralOrderPickupInput(Map<UUID, List<UUID>> assets) { this(assets, null, null, null, null); }
-    }
+    public record GeneralOrderInput(@NotBlank @jakarta.validation.constraints.Size(max = 160) String name,
+            @NotBlank @jakarta.validation.constraints.Size(max = 4000) String purpose,
+            UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities, UUID idempotencyKey) {}
 
-    public record PreparationInput(Map<UUID, Integer> preparedQuantities, Map<UUID, List<UUID>> assetAssignments,
+    public record PreparationInput(Map<@NotNull UUID, @NotNull @Min(0) Integer> preparedQuantities,
+            Map<@NotNull UUID, @NotNull List<@NotNull UUID>> assetAssignments,
             boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {
         public PreparationInput(Map<UUID, Integer> quantities, Map<UUID, List<UUID>> assets, boolean acknowledge, UUID key, String notes) {
             this(quantities, assets, acknowledge, key, notes, null);
@@ -111,8 +100,8 @@ public final class ApiModels {
             BigDecimal operatingHours,
             String notes) {}
     public record ReturnInput(
-            @NotEmpty Map<UUID, @jakarta.validation.Valid ReturnLine> lines,
-            Map<UUID, @jakarta.validation.Valid AssetReturnLine> assets,
+            @NotEmpty Map<@NotNull UUID, @NotNull @jakarta.validation.Valid ReturnLine> lines,
+            Map<@NotNull UUID, @NotNull @jakarta.validation.Valid AssetReturnLine> assets,
             UUID idempotencyKey,
             String notes) {}
     public record TransitionInput(

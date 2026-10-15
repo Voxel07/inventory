@@ -4,12 +4,15 @@ import type { Page } from './apiPagination';
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import { containsPrivateInventory } from './privateInventoryCache';
+import { changeOrderStatus, prepareOrder, reconcileOrder } from './orderCommands';
+import type { AssetReturnOutcome, ReturnLineInput, OrderTransitionInput } from '../types/orderCommands';
+export type { AssetReturnOutcome, ReturnLineInput } from '../types/orderCommands';
 
 export type FactionOrderFilters = { eventType?: string; faction?: string; orderCode?: string; status?: readonly FactionOrderStatus[]; eventId?: string };
 
 /** List rows are summaries: they carry no history, and nothing pretends otherwise. */
 export function getFactionOrders(filters: FactionOrderFilters | undefined, page: number, size: number): Promise<Page<FactionOrderSummary>> {
-  return apiPage<FactionOrderSummary>('/api/orders', page, size, { query: filters });
+  return apiPage<FactionOrderSummary>('/api/orders/faction', page, size, { query: filters });
 }
 const orderDetailKey = (id: string) => `faction-orders:detail:${encodeURIComponent(id)}`;
 
@@ -18,7 +21,7 @@ export async function getFactionOrder(id: string): Promise<FactionOrder> {
   const context = captureAuthSession();
   const key = orderDetailKey(id);
   try {
-    const order = await apiRequest<FactionOrder>(`/api/orders/${id}`, { session: context });
+    const order = await apiRequest<FactionOrder>(`/api/orders/faction/${id}`, { session: context });
     assertAuthSession(context);
     if (containsPrivateInventory(order)) await removeOfflineCatalog(key, context);
     else await setOfflineCatalog(key, order, context);
@@ -39,23 +42,18 @@ export async function getFactionOrder(id: string): Promise<FactionOrder> {
 export function createFactionOrder(data: FactionOrderFormData): Promise<FactionOrder> {
   const idempotencyKey = crypto.randomUUID();
   const body = { ...data, idempotencyKey };
-  return apiRequest('/api/orders', {
+  return apiRequest('/api/orders/faction', {
     method: 'POST',
     body,
-    offline: { type: 'order.create', payload: data, idempotencyKey },
+    offline: { type: 'order.create', payload: { kind: 'faction', ...data }, idempotencyKey },
   });
 }
 export function updateFactionOrder(id: string, data: FactionOrderFormData): Promise<FactionOrder> {
-  return apiRequest(`/api/orders/${id}`, { method: 'PATCH', body: data });
+  return apiRequest(`/api/orders/faction/${id}`, { method: 'PATCH', body: data });
 }
 
-function transition(id: string, status: string, notes?: string, extra?: Record<string, unknown>): Promise<FactionOrder> {
-  const idempotencyKey = crypto.randomUUID();
-  const body = { idempotencyKey, notes, ...extra };
-  return apiRequest(`/api/orders/${id}/transitions/${status}`, {
-    method: 'POST', body,
-    offline: { type: 'order.transition', payload: { orderId: id, status, notes, ...extra } },
-  });
+function transition(id: string, status: FactionOrderStatus, notes?: string, extra?: OrderTransitionInput): Promise<FactionOrder> {
+  return changeOrderStatus('faction', id, status, { notes, ...extra });
 }
 
 export function submitFactionOrder(id: string) { return transition(id, 'submitted'); }
@@ -70,7 +68,6 @@ export async function saveFactionOrderPreparation(
   sourceLocations?: Record<string, string>,
 ): Promise<FactionOrder> {
   const id = order.id;
-  const context = captureAuthSession();
   const flattened = { ...preparedQuantities };
   for (const assembly of order.expand?.assemblyIds || []) {
     const assemblyCount = preparedAssemblyQuantities[assembly.id] || 0;
@@ -79,11 +76,7 @@ export async function saveFactionOrderPreparation(
     }
   }
   const input = { preparedQuantities: flattened, assetAssignments, sourceLocations, acknowledgeShortages: false, idempotencyKey: crypto.randomUUID() };
-  return apiRequest(`/api/orders/${id}/prepare`, {
-    session: context,
-    method: 'POST', body: input,
-    offline: { type: 'order.prepare', payload: { orderId: id, input } },
-  });
+  return prepareOrder('faction', id, input);
 }
 
 export function markFactionOrderReady(
@@ -93,8 +86,8 @@ export function markFactionOrderReady(
   pickupLatitude?: number,
   pickupLongitude?: number,
 ) {
-  const extra: Record<string, unknown> = {};
-  if (pickupLocation !== undefined) extra.pickupLocation = pickupLocation || null;
+  const extra: OrderTransitionInput = {};
+  if (pickupLocation !== undefined) extra.pickupLocation = pickupLocation || undefined;
   if (pickupLatitude !== undefined) extra.pickupLatitude = pickupLatitude;
   if (pickupLongitude !== undefined) extra.pickupLongitude = pickupLongitude;
   return transition(id, 'ready', note, Object.keys(extra).length ? extra : undefined);
@@ -103,27 +96,15 @@ export function reopenFactionOrderPreparation(id: string, note?: string) { retur
 export function pickUpFactionOrder(id: string) { return transition(id, 'picked_up'); }
 export function returnFactionOrder(id: string): Promise<FactionOrder> {
   const body = { idempotencyKey: crypto.randomUUID() };
-  return apiRequest(`/api/orders/${id}/return-all`, { method: 'POST', body });
+  return apiRequest(`/api/orders/faction/${id}/return-all`, { method: 'POST', body });
 }
-export type AssetReturnOutcome = {
-  outcome: 'returned_good' | 'returned_damaged' | 'missing' | 'written_off';
-  operatingHours?: number;
-  notes?: string;
-};
-
-/** `missing` is the unresolved total after the command; the other quantities are reconciled now. Write-offs are inventory-admin only. */
-export type ReturnLineInput = { returned: number; consumed: number; missing: number; damaged: number; writtenOff: number; operatingHours?: number; notes?: string };
-
 export function returnFactionOrderItems(
   id: string,
   lines: Record<string, ReturnLineInput>,
   assets?: Record<string, AssetReturnOutcome>,
 ): Promise<FactionOrder> {
   const input = { lines, assets, idempotencyKey: crypto.randomUUID() };
-  return apiRequest(`/api/orders/${id}/return`, {
-    method: 'POST', body: input,
-    offline: { type: 'order.return', payload: { orderId: id, input } },
-  });
+  return reconcileOrder('faction', id, input);
 }
 export function cancelFactionOrder(id: string) { return transition(id, 'cancelled'); }
 export function closeFactionOrder(id: string) { return transition(id, 'closed'); }

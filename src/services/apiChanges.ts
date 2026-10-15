@@ -21,7 +21,7 @@ export function decodeServerChange(value: unknown, depth = 0): ApiChangeDetail {
 }
 
 type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated' | 'order.changed'
-  | 'general_order.changed' | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
+  | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'
   | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
   | 'vendor_document.attached' | 'loan.changed' | 'planning.overridden' | 'report.rebuilt' | 'reminder.changed'
@@ -39,7 +39,6 @@ export function localWriteChange(path: string): LocalWriteChange {
     case 'event-people': return change('event_logistics.changed');
     case 'assemblies': case 'storage-locations': case 'factions': case 'category-maintenance': return change('catalog.changed');
     case 'orders': return change('order.changed');
-    case 'general-orders': return change('general_order.changed');
     case 'transactions': return change('stock.changed');
     case 'returns': return change('return.changed');
     case 'damage-reports': return change('damage.updated');
@@ -121,7 +120,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('transfer.')) return new Set([...stock, 'operations:transfers']);
   if (type.startsWith('count.')) return new Set([...stock, 'operations:counts']);
   if (type.startsWith('equipment.') || type.startsWith('loan.')) return new Set([...stock, 'operations:transfers']);
-  if (type === 'stock.changed' || type.startsWith('order.') || type.startsWith('general_order.') || type.startsWith('return.')
+  if (type === 'stock.changed' || type.startsWith('order.') || type.startsWith('return.')
     || type.startsWith('asset.') || type.startsWith('damage.') || type.startsWith('repair.') || type.startsWith('maintenance.')
     || type.startsWith('maintenance_schedule.') || type.startsWith('inventory_lot.') || type.startsWith('member_request.')) return new Set(stock);
   return null;

@@ -32,7 +32,7 @@ public class OperationalReportOrm extends EntityOrm {
     }
 
     public List<StockTransaction> outcomeMovements() {
-        return entityManager.createQuery("from StockTransaction t join fetch t.item join fetch t.user left join fetch t.eventOccurrence left join fetch t.factionOrder left join fetch t.assetInstance where t.type in :types order by t.occurredAt, t.id", StockTransaction.class)
+        return entityManager.createQuery("from StockTransaction t join fetch t.item join fetch t.user left join fetch t.eventOccurrence left join fetch t.order left join fetch t.assetInstance where t.type in :types order by t.occurredAt, t.id", StockTransaction.class)
                 .setParameter("types", List.of(DomainEnums.TransactionType.consumed, DomainEnums.TransactionType.written_off)).getResultList();
     }
 }

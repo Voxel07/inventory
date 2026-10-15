@@ -27,19 +27,11 @@ public class AssetReservationOrm {
         var result = new HashMap<UUID, Holder>();
         if (assetIds.isEmpty()) return result;
         entityManager.createQuery("select assignment from OrderLineAssetAssignment assignment "
-                        + "join fetch assignment.order o join fetch o.faction "
+                        + "join fetch assignment.order o left join fetch o.faction "
                         + "where assignment.assetInstance.id in :ids and o.status in :open", OrderLineAssetAssignment.class)
                 .setParameter("ids", assetIds).setParameter("open", OPEN_ORDER).getResultList()
-                .forEach(assignment -> result.put(assignment.assetInstance.id, new Holder("faction_order", assignment.order.id,
-                        assignment.order.orderCode + " · " + assignment.order.faction.name)));
-        var wanted = assetIds.stream().filter(id -> !result.containsKey(id)).toList();
-        if (wanted.isEmpty()) return result;
-        for (var row : entityManager.createQuery("""
-                select o.id, o.name, a.assetInstance.id from GeneralOrderLineAsset a join a.line l join l.order o
-                where o.status in ('preparing', 'ready') and a.assetInstance.id in :ids
-                """, Object[].class).setParameter("ids", wanted).getResultList()) {
-            result.putIfAbsent((UUID) row[2], new Holder("general_order", (UUID) row[0], (String) row[1]));
-        }
+                .forEach(assignment -> result.put(assignment.assetInstance.id, new Holder(assignment.order.kind.name() + "_order", assignment.order.id,
+                        assignment.order.label())));
         return result;
     }
 }

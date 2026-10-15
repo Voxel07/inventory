@@ -549,11 +549,11 @@ test('SKU and order fallback searches are targeted, exact and read-only', async 
   fetchRequest = async input => {
     const url = new URL(String(input)); calls.push(url);
     if (url.pathname === '/api/items') return Response.json([]);
-    if (url.pathname === '/api/orders') return Response.json([{ id: 'order', orderCode: 'DE26-KGG-01' }]);
+    if (url.pathname === '/api/orders/faction') return Response.json([{ id: 'order', orderCode: 'DE26-KGG-01' }]);
     return Response.json({ error: 'Missing' }, { status: 404 });
   };
   expect(await codes.resolveScannedCode('DE26-KGG-01')).toMatchObject({ found: true, path: '/orders/faction/order' });
-  expect(calls.find(url => url.pathname === '/api/orders')?.searchParams.get('orderCode')).toBe('DE26-KGG-01');
+  expect(calls.find(url => url.pathname === '/api/orders/faction')?.searchParams.get('orderCode')).toBe('DE26-KGG-01');
 });
 
 test('report exports retain the initial generation and filters across the export request', async () => {

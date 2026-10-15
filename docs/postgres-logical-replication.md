@@ -119,11 +119,11 @@ Treat the replica tables as read-only to avoid replication conflicts. This is an
 asynchronous data copy, not a physical hot standby. Before using it for failover,
 disable or drop the subscription, synchronize sequences and point the app at the
 storage database explicitly. Most keys are UUIDs; the identity column of
-`faction_order_history` is the sequence that matters. On the promoted database:
+`order_history` is the sequence that matters. On the promoted database:
 
 ```sql
-SELECT setval(pg_get_serial_sequence('faction_order_history', 'id'),
-              COALESCE((SELECT max(id) FROM faction_order_history), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('order_history', 'id'),
+              COALESCE((SELECT max(id) FROM order_history), 0) + 1, false);
 ```
 
 Monitor retained WAL on the primary;

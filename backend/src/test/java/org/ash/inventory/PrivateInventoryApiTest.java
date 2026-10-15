@@ -224,10 +224,10 @@ class PrivateInventoryApiTest {
         var leader = actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test");
         String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", "2043-06-01",
                         "requestedQuantities", Map.of(item, 1), "requestedAssemblyQuantities", Map.of()))
-                .post("/api/orders").then().statusCode(200).extract().path("id");
+                .post("/api/orders/faction").then().statusCode(200).extract().path("id");
         for (String target : List.of("submitted", "draft", "submitted"))
             actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test").body(Map.of("idempotencyKey", UUID.randomUUID()))
-                    .post("/api/orders/" + order + "/transitions/" + target).then().statusCode(200);
+                    .post("/api/orders/faction/" + order + "/transitions/" + target).then().statusCode(200);
         tenant("lender").get("/api/notifications").then().statusCode(200)
                 .body("findAll { it.type == 'item_requested' }.size()", equalTo(1))
                 .body("find { it.type == 'item_requested' }.payload.itemId", equalTo(item))

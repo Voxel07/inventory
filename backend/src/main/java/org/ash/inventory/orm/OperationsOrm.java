@@ -29,7 +29,7 @@ public class OperationsOrm extends EntityOrm {
     /** {@code search}: item name, person, reason, notes, event type or faction. */
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             String search, int offset, int limit) {
-        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.factionOrder o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.order o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -179,7 +179,7 @@ public class OperationsOrm extends EntityOrm {
                 .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
                         DomainEnums.ReservationStatus.partially_released))
                 .getSingleResult();
-        return Math.toIntExact(quantity + generalReservations(List.of(item.id)).getOrDefault(item.id, 0L));
+        return Math.toIntExact(quantity);
     }
 
     /** Ledger rows since {@code since} that are not evidence of a resource hidden from the actor. */
@@ -198,18 +198,6 @@ public class OperationsOrm extends EntityOrm {
                 .getSingleResult();
     }
 
-    public Map<UUID, Long> generalReservations(Collection<UUID> itemIds) {
-        var result = new LinkedHashMap<UUID, Long>();
-        if (itemIds.isEmpty()) return result;
-        for (var row : entityManager.createQuery("""
-                select l.item.id, sum(l.preparedQuantity) from GeneralOrderLine l
-                where l.order.status in ('preparing', 'ready') and l.item.id in :ids group by l.item.id
-                """, Object[].class).setParameter("ids", itemIds).getResultList()) {
-            result.put((UUID) row[0], ((Number) row[1]).longValue());
-        }
-        return result;
-    }
-
     public Map<UUID, Long> activeReservationQuantities(Collection<UUID> itemIds) {
         var quantities = new LinkedHashMap<UUID, Long>();
         if (itemIds.isEmpty()) return quantities;
@@ -226,7 +214,6 @@ public class OperationsOrm extends EntityOrm {
                 .getResultList()) {
             quantities.put((UUID) row[0], (Long) row[1]);
         }
-        generalReservations(itemIds).forEach((id, quantity) -> { if (itemIds.contains(id)) quantities.merge(id, quantity, Long::sum); });
         return quantities;
     }
 

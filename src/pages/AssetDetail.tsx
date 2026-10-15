@@ -73,7 +73,7 @@ export function AssetDetail() {
                 timestamp: transaction.timestamp,
                 title: formatStatus(transaction.transactionType),
                 detail: [
-                    transaction.expand?.factionOrderId?.orderCode,
+                    transaction.expand?.order?.orderCode,
                     transaction.eventType,
                     transaction.faction,
                     transaction.reason,

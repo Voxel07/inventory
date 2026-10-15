@@ -32,10 +32,6 @@ public class StockFactsOrm {
                 from stock_reservations r join scope s on s.id = r.item_id
                 where r.status in ('active','partially_released') group by r.item_id
                 union all
-                select 'reservation', l.item_id, null, sum(l.prepared_quantity), 0
-                from general_order_lines l join scope s on s.id = l.item_id join general_orders o on o.id = l.general_order_id
-                where o.status in ('preparing','ready') group by l.item_id
-                union all
                 select 'member_damage', r.item_id, null, 0, 0
                 from member_requests r join scope s on s.id = r.item_id
                 where r.kind = 'damage' and r.status <> 'resolved' and r.damage_report_id is null group by r.item_id

@@ -229,15 +229,15 @@ class ArchitectureApiCoverageTest {
         String creator = actor("order-owner", "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id");
         String id = item(location(), 2, "bulk"), faction = "Architecture " + UUID.randomUUID();
         String order = admin().body(Map.of("eventType", "DE", "faction", faction, "eventDate", "2039-06-12", "requestedQuantities", Map.of(id, 1)))
-                .post("/api/orders").then().statusCode(200).extract().path("id");
-        admin().body(Map.of()).post("/api/orders/" + order + "/transitions/submitted").then().statusCode(200);
-        admin().body(Map.of("preparedQuantities", Map.of(id, 1))).post("/api/orders/" + order + "/prepare").then().statusCode(200);
-        admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4)).post("/api/orders/" + order + "/transitions/ready").then().statusCode(200);
-        admin().body(Map.of()).post("/api/orders/" + order + "/transitions/picked_up").then().statusCode(200);
-        admin().get("/api/orders/" + order + "/handovers").then().statusCode(200).body("size()", equalTo(1));
+                .post("/api/orders/faction").then().statusCode(200).extract().path("id");
+        admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
+        admin().body(Map.of("preparedQuantities", Map.of(id, 1))).post("/api/orders/faction/" + order + "/prepare").then().statusCode(200);
+        admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4)).post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
+        admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
+        admin().get("/api/orders/faction/" + order + "/handovers").then().statusCode(200).body("size()", equalTo(1));
         admin().body(Map.of("lines", Map.of(id, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0))))
-                .post("/api/orders/" + order + "/return").then().statusCode(200);
-        admin().get("/api/orders/" + order + "/reconciliations").then().statusCode(200).body("size()", equalTo(1));
+                .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
+        admin().get("/api/orders/faction/" + order + "/reconciliations").then().statusCode(200).body("size()", equalTo(1));
         String notification = QuarkusTransaction.requiringNew().call(() -> {
             var n = new Notification(); n.recipient = em.find(UserAccount.class, UUID.fromString(creator)); n.type = "architecture.review";
             em.persist(n); return n.id.toString();

@@ -1,7 +1,7 @@
 package org.ash.inventory.service;
 
 import org.ash.inventory.model.AssemblyItemId;
-import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.OrderLine;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,7 +24,7 @@ public record OrderQuantities(
         Map<String, Integer> requestedAssemblies,
         Map<String, Integer> preparedAssemblies) {
 
-    public static OrderQuantities from(List<FactionOrderLine> lines, Map<AssemblyItemId, Integer> componentQuantities) {
+    public static OrderQuantities from(List<OrderLine> lines, Map<AssemblyItemId, Integer> componentQuantities) {
         var requested = new LinkedHashMap<String, Integer>();
         var prepared = new LinkedHashMap<String, Integer>();
         var allocated = new LinkedHashMap<String, Integer>();
@@ -35,7 +35,7 @@ public record OrderQuantities(
         var missing = new LinkedHashMap<String, Integer>();
         var damaged = new LinkedHashMap<String, Integer>();
         var writtenOff = new LinkedHashMap<String, Integer>();
-        var assemblyLines = new LinkedHashMap<UUID, List<FactionOrderLine>>();
+        var assemblyLines = new LinkedHashMap<UUID, List<OrderLine>>();
         for (var line : lines) {
             String itemId = line.item.id.toString();
             if (line.sourceAssembly == null) {
@@ -65,7 +65,7 @@ public record OrderQuantities(
                 missing, damaged, writtenOff, requestedAssemblies, preparedAssemblies);
     }
 
-    private static int minimumAssemblyCount(UUID assemblyId, List<FactionOrderLine> lines,
+    private static int minimumAssemblyCount(UUID assemblyId, List<OrderLine> lines,
             Map<AssemblyItemId, Integer> componentQuantities, boolean prepared) {
         return lines.stream().mapToInt(line -> {
             int component = componentQuantities.getOrDefault(new AssemblyItemId(assemblyId, line.item.id), 1);

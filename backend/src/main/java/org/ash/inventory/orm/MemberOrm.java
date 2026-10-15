@@ -21,7 +21,7 @@ public class MemberOrm extends EntityOrm {
                         and r.assetInstance = a and r.outcome <> missing)
                 """, CustodyHandoverLine.class).setParameter("orders", orders).getResultList();
         var pending = new java.util.HashMap<String, Integer>();
-        for (var row : entityManager.createQuery("select r.factionOrder.id, r.assetInstance.id, sum(r.quantity) from ReturnSubmission r where r.factionOrder.id in :orders and r.status = pending and r.assetInstance is not null group by r.factionOrder.id, r.assetInstance.id", Object[].class)
+        for (var row : entityManager.createQuery("select r.order.id, r.assetInstance.id, sum(r.quantity) from ReturnSubmission r where r.order.id in :orders and r.status = pending and r.assetInstance is not null group by r.order.id, r.assetInstance.id", Object[].class)
                 .setParameter("orders", orders).getResultList()) pending.put(row[0] + ":" + row[1], Math.toIntExact(((Number) row[2]).longValue()));
         var result = new java.util.LinkedHashMap<String, CustodyAsset>();
         for (var line : assets) {

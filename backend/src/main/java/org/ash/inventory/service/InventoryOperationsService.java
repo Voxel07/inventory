@@ -11,7 +11,7 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.CustodyHandover;
-import org.ash.inventory.model.FactionOrder;
+import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.MaintenanceSchedule;
@@ -76,29 +76,23 @@ public class InventoryOperationsService {
     /** Direct stock command; authorization follows the transaction type (checkout: ASH, otherwise item edit). */
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
-        return transact(input, null);
-    }
-
-    /** General-order handover and reconciliation: the order owns the custody, so the ledger row is linked to it. */
-    @Transactional
-    public StockTransaction transact(ApiModels.TransactionInput input, UUID generalOrderId) {
         return input.transactionType() == DomainEnums.TransactionType.checkout
-                ? checkout(input, generalOrderId) : transactInventory(input, generalOrderId);
+                ? checkout(input) : transactInventory(input);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
-    public StockTransaction checkout(ApiModels.TransactionInput input, UUID generalOrderId) {
+    public StockTransaction checkout(ApiModels.TransactionInput input) {
         actors.requireTakeout();
         if (input.transactionType() != DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Checkout transaction required");
-        return recordTransaction(input, generalOrderId);
+        return recordTransaction(input);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public StockTransaction transactInventory(ApiModels.TransactionInput input, UUID generalOrderId) {
+    public StockTransaction transactInventory(ApiModels.TransactionInput input) {
         if (input.transactionType() == DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Use the checkout workflow");
-        return recordTransaction(input, generalOrderId);
+        return recordTransaction(input);
     }
 
     private void requireTransactionAccess(Item item, ApiModels.TransactionInput input) {
@@ -106,7 +100,7 @@ public class InventoryOperationsService {
         else actors.requireItemEdit(item);
     }
 
-    private StockTransaction recordTransaction(ApiModels.TransactionInput input, UUID generalOrderId) {
+    private StockTransaction recordTransaction(ApiModels.TransactionInput input) {
         var actor = actors.current();
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
@@ -114,7 +108,7 @@ public class InventoryOperationsService {
                     + " must be created by its owning inventory workflow");
         }
         if (input.factionOrderId() != null) {
-            throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
+            throw ApiException.badRequest("Order-linked stock changes must use the order workflow");
         }
         if (input.idempotencyKey() != null) {
             requireTransactionAccess(orm.find(Item.class, input.itemId()), input);
@@ -128,7 +122,7 @@ public class InventoryOperationsService {
         var item = lockedItem(input.itemId());
         requireTransactionAccess(item, input);
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            return transactSerialized(input, item, actor, occurredAt, generalOrderId);
+            return transactSerialized(input, item, actor, occurredAt);
         }
         if (input.assetInstanceId() != null)
             throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
@@ -160,8 +154,7 @@ public class InventoryOperationsService {
         transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
-        link(transaction, generalOrderId);
-        if (input.transactionType() == DomainEnums.TransactionType.checkin && generalOrderId == null) {
+        if (input.transactionType() == DomainEnums.TransactionType.checkin) {
             settleDirectCustody(transaction, null, input);
         }
         switch (input.transactionType()) {
@@ -183,8 +176,7 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt,
-            UUID generalOrderId) {
+    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt) {
         if (input.transactionType() != DomainEnums.TransactionType.checkout
                 && input.transactionType() != DomainEnums.TransactionType.checkin) {
             throw ApiException.conflict("Serialized stock changes must be made through individual asset records");
@@ -215,7 +207,6 @@ public class InventoryOperationsService {
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         transaction.availabilityBefore = before;
-        link(transaction, generalOrderId);
 
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
             requireCheckoutContext(input, transaction.eventOccurrence);
@@ -235,7 +226,7 @@ public class InventoryOperationsService {
                     && asset.availabilityStatus != DomainEnums.AssetState.returned_pending_check) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not checked out");
             }
-            if (generalOrderId == null) settleDirectCustody(transaction, asset, input);
+            settleDirectCustody(transaction, asset, input);
             transaction.sourceLocation = asset.currentLocation;
             transaction.destinationLocation = input.locationId() == null ? (item.returnLocation == null ? item.storageLocation : item.returnLocation) : positions.location(input.locationId());
             asset.availabilityStatus = StockPolicy.returnedState(asset);
@@ -256,11 +247,6 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private static void link(StockTransaction transaction, UUID generalOrderId) {
-        if (generalOrderId == null) return;
-        transaction.relatedEntityType = "general_order";
-        transaction.relatedEntityId = generalOrderId;
-    }
 
     /**
      * A direct check-in settles one exact direct custody (custodian and event). Order-held stock is settled by its
@@ -475,7 +461,7 @@ public class InventoryOperationsService {
         report.safetyImpact = input.safetyImpact();
         report.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null)
-            report.factionOrder = orm.require(FactionOrder.class, input.factionOrderId(), "Faction order");
+            report.order = orm.require(InventoryOrder.class, input.factionOrderId(), "Faction order");
         if (input.assetInstanceId() != null) {
             if (report.item == null) throw ApiException.badRequest("An asset can only be reported with its item");
             var asset = orm.findLockedAsset(input.assetInstanceId());
@@ -596,7 +582,7 @@ public class InventoryOperationsService {
                 : DomainEnums.TransactionType.written_off;
         transaction.quantity = resolutionAmount;
         transaction.damageReport = report;
-        transaction.factionOrder = report.factionOrder;
+        transaction.order = report.order;
         transaction.reason = input.status() == DomainEnums.DamageStatus.repaired ? "Damage repaired"
                 : "Damage written off";
         transaction.notes = input.notes();

@@ -355,7 +355,7 @@ export function FactionOrderDetail() {
         onSetAssetAssignments={setAssetAssignments}
       />}
 
-      <CustodyEvidence orderId={order.id} />
+      <CustodyEvidence orderId={order.id} kind={order.kind} />
       <OrderTraceability
         key={order.id}
         order={order}

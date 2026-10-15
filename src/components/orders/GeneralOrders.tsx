@@ -109,8 +109,8 @@ export function GeneralOrders() {
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
-  function advance(order: GeneralOrderSummary, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel', assetAssignments?: Record<string, string[]>) {
-    transitionOrder.mutate({ id: order.id, action, assetAssignments }, feedback.callbacks(t('orders.generalOrders.orderUpdated')));
+  function advance(order: GeneralOrderSummary, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel') {
+    transitionOrder.mutate({ id: order.id, action }, feedback.callbacks(t('orders.generalOrders.orderUpdated')));
   }
   const editItem = (item: Item) => (
     <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>

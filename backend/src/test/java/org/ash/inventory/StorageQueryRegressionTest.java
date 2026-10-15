@@ -125,13 +125,14 @@ class StorageQueryRegressionTest {
         asset.item = privateItem;
         asset.assetCode = UUID.randomUUID().toString();
         em.persist(asset);
-        var order = new GeneralOrder();
+        var order = new InventoryOrder();
+        order.kind = InventoryOrder.Kind.general;
         order.name = "Order line privacy provenance";
         order.purpose = "regression";
         order.createdBy = owner;
-        var requested = new org.ash.inventory.model.GeneralOrderLine();
+        var requested = new org.ash.inventory.model.OrderLine();
         requested.order = order; requested.item = privateItem; requested.lineNumber = 1; requested.requestedQuantity = 1;
-        var sourced = new org.ash.inventory.model.GeneralOrderLine();
+        var sourced = new org.ash.inventory.model.OrderLine();
         sourced.order = order; sourced.item = publicItem; sourced.lineNumber = 2; sourced.requestedQuantity = 1; sourced.sourceLocation = location;
         order.lines.addAll(List.of(requested, sourced));
         em.persist(order);

@@ -9,7 +9,6 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.StorageLocation;
-import org.ash.inventory.orm.GeneralOrderOrm;
 import org.ash.inventory.orm.NotificationOrm;
 import org.ash.inventory.orm.OperationsOrm;
 import org.ash.inventory.orm.OrderOrm;
@@ -39,7 +38,6 @@ public class ApiQueryService {
     private final InventoryOperationsService inventory;
     private final OrderOrm orders;
     private final OperationsOrm operations;
-    private final GeneralOrderOrm generalOrders;
     private final NotificationOrm notifications;
     private final UserOrm users;
     private final ApiMapper mapper;
@@ -52,14 +50,13 @@ public class ApiQueryService {
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
-            GeneralOrderOrm generalOrders, NotificationOrm notifications, UserOrm users, ApiMapper mapper) {
+            NotificationOrm notifications, UserOrm users, ApiMapper mapper) {
         this.actors = actors;
         this.catalog = catalog;
         this.orderService = orderService;
         this.inventory = inventory;
         this.orders = orders;
         this.operations = operations;
-        this.generalOrders = generalOrders;
         this.notifications = notifications;
         this.users = users;
         this.mapper = mapper;
@@ -165,7 +162,7 @@ public class ApiQueryService {
         var values = orders.orders(eventType, faction, orderCode, null, statuses, eventId, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
-        var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.FactionOrderLine>>();
+        var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.OrderLine>>();
         var assemblyIds = new ArrayList<UUID>();
         for (var line : lines) {
             linesByOrder.computeIfAbsent(line.order.id, ignored -> new ArrayList<>()).add(line);
@@ -186,7 +183,7 @@ public class ApiQueryService {
     @Transactional
     public ApiResponses.OrderResponse order(UUID id) {
         var value = orders.findOrder(id);
-        if (value == null) throw ApiException.notFound("Faction order not found");
+        if (value == null || value.kind != org.ash.inventory.model.InventoryOrder.Kind.faction) throw ApiException.notFound("Faction order not found");
         orderService.assertCanView(value);
         return projectOrder(value);
     }
@@ -234,19 +231,19 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(org.ash.inventory.orm.GeneralOrderOrm.Filter filter, int page, int size) {
+    public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(org.ash.inventory.orm.OrderOrm.Filter filter, int page, int size) {
         actors.requireReader();
         var actor = actors.current();
         var bounds = bounds(page, size);
-        var values = generalOrders.orders(actor, filter, bounds.offset(), bounds.limit());
+        var values = orders.orders(actor, filter, bounds.offset(), bounds.limit());
         var names = generalOrderNames(values);
         return values.stream().map(o -> mapper.generalOrderSummary(o, namesFor(o, names))).toList();
     }
 
     @Transactional
     public ApiResponses.GeneralOrderResponse generalOrder(UUID id) {
-        var order = generalOrders.find(org.ash.inventory.model.GeneralOrder.class, id);
-        if (order == null) throw ApiException.notFound("General order not found");
+        var order = orders.find(org.ash.inventory.model.InventoryOrder.class, id);
+        if (order == null || order.kind != org.ash.inventory.model.InventoryOrder.Kind.general) throw ApiException.notFound("General order not found");
         actors.requireReader();
         return projectGeneralOrder(order);
     }
@@ -288,21 +285,33 @@ public class ApiQueryService {
         return projectEvents(List.of(value)).getFirst();
     }
 
-    private Map<String, String> generalOrderNames(List<org.ash.inventory.model.GeneralOrder> values) {
+    private Map<String, String> generalOrderNames(List<org.ash.inventory.model.InventoryOrder> values) {
         return catalogOrm.itemNames(values.stream().flatMap(o -> o.lines.stream()).map(line -> line.item.id).distinct().toList());
     }
 
-    private Map<String, String> namesFor(org.ash.inventory.model.GeneralOrder order, Map<String, String> names) {
+    private Map<String, String> namesFor(org.ash.inventory.model.InventoryOrder order, Map<String, String> names) {
         var result = new LinkedHashMap<String, String>();
         order.lines.forEach(line -> { var id = line.item.id.toString(); if (names.containsKey(id)) result.put(id, names.get(id)); });
         return result;
     }
 
-    public ApiResponses.GeneralOrderResponse projectGeneralOrder(org.ash.inventory.model.GeneralOrder value) {
-        return mapper.generalOrder(value, generalOrderNames(List.of(value)), generalOrders.history(value));
+    public ApiResponses.GeneralOrderResponse projectGeneralOrder(org.ash.inventory.model.InventoryOrder value) {
+        return mapper.generalOrder(value, generalOrderNames(List.of(value)), orders.history(value));
     }
 
-    public ApiResponses.OrderResponse projectOrder(org.ash.inventory.model.FactionOrder value) {
+    public ApiResponses.OrderDetail projectAnyOrder(org.ash.inventory.model.InventoryOrder value) {
+        return value.kind == org.ash.inventory.model.InventoryOrder.Kind.general ? projectGeneralOrder(value) : projectOrder(value);
+    }
+
+    @Transactional
+    public ApiResponses.OrderDetail orderDetail(UUID id) {
+        actors.requireReader();
+        var value = orders.find(org.ash.inventory.model.InventoryOrder.class, id);
+        if (value == null) throw ApiException.notFound("Order not found");
+        return projectAnyOrder(value);
+    }
+
+    public ApiResponses.OrderResponse projectOrder(org.ash.inventory.model.InventoryOrder value) {
         var actor = actors.current();
         var lines = orders.lines(List.of(value));
         var assemblies = lines.stream().filter(l -> l.sourceAssembly != null).map(l -> l.sourceAssembly).distinct().toList();

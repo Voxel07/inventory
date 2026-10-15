@@ -148,7 +148,7 @@ export interface ReturnSubmission {
   returnedForUserName: string;
   submittedById: string;
   submittedByName: string;
-  factionOrderId?: string;
+  orderId?: string;
   expectedReturnLocationId?: string;
   expectedReturnLocationName?: string;
   placementImage?: string;
@@ -180,7 +180,7 @@ export interface ReturnSubmissionFormData {
   quantity: number;
   assetInstanceId?: string;
   returnedForUserId?: string;
-  factionOrderId?: string;
+  orderId?: string;
   placementImageFile?: File;
   notes?: string;
 }

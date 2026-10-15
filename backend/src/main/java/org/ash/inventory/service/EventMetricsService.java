@@ -18,12 +18,11 @@ public class EventMetricsService {
     public Map<UUID, Summary> summarize(List<EventOccurrence> events) {
         if (events.isEmpty()) return Map.of();
         var ids = events.stream().map(e -> e.id).toList();
-        var faction = orm.factionLines(ids).stream().collect(java.util.stream.Collectors.groupingBy(l -> l.order.eventOccurrence.id));
-        var general = orm.generalOrders(ids).stream().collect(java.util.stream.Collectors.groupingBy(o -> o.eventOccurrence.id));
+        var faction = orm.orderLines(ids).stream().collect(java.util.stream.Collectors.groupingBy(l -> l.order.eventOccurrence.id));
         var movements = orm.directMovements(ids).stream().collect(java.util.stream.Collectors.groupingBy(t -> t.eventOccurrence.id));
         var summaries = new LinkedHashMap<UUID, Summary>();
         for (var event : events) summaries.put(event.id, summarize(event, faction.getOrDefault(event.id, List.of()),
-                general.getOrDefault(event.id, List.of()), movements.getOrDefault(event.id, List.of())));
+                movements.getOrDefault(event.id, List.of())));
         var itemIds = new HashSet<UUID>();
         summaries.values().forEach(summary -> summary.itemIds().forEach(id -> {
             try { itemIds.add(UUID.fromString(id)); } catch (IllegalArgumentException ignored) { }
@@ -36,31 +35,20 @@ public class EventMetricsService {
         return summaries;
     }
 
-    private Summary summarize(EventOccurrence value, List<FactionOrderLine> factionLines,
-            List<GeneralOrder> generalOrders, List<StockTransaction> direct) {
+    private Summary summarize(EventOccurrence value, List<OrderLine> orderLines,
+            List<StockTransaction> direct) {
         var planned = value.plannedQuantities == null ? Map.<String, Integer>of() : value.plannedQuantities;
         var used = new LinkedHashMap<String, Integer>();
         var quantities = new LinkedHashMap<String, Map<String, Integer>>();
         for (var metric : List.of("requested", "prepared", "handedOver", "returned", "consumed", "damaged", "missing", "writtenOff", "outstanding"))
             quantities.put(metric, new LinkedHashMap<>());
-        for (var line : factionLines) {
+        for (var line : orderLines) {
             String id = line.item.id.toString();
             quantities.get("requested").merge(id, line.requestedQuantity, Integer::sum);
             quantities.get("prepared").merge(id, line.preparedQuantity, Integer::sum);
             quantities.get("handedOver").merge(id, line.handedOverQuantity, Integer::sum);
             quantities.get("returned").merge(id, line.returnedQuantity, Integer::sum);
             quantities.get("consumed").merge(id, line.consumedQuantity, Integer::sum);
-            quantities.get("damaged").merge(id, line.damagedQuantity, Integer::sum);
-            quantities.get("missing").merge(id, line.missingQuantity, Integer::sum);
-            quantities.get("writtenOff").merge(id, line.writtenOffQuantity, Integer::sum);
-        }
-        for (var line : generalOrders.stream().flatMap(order -> order.lines.stream()).toList()) {
-            String id = line.item.id.toString();
-            quantities.get("requested").merge(id, line.requestedQuantity, Integer::sum);
-            quantities.get("handedOver").merge(id, line.handedOverQuantity, Integer::sum);
-            quantities.get("returned").merge(id, line.returnedQuantity, Integer::sum);
-            quantities.get("consumed").merge(id, line.consumedQuantity, Integer::sum);
-            quantities.get("prepared").merge(id, line.preparedQuantity, Integer::sum);
             quantities.get("damaged").merge(id, line.damagedQuantity, Integer::sum);
             quantities.get("missing").merge(id, line.missingQuantity, Integer::sum);
             quantities.get("writtenOff").merge(id, line.writtenOffQuantity, Integer::sum);

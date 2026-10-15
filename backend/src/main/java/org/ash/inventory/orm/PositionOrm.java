@@ -29,11 +29,10 @@ public class PositionOrm {
     public <T> T find(Class<T> type, UUID id) { return accessActor.protect(em.find(type, id), false); }
     public void lock(Item item) { em.lock(item, LockModeType.PESSIMISTIC_WRITE); }
     /**
-     * Open faction reservations and prepared general-order lines per item and source location, from two grouped
-     * queries regardless of the number of locations. A reservation without source counts at the item's default
-     * location. {@code exceptFaction}/{@code exceptGeneral} exclude the order being (re)prepared.
+     * Open reservations per item and source location in one grouped query. A reservation without a source
+     * counts at the item's default location. {@code exceptOrder} excludes the order being prepared.
      */
-    public Map<UUID, Map<UUID, Integer>> reservedByLocation(Collection<UUID> itemIds, UUID exceptFaction, UUID exceptGeneral) {
+    public Map<UUID, Map<UUID, Integer>> reservedByLocation(Collection<UUID> itemIds, UUID exceptOrder) {
         var result = new HashMap<UUID, Map<UUID, Integer>>();
         if (itemIds.isEmpty()) return result;
         for (var row : em.createQuery("""
@@ -41,15 +40,7 @@ public class PositionOrm {
                 from StockReservation r join r.item i left join r.location l left join i.storageLocation d
                 where i.id in :ids and r.status in :statuses group by i.id, coalesce(l.id, d.id), r.order.id
                 """, Object[].class).setParameter("ids", itemIds).setParameter("statuses", openReservationStatuses()).getResultList()) {
-            if (row[1] != null && !row[2].equals(exceptFaction)) add(result, row);
-        }
-        for (var row : em.createQuery("""
-                select i.id, coalesce(l.id, d.id), o.id, sum(line.preparedQuantity)
-                from GeneralOrderLine line join line.order o join line.item i left join line.sourceLocation l left join i.storageLocation d
-                where i.id in :ids and o.status in ('preparing', 'ready') and line.preparedQuantity > 0
-                group by i.id, coalesce(l.id, d.id), o.id
-                """, Object[].class).setParameter("ids", itemIds).getResultList()) {
-            if (row[1] != null && !row[2].equals(exceptGeneral)) add(result, row);
+            if (row[1] != null && !row[2].equals(exceptOrder)) add(result, row);
         }
         return result;
     }

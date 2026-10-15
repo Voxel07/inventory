@@ -8,9 +8,16 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "faction_order_lines")
-public class FactionOrderLine extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_order_id") public FactionOrder order;
+@Table(name = "order_lines")
+public class OrderLine extends BaseEntity {
+    @Column(name = "line_number", nullable = false) public int lineNumber;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_location_id") public StorageLocation sourceLocation;
+    @jakarta.persistence.OneToMany(mappedBy = "orderLine", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("createdAt, id") @org.hibernate.annotations.BatchSize(size = 64)
+    public java.util.List<OrderLineAssetAssignment> assets = new java.util.ArrayList<>();
+    public java.util.List<String> assetIds() { return assets.stream().map(a -> a.assetInstance.id.toString()).toList(); }
+    public java.util.List<String> reconciledAssetIds() { return assets.stream().filter(a -> a.reconciled).map(a -> a.assetInstance.id.toString()).toList(); }
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_id") public InventoryOrder order;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_assembly_id") public Assembly sourceAssembly;
     @Column(name = "requested_quantity", nullable = false) public int requestedQuantity;

@@ -17,7 +17,7 @@ import java.util.Map;
 @Table(name = "notifications")
 public class Notification extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "recipient_id") public UserAccount recipient;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "faction_order_id") public FactionOrder factionOrder;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "order_id") public InventoryOrder order;
     @Column(nullable = false) public String type;
     @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false) public Map<String, Object> payload = new LinkedHashMap<>();
     @Column(name = "read_at") public Instant readAt;

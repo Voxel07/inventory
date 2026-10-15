@@ -147,6 +147,12 @@ public class SyncService {
         return switch (action.type()) {
             case "order.create" -> {
                 actors.current();
+                if ("general".equals(action.payload().get("kind"))) {
+                    var value = validated(action.payload(), ApiModels.GeneralOrderInput.class);
+                    yield queries.projectGeneralOrder(orders.createGeneral(new ApiModels.GeneralOrderInput(
+                            value.name(), value.purpose(), value.eventOccurrenceId(), value.requestedQuantities(), action.idempotencyKey())));
+                }
+                if (!"faction".equals(action.payload().get("kind"))) throw ApiException.badRequest("Unknown order kind");
                 var value = validated(action.payload(), ApiModels.OrderInput.class);
                 yield queries.projectOrder(orders.create(new ApiModels.OrderInput(
                         value.eventType(), value.faction(), value.eventDate(), value.eventOccurrenceId(), value.factionId(),
@@ -170,7 +176,7 @@ public class SyncService {
                     throw ApiException.badRequest("Missing required property 'input' in order.prepare payload");
                 }
                 var value = validated(inputObj, ApiModels.PreparationInput.class);
-                yield queries.projectOrder(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
+                yield queries.projectAnyOrder(orders.prepare(orderId, new ApiModels.PreparationInput(value.preparedQuantities(),
                         value.assetAssignments(), value.acknowledgeShortages(), action.idempotencyKey(), value.notes(), value.sourceLocations())));
             }
             case "order.transition" -> {
@@ -186,7 +192,7 @@ public class SyncService {
                     throw ApiException.badRequest("Invalid order status: " + statusObj);
                 }
                 var value = validated(action.payload(), ApiModels.TransitionInput.class);
-                yield queries.projectOrder(orders.transition(orderId, target, new ApiModels.TransitionInput(
+                yield queries.projectAnyOrder(orders.transition(orderId, target, new ApiModels.TransitionInput(
                         action.idempotencyKey(), value.notes(), value.collectorName(), value.pickupLocation(),
                         value.pickupLatitude(), value.pickupLongitude())));
             }
@@ -198,7 +204,7 @@ public class SyncService {
                     throw ApiException.badRequest("Missing required property 'input' in order.return payload");
                 }
                 var value = validated(inputObj, ApiModels.ReturnInput.class);
-                yield queries.projectOrder(orders.returnItems(orderId,
+                yield queries.projectAnyOrder(orders.returnItems(orderId,
                         new ApiModels.ReturnInput(value.lines(), value.assets(), action.idempotencyKey(), value.notes())));
             }
             case "damage.create" -> {

@@ -43,7 +43,7 @@ export function ReturnSubmissionForm({
       quantity,
       assetInstanceId,
       returnedForUserId,
-      factionOrderId,
+      orderId: factionOrderId,
       eventOccurrenceId,
       placementImageFile: image,
       notes: notes.trim() || undefined,

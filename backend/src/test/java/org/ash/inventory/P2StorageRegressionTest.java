@@ -49,11 +49,14 @@ class P2StorageRegressionTest {
     private StockTransaction tx(Item i, UserAccount u, DomainEnums.TransactionType type, int quantity, boolean loss) {
         var t = new StockTransaction(); t.item = i; t.user = u; t.type = type; t.quantity = quantity; t.custodyWriteOff = loss; em.persist(t); return t;
     }
-    private GeneralOrder order(Item i, UserAccount u, int reserved) {
-        var o = new GeneralOrder(); o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = "ready";
-        var line = new org.ash.inventory.model.GeneralOrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
+    private InventoryOrder order(Item i, UserAccount u, int reserved) {
+        var o = new InventoryOrder(); o.kind = InventoryOrder.Kind.general; o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = DomainEnums.OrderStatus.ready;
+        var line = new org.ash.inventory.model.OrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
         line.requestedQuantity = reserved; line.preparedQuantity = reserved; o.lines.add(line);
-        em.persist(o); return o;
+        em.persist(o);
+        var reservation = new StockReservation(); reservation.order = o; reservation.orderLine = line; reservation.item = i;
+        reservation.createdBy = u; reservation.location = i.storageLocation; reservation.requestedQuantity = reserved; reservation.reservedQuantity = reserved;
+        em.persist(reservation); return o;
     }
     @Test @TestTransaction
     void stockFactsUseOneStatementAndPreserveCustodyLossAndGeneralOrderReservations() {
@@ -237,12 +240,12 @@ class P2StorageRegressionTest {
             em.flush(); em.clear();
             var managed = em.find(Item.class, item.id);
             stats().clear();
-            var capacity = allocation.capacity(managed, null, null);
+            var capacity = allocation.capacity(managed, null);
             var source = allocation.defaultSource(managed, capacity, locations);
             assertEquals(locations, capacity.availableAt(source) + (source.id.equals(managed.storageLocation.id) ? 1 : 0));
             counts.add(stats().getPrepareStatementCount());
         }
         assertEquals(counts.get(0), counts.get(1), "Statements must not grow with the number of stock locations");
-        assertTrue(counts.get(0) <= 5, "positions, reservations, general-order lines and loans: " + counts.get(0));
+        assertTrue(counts.get(0) <= 4, "positions, shared reservations and loans: " + counts.get(0));
     }
 }
