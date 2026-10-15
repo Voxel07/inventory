@@ -1,7 +1,8 @@
 import { formatDateTime } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField as MuiTextField, Typography } from '@mui/material';
+import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
+import { TextField as MuiTextField } from '../shared/DateTextField';
 import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';

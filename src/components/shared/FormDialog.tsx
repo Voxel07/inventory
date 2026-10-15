@@ -42,6 +42,9 @@ export function DialogForm({ title, onSubmit, onCancel, submitLabel, submitDisab
     event.preventDefault();
     // Nested dialogs are portaled, but React still bubbles their submit events.
     event.stopPropagation();
+    // Forms with custom validation still need to reject incomplete date-field drafts.
+    if (noValidate && !Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>('input[data-date-field]'))
+      .every((input) => input.reportValidity())) return;
     if (!submitDisabled && !pending) onSubmit();
   }
   return <Box component="form" noValidate={noValidate} onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}>

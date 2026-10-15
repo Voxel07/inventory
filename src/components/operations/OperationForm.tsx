@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Autocomplete, Checkbox, FormControlLabel, Stack, TextField } from '@mui/material';
+import { Autocomplete, Checkbox, FormControlLabel, Stack } from '@mui/material';
+import { TextField } from '../shared/DateTextField';
 import { useOperationCommand } from '../../hooks/useOperations';
 import { DialogForm, FormDialog } from '../shared/FormDialog';
 

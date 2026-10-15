@@ -35,7 +35,7 @@ export function localWriteChange(path: string): LocalWriteChange {
   switch (resource) {
     case 'access': return change('access.changed');
     case 'items': return change(action === 'equipment' ? 'equipment.changed' : action === 'assets' ? 'asset.updated' : 'catalog.changed');
-    case 'events': return change(action === 'attendees' || action === 'timeline' ? 'event_logistics.changed' : 'catalog.changed');
+    case 'events': return change(action === 'attendees' || action === 'timeline' || action === 'catering' ? 'event_logistics.changed' : 'catalog.changed');
     case 'event-people': return change('event_logistics.changed');
     case 'assemblies': case 'storage-locations': case 'factions': case 'category-maintenance': return change('catalog.changed');
     case 'orders': return change('order.changed');

@@ -148,6 +148,9 @@ create table domain_event_outbox (
 );
 
 create table event_occurrences (
+    daily_main_meal_stamps integer not null default 4 check (daily_main_meal_stamps between 0 and 1000),
+    daily_breakfast_stamps integer not null default 1 check (daily_breakfast_stamps between 0 and 1000),
+    first_day_main_meal_stamps integer not null default 2 check (first_day_main_meal_stamps between 0 and 1000),
     end_date date not null,
     start_date date not null,
     created_at timestamp(6) with time zone not null,
@@ -204,7 +207,7 @@ create table event_timeline_entries (
     event_id uuid not null references event_occurrences(id) on delete cascade,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
-    category varchar(255) not null check (category in ('in_game', 'preparation')),
+    category varchar(255) not null check (category in ('in_game', 'preparation', 'catering')),
     title varchar(255) not null check (length(trim(title)) > 0),
     starts_at timestamp(6) not null,
     ends_at timestamp(6),

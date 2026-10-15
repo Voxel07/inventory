@@ -20,13 +20,12 @@ import {
   Paper,
   Select,
   Stack,
-  TextField,
   ToggleButtonGroup,
-
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { TextField } from '../shared/DateTextField';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CategoryIcon from '@mui/icons-material/Category';
 import AddIcon from '@mui/icons-material/Add';

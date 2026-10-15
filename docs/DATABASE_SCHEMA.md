@@ -119,11 +119,11 @@ The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses 
 
 | Table | Key data and relationships |
 |---|---|
-| `event_occurrences` | UUID; event type/name/status, start/end dates, planned/used JSON quantities |
+| `event_occurrences` | UUID; event type/name/status, start/end dates, editable daily regular/breakfast and first-day regular stamp rates, planned/used JSON quantities |
 | `event_people` | UUID; shared people registry: name and optional unique `app_users` link (`on delete set null`); event crew usually has no account. A rename applies at every event |
-| `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; fixed 4 main + 1 breakfast entitlement per person projected by the API |
+| `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; API calculates entitlement by attendance and catering days using editable rates on `event_occurrences` (daily main/breakfast and first-day main) and crew `catering` timeline periods |
 | `event_attendee_roles` | Element collection of an attendance (cascade): `faction_leader`/`faction_deputy`/`faction_hq_crew` with a required faction FK of the event type, `as_held`, or `event_crew` with optional assigned work; unique `(attendee, role, faction)` with nulls not distinct |
-| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
+| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation/catering category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
 | `factions` | UUID; unique `(event_type, slug)`, name and active flag |
 | `orders` | UUID; faction/general kind; creator and optional event/faction FKs; kind-specific metadata constraint, unique faction code, general name/purpose; status, pickup and lifecycle actors |
 | `order_lines` | UUID; order/item/source assembly/source location FKs; line order, requested, allocated, reserved, prepared, handed-over and reconciliation quantities |

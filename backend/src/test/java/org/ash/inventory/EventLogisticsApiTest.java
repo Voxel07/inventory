@@ -13,7 +13,7 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
-/** Event attendees with a shared people registry and predefined roles, plus the two-tab event timeline. */
+/** Event attendees with a shared people registry, predefined roles and catering-aware timelines. */
 @QuarkusTest
 class EventLogisticsApiTest {
     private RequestSpecification actor(String name, String role) {
@@ -61,7 +61,7 @@ class EventLogisticsApiTest {
                 .body("person.name", equalTo(name)).body("person.userId", nullValue())
                 .body("roles.role", contains("faction_leader", "as_held"))
                 .body("roles[0].factionId", equalTo(faction)).body("roles[0].factionName", startsWith("Faction "))
-                .body("mainMealStamps", equalTo(4)).body("breakfastStamps", equalTo(1))
+                .body("mainMealStamps", equalTo(6)).body("breakfastStamps", equalTo(2))
                 .extract().path("person.id");
 
         String renamed = name + " Mustermann";

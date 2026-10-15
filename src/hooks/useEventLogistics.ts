@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../services/apiClient';
 import type {
-  EventAccountOption, EventAttendee, EventAttendeeInput, EventPerson, EventPersonInput, EventTimelineEntry, EventTimelineInput,
+  CateringSettings, EventAccountOption, EventAttendee, EventAttendeeInput, EventPerson, EventPersonInput, EventTimelineEntry, EventTimelineInput,
 } from '../types/eventLogistics';
 
 function createEventLogisticsHooks<T, TInput>(section: 'attendees' | 'timeline') {
@@ -58,3 +58,11 @@ export function useEventAccounts(enabled: boolean) {
   });
 }
 export const timelineHooks = createEventLogisticsHooks<EventTimelineEntry, EventTimelineInput>('timeline');
+
+export function useCateringSettings(eventId: string) {
+  return useQuery({ queryKey: ['event-logistics', eventId, 'catering'], queryFn: () => apiRequest<CateringSettings>(`/api/events/${eventId}/catering`) });
+}
+
+export function useSaveCateringSettings(eventId: string) {
+  return useMutation({ mutationFn: (data: CateringSettings) => apiRequest<CateringSettings>(`/api/events/${eventId}/catering`, { method: 'PUT', body: data }) });
+}

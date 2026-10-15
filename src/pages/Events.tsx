@@ -23,10 +23,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { TextField } from '../components/shared/DateTextField';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SaveIcon from '@mui/icons-material/Save';

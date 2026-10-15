@@ -9,7 +9,6 @@ import {
     Accordion,
     AccordionDetails,
     Box,
-    TextField,
     Stack,
     Autocomplete,
     Checkbox,
@@ -20,6 +19,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
+import { TextField } from '../shared/DateTextField';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';

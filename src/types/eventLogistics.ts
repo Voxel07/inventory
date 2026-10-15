@@ -65,7 +65,13 @@ export interface EventAttendee {
   notes: string | null;
 }
 
-export type TimelineCategory = 'in_game' | 'preparation';
+export interface CateringSettings {
+  dailyMainMealStamps: number;
+  dailyBreakfastStamps: number;
+  firstDayMainMealStamps: number;
+}
+
+export type TimelineCategory = 'in_game' | 'preparation' | 'catering';
 export type TimelineStatus = 'planned' | 'in_progress' | 'completed';
 
 export interface EventTimelineInput {

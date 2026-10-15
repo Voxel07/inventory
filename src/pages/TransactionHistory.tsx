@@ -1,5 +1,6 @@
 import { Button } from '../components/shared/ActionButtons';
-import { Alert, Box, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, MenuItem, Stack, Typography } from '@mui/material';
+import { TextField } from '../components/shared/DateTextField';
 import { useState } from 'react';
 import { TransactionHistory as TransactionHistoryList } from '../components/lists/TransactionHistory';
 import { useTransactions } from '../hooks/useTransactions';

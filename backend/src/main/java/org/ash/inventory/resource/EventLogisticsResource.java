@@ -64,6 +64,14 @@ public class EventLogisticsResource {
     @GET @Path("/events/{eventId}/timeline")
     public List<TimelineResponse> timeline(@PathParam("eventId") UUID eventId) { return service.timeline(eventId); }
 
+    @GET @Path("/events/{eventId}/catering")
+    public CateringSettings catering(@PathParam("eventId") UUID eventId) { return service.cateringSettings(eventId); }
+
+    @PUT @Path("/events/{eventId}/catering")
+    public CateringSettings saveCatering(@PathParam("eventId") UUID eventId, @Valid CateringSettings settings) {
+        return service.saveCateringSettings(eventId, settings);
+    }
+
     @POST @Path("/events/{eventId}/timeline")
     public TimelineResponse createTimeline(@PathParam("eventId") UUID eventId, @Valid TimelineInput input) {
         return service.saveTimeline(eventId, null, input);

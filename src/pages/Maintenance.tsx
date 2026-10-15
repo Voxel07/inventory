@@ -14,9 +14,9 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
+import { TextField } from '../components/shared/DateTextField';
 import BuildIcon from '@mui/icons-material/Build';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorIcon from '@mui/icons-material/Error';

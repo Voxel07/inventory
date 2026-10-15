@@ -1,7 +1,8 @@
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Alert, Box, Card, CardContent, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, MenuItem, Paper, Stack, Typography } from '@mui/material';
+import { TextField } from '../shared/DateTextField';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';

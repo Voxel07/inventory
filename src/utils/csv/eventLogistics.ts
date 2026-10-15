@@ -83,7 +83,7 @@ export function parseEventTimeline(value: string | undefined): EventTimelineInpu
   return list(value).map((entry, index) => {
     try {
       const category = text(entry.category, true);
-      if (category !== 'preparation' && category !== 'in_game') throw new Error(`Unbekannte Zeitplankategorie: ${category}`);
+      if (category !== 'preparation' && category !== 'in_game' && category !== 'catering') throw new Error(`Unbekannte Zeitplankategorie: ${category}`);
       const status = text(entry.status ?? 'planned');
       if (status !== 'planned' && status !== 'in_progress' && status !== 'completed') throw new Error(`Unbekannter Zeitplanstatus: ${status}`);
       const title = text(entry.title, true);
