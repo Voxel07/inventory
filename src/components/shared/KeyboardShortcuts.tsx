@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, DialogContent, DialogTitle, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material';
 import { Dialog } from './ClosableDialog';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 /** Keys typed faster than this come from a barcode scanner, not a person. */
 const SCANNER_INTERVAL_MS = 65;
@@ -95,7 +95,7 @@ function backTarget(): number | string {
  * shortcut overview on "?".
  */
 export function KeyboardShortcuts() {
-    const t = useLocalizedText();
+    const t = useT();
     const navigate = useNavigate();
     const [helpOpen, setHelpOpen] = useState(false);
     const chordAt = useRef(0);
@@ -193,27 +193,27 @@ export function KeyboardShortcuts() {
     }, [navigate]);
 
     const rows: [string[], string][] = [
-        [['/', 'Ctrl K'], t('Suche der Seite fokussieren', 'Focus the page search')],
-        [['↓'], t('Aus der Suche in die Ergebnisse wechseln', 'Move from the search into the results')],
-        [['Enter'], t('In der Suche: ersten Treffer öffnen · in den Ergebnissen: Treffer öffnen', 'In the search: open the first match · in the results: open the match')],
-        [['↑', '↓', 'j', 'k'], t('Zwischen Ergebnissen wechseln', 'Move between results')],
-        [['Esc'], t('Suche verlassen', 'Leave the search')],
-        [['Backspace', 'Alt ←'], t('Zurück', 'Go back')],
-        [['g h'], t('Start', 'Home')],
-        [['g i'], t('Artikel', 'Items')],
-        [['g a'], t('Baugruppen', 'Assemblies')],
-        [['g l'], t('Lagerorte', 'Storage locations')],
-        [['g o'], t('Bestellungen', 'Orders')],
-        [['g e'], t('Eventplanung', 'Event planning')],
-        [['g t'], t('Eventteilnehmer', 'Event attendees')],
-        [['g p'], t('Profil', 'Profile')],
-        [['?'], t('Diese Übersicht', 'This overview')],
+        [['/', 'Ctrl K'], t('shared.keyboardShortcuts.focusThePageSearch')],
+        [['↓'], t('shared.keyboardShortcuts.moveFromTheSearchIntoTheResults')],
+        [['Enter'], t('shared.keyboardShortcuts.inTheSearchOpenTheFirstMatchInTheResults')],
+        [['↑', '↓', 'j', 'k'], t('shared.keyboardShortcuts.moveBetweenResults')],
+        [['Esc'], t('shared.keyboardShortcuts.leaveTheSearch')],
+        [['Backspace', 'Alt ←'], t('shared.keyboardShortcuts.goBack')],
+        [['g h'], t('nav.home')],
+        [['g i'], t('nav.items')],
+        [['g a'], t('nav.assemblies')],
+        [['g l'], t('nav.storageLocations')],
+        [['g o'], t('nav.orders')],
+        [['g e'], t('common.eventPlanning')],
+        [['g t'], t('common.eventAttendees')],
+        [['g p'], t('profile.title')],
+        [['?'], t('shared.keyboardShortcuts.thisOverview')],
     ];
 
     return <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('Tastenkürzel', 'Keyboard shortcuts')}</DialogTitle>
+        <DialogTitle>{t('shared.keyboardShortcuts.keyboardShortcuts')}</DialogTitle>
         <DialogContent dividers>
-            <Table size="small" aria-label={t('Tastenkürzel', 'Keyboard shortcuts')}>
+            <Table size="small" aria-label={t('shared.keyboardShortcuts.keyboardShortcuts')}>
                 <TableBody>
                     {rows.map(([keys, label]) => <TableRow key={keys.join()}>
                         <TableCell sx={{ whiteSpace: 'nowrap', width: '1%' }}>
@@ -227,7 +227,7 @@ export function KeyboardShortcuts() {
                 </TableBody>
             </Table>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-                {t('Kürzel sind in Eingabefeldern und offenen Dialogen inaktiv.', 'Shortcuts are inactive in input fields and open dialogs.')}
+                {t('shared.keyboardShortcuts.shortcutsAreInactiveInInputFieldsAndOpenDialogs')}
             </Typography>
         </DialogContent>
     </Dialog>;

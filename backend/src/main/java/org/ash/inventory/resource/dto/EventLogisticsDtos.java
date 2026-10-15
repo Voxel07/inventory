@@ -3,10 +3,13 @@ package org.ash.inventory.resource.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.ash.inventory.model.EventAttendee;
 import org.ash.inventory.model.EventPerson;
+import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.EventTimelineEntry;
 import org.ash.inventory.model.Faction;
 import java.time.LocalDateTime;
@@ -18,8 +21,12 @@ import java.util.UUID;
 public final class EventLogisticsDtos {
     private EventLogisticsDtos() {}
 
-    public static final int MAIN_MEAL_STAMPS = 4;
-    public static final int BREAKFAST_STAMPS = 1;
+    public record CateringSettings(@Min(0) @Max(1000) int dailyMainMealStamps,
+            @Min(0) @Max(1000) int dailyBreakfastStamps, @Min(0) @Max(1000) int firstDayMainMealStamps) {
+        public static CateringSettings from(EventOccurrence event) {
+            return new CateringSettings(event.dailyMainMealStamps, event.dailyBreakfastStamps, event.firstDayMainMealStamps);
+        }
+    }
 
     /** Faction roles require one of the event type's factions; only event crew carries an assignment. */
     public record RoleInput(
@@ -53,17 +60,17 @@ public final class EventLogisticsDtos {
     public record AttendeeResponse(UUID id, UUID eventId, PersonSummary person, List<RoleResponse> roles,
             LocalDateTime arrivesAt, LocalDateTime leavesAt, int mainMealStamps, int breakfastStamps,
             boolean foodStampsIssued, String notes) {
-        public static AttendeeResponse from(EventAttendee attendee, Map<UUID, Faction> factions) {
+        public static AttendeeResponse from(EventAttendee attendee, Map<UUID, Faction> factions, int mainMealStamps, int breakfastStamps) {
             var roles = attendee.roles.stream().map(role -> new RoleResponse(role.role, role.factionId,
                     role.factionId == null || !factions.containsKey(role.factionId) ? null : factions.get(role.factionId).name,
                     role.assignment)).toList();
             return new AttendeeResponse(attendee.id, attendee.event.id, PersonSummary.from(attendee.person), roles,
-                    attendee.arrivesAt, attendee.leavesAt, MAIN_MEAL_STAMPS, BREAKFAST_STAMPS,
+                    attendee.arrivesAt, attendee.leavesAt, mainMealStamps, breakfastStamps,
                     attendee.foodStampsIssued, attendee.notes);
         }
     }
 
-    public record TimelineInput(@NotNull @Pattern(regexp = "in_game|preparation") String category,
+    public record TimelineInput(@NotNull @Pattern(regexp = "in_game|preparation|catering") String category,
             @NotBlank @Size(max = 255) String title, @NotNull LocalDateTime startsAt, LocalDateTime endsAt,
             @Size(max = 255) String owner, @Size(max = 255) String location,
             @NotNull @Pattern(regexp = "planned|in_progress|completed") String status,

@@ -11,30 +11,28 @@ import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Button, ToggleButton } from '../components/shared/ActionButtons';
-import { useItems, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems } from '../hooks/useItems';
-import { useAssemblies } from '../hooks/useAssemblies';
+import { usePagedItems, useItemCategories, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems, type ItemQuery } from '../hooks/useItems';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useStorageLocations } from '../hooks/useStorageLocations';
-import { useAssignableUsers } from '../hooks/useUsers';
 import { useCrudManager } from '../hooks/useCrudManager';
-import { useMember } from '../hooks/useMember';
 import type { Item, ItemFormData } from '../types';
-import { useLocalizedText } from '../utils/naming';
+import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { personalItems } from '../utils/personalItems';
 import { canCreateInventory, canEditCatalog } from '../utils/access';
 
 export function Items() {
     const { user } = useAuth();
     const catalogManager = canEditCatalog(user);
     const canCreate = canCreateInventory(user);
-    const t = useLocalizedText();
+    const t = useT();
     const [params, setParams] = useSearchParams();
     const mine = params.get('scope') === 'mine';
-    const { data: items, isLoading, isFetchingNextPage, hasNextPage, isError, refetch, isComplete: itemsComplete } = useItems();
-    const { data: assemblies, isComplete: assembliesComplete, isError: assembliesError } = useAssemblies();
+    // Search, filters and the "mine" scope run on the server; further pages load on demand.
+    const [query, setQuery] = useState<ItemQuery>({});
+    const debouncedSearch = useDebouncedValue(query.search);
+    const catalog = usePagedItems({ ...query, search: debouncedSearch, mine: mine || undefined });
     const { data: storageLocations } = useStorageLocations();
-    const { data: assignableUsers } = useAssignableUsers(catalogManager);
-    const { custody } = useMember();
+    const { data: categories = [] } = useItemCategories();
 
     const createItem = useCreateItem();
     const updateItem = useUpdateItem();
@@ -43,75 +41,67 @@ export function Items() {
 
     const crud = useCrudManager<Item, ItemFormData>(
         { create: createItem, update: updateItem, delete: deleteItem, deleteMany: deleteItems },
-        { entityName: 'Artikel', entityNameEnglish: 'item', entityNamePlural: 'Artikel', entityNamePluralEnglish: 'items' },
+        { entityName: t('pages.items.item'), entityNamePlural: t('common.items') },
     );
 
     const [importOpen, setImportOpen] = useState(false);
     const [qrItem, setQrItem] = useState<Item | undefined>();
 
-    const visibleItems = mine && items ? personalItems(items, user?.id, custody.data ?? []) : items;
-    const categories = [...new Set(items?.map((i) => i.category).filter(Boolean) ?? [])];
-    const allNames = items?.map((i) => i.name) ?? [];
 
     return (
         <Box>
             <PageHeader
-                title={t('Artikel', 'Items')}
+                title={t('nav.items')}
                 actions={<>
                     {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>
-                        {t('CSV-Import', 'Import CSV')}
+                        {t('pages.items.importCSV')}
                     </Button>}
                     {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
-                        {t('Artikel hinzufügen', 'Add item')}
+                        {t('common.addItem')}
                     </Button>}
                 </>}
             />
-            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('Umfang', 'Scope')}
+            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
                 onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
-                <ToggleButton value="all">{t('Alle Artikel', 'All items')}</ToggleButton>
-                <ToggleButton value="mine">{t('Meine Artikel', 'My items')}</ToggleButton>
+                <ToggleButton value="all">{t('pages.items.allItems')}</ToggleButton>
+                <ToggleButton value="mine">{t('pages.items.myItems')}</ToggleButton>
             </ToggleButtonGroup>
 
             <ItemsList
-                items={visibleItems}
-                isLoading={isLoading || (mine && custody.isLoading)}
-                loadingMore={!isError && (hasNextPage || isFetchingNextPage)}
-                loadError={isError}
-                onRetry={() => { void refetch(); }}
+                items={catalog.data}
+                server={{ query, onQueryChange: setQuery, list: catalog }}
+                isLoading={catalog.isLoading}
+                loadError={catalog.isError}
+                onRetry={() => { void catalog.refetch(); }}
                 onCreate={canCreate ? crud.openCreate : undefined}
                 onEdit={crud.openEdit}
                 onDelete={crud.openDelete}
                 onDeleteMany={crud.openDeleteMany}
-                emptyHint={mine ? t('Dir sind derzeit keine Artikel zugeordnet und du hast keine ausgeliehen.', 'Nothing is assigned to you or checked out to you right now.') : undefined}
+                emptyHint={mine ? t('pages.items.nothingIsAssignedToYouOrCheckedOutToYou') : undefined}
             />
 
             <FormDialog open={crud.formOpen} onClose={crud.closeForm}>
                 <ItemForm
                     key={crud.editingEntity?.id ?? 'create'}
-                    title={crud.editingEntity ? t('Artikel bearbeiten', 'Edit item') : t('Neuer Artikel', 'New item')}
+                    title={crud.editingEntity ? t('pages.items.editItem') : t('pages.items.newItem')}
                     onCancel={crud.closeForm}
                     initialData={crud.editingEntity}
                     onSubmit={crud.handleSave}
                     isLoading={createItem.isPending || updateItem.isPending}
                     storageLocations={storageLocations ?? []}
                     categories={categories}
-                    existingNames={allNames.filter((name) => name !== crud.editingEntity?.name)}
-                    assignableUsers={assignableUsers ?? []}
                 />
             </FormDialog>
 
-            <QrLabelDialog label={qrItem ? { title: t('QR-Code', 'QR code'), itemId: qrItem.id, itemName: qrItem.name } : null}
+            <QrLabelDialog label={qrItem ? { title: t('pages.items.qRCode'), itemId: qrItem.id, itemName: qrItem.name } : null}
                 onClose={() => setQrItem(undefined)} />
 
             <ConfirmDialog
                 open={crud.isDeleteOpen}
-                title={t('Artikel stilllegen', crud.deletingIds.length > 1 ? 'Retire items' : 'Retire item')}
-                message={t(
-                    `${crud.deletingIds.length} Artikel stilllegen? Sie verschwinden aus dem Katalog; Codes und Verlauf bleiben erhalten.`,
-                    `Retire ${crud.deletingIds.length} item(s)? They leave the catalog; their codes and history are kept.`,
-                )}
-                actionLabel={t('Stilllegen', 'Retire')}
-                actionTooltip={t('Aus dem Katalog entfernen, Verlauf behalten', 'Remove from the catalog and keep history')}
+                title={crud.deletingIds.length > 1 ? t('pages.items.retireItems') : t('pages.items.retireItem')}
+                message={t('pages.items.retireDeletingIdCountItemSTheyLeaveTheCatalogTheirCodes', { deletingIdCount: String(crud.deletingIds.length) })}
+                actionLabel={t('common.retire')}
+                actionTooltip={t('pages.items.removeFromTheCatalogAndKeepHistory')}
                 actionColor="error"
                 onClose={crud.closeDelete}
                 onConfirm={crud.handleDeleteConfirm}
@@ -122,10 +112,6 @@ export function Items() {
                 open={importOpen}
                 initialType="items"
                 onClose={() => setImportOpen(false)}
-                items={items ?? []}
-                assemblies={assemblies ?? []}
-                storageLocations={storageLocations ?? []}
-                catalogComplete={itemsComplete && assembliesComplete && !isError && !assembliesError && !!items && !!assemblies}
             />
         </Box>
     );

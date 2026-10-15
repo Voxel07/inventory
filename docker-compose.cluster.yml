@@ -7,6 +7,65 @@
 #     live-event fan-out (caches are per node, keyed by committed database revisions)
 #   - S3_ENDPOINT: Garage S3 cluster node on VPS 3
 
+# Shared definition of every API node; each node below adds only its port and instance id.
+x-inventory-api: &inventory-api
+  build: ./backend
+  environment: &inventory-api-environment
+    QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
+    DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/inventory}
+    DB_USER: inventory
+    DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a unique secret (openssl rand -hex 32)}
+    REDIS_URL: ${REDIS_URL:-redis://valkey:6379}
+    API_RATE_LIMIT_BACKEND: redis
+    EVENT_BACKEND: redis
+    REDIS_HEALTH_ENABLED: "true"
+    INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
+    INVENTORY_ACCESS_GROUP: ${INVENTORY_ACCESS_GROUP:-inventory}
+    INVENTORY_BOOTSTRAP_ADMINS: ${INVENTORY_BOOTSTRAP_ADMINS:-}
+    OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
+    API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
+    API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
+    OIDC_ENABLED: ${OIDC_ENABLED:-true}
+    OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
+    OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
+    OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
+    DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
+    PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
+    PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
+    PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
+    TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
+    OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
+    OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
+    OTEL_LOGS_LEVEL: ${OTEL_LOGS_LEVEL:-INFO}
+    OTEL_LOG_STREAM: ${OTEL_LOG_STREAM:-inventory_backend}
+    OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15s}
+    OTEL_OUTBOX_SNAPSHOT_EVERY: ${OTEL_OUTBOX_SNAPSHOT_EVERY:-30s}
+    INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-INFO}
+    DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
+    APP_VERSION: ${APP_VERSION:-dev}
+    MEDIA_MODE: s3
+    S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
+    S3_BUCKET: ${S3_BUCKET:-inventory}
+    S3_REGION: ${S3_REGION:-garage}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    valkey:
+      condition: service_healthy
+    garage:
+      condition: service_started
+  healthcheck:
+    test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/q/health/live || exit 1"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+  restart: unless-stopped
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -23,7 +82,8 @@ services:
     environment:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
+      # Required, never defaulted: compose refuses to start with a missing or empty password.
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a unique secret (openssl rand -hex 32)}
     ports:
       # Private/VPN address only: the second API node and the storage replica connect here.
       - "${DB_REPLICATION_BIND_ADDRESS:-127.0.0.1}:${DB_REPLICATION_PORT:-5432}:5432"
@@ -75,127 +135,21 @@ services:
 
   # Primary API Node (VPS 1 / Replica 1)
   inventory-api-1:
-    build: ./backend
+    <<: *inventory-api
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
-      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/inventory}
-      DB_USER: inventory
-      DB_PASSWORD: ${DB_PASSWORD:-inventory}
-      REDIS_URL: ${REDIS_URL:-redis://valkey:6379}
-      API_RATE_LIMIT_BACKEND: redis
-      EVENT_BACKEND: redis
-      REDIS_HEALTH_ENABLED: "true"
-      INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
-      INVENTORY_ACCESS_GROUP: ${INVENTORY_ACCESS_GROUP:-inventory}
-      INVENTORY_BOOTSTRAP_ADMINS: ${INVENTORY_BOOTSTRAP_ADMINS:-}
-      OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
-      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
-      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
-      OIDC_ENABLED: ${OIDC_ENABLED:-true}
-      OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
-      OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
-      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
-      PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
-      PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
-      PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
-      OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
-      OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
-      OTEL_LOGS_LEVEL: ${OTEL_LOGS_LEVEL:-DEBUG}
+      <<: *inventory-api-environment
       OTEL_SERVICE_INSTANCE_ID: ${OTEL_SERVICE_INSTANCE_ID_1:-}
-      OTEL_LOG_STREAM: ${OTEL_LOG_STREAM:-inventory_backend}
-      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15s}
-      OTEL_OUTBOX_SNAPSHOT_EVERY: ${OTEL_OUTBOX_SNAPSHOT_EVERY:-30s}
-      INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-DEBUG}
-      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
-      APP_VERSION: ${APP_VERSION:-dev}
-      MEDIA_MODE: s3
-      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
-      S3_BUCKET: ${S3_BUCKET:-inventory}
-      S3_REGION: ${S3_REGION:-garage}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      garage:
-        condition: service_started
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/q/health/live || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
 
   # Secondary API Node (VPS 2 / Replica 2 for Load Balancing)
   inventory-api-2:
-    build: ./backend
+    <<: *inventory-api
     ports:
       - "127.0.0.1:8081:8080"
     environment:
-      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
-      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/inventory}
-      DB_USER: inventory
-      DB_PASSWORD: ${DB_PASSWORD:-inventory}
-      REDIS_URL: ${REDIS_URL:-redis://valkey:6379}
-      API_RATE_LIMIT_BACKEND: redis
-      EVENT_BACKEND: redis
-      REDIS_HEALTH_ENABLED: "true"
-      INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
-      INVENTORY_ACCESS_GROUP: ${INVENTORY_ACCESS_GROUP:-inventory}
-      INVENTORY_BOOTSTRAP_ADMINS: ${INVENTORY_BOOTSTRAP_ADMINS:-}
-      OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
-      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
-      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
-      OIDC_ENABLED: ${OIDC_ENABLED:-true}
-      OIDC_AUTH_SERVER_URL: ${OIDC_AUTH_SERVER_URL:-http://localhost:9000/application/o/inventory/}
-      OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
-      OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
-      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
-      PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
-      PROXY_ALLOW_FORWARDED: ${PROXY_ALLOW_FORWARDED:-true}
-      PROXY_ALLOW_X_FORWARDED: ${PROXY_ALLOW_X_FORWARDED:-false}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
-      OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
-      OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
-      OTEL_LOGS_LEVEL: ${OTEL_LOGS_LEVEL:-DEBUG}
+      <<: *inventory-api-environment
       OTEL_SERVICE_INSTANCE_ID: ${OTEL_SERVICE_INSTANCE_ID_2:-}
-      OTEL_LOG_STREAM: ${OTEL_LOG_STREAM:-inventory_backend}
-      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15s}
-      OTEL_OUTBOX_SNAPSHOT_EVERY: ${OTEL_OUTBOX_SNAPSHOT_EVERY:-30s}
-      INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-DEBUG}
-      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
-      APP_VERSION: ${APP_VERSION:-dev}
-      MEDIA_MODE: s3
-      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
-      S3_BUCKET: ${S3_BUCKET:-inventory}
-      S3_REGION: ${S3_REGION:-garage}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      garage:
-        condition: service_started
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/q/health/live || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
 
   # Static Web Frontend
   inventory-app:

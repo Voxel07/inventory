@@ -11,26 +11,11 @@ import java.util.Collection;
 public class CustodyOrm {
     private final EntityManager em;
     public CustodyOrm(EntityManager em) { this.em = em; }
-    public List<FactionOrderLine> factionLines(UUID actor) {
-        var query = em.createQuery("from FactionOrderLine l join fetch l.item i left join fetch i.returnLocation left join fetch i.storageLocation join fetch l.order o join fetch o.createdBy join fetch o.faction join fetch o.eventOccurrence where l.handedOverQuantity - l.returnedQuantity - l.consumedQuantity - l.damagedQuantity - l.writtenOffQuantity > 0"
-                + (actor == null ? "" : " and o.createdBy.id = :actor"), FactionOrderLine.class);
+    public List<OrderLine> orderLines(UUID actor) {
+        var query = em.createQuery("from OrderLine l join fetch l.item i left join fetch i.returnLocation left join fetch i.storageLocation join fetch l.order o join fetch o.createdBy left join fetch o.faction left join fetch o.eventOccurrence where l.handedOverQuantity - l.returnedQuantity - l.consumedQuantity - l.damagedQuantity - l.writtenOffQuantity > 0"
+                + (actor == null ? "" : " and o.createdBy.id = :actor"), OrderLine.class);
         if (actor != null) query.setParameter("actor", actor);
         return query.getResultList();
-    }
-    public List<GeneralOrder> generalOrders(UUID actor) {
-        var idsQuery = em.createNativeQuery("""
-                select o.id from general_orders o where o.status in ('picked_up', 'partially_returned')
-                and exists (select 1 from jsonb_each_text(o.handed_over_quantities) q
-                    where q.value::bigint - coalesce((o.returned_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.consumed_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.damaged_quantities ->> q.key)::bigint, 0)
-                        - coalesce((o.written_off_quantities ->> q.key)::bigint, 0) > 0)
-                """ + (actor == null ? "" : " and o.created_by = :actor"), UUID.class);
-        if (actor != null) idsQuery.setParameter("actor", actor);
-        var ids = idsQuery.getResultList();
-        if (ids.isEmpty()) return List.of();
-        return em.createQuery("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence where o.id in :ids", GeneralOrder.class)
-                .setParameter("ids", ids).getResultList();
     }
     public java.util.Map<UUID, Item> items(Collection<UUID> ids) {
         if (ids.isEmpty()) return java.util.Map.of();
@@ -45,7 +30,7 @@ public class CustodyOrm {
                         when t.type = checkin or t.type = consumed or (t.type = written_off and t.custodyWriteOff = true)
                         then -t.quantity else 0 end)
                 from StockTransaction t left join t.eventOccurrence e left join t.assetInstance a
-                where t.factionOrder is null and t.relatedEntityType is null
+                where t.order is null and t.relatedEntityType is null
                     and (t.type in (checkout, checkin, consumed) or (t.type = written_off and t.custodyWriteOff = true))
                 """ + (actor == null ? "" : " and t.user.id = :actor") + " group by t.item.id, t.user.id, e.id, a.id", Object[].class);
         if (actor != null) query.setParameter("actor", actor);
@@ -64,7 +49,7 @@ public class CustodyOrm {
                         when t.type = checkin or t.type = consumed or (t.type = written_off and t.custodyWriteOff = true)
                         then -t.quantity else 0 end)
                 from StockTransaction t left join t.eventOccurrence e
-                where t.factionOrder is null and t.relatedEntityType is null and t.item.id = :item
+                where t.order is null and t.relatedEntityType is null and t.item.id = :item
                     and (t.type in (checkout, checkin, consumed) or (t.type = written_off and t.custodyWriteOff = true))
                 """ + (asset == null ? " and t.assetInstance is null" : " and t.assetInstance.id = :asset")
                 + " group by t.user.id, e.id", Object[].class).setParameter("item", item);
@@ -79,11 +64,12 @@ public class CustodyOrm {
     }
     public List<Object[]> pending(UUID actor) {
         var query = em.createQuery("""
-                select r.item.id, r.returnedFor.id, e.id, f.id, g.id, a.id, sum(r.quantity)
-                from ReturnSubmission r left join r.eventOccurrence e left join r.factionOrder f
-                left join r.generalOrder g left join r.assetInstance a where r.status = pending
+                select r.item.id, r.returnedFor.id, e.id,
+                    case when o.kind = faction then o.id else null end,
+                    case when o.kind = general then o.id else null end, a.id, sum(r.quantity)
+                from ReturnSubmission r left join r.eventOccurrence e left join r.order o left join r.assetInstance a where r.status = pending
                 """ + (actor == null ? "" : " and r.returnedFor.id = :actor")
-                + " group by r.item.id, r.returnedFor.id, e.id, f.id, g.id, a.id", Object[].class);
+                + " group by r.item.id, r.returnedFor.id, e.id, o.kind, o.id, a.id", Object[].class);
         if (actor != null) query.setParameter("actor", actor);
         return query.getResultList();
     }
@@ -93,7 +79,7 @@ public class CustodyOrm {
                     when t.type = :checkin or t.type = :consumed or (t.type = :writtenOff and t.custodyWriteOff = true)
                     then -t.quantity else 0 end), 0)
                 from StockTransaction t where t.assetInstance.id = :asset
-                    and t.factionOrder is null and t.relatedEntityType is null
+                    and t.order is null and t.relatedEntityType is null
                 """, Long.class).setParameter("asset", assetId)
                 .setParameter("checkout", DomainEnums.TransactionType.checkout)
                 .setParameter("checkin", DomainEnums.TransactionType.checkin)
@@ -109,14 +95,7 @@ public class CustodyOrm {
                 """, Long.class).setParameter("asset", assetId)
                 .setParameter("checkout", DomainEnums.HandoverType.checkout)
                 .setParameter("missing", DomainEnums.ReconciliationOutcome.missing).getSingleResult();
-        if (faction > 0) return true;
-        return (Boolean) em.createNativeQuery("""
-                select exists (select 1 from general_orders o
-                    cross join lateral jsonb_each(o.asset_assignments) assignment
-                    cross join lateral jsonb_array_elements_text(assignment.value) asset
-                    where o.status in ('picked_up', 'partially_returned') and asset.value = :asset
-                    and not coalesce(o.reconciled_assets -> assignment.key, '[]'::jsonb) @> jsonb_build_array(cast(:asset as text)))
-                """, Boolean.class).setParameter("asset", assetId.toString()).getSingleResult();
+        return faction > 0;
     }
     public List<CustodyHandover> handovers(UUID orderId, int offset, int limit) {
         return em.createQuery("""

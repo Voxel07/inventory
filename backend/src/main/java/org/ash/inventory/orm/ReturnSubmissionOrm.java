@@ -1,8 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.Item;
@@ -39,7 +37,7 @@ public class ReturnSubmissionOrm extends EntityOrm {
                 "from ReturnSubmission r"
                         + " join fetch r.item"
                         + " left join fetch r.assetInstance"
-                        + " left join fetch r.factionOrder"
+                        + " left join fetch r.order"
                         + " join fetch r.returnedFor"
                         + " join fetch r.submittedBy"
                         + " left join fetch r.expectedReturnLocation location"
@@ -58,7 +56,7 @@ public class ReturnSubmissionOrm extends EntityOrm {
     public List<DamageReport> openDamage(java.util.Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
         return entityManager.createQuery(
-                "select d from DamageReport d join fetch d.reporter left join fetch d.assetInstance left join fetch d.factionOrder"
+                "select d from DamageReport d join fetch d.reporter left join fetch d.assetInstance left join fetch d.order"
                         + " where d.item.id in :items and d.status in :open order by d.createdAt desc", DamageReport.class)
                 .setParameter("items", itemIds)
                 .setParameter("open", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
@@ -87,15 +85,4 @@ public class ReturnSubmissionOrm extends EntityOrm {
                 .getSingleResult();
     }
 
-    public long checkedOutQuantity(Item item, UserAccount user) {
-        return entityManager.createQuery(
-                "select coalesce(sum(case when tx.type = :checkout then tx.quantity"
-                        + " when tx.type = :checkin then -tx.quantity else 0 end), 0)"
-                        + " from StockTransaction tx where tx.item = :item and tx.user = :user", Long.class)
-                .setParameter("item", item)
-                .setParameter("user", user)
-                .setParameter("checkout", DomainEnums.TransactionType.checkout)
-                .setParameter("checkin", DomainEnums.TransactionType.checkin)
-                .getSingleResult();
-    }
 }

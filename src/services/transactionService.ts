@@ -11,14 +11,14 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
       return apiRequest('/api/transactions', {
         method: 'POST',
         body: payload,
-        offline: { type: 'transaction', payload: data as unknown as Record<string, unknown> },
+        offline: { type: 'transaction', payload: data },
       });
     },
   },
 );
 
-type Filters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; page?: number; size?: number };
-export const getTransactions = (filters?: Filters): Promise<StockTransaction[]> => transactionApi.getAll(filters);
+export type TransactionFilters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; search?: string };
+export const getTransactions = (filters: TransactionFilters | undefined, page: number, size: number) => transactionApi.getPage(filters, page, size);
 export const createTransaction = transactionApi.create;
 export async function assemblyCheckout(itemQuantities: Record<string, number>, assemblyName: string, reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string, eventOccurrenceId: string) {
   const body = Object.entries(itemQuantities).filter(([, quantity]) => quantity > 0).map(([itemId, quantityChanged]) => ({ itemId, transactionType: 'checkout', quantityChanged, reason: reason || `Assembly checkout: ${assemblyName}`, notes, eventType, faction, eventOccurrenceId, idempotencyKey: crypto.randomUUID() }));

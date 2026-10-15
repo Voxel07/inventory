@@ -3,7 +3,7 @@ import { apiRequest } from './apiClient';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
 import { equipmentProfileInput, equipmentCommitmentInput } from './equipmentInputs';
-import { lotInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
+import { lotCreateInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
 import { loanApi } from './loanService';
 import { memberApi } from './memberService';
 import { inputChoice, inputText } from '../utils/inputValues';
@@ -46,7 +46,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     } else if (value.startsWith('@row:')) result = outputs.get(value.slice(5));
     else if (/^@(date|datetime):[+-]?\d+$/.test(value)) result = date(Number(value.split(':')[1]), value.startsWith('@datetime:'));
     else return value;
-    if (!result) throw new Error(translate(`Referenz konnte nicht aufgelöst werden: ${value}`, `Reference could not be resolved: ${value}`));
+    if (!result) throw new Error(translate('services.csvOperationImport.referenceCouldNotBeResolvedValue', { value: value }));
     return result;
   }
 
@@ -83,7 +83,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'repair_transition': {
         const repair = (await loadAllPages(operationsApi.repairs)).find((entry) => entry.id === data.repairId);
-        if (!repair) throw new Error(translate('Reparaturfall nicht gefunden', 'Repair case not found'));
+        if (!repair) throw new Error(translate('services.csvOperationImport.repairCaseNotFound'));
         // Re-imports resume the workflow without replaying completed transitions.
         const stages = ['reported', 'triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service'];
         const target = String(data.status);
@@ -95,7 +95,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'lot': {
         const existing = (await loadAllPages(operationsApi.lots({ itemId }))).find((lot) => lot.lotNumber === data.lotNumber);
-        result = existing ?? await operationsApi.saveLot(lotInput(data));
+        result = existing ?? await operationsApi.createLot(lotCreateInput(data));
         break;
       }
       case 'maintenance': {
@@ -123,13 +123,13 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'receipt': {
         const order = (await loadAllPages(getPurchaseOrders)).find((entry) => entry.id === data.purchaseOrderId);
-        if (!order) throw new Error(translate('Einkaufsbestellung nicht gefunden', 'Purchase order not found'));
-        if (!Array.isArray(data.lines)) throw new Error(translate('Wareneingangszeilen fehlen', 'Receipt lines are missing'));
+        if (!order) throw new Error(translate('services.csvOperationImport.purchaseOrderNotFound'));
+        if (!Array.isArray(data.lines)) throw new Error(translate('services.csvOperationImport.receiptLinesAreMissing'));
         const lines = data.lines.map((value: unknown) => {
-          if (!value || typeof value !== 'object') throw new Error(translate('Ungültige Wareneingangszeile', 'Invalid receipt line'));
+          if (!value || typeof value !== 'object') throw new Error(translate('services.csvOperationImport.invalidReceiptLine'));
           const line = value as Record<string, unknown>;
           const purchaseLine = order.lines.find((entry) => entry.itemId === line.itemId);
-          if (!purchaseLine) throw new Error(translate('Wareneingangsartikel fehlt in der Einkaufsbestellung', 'Received item is missing from the purchase order'));
+          if (!purchaseLine) throw new Error(translate('services.csvOperationImport.receivedItemIsMissingFromThePurchaseOrder'));
           return { damagedQuantity: 0, rejectedQuantity: 0, ...line, purchaseOrderLineId: purchaseLine.id };
         });
         result = await operationsApi.receive(receiptInput({ ...data, lines, idempotencyKey: key }));
@@ -143,7 +143,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
           const updated = await equipmentApi.commit(itemId,equipmentCommitmentInput({ ...data, revision: profile.revision }));
           commitment = updated.commitments.find((entry) => !profile.commitments.some((prior) => prior.id === entry.id));
         }
-        if (!commitment) throw new Error(translate('Die Zusage konnte nicht gefunden werden', 'The commitment could not be found'));
+        if (!commitment) throw new Error(translate('services.csvOperationImport.theCommitmentCouldNotBeFound'));
         result = commitment;
         break;
       }
@@ -154,7 +154,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'loan_collect': {
         const loan = (await loanApi.find((entry) => entry.id === data.loanId));
-        if (!loan) throw new Error(translate('Leihvereinbarung nicht gefunden', 'Loan agreement not found'));
+        if (!loan) throw new Error(translate('services.csvOperationImport.loanAgreementNotFound'));
         result = loan.collected >= loan.quantity ? loan : await loanApi.move(loan.id, 'collect', { transferId: inputText(data.transferId), notes: inputText(data.notes), revision: loan.revision });
         break;
       }
@@ -180,7 +180,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       }
       case 'member_return': {
         const custody = (await memberApi.custody()).find((entry) => entry.itemId === itemId && entry.checkedOut >= Number(data.quantity));
-        if (!custody) throw new Error(translate('Keine eigene Ausleihe für diese Rückgabe gefunden', 'No own loan found for this return'));
+        if (!custody) throw new Error(translate('services.csvOperationImport.noOwnLoanFoundForThisReturn'));
         result = await memberApi.submitReturn({ quantity: inputNumber(data.quantity), notes: optionalText(data.notes), custodyKey: custody.key, assetId: custody.assetInstanceId, commandId: key });
         break;
       }

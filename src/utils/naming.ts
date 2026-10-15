@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { Translator } from '../i18n/types';
 import {
   getAppLanguage,
   i18next,
@@ -8,6 +9,7 @@ import {
 } from '../i18n';
 
 export type { AppLanguage };
+export type { TranslationKey, TranslationOptions, Translator } from '../i18n/types';
 export { getAppLanguage, setAppLanguage };
 
 export function useAppLanguage(): AppLanguage {
@@ -45,21 +47,18 @@ const GROUP_VALUES: Record<NamingGroup, readonly string[]> = {
  *   const t = useT();
  *   t('header.queuedActions', { count: queued })
  */
-export function useT() {
-  useAppLanguage();
-  return i18next.t.bind(i18next);
-}
-
-/** Resolves contextual bilingual copy that does not belong to the shared catalog. */
-export function useLocalizedText() {
-  const language = useAppLanguage();
-  return (de: string, en: string): string => (language === 'de' ? de : en);
+export function useT(): Translator {
+  return translators[useAppLanguage()];
 }
 
 /** Synchronous translation for non-React call sites (errors, module scope). */
-export function translate(de: string, en: string): string {
-  return getAppLanguage() === 'de' ? de : en;
-}
+export const translate: Translator = (key, options) => i18next.t(key, options);
+
+// Keep callbacks and asynchronous exports in the language selected when they start.
+const translators: Record<AppLanguage, Translator> = {
+  de: (key, options) => i18next.t(key, { ...options, lng: 'de' }),
+  en: (key, options) => i18next.t(key, { ...options, lng: 'en' }),
+};
 
 export function nameFor(group: NamingGroup, value: string): string {
   const translated = i18next.t(`enum.${group}.${value}`, { defaultValue: '' });
@@ -88,4 +87,3 @@ export function useNames() {
   useAppLanguage();
   return getNames();
 }
-

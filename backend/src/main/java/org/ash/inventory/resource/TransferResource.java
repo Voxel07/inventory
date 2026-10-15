@@ -26,7 +26,7 @@ public class TransferResource {
 
     public TransferResource(TransferService service) { this.service = service; }
 
-    @GET
+    @Paged @GET
     public List<TransferDtos.TransferResponse> list(@QueryParam("status") String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {

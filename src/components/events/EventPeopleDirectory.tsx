@@ -13,7 +13,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useDeleteEventPerson, useEventAccounts, useEventPeople, useSaveEventPerson } from '../../hooks/useEventLogistics';
 import { useUIStore } from '../../store/uiStore';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import type { EventPerson } from '../../types/eventLogistics';
 
 /**
@@ -26,7 +26,7 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
   attendingPersonIds: string[];
   onAddToEvent: (person: EventPerson) => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const people = useEventPeople();
   const remove = useDeleteEventPerson();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
@@ -39,29 +39,28 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
 
   return <>
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{t('Personenliste', 'People list')}</DialogTitle>
+      <DialogTitle>{t('events.eventPeopleDirectory.peopleList')}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            {t('Alle bekannten Personen, eventübergreifend. „Person hinzufügen“ schlägt Einträge aus dieser Liste vor.',
-              'Everyone known across events. “Add person” suggests entries from this list.')}
+            {t('events.eventPeopleDirectory.everyoneKnownAcrossEventsAddPersonSuggestsEntriesFromThis')}
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between' }}>
-            <TextField size="small" autoFocus label={t('Personen suchen', 'Search people')} value={search} onChange={(e) => setSearch(e.target.value)}
+            <TextField size="small" autoFocus label={t('events.eventPeopleDirectory.searchPeople')} value={search} onChange={(e) => setSearch(e.target.value)}
               sx={{ width: { xs: '100%', sm: 300 } }}
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }} />
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setEditing('new')}>{t('Neuer Eintrag', 'New entry')}</Button>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setEditing('new')}>{t('events.eventPeopleDirectory.newEntry')}</Button>
           </Stack>
           <QueryFeedback isLoading={people.isLoading} error={people.error} />
           {!people.isLoading && !people.error && (!all.length
-            ? <Alert severity="info">{t('Noch keine Personen. Lege den ersten Eintrag an.', 'No people yet. Create the first entry.')}</Alert>
+            ? <Alert severity="info">{t('events.eventPeopleDirectory.noPeopleYetCreateTheFirstEntry')}</Alert>
             : <TableContainer>
-              <Table size="small" aria-label={t('Personenliste', 'People list')}>
+              <Table size="small" aria-label={t('events.eventPeopleDirectory.peopleList')}>
                 <TableHead><TableRow>
-                  <TableCell>{t('Name', 'Name')}</TableCell>
-                  <TableCell>{t('App-Konto', 'App account')}</TableCell>
-                  <TableCell align="right">{t('Events', 'Events')}</TableCell>
-                  <TableCell align="right">{t('Aktionen', 'Actions')}</TableCell>
+                  <TableCell>{t('profile.name')}</TableCell>
+                  <TableCell>{t('events.eventPeopleDirectory.appAccount')}</TableCell>
+                  <TableCell align="right">{t('nav.events')}</TableCell>
+                  <TableCell align="right">{t('common.actions')}</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {visible.map((person) => {
@@ -74,20 +73,20 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
                       <TableCell align="right" className="tabular">{person.attendances}</TableCell>
                       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                         {attending
-                          ? <Chip size="small" variant="outlined" color="success" label={t('Dabei', 'Attending')} sx={{ mr: 1 }} />
-                          : <Button size="small" startIcon={<PersonAddAlt1OutlinedIcon />} onClick={() => onAddToEvent(person)}>{t('Zum Event', 'Add to event')}</Button>}
-                        <IconButton title={t(`${person.name} bearbeiten`, `Edit ${person.name}`)} onClick={() => setEditing(person)}><EditOutlinedIcon fontSize="small" /></IconButton>
+                          ? <Chip size="small" variant="outlined" color="success" label={t('events.eventPeopleDirectory.attending')} sx={{ mr: 1 }} />
+                          : <Button size="small" startIcon={<PersonAddAlt1OutlinedIcon />} onClick={() => onAddToEvent(person)}>{t('events.eventPeopleDirectory.addToEvent')}</Button>}
+                        <IconButton title={t('events.eventPeopleDirectory.editName', { name: String(person.name) })} onClick={() => setEditing(person)}><EditOutlinedIcon fontSize="small" /></IconButton>
                         <IconButton title={person.attendances > 0
-                          ? t('Personen mit Event-Teilnahmen können nicht gelöscht werden', 'People who attend events cannot be deleted')
-                          : t(`${person.name} löschen`, `Delete ${person.name}`)}
+                          ? t('events.eventPeopleDirectory.peopleWhoAttendEventsCannotBeDeleted')
+                          : t('events.eventPeopleDirectory.deleteName', { name: String(person.name) })}
                           disabled={person.attendances > 0} onClick={() => setDeleting(person)}><DeleteOutlineIcon fontSize="small" /></IconButton>
                       </TableCell>
                     </TableRow>;
                   })}
                   {!visible.length && <TableRow><TableCell colSpan={4}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span>{t('Keine passenden Personen.', 'No matching people.')}</span>
-                      {term && <Button size="small" startIcon={<AddIcon />} onClick={() => setEditing('new')}>{t(`„${search.trim()}“ anlegen`, `Create “${search.trim()}”`)}</Button>}
+                      <span>{t('events.eventPeopleDirectory.noMatchingPeople')}</span>
+                      {term && <Button size="small" startIcon={<AddIcon />} onClick={() => setEditing('new')}>{t('events.eventPeopleDirectory.createSearch', { search: String(search.trim()) })}</Button>}
                     </Stack>
                   </TableCell></TableRow>}
                 </TableBody>
@@ -100,18 +99,18 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
       {editing && <PersonForm person={editing === 'new' ? undefined : editing} initialName={editing === 'new' ? search.trim() : ''}
         onDone={() => setEditing(null)} />}
     </FormDialog>
-    <ConfirmDialog open={Boolean(deleting)} title={t('Person löschen', 'Delete person')}
-      message={t(`${deleting?.name ?? ''} aus der Personenliste löschen?`, `Delete ${deleting?.name ?? ''} from the people list?`)}
-      actionLabel={t('Löschen', 'Delete')} actionColor="error" pending={remove.isPending} onClose={() => { if (!remove.isPending) setDeleting(null); }}
+    <ConfirmDialog open={Boolean(deleting)} title={t('events.eventPeopleDirectory.deletePerson')}
+      message={t('events.eventPeopleDirectory.deleteNameFromThePeopleList', { name: String(deleting?.name ?? '') })}
+      actionLabel={t('common.delete')} actionColor="error" pending={remove.isPending} onClose={() => { if (!remove.isPending) setDeleting(null); }}
       onConfirm={() => { if (deleting) remove.mutate(deleting.id, {
-        onSuccess: () => { setDeleting(null); showSnackbar(t('Person gelöscht', 'Person deleted'), 'success'); },
+        onSuccess: () => { setDeleting(null); showSnackbar(t('events.eventPeopleDirectory.personDeleted'), 'success'); },
         onError: (error) => showSnackbar(error.message, 'error'),
       }); }} />
   </>;
 }
 
 function PersonForm({ person, initialName, onDone }: { person?: EventPerson; initialName: string; onDone: () => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   const save = useSaveEventPerson();
   const accounts = useEventAccounts(true);
   const people = useEventPeople();
@@ -123,21 +122,21 @@ function PersonForm({ person, initialName, onDone }: { person?: EventPerson; ini
     ?? (userId ? { id: userId, name: person?.userName ?? userId, linkedPersonId: person?.id ?? null } : null);
   const sameName = (people.data ?? []).find((other) => other.id !== person?.id && other.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase());
 
-  return <DialogForm title={person ? t('Person bearbeiten', 'Edit person') : t('Neuer Eintrag', 'New entry')}
+  return <DialogForm title={person ? t('events.eventPeopleDirectory.editPerson') : t('events.eventPeopleDirectory.newEntry')}
     pending={save.isPending} error={save.error?.message} onCancel={onDone} submitDisabled={!name.trim()}
     onSubmit={() => save.mutate({ id: person?.id, data: { name: name.trim(), userId } }, {
-      onSuccess: () => { onDone(); showSnackbar(t('Person gespeichert', 'Person saved'), 'success'); },
+      onSuccess: () => { onDone(); showSnackbar(t('events.eventPeopleDirectory.personSaved'), 'success'); },
     })}>
-    <TextField autoFocus required fullWidth label={t('Name', 'Name')} value={name} onChange={(e) => setName(e.target.value)}
-      helperText={person ? t('Eine Namensänderung gilt für diese Person bei allen Events.', 'Renaming applies to this person at every event.') : undefined}
+    <TextField autoFocus required fullWidth label={t('profile.name')} value={name} onChange={(e) => setName(e.target.value)}
+      helperText={person ? t('events.eventPeopleDirectory.renamingAppliesToThisPersonAtEveryEvent') : undefined}
       slotProps={{ htmlInput: { maxLength: 255 } }} />
-    {sameName && <Alert severity="warning">{t(`„${sameName.name}“ steht bereits in der Liste.`, `“${sameName.name}” is already on the list.`)}</Alert>}
+    {sameName && <Alert severity="warning">{t('events.eventPeopleDirectory.nameIsAlreadyOnTheList', { name: String(sameName.name) })}</Alert>}
     <Box>
       <Autocomplete options={linkable} value={linkedAccount} loading={accounts.isLoading}
         getOptionLabel={(option) => option.name} isOptionEqualToValue={(option, value) => option.id === value.id}
         onChange={(_, option) => setUserId(option?.id ?? null)}
-        renderInput={(params) => <TextField {...params} label={t('Verknüpftes App-Konto (optional)', 'Linked app account (optional)')}
-          helperText={t('Eventcrew hat meist kein Konto.', 'Event crew usually has no account.')} />} />
+        renderInput={(params) => <TextField {...params} label={t('events.eventPeopleDirectory.linkedAppAccountOptional')}
+          helperText={t('events.eventPeopleDirectory.eventCrewUsuallyHasNoAccount')} />} />
     </Box>
   </DialogForm>;
 }

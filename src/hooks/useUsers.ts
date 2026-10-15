@@ -1,11 +1,14 @@
-import { getAssignableUsers, getUsers } from '../services/userService';
+import { useQuery } from '@tanstack/react-query';
+import { loadAllPages } from '../services/apiPagination';
+import { getUsers } from '../services/userService';
 import type { User } from '../types';
-import { useProgressiveList } from './useProgressiveList';
+import { usePagedList } from './usePagedList';
 
 export function useUsers() {
-  return useProgressiveList<User>(['users'], (page, size) => getUsers({ page, size }));
+  return usePagedList<User>(['users'], getUsers);
 }
 
-export function useAssignableUsers(enabled = true) {
-  return useProgressiveList<User>(['users', 'assignable'], (page, size) => getAssignableUsers({ page, size }), { enabled });
+/** Explicit complete read of the people directory, for person filters and assignment selects. */
+export function useAllUsers(enabled = true) {
+  return useQuery({ queryKey: ['users', 'all'], enabled, networkMode: 'offlineFirst', queryFn: () => loadAllPages(getUsers) });
 }

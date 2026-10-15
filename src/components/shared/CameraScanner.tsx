@@ -1,13 +1,13 @@
 import { Button } from './ActionButtons';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Stack } from '@mui/material';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 type Detector = { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> };
 type DetectorConstructor = { new(options: { formats: string[] }): Detector; getSupportedFormats(): Promise<string[]> };
 
 export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   const video = useRef<HTMLVideoElement>(null);
   const callback = useRef(onScan);
   useEffect(() => { callback.current = onScan; }, [onScan]);
@@ -22,9 +22,9 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
     void (async () => {
       try {
         const Constructor = (window as unknown as { BarcodeDetector?: DetectorConstructor }).BarcodeDetector;
-        if (!Constructor || !navigator.mediaDevices?.getUserMedia) throw new Error(translate('Kamera-Scannen wird hier nicht unterstützt. Code unten eingeben oder einen Scanner verwenden.', 'Camera scanning is not supported here. Enter the code below or use a handheld scanner.'));
+        if (!Constructor || !navigator.mediaDevices?.getUserMedia) throw new Error(translate('shared.cameraScanner.cameraScanningIsNotSupportedHereEnterTheCodeBelow'));
         const formats = await Constructor.getSupportedFormats();
-        if (!formats.includes('qr_code')) throw new Error(translate('Dieser Browser kann keine QR-Codes erkennen.', 'This browser cannot detect QR codes.'));
+        if (!formats.includes('qr_code')) throw new Error(translate('shared.cameraScanner.thisBrowserCannotDetectQRCodes'));
         const detector = new Constructor({ formats });
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
         if (stopped) { stream.getTracks().forEach(track => track.stop()); return; }
@@ -42,14 +42,14 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
         };
         void read();
       } catch (e) {
-        if (!stopped) { stop(); setRunning(false); setError(e instanceof Error ? e.message : translate('Kamera nicht verfügbar.', 'Camera unavailable.')); }
+        if (!stopped) { stop(); setRunning(false); setError(e instanceof Error ? e.message : translate('shared.cameraScanner.cameraUnavailable')); }
       }
     })();
     return () => { stop(); document.removeEventListener('visibilitychange', hidden); };
   }, [running]);
   return <Stack spacing={1} sx={{ mb: 2 }}>
     {error && <Alert severity="warning">{error}</Alert>}
-    {running && <Box component="video" ref={video} muted playsInline aria-label={t('Kameravorschau', 'Camera preview')} sx={{ width: '100%', maxHeight: 300, bgcolor: 'black' }} />}
-    <Button title={translate('Die Kamera zum Scannen starten oder stoppen', 'Start or stop the camera scanner')} type="button" variant="outlined" onClick={() => { setError(''); setRunning(!running); }}>{running ? t('Kamera stoppen', 'Stop camera') : t('Mit Kamera scannen', 'Scan with camera')}</Button>
+    {running && <Box component="video" ref={video} muted playsInline aria-label={t('shared.cameraScanner.cameraPreview')} sx={{ width: '100%', maxHeight: 300, bgcolor: 'black' }} />}
+    <Button title={translate('shared.cameraScanner.startOrStopTheCameraScanner')} type="button" variant="outlined" onClick={() => { setError(''); setRunning(!running); }}>{running ? t('shared.cameraScanner.stopCamera') : t('shared.cameraScanner.scanWithCamera')}</Button>
   </Stack>;
 }

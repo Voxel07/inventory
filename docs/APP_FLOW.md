@@ -43,7 +43,7 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/orders/faction/:orderId` | Faction order detail and lifecycle | OrganizationGuard; faction write policy in services |
 | `/events`, `/events/:reportId` | Event planning and occurrence detail | OrganizationGuard; inventory admin edits |
 | `/events/attendees?eventId=…` | Attendees from the shared people registry, predefined roles, arrival/departure and food-stamp issuance | OrganizationGuard; inventory admin edits |
-| `/events/timeline?eventId=…&tab=preparation` | Day-grouped schedule; in-game default tab and setup/preparation tab | OrganizationGuard; inventory admin edits |
+| `/events/timeline?eventId=…&tab=preparation` | Day-grouped schedule; in-game, setup/preparation and crew catering tabs | OrganizationGuard; inventory admin edits |
 | `/checked-out` | Outstanding custody | InventoryManagerGuard |
 | `/returns` | Pending return acceptance and history | InventoryManagerGuard |
 | `/transactions` | Movement history | InventoryManagerGuard |
@@ -71,9 +71,11 @@ Items, locations and assemblies are retired, never deleted: they leave the catal
 
 ## 4. Event planning and purchasing
 
-From Event planning or an event detail, open **Attendees & food stamps** or **Event timeline** for the selected occurrence. Both pages also appear in navigation and offer a dated event selector. Attendees come from a shared people registry: in the add dialog, pick a known person or type a new name. A person may be linked to an Authentik account but need not be (event crew usually has no account). Renaming a person in the edit dialog applies at every event. Each attendance holds one or more predefined roles: **Faction leader**, **Faction deputy** or **HQ crew** of one of the event type's factions, **AS-Held** for the whole event, or **Event crew** with free-text assigned work. A person attends an event at most once. Arrival/departure times, notes and a stamp-issued flag are per attendance. Each person receives four main-meal stamps and one breakfast stamp regardless of the number of roles; totals and remaining issuance always use the full attendee list, independently of search and role filter.
+From Event planning or an event detail, open **Attendees & food stamps** or **Event timeline** for the selected occurrence. Both pages also appear in navigation and offer a dated event selector. Attendees come from a shared people registry: in the add dialog, pick a known person or type a new name. A person may be linked to an Authentik account but need not be (event crew usually has no account). Renaming a person in the edit dialog applies at every event. Each attendance holds one or more predefined roles: **Faction leader**, **Faction deputy** or **HQ crew** of one of the event type's factions, **AS-Held** for the whole event, or **Event crew** with free-text assigned work. A person attends an event at most once. Arrival/departure default to the event's first and last dates and can be extended. Sort the attendee table by person, role or arrival. Faction chips use blue for DE Miliz/LS UCRF, red for KGG, yellow for GOF and green for TERA. Date entry and display use DD-MM-YYYY, with 24-hour times.
 
-The timeline defaults to **In game**; **Setup & preparation** covers construction, preparation and teardown, including dates outside the event itself. Add/edit entries with start, optional end, responsible person/team, location/area, status and description. Entries appear chronologically, grouped by day. Times on both pages are wall-clock times at the event. Reads are open to read-only members and up (not tenants); writes require the inventory admin, are online-only and refresh other sessions through `event_logistics.changed`.
+Food stamps count calendar days where attendance overlaps catering. Event dates provide the standard catering period; crew catering timeline periods extend it for anyone holding the event crew role. Overlapping and adjacent periods merge; gaps do not count. The first day of each catering period supplies 2 regular stamps, full days 4 regular + 1 breakfast, and the last day breakfast only. A single-day catering period supplies the opening meal only. Rates are editable and saved per event. Missing travel dates produce no entitlement until confirmed. Multiple roles never multiply stamps; totals and remaining issuance always use the full attendee list, independently of search and role filters.
+
+The timeline defaults to **In game**; **Setup & preparation** covers construction, preparation and teardown, including dates outside the event itself. **Crew catering**, also embedded below the attendee list, plans additional catering periods with the same timeline component. Add/edit entries with start, optional end, responsible person/team, location/area, status and description. Entries appear chronologically, grouped by day. Times on both pages are wall-clock times at the event. Reads are open to read-only members and up (not tenants); writes require the inventory admin, are online-only and refresh other sessions through `event_logistics.changed`.
 
 1. A planner maintains event occurrences, factions and demand; compares demand with usable supply and expected receipts.
 2. The planner records reasoned overrides where needed and prepares supplier quantities.
@@ -113,7 +115,7 @@ This is the main business lifecycle. Specialized edits, preparation reopening an
 6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
 7. Units that will not come back are written off by an inventory admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations; faction leaders may withdraw their lists while draft or submitted, afterwards only the warehouse cancels. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
 
-Faction and general workflows currently use separate models/services; general lines and reconciliation quantities are JSON maps (PLAN-02). They must retain the same stock rules while this remains true.
+Faction and general workflows use one order aggregate distinguished by kind (PLAN-02). The kind-specific forms use shared preparation, transition, return, history and custody contracts under `/api/orders/faction` and `/api/orders/general`. Faction membership and general-order ownership remain separate permissions; general orders are editable only in draft.
 
 ## 6. Member self-service and two-stage returns
 
@@ -152,7 +154,7 @@ Private/external equipment lending starts with owner consent and a commitment wi
 
 1. Download organizational catalog data while online. Offline reads can only show data previously cached for this access context; freshness and incomplete lists must remain visible.
 2. While disconnected, supported stock transactions, media-free damage reports and faction-order create/prepare/transition/reconcile commands are saved with a UUID and account owner.
-3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, general orders and other operations need connectivity.
+3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, order edits and other operations need connectivity; both order kinds can queue creation, preparation, transitions and reconciliation.
 4. Reconnect under the original account and replay `/api/sync` batches. Each command rechecks rights and current stock.
 5. Applied entries leave the queue and enter history. Rejected/conflicting entries open Sync Issues with preserved evidence.
 6. Correct online using an edited payload, note and new command ID linked to the original; archive keeps history. Do not overwrite the failed command or use last-write-wins.

@@ -42,7 +42,7 @@ flowchart LR
 
 ## Node A — application
 
-Copy `.env.example` to `.env` on the app VPS and set the public URLs, then:
+Copy `.env.example` to `.env` on the app VPS, set the public URLs and a unique `DB_PASSWORD` (`openssl rand -hex 32`; Compose refuses to start without one), then:
 
 ```bash
 docker compose up -d --build

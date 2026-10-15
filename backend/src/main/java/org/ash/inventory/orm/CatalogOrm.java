@@ -1,8 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItem;
@@ -16,6 +14,8 @@ import org.ash.inventory.model.StorageLocation;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -25,55 +25,104 @@ import java.util.UUID;
 public class CatalogOrm extends EntityOrm {
 
 
-    public List<Item> items(String search, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
-        return items(search, null, actorId, actorGroups, manager, offset, limit);
+    /**
+     * Server-side catalog filters. {@code locationIds} matches the default location, stocked positions and active
+     * assets there; {@code mineOwner}/{@code mineItemIds} select owned private items and items in the actor's custody.
+     */
+    /**
+     * {@code includeUntagged}: with {@code eventType}, items without any event tag match too (usable for every event).
+     * {@code maintenanceAttention}: items with a calendar interval that are out of service, undated or due within the
+     * calendar warning window.
+     */
+    public record ItemFilter(String search, String category, String eventType, boolean includeUntagged, List<UUID> locationIds,
+            List<UUID> ids, UUID mineOwner, List<UUID> mineItemIds, String sort, boolean maintenanceAttention) {
+        public static ItemFilter search(String search, String category) {
+            return new ItemFilter(search, category, null, false, List.of(), List.of(), null, List.of(), null, false);
+        }
     }
 
-    public List<Item> items(String search, String category, UUID actorId, List<String> actorGroups, boolean manager, int offset, int limit) {
-        String filtering = search == null || search.isBlank() ? ""
-                : " and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)";
-        String categoryFilter = category == null || category.isBlank() ? "" : " and lower(i.category) = :category";
-        var query = visible(entityManager.createQuery(
-                "select distinct i from Item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent"
-                        + " left join fetch i.assignedUser where i.active = true" + visibility() + filtering + categoryFilter
-                        + " order by i.createdAt desc, i.id desc", Item.class), actorId, actorGroups, manager)
-                .setFirstResult(offset).setMaxResults(limit);
-        if (!filtering.isEmpty()) query.setParameter("search", "%" + search.toLowerCase(Locale.ROOT) + "%");
-        if (!categoryFilter.isEmpty()) query.setParameter("category", category.trim().toLowerCase(Locale.ROOT));
-        return query.getResultList();
+    private static final Map<String, String> ITEM_SORTS = Map.of(
+            "name", "lower(i.name), i.id", "-name", "lower(i.name) desc, i.id desc",
+            "sku", "lower(i.sku), i.id", "-sku", "lower(i.sku) desc, i.id desc",
+            "category", "lower(i.category), lower(i.name), i.id", "-category", "lower(i.category) desc, lower(i.name) desc, i.id desc",
+            "created", "i.createdAt, i.id", "-created", "i.createdAt desc, i.id desc");
+
+    /** One page of visible active items; the access-policy predicate and every filter run before pagination. */
+    public List<Item> items(ItemFilter filter, int offset, int limit) {
+        var where = new StringBuilder(" where i.active = true").append(visibility());
+        var parameters = new LinkedHashMap<String, Object>();
+        if (filter.search() != null && !filter.search().isBlank()) {
+            where.append(" and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)");
+            parameters.put("search", "%" + filter.search().trim().toLowerCase(Locale.ROOT) + "%");
+        }
+        if (filter.category() != null && !filter.category().isBlank()) {
+            where.append(" and lower(i.category) = :category");
+            parameters.put("category", filter.category().trim().toLowerCase(Locale.ROOT));
+        }
+        if (filter.eventType() != null && !filter.eventType().isBlank()) {
+            where.append(filter.includeUntagged()
+                    ? " and (cast(i.eventTags as String) like :eventType escape '!' or cast(i.eventTags as String) = '[]')"
+                    : " and cast(i.eventTags as String) like :eventType escape '!'");
+            parameters.put("eventType", jsonElementPattern(filter.eventType()));
+        }
+        if (!filter.locationIds().isEmpty()) {
+            where.append(" and (i.storageLocation.id in :locations"
+                    + " or exists (select p.id from InventoryPosition p where p.item = i and p.location.id in :locations and p.quantityOnHand > 0)"
+                    + " or exists (select a.id from AssetInstance a where a.item = i and a.active = true and a.currentLocation.id in :locations"
+                    + " and a.availabilityStatus not in (:gone)))");
+            parameters.put("locations", filter.locationIds());
+            parameters.put("gone", List.of(DomainEnums.AssetState.lost, DomainEnums.AssetState.written_off));
+        }
+        if (filter.maintenanceAttention()) {
+            where.append(" and i.maintenanceIntervalDays > 0 and (i.outOfService = true or i.nextMaintenanceDue is null or i.nextMaintenanceDue <= :warnUntil)");
+            parameters.put("warnUntil", org.ash.inventory.helper.BusinessTime.today().plusDays(org.ash.inventory.service.MaintenancePolicy.CALENDAR_WARNING_DAYS));
+        }
+        if (!filter.ids().isEmpty()) {
+            where.append(" and i.id in :ids");
+            parameters.put("ids", filter.ids());
+        }
+        if (filter.mineOwner() != null) {
+            where.append(filter.mineItemIds().isEmpty() ? " and ap.owner.id = :mineOwner"
+                    : " and (ap.owner.id = :mineOwner or i.id in :mineItems)");
+            parameters.put("mineOwner", filter.mineOwner());
+            if (!filter.mineItemIds().isEmpty()) parameters.put("mineItems", filter.mineItemIds());
+        }
+        String order = ITEM_SORTS.getOrDefault(filter.sort() == null ? "-created" : filter.sort(), ITEM_SORTS.get("-created"));
+        // Only to-one associations are fetched, so rows stay unique and paging runs in SQL.
+        var query = visible(entityManager.createQuery("select i from Item i left join i.accessPolicy ap"
+                + " left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent"
+                + " left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent"
+                + where + " order by " + order, Item.class));
+        parameters.forEach(query::setParameter);
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    private String visibility() {
-        return " and " + InventoryAccessOrm.visible("i.accessPolicy") + " and (i.accessPolicy is not null or :manager = true or i.visibilityScope is null or i.visibilityScope in (:publicScopes)"
-                + " or (i.visibilityScope = :personScope and i.assignedUser.id = :actorId)"
-                + " or (i.visibilityScope = :groupScope and :hasGroups = true and i.assignedGroup in (:actorGroups)))";
+    /** LIKE pattern matching one string element of a JSON array column rendered as text. */
+    private static String jsonElementPattern(String value) {
+        String json = "\"" + value.trim().replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        return "%" + json.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
     }
 
-    private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query,
-            UUID actorId, List<String> actorGroups, boolean manager) {
-        return InventoryAccessOrm.bind(query, accessActor.current()).setParameter("manager", manager)
-                .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
-                .setParameter("personScope", DomainEnums.ItemVisibilityScope.person)
-                .setParameter("groupScope", DomainEnums.ItemVisibilityScope.group)
-                .setParameter("hasGroups", actorGroups != null && !actorGroups.isEmpty())
-                .setParameter("actorId", actorId)
-                .setParameter("actorGroups", actorGroups == null || actorGroups.isEmpty() ? List.of("__none__") : actorGroups);
+    private static String visibility() {
+        return " and " + InventoryAccessOrm.visible("i.accessPolicy");
     }
 
-    public List<UUID> visibleItemIds(UUID actorId, List<String> actorGroups, boolean manager) {
-        return visible(entityManager.createQuery("select i.id from Item i where i.active = true" + visibility(), UUID.class),
-                actorId, actorGroups, manager).getResultList();
+    private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query) {
+        return InventoryAccessOrm.bind(query, accessActor.current());
     }
 
-    public List<String> categories(UUID actorId, List<String> actorGroups, boolean manager) {
+    public List<Item> itemsByIds(List<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return entityManager.createQuery("from Item i where i.id in :ids", Item.class).setParameter("ids", ids).getResultList();
+    }
+
+    public List<UUID> visibleItemIds() {
+        return visible(entityManager.createQuery("select i.id from Item i where i.active = true" + visibility(), UUID.class)).getResultList();
+    }
+
+    public List<String> categories() {
         return visible(entityManager.createQuery("select distinct i.category from Item i where i.active = true"
-                + " and i.category is not null" + visibility() + " order by i.category", String.class),
-                actorId, actorGroups, manager).getResultList();
-    }
-
-    public List<StorageLocation> locations() {
-        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true and " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.createdAt desc", StorageLocation.class);
-        return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
+                + " and i.category is not null" + visibility() + " order by i.category", String.class)).getResultList();
     }
 
     /** One page of visible active locations, optionally within one warehouse. */
@@ -86,11 +135,10 @@ public class CatalogOrm extends EntityOrm {
     }
 
     public record VisibleCounts(long items, long serializedAssets, long locations) {}
-    public VisibleCounts visibleCounts(UUID actorId, List<String> actorGroups, boolean manager) {
-        long items = visible(entityManager.createQuery("select count(i) from Item i where i.active = true" + visibility(), Long.class),
-                actorId, actorGroups, manager).getSingleResult();
+    public VisibleCounts visibleCounts() {
+        long items = visible(entityManager.createQuery("select count(i) from Item i where i.active = true" + visibility(), Long.class)).getSingleResult();
         long assets = visible(entityManager.createQuery("select count(a) from AssetInstance a join a.item i where a.active = true and i.active = true"
-                + visibility(), Long.class), actorId, actorGroups, manager).getSingleResult();
+                + visibility(), Long.class)).getSingleResult();
         long locations = InventoryAccessOrm.bind(entityManager.createQuery("select count(l) from StorageLocation l where l.active = true and "
                 + InventoryAccessOrm.visible("l.accessPolicy"), Long.class), accessActor.current()).getSingleResult();
         return new VisibleCounts(items, assets, locations);
@@ -101,15 +149,33 @@ public class CatalogOrm extends EntityOrm {
                 .setParameter("today", today).getSingleResult();
     }
 
-    public List<StorageLocation> allLocations() {
-        return InventoryAccessOrm.bind(entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where " + InventoryAccessOrm.visible("l.accessPolicy") + " order by l.name, l.id", StorageLocation.class), accessActor.current()).getResultList();
+    /** One page of visible locations, newest first; access policy and filters apply before pagination. */
+    public List<StorageLocation> locations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
+        var subtree = new java.util.LinkedHashSet<UUID>();
+        if (subtreeId != null) {
+            var frontier = List.of(subtreeId);
+            while (!frontier.isEmpty()) {
+                subtree.addAll(frontier);
+                frontier = entityManager.createQuery("select l.id from StorageLocation l where l.parent.id in :parents", UUID.class)
+                        .setParameter("parents", frontier).getResultList().stream().filter(id -> !subtree.contains(id)).toList();
+            }
+        }
+        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where "
+                + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
+                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(coalesce(l.area, '')) like :search or lower(coalesce(l.position, '')) like :search)")
+                + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
+                + (subtreeId == null ? "" : " and l.id in :subtree")
+                + " order by l.createdAt desc, l.id", StorageLocation.class);
+        if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
+        if (warehouseId != null) query.setParameter("warehouse", warehouseId);
+        if (subtreeId != null) query.setParameter("subtree", subtree);
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     /** Orders, movements, returns and owner commitments are history that must keep their event. */
     public boolean hasEventHistory(UUID eventId) {
         for (String query : List.of(
-                "select o.id from FactionOrder o where o.eventOccurrence.id = :id",
-                "select o.id from GeneralOrder o where o.eventOccurrence.id = :id",
+                "select o.id from InventoryOrder o where o.eventOccurrence.id = :id",
                 "select o.id from PurchaseOrder o where o.eventOccurrence.id = :id",
                 "select t.id from StockTransaction t where t.eventOccurrence.id = :id",
                 "select r.id from ReturnSubmission r where r.eventOccurrence.id = :id",
@@ -126,8 +192,22 @@ public class CatalogOrm extends EntityOrm {
                 .setParameter("id", eventId).executeUpdate();
     }
 
-    public List<Assembly> assemblies() {
-        return entityManager.createQuery("from Assembly a where a.active order by a.createdAt desc", Assembly.class).getResultList();
+    /**
+     * One page of visible active assemblies: a private assembly needs its own grant, and every assembly needs every
+     * component visible and active. Both predicates run before pagination.
+     */
+    public List<Assembly> assemblies(String search, String eventTag, UUID mineOwner, int offset, int limit) {
+        var query = entityManager.createQuery("from Assembly a where a.active = true and " + InventoryAccessOrm.visible("a.accessPolicy")
+                + " and not exists (select ai.quantity from AssemblyItem ai join ai.item component where ai.assembly = a and (component.active = false or not "
+                + InventoryAccessOrm.visible("component.accessPolicy") + "))"
+                + (search == null || search.isBlank() ? "" : " and lower(a.name) like :search")
+                + (eventTag == null || eventTag.isBlank() ? "" : " and cast(a.eventTags as String) like :eventTag escape '!'")
+                + (mineOwner == null ? "" : " and a.accessPolicy.owner.id = :mineOwner")
+                + " order by a.createdAt desc, a.id", Assembly.class);
+        if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
+        if (eventTag != null && !eventTag.isBlank()) query.setParameter("eventTag", jsonElementPattern(eventTag));
+        if (mineOwner != null) query.setParameter("mineOwner", mineOwner);
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<EventOccurrence> events(String eventType) {
@@ -171,7 +251,7 @@ public class CatalogOrm extends EntityOrm {
     }
 
     public List<AssemblyItem> assemblyItems(Assembly assembly) {
-        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser where ai.assembly = :assembly", AssemblyItem.class)
+        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent where ai.assembly = :assembly", AssemblyItem.class)
                 .setParameter("assembly", assembly).getResultList();
     }
 
@@ -180,7 +260,7 @@ public class CatalogOrm extends EntityOrm {
             return java.util.Map.of();
         }
         var items = entityManager.createQuery(
-                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser where ai.assembly in :assemblies", AssemblyItem.class)
+                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent where ai.assembly in :assemblies", AssemblyItem.class)
                 .setParameter("assemblies", assemblies)
                 .getResultList();
         return items.stream().collect(java.util.stream.Collectors.groupingBy(ai -> ai.assembly.id));
@@ -216,15 +296,6 @@ public class CatalogOrm extends EntityOrm {
                 .setParameter("item", item).executeUpdate();
     }
 
-    public void clearActiveLocationAssignments(StorageLocation location) {
-        entityManager.createQuery("update Item i set i.storageLocation = null where i.storageLocation = :location")
-                .setParameter("location", location).executeUpdate();
-        entityManager.createQuery("update Item i set i.returnLocation = null where i.returnLocation = :location")
-                .setParameter("location", location).executeUpdate();
-        entityManager.createQuery("update AssetInstance a set a.currentLocation = null where a.currentLocation = :location")
-                .setParameter("location", location).executeUpdate();
-    }
-
     public List<AssetInstance> assetInstances(Item item) {
         return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true order by a.assetCode asc", AssetInstance.class)
                 .setParameter("item", item).getResultList();
@@ -247,21 +318,18 @@ public class CatalogOrm extends EntityOrm {
         var row = (Object[]) entityManager.createNativeQuery("""
                 select
                     exists (select 1 from stock_transactions t
-                        where t.item_id = :item and t.faction_order_id is null and t.related_entity_type is null
+                        where t.item_id = :item and t.order_id is null and t.related_entity_type is null
                             and (t.type in ('checkout', 'checkin', 'consumed') or (t.type = 'written_off' and t.custody_write_off))
                         group by t.user_id, t.event_occurrence_id, t.asset_instance_id
                         having sum(case when t.type = 'checkout' then t.quantity else -t.quantity end) > 0),
-                    exists (select 1 from faction_order_lines l join faction_orders o on o.id = l.faction_order_id
+                    exists (select 1 from order_lines l join orders o on o.id = l.order_id
                         where l.item_id = :item and (o.status not in ('returned', 'closed', 'cancelled')
                             or l.handed_over_quantity - l.returned_quantity - l.consumed_quantity
                                 - l.damaged_quantity - l.written_off_quantity > 0)),
-                    exists (select 1 from general_orders o
-                        where o.status not in ('returned', 'closed', 'cancelled')
-                            and (jsonb_exists(o.requested_quantities, cast(:item as text)) or jsonb_exists(o.handed_over_quantities, cast(:item as text)))),
                     exists (select 1 from return_submissions r where r.item_id = :item and r.status = 'pending'),
                     exists (select 1 from stock_reservations r where r.item_id = :item and r.status in ('active', 'partially_released'))
                 """).setParameter("item", item.id).getSingleResult();
-        var labels = List.of("outstanding direct custody", "open faction orders", "open general orders",
+        var labels = List.of("outstanding direct custody", "open orders",
                 "pending returns", "active reservations");
         var result = new ArrayList<String>();
         for (int i = 0; i < labels.size(); i++) if (Boolean.TRUE.equals(row[i])) result.add(labels.get(i));

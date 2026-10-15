@@ -5,10 +5,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.model.CategoryMaintenancePolicy;
-import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.orm.CategoryMaintenanceOrm;
 import org.ash.inventory.resource.ApiException;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,15 +52,11 @@ public class CategoryMaintenanceService {
         var items = orm.items(name);
         for (var item : items) {
             item.maintenanceIntervalDays = input.intervalDays() == 0 ? null : input.intervalDays();
-            if (input.intervalDays() == 0) {
-                item.nextMaintenanceDue = null;
-                if (item.maintenanceStatus == DomainEnums.MaintenanceStatus.overdue
-                        || item.maintenanceStatus == DomainEnums.MaintenanceStatus.due_soon) {
-                    item.maintenanceStatus = DomainEnums.MaintenanceStatus.certified;
-                }
-            }
+            if (input.intervalDays() == 0) item.nextMaintenanceDue = null;
             else if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = BusinessTime.today().plusDays(input.intervalDays());
         }
+        // Without a category calendar, individually inspected assets no longer carry calendar dates either.
+        if (input.intervalDays() == 0) orm.clearAssetCalendars(items);
         events.record("catalog.changed", "category-maintenance", policy == null ? UUID.randomUUID() : policy.id,
                 actors.current().id, null, Map.of("resource", "category-maintenance", "category", name));
         return new Policy(name, input.intervalDays());

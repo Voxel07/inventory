@@ -5,12 +5,13 @@ import type { AssetInstance } from './item';
 export interface StockTransaction {
   id: string;
   itemId: string;
+  itemName: string;
   transactionType: TransactionType;
   quantityChanged: number;
   assetInstanceId?: string;
   userId: string;
   damageReportId?: string;
-  factionOrderId?: string;
+  orderId?: string;
   eventType?: EventType;
   faction?: string;
   clientCommandId?: string;
@@ -24,9 +25,10 @@ export interface StockTransaction {
   expand?: {
     userId?: User;
     assetInstanceId?: AssetInstance;
-    factionOrderId?: {
+    order?: {
+      kind: 'faction' | 'general';
       id: string;
-      eventType: string;
+      eventType?: string;
       faction: string;
       orderCode?: string;
     };

@@ -39,7 +39,7 @@ export function StateMessage({ kind, title, description, action, detail, compact
     {description && <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>{description}</Typography>}
     {action && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', justifyContent: 'center', mt: 0.5 }}>{action}</Stack>}
     {detail && <Typography variant="caption" color="text.secondary" component="details" sx={{ mt: 0.5, maxWidth: 480 }}>
-      <summary style={{ cursor: 'pointer' }}>{translate('Technische Details', 'Technical details')}</summary>
+      <summary style={{ cursor: 'pointer' }}>{translate('common.stateMessage.technicalDetails')}</summary>
       <span className="mono">{detail}</span>
     </Typography>}
   </Box>;

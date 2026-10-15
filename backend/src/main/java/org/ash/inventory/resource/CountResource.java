@@ -26,7 +26,7 @@ public class CountResource {
 
     public CountResource(CountService service) { this.service = service; }
 
-    @GET
+    @Paged @GET
     public List<CountDtos.CountResponse> list(@QueryParam("status") String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {

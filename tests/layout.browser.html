@@ -7,6 +7,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/tests/layout.browser.jsx"></script>
+    <script>window.__ENV__ = { API_URL: 'http://fixture.invalid' };</script>
+    <script type="module" src="/tests/layout.browser.tsx"></script>
   </body>
 </html>

@@ -4,7 +4,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Link as RouterLink } from 'react-router-dom';
 import { Button, IconButton } from '../shared/ActionButtons';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 export type RowAction = { label: string; icon: ReactNode; onClick: () => void; destructive?: boolean };
 
@@ -24,10 +24,10 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
   onOpenMenu?: (anchor: HTMLElement) => void;
   onClick?: () => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   return <Box component="li" sx={{ display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
     {selectable && <Checkbox checked={selected} onChange={onToggleSelected} sx={{ ml: 0.5, p: 1.25 }}
-      slotProps={{ input: { 'aria-label': t(`${title} auswählen`, `Select ${title}`) } }} />}
+      slotProps={{ input: { 'aria-label': t('lists.catalogParts.selectTitle', { title: title }) } }} />}
     <ButtonBase component={RouterLink} to={to} onClick={onClick} sx={{
       flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
       '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { bgcolor: 'action.focus', outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
@@ -38,7 +38,7 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
       </Typography>
       {secondary && <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{secondary}</Typography>}
     </ButtonBase>
-    {onOpenMenu && <IconButton title={t(`Weitere Aktionen für ${title}`, `More actions for ${title}`)} aria-haspopup="menu"
+    {onOpenMenu && <IconButton title={t('lists.catalogParts.moreActionsForTitle', { title: title })} aria-haspopup="menu"
       onClick={(event) => onOpenMenu(event.currentTarget)} sx={{ mr: 0.5, flexShrink: 0 }}>
       <MoreVertIcon />
     </IconButton>}
@@ -57,35 +57,35 @@ export function CatalogSearchBar({ search, onSearch, label, activeFilters = 0, o
   selecting?: boolean;
   onToggleSelecting?: () => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   return <Stack spacing={1} sx={{ mb: 1.5 }}>
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <TextField type="search" label={label} value={search} onChange={(event) => onSearch(event.target.value)} fullWidth size="small"
         sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
       {onOpenFilters && <Button variant="outlined" aria-haspopup="dialog" onClick={onOpenFilters} sx={{ flexShrink: 0 }}
-        aria-label={activeFilters ? t(`Filter, ${activeFilters} aktiv`, `Filters, ${activeFilters} active`) : t('Filter', 'Filters')}
+        aria-label={activeFilters ? t('lists.catalogParts.filtersActiveFiltersActive', { activeFilters: activeFilters }) : t('common.filters')}
         startIcon={<Badge badgeContent={activeFilters} color="primary"><FilterListIcon /></Badge>}>
-        {t('Filter', 'Filters')}
+        {t('common.filters')}
       </Button>}
     </Stack>
     {(activeFilters > 0 || selecting !== undefined) && <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
       {activeFilters > 0
         ? <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">{t(`${activeFilters} Filter aktiv`, `${activeFilters} filter${activeFilters === 1 ? '' : 's'} active`)}</Typography>
-          <Button size="small" onClick={onClearFilters}>{t('Zurücksetzen', 'Clear')}</Button>
+          <Typography variant="body2" color="text.secondary">{t('lists.catalogParts.activeFilters', { count: activeFilters })}</Typography>
+          <Button size="small" onClick={onClearFilters}>{t('lists.catalogParts.clear')}</Button>
         </Stack>
         : <span />}
       {selecting !== undefined && <Button size="small" onClick={onToggleSelecting}>
-        {selecting ? t('Auswahl beenden', 'Done selecting') : t('Auswählen', 'Select')}
+        {selecting ? t('lists.catalogParts.doneSelecting') : t('lists.catalogParts.select')}
       </Button>}
     </Stack>}
   </Stack>;
 }
 
 export function FilterSheetActions({ resultCount, activeFilters, onClear, onDone }: { resultCount: number; activeFilters: number; onClear: () => void; onDone: () => void }) {
-  const t = useLocalizedText();
+  const t = useT();
   return <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-    <Button fullWidth variant="outlined" onClick={onClear} disabled={!activeFilters}>{t('Zurücksetzen', 'Clear')}</Button>
-    <Button fullWidth variant="contained" onClick={onDone}>{t(`${resultCount} anzeigen`, `Show ${resultCount}`)}</Button>
+    <Button fullWidth variant="outlined" onClick={onClear} disabled={!activeFilters}>{t('lists.catalogParts.clear')}</Button>
+    <Button fullWidth variant="contained" onClick={onDone}>{t('lists.catalogParts.showResultCount', { resultCount: resultCount })}</Button>
   </Stack>;
 }

@@ -1,18 +1,16 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.FactionOrderLine;
 import org.ash.inventory.model.Item;
-import org.ash.inventory.model.InventoryPosition;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.MaintenanceSchedule;
 import org.ash.inventory.model.StockTransaction;
 import org.ash.inventory.model.StockReservation;
+import org.ash.inventory.model.UserAccount;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -25,21 +23,22 @@ import java.util.UUID;
 /** Database access for stock, damage, maintenance, and procurement views. */
 @ApplicationScoped
 public class OperationsOrm extends EntityOrm {
+    @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
 
-    public List<Item> minStockItems() {
-        return entityManager.createQuery("from Item i where i.active = true and i.minStock > 0", Item.class).getResultList();
-    }
-
+    /** {@code search}: item name, person, reason, notes, event type or faction. */
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
-            int offset, int limit) {
-        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.factionOrder o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
+            String search, int offset, int limit) {
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.order o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
         if (type != null && !type.isBlank()) jpql.append(" and tx.type = :type");
         if (start != null) jpql.append(" and tx.occurredAt >= :start");
         if (end != null) jpql.append(" and tx.occurredAt <= :end");
+        boolean searching = search != null && !search.isBlank();
+        if (searching) jpql.append(" and (lower(tx.item.name) like :search or lower(tx.user.name) like :search or lower(coalesce(tx.reason, '')) like :search"
+                + " or lower(coalesce(tx.notes, '')) like :search or lower(coalesce(tx.eventType, '')) like :search or lower(coalesce(tx.faction, '')) like :search)");
         jpql.append(" order by tx.occurredAt desc, tx.id desc");
         var query = entityManager.createQuery(jpql.toString(), StockTransaction.class);
         if (itemId != null) query.setParameter("itemId", itemId);
@@ -48,19 +47,26 @@ public class OperationsOrm extends EntityOrm {
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);
+        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int offset, int limit) {
-        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly left join fetch d.assetInstance where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
+    public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId,
+            Collection<DomainEnums.DamageStatus> statuses, String search, int offset, int limit) {
+        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly da left join fetch d.assetInstance asset where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
         if (itemId != null) jpql.append(" and d.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
+        if (!statuses.isEmpty()) jpql.append(" and d.status in :statuses");
+        boolean searching = search != null && !search.isBlank();
+        if (searching) jpql.append(" and (lower(d.description) like :search or lower(di.name) like :search or lower(da.name) like :search or lower(asset.assetCode) like :search)");
         jpql.append(" order by d.createdAt desc, d.id desc");
         var query = entityManager.createQuery(jpql.toString(), DamageReport.class);
+        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (assemblyId != null) query.setParameter("assemblyId", assemblyId);
+        if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -152,16 +158,6 @@ public class OperationsOrm extends EntityOrm {
         totals.merge(DomainEnums.TransactionType.consumed, quantity, Long::sum);
     }
 
-    public List<DamageReport> unresolvedDamage(Item item) {
-        return entityManager.createQuery("from DamageReport d where d.item = :item and d.status in :statuses", DamageReport.class)
-                .setParameter("item", item)
-                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
-                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
-                        DomainEnums.DamageStatus.in_repair, DomainEnums.DamageStatus.repaired,
-                        DomainEnums.DamageStatus.verified))
-                .getResultList();
-    }
-
     public int unresolvedDamageQuantity(Item item) {
         Long quantity = entityManager.createQuery("""
                 select coalesce(sum(d.quantity - d.repairedQuantity - d.writtenOffQuantity), 0)
@@ -176,33 +172,6 @@ public class OperationsOrm extends EntityOrm {
         return Math.toIntExact(quantity);
     }
 
-    public Map<UUID, Long> unresolvedDamageQuantities(Collection<UUID> itemIds) {
-        var quantities = new LinkedHashMap<UUID, Long>();
-        if (itemIds.isEmpty()) return quantities;
-        for (var row : entityManager.createQuery("""
-                select d.item.id, coalesce(sum(d.quantity - d.repairedQuantity - d.writtenOffQuantity), 0)
-                from DamageReport d
-                where d.item.id in :itemIds and d.status in :statuses
-                group by d.item.id
-                """, Object[].class)
-                .setParameter("itemIds", itemIds)
-                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
-                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review,
-                        DomainEnums.DamageStatus.in_repair, DomainEnums.DamageStatus.repaired,
-                        DomainEnums.DamageStatus.verified))
-                .getResultList()) {
-            quantities.put((UUID) row[0], (Long) row[1]);
-        }
-        return quantities;
-    }
-
-    public List<StockReservation> activeReservations(Item item) {
-        return entityManager.createQuery("from StockReservation reservation where reservation.item = :item and reservation.status in :statuses", StockReservation.class)
-                .setParameter("item", item)
-                .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active, DomainEnums.ReservationStatus.partially_released))
-                .getResultList();
-    }
-
     public int activeReservationQuantity(Item item) {
         Long quantity = entityManager.createQuery("""
                 select coalesce(sum(reservation.reservedQuantity - reservation.releasedQuantity), 0)
@@ -213,30 +182,23 @@ public class OperationsOrm extends EntityOrm {
                 .setParameter("statuses", List.of(DomainEnums.ReservationStatus.active,
                         DomainEnums.ReservationStatus.partially_released))
                 .getSingleResult();
-        return Math.toIntExact(quantity + generalReservations(List.of(item.id)).getOrDefault(item.id, 0L));
+        return Math.toIntExact(quantity);
     }
 
-    public Map<UUID, Long> generalReservations(Collection<UUID> itemIds) {
-        var result = new LinkedHashMap<UUID, Long>();
-        if (itemIds.isEmpty()) return result;
-        for (var value : entityManager.createNativeQuery("""
-                select i.id, sum(q.value::bigint) from general_orders o
-                cross join lateral jsonb_each_text(o.prepared_quantities) q
-                join items i on lower(q.key) = i.id::text
-                where o.status in ('preparing', 'ready') and i.id in (:ids) group by i.id
-                """, Object[].class).setParameter("ids", itemIds).getResultList()) {
-            var row = (Object[]) value;
-            result.put(UUID.fromString(row[0].toString()), ((Number) row[1]).longValue());
-        }
-        return result;
+    /** Ledger rows since {@code since} that are not evidence of a resource hidden from the actor. */
+    public long visibleTransactionsSince(UserAccount actor, java.time.Instant since) {
+        var denied = privacyScopes.deniedReferences(actor);
+        return InventoryAccessOrm.bindDenied(entityManager.createQuery("select count(t) from StockTransaction t where t.occurredAt >= :since"
+                + InventoryAccessOrm.excluding("t", denied), Long.class), denied).setParameter("since", since).getSingleResult();
     }
 
-    public Map<UUID, Long> inTransitQuantities(Collection<UUID> itemIds) {
-        var result = new LinkedHashMap<UUID, Long>();
-        if (itemIds.isEmpty()) return result;
-        for (var row : entityManager.createQuery("select p.item.id, sum(p.quantityInTransit) from InventoryPosition p where p.item.id in :ids group by p.item.id", Object[].class)
-                .setParameter("ids", itemIds).getResultList()) result.put((UUID) row[0], (Long) row[1]);
-        return result;
+    public long visibleOpenDamageReports(UserAccount actor) {
+        var denied = privacyScopes.deniedReferences(actor);
+        return InventoryAccessOrm.bindDenied(entityManager.createQuery("select count(d) from DamageReport d where d.status in :statuses"
+                + InventoryAccessOrm.excluding("d", denied), Long.class), denied)
+                .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
+                        DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review, DomainEnums.DamageStatus.in_repair))
+                .getSingleResult();
     }
 
     public Map<UUID, Long> activeReservationQuantities(Collection<UUID> itemIds) {
@@ -255,17 +217,7 @@ public class OperationsOrm extends EntityOrm {
                 .getResultList()) {
             quantities.put((UUID) row[0], (Long) row[1]);
         }
-        generalReservations(itemIds).forEach((id, quantity) -> { if (itemIds.contains(id)) quantities.merge(id, quantity, Long::sum); });
         return quantities;
-    }
-
-    public List<FactionOrderLine> activeOrderLines(UUID eventOccurrenceId, List<DomainEnums.OrderStatus> statuses) {
-        if (eventOccurrenceId == null) {
-            return entityManager.createQuery("from FactionOrderLine line where line.order.status in :statuses", FactionOrderLine.class)
-                    .setParameter("statuses", statuses).getResultList();
-        }
-        return entityManager.createQuery("from FactionOrderLine line where line.order.status in :statuses and line.order.eventOccurrence.id = :eventId", FactionOrderLine.class)
-                .setParameter("statuses", statuses).setParameter("eventId", eventOccurrenceId).getResultList();
     }
 
     public Item findLockedItem(UUID id) { return accessActor.protect(entityManager.find(Item.class, id, LockModeType.PESSIMISTIC_WRITE), true); }

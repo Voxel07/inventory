@@ -1,30 +1,33 @@
 import { formatDateTime } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
-import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField as MuiTextField, Typography } from '@mui/material';
+import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
+import { TextField as MuiTextField } from '../shared/DateTextField';
 import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
 import type { ReportFilters } from '../../types/report';
-import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
-import { useItems } from '../../hooks/useItems';
+import { useCompleteList } from '../../hooks/usePagedList';
+import { useOperationCommand } from '../../hooks/useOperations';
+import { useItemsByIds } from '../../hooks/useItems';
+import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useEventReports } from '../../hooks/useEvents';
 import { getWarehouses } from '../../services/warehouseService';
 import { locationPath } from '../../utils/locationHierarchy';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { reportPdf } from './reportPdf';
 
 const TextField: typeof MuiTextField = (props) => <MuiTextField size="small" {...props} />;
 
 const title = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
-const labels = { events: ['Eventbedarf und Nutzung', 'Event demand and use'], availability: ['Verfügbarkeit nach Lagerort', 'Availability by location'], returns: ['Offene Rückgaben', 'Unresolved returns'], repairs: ['Reparaturrückstand', 'Repair backlog'], maintenance: ['Wartungsbedarf', 'Maintenance due'], purchases: ['Einkaufshistorie', 'Purchase history'], counts: ['Inventurdifferenzen', 'Count variance'], movements: ['Verbrauch und Abschreibungen', 'Consumption and write-offs'] } as const;
+const labels = { events: 'operations.reportsPanel.reportLabels.events', availability: 'operations.reportsPanel.reportLabels.availability', returns: 'operations.reportsPanel.reportLabels.returns', repairs: 'operations.reportsPanel.reportLabels.repairs', maintenance: 'operations.reportsPanel.reportLabels.maintenance', purchases: 'operations.reportsPanel.reportLabels.purchases', counts: 'operations.reportsPanel.reportLabels.counts', movements: 'operations.reportsPanel.reportLabels.movements' } as const;
 
 export function ReportsPanel() {
-  const t = useLocalizedText(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
+  const t = useT(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReportFilters>({}); const command = useOperationCommand();
   const definitions = useReportDefinitions();
-  const items = useItems(); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useOperationList('warehouses', getWarehouses);
+  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useCompleteList(['operations', 'warehouses'], getWarehouses);
   const report = useOperationalReport(name, filters, page);
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));
@@ -32,12 +35,12 @@ export function ReportsPanel() {
   /** Readable active filters for the PDF header. */
   function filterLabels(): string[] {
     const named: [string, string | undefined][] = [
-      [t('Artikel', 'Item'), items.data?.find((item) => item.id === filters.itemId)?.name ?? filters.itemId],
-      [t('Veranstaltung', 'Event'), events.data?.find((event) => event.id === filters.eventId)?.name ?? filters.eventId],
-      [t('Standort', 'Warehouse'), warehouses.data?.find((w) => w.id === filters.warehouseId)?.name ?? filters.warehouseId],
-      [t('Lagerort', 'Location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
-      [t('Suche', 'Search'), filters.search], [t('Status', 'Status'), filters.status], [t('Kategorie', 'Category'), filters.category],
-      [t('Von', 'From'), filters.from], [t('Bis', 'To'), filters.to],
+      [t('common.item'), selectedItem.data?.[0]?.name ?? filters.itemId],
+      [t('operations.reportsPanel.event'), events.data?.find((event) => event.id === filters.eventId)?.name ?? filters.eventId],
+      [t('operations.reportsPanel.warehouse'), warehouses.data?.find((w) => w.id === filters.warehouseId)?.name ?? filters.warehouseId],
+      [t('enum.value.location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
+      [t('operations.reportsPanel.search'), filters.search], [t('common.status'), filters.status], [t('common.category'), filters.category],
+      [t('operations.reportsPanel.from'), filters.from], [t('operations.reportsPanel.to'), filters.to],
     ];
     return named.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`);
   }
@@ -48,11 +51,11 @@ export function ReportsPanel() {
   async function download(format: 'csv' | 'pdf') {
     setExporting(true); setExportError('');
     try {
-      const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('Bericht wurde während des Exports neu erstellt. Bitte wiederholen.', 'Report rebuilt during export. Please retry.'));
+      const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('operations.reportsPanel.reportRebuiltDuringExportPleaseRetry'));
       const fileName = `${name}-${generation?.slice(0, 10) ?? 'unbuilt'}.${format}`;
       if (format === 'pdf') {
         const label = labels[name as keyof typeof labels];
-        save(await reportPdf({ title: label ? t(label[0], label[1]) : title(name), definition: definition ?? definitions.data?.[name],
+        save(await reportPdf({ title: label ? t(label) : title(name), definition: definition ?? definitions.data?.[name],
           generatedAt: generation ?? '', stale, filters: filterLabels(), rows, heading: title, t }), fileName);
         return;
       }
@@ -63,33 +66,33 @@ export function ReportsPanel() {
     } catch (e) { setExportError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
   }
   return <Stack spacing={2}>
-    <Typography variant="h6">{t('Betriebsberichte', 'Operational reports')}</Typography>
-    <TextField select label={t('Bericht', 'Report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label[0], label[1])}</MenuItem>)}</TextField>
+    <Typography variant="h6">{t('operations.reportsPanel.operationalReports')}</Typography>
+    <TextField select label={t('operations.reportsPanel.report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label)}</MenuItem>)}</TextField>
     <Typography variant="body2">{report.data?.definition ?? definitions.data?.[name]}</Typography>
-    <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('Erstellt', 'Generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('Quelldaten oder Zeitbezug haben sich geändert. Neu berechnen.', 'Sources or time reference changed. Rebuild required.') : t('Stand der letzten Berechnung', 'As of the last rebuild')}</> : t('Noch kein Bericht erstellt. Jetzt aus den Quelldaten neu berechnen.', 'No report built yet. Rebuild from source records now.')}</Alert>
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('Diesen Bericht mit aktuellen Daten neu berechnen', 'Recalculate this report using current data')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('Neu berechnen', 'Rebuild report')}</Button><Button title={translate('Die gefilterten Berichtsdaten als CSV herunterladen', 'Download the filtered report data as CSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('csv'); }}>{t('Gefilterte Daten als CSV', 'Export filtered CSV')}</Button><Button title={translate('Den gefilterten Bericht als PDF herunterladen', 'Download the filtered report as PDF')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('pdf'); }}>{t('Gefilterter Bericht als PDF', 'Export filtered PDF')}</Button><Button title={translate('Alle Berichtsfilter zurücksetzen', 'Reset all report filters')} onClick={() => { setFilters({}); setPage(0); }}>{t('Filter zurücksetzen', 'Reset filters')}</Button></Stack>
+    <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('operations.reportsPanel.generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('operations.reportsPanel.sourcesOrTimeReferenceChangedRebuildRequired') : t('operations.reportsPanel.asOfTheLastRebuild')}</> : t('operations.reportsPanel.noReportBuiltYetRebuildFromSourceRecordsNow')}</Alert>
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('operations.reportsPanel.recalculateThisReportUsingCurrentData')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('operations.reportsPanel.rebuildReport')}</Button><Button title={translate('operations.reportsPanel.downloadTheFilteredReportDataAsCSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('csv'); }}>{t('operations.reportsPanel.exportFilteredCSV')}</Button><Button title={translate('operations.reportsPanel.downloadTheFilteredReportAsPDF')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('pdf'); }}>{t('operations.reportsPanel.exportFilteredPDF')}</Button><Button title={translate('operations.reportsPanel.resetAllReportFilters')} onClick={() => { setFilters({}); setPage(0); }}>{t('operations.reportsPanel.resetFilters')}</Button></Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-      <TextField select fullWidth label={t('Artikel', 'Item')} value={filters.itemId ?? ''} onChange={(e) => change('itemId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{items.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
-      {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('Veranstaltung', 'Event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}
+      <ItemAutocomplete label={t('operations.reportsPanel.itemEmptyAll')} value={filters.itemId} onChange={(item) => change('itemId', item?.id ?? '')} />
+      {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('operations.reportsPanel.event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}
       {['availability', 'repairs', 'maintenance', 'counts', 'movements'].includes(name) && <>
-        <TextField select fullWidth label={t('Standort', 'Warehouse')} value={filters.warehouseId ?? ''} onChange={(e) => change('warehouseId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
-        <TextField select fullWidth label={t('Lagerort', 'Location')} value={filters.locationId ?? ''} onChange={(e) => change('locationId', e.target.value)}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{locations.data?.map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations.data ?? [])}</MenuItem>)}</TextField>
+        <TextField select fullWidth label={t('operations.reportsPanel.warehouse')} value={filters.warehouseId ?? ''} onChange={(e) => change('warehouseId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
+        <TextField select fullWidth label={t('enum.value.location')} value={filters.locationId ?? ''} onChange={(e) => change('locationId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{locations.data?.map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations.data ?? [])}</MenuItem>)}</TextField>
       </>}
     </Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-      <TextField fullWidth label={t('Suche', 'Search')} value={filters.search ?? ''} onChange={(e) => change('search', e.target.value)} />
-      <TextField fullWidth label={t('Status (exakt)', 'Status (exact)')} value={filters.status ?? ''} onChange={(e) => change('status', e.target.value)} />
-      <TextField fullWidth label={t('Kategorie (exakt)', 'Category (exact)')} value={filters.category ?? ''} onChange={(e) => change('category', e.target.value)} />
-      <TextField type="date" label={t('Von', 'From')} slotProps={{ inputLabel: { shrink: true } }} value={filters.from ?? ''} onChange={(e) => change('from', e.target.value)} />
-      <TextField type="date" label={t('Bis', 'To')} slotProps={{ inputLabel: { shrink: true } }} value={filters.to ?? ''} onChange={(e) => change('to', e.target.value)} />
+      <TextField fullWidth label={t('operations.reportsPanel.search')} value={filters.search ?? ''} onChange={(e) => change('search', e.target.value)} />
+      <TextField fullWidth label={t('operations.reportsPanel.statusExact')} value={filters.status ?? ''} onChange={(e) => change('status', e.target.value)} />
+      <TextField fullWidth label={t('operations.reportsPanel.categoryExact')} value={filters.category ?? ''} onChange={(e) => change('category', e.target.value)} />
+      <TextField type="date" label={t('operations.reportsPanel.from')} slotProps={{ inputLabel: { shrink: true } }} value={filters.from ?? ''} onChange={(e) => change('from', e.target.value)} />
+      <TextField type="date" label={t('operations.reportsPanel.to')} slotProps={{ inputLabel: { shrink: true } }} value={filters.to ?? ''} onChange={(e) => change('to', e.target.value)} />
     </Stack>
-    {(filters.from || filters.to) && <Typography variant="caption">{t('Datumsfilter schließen Zeilen ohne Bezugsdatum aus. Die Definition oben beschreibt das Datum dieses Berichts.', 'Date filters exclude rows with no date. The definition above describes the date used by this report.')}</Typography>}
+    {(filters.from || filters.to) && <Typography variant="caption">{t('operations.reportsPanel.dateFiltersExcludeRowsWithNoDateTheDefinitionAbove')}</Typography>}
     {(report.isFetching || command.isPending || exporting) && <LinearProgress />}
     {(report.error || definitions.error || command.error || exportError) && <Alert severity="error">{(report.error || definitions.error || command.error)?.message || exportError}</Alert>}
-    {['purchases', 'movements'].includes(name) && <Typography variant="body2">{t('Einen Artikel wählen, um Monatssummen nach Status für alle gefilterten Zeilen zu sehen.', 'Select one item to see monthly totals by status across all filtered rows.')}</Typography>}
+    {['purchases', 'movements'].includes(name) && <Typography variant="body2">{t('operations.reportsPanel.selectOneItemToSeeMonthlyTotalsByStatusAcross')}</Typography>}
     {!!report.data?.monthlyTotals.length && <TableContainer><Table size="small"><TableHead><TableRow>{Object.keys(report.data.monthlyTotals[0]).map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data.monthlyTotals.map((row, i) => <TableRow key={i}>{Object.entries(row).map(([key, value]) => <TableCell key={key}>{String(value ?? '—')}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>}
     <TableContainer component={Box} sx={{ maxHeight: 600 }}><Table size="small" stickyHeader><TableHead><TableRow>{columns.map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data?.rows.map((row, index) => <TableRow key={String(row.id ?? index)}>{columns.map((key) => <TableCell key={key} sx={{ minWidth: 90, overflowWrap: 'anywhere' }}>{key === 'item' && row.itemId ? <Link to={`/items/${row.itemId}`}>{String(row[key])}</Link> : key === 'event' && row.eventId ? <Link to={`/events/${row.eventId}`}>{String(row[key])}</Link> : String(row[key] ?? '—')}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>
-    {!report.isLoading && report.data?.generatedAt && !report.data.total && <Alert severity="info">{t('Keine passenden Datensätze.', 'No matching records.')}</Alert>}
+    {!report.isLoading && report.data?.generatedAt && !report.data.total && <Alert severity="info">{t('operations.reportsPanel.noMatchingRecords')}</Alert>}
     <TablePagination component="div" count={report.data?.total ?? 0} page={page} rowsPerPage={50} rowsPerPageOptions={[50]} onPageChange={(_, value) => setPage(value)} />
   </Stack>;
 }

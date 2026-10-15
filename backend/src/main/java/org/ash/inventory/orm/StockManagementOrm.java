@@ -1,9 +1,6 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
-import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.InventoryLot;
 import org.ash.inventory.model.InventoryPosition;
 import org.ash.inventory.model.Warehouse;
@@ -70,11 +67,9 @@ public class StockManagementOrm extends EntityOrm {
         return visible(query, actor).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     private String visibility(String item) {
-        return InventoryAccessOrm.visible(item + ".accessPolicy") + " and (" + item + ".accessPolicy is not null or :manager = true or " + item + ".visibilityScope in :publicScopes or " + item + ".assignedUser.id = :actorId or " + item + ".assignedGroup in :groups)";
+        return InventoryAccessOrm.visible(item + ".accessPolicy");
     }
     private <T> jakarta.persistence.TypedQuery<T> visible(jakarta.persistence.TypedQuery<T> query, UserAccount actor) {
-        return InventoryAccessOrm.bind(query, actor).setParameter("manager", actor.role.atLeast(DomainEnums.UserRole.warehouse_crew))
-                .setParameter("publicScopes", List.of(DomainEnums.ItemVisibilityScope.global, DomainEnums.ItemVisibilityScope.event))
-                .setParameter("actorId", actor.id).setParameter("groups", actor.factions == null || actor.factions.isEmpty() ? List.of("__none__") : actor.factions);
+        return InventoryAccessOrm.bind(query, actor);
     }
 }

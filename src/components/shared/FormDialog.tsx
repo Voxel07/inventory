@@ -2,7 +2,7 @@ import { useId, type FormEvent, type ReactNode } from 'react';
 import { Alert, Box, DialogActions, DialogContent, DialogTitle, Stack, Typography, useMediaQuery, useTheme, type DialogProps } from '@mui/material';
 import { Dialog } from './ClosableDialog';
 import { Button } from './ActionButtons';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 /**
  * The one dialog shell for forms: full screen on phones, otherwise a centred
@@ -37,11 +37,14 @@ export function DialogForm({ title, onSubmit, onCancel, submitLabel, submitDisab
   /** Opt out of native constraint validation when the form validates itself. */
   noValidate?: boolean;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   function submit(event: FormEvent) {
     event.preventDefault();
     // Nested dialogs are portaled, but React still bubbles their submit events.
     event.stopPropagation();
+    // Forms with custom validation still need to reject incomplete date-field drafts.
+    if (noValidate && !Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>('input[data-date-field]'))
+      .every((input) => input.reportValidity())) return;
     if (!submitDisabled && !pending) onSubmit();
   }
   return <Box component="form" noValidate={noValidate} onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}>
@@ -54,8 +57,8 @@ export function DialogForm({ title, onSubmit, onCancel, submitLabel, submitDisab
     </DialogContent>
     <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', sm: 1.5 } }}>
       {extraActions && <Box sx={{ mr: 'auto' }}>{extraActions}</Box>}
-      <Button onClick={onCancel} disabled={pending}>{t('Abbrechen', 'Cancel')}</Button>
-      <Button type="submit" variant="contained" disabled={submitDisabled || pending}>{submitLabel ?? t('Speichern', 'Save')}</Button>
+      <Button onClick={onCancel} disabled={pending}>{t('common.cancel')}</Button>
+      <Button type="submit" variant="contained" disabled={submitDisabled || pending}>{submitLabel ?? t('common.save')}</Button>
     </DialogActions>
   </Box>;
 }

@@ -56,8 +56,7 @@ const parsed = parseItemsFromCsv(rows, locations, items, reference);
 for (const row of parsed) {
   if (row.isExisting) continue;
   assert.notEqual(row.status, 'error', row.statusMessage);
-  const { isConsumable, ...input } = row.data;
-  const item = await tool('create_item', { input: { ...input, consumable: isConsumable, storageLocation: row.storageLocationId || undefined } });
+  const item = await tool('create_item', { input: { ...row.data, storageLocation: row.storageLocationId || undefined } });
   items.push(item);
 }
 // Read through REST again to verify the MCP writes use the same stock projections.

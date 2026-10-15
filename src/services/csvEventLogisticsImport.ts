@@ -5,7 +5,7 @@ import type { ParsedEventReportRow } from '../types/csvImport';
 import { translate } from '../utils/naming';
 
 /** Reuse people across events and update matching records when an import is retried. */
-export function createCsvEventLogisticsImporter() {
+export function createCsvEventLogisticsImporter(factionIds: ReadonlyMap<string, string> = new Map()) {
   const context = captureAuthSession();
   let people: EventPersonSummary[] | undefined;
   return async (eventId: string, row: ParsedEventReportRow) => {
@@ -17,7 +17,7 @@ export function createCsvEventLogisticsImporter() {
       // Resolve every name before writing so an ambiguous name leaves the event untouched.
       const resolved = row.attendees.map((input) => {
         const matches = known.filter((person) => person.name.toLowerCase().trim() === input.personName.toLowerCase());
-        if (matches.length > 1) throw new Error(translate(`Mehrere Personen heißen ${input.personName}`, `Multiple people are named ${input.personName}`));
+        if (matches.length > 1) throw new Error(translate('services.csvEventLogisticsImport.multiplePeopleAreNamedPersonName', { personName: String(input.personName) }));
         return { input, person: matches.at(0) };
       });
       const attendees = await apiRequest<EventAttendee[]>(`${base}/attendees`);
@@ -26,7 +26,8 @@ export function createCsvEventLogisticsImporter() {
         const existing = attendees.find((attendee) => attendee.person.id === person?.id);
         const saved = await apiRequest<EventAttendee>(existing ? `${base}/attendees/${existing.id}` : `${base}/attendees`, {
           method: existing ? 'PUT' : 'POST',
-          body: { ...input, personId: person?.id ?? null, personName: person?.name ?? input.personName, personUserId: person?.userId ?? null },
+          body: { ...input, personId: person?.id ?? null, personName: person?.name ?? input.personName, personUserId: person?.userId ?? null,
+            roles: input.roles.map((role) => ({ ...role, factionId: role.factionId ? factionIds.get(role.factionId) ?? role.factionId : null })) },
         });
         if (!person) people.push(saved.person);
       }

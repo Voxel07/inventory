@@ -11,8 +11,7 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.CustodyHandover;
-import org.ash.inventory.model.FactionOrder;
-import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MaintenanceRecord;
 import org.ash.inventory.model.MaintenanceSchedule;
@@ -25,7 +24,6 @@ import org.ash.inventory.orm.PurchasingOrm;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,29 +76,23 @@ public class InventoryOperationsService {
     /** Direct stock command; authorization follows the transaction type (checkout: ASH, otherwise item edit). */
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
-        return transact(input, null);
-    }
-
-    /** General-order handover and reconciliation: the order owns the custody, so the ledger row is linked to it. */
-    @Transactional
-    public StockTransaction transact(ApiModels.TransactionInput input, UUID generalOrderId) {
         return input.transactionType() == DomainEnums.TransactionType.checkout
-                ? checkout(input, generalOrderId) : transactInventory(input, generalOrderId);
+                ? checkout(input) : transactInventory(input);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
-    public StockTransaction checkout(ApiModels.TransactionInput input, UUID generalOrderId) {
+    public StockTransaction checkout(ApiModels.TransactionInput input) {
         actors.requireTakeout();
         if (input.transactionType() != DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Checkout transaction required");
-        return recordTransaction(input, generalOrderId);
+        return recordTransaction(input);
     }
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public StockTransaction transactInventory(ApiModels.TransactionInput input, UUID generalOrderId) {
+    public StockTransaction transactInventory(ApiModels.TransactionInput input) {
         if (input.transactionType() == DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Use the checkout workflow");
-        return recordTransaction(input, generalOrderId);
+        return recordTransaction(input);
     }
 
     private void requireTransactionAccess(Item item, ApiModels.TransactionInput input) {
@@ -108,7 +100,7 @@ public class InventoryOperationsService {
         else actors.requireItemEdit(item);
     }
 
-    private StockTransaction recordTransaction(ApiModels.TransactionInput input, UUID generalOrderId) {
+    private StockTransaction recordTransaction(ApiModels.TransactionInput input) {
         var actor = actors.current();
         var occurredAt = historicalTimestamp(input.occurredAt());
         if (!DIRECT_TRANSACTION_TYPES.contains(input.transactionType())) {
@@ -116,7 +108,7 @@ public class InventoryOperationsService {
                     + " must be created by its owning inventory workflow");
         }
         if (input.factionOrderId() != null) {
-            throw ApiException.badRequest("Order-linked stock changes must use the faction order workflow");
+            throw ApiException.badRequest("Order-linked stock changes must use the order workflow");
         }
         if (input.idempotencyKey() != null) {
             requireTransactionAccess(orm.find(Item.class, input.itemId()), input);
@@ -130,7 +122,7 @@ public class InventoryOperationsService {
         var item = lockedItem(input.itemId());
         requireTransactionAccess(item, input);
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
-            return transactSerialized(input, item, actor, occurredAt, generalOrderId);
+            return transactSerialized(input, item, actor, occurredAt);
         }
         if (input.assetInstanceId() != null)
             throw ApiException.badRequest("assetInstanceId can only be used with serialized items");
@@ -162,8 +154,7 @@ public class InventoryOperationsService {
         transaction.faction = Inputs.blankToNull(input.faction());
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
-        link(transaction, generalOrderId);
-        if (input.transactionType() == DomainEnums.TransactionType.checkin && generalOrderId == null) {
+        if (input.transactionType() == DomainEnums.TransactionType.checkin) {
             settleDirectCustody(transaction, null, input);
         }
         switch (input.transactionType()) {
@@ -185,8 +176,7 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt,
-            UUID generalOrderId) {
+    private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt) {
         if (input.transactionType() != DomainEnums.TransactionType.checkout
                 && input.transactionType() != DomainEnums.TransactionType.checkin) {
             throw ApiException.conflict("Serialized stock changes must be made through individual asset records");
@@ -217,7 +207,6 @@ public class InventoryOperationsService {
         transaction.idempotencyKey = input.idempotencyKey();
         transaction.clientCommandId = input.idempotencyKey();
         transaction.availabilityBefore = before;
-        link(transaction, generalOrderId);
 
         if (input.transactionType() == DomainEnums.TransactionType.checkout) {
             requireCheckoutContext(input, transaction.eventOccurrence);
@@ -237,7 +226,7 @@ public class InventoryOperationsService {
                     && asset.availabilityStatus != DomainEnums.AssetState.returned_pending_check) {
                 throw ApiException.conflict("Asset " + asset.assetCode + " is not checked out");
             }
-            if (generalOrderId == null) settleDirectCustody(transaction, asset, input);
+            settleDirectCustody(transaction, asset, input);
             transaction.sourceLocation = asset.currentLocation;
             transaction.destinationLocation = input.locationId() == null ? (item.returnLocation == null ? item.storageLocation : item.returnLocation) : positions.location(input.locationId());
             asset.availabilityStatus = StockPolicy.returnedState(asset);
@@ -258,11 +247,6 @@ public class InventoryOperationsService {
         return transaction;
     }
 
-    private static void link(StockTransaction transaction, UUID generalOrderId) {
-        if (generalOrderId == null) return;
-        transaction.relatedEntityType = "general_order";
-        transaction.relatedEntityId = generalOrderId;
-    }
 
     /**
      * A direct check-in settles one exact direct custody (custodian and event). Order-held stock is settled by its
@@ -298,10 +282,9 @@ public class InventoryOperationsService {
             throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its condition is "
                     + asset.conditionStatus);
         }
-        if (asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue
-                || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
+        if (MaintenancePolicy.blocksAsset(asset, BusinessTime.today())) {
             throw ApiException.conflict("Asset " + asset.assetCode + " is blocked because its service status is "
-                    + asset.serviceStatus);
+                    + MaintenancePolicy.assetStatus(asset, BusinessTime.today()));
         }
         assertNoBlockingScheduleIsDue(asset.item, asset);
     }
@@ -437,10 +420,9 @@ public class InventoryOperationsService {
 
     public void assertCheckoutAllowed(Item item) {
         if (equipment.hasMemberDamage(item)) throw ApiException.conflict("Warehouse must review the open contributor damage report before checkout");
-        refreshMaintenanceStatus(item);
-        if (MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.today())) {
+        if (MaintenancePolicy.blocksItem(item, BusinessTime.today())) {
             throw ApiException.conflict("Item " + item.name + " is blocked from checkout because maintenance status is "
-                    + item.maintenanceStatus);
+                    + MaintenancePolicy.itemStatus(item, BusinessTime.today()));
         }
         assertNoBlockingScheduleIsDue(item, null);
     }
@@ -479,7 +461,7 @@ public class InventoryOperationsService {
         report.safetyImpact = input.safetyImpact();
         report.idempotencyKey = input.idempotencyKey();
         if (input.factionOrderId() != null)
-            report.factionOrder = orm.require(FactionOrder.class, input.factionOrderId(), "Faction order");
+            report.order = orm.require(InventoryOrder.class, input.factionOrderId(), "Faction order");
         if (input.assetInstanceId() != null) {
             if (report.item == null) throw ApiException.badRequest("An asset can only be reported with its item");
             var asset = orm.findLockedAsset(input.assetInstanceId());
@@ -490,8 +472,8 @@ public class InventoryOperationsService {
             report.assetInstance = asset;
             asset.conditionStatus = input.safetyImpact()
                     ? DomainEnums.ConditionStatus.unsafe : DomainEnums.ConditionStatus.damaged;
-            // A checked-out asset stays in custody so it can still be returned; the condition blocks re-checkout.
-            if (!StockPolicy.checkedOut(asset)) asset.availabilityStatus = DomainEnums.AssetState.damaged;
+            // Custody, reservation and transit keep their state so their workflows can finish; the condition blocks reuse.
+            asset.availabilityStatus = StockPolicy.conditionedState(asset);
         } else if (report.item != null && report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
             throw ApiException.badRequest("assetInstanceId is required for serialized item damage");
         }
@@ -600,7 +582,7 @@ public class InventoryOperationsService {
                 : DomainEnums.TransactionType.written_off;
         transaction.quantity = resolutionAmount;
         transaction.damageReport = report;
-        transaction.factionOrder = report.factionOrder;
+        transaction.order = report.order;
         transaction.reason = input.status() == DomainEnums.DamageStatus.repaired ? "Damage repaired"
                 : "Damage written off";
         transaction.notes = input.notes();
@@ -618,8 +600,7 @@ public class InventoryOperationsService {
                 report.assetInstance.active = false;
             } else {
                 report.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
-                if (!StockPolicy.checkedOut(report.assetInstance))
-                    report.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+                report.assetInstance.availabilityStatus = StockPolicy.conditionedState(report.assetInstance);
             }
         }
         transaction.availabilityAfter = stock(report.item).available();
@@ -670,8 +651,9 @@ public class InventoryOperationsService {
         record.inspector = actors.current();
         record.type = input.type();
         record.performedAt = input.performedAt() == null ? Instant.now() : input.performedAt();
+        // A schedule inspection advances only its schedule; a calendar inspection advances the item or asset calendar.
         record.nextDueAt = input.nextDueAt() != null ? input.nextDueAt()
-                : item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
+                : record.schedule == null && item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
                     ? record.performedAt.plus(java.time.Duration.ofDays(item.maintenanceIntervalDays)) : null;
         record.operatingHours = input.operatingHours();
         record.result = input.result();
@@ -681,22 +663,25 @@ public class InventoryOperationsService {
         orm.persist(record);
         if (input.certificateObjectKey() != null)
             record.certificateObjectKey = media.attachToMaintenance(input.certificateObjectKey(), record.id);
-        if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
-            item.currentOperatingHours = input.operatingHours();
-        item.nextMaintenanceDue = record.nextDueAt == null ? null
-                : BusinessTime.date(record.nextDueAt);
-        item.maintenanceStatus = input.result() == DomainEnums.MaintenanceResult.failed
-                ? DomainEnums.MaintenanceStatus.in_service
-                : deriveStatus(item.nextMaintenanceDue);
-        if (record.assetInstance != null) {
-            record.assetInstance.operatingHours = input.operatingHours() == null
-                    ? record.assetInstance.operatingHours : input.operatingHours();
-            record.assetInstance.serviceStatus = input.result() == DomainEnums.MaintenanceResult.failed
-                    ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
-            if (input.result() == DomainEnums.MaintenanceResult.failed) {
-                record.assetInstance.availabilityStatus = DomainEnums.AssetState.in_maintenance;
-            } else if (record.assetInstance.availabilityStatus == DomainEnums.AssetState.in_maintenance) {
-                record.assetInstance.availabilityStatus = DomainEnums.AssetState.available;
+        boolean failed = input.result() == DomainEnums.MaintenanceResult.failed;
+        var calendarDue = record.nextDueAt == null ? null : BusinessTime.date(record.nextDueAt);
+        var asset = record.assetInstance;
+        if (asset == null) {
+            if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
+                item.currentOperatingHours = input.operatingHours();
+            if (record.schedule == null && !failed) item.nextMaintenanceDue = calendarDue;
+            item.outOfService = failed;
+        } else {
+            // The result belongs to this asset only; the item calendar and sibling assets are untouched.
+            if (input.operatingHours() != null && input.operatingHours().compareTo(asset.operatingHours) > 0)
+                asset.operatingHours = input.operatingHours();
+            if (record.schedule == null && !failed) asset.nextMaintenanceDue = calendarDue;
+            asset.outOfService = failed;
+            // Only an idle warehouse asset changes physical state; custody, reservation and transit keep theirs.
+            if (failed && asset.availabilityStatus == DomainEnums.AssetState.available) {
+                asset.availabilityStatus = DomainEnums.AssetState.in_maintenance;
+            } else if (!failed && asset.availabilityStatus == DomainEnums.AssetState.in_maintenance) {
+                asset.availabilityStatus = StockPolicy.returnedState(asset);
             }
         }
         events.record("maintenance.recorded", "item", item.id, record.inspector.id, null,
@@ -740,22 +725,6 @@ public class InventoryOperationsService {
                         + " maintenance");
             }
         }
-    }
-
-    public void refreshMaintenanceStatus(Item item) {
-        if (item.maintenanceStatus == DomainEnums.MaintenanceStatus.in_service)
-            return;
-        item.maintenanceStatus = deriveStatus(item.nextMaintenanceDue);
-    }
-
-    private DomainEnums.MaintenanceStatus deriveStatus(LocalDate due) {
-        if (due == null)
-            return DomainEnums.MaintenanceStatus.certified;
-        if (due.isBefore(BusinessTime.today()))
-            return DomainEnums.MaintenanceStatus.overdue;
-        if (!due.isAfter(BusinessTime.today().plusDays(30)))
-            return DomainEnums.MaintenanceStatus.due_soon;
-        return DomainEnums.MaintenanceStatus.certified;
     }
 
     private Item lockedItem(UUID id) {

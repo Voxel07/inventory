@@ -1,8 +1,11 @@
-import type { CountInput, LotInput, ReceiptInput, ReceiptLineInput, RepairInput, RepairTransitionInput, ScheduleInput, TransferInput, VendorDocumentInput } from '../types/operations';
+import type { CountInput, LotCreateInput, LotUpdateInput, ReceiptInput, ReceiptLineInput, RepairInput, RepairTransitionInput, ScheduleInput, TransferInput, VendorDocumentInput } from '../types/operations';
 import { inputBoolean, inputChoice, inputNumber, inputRows, inputStrings, inputText, optionalNumber, optionalText, type InputValues } from '../utils/inputValues';
 
-export function lotInput(v: InputValues): LotInput {
-  return { itemId: inputText(v.itemId), lotNumber: inputText(v.lotNumber), supplierLot: optionalText(v.supplierLot), manufactureDate: optionalText(v.manufactureDate), expiryDate: optionalText(v.expiryDate), bestBeforeDate: optionalText(v.bestBeforeDate), storageRequirements: optionalText(v.storageRequirements), status: v.status == null ? undefined : inputChoice(v.status, ['available', 'hold', 'recalled', 'expired', 'depleted']), notes: optionalText(v.notes) };
+export function lotUpdateInput(v: InputValues): LotUpdateInput {
+  return { lotNumber: inputText(v.lotNumber), supplierLot: optionalText(v.supplierLot), manufactureDate: optionalText(v.manufactureDate), expiryDate: optionalText(v.expiryDate), bestBeforeDate: optionalText(v.bestBeforeDate), storageRequirements: optionalText(v.storageRequirements), status: v.status == null ? undefined : inputChoice(v.status, ['available', 'hold', 'recalled', 'expired', 'depleted']), notes: optionalText(v.notes) };
+}
+export function lotCreateInput(v: InputValues): LotCreateInput {
+  return { ...lotUpdateInput(v), itemId: inputText(v.itemId) };
 }
 export function transferInput(v: InputValues): TransferInput {
   return { transferNumber: optionalText(v.transferNumber), sourceLocationId: inputText(v.sourceLocationId), destinationLocationId: inputText(v.destinationLocationId), idempotencyKey: inputText(v.idempotencyKey), notes: optionalText(v.notes), lines: inputRows(v.lines).map((line) => ({ itemId: inputText(line.itemId), assetInstanceId: optionalText(line.assetInstanceId), lotId: optionalText(line.lotId), quantity: inputNumber(line.quantity) })) };

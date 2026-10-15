@@ -5,7 +5,6 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.ash.inventory.helper.Inputs;
 import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventAttendee;
 import org.ash.inventory.model.EventAttendeeRole;
 import org.ash.inventory.model.EventOccurrence;
@@ -21,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -42,7 +40,27 @@ public class EventLogisticsService {
         requireRead();
         var event = orm.require(EventOccurrence.class, eventId, "Event");
         var factions = orm.factions(event.eventType);
-        return orm.attendees(eventId).stream().map(attendee -> AttendeeResponse.from(attendee, factions)).toList();
+        var timeline = orm.timeline(eventId);
+        return orm.attendees(eventId).stream().map(attendee -> attendeeResponse(attendee, factions, timeline)).toList();
+    }
+
+    public CateringSettings cateringSettings(UUID eventId) {
+        requireRead();
+        return CateringSettings.from(orm.require(EventOccurrence.class, eventId, "Event"));
+    }
+
+    public CateringSettings saveCateringSettings(UUID eventId, @Valid CateringSettings settings) {
+        var event = writableEvent(eventId);
+        event.dailyMainMealStamps = settings.dailyMainMealStamps();
+        event.dailyBreakfastStamps = settings.dailyBreakfastStamps();
+        event.firstDayMainMealStamps = settings.firstDayMainMealStamps();
+        changed(eventId, "catering");
+        return CateringSettings.from(event);
+    }
+
+    private AttendeeResponse attendeeResponse(EventAttendee attendee, Map<UUID, Faction> factions, List<EventTimelineEntry> timeline) {
+        var stamps = FoodStampCalculator.calculate(attendee, timeline);
+        return AttendeeResponse.from(attendee, factions, stamps.mainMeals(), stamps.breakfasts());
     }
 
     public List<PersonResponse> people() {
@@ -81,7 +99,9 @@ public class EventLogisticsService {
 
     public AttendeeResponse saveAttendee(UUID eventId, UUID id, @Valid AttendeeInput input) {
         var event = writableEvent(eventId);
-        validateRange(input.arrivesAt(), input.leavesAt());
+        var arrival = id == null && input.arrivesAt() == null ? event.startDate.atStartOfDay() : input.arrivesAt();
+        var departure = id == null && input.leavesAt() == null ? event.endDate.atTime(23, 59) : input.leavesAt();
+        validateRange(arrival, departure);
         var attendee = id == null ? new EventAttendee() : orm.requireLocked(EventAttendee.class, id, "Attendee");
         if (id != null) requireEvent(eventId, attendee.event.id);
         var factions = orm.factions(event.eventType);
@@ -91,15 +111,15 @@ public class EventLogisticsService {
             throw ApiException.conflict(person.name + " already attends this event");
         attendee.event = event;
         attendee.person = person;
-        attendee.arrivesAt = input.arrivesAt();
-        attendee.leavesAt = input.leavesAt();
+        attendee.arrivesAt = arrival;
+        attendee.leavesAt = departure;
         attendee.foodStampsIssued = input.foodStampsIssued();
         attendee.notes = Inputs.blankToNull(input.notes());
         attendee.roles.clear();
         attendee.roles.addAll(roles);
         if (id == null) orm.persist(attendee);
         changed(eventId, "attendees");
-        return AttendeeResponse.from(attendee, factions);
+        return attendeeResponse(attendee, factions, orm.timeline(eventId));
     }
 
     /** Creates the person or renames/relinks the existing one; the change shows at every event. */

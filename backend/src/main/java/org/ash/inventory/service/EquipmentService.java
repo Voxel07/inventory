@@ -94,7 +94,7 @@ public class EquipmentService {
         if (input.eventId() != null && event == null) throw ApiException.notFound("Event not found");
         if (event != null && (input.availableFrom().isAfter(event.startDate) || input.availableUntil().isBefore(event.endDate)))
             throw ApiException.badRequest("Commitment must cover the entire event");
-        if ((!item.consumable && (input.returnDue() == null || blank(input.returnDetails())))
+        if ((!item.consumable() && (input.returnDue() == null || blank(input.returnDetails())))
                 || (input.returnDue() != null && input.returnDue().isBefore(input.availableUntil())))
             throw ApiException.badRequest("Returnable equipment needs return instructions and a due date on or after the commitment ends");
         // One overlapping offer per pool avoids promising the same bulk units or assets to multiple events.
@@ -197,7 +197,7 @@ public class EquipmentService {
             int reserved = eligible.stream().mapToInt(a -> StockPolicy.classify(a).reserved()).sum();
             return free + Math.min(ownReservation, reserved);
         }
-        int consumed = item.consumable ? data.consumedDuring(c) : 0;
+        int consumed = item.consumable() ? data.consumedDuring(c) : 0;
         int physical = state.available() + ownReservation;
         if (agreement != null) {
             int internal = data.internalQuantity(agreement.providerLocation.id);
@@ -235,8 +235,13 @@ public class EquipmentService {
 
     /** False for provider-held locations of an open loan, the only places stock may not be issued from. */
     public boolean isInternalSource(Item item, StorageLocation source) {
+        return internalSources(item).test(source);
+    }
+
+    /** {@link #isInternalSource} for many candidate locations from one loan read. */
+    public java.util.function.Predicate<StorageLocation> internalSources(Item item) {
         var loans = orm.openLoans(item);
-        return loans.isEmpty() || (source != null && loans.stream().noneMatch(l -> l.providerLocation.id.equals(source.id)));
+        return source -> loans.isEmpty() || (source != null && loans.stream().noneMatch(l -> l.providerLocation.id.equals(source.id)));
     }
     private LoanArrangement loan(EquipmentCommitment c) {
         return orm.commitmentLoans(c).findFirst().orElse(null);
@@ -269,10 +274,9 @@ public class EquipmentService {
         if (state.reserved() > 0 || state.checkedOut() > 0 || assetBusy)
             throw ApiException.conflict("Release reservations and reconcile custody/transfers before changing this agreement");
         // Missing and in-transit bulk equipment must not become a new owner's stock by metadata change.
-        long missing = orm.missingFactionLines(item);
-        boolean generalMissing = orm.generalOrders().anyMatch(o -> o.missingQuantities.getOrDefault(item.id.toString(), 0) > 0);
+        long missing = orm.missingOrderLines(item);
         long transit = orm.inTransitPositions(item);
-        if (missing > 0 || generalMissing || transit > 0) throw ApiException.conflict("Resolve missing or in-transit equipment first");
+        if (missing > 0 || transit > 0) throw ApiException.conflict("Resolve missing or in-transit equipment first");
     }
 
     private boolean usable(AssetInstance a) {

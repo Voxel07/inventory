@@ -1,3 +1,4 @@
+import type { Translator } from '../../../utils/naming';
 import { formatDate } from '../../../utils/dateFormat';
 import { generateQRCodeDataURL } from '../../../utils/qrCode';
 import type { Assembly, FactionOrder, Item } from '../../../types';
@@ -8,7 +9,7 @@ export interface GeneratePdfSlipOptions {
   orderAssemblies: Assembly[];
   itemMap: Map<string, Item>;
   pickupLocationLabel: string;
-  t: (de: string, en: string) => string;
+  t: Translator;
 }
 
 export async function generateOrderPdfSlip({
@@ -29,7 +30,7 @@ export async function generateOrderPdfSlip({
     const location = item.expand?.storageLocation;
     return location
       ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
-      : item.storageLocation || t('Kein Lagerort', 'No location');
+      : item.storageLocation || t('orders.detail.orderPdfSlip.noLocation');
   };
 
   type PrintRow = {
@@ -45,7 +46,7 @@ export async function generateOrderPdfSlip({
     const components = Object.entries(assembly.itemQuantities ?? {})
       .map(([itemId, componentQuantity]) => {
         const item = itemMap.get(itemId);
-        const location = item ? locationLabel(item) : t('Kein Lagerort', 'No location');
+        const location = item ? locationLabel(item) : t('orders.detail.orderPdfSlip.noLocation');
         return {
           kind: 'component' as const,
           requested: assemblyCount * componentQuantity,
@@ -57,14 +58,14 @@ export async function generateOrderPdfSlip({
       .sort((a, b) => a.locationKey.localeCompare(b.locationKey));
 
     const componentSummary = components.length
-      ? t(`${components.length} Komponenten`, `${components.length} components`)
-      : t('Keine Komponenten', 'No components');
+      ? t('orders.detail.orderPdfSlip.componentCountComponents', { componentCount: String(components.length) })
+      : t('orders.detail.orderPdfSlip.noComponents');
 
     return [
       {
         kind: 'assembly' as const,
         requested: assemblyCount,
-        name: `${t('Baugruppe', 'Assembly')}: ${assembly.name}`,
+        name: `${t('enum.value.assembly')}: ${assembly.name}`,
         details: [componentSummary, assembly.hint].filter(Boolean).join(' · '),
       },
       ...components,
@@ -94,7 +95,7 @@ export async function generateOrderPdfSlip({
     doc.setFontSize(firstPage ? 17 : 12);
     doc.setFont('helvetica', 'bold');
     doc.text(
-      `${order.eventType} · ${order.faction} — ${t('Kommissionierschein', 'Commissioning Slip')}`,
+      `${order.eventType} · ${order.faction} — ${t('orders.detail.orderPdfSlip.commissioningSlip')}`,
       14,
       firstPage ? 18 : 12,
     );
@@ -107,7 +108,7 @@ export async function generateOrderPdfSlip({
         25,
       );
       doc.setFont('helvetica', 'bold');
-      doc.text(`${t('Abholort', 'Pickup location')}:`, 14, 32);
+      doc.text(`${t('common.pickupLocation')}:`, 14, 32);
       doc.setFont('helvetica', 'normal');
       doc.text(doc.splitTextToSize(pickupLocationLabel, 132), 14, 37);
       doc.addImage(qr, 'PNG', 166, 10, 30, 30);
@@ -116,11 +117,11 @@ export async function generateOrderPdfSlip({
     }
     const tableY = firstPage ? 54 : 18;
     const headers = [
-      t('Erl.', 'Done'),
-      t('Bed.', 'Qty'),
-      t('Vorb.', 'Prep.'),
-      t('Artikel / Baugruppe', 'Item / Assembly'),
-      t('Lagerort / Komponenten', 'Location / Components'),
+      t('orders.detail.orderPdfSlip.done'),
+      t('orders.detail.orderPdfSlip.qty'),
+      t('orders.detail.orderPdfSlip.prep'),
+      t('orders.detail.orderPdfSlip.itemAssembly'),
+      t('orders.detail.orderPdfSlip.locationComponents'),
     ];
 
     for (let index = 0; index < headers.length; index += 1) {
@@ -215,13 +216,13 @@ export async function generateOrderPdfSlip({
   y += 5;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(t('Notizen / offene Punkte', 'Notes / open tasks'), 14, y);
+  doc.text(t('orders.detail.orderPdfSlip.notesOpenTasks'), 14, y);
   doc.setFont('helvetica', 'normal');
   doc.rect(14, y + 2, 183, 22);
 
   y += 30;
   doc.text(
-    `${t('Kommissioniert von', 'Commissioned by')}: ___________________   ${t('Datum/Uhrzeit', 'Date/Time')}: ___________________`,
+    `${t('orders.detail.orderPdfSlip.commissionedBy')}: ___________________   ${t('orders.detail.orderPdfSlip.dateTime')}: ___________________`,
     14,
     y,
   );

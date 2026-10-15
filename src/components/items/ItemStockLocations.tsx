@@ -2,20 +2,20 @@ import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow 
 import { DetailPanel } from './CompactDetail';
 import { Link as RouterLink } from 'react-router-dom';
 import type { Item } from '../../types';
-import { useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { isAssetStored } from '../../utils/locationStock';
 
 /** Show physical stock grouped by location when the item occupies multiple locations. */
 export function ItemStockLocations({ item }: { item: Item }) {
-  const t = useLocalizedText();
+  const t = useT();
   const serialized = item.trackingMode === 'serialized';
-  const positions = useOperationList(`positions:${item.id}:`, operationsApi.positions({ itemId: item.id }), !serialized);
-  const assets = useOperationList(`assets:${item.id}:`, operationsApi.assets({ itemId: item.id }), serialized);
+  const positions = useCompleteList(['operations', `positions:${item.id}:`], operationsApi.positions({ itemId: item.id }), { enabled: !serialized });
+  const assets = useCompleteList(['operations', `assets:${item.id}:`], operationsApi.assets({ itemId: item.id }), { enabled: serialized });
   const locations = useStorageLocations({ includeInactive: true });
   const quantities = new Map<string, { quantity: number; name?: string }>();
   if (serialized) {
@@ -37,11 +37,11 @@ export function ItemStockLocations({ item }: { item: Item }) {
     const location = locations.data?.find(location => location.id === id);
     return { id, quantity: stock.quantity, name: location ? locationPath(location, locations.data ?? []) : stock.name ?? id };
   }).sort((a, b) => a.name.localeCompare(b.name));
-  return <DetailPanel title={t('Bestand nach Lagerort', 'Stock by location')}>
+  return <DetailPanel title={t('items.itemStockLocations.stockByLocation')}>
     <QueryFeedback error={error} />
     {ready && quantities.size > 1 && <TableContainer>
-      <Table size="small" aria-label={t('Bestand nach Lagerort', 'Stock by location')} sx={{ '& .MuiTableCell-root': { py: 0.25, fontSize: '0.8125rem' } }}>
-        <TableHead><TableRow><TableCell>{t('Lagerort', 'Storage location')}</TableCell><TableCell align="right">{t('Vor Ort', 'On hand')}</TableCell></TableRow></TableHead>
+      <Table size="small" aria-label={t('items.itemStockLocations.stockByLocation')} sx={{ '& .MuiTableCell-root': { py: 0.25, fontSize: '0.8125rem' } }}>
+        <TableHead><TableRow><TableCell>{t('common.storageLocation')}</TableCell><TableCell align="right">{t('items.itemStockLocations.onHand')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map(row => <TableRow key={row.id}>
           <TableCell><Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(row.id)}`}>{row.name}</Link></TableCell>
           <TableCell align="right">{row.quantity}</TableCell>

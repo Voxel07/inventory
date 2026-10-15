@@ -5,13 +5,13 @@ import { Alert, DialogActions, DialogContent, DialogTitle, Stack, TextField, Tog
 import type { AssetInstance } from '../../types';
 import { useUpdateItemAsset } from '../../hooks/useItems';
 import { useUIStore } from '../../store/uiStore';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 
 type Mode = 'add' | 'total';
 
 /** Logs the running hours of one serialized asset; meter-based maintenance plans read them live. */
 export function OperatingHoursDialog({ itemId, asset, onClose }: { itemId: string; asset: AssetInstance | null; onClose: () => void }) {
-    const t = useLocalizedText();
+    const t = useT();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const update = useUpdateItemAsset(itemId);
     const [mode, setMode] = useState<Mode>('add');
@@ -32,46 +32,46 @@ export function OperatingHoursDialog({ itemId, asset, onClose }: { itemId: strin
         if (!asset || !valid) return;
         update.mutate({ assetId: asset.id, input: { operatingHours: total, expectedVersion: asset.version } }, {
             onSuccess: () => {
-                showSnackbar(t(`Betriebsstunden für ${asset.assetCode}: ${total} h`, `Operating hours for ${asset.assetCode}: ${total} h`), 'success');
+                showSnackbar(t('items.operatingHoursDialog.operatingHoursForAssetCodeTotalH', { assetCode: String(asset.assetCode), total: total }), 'success');
                 close();
             },
-            onError: (error) => showSnackbar(error instanceof Error ? error.message : t('Speichern fehlgeschlagen', 'Could not save'), 'error'),
+            onError: (error) => showSnackbar(error instanceof Error ? error.message : t('items.operatingHoursDialog.couldNotSave'), 'error'),
         });
     }
 
     return (
         <Dialog open={Boolean(asset)} onClose={close} maxWidth="xs" fullWidth>
-            <DialogTitle>{t('Betriebsstunden erfassen', 'Log operating hours')}: {asset?.assetCode}</DialogTitle>
+            <DialogTitle>{t('items.operatingHoursDialog.logOperatingHours')}: {asset?.assetCode}</DialogTitle>
             <DialogContent sx={{ pt: '8px !important' }}>
                 <Stack spacing={2}>
                     <Typography variant="body2" color="text.secondary">
-                        {t('Aktueller Stand', 'Current reading')}: <strong>{current} h</strong>
+                        {t('items.operatingHoursDialog.currentReading')}: <strong>{current} h</strong>
                     </Typography>
                     <ToggleButtonGroup exclusive fullWidth size="small" value={mode} onChange={(_, next: Mode | null) => { if (next) { setMode(next); setValue(''); } }}
-                        aria-label={t('Erfassungsart', 'Entry type')}>
-                        <ToggleButton value="add" sx={{ textTransform: 'none' }}>{t('Stunden hinzufügen', 'Add hours')}</ToggleButton>
-                        <ToggleButton value="total" sx={{ textTransform: 'none' }}>{t('Zählerstand eingeben', 'Enter meter reading')}</ToggleButton>
+                        aria-label={t('items.operatingHoursDialog.entryType')}>
+                        <ToggleButton value="add" sx={{ textTransform: 'none' }}>{t('items.operatingHoursDialog.addHours')}</ToggleButton>
+                        <ToggleButton value="total" sx={{ textTransform: 'none' }}>{t('items.operatingHoursDialog.enterMeterReading')}</ToggleButton>
                     </ToggleButtonGroup>
                     <TextField
                         autoFocus
                         type="number"
-                        label={mode === 'add' ? t('Gelaufene Stunden', 'Hours run') : t('Neuer Zählerstand (h)', 'New meter reading (h)')}
+                        label={mode === 'add' ? t('items.operatingHoursDialog.hoursRun') : t('items.operatingHoursDialog.newMeterReadingH')}
                         value={value}
                         onChange={(event) => setValue(event.target.value)}
                         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); save(); } }}
                         error={value.trim() !== '' && !valid}
                         helperText={value.trim() !== '' && !valid
-                            ? mode === 'add' ? t('Mehr als 0 Stunden eingeben', 'Enter more than 0 hours') : t(`Mindestens ${current} h`, `At least ${current} h`)
-                            : valid ? t(`Neuer Stand: ${total} h`, `New reading: ${total} h`) : undefined}
+                            ? mode === 'add' ? t('items.operatingHoursDialog.enterMoreThan0Hours') : t('items.operatingHoursDialog.atLeastCurrentH', { current: current })
+                            : valid ? t('items.operatingHoursDialog.newReadingTotalH', { total: total }) : undefined}
                         slotProps={{ htmlInput: { min: mode === 'add' ? 0.1 : current, step: 0.1, inputMode: 'decimal' } }}
                     />
-                    {update.isError && <Alert severity="error">{t('Die Stunden konnten nicht gespeichert werden. Bitte die Seite neu laden und erneut versuchen.', 'The hours could not be saved. Reload the page and try again.')}</Alert>}
+                    {update.isError && <Alert severity="error">{t('items.operatingHoursDialog.theHoursCouldNotBeSavedReloadThePageAnd')}</Alert>}
                 </Stack>
             </DialogContent>
             <DialogActions>
-                <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={close}>{t('Abbrechen', 'Cancel')}</Button>
-                <Button title={translate('Die Betriebsstunden speichern', 'Save the operating hours')} variant="contained" onClick={save} disabled={!valid || update.isPending}>
-                    {t('Speichern', 'Save')}
+                <Button title={translate('common.discardChangesAndClose')} onClick={close}>{t('common.cancel')}</Button>
+                <Button title={translate('items.operatingHoursDialog.saveTheOperatingHours')} variant="contained" onClick={save} disabled={!valid || update.isPending}>
+                    {t('common.save')}
                 </Button>
             </DialogActions>
         </Dialog>

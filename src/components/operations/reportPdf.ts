@@ -1,3 +1,4 @@
+import type { Translator } from '../../utils/naming';
 import { formatDateTime } from '../../utils/dateFormat';
 
 export interface ReportPdfOptions {
@@ -9,7 +10,7 @@ export interface ReportPdfOptions {
   filters: string[];
   rows: Record<string, unknown>[];
   heading: (key: string) => string;
-  t: (de: string, en: string) => string;
+  t: Translator;
 }
 
 /**
@@ -50,9 +51,9 @@ export async function reportPdf({ title, definition, generatedAt, stale, filters
   y += 8;
   doc.setFont('helvetica', 'normal').setFontSize(9);
   const meta = [
-    `${t('Erstellt', 'Generated')}: ${formatDateTime(generatedAt)}${stale ? ` · ${t('Veraltet: Quelldaten haben sich geändert', 'Stale: source records changed')}` : ''}`,
-    `${t('Filter', 'Filters')}: ${filters.length ? filters.join(' · ') : t('keine', 'none')}`,
-    `${t('Zeilen', 'Rows')}: ${rows.length}`,
+    `${t('operations.reportPdf.generated')}: ${formatDateTime(generatedAt)}${stale ? ` · ${t('operations.reportPdf.staleSourceRecordsChanged')}` : ''}`,
+    `${t('common.filters')}: ${filters.length ? filters.join(' · ') : t('operations.reportPdf.none')}`,
+    `${t('operations.reportPdf.rows')}: ${rows.length}`,
     ...(definition ? [definition] : []),
   ];
   // Long filter lists and definitions wrap and continue on the next page line by line.
@@ -65,7 +66,7 @@ export async function reportPdf({ title, definition, generatedAt, stale, filters
 
   if (!rows.length) {
     if (y + 4 > bottom) nextPage();
-    doc.text(t('Keine passenden Datensätze.', 'No matching records.'), margin, y);
+    doc.text(t('operations.reportPdf.noMatchingRecords'), margin, y);
   } else {
     // The header needs room for itself and at least one row line.
     if (y + 2 * lineHeight + 6 > bottom) nextPage();

@@ -1,13 +1,12 @@
 package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.ash.inventory.model.Assembly;
 import org.ash.inventory.model.AssemblyItem;
-import org.ash.inventory.model.FactionOrder;
-import org.ash.inventory.model.FactionOrderHistory;
-import org.ash.inventory.model.FactionOrderLine;
+import org.ash.inventory.model.InventoryOrder;
+import org.ash.inventory.model.OrderHistory;
+import org.ash.inventory.model.OrderLine;
 import org.ash.inventory.model.Faction;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.OrderLineAssetAssignment;
@@ -18,47 +17,81 @@ import java.util.Collection;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Database access for faction orders and their related models. */
+/** Persistence for both order kinds and their shared lifecycle records. */
 @ApplicationScoped
 public class OrderOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
 
     /** {@code factionKeys} ({@code EVENT:slug}) restricts the result to those factions; {@code null} means unrestricted. */
-    public List<FactionOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
-            int offset, int limit) {
+    public List<InventoryOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
+            Collection<org.ash.inventory.model.DomainEnums.OrderStatus> statuses, UUID eventId, int offset, int limit) {
         if (factionKeys != null && factionKeys.isEmpty()) return List.of();
         var denied = privacyScopes.deniedReferences(accessActor.current());
-        var jpql = new StringBuilder("select o from FactionOrder o "
-                + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where 1 = 1");
+        var jpql = new StringBuilder("select o from InventoryOrder o "
+                + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where o.kind = faction");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
         if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
         if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
+        if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
+        if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
         jpql.append(InventoryAccessOrm.excluding("o", denied)).append(" order by o.eventOccurrence.startDate desc");
-        var query = entityManager.createQuery(jpql.toString(), FactionOrder.class);
+        var query = entityManager.createQuery(jpql.toString(), InventoryOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
         if (factionKeys != null) query.setParameter("factionKeys", factionKeys);
+        if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
+        if (eventId != null) query.setParameter("eventId", eventId);
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    public FactionOrder findOrder(UUID id) { return entityManager.find(FactionOrder.class, id); }
-    public FactionOrder findLockedOrder(UUID id) { return entityManager.find(FactionOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
+    public InventoryOrder previousFactionOrder(String eventType, String faction, java.time.LocalDate before, UUID excludeId) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
+        var query = entityManager.createQuery("from InventoryOrder o join fetch o.eventOccurrence event join fetch o.faction f"
+                + " where o.kind = faction and event.eventType = :eventType and f.name = :faction"
+                + " and event.startDate < :before and o.status <> cancelled"
+                + (excludeId == null ? "" : " and o.id <> :excludeId")
+                + InventoryAccessOrm.excluding("o", denied) + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
+                .setParameter("eventType", eventType).setParameter("faction", faction).setParameter("before", before.withDayOfYear(1));
+        if (excludeId != null) query.setParameter("excludeId", excludeId);
+        return InventoryAccessOrm.bindDenied(query, denied).setMaxResults(1).getResultStream().findFirst().orElse(null);
+    }
 
-    public List<FactionOrderLine> lines(FactionOrder order) {
-        return entityManager.createQuery("from FactionOrderLine line where line.order = :order", FactionOrderLine.class)
+    public InventoryOrder findOrder(UUID id) { return entityManager.find(InventoryOrder.class, id); }
+    public InventoryOrder findLockedOrder(UUID id) { return entityManager.find(InventoryOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
+
+    public record Filter(Collection<org.ash.inventory.model.DomainEnums.OrderStatus> statuses, UUID eventId, String eventType, String search) {}
+
+    public List<InventoryOrder> orders(org.ash.inventory.model.UserAccount actor, Filter filter, int offset, int limit) {
+        var denied = privacyScopes.deniedReferences(actor);
+        var jpql = new StringBuilder("from InventoryOrder o join fetch o.createdBy left join fetch o.eventOccurrence event where o.kind = general");
+        if (!filter.statuses().isEmpty()) jpql.append(" and o.status in :statuses");
+        if (filter.eventId() != null) jpql.append(" and event.id = :eventId");
+        else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
+        boolean searching = filter.search() != null && !filter.search().isBlank();
+        if (searching) jpql.append(" and (lower(o.name) like :search or lower(o.purpose) like :search)");
+        var query = entityManager.createQuery(jpql + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc, o.id", InventoryOrder.class);
+        if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
+        if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());
+        else if (filter.eventType() != null && !filter.eventType().isBlank()) query.setParameter("eventType", filter.eventType());
+        if (searching) query.setParameter("search", "%" + filter.search().trim().toLowerCase(Locale.ROOT) + "%");
+        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<OrderLine> lines(InventoryOrder order) {
+        return entityManager.createQuery("from OrderLine line where line.order = :order order by line.lineNumber, line.createdAt, line.id", OrderLine.class)
                 .setParameter("order", order).getResultList();
     }
 
-    public List<FactionOrderLine> lines(Collection<FactionOrder> orders) {
+    public List<OrderLine> lines(Collection<InventoryOrder> orders) {
         if (orders.isEmpty()) return List.of();
         return entityManager.createQuery(
-                "select line from FactionOrderLine line "
-                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch i.assignedUser left join fetch line.sourceAssembly "
+                "select line from OrderLine line "
+                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch line.sourceAssembly "
                         + "where line.order in :orders",
-                FactionOrderLine.class)
+                OrderLine.class)
                 .setParameter("orders", orders).getResultList();
     }
 
@@ -75,22 +108,22 @@ public class OrderOrm extends EntityOrm {
                 .setParameter("assembly", assembly).getResultList();
     }
 
-    public List<FactionOrderHistory> history(FactionOrder order) {
-        return entityManager.createQuery("from FactionOrderHistory history join fetch history.actor where history.order = :order order by history.occurredAt", FactionOrderHistory.class)
+    public List<OrderHistory> history(InventoryOrder order) {
+        return entityManager.createQuery("from OrderHistory history join fetch history.actor where history.order = :order order by history.occurredAt, history.id", OrderHistory.class)
                 .setParameter("order", order).getResultList();
     }
 
-    public List<StockReservation> reservations(FactionOrder order) {
+    public List<StockReservation> reservations(InventoryOrder order) {
         return entityManager.createQuery("from StockReservation reservation where reservation.order = :order", StockReservation.class)
                 .setParameter("order", order).getResultList();
     }
 
-    public StockReservation reservation(FactionOrderLine line) {
+    public StockReservation reservation(OrderLine line) {
         return entityManager.createQuery("from StockReservation reservation where reservation.orderLine = :line order by reservation.createdAt desc", StockReservation.class)
                 .setParameter("line", line).setMaxResults(1).getResultStream().findFirst().orElse(null);
     }
 
-    public List<OrderLineAssetAssignment> assetAssignments(FactionOrder order) {
+    public List<OrderLineAssetAssignment> assetAssignments(InventoryOrder order) {
         return entityManager.createQuery(
                 "select assignment from OrderLineAssetAssignment assignment "
                         + "join fetch assignment.assetInstance asset "
@@ -100,7 +133,7 @@ public class OrderOrm extends EntityOrm {
                 .setParameter("order", order).getResultList();
     }
 
-    public List<OrderLineAssetAssignment> assetAssignments(FactionOrder order, Item item) {
+    public List<OrderLineAssetAssignment> assetAssignments(InventoryOrder order, Item item) {
         return entityManager.createQuery(
                 "select assignment from OrderLineAssetAssignment assignment "
                         + "join fetch assignment.assetInstance asset "
@@ -109,29 +142,24 @@ public class OrderOrm extends EntityOrm {
                 .setParameter("order", order).setParameter("item", item).getResultList();
     }
 
-    public void removeAssetAssignments(FactionOrder order) {
-        for (var assignment : assetAssignments(order)) entityManager.remove(assignment);
+    public void removeAssetAssignments(InventoryOrder order) {
+        for (var line : order.lines) line.assets.clear();
         entityManager.flush();
     }
 
-    public void deleteLines(FactionOrder order) {
+    public void deleteLines(InventoryOrder order) {
         for (var reservation : reservations(order)) entityManager.remove(reservation);
         removeAssetAssignments(order);
-        for (var line : lines(order)) entityManager.remove(line);
+        order.lines.clear();
     }
 
-    public boolean historyExists(FactionOrder order, UUID idempotencyKey) {
-        return entityManager.createQuery("select count(h) from FactionOrderHistory h where h.order = :order and h.idempotencyKey = :key", Long.class)
-                .setParameter("order", order).setParameter("key", idempotencyKey).getSingleResult() > 0;
-    }
-
-    public FactionOrder orderByHistoryIdempotencyKey(UUID idempotencyKey) {
-        return entityManager.createQuery("select h.order from FactionOrderHistory h where h.idempotencyKey = :key", FactionOrder.class)
+    public InventoryOrder orderByHistoryIdempotencyKey(UUID idempotencyKey) {
+        return entityManager.createQuery("select h.order from OrderHistory h where h.idempotencyKey = :key", InventoryOrder.class)
                 .setParameter("key", idempotencyKey).getResultStream().findFirst().orElse(null);
     }
 
     public long countOrderCodes(String prefixPattern) {
-        return entityManager.createQuery("select count(o) from FactionOrder o where o.orderCode like :prefix", Long.class)
+        return entityManager.createQuery("select count(o) from InventoryOrder o where o.orderCode like :prefix", Long.class)
                 .setParameter("prefix", prefixPattern).getSingleResult();
     }
 

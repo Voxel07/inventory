@@ -1,8 +1,11 @@
 import { OIDC_CONFIG } from '../config/runtimeConfig';
 import { translate } from '../utils/naming';
+import { abortable, isAbortError } from './abort';
 
 const TRANSACTION_KEY = 'ash.inventory.oidc.transaction';
 const TRANSACTION_MAX_AGE_MS = 10 * 60 * 1000;
+/** Upper bound of one provider request; refreshes hold the cross-tab session lock while they wait. */
+export const OIDC_REQUEST_TIMEOUT_MS = 15_000;
 
 type OidcMetadata = {
   issuer: string;
@@ -19,6 +22,17 @@ type OidcTransaction = {
   redirectUri: string;
   createdAt: number;
 };
+
+function decodeTransaction(raw: string): OidcTransaction {
+  const value: unknown = JSON.parse(raw);
+  const record = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+  const { state, nonce, verifier, redirectUri, createdAt } = record;
+  if (typeof state !== 'string' || typeof nonce !== 'string' || typeof verifier !== 'string' || typeof redirectUri !== 'string'
+    || typeof createdAt !== 'number') {
+    throw new Error(translate('services.oidcClient.theStoredOIDCLoginTransactionIsInvalid'));
+  }
+  return { state, nonce, verifier, redirectUri, createdAt };
+}
 
 type TokenResponse = {
   access_token?: string;
@@ -49,6 +63,25 @@ export class OidcTokenRequestError extends Error {
     this.name = 'OidcTokenRequestError';
     this.status = status;
     this.code = code;
+  }
+}
+
+/** The provider did not answer in time; a temporary failure like any other network error. */
+export class OidcTimeoutError extends Error {
+  constructor(what: string) {
+    super(translate('services.oidcClient.oIDCProviderDidNotRespondInTimeWhat', { what: what }));
+    this.name = 'OidcTimeoutError';
+  }
+}
+
+/** One provider request, bounded by {@link OIDC_REQUEST_TIMEOUT_MS} and cancellable by the caller. */
+async function providerFetch(what: string, url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  const timeout = AbortSignal.timeout(OIDC_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: signal ? AbortSignal.any([timeout, signal]) : timeout });
+  } catch (error) {
+    if (timeout.aborted && isAbortError(error)) throw new OidcTimeoutError(what);
+    throw error;
   }
 }
 
@@ -86,27 +119,27 @@ function normalizeIssuer(value: string): string {
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const segment = token.split('.')[1];
-  if (!segment) throw new Error(translate('Der OIDC-Anbieter hat ein ungültiges ID-Token geliefert', 'OIDC provider returned an invalid ID token'));
+  if (!segment) throw new Error(translate('services.oidcClient.oIDCProviderReturnedAnInvalidIDToken'));
   const padded = segment.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(segment.length / 4) * 4, '=');
   const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
   return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
 }
 
 function validateIdToken(idToken: string, provider: OidcMetadata, expectedNonce: string): void {
-  if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
+  if (!OIDC_CONFIG) throw new Error(translate('services.oidcClient.oIDCIsNotConfigured'));
   const claims = decodeJwtPayload(idToken);
   const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (normalizeIssuer(String(claims.iss || '')) !== normalizeIssuer(provider.issuer)) {
-    throw new Error(translate('Der Aussteller des OIDC-ID-Tokens passt nicht zu den Discovery-Metadaten', 'OIDC ID token issuer does not match discovery metadata'));
+    throw new Error(translate('services.oidcClient.oIDCIDTokenIssuerDoesNotMatchDiscoveryMetadata'));
   }
   if (!audience.includes(OIDC_CONFIG.clientId)) {
-    throw new Error(translate('Die Zielgruppe des OIDC-ID-Tokens enthält diese Anwendung nicht', 'OIDC ID token audience does not include this application'));
+    throw new Error(translate('services.oidcClient.oIDCIDTokenAudienceDoesNotIncludeThisApplication'));
   }
   if (claims.nonce !== expectedNonce) {
-    throw new Error(translate('Die Nonce-Prüfung des OIDC-Rückrufs ist fehlgeschlagen', 'OIDC callback nonce validation failed'));
+    throw new Error(translate('services.oidcClient.oIDCCallbackNonceValidationFailed'));
   }
   if (typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now() - 30_000) {
-    throw new Error(translate('Das OIDC-ID-Token ist abgelaufen', 'OIDC ID token is expired'));
+    throw new Error(translate('services.oidcClient.oIDCIDTokenIsExpired'));
   }
 }
 
@@ -121,17 +154,18 @@ function expiry(response: TokenResponse): number | null {
   }
 }
 
-async function metadata(): Promise<OidcMetadata> {
-  if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
+/** Discovery is shared by every caller, so only its own timeout cancels it; a caller abort only stops waiting. */
+async function metadata(signal?: AbortSignal): Promise<OidcMetadata> {
+  if (!OIDC_CONFIG) throw new Error(translate('services.oidcClient.oIDCIsNotConfigured'));
   if (!metadataPromise) {
-    metadataPromise = fetch(`${OIDC_CONFIG.authority}/.well-known/openid-configuration`, {
+    metadataPromise = providerFetch('discovery', `${OIDC_CONFIG.authority}/.well-known/openid-configuration`, {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     }).then(async (response) => {
-      if (!response.ok) throw new Error(translate(`OIDC-Discovery fehlgeschlagen (${response.status})`, `OIDC discovery failed (${response.status})`));
+      if (!response.ok) throw new Error(translate('services.oidcClient.oIDCDiscoveryFailedStatus', { status: String(response.status) }));
       const result = await response.json() as Partial<OidcMetadata>;
       if (!result.issuer || !result.authorization_endpoint || !result.token_endpoint) {
-        throw new Error(translate('Die OIDC-Discovery-Antwort ist unvollständig', 'OIDC discovery response is incomplete'));
+        throw new Error(translate('services.oidcClient.oIDCDiscoveryResponseIsIncomplete'));
       }
       return result as OidcMetadata;
     }).catch((error) => {
@@ -139,16 +173,16 @@ async function metadata(): Promise<OidcMetadata> {
       throw error;
     });
   }
-  return metadataPromise;
+  return abortable(metadataPromise, signal);
 }
 
-async function tokenRequest(parameters: URLSearchParams): Promise<TokenResponse> {
-  const provider = await metadata();
-  const response = await fetch(provider.token_endpoint, {
+async function tokenRequest(parameters: URLSearchParams, signal?: AbortSignal): Promise<TokenResponse> {
+  const provider = await metadata(signal);
+  const response = await providerFetch('token', provider.token_endpoint, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: parameters,
-  });
+  }, signal);
   const result = await response.json().catch(() => ({})) as TokenResponse;
   if (!response.ok || result.error) {
     if (result.error === 'invalid_client' || response.status === 401) {
@@ -164,7 +198,7 @@ async function tokenRequest(parameters: URLSearchParams): Promise<TokenResponse>
       result.error,
     );
   }
-  if (!result.access_token) throw new Error(translate('Der OIDC-Anbieter hat kein Zugriffstoken geliefert', 'OIDC provider did not return an access token'));
+  if (!result.access_token) throw new Error(translate('services.oidcClient.oIDCProviderDidNotReturnAnAccessToken'));
   return result;
 }
 
@@ -186,7 +220,7 @@ function cleanCallbackUrl(): void {
 }
 
 export async function beginOidcLogin(): Promise<void> {
-  if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
+  if (!OIDC_CONFIG) throw new Error(translate('services.oidcClient.oIDCIsNotConfigured'));
   const provider = await metadata();
   const transaction: OidcTransaction = {
     state: randomValue(),
@@ -222,10 +256,10 @@ export async function completeOidcLogin(): Promise<OidcTokenSet | null> {
   sessionStorage.removeItem(TRANSACTION_KEY);
   try {
     if (providerError) throw new Error(url.searchParams.get('error_description') || providerError);
-    if (!code || !rawTransaction) throw new Error(translate('Zum OIDC-Rückruf gibt es keinen passenden Anmeldevorgang', 'OIDC callback has no matching login transaction'));
-    const transaction = JSON.parse(rawTransaction) as OidcTransaction;
-    if (Date.now() - transaction.createdAt > TRANSACTION_MAX_AGE_MS) throw new Error(translate('Der OIDC-Anmeldevorgang ist abgelaufen', 'OIDC login transaction expired'));
-    if (url.searchParams.get('state') !== transaction.state) throw new Error(translate('Die State-Prüfung des OIDC-Rückrufs ist fehlgeschlagen', 'OIDC callback state validation failed'));
+    if (!code || !rawTransaction) throw new Error(translate('services.oidcClient.oIDCCallbackHasNoMatchingLoginTransaction'));
+    const transaction = decodeTransaction(rawTransaction);
+    if (Date.now() - transaction.createdAt > TRANSACTION_MAX_AGE_MS) throw new Error(translate('services.oidcClient.oIDCLoginTransactionExpired'));
+    if (url.searchParams.get('state') !== transaction.state) throw new Error(translate('services.oidcClient.oIDCCallbackStateValidationFailed'));
 
     const response = await tokenRequest(new URLSearchParams({
       grant_type: 'authorization_code',
@@ -234,7 +268,7 @@ export async function completeOidcLogin(): Promise<OidcTokenSet | null> {
       redirect_uri: transaction.redirectUri,
       code_verifier: transaction.verifier,
     }));
-    if (!response.id_token) throw new Error(translate('Der OIDC-Anbieter hat kein ID-Token geliefert', 'OIDC provider did not return an ID token'));
+    if (!response.id_token) throw new Error(translate('services.oidcClient.oIDCProviderDidNotReturnAnIDToken'));
     validateIdToken(response.id_token, await metadata(), transaction.nonce);
     return toTokenSet(response);
   } finally {
@@ -242,13 +276,13 @@ export async function completeOidcLogin(): Promise<OidcTokenSet | null> {
   }
 }
 
-export async function refreshOidcTokens(refreshToken: string): Promise<OidcTokenSet> {
-  if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
+export async function refreshOidcTokens(refreshToken: string, signal?: AbortSignal): Promise<OidcTokenSet> {
+  if (!OIDC_CONFIG) throw new Error(translate('services.oidcClient.oIDCIsNotConfigured'));
   const response = await tokenRequest(new URLSearchParams({
     grant_type: 'refresh_token',
     client_id: OIDC_CONFIG.clientId,
     refresh_token: refreshToken,
-  }));
+  }), signal);
   return toTokenSet(response, refreshToken);
 }
 
@@ -257,19 +291,19 @@ export async function revokeOidcToken(token: string, hint: 'refresh_token' | 'ac
   if (!OIDC_CONFIG || !token) return;
   const provider = await metadata();
   if (!provider.revocation_endpoint) return;
-  const response = await fetch(provider.revocation_endpoint, {
+  const response = await providerFetch('revocation', provider.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ token, token_type_hint: hint, client_id: OIDC_CONFIG.clientId }),
   });
-  if (!response.ok) throw new Error(translate(`Token-Widerruf fehlgeschlagen (${response.status})`, `Token revocation failed (${response.status})`));
+  if (!response.ok) throw new Error(translate('services.oidcClient.tokenRevocationFailedStatus', { status: String(response.status) }));
 }
 
 export async function oidcLogoutUrl(idToken: string): Promise<string> {
-  if (!OIDC_CONFIG) throw new Error(translate('OIDC ist nicht konfiguriert', 'OIDC is not configured'));
+  if (!OIDC_CONFIG) throw new Error(translate('services.oidcClient.oIDCIsNotConfigured'));
   const provider = await metadata();
   if (!provider.end_session_endpoint) {
-    throw new Error(translate('Die OIDC-Discovery-Antwort enthält keinen End-Session-Endpunkt', 'OIDC discovery response does not include an end-session endpoint'));
+    throw new Error(translate('services.oidcClient.oIDCDiscoveryResponseDoesNotIncludeAnEndSessionEndpoint'));
   }
 
   const parameters: Record<string, string> = {

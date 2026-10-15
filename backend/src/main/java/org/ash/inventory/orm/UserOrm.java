@@ -21,9 +21,13 @@ public class UserOrm {
 
     public UserAccount find(UUID id) { return entityManager.find(UserAccount.class, id); }
     public boolean isManaged(UserAccount user) { return entityManager.contains(user); }
-    public List<UserAccount> users(int offset, int limit) {
-        return entityManager.createQuery("from UserAccount user order by user.name, user.email", UserAccount.class)
-                .setFirstResult(offset).setMaxResults(limit).getResultList();
+    public List<UserAccount> users(String search, int offset, int limit) {
+        boolean searching = search != null && !search.isBlank();
+        var query = entityManager.createQuery("from UserAccount user"
+                + (searching ? " where lower(user.name) like :search or lower(user.email) like :search" : "")
+                + " order by user.name, user.email, user.id", UserAccount.class);
+        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public void persist(UserAccount user) { entityManager.persist(user); }
     public boolean adminExists() {

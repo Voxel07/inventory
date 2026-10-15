@@ -165,7 +165,6 @@ export const NEXT_MAINTENANCE_DUE_ALIASES = ['nextmaintenancedue', 'naechstewart
 
 export const CURRENT_OPERATING_HOURS_ALIASES = ['currentoperatinghours', 'operatinghours', 'betriebsstunden', 'laufstunden'];
 
-export const MAINTENANCE_STATUS_ALIASES = ['maintenancestatus', 'wartungsstatus'];
 
 export const FUEL_CONSUMPTION_ALIASES = [
   'fuelconsumptionlitersper100km',

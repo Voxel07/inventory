@@ -14,7 +14,6 @@ import org.ash.inventory.resource.ApiMapper;
 import org.ash.inventory.resource.ApiModels;
 import org.ash.inventory.resource.dto.ApiResponses;
 
-import java.time.LocalDate;
 import java.util.*;
 
 /** Authorized MCP use cases. Persistence and domain decisions remain in their existing owners. */
@@ -30,6 +29,25 @@ public class McpInventoryService {
     @Inject Validator validator;
     @Inject org.ash.inventory.resource.ApiRateLimitFilter rateLimit;
     @Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
+    @Inject OrderService orders;
+    @Inject PrivacyProjectionService privacy;
+
+    public com.fasterxml.jackson.databind.JsonNode order(UUID id) { return privacy.filter(queries.orderDetail(id), true).value(); }
+    public com.fasterxml.jackson.databind.JsonNode createFactionOrder(ApiModels.OrderInput input) {
+        return privacy.filter(queries.projectOrder(orders.create(valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode createGeneralOrder(ApiModels.GeneralOrderInput input) {
+        return privacy.filter(queries.projectGeneralOrder(orders.createGeneral(valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode prepareOrder(UUID id, ApiModels.PreparationInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.prepare(id, valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode transitionOrder(UUID id, DomainEnums.OrderStatus status, ApiModels.TransitionInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.transition(id, status, valid(input))), false).value();
+    }
+    public com.fasterxml.jackson.databind.JsonNode returnOrder(UUID id, ApiModels.ReturnInput input) {
+        return privacy.filter(queries.projectAnyOrder(orders.returnItems(id, valid(input))), false).value();
+    }
 
     /** MCP serves organization data only; tenant accounts manage their private items in the app. */
     public void authenticate() {
@@ -82,9 +100,9 @@ public class McpInventoryService {
 
     public ApiResponses.AssemblyResponse assembly(UUID id) { return queries.assembly(id); }
 
-    public List<ApiResponses.AssemblyResponse> assemblies(String eventTag) {
-        return queries.assemblies().stream().filter(a -> eventTag == null || eventTag.isBlank()
-                || a.eventTypes().contains(eventTag.trim())).toList();
+    public List<ApiResponses.AssemblyResponse> assemblies(String eventTag, Integer page, Integer limit) {
+        var bounds = bounds(page, limit);
+        return queries.assemblies(null, eventTag, false, bounds.offset() / bounds.limit(), bounds.limit());
     }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
@@ -172,7 +190,7 @@ public class McpInventoryService {
         boolean usable = EquipmentService.freelyAvailable(item) && policy.eligible();
         return policy.positions().stream().filter(p -> actors.canViewLocation(p.location)).map(p -> new InventoryMcpDtos.StockPositionDto(p.id,
                 p.location.id.toString(), p.location.name, p.quantityOnHand,
-                p.quantityReserved + reserved.getOrDefault(p.id, 0),
+                reserved.getOrDefault(p.id, 0),
                 usable ? Math.max(0, p.availableQuantity() - reserved.getOrDefault(p.id, 0)) : 0,
                 p.quantityDamaged, p.quantityQuarantined, p.quantityInTransit,
                 p.lot == null ? null : p.lot.lotNumber, p.lot == null || p.lot.expiryDate == null ? null : p.lot.expiryDate.toString())).toList();
@@ -183,7 +201,7 @@ public class McpInventoryService {
         int buffer = threshold == null ? 0 : threshold;
         if (buffer < 0) throw ApiException.badRequest("threshold must be non-negative");
         var bounds = bounds(page, limit);
-        var window = catalog.getItems(null, bounds.offset(), bounds.limit() + 1);
+        var window = catalog.getItems(null, null, bounds.offset(), bounds.limit() + 1);
         var items = window.stream().limit(bounds.limit()).filter(i -> i.minStock > 0).toList();
         var stock = inventory.stock(items);
         return new InventoryMcpDtos.AlertPage<>(items.stream().filter(i -> (long) stock.get(i.id).available() <= (long) i.minStock + buffer)
@@ -196,7 +214,7 @@ public class McpInventoryService {
     /** Aggregate counts only; maintenance alerts are read page by page with {@link #maintenanceAlerts}. */
     public InventoryMcpDtos.OperationalMetricsDto summary() {
         var actor = actors.current();
-        var counts = catalogOrm.visibleCounts(actor.id, actor.factions, catalog.managesInventory(actor));
+        var counts = catalogOrm.visibleCounts();
         return new InventoryMcpDtos.OperationalMetricsDto(counts.items(), counts.serializedAssets(), counts.locations(),
                 catalogOrm.upcomingEventCount(BusinessTime.today()));
     }
@@ -204,7 +222,7 @@ public class McpInventoryService {
     /** Evaluates one bounded page of the visible catalog; continue while {@code hasMore}. */
     public InventoryMcpDtos.AlertPage<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts(Integer page, Integer limit) {
         var bounds = bounds(page, limit);
-        var window = catalog.getItems(null, bounds.offset(), bounds.limit() + 1);
+        var window = catalog.getItems(null, null, bounds.offset(), bounds.limit() + 1);
         var items = window.stream().limit(bounds.limit()).toList();
         return new InventoryMcpDtos.AlertPage<>(maintenanceAlerts(items, inventory.readStock(items)),
                 bounds.offset() / bounds.limit(), bounds.limit(), window.size() > bounds.limit());
@@ -227,20 +245,26 @@ public class McpInventoryService {
                         schedule.maintenanceType + " (" + schedule.intervalType + ")", status.name(),
                         schedule.nextDueAt == null ? null : schedule.nextDueAt.toString()));
             }
-            boolean flagged = item.maintenanceStatus != DomainEnums.MaintenanceStatus.certified;
-            if (flagged
-                    || (!itemScheduled && item.nextMaintenanceDue != null && !item.nextMaintenanceDue.isAfter(today.plusDays(30)))) {
-                String status = flagged ? item.maintenanceStatus.name()
-                        : item.nextMaintenanceDue.isBefore(today) ? "due" : "warning";
+            var itemStatus = MaintenancePolicy.itemStatus(item, today);
+            boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.in_service
+                    || (!itemScheduled && itemStatus != DomainEnums.MaintenanceStatus.certified);
+            if (flagged) {
+                String status = switch (itemStatus) {
+                    case overdue -> "due";
+                    case due_soon -> "warning";
+                    default -> itemStatus.name();
+                };
                 alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("item", item.id, item.sku, item.name,
                         "Item maintenance", status, item.nextMaintenanceDue == null ? null : item.nextMaintenanceDue.toString()));
             }
             for (var asset : policy.assets()) {
+                var serviceStatus = MaintenancePolicy.assetStatus(asset, today);
                 if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
-                        || asset.serviceStatus == DomainEnums.MaintenanceStatus.overdue || asset.serviceStatus == DomainEnums.MaintenanceStatus.due_soon
-                        || asset.serviceStatus == DomainEnums.MaintenanceStatus.in_service) {
+                        || serviceStatus != DomainEnums.MaintenanceStatus.certified) {
+                    var due = MaintenancePolicy.assetDue(item, asset);
                     alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("asset", asset.id, asset.assetCode, item.name,
-                            "Condition: " + asset.conditionStatus + "; service: " + asset.serviceStatus, asset.serviceStatus.name(), null));
+                            "Condition: " + asset.conditionStatus + "; service: " + serviceStatus, serviceStatus.name(),
+                            due == null ? null : due.toString()));
                 }
             }
         }

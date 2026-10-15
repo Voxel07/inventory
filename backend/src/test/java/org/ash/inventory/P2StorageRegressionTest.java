@@ -37,6 +37,7 @@ class P2StorageRegressionTest {
     @Inject OperationalReportService reports;
     @Inject org.ash.inventory.resource.CatalogResponses factionCache;
     @Inject com.fasterxml.jackson.databind.ObjectMapper json;
+    @Inject OrderAllocationService allocation;
     private org.hibernate.stat.Statistics stats() { return em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics(); }
     private UserAccount person() {
         var p = new UserAccount(); p.issuer = "test"; p.externalSubject = UUID.randomUUID().toString(); p.name = "P2 person";
@@ -48,12 +49,17 @@ class P2StorageRegressionTest {
     private StockTransaction tx(Item i, UserAccount u, DomainEnums.TransactionType type, int quantity, boolean loss) {
         var t = new StockTransaction(); t.item = i; t.user = u; t.type = type; t.quantity = quantity; t.custodyWriteOff = loss; em.persist(t); return t;
     }
-    private GeneralOrder order(Item i, UserAccount u, int reserved) {
-        var o = new GeneralOrder(); o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = "ready";
-        o.preparedQuantities.put(i.id.toString(), reserved); em.persist(o); return o;
+    private InventoryOrder order(Item i, UserAccount u, int reserved) {
+        var o = new InventoryOrder(); o.kind = InventoryOrder.Kind.general; o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = DomainEnums.OrderStatus.ready;
+        var line = new org.ash.inventory.model.OrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
+        line.requestedQuantity = reserved; line.preparedQuantity = reserved; o.lines.add(line);
+        em.persist(o);
+        var reservation = new StockReservation(); reservation.order = o; reservation.orderLine = line; reservation.item = i;
+        reservation.createdBy = u; reservation.location = i.storageLocation; reservation.requestedQuantity = reserved; reservation.reservedQuantity = reserved;
+        em.persist(reservation); return o;
     }
     @Test @TestTransaction
-    void stockFactsUseOneStatementAndPreserveCustodyLossAndJsonReservations() {
+    void stockFactsUseOneStatementAndPreserveCustodyLossAndGeneralOrderReservations() {
         var user = person(); var item = item(); var other = item();
         tx(item, user, DomainEnums.TransactionType.checkout, 10, false);
         tx(item, user, DomainEnums.TransactionType.checkin, 2, false);
@@ -100,7 +106,7 @@ class P2StorageRegressionTest {
             tx(item, person(), DomainEnums.TransactionType.checkout, 1, false).assetInstance = asset;
         }
         UUID id = item.id; em.flush(); em.clear(); actors.current(); stats().clear();
-        var rows = operations.transactions(id, null, null, null, null, null, 0, 100);
+        var rows = operations.transactions(id, null, null, null, null, null, null, 0, 100);
         assertEquals(1, stats().getPrepareStatementCount());
         rows.forEach(mapper::transaction); assertEquals(1, stats().getPrepareStatementCount()); assertEquals(25, rows.size());
     }
@@ -138,7 +144,7 @@ class P2StorageRegressionTest {
         actors.current(); String prefix = "P2 page " + UUID.randomUUID();
         for (int n = 0; n < 25; n++) { var item = item(); item.name = prefix + n; }
         em.flush(); em.clear(); actors.current(); stats().clear();
-        var rows = queries.projectItems(catalog.getItems(prefix, 0, 100));
+        var rows = queries.projectItems(catalog.getItems(prefix, null, 0, 100));
         assertEquals(25, rows.size()); assertEquals(6, stats().getPrepareStatementCount());
     }
     @Test @TestTransaction
@@ -150,7 +156,7 @@ class P2StorageRegressionTest {
             var item = item(); item.name = prefix + n; item.accessPolicy = policy; item.storageLocation = location; item.returnLocation = location;
         }
         em.flush(); em.clear(); actors.current(); stats().clear();
-        var rows = queries.projectItems(catalog.getItems(prefix, 0, 100));
+        var rows = queries.projectItems(catalog.getItems(prefix, null, 0, 100));
         assertEquals(25, rows.size()); assertEquals(11, stats().getPrepareStatementCount()); // includes the two inheritance batches
         assertEquals(0, stats().getCollectionFetchCount(), "No group member collections in DTO projection");
     }
@@ -216,5 +222,30 @@ class P2StorageRegressionTest {
         assertEquals(before, QuarkusTransaction.requiringNew().call(revisions::reportToken));
         QuarkusTransaction.requiringNew().run(() -> item());
         assertNotEquals(before, QuarkusTransaction.requiringNew().call(revisions::reportToken));
+    }
+
+    @Test @TestTransaction
+    void sourceSelectionStatementsStayBoundedAsLocationsGrow() { // audit H08
+        var user = person();
+        var counts = new ArrayList<Long>();
+        for (int locations : new int[] {2, 12}) {
+            var item = item();
+            for (int n = 0; n < locations; n++) {
+                var location = new StorageLocation(); location.name = "H08 shelf " + UUID.randomUUID(); em.persist(location);
+                if (n == 0) item.storageLocation = location;
+                var position = new InventoryPosition(); position.item = item; position.location = location; position.quantityOnHand = n + 1;
+                em.persist(position);
+            }
+            order(item, user, 1);
+            em.flush(); em.clear();
+            var managed = em.find(Item.class, item.id);
+            stats().clear();
+            var capacity = allocation.capacity(managed, null);
+            var source = allocation.defaultSource(managed, capacity, locations);
+            assertEquals(locations, capacity.availableAt(source) + (source.id.equals(managed.storageLocation.id) ? 1 : 0));
+            counts.add(stats().getPrepareStatementCount());
+        }
+        assertEquals(counts.get(0), counts.get(1), "Statements must not grow with the number of stock locations");
+        assertTrue(counts.get(0) <= 4, "positions, shared reservations and loans: " + counts.get(0));
     }
 }

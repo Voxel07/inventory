@@ -176,15 +176,10 @@ public class ActorService {
         if (!createsInventory(current())) throw ApiException.forbidden("Read-only accounts cannot add inventory");
     }
 
+    /** Mirrors {@link org.ash.inventory.orm.InventoryAccessOrm#visible}: the access policy is the only item visibility. */
     public boolean canViewItem(org.ash.inventory.model.Item item, UserAccount actor) {
         if (item.accessPolicy != null) return privateAccess.allows(item.accessPolicy, actor, false);
-        if (!seesOrganization(actor)) return false;
-        if (actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)
-                || item.visibilityScope == null || item.visibilityScope == DomainEnums.ItemVisibilityScope.global
-                || item.visibilityScope == DomainEnums.ItemVisibilityScope.event) return true;
-        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person)
-            return item.assignedUser != null && item.assignedUser.id.equals(actor.id);
-        return item.assignedGroup != null && actor.factions.contains(item.assignedGroup);
+        return seesOrganization(actor);
     }
 
     public void requireItemAccess(org.ash.inventory.model.Item item) {

@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
-import { flushOfflineQueue, getCatalogFallbacks, getOfflineQueueCount, getSyncFailureCount } from '../services/offlineQueue';
+import { flushOfflineQueue, getCatalogFallbacks, getOfflineQueueCount, getSyncFailureCount, getSyncState, type SyncState } from '../services/offlineQueue';
 import { subscribeAuth } from '../services/authManager';
 
-type OfflineQueueDetail = { queued?: number; failures?: number };
+type OfflineQueueDetail = { queued?: number; failures?: number; sync?: SyncState };
 
 export function useOfflineStatus() {
   const [online, setOnline] = useState(navigator.onLine);
   const [queued, setQueued] = useState(0);
   const [syncIssues, setSyncIssues] = useState(0);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [sync, setSync] = useState<SyncState>(getSyncState);
   useEffect(() => {
     const refresh = () => void Promise.all([getOfflineQueueCount(), getSyncFailureCount()])
       .then(([queueCount, failureCount]) => {
         setQueued(queueCount);
         setSyncIssues(failureCount);
+        setSync(getSyncState());
       });
     const becameOnline = () => { setOnline(true); void flushOfflineQueue().finally(refresh); };
     const becameOffline = () => setOnline(false);
@@ -21,6 +23,7 @@ export function useOfflineStatus() {
       const detail = (event as CustomEvent<OfflineQueueDetail>).detail ?? {};
       setQueued(detail.queued ?? 0);
       setSyncIssues(detail.failures ?? 0);
+      setSync(detail.sync ?? getSyncState());
     };
     refresh();
     const cacheChanged = () => setCachedAt(getCatalogFallbacks().map((entry) => entry.cachedAt).sort()[0] ?? null);
@@ -38,5 +41,5 @@ export function useOfflineStatus() {
       window.removeEventListener('ash-offline-queue', queueChanged);
     };
   }, []);
-  return { online, queued, syncIssues, cachedAt };
+  return { online, queued, syncIssues, cachedAt, sync };
 }

@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient';
+import { apiPage, apiRequest } from './apiClient';
 
 export type ProcurementDeficit = {
   committedStock?: number;
@@ -31,8 +31,8 @@ export type PurchaseOrder = { id: string; orderNumber: string; vendorId: string;
 export const saveVendor = (data: object, id?: string) => apiRequest<Vendor>(`/api/vendors${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: data });
 export const updatePurchaseOrder = (id: string, data: object) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}`, { method: 'PUT', body: data });
 
-export const getVendors = (page = 0, size = 100) => apiRequest<Vendor[]>('/api/vendors', { query: { page, size } });
-export const getPurchaseOrders = (page = 0, size = 100) => apiRequest<PurchaseOrder[]>('/api/purchase-orders', { query: { page, size } });
+export const getVendors = (page: number, size: number) => apiPage<Vendor>('/api/vendors', page, size);
+export const getPurchaseOrders = (page: number, size: number) => apiPage<PurchaseOrder>('/api/purchase-orders', page, size);
 export function createVendor(name: string): Promise<Vendor> {
   return apiRequest('/api/vendors', { method: 'POST', body: { name, active: true } });
 }

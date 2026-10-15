@@ -9,13 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class InventoryModelInvariantTest {
     @Test
-    void bulkAvailabilityExcludesReservedQuarantinedAndDamagedStock() {
+    void bulkAvailabilityExcludesQuarantinedAndDamagedStock() {
         var position = new InventoryPosition();
         position.quantityOnHand = 20;
-        position.quantityReserved = 5;
         position.quantityQuarantined = 2;
         position.quantityDamaged = 3;
-        assertEquals(10, position.availableQuantity());
+        assertEquals(15, position.availableQuantity());
     }
 
     @Test

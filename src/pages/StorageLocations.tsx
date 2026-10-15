@@ -10,7 +10,12 @@ import { useAuth } from '../hooks/useAuth';
 import { canCreateInventory, canEditCatalog, canViewOrganization } from '../utils/access';
 import { ItemsList } from '../components/lists/ItemsList';
 import { getLocationInventory } from '../utils/locationStock';
-import { useOperationList } from '../hooks/useOperations';
+import { useQuery } from '@tanstack/react-query';
+import { storageLocationApi } from '../services/storageLocationService';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { PagedAutocomplete } from '../components/shared/PagedAutocomplete';
+import { mapPage } from '../services/apiPagination';
+import { LoadMore } from '../components/shared/LoadMore';
 import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
@@ -22,21 +27,21 @@ import RoomIcon from '@mui/icons-material/Room';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MapIcon from '@mui/icons-material/Map';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
-import { useItems } from '../hooks/useItems';
+import { useStorageLocation, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
+import { useItemsByIds } from '../hooks/useItems';
+import { usePagedList, useCompleteList } from '../hooks/usePagedList';
+import { queryKeys } from '../utils/queryKeys';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
-import { ListPagination } from '../components/shared/ListPagination';
-import { useClientPagination } from '../hooks/useClientPagination';
 import { formatStatus } from '../utils/formatters';
 
 export function StorageLocations() {
-    const t = useLocalizedText();
+    const t = useT();
     const { user } = useAuth();
     const canEdit = canEditCatalog(user);
     const canCreate = canCreateInventory(user);
@@ -47,8 +52,6 @@ export function StorageLocations() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = useStorageLocations({ includeInactive: true });
-    const itemQuery = useItems();
 
     const createMutation = useCreateStorageLocation();
     const updateMutation = useUpdateStorageLocation();
@@ -73,7 +76,18 @@ export function StorageLocations() {
     const [showInactive, setShowInactive] = useState(false);
     const [warehousesOpen, setWarehousesOpen] = useState(false);
     const [tab, setTab] = useState('locations');
-    const warehouses = useOperationList('warehouses', getWarehouses, organization);
+    const warehouses = useCompleteList(['operations', 'warehouses'], getWarehouses, { enabled: organization });
+    const search = useDebouncedValue(searchQuery.trim());
+    const locationFilters = tab === 'responsibilities' ? { includeInactive: false } : { includeInactive: showInactive, search: search || undefined, warehouseId: warehouseFilter || undefined, subtreeId: parentFilter || undefined };
+    const locationList = usePagedList(['storageLocations', 'list', locationFilters], (page, size) => storageLocationApi.getPage(locationFilters, page, size));
+    const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = locationList;
+    const selectedLocation = useStorageLocation(selectedLocId ?? undefined);
+    // The edit dialog explicitly needs the hierarchy to exclude descendant parent choices.
+    const hierarchy = useQuery({ queryKey: ['storageLocations', 'hierarchy'], enabled: dialogOpen,
+      queryFn: () => storageLocationApi.getAll({ includeInactive: true }), networkMode: 'offlineFirst' });
+    const locationOptions = async (needle: string, page: number, size: number) =>
+      mapPage(await storageLocationApi.getPage({ includeInactive: true, search: needle || undefined, warehouseId: warehouseFilter || undefined }, page, size),
+        location => ({ value: location.id, label: locationPath(location, []) }));
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -87,29 +101,19 @@ export function StorageLocations() {
     });
     const overlayPreview = useObjectUrl(dialogOpen ? formData.mapOverlayFile : undefined);
 
-    const activeLocation = locations?.find((l) => l.id === selectedLocId) || null;
+    const activeLocation = selectedLocation.data ?? locations?.find((l) => l.id === selectedLocId) ?? null;
 
-    const filteredLocations = (() => {
-        if (!locations) return [];
 
-        const lower = searchQuery.toLowerCase();
-        return locations.filter(
-            (l) =>
-                (showInactive || l.active) && (!warehouseFilter || l.warehouseId === warehouseFilter)
-                && (!parentFilter || isDescendant(l, parentFilter, locations))
-                && (locationPath(l, locations).toLowerCase().includes(lower) || (l.area ?? '').toLowerCase().includes(lower))
-        );
-    })();
-    const { pageItems: pageLocations, page: currentLocationPage, setPage: setLocationPage, pageSize: locationPageSize, onPageSizeChange: onLocationPageSizeChange } = useClientPagination(filteredLocations);
 
-    const positions = useOperationList(`storage-positions:${selectedLocId}`, operationsApi.positions({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
-
-    const locatedAssets = useOperationList(`storage-assets:${selectedLocId}`, operationsApi.assets({ locationId: selectedLocId ?? undefined }), Boolean(selectedLocId));
+    // One location's stock is bounded: read all of it, then exactly the items stored there.
+    const positions = useCompleteList(queryKeys.operations(`storage-positions:${selectedLocId}`), operationsApi.positions({ locationId: selectedLocId ?? undefined }), { enabled: Boolean(selectedLocId) });
+    const locatedAssets = useCompleteList(queryKeys.operations(`storage-assets:${selectedLocId}`), operationsApi.assets({ locationId: selectedLocId ?? undefined }), { enabled: Boolean(selectedLocId) });
+    const itemQuery = useItemsByIds([...(positions.data ?? []).map((position) => position.itemId), ...(locatedAssets.data ?? []).map((asset) => asset.itemId)]);
 
     const inventory = getLocationInventory(itemQuery.data ?? [], positions.data ?? [], locatedAssets.data ?? [], selectedLocId);
     const inventoryLoading = itemQuery.isLoading || positions.isLoading || locatedAssets.isLoading;
     const inventoryError = itemQuery.error || positions.error || locatedAssets.error;
-    const inventoryLoadingMore = [itemQuery, positions, locatedAssets].some(query => query.hasNextPage || query.isFetchingNextPage);
+    const inventoryLoadingMore = false;
     function retryInventory() {
         void itemQuery.refetch();
         void positions.refetch();
@@ -147,7 +151,7 @@ export function StorageLocations() {
         setDeleteConfirmOpen(true);
     }
 
-    const parentIsPrivate = Boolean(locations?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
+    const parentIsPrivate = Boolean(hierarchy.data?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -159,7 +163,7 @@ export function StorageLocations() {
                 {
                     onSuccess: () => {
                         setDialogOpen(false);
-                        showSnackbar(t('Lagerort erfolgreich aktualisiert', 'Storage location updated successfully'), 'success');
+                        showSnackbar(t('pages.storageLocations.storageLocationUpdatedSuccessfully'), 'success');
                     },
                     onError: (error) => showSnackbar(error.message, 'error'),
                 }
@@ -169,7 +173,7 @@ export function StorageLocations() {
                 onSuccess: (newLoc) => {
                     setDialogOpen(false);
                     setSelectedLocId(newLoc.id);
-                    showSnackbar(t('Lagerort erfolgreich erstellt', 'Storage location created successfully'), 'success');
+                    showSnackbar(t('pages.storageLocations.storageLocationCreatedSuccessfully'), 'success');
                 },
                 onError: (error) => showSnackbar(error.message, 'error'),
             });
@@ -182,7 +186,7 @@ export function StorageLocations() {
             onSuccess: () => {
                 setDeleteConfirmOpen(false);
                 setSelectedLocId(null);
-                showSnackbar(t('Lagerort deaktiviert', 'Storage location deactivated'), 'success');
+                showSnackbar(t('pages.storageLocations.storageLocationDeactivated'), 'success');
             },
             onError: (error) => showSnackbar(error.message, 'error'),
         });
@@ -190,41 +194,42 @@ export function StorageLocations() {
 
     return (
         <Box>
-            {locationsError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('Erneut laden', 'Retry')}</Button>}>{locationsError.message}</Alert>}
-            <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('Standorte', 'Warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={() => setWarehousesOpen(false)}>{t('Schließen', 'Close')}</Button></DialogActions></Dialog>
+            {(locationsError || selectedLocation.error || hierarchy.error) && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('common.retry')}</Button>}>{(locationsError || selectedLocation.error || hierarchy.error)?.message}</Alert>}
+            <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('pages.storageLocations.warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('common.closeThisDialog')} onClick={() => setWarehousesOpen(false)}>{t('common.close')}</Button></DialogActions></Dialog>
             {(tab !== 'locations' || !isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h4">
-                        {t('Lagerorte', 'Storage locations')}
+                        {t('nav.storageLocations')}
                     </Typography>
-                    {canCreate && <Button title={translate('Einen neuen Lagerort anlegen', 'Create a new storage location')}
+                    {canCreate && <Button title={translate('pages.storageLocations.createANewStorageLocation')}
                         variant="contained"
                         startIcon={<AddIcon />}
                         onClick={handleOpenCreate}
                     >
-                        {t('Lagerort hinzufügen', 'Add storage location')}
+                        {t('pages.storageLocations.addStorageLocation')}
                     </Button>}
                 </Box>
             )}
 
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minWidth: 0, maxWidth: '100%' }} aria-label={t('Lagerort-Bereiche', 'Storage location sections')}>
-                    <Tab value="locations" label={t('Lagerorte & Bestand', 'Locations & stock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
-                    {canEdit && <Tab value="responsibilities" label={t('Verantwortung & fehlende Angaben', 'Responsibility & missing information')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
+                <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minWidth: 0, maxWidth: '100%' }} aria-label={t('pages.storageLocations.storageLocationSections')}>
+                    <Tab value="locations" label={t('pages.storageLocations.locationsStock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
+                    {canEdit && <Tab value="responsibilities" label={t('pages.storageLocations.responsibilityMissingInformation')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
                 </Tabs>
-                <Button title={translate('Standorte anlegen und bearbeiten', 'Create and edit warehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('Standorte verwalten', 'Manage warehouses')}</Button>
+                <Button title={translate('pages.storageLocations.createAndEditWarehouses')} disabled={!canEdit} onClick={() => setWarehousesOpen(true)}>{t('pages.storageLocations.manageWarehouses')}</Button>
             </Box>
             {tab === 'responsibilities' && canEdit && !locationsError && <Box role="tabpanel" id="storage-panel-responsibilities" aria-labelledby="storage-tab-responsibilities">
                 <StorageResponsibilities locations={locations ?? []} loading={locationsLoading} onEditLocation={handleOpenEdit} />
+                <LoadMore list={locationList} />
             </Box>}
             <Box hidden={tab !== 'locations'} role="tabpanel" id="storage-panel-locations" aria-labelledby="storage-tab-locations">
             {isMobile && selectedLocId && (
-                <Button title={translate('Zur Lagerortübersicht zurückkehren', 'Return to the storage location list')}
+                <Button title={translate('pages.storageLocations.returnToTheStorageLocationList')}
                     startIcon={<ArrowBackIcon />}
                     onClick={() => setSelectedLocId(null)}
                     sx={{ mb: 2 }}
                 >
-                    {t('Zurück zur Lagerort-Liste', 'Back to location list')}
+                    {t('pages.storageLocations.backToLocationList')}
                 </Button>
             )}
 
@@ -234,30 +239,31 @@ export function StorageLocations() {
                     <Grid size={{ xs: 12, md: 4 }}>
                         <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 180px)', overflowY: isMobile ? 'visible' : 'auto' }}>
                             <TextField
-                                label={t('Lagerorte suchen', 'Search storage locations')}
+                                label={t('pages.storageLocations.searchStorageLocations')}
                                 value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setLocationPage(1); }}
+                                onChange={(e) => { setSearchQuery(e.target.value); }}
                                 size="small"
                                 fullWidth
                                 sx={{ mb: 2 }}
                             />
 
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                              <TextField select size="small" label={t('Standort', 'Warehouse')} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setParentFilter(''); setLocationPage(1); }}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
-                              <TextField select size="small" label={t('Teilbaum', 'Location subtree')} value={parentFilter} onChange={(e) => { setParentFilter(e.target.value); setLocationPage(1); }}><MenuItem value="">{t('Alle', 'All')}</MenuItem>{locations?.filter((l) => !warehouseFilter || l.warehouseId === warehouseFilter).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
-                              <FormControlLabel label={t('Inaktive anzeigen', 'Show inactive')} control={<Checkbox checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); setLocationPage(1); }} />} />
+                              <TextField select size="small" label={t('pages.storageLocations.warehouse')} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setParentFilter(''); }}><MenuItem value="">{t('common.all')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
+                              <PagedAutocomplete size="small" label={t('pages.storageLocations.locationSubtree')} value={parentFilter}
+                                queryKey={['storageLocations', 'subtree-picker', warehouseFilter]} getPage={locationOptions} onChange={setParentFilter} />
+                              <FormControlLabel label={t('pages.storageLocations.showInactive')} control={<Checkbox checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); }} />} />
                             </Stack>
                             {locationsLoading ? (
-                                <Typography sx={{ p: 2 }}>{t('Lagerorte werden geladen...', 'Loading storage locations...')}</Typography>
-                            ) : filteredLocations.length === 0 ? (
+                                <Typography sx={{ p: 2 }}>{t('pages.storageLocations.loadingStorageLocations')}</Typography>
+                            ) : locations?.length === 0 ? (
                                 <Typography sx={{ p: 2 }} color="text.secondary">
-                                    {t('Keine Lagerorte gefunden', 'No storage locations found')}
+                                    {t('pages.storageLocations.noStorageLocationsFound')}
                                 </Typography>
                             ) : (
                                 <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
-                                    {pageLocations.map((loc) => {
+                                    {locations?.map((loc) => {
                                         return (
-                                            <ListItemButton title={translate('Details und Bestand dieses Lagerorts anzeigen', 'Display this storage location\'s details and stock')}
+                                            <ListItemButton title={translate('pages.storageLocations.displayThisStorageLocationSDetailsAndStock')}
                                                 key={loc.id}
                                                 selected={selectedLocId === loc.id}
                                                 onClick={() => { setSelectedLocId(loc.id); }}
@@ -292,16 +298,16 @@ export function StorageLocations() {
                                                 />
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                                                     <Chip
-                                                        label={loc.active ? formatStatus(loc.locationType ?? 'bin') : t('Inaktiv', 'Inactive')}
+                                                        label={loc.active ? formatStatus(loc.locationType ?? 'bin') : t('common.inactive')}
                                                         size="small"
                                                         variant="outlined"
                                                     />
 
-                                                    <IconButton title={t('Bearbeiten', 'Edit')} size="small" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(loc, e)}>
+                                                    <IconButton title={t('common.edit')} size="small" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(loc, e)}>
                                                         <EditIcon fontSize="small" />
                                                     </IconButton>
 
-                                                    <IconButton title={t('Deaktivieren', 'Deactivate')} size="small" color="error" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenDelete(loc.id, e)}>
+                                                    <IconButton title={t('pages.storageLocations.deactivate')} size="small" color="error" disabled={!(loc.access?.privateResource ? loc.access.canEdit : canEdit)} onClick={(e) => handleOpenDelete(loc.id, e)}>
                                                         <DeleteIcon fontSize="small" />
                                                     </IconButton>
                                                 </Box>
@@ -310,7 +316,7 @@ export function StorageLocations() {
                                     })}
                                 </List>
                             )}
-                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} pageSize={locationPageSize} onPageSizeChange={onLocationPageSizeChange} />
+                            <LoadMore list={locationList} />
                         </Paper>
                     </Grid>
                 )}
@@ -331,12 +337,12 @@ export function StorageLocations() {
                                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
                                                 {activeLocation.area && (
                                                     <Typography variant="subtitle2" color="text.secondary">
-                                                        {t('Bereich/Sektion', 'Area/section')}: {activeLocation.area}
+                                                        {t('pages.storageLocations.areaSection')}: {activeLocation.area}
                                                     </Typography>
                                                 )}
                                                 {activeLocation.location && (
                                                     <Typography variant="subtitle2" color="text.secondary">
-                                                        {t('Ort', 'Place')}: {activeLocation.location}
+                                                        {t('pages.storageLocations.place')}: {activeLocation.location}
                                                     </Typography>
                                                 )}
                                                 {activeLocation.position && (
@@ -348,17 +354,17 @@ export function StorageLocations() {
                                         </Box>
                                     </Box>
                                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
-                                        <Button size="small" title={t('Etiketten, Scans und Umlagerungen für diesen Lagerort öffnen', 'Open labels, scanning and transfers for this location')}
+                                        <Button size="small" title={t('pages.storageLocations.openLabelsScanningAndTransfersForThisLocation')}
                                             onClick={() => navigate(`/locations/${activeLocation.id}`)}>
-                                            {t('Etiketten / Scannen / Umlagern', 'Labels / scan / transfer')}
+                                            {t('pages.storageLocations.labelsScanTransfer')}
                                         </Button>
-                                        <Button title={translate('Die Daten dieses Lagerorts bearbeiten', 'Edit this storage location\'s details')}
+                                        <Button title={translate('pages.storageLocations.editThisStorageLocationSDetails')}
                                             size="small"
                                             variant="outlined"
                                             startIcon={<EditIcon />}
                                             disabled={!(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(activeLocation, e)}
                                         >
-                                            {t('Bearbeiten', 'Edit')}
+                                            {t('common.edit')}
                                         </Button>
                                     </Stack>
                                 </Box>
@@ -386,12 +392,12 @@ export function StorageLocations() {
 
                                 <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
                                     <Typography variant="h6">
-                                        {t('Hier gelagerte Artikel', 'Items stored here')}
+                                        {t('pages.storageLocations.itemsStoredHere')}
                                     </Typography>
                                     <Chip size="small" label={inventory.items.length} />
                                 </Stack>
-                                {inventoryError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={retryInventory}>{t('Erneut laden', 'Retry')}</Button>}>
-                                    {t('Die gelagerten Artikel konnten nicht vollständig geladen werden.', 'Could not load all items stored here.')}
+                                {inventoryError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={retryInventory}>{t('common.retry')}</Button>}>
+                                    {t('pages.storageLocations.couldNotLoadAllItemsStoredHere')}
                                 </Alert>}
                                 <ItemsList key={activeLocation.id} items={inventory.items} locationStock={inventory.stockByItemId}
                                     isLoading={inventoryLoading} loadingMore={inventoryLoadingMore} />
@@ -410,7 +416,7 @@ export function StorageLocations() {
                                 <Box sx={{ textAlign: 'center' }}>
                                     <RoomIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                                     <Typography color="text.secondary" variant="subtitle1">
-                                        {t('Wählen Sie einen Lagerort aus der Liste aus, um die gelagerten Artikel anzuzeigen', 'Select a storage location from the list to view its items')}
+                                        {t('pages.storageLocations.selectAStorageLocationFromTheListToViewIts')}
                                     </Typography>
                                 </Box>
                             </Paper>
@@ -422,24 +428,24 @@ export function StorageLocations() {
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} fullScreen={isMobile} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-                <DialogTitle>{editingLoc ? t('Lagerort bearbeiten', 'Edit storage location') : t('Neuer Lagerort', 'New storage location')}</DialogTitle>
+                <DialogTitle>{editingLoc ? t('pages.storageLocations.editStorageLocation') : t('pages.storageLocations.newStorageLocation')}</DialogTitle>
                 <Box component="form" onSubmit={handleSubmit}>
                     <DialogContent sx={{ pt: 1 }}>
                         <Stack spacing={2}>
                             <FormControlLabel control={<Checkbox checked={Boolean(formData.privateResource) || parentIsPrivate} disabled={Boolean(editingLoc) || !canEdit || parentIsPrivate}
-                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('Privater Lagerort — nur Eigentümer, Inventar-Admins und Freigaben (gilt auch für alles, was hier lagert)', 'Private storage location — owner, inventory admins and explicit shares only (also covers everything stored here)')} />
-                            {organization && <TextField select label={t('Standort', 'Warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('Nicht zugeordnet', 'Unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('inaktiv', 'inactive')})`}</MenuItem>)}</TextField>}
-                            <TextField select label={t('Übergeordneter Lagerort', 'Parent location')} value={formData.parentLocationId ?? ''} onChange={(e) => {
+                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />} label={t('pages.storageLocations.privateStorageLocationOwnerInventoryAdminsAndExplicitSharesOnly')} />
+                            {organization && <TextField select label={t('pages.storageLocations.warehouse')} value={formData.warehouseId ?? ''} onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value || null, parentLocationId: null })}><MenuItem value="">{t('pages.storageLocations.unassigned')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}{w.active ? '' : ` (${t('pages.storageLocations.inactive')})`}</MenuItem>)}</TextField>}
+                            <TextField select label={t('pages.storageLocations.parentLocation')} value={formData.parentLocationId ?? ''} onChange={(e) => {
                                 const parentId = e.target.value || null;
                                 // Shares flow down a private location tree, so children of private locations are private.
-                                const privateParent = Boolean(locations?.find((l) => l.id === parentId)?.access?.privateResource);
+                                const privateParent = Boolean(hierarchy.data?.find((l) => l.id === parentId)?.access?.privateResource);
                                 setFormData({ ...formData, parentLocationId: parentId, ...(privateParent ? { privateResource: true } : {}) });
-                            }}><MenuItem value="">{t('Oberste Ebene', 'Top level')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
-                            <TextField select label={t('Lagerorttyp', 'Location type')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
-                            <FormControlLabel label={t('Aktiv', 'Active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
-                            <Alert severity="info">{t('Inaktive Lagerorte bleiben für Bestand und Historie sichtbar. Unterorte müssen zuerst deaktiviert werden.', 'Inactive locations remain visible for stock and history. Deactivate child locations first.')}</Alert>
+                            }}><MenuItem value="">{t('pages.storageLocations.topLevel')}</MenuItem>{hierarchy.data?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, hierarchy.data ?? []))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, hierarchy.data ?? [])}</MenuItem>)}</TextField>
+                            <TextField select label={t('pages.storageLocations.locationType')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
+                            <FormControlLabel label={t('enum.value.active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
+                            <Alert severity="info">{t('pages.storageLocations.inactiveLocationsRemainVisibleForStockAndHistoryDeactivateChild')}</Alert>
                             <TextField
-                                label={t('Name des Lagerorts', 'Storage location name')}
+                                label={t('pages.storageLocations.storageLocationName')}
                                 value={formData.name}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                                 required
@@ -447,28 +453,28 @@ export function StorageLocations() {
                                 autoFocus
                             />
                             <TextField
-                                        label={t('Bereich / Sektion', 'Area / section')}
-                                        placeholder={t('z. B. Regal A, Raum 204', 'e.g. shelf A, room 204')}
+                                        label={t('pages.storageLocations.areaSection2')}
+                                        placeholder={t('pages.storageLocations.eGShelfARoom204')}
                                         value={formData.area}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, area: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label={t('Ort / Gebäude', 'Location / building')}
-                                        placeholder={t('z. B. Gebäude B, Raum 204', 'e.g. building B, room 204')}
+                                        label={t('pages.storageLocations.locationBuilding')}
+                                        placeholder={t('pages.storageLocations.eGBuildingBRoom204')}
                                         value={formData.location}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                                         fullWidth
                                     />
                                     <TextField
-                                        label={t('Position / Regal', 'Position / shelf')}
-                                        placeholder={t('z. B. Reihe 3, Fach 2', 'e.g. row 3, compartment 2')}
+                                        label={t('pages.storageLocations.positionShelf')}
+                                        placeholder={t('pages.storageLocations.eGRow3Compartment2')}
                                         value={formData.position}
                                         onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                                         fullWidth
                                     />
                             <TextField
-                                label={t('Beschreibung', 'Description')}
+                                label={t('common.description')}
                                 value={formData.description}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                                 multiline
@@ -478,11 +484,11 @@ export function StorageLocations() {
                             <Divider />
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                 <MapIcon color="primary" />
-                                <Typography variant="h6">{t('OpenStreetMap und Kartenebene', 'OpenStreetMap and map overlay')}</Typography>
+                                <Typography variant="h6">{t('pages.storageLocations.openStreetMapAndMapOverlay')}</Typography>
                             </Stack>
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                                 <TextField
-                                    label={t('Breitengrad', 'Latitude')}
+                                    label={t('pages.storageLocations.latitude')}
                                     type="number"
                                     value={formData.latitude ?? ''}
                                     onChange={(event) => setFormData((current) => ({ ...current, latitude: Number(event.target.value) }))}
@@ -490,7 +496,7 @@ export function StorageLocations() {
                                     fullWidth
                                 />
                                 <TextField
-                                    label={t('Längengrad', 'Longitude')}
+                                    label={t('pages.storageLocations.longitude')}
                                     type="number"
                                     value={formData.longitude ?? ''}
                                     onChange={(event) => setFormData((current) => ({ ...current, longitude: Number(event.target.value) }))}
@@ -498,13 +504,13 @@ export function StorageLocations() {
                                     fullWidth
                                 />
                             </Stack>
-                            <Button title={translate('Eine Bilddatei als Kartenebene auswählen', 'Choose an image file for the map overlay')} component="label" variant="outlined">
-                                {t('Eigene Kartenebene hochladen', 'Upload custom map overlay')}
+                            <Button title={translate('pages.storageLocations.chooseAnImageFileForTheMapOverlay')} component="label" variant="outlined">
+                                {t('pages.storageLocations.uploadCustomMapOverlay')}
                                 <input hidden type="file" accept="image/*" onChange={(event) => setFormData((current) => ({ ...current, mapOverlayFile: event.target.files?.[0], removeMapOverlay: false }))} />
                             </Button>
                             {editingLoc?.mapOverlay && !formData.removeMapOverlay && (
-                                <Button title={translate('Die gespeicherte Kartenebene entfernen', 'Remove the saved map overlay')} color="error" onClick={() => setFormData((current) => ({ ...current, removeMapOverlay: true, mapOverlayFile: undefined }))}>
-                                    {t('Vorhandene Kartenebene entfernen', 'Remove existing map overlay')}
+                                <Button title={translate('pages.storageLocations.removeTheSavedMapOverlay')} color="error" onClick={() => setFormData((current) => ({ ...current, removeMapOverlay: true, mapOverlayFile: undefined }))}>
+                                    {t('pages.storageLocations.removeExistingMapOverlay')}
                                 </Button>
                             )}
                             <StorageLocationMap
@@ -519,15 +525,15 @@ export function StorageLocations() {
                         </Stack>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
-                        <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} onClick={() => setDialogOpen(false)} color="inherit">
-                            {t('Abbrechen', 'Cancel')}
+                        <Button title={translate('common.discardChangesAndClose')} onClick={() => setDialogOpen(false)} color="inherit">
+                            {t('common.cancel')}
                         </Button>
-                        <Button title={translate('Die Daten und Kartenebene dieses Lagerorts speichern', 'Save this storage location\'s details and map overlay')}
+                        <Button title={translate('pages.storageLocations.saveThisStorageLocationSDetailsAndMapOverlay')}
                             type="submit"
                             variant="contained"
                             disabled={createMutation.isPending || updateMutation.isPending || !formData.name}
                         >
-                            {t('Speichern', 'Save')}
+                            {t('common.save')}
                         </Button>
                     </DialogActions>
                 </Box>
@@ -536,17 +542,14 @@ export function StorageLocations() {
             {/* Delete Confirmation */}
             <ConfirmDialog
                 open={deleteConfirmOpen}
-                title={t('Lagerort deaktivieren', 'Deactivate storage location')}
+                title={t('pages.storageLocations.deactivateStorageLocation')}
                 onClose={() => setDeleteConfirmOpen(false)}
                 onConfirm={handleDeleteConfirm}
                 pending={deleteMutation.isPending}
-                actionLabel={t('Deaktivieren', 'Deactivate')}
-                actionTooltip={t('Deaktivieren', 'Deactivate')}
+                actionLabel={t('pages.storageLocations.deactivate')}
+                actionTooltip={t('pages.storageLocations.deactivate')}
                 actionColor="error"
-                message={t(
-                    'Lagerort deaktivieren? Bestand und historische Verknüpfungen bleiben erhalten.',
-                    'Deactivate this location? Stock and historical links are retained.',
-                )}
+                message={t('pages.storageLocations.deactivateThisLocationStockAndHistoricalLinksAreRetained')}
             />
         </Box>
     );

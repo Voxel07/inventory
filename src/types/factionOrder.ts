@@ -2,6 +2,8 @@ import type { AssetInstance, Item } from './item';
 import type { Assembly } from './assembly';
 import type { EventType } from './event';
 import type { User } from './user';
+import type { OrderStatus } from './orderCommands';
+import type { OrderHistoryEntry } from './orderHistory';
 import type { StorageLocation } from './item';
 
 /** Reference data from GET /api/factions. Memberships are `EVENT:slug` keys (see {@link FactionOrder.factionKey}). */
@@ -13,42 +15,11 @@ export interface Faction {
   active?: boolean;
 }
 
-export type FactionOrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picked_up' | 'partially_returned' | 'returned' | 'closed' | 'cancelled';
-export type FactionOrderHistoryAction =
-  | 'created'
-  | 'updated'
-  | 'historical_correction'
-  | 'submitted'
-  | 'submission_reopened'
-  | 'preparation_started'
-  | 'preparation_saved'
-  | 'preparation_reopened'
-  | 'ready'
-  | 'picked_up'
-  | 'partially_returned'
-  | 'returned'
-  | 'closed'
-  | 'cancelled';
-
-export interface FactionOrderHistoryEntry {
-  action: FactionOrderHistoryAction;
-  userId: string;
-  userName: string;
-  timestamp: string;
-  deltaSnapshot?: {
-    items?: Record<string, number>;
-    assemblies?: Record<string, number>;
-    addedItems?: Record<string, number>;
-    removedItems?: Record<string, number>;
-    changedItems?: Record<string, { before: number; after: number }>;
-    addedAssemblies?: Record<string, number>;
-    removedAssemblies?: Record<string, number>;
-    changedAssemblies?: Record<string, { before: number; after: number }>;
-  };
-  note?: string;
-}
+export type FactionOrderStatus = OrderStatus;
+export type { OrderHistoryAction as FactionOrderHistoryAction, OrderHistoryEntry as FactionOrderHistoryEntry } from './orderHistory';
 
 export interface FactionOrder {
+  kind: 'faction';
   sourceLocations?: Record<string, string>;
   id: string;
   orderCode: string;
@@ -83,7 +54,7 @@ export interface FactionOrder {
   readyBy?: string;
   pickedUpBy?: string;
   returnedBy?: string;
-  history: FactionOrderHistoryEntry[];
+  history: OrderHistoryEntry[];
   created: string;
   updated: string;
   expand?: {
@@ -97,6 +68,9 @@ export interface FactionOrder {
     pickupLocation?: StorageLocation;
   };
 }
+
+/** List projection of GET /api/orders: no history, asset assignments, lines, source locations or actor fields. */
+export type FactionOrderSummary = Omit<FactionOrder, 'history' | 'assetAssignments' | 'sourceLocations' | 'createdBy' | 'preparedBy' | 'readyBy' | 'pickedUpBy' | 'returnedBy'>;
 
 export interface FactionOrderFormData {
   eventType: EventType;
@@ -113,4 +87,3 @@ export interface FactionOrderFormData {
   requestedAssemblyQuantities: Record<string, number>;
   notes?: string;
 }
-

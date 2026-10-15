@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
-import { localWriteChange } from '../src/services/apiChanges';
+import { decodeServerChange, localWriteChange } from '../src/services/apiChanges';
 import { createApiChangeCoalescer, invalidateForApiChange } from '../src/utils/realtimeInvalidation';
 
 test('role changes discard cached organization data, including inactive event queries', async () => {
@@ -105,4 +105,13 @@ test('server logistics events and event deletion both refresh logistics readers'
   invalidateForApiChange(client, localWriteChange('/api/events/event-a'));
   expect(client.getQueryState(['event-logistics', 'event-a', 'timeline'])?.isInvalidated).toBe(true);
   client.clear();
+});
+
+test('realtime payloads are decoded to string fields and always count as server changes', () => {
+  expect(decodeServerChange({ type: 'order.changed', id: 'o1', itemId: 42, source: 'local', extra: 'x' }))
+    .toEqual({ type: 'order.changed', id: 'o1', source: 'server' });
+  expect(decodeServerChange('ping')).toEqual({ type: 'ping', source: 'server' });
+  expect(decodeServerChange([1])).toEqual({ type: '1', source: 'server' });
+  const nested = decodeServerChange({ type: 'batch', changes: [{ type: 'a', changes: [{ type: 'b', changes: [{ type: 'c', changes: [{ type: 'd' }] }] }] }] });
+  expect(nested.changes?.[0]?.changes?.[0]).toEqual({ type: 'b', source: 'server' });
 });

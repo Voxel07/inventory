@@ -46,7 +46,7 @@ public class UserResource {
         return new ApiResponses.DevLoginResponse("dev:" + user.externalSubject, mapper.user(user));
     }
 
-    @GET @Path("/users")
+    @Paged @GET @Path("/users")
     public List<ApiResponses.UserResponse> users(@jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
             @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size) {
         return queries.users(page, size);
@@ -58,10 +58,11 @@ public class UserResource {
         return mapper.user(users.updateAccess(id, input));
     }
 
-    @GET @Path("/users/assignable")
+    @Paged @GET @Path("/users/assignable")
     public List<ApiResponses.UserResponse> assignableUsers(
+            @jakarta.ws.rs.QueryParam("search") String search,
             @jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
             @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size) {
-        return queries.assignableUsers(page, size);
+        return queries.assignableUsers(search, page, size);
     }
 }

@@ -33,7 +33,7 @@ public class LoanService {
         actors.requireWarehouse(); var c = orm.find(EquipmentCommitment.class, input.commitmentId());
         if (c == null) throw ApiException.notFound("Commitment not found");
         orm.refreshLocked(c.item); orm.refresh(c);
-        if (c.cancelled || c.returnDue == null || c.item.consumable || c.item.ownershipType == Item.Ownership.organization || c.availableUntil.isBefore(BusinessTime.today())) throw ApiException.conflict("Use a current returnable private/external commitment");
+        if (c.cancelled || c.returnDue == null || c.item.consumable() || c.item.ownershipType == Item.Ownership.organization || c.availableUntil.isBefore(BusinessTime.today())) throw ApiException.conflict("Use a current returnable private/external commitment");
         equipment.requireIdle(c.item);
         if (orm.commitmentCount(c) > 0) throw ApiException.conflict("Commitment already has an arrangement");
         if (!Set.of("borrow", "rental").contains(input.kind())) throw ApiException.badRequest("Choose borrow or rental");

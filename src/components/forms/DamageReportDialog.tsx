@@ -3,7 +3,7 @@ import { Dialog } from '../shared/ClosableDialog';
 import { DamageReportForm, type DamageReportFormProps } from './DamageReportForm';
 import { useCreateDamageReport } from '../../hooks/useDamageReports';
 import { useUIStore } from '../../store/uiStore';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { isOfflineQueuedError } from '../../utils/offline';
 import type { DamageReportFormData } from '../../types';
 
@@ -15,7 +15,7 @@ type Props = Omit<DamageReportFormProps, 'onSubmit' | 'isLoading'> & {
 
 /** Report damage for an item, asset or assembly; shared by the damage list and the detail pages. */
 export function DamageReportDialog({ open, title, onClose, ...formProps }: Props) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const showSnackbar = useUIStore((state) => state.showSnackbar);
@@ -25,12 +25,12 @@ export function DamageReportDialog({ open, title, onClose, ...formProps }: Props
     createReport.mutate(data, {
       onSuccess: () => {
         onClose();
-        showSnackbar(t('Schadensbericht übermittelt', 'Damage report submitted'), 'success');
+        showSnackbar(t('forms.damageReportDialog.damageReportSubmitted'), 'success');
       },
       onError: (error) => {
         // The global mutation handler confirms that the report was queued for sync.
         if (isOfflineQueuedError(error)) { onClose(); return; }
-        showSnackbar(t('Fehler beim Übermitteln des Schadensberichts', 'Could not submit damage report'), 'error');
+        showSnackbar(t('forms.damageReportDialog.couldNotSubmitDamageReport'), 'error');
       },
     });
   }

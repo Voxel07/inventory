@@ -10,6 +10,10 @@ test('mixed catalog responses protect private commands while public locations re
     { id: 'public-item', access: { privateResource: false } }];
   markPrivateInventoryResponse(rows);
   expect(containsPrivateInventory(rows)).toBe(true);
+  const publicSnapshot = rows.filter(row => !containsPrivateInventory(row));
+  expect(publicSnapshot.map(row => row.id)).toEqual(['public-item']);
+  expect(containsPrivateInventory(publicSnapshot)).toBe(false);
+  expect(containsPrivateInventory(rows[0].expand!.storageLocation)).toBe(false);
   expect(referencesPrivateInventory({ itemId: 'private-item' })).toBe(true);
   expect(referencesPrivateInventory({ requestedQuantities: { 'private-item': 2 } })).toBe(true);
   expect(referencesPrivateInventory('/api/items/private-item/assets')).toBe(true);
@@ -17,6 +21,9 @@ test('mixed catalog responses protect private commands while public locations re
 });
 
 test('operational projections inherit protection and resetting the account clears known IDs', () => {
+  const privateCodes = ['restricted-code'];
+  markPrivateInventoryResponse(privateCodes);
+  expect(containsPrivateInventory(privateCodes)).toBe(true);
   const projection = [{ id: 'private-transaction', details: { id: 'private-asset' } }];
   markPrivateInventoryResponse(projection);
   expect(referencesPrivateInventory({ assetInstanceId: 'private-asset' })).toBe(true);

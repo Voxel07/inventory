@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **60 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity faction-order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **57 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway applies the single editable baseline in dev/test/prod; Hibernate validates it. Data is disposable: recreate the database after a baseline change. There are no upgrade migrations or backfills. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -45,14 +45,14 @@ erDiagram
     ITEMS ||--o{ STOCK_TRANSACTIONS : records
     ASSEMBLIES ||--o{ ASSEMBLY_ITEMS : contains
     ITEMS ||--o{ ASSEMBLY_ITEMS : component
-    EVENT_OCCURRENCES ||--o{ FACTION_ORDERS : scopes
-    FACTIONS ||--o{ FACTION_ORDERS : requests
-    FACTION_ORDERS ||--o{ FACTION_ORDER_LINES : contains
-    ITEMS ||--o{ FACTION_ORDER_LINES : requested
-    FACTION_ORDER_LINES ||--o{ STOCK_RESERVATIONS : reserves
-    FACTION_ORDERS ||--o{ CUSTODY_HANDOVERS : hands_over
+    EVENT_OCCURRENCES o|--o{ ORDERS : scopes
+    FACTIONS o|--o{ ORDERS : requests
+    ORDERS ||--o{ ORDER_LINES : contains
+    ITEMS ||--o{ ORDER_LINES : requested
+    ORDER_LINES ||--o{ STOCK_RESERVATIONS : reserves
+    ORDERS ||--o{ CUSTODY_HANDOVERS : hands_over
     CUSTODY_HANDOVERS ||--o{ CUSTODY_HANDOVER_LINES : contains
-    FACTION_ORDER_LINES ||--o{ RETURN_RECONCILIATIONS : reconciles
+    ORDER_LINES ||--o{ RETURN_RECONCILIATIONS : reconciles
     ITEMS ||--o{ RETURN_SUBMISSIONS : pending_check
     ITEMS o|--o{ DAMAGE_REPORTS : incident
     DAMAGE_REPORTS ||--o| REPAIR_CASES : repair
@@ -66,7 +66,7 @@ erDiagram
     EQUIPMENT_COMMITMENTS ||--o| LOAN_ARRANGEMENTS : agreement
 ```
 
-General orders form a separate aggregate: creator and optional event are relational; line quantities/source locations/asset assignments are JSON maps rather than `general_order_lines`. Damage can target an item **or** an assembly (XOR), so the item relationship shown above is optional for assembly incidents.
+Faction and general orders share `orders` (`kind=faction/general`), relational `order_lines`, asset assignments, history, reservations, handovers and reconciliations. Faction orders require an event, faction and unique code; general orders have a name/purpose and an optional draft event. Damage can target an item **or** an assembly (XOR), so the item relationship shown above is optional for assembly incidents.
 
 ## 4. Table inventory
 
@@ -82,7 +82,7 @@ General orders form a separate aggregate: creator and optional event are relatio
 | `inventory_access_links` | Materialized grant inheritance: policy FK and ancestor policy FK (cascade), unique pair, ancestor index. A private item links to the policies of its private home location and that location's private ancestors; a private location to its private ancestors |
 | `inventory_media_objects` | Unique object key; uploader FK; optional resource type/ID pair; both absent means staged |
 
-Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; legacy item `visibility_scope`, assigned user/group and event scopes still coexist (PLAN-01). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
+Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; it is the only item visibility rule (the former `visibility_scope` and assigned user/group columns were removed). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
 
 ### Catalog and storage geography (6 tables)
 
@@ -105,7 +105,7 @@ Location services enforce no cycles and same-warehouse parentage. Item tracking 
 |---|---|
 | `asset_instances` | UUID; item/current location/current custodian FKs; unique asset code; availability/condition/service state, hours, serial/manufacturer, active flag and version |
 | `inventory_lots` | UUID; item FK; unique `(item_id, lot_number)`; expiry/best-before/manufacture, supplier lot, requirements and status |
-| `inventory_positions` | UUID; item/location/optional lot FKs; on-hand, reserved, damaged, quarantined and transit quantities; last count; version |
+| `inventory_positions` | UUID; item/location/optional lot FKs (lot composite with item); on-hand, damaged, quarantined and transit quantities; last count; version. One row per item/location/lot (`unique nulls not distinct`). Reservations are not stored here: they are computed from live order reservations |
 | `stock_transactions` | UUID; item/actor FKs plus optional asset/lot/order/event/damage/locations; movement type, quantity, UTC time, reason/notes, before/after availability, idempotency UUID, position map and related-entity reference |
 | `stock_reservations` | UUID; item/asset/order/line/location/creator links; requested/reserved/released quantities and status; version; unique active asset reservation key |
 | `inventory_transfers` | UUID; source/destination locations, requester/receiver, unique transfer number and idempotency key, status, dispatch/receipt times |
@@ -115,26 +115,24 @@ Location services enforce no cycles and same-warehouse parentage. Item tracking 
 
 The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses PostgreSQL's ordinary nullable-key semantics; it does **not** by itself enforce a single null-lot row. Operational uniqueness and locking must also be assessed in the services/ORM, rather than inferred from this constraint.
 
-### Events, orders and custody (14 tables)
+### Events, orders and custody (12 tables)
 
 | Table | Key data and relationships |
 |---|---|
-| `event_occurrences` | UUID; event type/name/status, start/end dates, planned/used JSON quantities |
+| `event_occurrences` | UUID; event type/name/status, start/end dates, editable daily regular/breakfast and first-day regular stamp rates, planned/used JSON quantities |
 | `event_people` | UUID; shared people registry: name and optional unique `app_users` link (`on delete set null`); event crew usually has no account. A rename applies at every event |
-| `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; fixed 4 main + 1 breakfast entitlement per person projected by the API |
+| `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; API calculates entitlement by attendance and catering days using editable rates on `event_occurrences` (daily main/breakfast and first-day main) and crew `catering` timeline periods |
 | `event_attendee_roles` | Element collection of an attendance (cascade): `faction_leader`/`faction_deputy`/`faction_hq_crew` with a required faction FK of the event type, `as_held`, or `event_crew` with optional assigned work; unique `(attendee, role, faction)` with nulls not distinct |
-| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
+| `event_timeline_entries` | UUID; event FK with deletion cascade; in-game/preparation/catering category, title, local start/optional end, owner/team, location/area, planned/in-progress/completed status and description |
 | `factions` | UUID; unique `(event_type, slug)`, name and active flag |
-| `faction_orders` | UUID; event/faction/creator FKs; unique order code; status, pickup location/coordinates/date, collector and lifecycle actors |
-| `faction_order_lines` | UUID; order/item/source assembly FKs; requested, allocated, reserved, prepared, handed-over and reconciliation quantities |
-| `order_line_asset_assignments` | UUID; order/line/asset FKs; unique `(faction_order_id, asset_instance_id)` |
-| `faction_order_history` | Bigint identity; order/actor links, occurrence time, action/from/to, notes, JSON delta and unique idempotency key |
-| `general_orders` | UUID; creator/optional event FKs; name/purpose/status; JSON requested/prepared/handed-over/returned/consumed/damaged/missing/written-off quantities, source locations, assigned and reconciled assets |
-| `general_order_history` | UUID; order/actor FKs; time/action/notes, JSON delta and unique command ID |
-| `custody_handovers` | UUID; faction order, marshal, collector and location FKs; unique handover code/idempotency key, type/time, acknowledgement key and condition confirmation |
+| `orders` | UUID; faction/general kind; creator and optional event/faction FKs; kind-specific metadata constraint, unique faction code, general name/purpose; status, pickup and lifecycle actors |
+| `order_lines` | UUID; order/item/source assembly/source location FKs; line order, requested, allocated, reserved, prepared, handed-over and reconciliation quantities |
+| `order_line_asset_assignments` | UUID; order/line/asset FKs; unique `(order_id, asset_instance_id)`; reconciled flag |
+| `order_history` | Bigint identity; order/actor links, occurrence time, action/from/to, notes, JSON delta and unique idempotency key |
+| `custody_handovers` | UUID; order, marshal, collector and location FKs; unique handover code/idempotency key, type/time, acknowledgement key and condition confirmation |
 | `custody_handover_lines` | UUID; handover/order line/item/optional asset FKs; quantity and condition notes |
 
-Unifying `orders` / `order_lines` with a faction/general kind is planned (PLAN-02); those tables do not currently exist. General-order JSON references rely on service validation, unlike relational faction line FKs.
+Both order kinds use `OrderService` and the same relational foreign keys and stock lifecycle (PLAN-02). The baseline replaces the former tables directly; disposable databases must be recreated.
 
 ### Returns, lifecycle and maintenance (6 tables)
 
@@ -240,8 +238,8 @@ Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still 
 | Data | Stored in | Source | Retention today |
 |---|---|---|---|
 | Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Name/email/subject from Authentik claims, refreshed at sign-in; role and factions set by the inventory admin | Indefinite; no deactivation or deletion |
-| Actor references on every movement and transition | `stock_transactions`, `faction_order_history`, `general_order_history`, `return_reconciliations`, `custody_handovers`, damage/repair/maintenance records, `inventory_count_*`, `goods_receipts` | App actions | Permanent (append-only evidence) |
-| Collector name, pickup coordinates, notes | `faction_orders`, `custody_handovers` | Staff input | Permanent |
+| Actor references on every movement and transition | `stock_transactions`, `order_history`, `return_reconciliations`, `custody_handovers`, damage/repair/maintenance records, `inventory_count_*`, `goods_receipts` | App actions | Permanent (append-only evidence) |
+| Collector name, pickup coordinates, notes | `orders`, `custody_handovers` | Staff input | Permanent |
 | Handover acknowledgements, placement photos, certificates | Media store (local disk or Garage S3) referenced from `custody_handovers`, `return_submissions`, `maintenance_records` | Uploads | Permanent once attached; staged uploads purged after 24 h |
 | Display owner, keeper name/contact | `items` | Staff/owner input | Until edited; items are retired, not deleted |
 | Private location address fields and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |

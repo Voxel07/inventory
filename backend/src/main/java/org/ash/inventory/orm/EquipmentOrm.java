@@ -59,12 +59,9 @@ public class EquipmentOrm extends EntityOrm {
                 .setParameter("item", item).setParameter("type", DomainEnums.TransactionType.consumed).getResultStream();
     }
 
-    public Long missingFactionLines(Item item) {
-        return entityManager.createQuery("select count(l) from FactionOrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult();
-    }
-
-    public Stream<GeneralOrder> generalOrders() {
-        return entityManager.createQuery("from GeneralOrder", GeneralOrder.class).getResultStream();
+    /** Faction and general order lines that still report missing units of the item. */
+    public long missingOrderLines(Item item) {
+        return entityManager.createQuery("select count(l) from OrderLine l where l.item = :item and l.missingQuantity > 0", Long.class).setParameter("item", item).getSingleResult();
     }
 
     public Long inTransitPositions(Item item) {

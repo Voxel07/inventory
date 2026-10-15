@@ -24,7 +24,7 @@ public class NotificationResource {
     }
 
     /** Newest first; {@code unread=true} pages unread notices server-side so read ones never hide them. */
-    @GET
+    @Paged @GET
     public List<ApiResponses.NotificationResponse> list(
             @QueryParam("unread") @DefaultValue("false") boolean unread,
             @QueryParam("page") @DefaultValue("0") int page,

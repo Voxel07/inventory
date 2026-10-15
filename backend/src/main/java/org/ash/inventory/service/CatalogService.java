@@ -1,6 +1,5 @@
 package org.ash.inventory.service;
 
-import org.ash.inventory.helper.Inputs;
 import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -44,23 +43,23 @@ public class CatalogService {
         this.events = events;
     }
 
-    public List<Item> getItems(String search, int offset, int limit) {
-        return getItems(search, null, offset, limit);
+    public List<Item> getItems(String search, String category, int offset, int limit) {
+        return getItems(org.ash.inventory.orm.CatalogOrm.ItemFilter.search(search, category), offset, limit);
     }
 
-    public List<Item> getItems(String search, String category, int offset, int limit) {
-        var actor = actorService.current();
-        return orm.items(search, category, actor.id, actor.factions, canManageInventory(actor), offset, limit);
+    public List<Item> getItems(org.ash.inventory.orm.CatalogOrm.ItemFilter filter, int offset, int limit) {
+        actorService.current();
+        return orm.items(filter, offset, limit);
     }
 
     public List<UUID> getVisibleItemIds() {
         var actor = actorService.current();
-        return orm.visibleItemIds(actor.id, actor.factions, canManageInventory(actor));
+        return orm.visibleItemIds();
     }
 
     public List<String> getVisibleCategories() {
         var actor = actorService.current();
-        return orm.categories(actor.id, actor.factions, canManageInventory(actor));
+        return orm.categories();
     }
 
     public Item getVisibleItem(UUID id) {
@@ -70,26 +69,18 @@ public class CatalogService {
         return item;
     }
 
-    public List<StorageLocation> getLocations() {
-        return orm.locations();
-    }
-
-    public List<StorageLocation> getAllLocations() {
-        return orm.allLocations();
+    public List<StorageLocation> getLocations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
+        actorService.current();
+        return orm.locations(includeInactive, search, warehouseId, subtreeId, offset, limit);
     }
 
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
 
-    public VisibleAssemblies getVisibleAssemblies() {
+    /** {@code mine}: private assemblies the actor owns. */
+    public VisibleAssemblies getVisibleAssemblies(String search, String eventTag, boolean mine, int offset, int limit) {
         var actor = actorService.current();
-        var values = orm.assemblies();
-        var components = orm.assemblyItems(values);
-        accessPolicies.prepare(values.stream().map(value -> value.accessPolicy).toList());
-        var visible = values.stream().filter(value -> canViewAssembly(value,
-                components.getOrDefault(value.id, List.of()), actor)).toList();
-        var visibleComponents = new LinkedHashMap<UUID, List<AssemblyItem>>();
-        visible.forEach(value -> visibleComponents.put(value.id, components.getOrDefault(value.id, List.of())));
-        return new VisibleAssemblies(visible, visibleComponents);
+        var values = orm.assemblies(search, eventTag, mine ? actor.id : null, offset, limit);
+        return new VisibleAssemblies(values, orm.assemblyItems(values));
     }
 
     public boolean canViewItem(Item item) { return item.active && canView(item, actorService.current()); }
@@ -167,7 +158,6 @@ public class CatalogService {
                 asset.assetCode = String.format("%s-%03d", item.sku, i);
                 asset.availabilityStatus = DomainEnums.AssetState.available;
                 asset.conditionStatus = DomainEnums.ConditionStatus.good;
-                asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
                 asset.currentLocation = item.storageLocation;
                 asset.active = true;
                 orm.persist(asset);
@@ -246,35 +236,11 @@ public class CatalogService {
         item.category = input.category().trim();
         item.subcategory = input.subcategory();
         item.supplier = input.supplier();
-        item.visibilityScope = input.visibilityScope() == null
-                ? DomainEnums.ItemVisibilityScope.global : input.visibilityScope();
-        item.assignedUser = input.assignedUserId() == null ? null
-                : orm.require(UserAccount.class, input.assignedUserId(), "Assigned user");
-        item.assignedGroup = Inputs.blankToNull(input.assignedGroup());
-        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.person && item.assignedUser == null) {
-            throw ApiException.badRequest("Person-scoped items require an assigned user");
-        }
-        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.group && item.assignedGroup == null) {
-            throw ApiException.badRequest("Group-scoped items require an assigned group");
-        }
-        if (item.visibilityScope == DomainEnums.ItemVisibilityScope.event
-                && (input.eventTypes() == null || input.eventTypes().isEmpty())) {
-            throw ApiException.badRequest("Event-scoped items require at least one event type");
-        }
-        if (item.visibilityScope != DomainEnums.ItemVisibilityScope.person) item.assignedUser = null;
-        if (item.visibilityScope != DomainEnums.ItemVisibilityScope.group) item.assignedGroup = null;
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
         item.trackingMode = input.trackingMode() == null
                 ? (item.trackingMode != null ? item.trackingMode : DomainEnums.TrackingMode.bulk)
                 : input.trackingMode();
-        // The role is authoritative; the consumable flag is its projection and must agree when both are given.
-        if (input.inventoryRole() != null && input.consumable() != (input.inventoryRole() == DomainEnums.InventoryRole.consumable)) {
-            throw ApiException.badRequest("consumable must match inventoryRole");
-        }
-        item.inventoryRole = input.inventoryRole() == null
-                ? (input.consumable() ? DomainEnums.InventoryRole.consumable : DomainEnums.InventoryRole.returnable)
-                : input.inventoryRole();
-        item.consumable = item.inventoryRole == DomainEnums.InventoryRole.consumable;
+        if (input.inventoryRole() != null) item.inventoryRole = input.inventoryRole();
         if (item.trackingMode == DomainEnums.TrackingMode.serialized
                 && item.inventoryRole == DomainEnums.InventoryRole.consumable) {
             throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
@@ -302,7 +268,6 @@ public class CatalogService {
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
-        if (input.maintenanceStatus() != null) item.maintenanceStatus = input.maintenanceStatus();
     }
 
     public boolean managesInventory(UserAccount actor) { return canManageInventory(actor); }
@@ -627,7 +592,6 @@ public class CatalogService {
                 asset.assetCode = code;
                 asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
                 asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
-                asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
                 asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
                 asset.active = true;
                 orm.persist(asset);
@@ -652,7 +616,6 @@ public class CatalogService {
             asset.model = input.model();
             asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
             asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
-            asset.serviceStatus = DomainEnums.MaintenanceStatus.certified;
             asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
             if (input.currentCustodianId() != null) {
                 asset.currentCustodian = orm.require(UserAccount.class, input.currentCustodianId(), "User");
@@ -800,12 +763,7 @@ public class CatalogService {
         var actor = actorService.current();
         var previous = asset.conditionStatus;
         asset.conditionStatus = input.conditionStatus();
-        if (input.conditionStatus() == DomainEnums.ConditionStatus.damaged
-                || input.conditionStatus() == DomainEnums.ConditionStatus.unsafe) {
-            asset.availabilityStatus = DomainEnums.AssetState.damaged;
-        } else if (asset.availabilityStatus == DomainEnums.AssetState.damaged) {
-            asset.availabilityStatus = DomainEnums.AssetState.available;
-        }
+        asset.availabilityStatus = StockPolicy.conditionedState(asset);
         events.record("asset.condition_changed", "asset", asset.id, actor.id, null,
                 Map.of("itemId", item.id.toString(), "from", previous.name(), "to", input.conditionStatus().name()));
         orm.flush();

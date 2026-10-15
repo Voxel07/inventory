@@ -21,7 +21,6 @@ import { generateOrderPdfSlip } from '../components/orders/detail/OrderPdfSlip';
 import {
   useCancelFactionOrder,
   useFactionOrder,
-  useFactionOrders,
   useMarkFactionOrderReady,
   usePickUpFactionOrder,
   useReopenFactionOrderPreparation,
@@ -31,11 +30,13 @@ import {
   useSubmitFactionOrder,
   useUpdateFactionOrder,
 } from '../hooks/useFactionOrders';
-import { useItems } from '../hooks/useItems';
+import { useItemsByIds } from '../hooks/useItems';
+import { loadAllPages } from '../services/apiPagination';
+import { getFactionOrders } from '../services/factionOrderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { Assembly, FactionOrder, Item } from '../types';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
@@ -58,7 +59,7 @@ type PreparationDraft = ReturnType<typeof preparationDraft>;
 export function FactionOrderDetail() {
   const { orderId = '' } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { success, error: handleError } = useMutationFeedback();
@@ -67,9 +68,14 @@ export function FactionOrderDetail() {
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const pickupGroups = useQuery({ queryKey: ['order-pickup-groups', 'faction', orderId], queryFn: () => orderPickupApi.get('faction', orderId), enabled: Boolean(orderId) });
   const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
-  const { data: allOrders = [] } = useFactionOrders();
-  const { data: items = [] } = useItems();
+  // Exactly this order's items (lines and assembly components) and this faction's orders, never the catalog.
+  const { data: allOrders = [] } = useQuery({ queryKey: ['faction-orders', 'faction', order?.eventType, order?.faction],
+    enabled: Boolean(order), networkMode: 'offlineFirst',
+    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType: order!.eventType, faction: order!.faction }, page, size)) });
   const { data: assemblies = [] } = useAssemblies();
+  const lineIds = [...Object.keys(order?.requestedQuantities ?? {}), ...(order?.expand?.assemblyIds ?? []).flatMap((assembly) => Object.keys(assembly.itemQuantities ?? {}))];
+  const { data: lineLookup = [] } = useItemsByIds(lineIds);
+  const items = [...new Map([...(order?.expand?.itemIds ?? []), ...lineLookup].map((item) => [item.id, item])).values()];
   const { data: storageLocations = [] } = useStorageLocations();
 
   const updateOrder = useUpdateFactionOrder();
@@ -115,7 +121,7 @@ export function FactionOrderDetail() {
   // Every item on an order line, including assembly components. Serialized pickers and returns work on these.
   const lineItems = (() => {
     if (!order) return [];
-    return (order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter(Boolean)) as Item[];
+    return order.expand?.itemIds ?? Object.keys(order.requestedQuantities).map((id) => itemMap.get(id)).filter((item): item is Item => Boolean(item));
   })();
   // Only items ordered on their own; assembly components are listed under their assembly.
   const orderItems = lineItems.filter((item) => item.id in (order?.requestedQuantities ?? {}));
@@ -156,10 +162,7 @@ export function FactionOrderDetail() {
       const required = flattened[item.id] ?? 0;
       const selected = assetAssignments[item.id]?.length ?? 0;
       if (selected !== required) {
-        handleError(new Error(t(
-          `Für ${item.name} müssen genau ${required} Seriengeräte ausgewählt werden (aktuell ${selected}).`,
-          `Select exactly ${required} serialized assets for ${item.name} (${selected} currently selected).`,
-        )));
+        handleError(new Error(t('pages.factionOrderDetail.selectExactlyRequiredSerializedAssetsForNameSelectedCurrentlySelected', { name: String(item.name), required: required, selected: selected })));
         return;
       }
     }
@@ -167,7 +170,7 @@ export function FactionOrderDetail() {
       // No source locations: the backend takes the item's default location, or the location with free stock.
       { order, values, assemblyValues, assetAssignments },
       {
-        onSuccess: () => success(t('Vorbereitung gespeichert', 'Preparation saved')),
+        onSuccess: () => success(t('pages.factionOrderDetail.preparationSaved')),
         onError: handleError,
       },
     );
@@ -202,12 +205,12 @@ export function FactionOrderDetail() {
     setConfirmAction(null);
     if (action === 'pickup') {
       pickUp.mutate(order.id, {
-        onSuccess: () => success(t('Liste ausgegeben und Bestand gebucht', 'List checked out and stock recorded')),
+        onSuccess: () => success(t('pages.factionOrderDetail.listCheckedOutAndStockRecorded')),
         onError: handleError,
       });
     } else if (action === 'cancel') {
       cancelOrder.mutate(order.id, {
-        onSuccess: () => success(t('Liste storniert', 'List cancelled')),
+        onSuccess: () => success(t('pages.factionOrderDetail.listCancelled')),
         onError: handleError,
       });
     }
@@ -226,7 +229,7 @@ export function FactionOrderDetail() {
       {
         onSuccess: () => {
           setPickupMapOpen(false);
-          success(t('Liste ist abholbereit', 'List is ready for pickup'));
+          success(t('pages.factionOrderDetail.listIsReadyForPickup'));
         },
         onError: handleError,
       },
@@ -236,8 +239,8 @@ export function FactionOrderDetail() {
   if (isLoading) return <LinearProgress />;
   if (isError || !order) {
     return (
-      <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
-        {t('Bestellliste nicht gefunden.', 'Order list not found.')}
+      <Alert severity="error" action={<Button title={translate('pages.factionOrderDetail.returnToTheFactionOrderOverview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('pages.factionOrderDetail.backToOverview')}</Button>}>
+        {t('pages.factionOrderDetail.orderListNotFound')}
       </Alert>
     );
   }
@@ -245,8 +248,8 @@ export function FactionOrderDetail() {
   const currentUser = user;
   if (!canViewFaction(currentUser)) {
     return (
-      <Alert severity="error" action={<Button title={translate('Zur Übersicht der Fraktionsbestellungen zurückkehren', 'Return to the faction order overview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('Zur Übersicht', 'Back to overview')}</Button>}>
-        {t('Sie haben keinen Zugriff auf diese Fraktionsliste.', 'You do not have access to this faction order.')}
+      <Alert severity="error" action={<Button title={translate('pages.factionOrderDetail.returnToTheFactionOrderOverview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('pages.factionOrderDetail.backToOverview')}</Button>}>
+        {t('pages.factionOrderDetail.youDoNotHaveAccessToThisFactionOrder')}
       </Alert>
     );
   }
@@ -259,7 +262,7 @@ export function FactionOrderDetail() {
     ? pickupGroups.data.groups.map(group => `${group.name}: ${group.pickupLocationName}`).join(' · ')
     : pickupLocation
     ? [...[pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean), pickupPoint].filter(Boolean).join(' · ')
-    : pickupPoint ?? t('Nicht angegeben', 'Not specified');
+    : pickupPoint ?? t('pages.factionOrderDetail.notSpecified');
 
   const isManager = canManageInventory(currentUser);
   const canEditOrder = canWriteFaction(currentUser, order.factionKey);
@@ -301,13 +304,13 @@ export function FactionOrderDetail() {
         }
         onSubmit={() =>
           submitOrder.mutate(order.id, {
-            onSuccess: () => success(t('Bedarf ist bereit zur Bearbeitung — Artikel werden reserviert', 'Request submitted — items will be reserved')),
+            onSuccess: () => success(t('pages.factionOrderDetail.requestSubmittedItemsWillBeReserved')),
             onError: handleError,
           })
         }
         onStartPreparation={() =>
           startPreparation.mutate(order.id, {
-            onSuccess: () => success(t('Vorbereitung gestartet', 'Preparation started')),
+            onSuccess: () => success(t('pages.factionOrderDetail.preparationStarted')),
             onError: handleError,
           })
         }
@@ -321,7 +324,7 @@ export function FactionOrderDetail() {
           reopenPreparation.mutate(
             { id: order.id },
             {
-              onSuccess: () => success(t('Liste ist wieder in Vorbereitung', 'List moved back to preparation')),
+              onSuccess: () => success(t('pages.factionOrderDetail.listMovedBackToPreparation')),
               onError: handleError,
             },
           )
@@ -352,7 +355,7 @@ export function FactionOrderDetail() {
         onSetAssetAssignments={setAssetAssignments}
       />}
 
-      <CustodyEvidence orderId={order.id} />
+      <CustodyEvidence orderId={order.id} kind={order.kind} />
       <OrderTraceability
         key={order.id}
         order={order}
@@ -365,22 +368,20 @@ export function FactionOrderDetail() {
       {/* Edit Order Modal */}
       <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth
         slotProps={{ transition: { onEntered: () => setEditReady(true), onExit: () => setEditReady(false) } }}>
-        <DialogTitle>{t('Fraktionsliste bearbeiten', 'Edit faction order')}</DialogTitle>
+        <DialogTitle>{t('pages.factionOrderDetail.editFactionOrder')}</DialogTitle>
         <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
           {editReady && <FactionOrderForm
             initialData={order}
-            items={items}
             assemblies={assemblies}
             storageLocations={storageLocations}
-            orders={allOrders}
-            submitLabel={t('Bestellliste aktualisieren', 'Update order list')}
+            submitLabel={t('pages.factionOrderDetail.updateOrderList')}
             onSubmit={(data) => {
               updateOrder.mutate(
                 { id: order.id, data },
                 {
                   onSuccess: () => {
                     setEditOpen(false);
-                    success(t('Fraktionsliste aktualisiert', 'Faction order updated'));
+                    success(t('pages.factionOrderDetail.factionOrderUpdated'));
                   },
                   onError: handleError,
                 },
@@ -406,7 +407,7 @@ export function FactionOrderDetail() {
 
       {/* Return Reconciliation Dialog */}
       <Dialog open={returnOpen} fullScreen={isMobile} onClose={() => setReturnOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>{t('Rückgabe & Zustandserfassung', 'Return & condition inspection')}</DialogTitle>
+        <DialogTitle>{t('pages.factionOrderDetail.returnConditionInspection')}</DialogTitle>
         <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
           <OrderReturnChecklist
             order={order}
@@ -420,7 +421,7 @@ export function FactionOrderDetail() {
                 {
                   onSuccess: () => {
                     setReturnOpen(false);
-                    success(t('Rückgabe erfolgreich verbucht', 'Return successfully recorded'));
+                    success(t('pages.factionOrderDetail.returnSuccessfullyRecorded'));
                   },
                   onError: handleError,
                 },
@@ -437,14 +438,14 @@ export function FactionOrderDetail() {
       {/* Action Confirmation Dialog */}
       <ConfirmDialog
         open={Boolean(confirmAction)}
-        title={confirmAction === 'pickup' ? t('Liste ausgeben', 'Check out list') : t('Liste stornieren', 'Cancel order')}
+        title={confirmAction === 'pickup' ? t('pages.factionOrderDetail.checkOutList') : t('pages.factionOrderDetail.cancelOrder')}
         message={
           confirmAction === 'pickup'
-            ? t('Möchten Sie diese Liste als abgeholt markieren und den Bestand verbuchen?', 'Do you want to mark this list as picked up and record the stock checkout?')
-            : t('Sind Sie sicher, dass Sie diese Fraktionsliste stornieren möchten?', 'Are you sure you want to cancel this faction order?')
+            ? t('pages.factionOrderDetail.doYouWantToMarkThisListAsPickedUp')
+            : t('pages.factionOrderDetail.areYouSureYouWantToCancelThisFactionOrder')
         }
-        actionLabel={confirmAction === 'pickup' ? t('Ausgeben', 'Check out') : t('Stornieren', 'Cancel order')}
-        actionTooltip={confirmAction === 'pickup' ? t('Ausgabe bestätigen', 'Confirm checkout') : t('Stornierung bestätigen', 'Confirm cancellation')}
+        actionLabel={confirmAction === 'pickup' ? t('pages.factionOrderDetail.checkOut') : t('pages.factionOrderDetail.cancelOrder2')}
+        actionTooltip={confirmAction === 'pickup' ? t('pages.factionOrderDetail.confirmCheckout') : t('pages.factionOrderDetail.confirmCancellation')}
         actionColor={confirmAction === 'pickup' ? 'success' : 'error'}
         onClose={() => setConfirmAction(null)}
         onConfirm={runConfirmedAction}

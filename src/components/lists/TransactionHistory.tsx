@@ -14,21 +14,20 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
-import type { StockTransaction, Item, User } from '../../types';
+import type { StockTransaction, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { formatDateTime } from '../../utils/dateFormat';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 import { Link } from 'react-router-dom';
 
 interface Props {
     transactions: StockTransaction[] | undefined;
-    items: Item[] | undefined;
     users?: User[] | undefined;
     isLoading: boolean;
 }
 
-export function TransactionHistory({ transactions, items, users, isLoading }: Props) {
-    const t = useLocalizedText();
+export function TransactionHistory({ transactions, users, isLoading }: Props) {
+    const t = useT();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     if (isLoading) {
@@ -44,13 +43,9 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
     if (!transactions?.length) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">{t('Keine Transaktionen gefunden', 'No transactions found')}</Typography>
+                <Typography color="text.secondary">{t('lists.transactionHistory.noTransactionsFound')}</Typography>
             </Paper>
         );
-    }
-
-    function getItemName(itemId: string) {
-        return items?.find((i) => i.id === itemId)?.name ?? itemId;
     }
 
     function getUserName(tx: StockTransaction) {
@@ -89,7 +84,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
             fontSize: '0.7rem',
             '& .MuiChip-label': { px: 0.75 },
         } : undefined;
-        if (!tx.factionOrderId) {
+        if (!tx.orderId) {
             if (!tx.eventType || !tx.faction) return null;
             return (
                 <Chip
@@ -100,16 +95,16 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                 />
             );
         }
-        const order = tx.expand?.factionOrderId;
+        const order = tx.expand?.order;
         return (
             <Chip
                 component={Link}
                 clickable
-                to={`/orders/faction/${tx.factionOrderId}`}
+                to={order?.kind === 'general' ? `/orders?pickupOrder=${tx.orderId}&pickupKind=general` : `/orders/faction/${tx.orderId}`}
                 size="small"
                 variant="outlined"
                 color="primary"
-                label={order ? `${order.eventType} · ${order.faction}` : t('Fraktionsliste', 'Faction list')}
+                label={order?.orderCode ?? t('lists.transactionHistory.factionList')}
                 sx={compactSx}
             />
         );
@@ -121,7 +116,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                 <Paper key={tx.id} sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{getItemName(tx.itemId)}</Typography>
+                            <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{tx.itemName}</Typography>
                             {assetChip(tx)}
                             <Typography variant="caption" color="text.secondary">
                                 {formatDateTime(tx.timestamp)} · {getUserName(tx)}
@@ -133,7 +128,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                         <Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
-                    {(tx.factionOrderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
+                    {(tx.orderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
                 </Paper>
             ))}
         </Stack>
@@ -144,13 +139,13 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>{t('Datum', 'Date')}</TableCell>
-                        <TableCell>{t('Artikel', 'Item')}</TableCell>
-                        <TableCell>{t('Typ', 'Type')}</TableCell>
-                        <TableCell>{t('Benutzer', 'User')}</TableCell>
-                        <TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                        <TableCell>{t('Grund', 'Reason')}</TableCell>
-                        <TableCell>{t('Anmerkungen', 'Notes')}</TableCell>
+                        <TableCell>{t('common.date')}</TableCell>
+                        <TableCell>{t('common.item')}</TableCell>
+                        <TableCell>{t('common.type')}</TableCell>
+                        <TableCell>{t('common.user')}</TableCell>
+                        <TableCell align="right">{t('common.quantity')}</TableCell>
+                        <TableCell>{t('common.reason')}</TableCell>
+                        <TableCell>{t('common.notes')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -159,7 +154,7 @@ export function TransactionHistory({ transactions, items, users, isLoading }: Pr
                             <TableCell>{formatDateTime(tx.timestamp)}</TableCell>
                             <TableCell>
                                 <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                                    <span>{getItemName(tx.itemId)}</span>
+                                    <span>{tx.itemName}</span>
                                     {assetChip(tx)}
                                 </Stack>
                             </TableCell>

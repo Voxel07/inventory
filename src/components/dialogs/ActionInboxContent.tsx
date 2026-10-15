@@ -10,7 +10,7 @@ import type { InboxAction } from '../../types/actionInbox';
 import { useActionInbox } from '../../hooks/useActionInbox';
 import { noticeDetails, notificationPath, notificationTitle, usePickupNotifications } from '../../hooks/useInbox';
 import { useOperationCommand } from '../../hooks/useOperations';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { OperationForm } from '../operations/OperationForm';
 import { StateMessage } from '../common/StateMessage';
 import { formatDateTime } from '../../utils/dateFormat';
@@ -28,10 +28,10 @@ const rowSx = { py: 1.25, borderBottom: 1, borderColor: 'divider', display: 'gri
 
 /** One inbox: pickup notices, due tasks and snoozed reminders as categories. */
 export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
-  const t = useLocalizedText(); const query = useActionInbox(); const command = useOperationCommand();
+  const t = useT(); const query = useActionInbox(); const command = useOperationCommand();
   const notices = usePickupNotifications(); const navigate = useNavigate();
   const [category, setCategory] = useState<Category>('all'); const [reminder, setReminder] = useState<InboxAction | null>(null);
-  const labels: Record<string, string> = { pickup: t('Abholung', 'Pickup'), overdue_return: t('Überfällige Rückgabe', 'Overdue return'), acknowledgement: t('Rückgabeprüfung', 'Return review'), receipt: t('Wareneingang', 'Receipt'), expiring_lot: t('Charge läuft ab', 'Expiring lot'), maintenance: t('Wartung', 'Maintenance'), damage: t('Schadensmeldung', 'Damage report'), collection: t('Beim Anbieter abholen', 'Provider collection'), provider_return: t('An Anbieter zurückgeben', 'Provider return') };
+  const labels: Record<string, string> = { pickup: t('common.pickup'), overdue_return: t('dialogs.actionInboxContent.overdueReturn'), acknowledgement: t('dialogs.actionInboxContent.returnReview'), receipt: t('dialogs.actionInboxContent.receipt'), expiring_lot: t('dialogs.actionInboxContent.expiringLot'), maintenance: t('enum.reason.maintenance'), damage: t('common.damageReport'), collection: t('dialogs.actionInboxContent.providerCollection'), provider_return: t('dialogs.actionInboxContent.providerReturn') };
   const now = query.dataUpdatedAt;
   const due = (query.data ?? []).filter(a => !a.remindAt || Date.parse(a.remindAt) <= now);
   const later = (query.data ?? []).filter(a => a.remindAt && Date.parse(a.remindAt) > now);
@@ -45,35 +45,35 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
       <Stack direction="row" useFlexGap sx={{ gap: 0.75, alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>{a.title}</Typography>
         <Chip size="small" variant="outlined" color={a.kind === 'overdue_return' ? 'error' : 'default'} label={labels[a.kind] ?? a.kind} />
-        {a.due && <Typography variant="caption" color="text.secondary">{t('Fällig', 'Due')}: {a.due}</Typography>}
+        {a.due && <Typography variant="caption" color="text.secondary">{t('common.due')}: {a.due}</Typography>}
       </Stack>
       {a.detail && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.25 }}>{a.detail}</Typography>}
-      {a.remindAt && <Typography variant="caption" color="text.secondary">{t('Erinnerung', 'Reminder')}: {formatDateTime(a.remindAt)}</Typography>}
+      {a.remindAt && <Typography variant="caption" color="text.secondary">{t('dialogs.actionInboxContent.reminder')}: {formatDateTime(a.remindAt)}</Typography>}
     </Box>
     <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>
-      <Button size="small" variant="outlined" component={Link} to={a.path} onClick={onOpenTask}>{t('Öffnen', 'Open')}</Button>
-      <IconButton title={t('Später erinnern', 'Remind later')} onClick={() => setReminder(a)}><SnoozeIcon fontSize="small" /></IconButton>
-      {a.remindAt && <IconButton title={t('Jetzt anzeigen', 'Show now')} disabled={command.isPending} onClick={() => command.mutate(() => actionInboxApi.remind({ key: a.key, remindAt: null }))}><NotificationsActiveOutlinedIcon fontSize="small" /></IconButton>}
+      <Button size="small" variant="outlined" component={Link} to={a.path} onClick={onOpenTask}>{t('common.open')}</Button>
+      <IconButton title={t('dialogs.actionInboxContent.remindLater')} onClick={() => setReminder(a)}><SnoozeIcon fontSize="small" /></IconButton>
+      {a.remindAt && <IconButton title={t('dialogs.actionInboxContent.showNow')} disabled={command.isPending} onClick={() => command.mutate(() => actionInboxApi.remind({ key: a.key, remindAt: null }))}><NotificationsActiveOutlinedIcon fontSize="small" /></IconButton>}
     </Stack>
   </ListItem>;
 
   return <Stack spacing={2}>
     <ToggleButtonGroup exclusive size="small" value={category} onChange={(_, value: Category | null) => { if (value) setCategory(value); }}
-      aria-label={t('Kategorie', 'Category')} sx={{ flexWrap: 'wrap' }}>
-      <ToggleButton value="all">{t('Alle', 'All')} ({due.length + notices.unreadTotal})</ToggleButton>
-      <ToggleButton value="notices">{t('Hinweise', 'Notices')} ({notices.unreadTotal})</ToggleButton>
-      <ToggleButton value="tasks">{t('Aufgaben', 'Tasks')} ({due.length})</ToggleButton>
-      <ToggleButton value="later">{t('Später', 'Snoozed')} ({later.length})</ToggleButton>
+      aria-label={t('common.category')} sx={{ flexWrap: 'wrap' }}>
+      <ToggleButton value="all">{t('common.all')} ({due.length + notices.unreadTotal})</ToggleButton>
+      <ToggleButton value="notices">{t('dialogs.actionInboxContent.notices')} ({notices.unreadTotal})</ToggleButton>
+      <ToggleButton value="tasks">{t('common.tasks')} ({due.length})</ToggleButton>
+      <ToggleButton value="later">{t('dialogs.actionInboxContent.snoozed')} ({later.length})</ToggleButton>
     </ToggleButtonGroup>
-    {loading && <LinearProgress aria-label={t('Posteingang wird geladen', 'Loading inbox')} />}
-    {failed && <StateMessage kind="error" title={t('Posteingang konnte nicht vollständig geladen werden', 'Could not load the whole inbox')}
-      description={t('Prüfe die Verbindung und versuche es erneut.', 'Check your connection and try again.')}
-      action={<Button onClick={() => { void query.refetch(); void notices.refetch(); }}>{t('Erneut laden', 'Retry')}</Button>} />}
-    {command.error && <StateMessage kind="error" title={t('Erinnerung konnte nicht geändert werden', 'Could not change the reminder')} description={command.error.message} />}
-    {!loading && !failed && visibleCount === 0 && <StateMessage kind="done" title={t('Alles erledigt', 'All caught up')}
-      description={t('Erledigte Aufgaben verschwinden automatisch.', 'Completed tasks disappear automatically.')} />}
+    {loading && <LinearProgress aria-label={t('dialogs.actionInboxContent.loadingInbox')} />}
+    {failed && <StateMessage kind="error" title={t('dialogs.actionInboxContent.couldNotLoadTheWholeInbox')}
+      description={t('common.checkYourConnectionAndTryAgain')}
+      action={<Button onClick={() => { void query.refetch(); void notices.refetch(); }}>{t('common.retry')}</Button>} />}
+    {command.error && <StateMessage kind="error" title={t('dialogs.actionInboxContent.couldNotChangeTheReminder')} description={command.error.message} />}
+    {!loading && !failed && visibleCount === 0 && <StateMessage kind="done" title={t('dialogs.actionInboxContent.allCaughtUp')}
+      description={t('dialogs.actionInboxContent.completedTasksDisappearAutomatically')} />}
 
-    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('Hinweise', 'Notices')} count={notices.unreadTotal}>
+    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('dialogs.actionInboxContent.notices')} count={notices.unreadTotal}>
       {notices.unread.map((notification) => {
         const path = notificationPath(notification);
         const details = noticeDetails(notification);
@@ -83,24 +83,24 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
             {details && <Typography variant="body2" color="text.secondary">{details}</Typography>}
           </Box>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>
-            {path && <Button size="small" variant="outlined" onClick={() => { notices.markRead.mutate([notification.id]); onOpenTask(); navigate(path); }}>{t('Öffnen', 'Open')}</Button>}
-            <IconButton title={translate('Als gelesen markieren', 'Mark as read')} disabled={notices.markRead.isPending} onClick={() => notices.markRead.mutate([notification.id])}><DoneAllIcon fontSize="small" /></IconButton>
+            {path && <Button size="small" variant="outlined" onClick={() => { notices.markRead.mutate([notification.id]); onOpenTask(); navigate(path); }}>{t('common.open')}</Button>}
+            <IconButton title={translate('dialogs.actionInboxContent.markAsRead')} disabled={notices.markRead.isPending} onClick={() => notices.markRead.mutate([notification.id])}><DoneAllIcon fontSize="small" /></IconButton>
           </Stack>
         </ListItem>;
       })}
       <Stack direction="row" useFlexGap sx={{ mt: 1, gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
         {notices.hasNextPage && <Button size="small" variant="outlined" disabled={notices.isFetchingNextPage} onClick={() => { void notices.fetchNextPage(); }}
-          aria-label={t(`Weitere Hinweise laden, ${notices.unread.length} von ${notices.unreadTotal} angezeigt`, `Load more notices, ${notices.unread.length} of ${notices.unreadTotal} shown`)}>
-          {t('Weitere Hinweise laden', 'Load more notices')} ({notices.unread.length}/{notices.unreadTotal})</Button>}
+          aria-label={t('dialogs.actionInboxContent.loadMoreNoticesUnreadCountOfUnreadTotalShown', { unreadCount: String(notices.unread.length), unreadTotal: String(notices.unreadTotal) })}>
+          {t('dialogs.actionInboxContent.loadMoreNotices')} ({notices.unread.length}/{notices.unreadTotal})</Button>}
         {/* Applies to every unread notice up to the newest shown, including pages not loaded yet. */}
         {notices.unreadTotal > 1 && <Button size="small" startIcon={<DoneAllIcon />} disabled={notices.markAll.isPending} onClick={() => notices.markAll.mutate()}>
-          {t(`Alle ${notices.unreadTotal} als gelesen markieren`, `Mark all ${notices.unreadTotal} as read`)}</Button>}
+          {t('dialogs.actionInboxContent.markAllUnreadTotalAsRead', { unreadTotal: String(notices.unreadTotal) })}</Button>}
       </Stack>
     </InboxSection>}
 
-    {show('tasks') && due.length > 0 && <InboxSection title={t('Aufgaben', 'Tasks')} count={due.length}>{due.map(taskRow)}</InboxSection>}
-    {show('later') && later.length > 0 && <InboxSection title={t('Später erinnern', 'Snoozed')} count={later.length}>{later.map(taskRow)}</InboxSection>}
+    {show('tasks') && due.length > 0 && <InboxSection title={t('common.tasks')} count={due.length}>{due.map(taskRow)}</InboxSection>}
+    {show('later') && later.length > 0 && <InboxSection title={t('dialogs.actionInboxContent.snoozed2')} count={later.length}>{later.map(taskRow)}</InboxSection>}
 
-    {reminder && <OperationForm title={t('Erinnerung planen', 'Schedule reminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('Zeitpunkt (innerhalb 30 Tagen)', 'Time (within 30 days)'), type: 'datetime-local', required: true }]} onSave={v => actionInboxApi.remind({ key: reminder.key, remindAt: new Date(String(v.at)).toISOString() })} />}
+    {reminder && <OperationForm title={t('dialogs.actionInboxContent.scheduleReminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('dialogs.actionInboxContent.timeWithin30Days'), type: 'datetime-local', required: true }]} onSave={v => actionInboxApi.remind({ key: reminder.key, remindAt: new Date(String(v.at)).toISOString() })} />}
   </Stack>;
 }

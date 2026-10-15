@@ -59,9 +59,16 @@ interface TooltipControlProps {
   'aria-label'?: string;
 }
 
+/**
+ * Wraps a MUI control without changing its contract: every prop (including `component`/`to` for links) and the ref
+ * are forwarded unchanged to the control, `title` keeps its string type but is shown as a tooltip, and `sx` is only
+ * split between the control and the hover wrapper of a disabled control. The result therefore keeps the control's
+ * own polymorphic props and ref target (`C`), which `forwardRef` cannot express on its own. Only MUI controls whose
+ * `title`, `disabled`, `fullWidth` and `sx` keep their usual meaning are wrapped below.
+ */
 function withActionTooltip<C extends ElementType>(Component: C, iconOnly = false): C {
-  const Control = Component as ElementType;
-  const ActionControl = forwardRef<HTMLElement, TooltipControlProps>(function ActionControl(
+  const Control: ElementType = Component;
+  const ActionControl = forwardRef<unknown, TooltipControlProps>(function ActionControl(
     { title, sx, ...props }, ref,
   ) {
     const showTooltip = Boolean(title && (iconOnly || props.disabled));
@@ -80,7 +87,6 @@ function withActionTooltip<C extends ElementType>(Component: C, iconOnly = false
         : button}
     </Tooltip>;
   });
-  // Preserve MUI's polymorphic component, link and ref overloads.
   return ActionControl as unknown as C;
 }
 

@@ -4,8 +4,24 @@ export type ApiChangeDetail = {
   source?: 'local' | 'server'; changes?: ApiChangeDetail[];
 };
 
+const CHANGE_TEXT_FIELDS = ['type', 'resource', 'id', 'itemId', 'orderId', 'eventId', 'idempotencyKey', 'status'] as const;
+
+/**
+ * Decodes one realtime payload. Only string fields are kept, nesting is bounded, and every decoded change is marked as
+ * a server change: a stream message can neither claim to be a local write nor inject non-string identifiers.
+ */
+export function decodeServerChange(value: unknown, depth = 0): ApiChangeDetail {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return { type: String(value), source: 'server' };
+  const record = value as Record<string, unknown>;
+  const change: ApiChangeDetail = { source: 'server' };
+  for (const field of CHANGE_TEXT_FIELDS) if (typeof record[field] === 'string') change[field] = record[field];
+  if ('quantity' in record) change.quantity = record.quantity;
+  if (depth < 2 && Array.isArray(record.changes)) change.changes = record.changes.map((nested) => decodeServerChange(nested, depth + 1));
+  return change;
+}
+
 type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated' | 'order.changed'
-  | 'general_order.changed' | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
+  | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'
   | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
   | 'vendor_document.attached' | 'loan.changed' | 'planning.overridden' | 'report.rebuilt' | 'reminder.changed'
@@ -19,11 +35,10 @@ export function localWriteChange(path: string): LocalWriteChange {
   switch (resource) {
     case 'access': return change('access.changed');
     case 'items': return change(action === 'equipment' ? 'equipment.changed' : action === 'assets' ? 'asset.updated' : 'catalog.changed');
-    case 'events': return change(action === 'attendees' || action === 'timeline' ? 'event_logistics.changed' : 'catalog.changed');
+    case 'events': return change(action === 'attendees' || action === 'timeline' || action === 'catering' ? 'event_logistics.changed' : 'catalog.changed');
     case 'event-people': return change('event_logistics.changed');
     case 'assemblies': case 'storage-locations': case 'factions': case 'category-maintenance': return change('catalog.changed');
     case 'orders': return change('order.changed');
-    case 'general-orders': return change('general_order.changed');
     case 'transactions': return change('stock.changed');
     case 'returns': return change('return.changed');
     case 'damage-reports': return change('damage.updated');
@@ -105,7 +120,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('transfer.')) return new Set([...stock, 'operations:transfers']);
   if (type.startsWith('count.')) return new Set([...stock, 'operations:counts']);
   if (type.startsWith('equipment.') || type.startsWith('loan.')) return new Set([...stock, 'operations:transfers']);
-  if (type === 'stock.changed' || type.startsWith('order.') || type.startsWith('general_order.') || type.startsWith('return.')
+  if (type === 'stock.changed' || type.startsWith('order.') || type.startsWith('return.')
     || type.startsWith('asset.') || type.startsWith('damage.') || type.startsWith('repair.') || type.startsWith('maintenance.')
     || type.startsWith('maintenance_schedule.') || type.startsWith('inventory_lot.') || type.startsWith('member_request.')) return new Set(stock);
   return null;

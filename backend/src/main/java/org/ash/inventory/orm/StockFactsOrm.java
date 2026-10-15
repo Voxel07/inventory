@@ -32,10 +32,6 @@ public class StockFactsOrm {
                 from stock_reservations r join scope s on s.id = r.item_id
                 where r.status in ('active','partially_released') group by r.item_id
                 union all
-                select 'reservation', s.id, null, sum(q.value::bigint), 0
-                from general_orders o cross join lateral jsonb_each_text(o.prepared_quantities) q
-                join scope s on lower(q.key) = s.id::text where o.status in ('preparing','ready') group by s.id
-                union all
                 select 'member_damage', r.item_id, null, 0, 0
                 from member_requests r join scope s on s.id = r.item_id
                 where r.kind = 'damage' and r.status <> 'resolved' and r.damage_report_id is null group by r.item_id

@@ -91,7 +91,7 @@ Preserve actor/time/history visibility for handover and reconciliation. Show cur
 
 The shell includes a keyboard-focus skip link to main content, labelled navigation, active-route `aria-current`, tab/tabpanel associations and dialog affordances. Shared controls provide titles/labels for icon actions. Preserve these patterns when editing screens. Verify focus return, keyboard use, error announcement and camera alternatives in browser acceptance (ACC-02).
 
-Use the existing naming/date/money helpers and locale-aware presentation. German and English resources coexist with inline translation pairs; key-only localization is a target (PLAN-09). Do not assume fixed label lengths. Theme/language controls must stay discoverable on mobile.
+Use the existing naming/date/money helpers and locale-aware presentation. German and English copy belongs in the i18next catalogs; use typed `useT()` / `translate()` keys and interpolation instead of inline translation pairs (PLAN-09 complete). Do not assume fixed label lengths. Theme/language controls must stay discoverable on mobile.
 
 Print CSS hides headers, drawers, navigation and `.no-print` elements, and removes main-layout padding. QR labels, order slips and report CSV/PDF exports need independent legibility checks; screen styling alone does not validate exported output (ACC-03).
 

@@ -12,7 +12,6 @@ import org.ash.inventory.resource.ApiException;
 import org.ash.inventory.resource.dto.CountDtos;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -217,8 +216,7 @@ public class CountService {
                     throw ApiException.conflict("Inventory changed after the count snapshot for " + line.item.name);
                 }
                 if (!line.item.active || line.item.trackingMode == DomainEnums.TrackingMode.serialized
-                        || line.approvedQuantity < position.quantityReserved
-                        + positions.reservedAt(position) + position.quantityDamaged + position.quantityQuarantined) {
+                        || line.approvedQuantity < positions.reservedAt(position) + position.quantityDamaged + position.quantityQuarantined) {
                     throw ApiException.conflict("Count adjustment would remove reserved or held inventory for " + line.item.name);
                 }
                 position.quantityOnHand = line.approvedQuantity;

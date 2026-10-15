@@ -42,25 +42,20 @@ public class Item extends BaseEntity {
     public String category;
     public String subcategory;
     public String supplier;
-    @Enumerated(EnumType.STRING)
-    @Column(name = "visibility_scope", nullable = false)
-    public DomainEnums.ItemVisibilityScope visibilityScope = DomainEnums.ItemVisibilityScope.global;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_user_id")
-    public UserAccount assignedUser;
-    @Column(name = "assigned_group")
-    public String assignedGroup;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "event_tags", columnDefinition = "jsonb", nullable = false)
     public List<String> eventTags = new ArrayList<>();
-    @Column(name = "is_consumable", nullable = false)
-    public boolean consumable;
     @Enumerated(EnumType.STRING)
     @Column(name = "tracking_mode", nullable = false)
     public DomainEnums.TrackingMode trackingMode = DomainEnums.TrackingMode.bulk;
     @Enumerated(EnumType.STRING)
     @Column(name = "inventory_role", nullable = false)
     public DomainEnums.InventoryRole inventoryRole = DomainEnums.InventoryRole.returnable;
+
+    /** Consumption is a property of the inventory role, which is the only stored authority. */
+    public boolean consumable() {
+        return inventoryRole == DomainEnums.InventoryRole.consumable;
+    }
     @Column(name = "min_stock", nullable = false)
     public int minStock;
     @Column(name = "unit_value_cents", nullable = false)
@@ -94,9 +89,9 @@ public class Item extends BaseEntity {
     public LocalDate batteryReplacementDue;
     @Column(name = "best_before_date")
     public LocalDate bestBeforeDate;
-    @Enumerated(EnumType.STRING)
-    @Column(name = "maintenance_status", nullable = false)
-    public DomainEnums.MaintenanceStatus maintenanceStatus = DomainEnums.MaintenanceStatus.certified;
+    /** Set by a failed item-scope inspection and cleared by a passing one; the calendar status is derived. */
+    @Column(name = "out_of_service", nullable = false)
+    public boolean outOfService;
     @Column(nullable = false)
     public boolean active = true;
 }

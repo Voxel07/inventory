@@ -61,21 +61,18 @@ export function useBarcodeScanner(enabled = true) {
         const result = await resolveScannedCode(code);
         if (result.found && result.path) {
           showSnackbar(
-            translate(
-              `Scancode erkannt: ${result.name || result.code} geöffnet`,
-              `Scan code detected: opening ${result.name || result.code}`,
-            ),
+            translate('hooks.useBarcodeScanner.scanCodeDetectedOpeningName', { name: String(result.name || result.code) }),
             'info',
           );
           navigate(result.path);
           return;
         }
       } catch (error) {
-        showSnackbar(error instanceof Error ? error.message : translate('Code konnte nicht geprüft werden.', 'Could not verify code.'), 'warning');
+        showSnackbar(error instanceof Error ? error.message : translate('hooks.useBarcodeScanner.couldNotVerifyCode'), 'warning');
         return;
       }
 
-      showSnackbar(translate(`Scancode gelesen: ${code}`, `Scan code read: ${code}`), 'info');
+      showSnackbar(translate('hooks.useBarcodeScanner.scanCodeReadCode', { code: code }), 'info');
     }
 
     window.addEventListener('keydown', handleKeyDown, true);

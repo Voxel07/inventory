@@ -20,6 +20,7 @@ export type { EventType, EventReportStatus, EventReport, EventReportFormData } f
 export type {
   Faction,
   FactionOrder,
+  FactionOrderSummary,
   FactionOrderFormData,
   FactionOrderHistoryAction,
   FactionOrderHistoryEntry,

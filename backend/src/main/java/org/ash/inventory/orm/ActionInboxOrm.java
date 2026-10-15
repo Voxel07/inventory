@@ -21,11 +21,11 @@ public class ActionInboxOrm extends EntityOrm {
         if (actor != null) query.setParameter("actor", actor);
         return query.getResultList();
     }
-    public List<FactionOrder> readyFactionOrders(java.util.UUID actor) {
-        return scoped("from FactionOrder o join fetch o.createdBy where o.status = ready", FactionOrder.class, actor, "o.createdBy.id");
+    public List<InventoryOrder> readyFactionOrders(java.util.UUID actor) {
+        return scoped("from InventoryOrder o join fetch o.createdBy where o.kind = faction and o.status = ready", InventoryOrder.class, actor, "o.createdBy.id");
     }
-    public List<GeneralOrder> readyGeneralOrders(java.util.UUID actor) {
-        return scoped("from GeneralOrder o join fetch o.createdBy left join fetch o.eventOccurrence where o.status = 'ready'", GeneralOrder.class, actor, "o.createdBy.id");
+    public List<InventoryOrder> readyGeneralOrders(java.util.UUID actor) {
+        return scoped("from InventoryOrder o join fetch o.createdBy left join fetch o.eventOccurrence where o.kind = general and o.status = ready", InventoryOrder.class, actor, "o.createdBy.id");
     }
     public List<ReturnSubmission> pendingReturns(java.util.UUID actor) {
         return scoped("from ReturnSubmission r join fetch r.item join fetch r.returnedFor where r.status = pending", ReturnSubmission.class, actor, "r.returnedFor.id");

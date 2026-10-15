@@ -30,11 +30,12 @@ public class PurchasingResource {
         this.service = service;
     }
 
-    @GET @Path("/vendors")
+    @Paged @GET @Path("/vendors")
     public List<PurchasingDtos.VendorResponse> vendors(
+            @QueryParam("search") String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.vendors(page, size);
+        return service.vendors(search, page, size);
     }
 
     @POST @Path("/vendors")
@@ -55,7 +56,7 @@ public class PurchasingResource {
         return Response.noContent().build();
     }
 
-    @GET @Path("/purchase-orders")
+    @Paged @GET @Path("/purchase-orders")
     public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(
             @QueryParam("status") String status,
             @QueryParam("page") @DefaultValue("0") int page,
@@ -81,7 +82,7 @@ public class PurchasingResource {
         return service.transitionPurchaseOrder(id, input);
     }
 
-    @GET @Path("/goods-receipts")
+    @Paged @GET @Path("/goods-receipts")
     public List<PurchasingDtos.GoodsReceiptResponse> receipts(
             @QueryParam("purchaseOrderId") UUID purchaseOrderId,
             @QueryParam("page") @DefaultValue("0") int page,
@@ -95,7 +96,7 @@ public class PurchasingResource {
         return Response.created(URI.create("/api/goods-receipts/" + created.id())).entity(created).build();
     }
 
-    @GET @Path("/vendor-documents")
+    @Paged @GET @Path("/vendor-documents")
     public List<PurchasingDtos.VendorDocumentResponse> documents(
             @QueryParam("vendorId") UUID vendorId,
             @QueryParam("purchaseOrderId") UUID purchaseOrderId,

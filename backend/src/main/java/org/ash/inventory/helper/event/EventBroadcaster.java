@@ -23,8 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 
 /**
  * Publishes application lifecycle and inventory events to Server-Sent Event (SSE) streams.
@@ -38,7 +36,6 @@ public class EventBroadcaster {
     private final ObjectMapper objectMapper;
     private final String backend;
     private final BroadcastProcessor<Map<String, Object>> processor = BroadcastProcessor.create();
-    private final CopyOnWriteArrayList<Consumer<Map<String, Object>>> internalListeners = new CopyOnWriteArrayList<>();
     private final Set<String> deliveredEventIds = ConcurrentHashMap.newKeySet();
     private volatile PubSubCommands.RedisSubscriber redisSubscriber;
     private final InventoryTelemetry telemetry;
@@ -122,12 +119,6 @@ public class EventBroadcaster {
         return Multi.createBy().merging().streams(processor, heartbeat);
     }
 
-    /** Registers an in-process listener, including for events received from other Redis-backed nodes. */
-    public Runnable addListener(Consumer<Map<String, Object>> listener) {
-        internalListeners.add(listener);
-        return () -> internalListeners.remove(listener);
-    }
-
     private void publish(Map<String, Object> payload) {
         telemetry.call("redis", "publish_event", usesRedis() ? "redis" : "memory", () -> {
             if (usesRedis()) {
@@ -162,14 +153,6 @@ public class EventBroadcaster {
         if (eventId != null && !deliveredEventIds.add(eventId.toString())) return;
         telemetry.count("inventory.events.received", 1, Attributes.builder().put("backend", usesRedis() ? "redis" : "memory").build());
         processor.onNext(payload);
-        for (var listener : internalListeners) {
-            try {
-                listener.accept(payload);
-            } catch (RuntimeException exception) {
-                telemetry.count("inventory.events.listener.failures", 1, Attributes.empty());
-                LOG.warn("Inventory event listener failed", exception);
-            }
-        }
     }
 
     private boolean usesRedis() {

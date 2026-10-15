@@ -9,9 +9,10 @@ import jakarta.persistence.UniqueConstraint;
 
 @Entity
 @Table(name = "order_line_asset_assignments", uniqueConstraints =
-        @UniqueConstraint(name = "uq_order_assigned_asset", columnNames = {"faction_order_id", "asset_instance_id"}))
+        @UniqueConstraint(name = "uq_order_assigned_asset", columnNames = {"order_id", "asset_instance_id"}))
 public class OrderLineAssetAssignment extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "faction_order_id") public FactionOrder order;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_line_id") public FactionOrderLine orderLine;
+    @jakarta.persistence.Column(nullable = false) public boolean reconciled;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_id") public InventoryOrder order;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "order_line_id") public OrderLine orderLine;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
 }

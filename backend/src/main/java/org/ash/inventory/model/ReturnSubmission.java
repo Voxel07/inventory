@@ -32,11 +32,8 @@ public class ReturnSubmission extends BaseEntity {
     public Long pendingAssetVersion;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "faction_order_id")
-    public FactionOrder factionOrder;
-
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "general_order_id")
-    public GeneralOrder generalOrder;
+    @JoinColumn(name = "order_id")
+    public InventoryOrder order;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_occurrence_id")

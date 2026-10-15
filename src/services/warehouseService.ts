@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient';
+import { apiPage, apiRequest } from './apiClient';
 
 export interface Warehouse {
   id: string;
@@ -11,7 +11,7 @@ export interface Warehouse {
 export type WarehouseInput = Pick<Warehouse, 'code' | 'name' | 'description' | 'active'>;
 
 export function getWarehouses(page: number, size: number) {
-  return apiRequest<Warehouse[]>('/api/warehouses', { query: { page, size } });
+  return apiPage<Warehouse>('/api/warehouses', page, size);
 }
 
 export function saveWarehouse(data: WarehouseInput, id?: string) {

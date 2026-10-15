@@ -8,7 +8,7 @@ import org.ash.inventory.helper.storage.MediaService;
 import org.ash.inventory.model.AssetInstance;
 import org.ash.inventory.model.DamageReport;
 import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.FactionOrder;
+import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MemberRequest;
 import org.ash.inventory.model.ReturnSubmission;
@@ -26,7 +26,6 @@ import java.util.UUID;
 @ApplicationScoped
 public class ReturnSubmissionService {
     @jakarta.inject.Inject CustodyBalanceService custody;
-    @jakarta.inject.Inject GeneralOrderService generalOrders;
     private final ReturnSubmissionOrm orm;
     private final ActorService actors;
     private final InventoryOperationsService inventory;
@@ -58,10 +57,10 @@ public class ReturnSubmissionService {
         }
 
         var balance = custody.list(false).stream().filter(row -> row.itemId().equals(item.id)
-                && row.personId().equals(returnedFor.id) && row.generalOrderId() == null
-                && java.util.Objects.equals(row.factionOrderId(), input.factionOrderId())
-                && (input.factionOrderId() != null || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
-                && (input.factionOrderId() != null || java.util.Objects.equals(row.eventOccurrenceId(), input.eventOccurrenceId())))
+                && row.personId().equals(returnedFor.id)
+                && java.util.Objects.equals(row.factionOrderId() == null ? row.generalOrderId() : row.factionOrderId(), input.orderId())
+                && (row.factionOrderId() != null || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
+                && (input.orderId() != null || java.util.Objects.equals(row.eventOccurrenceId(), input.eventOccurrenceId())))
                 .findFirst().orElseThrow(() -> ApiException.conflict("No matching outstanding custody; return order items through their order"));
         if (input.quantity() + balance.pendingQuantity() > balance.checkedOut()) {
             throw ApiException.conflict("Return quantity exceeds the user's outstanding quantity");
@@ -75,7 +74,7 @@ public class ReturnSubmissionService {
             }
             asset = orm.requireLockedFresh(AssetInstance.class, input.assetInstanceId(), "Asset instance");
             if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to this item");
-            if (input.factionOrderId() != null && !orm.assignedToOrder(asset.id, input.factionOrderId())) {
+            if (input.orderId() != null && !orm.assignedToOrder(asset.id, input.orderId())) {
                 throw ApiException.conflict("Asset is not assigned to this order");
             }
             if (asset.availabilityStatus != DomainEnums.AssetState.in_field
@@ -94,8 +93,8 @@ public class ReturnSubmissionService {
         value.assetInstance = asset;
         value.previousAssetState = valueAssetStateHolder;
         value.pendingAssetVersion = asset == null ? null : asset.version;
-        value.factionOrder = input.factionOrderId() == null ? null
-                : orm.require(FactionOrder.class, input.factionOrderId(), "Faction order");
+        value.order = input.orderId() == null ? null
+                : orm.require(InventoryOrder.class, input.orderId(), "Order");
         value.eventOccurrence = balance.eventOccurrenceId() == null ? null
                 : orm.require(org.ash.inventory.model.EventOccurrence.class, balance.eventOccurrenceId(), "Event");
         value.returnedFor = returnedFor;
@@ -119,17 +118,15 @@ public class ReturnSubmissionService {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
         var worker = actors.current();
-        if (value.generalOrder != null) {
-            generalOrders.returnItems(value.generalOrder.id, new ApiModels.GeneralOrderReturnInput(
-                    Map.of(value.item.id, value.quantity), null, null, null, null,
-                    value.assetInstance == null ? null : Map.of(value.item.id, List.of(value.assetInstance.id)),
-                    null, null, value.id, value.notes, null));
-        } else if (value.factionOrder != null) {
-            var line = new ApiModels.ReturnLine(value.quantity, 0, 0, 0, 0, null, value.notes);
+        if (value.order != null) {
+            var relevant = value.order.lines.stream().filter(line -> line.item.id.equals(value.item.id)).toList();
+            int outstanding = relevant.stream().mapToInt(CustodyQuantities::outstanding).sum();
+            int missing = relevant.stream().mapToInt(line -> line.missingQuantity).sum();
+            var line = new ApiModels.ReturnLine(value.quantity, 0, Math.min(missing, Math.max(0, outstanding - value.quantity)), 0, 0, null, value.notes);
             Map<UUID, ApiModels.AssetReturnLine> assets = value.assetInstance == null ? Map.of()
                     : Map.of(value.assetInstance.id, new ApiModels.AssetReturnLine(
                             DomainEnums.ReconciliationOutcome.returned_good, null, value.notes));
-            orders.returnItems(value.factionOrder.id,
+            orders.returnItems(value.order.id,
                     new ApiModels.ReturnInput(Map.of(value.item.id, line), assets, value.id, value.notes));
         } else {
             inventory.transact(new ApiModels.TransactionInput(
@@ -154,7 +151,7 @@ public class ReturnSubmissionService {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
         var worker = actors.current();
-        if (value.assetInstance != null && value.generalOrder == null) {
+        if (value.assetInstance != null) {
             var asset = orm.requireLockedFresh(AssetInstance.class, value.assetInstance.id, "Asset instance");
             if (asset.active && asset.item.id.equals(value.item.id)
                     && asset.availabilityStatus == DomainEnums.AssetState.returned_pending_check
@@ -215,16 +212,14 @@ public class ReturnSubmissionService {
             return report.assetInstance != null && report.assetInstance.id.equals(value.assetInstance.id);
         }
         return report.reporter.id.equals(value.returnedFor.id) || report.reporter.id.equals(value.submittedBy.id)
-                || (value.factionOrder != null && report.factionOrder != null && report.factionOrder.id.equals(value.factionOrder.id));
+                || (value.order != null && report.order != null && report.order.id.equals(value.order.id));
     }
 
     private ReturnSubmission pendingForDecision(UUID id) {
         var submitted = orm.require(ReturnSubmission.class, id, "Return submission");
         // Match order commands: order -> item -> asset. Serialize decisions last.
-        if (submitted.generalOrder != null)
-            orm.requireLockedFresh(org.ash.inventory.model.GeneralOrder.class, submitted.generalOrder.id, "General order");
-        else if (submitted.factionOrder != null)
-            orm.requireLockedFresh(FactionOrder.class, submitted.factionOrder.id, "Faction order");
+        if (submitted.order != null)
+            orm.requireLockedFresh(InventoryOrder.class, submitted.order.id, "Faction order");
         orm.requireLockedFresh(Item.class, submitted.item.id, "Item");
         if (submitted.assetInstance != null)
             orm.requireLockedFresh(AssetInstance.class, submitted.assetInstance.id, "Asset instance");

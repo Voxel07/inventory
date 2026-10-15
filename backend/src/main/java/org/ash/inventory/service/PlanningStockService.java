@@ -11,7 +11,6 @@ import org.ash.inventory.orm.PlanningStockOrm;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.*;
 
 /** Request-local stock snapshot. All access after load() is in memory. */
@@ -33,7 +32,7 @@ public class PlanningStockService {
         items.forEach(item -> snapshots.put(item.id, new ItemStock(item, now)));
         for (var row : orm.snapshot(items.stream().map(item -> item.id).toList(), BusinessTime.today())) {
             try {
-                snapshots.get((UUID) row[1]).read((String) row[0], row, json);
+                snapshots.get(row.itemId()).read(row, json);
             } catch (JsonProcessingException ex) {
                 throw new IllegalStateException("Could not read planning stock snapshot", ex);
             }
@@ -74,65 +73,69 @@ public class PlanningStockService {
         private long itemCheckoutCount;
         private int inTransit;
         private boolean memberDamage;
+        private AvailabilityEligibility eligibility;
 
         private ItemStock(Item item, Instant now) { this.item = item; this.now = now; }
         public InventoryOperationsService.StockState physical() { return physical; }
         public InventoryOperationsService.StockState stock() { return stock; }
 
-        private void read(String kind, Object[] row, ObjectMapper json) throws JsonProcessingException {
-            switch (kind) {
+        /**
+         * Reads one snapshot row. Assets, commitments and loans become detached, read-only value holders for the
+         * shared availability rules; they are never attached to the persistence context.
+         */
+        private void read(PlanningStockOrm.SnapshotRow row, ObjectMapper json) throws JsonProcessingException {
+            switch (row.kind()) {
                 case "transaction" -> {
-                    totals.put(DomainEnums.TransactionType.valueOf((String) row[4]), number(row[7]));
-                    custodyWriteOff += number(row[8]);
+                    totals.put(DomainEnums.TransactionType.valueOf(row.text1()), row.quantity1());
+                    custodyWriteOff += row.quantity2();
                 }
-                case "damage" -> damage += number(row[7]);
-                case "reservation" -> reservations += number(row[7]);
+                case "damage" -> damage += row.quantity1();
+                case "reservation" -> reservations += row.quantity1();
                 case "member_damage" -> memberDamage = true;
                 case "position" -> {
-                    inTransit += Math.toIntExact(number(row[11]));
-                    boolean usable = (boolean) row[19]
-                            && (item.trackingMode != DomainEnums.TrackingMode.lot_tracked || (boolean) row[18]);
-                    int onHand = Math.toIntExact(number(row[7])), damaged = Math.toIntExact(number(row[8]));
-                    int quarantined = Math.toIntExact(number(row[10]));
-                    positions.add(new Position((UUID) row[3],
+                    // quantity1 on hand, quantity2 damaged, quantity4 quarantined, decimal in transit;
+                    // flag1 has a lot, flag2 the lot is usable today.
+                    inTransit += row.decimal().intValueExact();
+                    boolean usable = row.flag2() && (item.trackingMode != DomainEnums.TrackingMode.lot_tracked || row.flag1());
+                    int onHand = Math.toIntExact(row.quantity1()), damaged = Math.toIntExact(row.quantity2());
+                    int quarantined = Math.toIntExact(row.quantity4());
+                    positions.add(new Position(row.referenceId(),
                             usable ? quarantined : Math.max(0, onHand - damaged),
-                            usable ? Math.max(0, onHand - damaged - quarantined - Math.toIntExact(number(row[9]))) : 0));
+                            usable ? Math.max(0, onHand - damaged - quarantined) : 0));
                 }
                 case "asset" -> {
-                    var asset = new AssetInstance(); asset.id = (UUID) row[2]; asset.item = item;
-                    asset.currentLocation = location((UUID) row[3]);
-                    asset.availabilityStatus = DomainEnums.AssetState.valueOf((String) row[4]);
-                    asset.conditionStatus = DomainEnums.ConditionStatus.valueOf((String) row[5]);
-                    asset.serviceStatus = DomainEnums.MaintenanceStatus.valueOf((String) row[6]);
-                    asset.operatingHours = (BigDecimal) row[11]; assets.add(asset);
+                    var asset = new AssetInstance(); asset.id = row.entityId(); asset.item = item;
+                    asset.currentLocation = location(row.referenceId());
+                    asset.availabilityStatus = DomainEnums.AssetState.valueOf(row.text1());
+                    asset.conditionStatus = DomainEnums.ConditionStatus.valueOf(row.text2());
+                    asset.outOfService = row.flag1();
+                    asset.nextMaintenanceDue = row.date1();
+                    asset.operatingHours = row.decimal(); assets.add(asset);
                 }
                 case "checkout_count" -> {
-                    itemCheckoutCount += number(row[7]);
-                    if (row[2] != null) checkoutCounts.put((UUID) row[2], number(row[7]));
+                    itemCheckoutCount += row.quantity1();
+                    if (row.entityId() != null) checkoutCounts.put(row.entityId(), row.quantity1());
                 }
-                case "schedule" -> schedules.add(new MaintenancePolicy.Facts((UUID) row[2],
-                        DomainEnums.MaintenanceIntervalType.valueOf((String) row[4]), instant(row[14]), (BigDecimal) row[11],
-                        row[5] == null ? null : new BigDecimal((String) row[5])));
-                case "consumed" -> consumed.merge(BusinessTime.date(instant(row[14])),
-                        Math.toIntExact(number(row[7])), Integer::sum);
+                case "schedule" -> schedules.add(new MaintenancePolicy.Facts(row.entityId(),
+                        DomainEnums.MaintenanceIntervalType.valueOf(row.text1()), row.timestamp(), row.decimal(),
+                        row.text2() == null ? null : new BigDecimal(row.text2())));
+                case "consumed" -> consumed.merge(BusinessTime.date(row.timestamp()), Math.toIntExact(row.quantity1()), Integer::sum);
                 case "commitment" -> {
-                    var commitment = new EquipmentCommitment(); commitment.id = (UUID) row[2]; commitment.item = item;
-                    UUID eventId = (UUID) row[3];
-                    if (eventId != null) { commitment.event = new EventOccurrence(); commitment.event.id = eventId; }
-                    commitment.quantity = Math.toIntExact(number(row[7])); commitment.assetIds = strings((String) row[15], json);
-                    commitment.availableFrom = LocalDate.parse(row[12].toString());
-                    commitment.availableUntil = LocalDate.parse(row[13].toString());
-                    commitment.createdAt = instant(row[14]); commitments.add(commitment);
-                    UUID loanId = (UUID) row[21];
-                    if (loanId != null) {
-                        var loan = new LoanArrangement(); loan.id = loanId; loan.commitment = commitment;
-                        loan.providerLocation = location((UUID) row[20]);
-                        loan.collected = Math.toIntExact(number(row[8])); loan.returned = Math.toIntExact(number(row[9]));
-                        loan.collectedAssets = strings((String) row[16], json); loan.returnedAssets = strings((String) row[17], json);
+                    var commitment = new EquipmentCommitment(); commitment.id = row.entityId(); commitment.item = item;
+                    if (row.referenceId() != null) { commitment.event = new EventOccurrence(); commitment.event.id = row.referenceId(); }
+                    commitment.quantity = Math.toIntExact(row.quantity1()); commitment.assetIds = strings(row.json1(), json);
+                    commitment.availableFrom = row.date1();
+                    commitment.availableUntil = row.date2();
+                    commitment.createdAt = row.timestamp(); commitments.add(commitment);
+                    if (row.loanId() != null) {
+                        var loan = new LoanArrangement(); loan.id = row.loanId(); loan.commitment = commitment;
+                        loan.providerLocation = location(row.providerId());
+                        loan.collected = Math.toIntExact(row.quantity2()); loan.returned = Math.toIntExact(row.quantity3());
+                        loan.collectedAssets = strings(row.json2(), json); loan.returnedAssets = strings(row.json3(), json);
                         loans.put(commitment.id, loan);
                     }
                 }
-                default -> throw new IllegalStateException("Unknown planning stock row: " + kind);
+                default -> throw new IllegalStateException("Unknown planning stock row: " + row.kind());
             }
         }
 
@@ -148,10 +151,7 @@ public class PlanningStockService {
         }
 
         public boolean hasMemberDamage() { return memberDamage; }
-        public boolean itemUsable() {
-            return !MaintenancePolicy.blocksItem(item.active, item.maintenanceStatus, item.nextMaintenanceDue, BusinessTime.date(now))
-                    && schedules.stream().filter(s -> s.assetId() == null).noneMatch(s -> blocking(s, null));
-        }
+        public boolean itemUsable() { return eligibility().itemUsable(); }
         public List<EquipmentCommitment> commitments() { return commitments; }
         public LoanArrangement loan(EquipmentCommitment commitment) { return loans.get(commitment.id); }
         public List<AssetInstance> assets() { return assets; }
@@ -161,29 +161,12 @@ public class PlanningStockService {
         public int internalQuantity(UUID providerId) {
             return positions.stream().filter(p -> !p.locationId().equals(providerId)).mapToInt(Position::available).sum();
         }
-        public boolean usable(AssetInstance asset) {
-            if (!asset.active || Set.of(DomainEnums.ConditionStatus.damaged, DomainEnums.ConditionStatus.unsafe,
-                    DomainEnums.ConditionStatus.lost).contains(asset.conditionStatus)
-                    || Set.of(DomainEnums.MaintenanceStatus.overdue, DomainEnums.MaintenanceStatus.in_service).contains(asset.serviceStatus)) return false;
-            for (var schedule : schedules) {
-                if (schedule.assetId() != null && !schedule.assetId().equals(asset.id)) continue;
-                if (blocking(schedule, asset)) return false;
-            }
-            return true;
-        }
+        public boolean usable(AssetInstance asset) { return eligibility().usable(asset); }
 
-        private boolean blocking(MaintenancePolicy.Facts schedule, AssetInstance asset) {
-            return MaintenancePolicy.blocksCheckout(MaintenancePolicy.status(schedule, now,
-                    new MaintenancePolicy.Counters(item.currentOperatingHours, itemCheckoutCount,
-                            asset == null ? null : asset.operatingHours, asset == null ? 0 : checkoutCounts.getOrDefault(asset.id, 0L))));
-        }
-
-        private static long number(Object value) { return ((Number) value).longValue(); }
-        private static Instant instant(Object value) {
-            if (value == null) return null;
-            if (value instanceof Instant instant) return instant;
-            if (value instanceof OffsetDateTime dateTime) return dateTime.toInstant();
-            return ((java.sql.Timestamp) value).toInstant();
+        /** Schedules here are already restricted to active, checkout-blocking ones by the snapshot query. */
+        private AvailabilityEligibility eligibility() {
+            if (eligibility == null) eligibility = new AvailabilityEligibility(item, now, schedules, itemCheckoutCount, checkoutCounts);
+            return eligibility;
         }
         private static StorageLocation location(UUID id) {
             if (id == null) return null;

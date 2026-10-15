@@ -3,7 +3,7 @@ import { Box, Collapse, Stack, Table, TableBody, TableCell, TableContainer, Tabl
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Button } from '../shared/ActionButtons';
-import { useLocalizedText } from '../../utils/naming';
+import { useT } from '../../utils/naming';
 
 /**
  * Line items of an operation. Phones get stacked label/value rows instead of a
@@ -33,14 +33,14 @@ export function OperationLines({ label, headers, rows }: { label: string; header
 
 /** Line items behind a toggle, for records whose lines would otherwise make the page very long. */
 export function CollapsibleOperationLines({ summary, ...props }: Parameters<typeof OperationLines>[0] & { summary?: ReactNode }) {
-  const t = useLocalizedText();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const id = useId();
   return <Box>
     <Stack direction="row" useFlexGap sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
       <Button size="small" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={id}
         startIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ px: 0.5 }}>
-        {open ? t('Positionen ausblenden', 'Hide lines') : t(`${props.rows.length} Positionen anzeigen`, `Show ${props.rows.length} lines`)}
+        {open ? t('operations.operationLines.hideLines') : t('operations.operationLines.showRowCountLines', { rowCount: String(props.rows.length) })}
       </Button>
       {summary && <Typography variant="body2" color="text.secondary">{summary}</Typography>}
     </Stack>

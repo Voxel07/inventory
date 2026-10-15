@@ -19,13 +19,13 @@ public class SyncResource {
     @POST
     public ApiResponses.SyncBatchResponse sync(@Valid ApiModels.SyncBatch batch) { return sync.sync(batch); }
 
-    @GET @Path("/audit")
+    @Paged @GET @Path("/audit")
     public List<ApiResponses.SyncAuditResponse> audit(@QueryParam("status") String status,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         return sync.audit(status, page, size);
     }
 
-    @GET @Path("/audit/mine")
+    @Paged @GET @Path("/audit/mine")
     public List<ApiResponses.SyncAuditResponse> myAudit(@QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) { return sync.myAudit(page, size); }
 

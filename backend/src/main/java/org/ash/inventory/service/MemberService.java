@@ -135,14 +135,11 @@ public class MemberService {
         if (prior != null) { if (!prior.returnedFor.id.equals(actor.id)) throw ApiException.conflict("Command already used"); return prior.id; }
         row = custodyRows().stream().filter(b -> b.key().equals(input.custodyKey())).findFirst().orElseThrow(() -> ApiException.conflict("Custody changed"));
         if (input.quantity() > row.checkedOut() - row.pendingQuantity()) throw ApiException.conflict("Quantity already submitted or no longer outstanding");
-        if (row.generalOrderId() == null) { var result = returns.create(new ApiModels.ReturnSubmissionInput(row.itemId(), input.quantity(),
-                row.assetInstanceId() == null ? input.assetId() : row.assetInstanceId(), actor.id, row.factionOrderId(), null, input.notes(), row.eventOccurrenceId())); result.memberCommandId = input.commandId(); return result.id; }
-        var r = new ReturnSubmission(); r.item = orm.find(Item.class, row.itemId()); r.generalOrder = orm.find(GeneralOrder.class, row.generalOrderId());
-        r.assetInstance = row.assetInstanceId() == null ? null : orm.find(AssetInstance.class, row.assetInstanceId());
-        r.eventOccurrence = r.generalOrder.eventOccurrence; r.returnedFor = actor; r.submittedBy = actor; r.quantity = input.quantity(); r.notes = input.notes();
-        r.expectedReturnLocation = r.item.returnLocation == null ? r.item.storageLocation : r.item.returnLocation;
-        r.memberCommandId = input.commandId();
-        orm.persist(r); events.record("return.submitted", "return_submission", r.id, actor.id, null, Map.of("itemId", r.item.id.toString(), "quantity", r.quantity)); return r.id;
+        var result = returns.create(new ApiModels.ReturnSubmissionInput(row.itemId(), input.quantity(),
+                row.assetInstanceId() == null ? input.assetId() : row.assetInstanceId(), actor.id,
+                row.factionOrderId() == null ? row.generalOrderId() : row.factionOrderId(), null, input.notes(), row.eventOccurrenceId()));
+        result.memberCommandId = input.commandId();
+        return result.id;
     }
     private static CustodyBalanceService.Balance withName(CustodyBalanceService.Balance b, String name) {
         return new CustodyBalanceService.Balance(b.key(), b.itemId(), name, b.category(), b.storageLocation(), b.checkedOut(), b.pendingQuantity(),

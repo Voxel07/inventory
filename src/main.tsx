@@ -4,6 +4,7 @@ import App from './App.tsx'
 import './index.css'
 import 'leaflet/dist/leaflet.css'
 import { initializeAuth } from './services/apiClient.ts'
+import './services/offlineSnapshot.ts'
 
 async function bootstrap() {
   await initializeAuth()

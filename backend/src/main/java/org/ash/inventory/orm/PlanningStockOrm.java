@@ -2,7 +2,10 @@ package org.ash.inventory.orm;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +40,7 @@ public class PlanningStockOrm {
     }
 
     private static final String SNAPSHOT_SQL = """
-            with scope as (select id, is_consumable, availability_policy from items where id in (:itemIds)),
+            with scope as (select id, inventory_role, availability_policy from items where id in (:itemIds)),
             ledger as (
                 select t.item_id, t.asset_instance_id, t.type, t.quantity, t.custody_write_off, t.created_at
                 from stock_transactions t join scope s on s.id = t.item_id
@@ -55,21 +58,17 @@ public class PlanningStockOrm {
                     "sum(r.reserved_quantity - r.released_quantity)",
                     null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                     "stock_reservations r join scope s on s.id = r.item_id where r.status in ('active', 'partially_released') group by r.item_id"),
-            rows("reservation", "s.id", null, null, null, null, null,
-                    "sum(q.value::bigint)",
-                    null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    "general_orders o cross join lateral jsonb_each_text(o.prepared_quantities) q join scope s on lower(q.key) = s.id::text where o.status in ('preparing', 'ready') group by s.id"),
             rows("member_damage", "r.item_id", null, null, null, null, null,
                     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                     "member_requests r join scope s on s.id = r.item_id where r.kind = 'damage' and r.status <> 'resolved' and r.damage_report_id is null group by r.item_id"),
             rows("position", "p.item_id", null, "p.location_id", null, null, null,
-                    "p.quantity_on_hand", "p.quantity_damaged", "p.quantity_reserved", "p.quantity_quarantined",
+                    "p.quantity_on_hand", "p.quantity_damaged", null, "p.quantity_quarantined",
                     "p.quantity_in_transit", null, null, null, null, null, null, "p.lot_id is not null",
                     "l.id is null or (l.status = 'available' and (l.expiry_date is null or l.expiry_date >= :today) and (l.best_before_date is null or l.best_before_date >= :today))",
                     null, null, "inventory_positions p join scope s on s.id = p.item_id left join inventory_lots l on l.id = p.lot_id"),
             rows("asset", "a.item_id", "a.id", "a.current_location_id",
-                    "a.availability_status", "a.condition_status", "a.service_status", null, null, null, null,
-                    "a.operating_hours", null, null, null, null, null, null, null, null, null, null,
+                    "a.availability_status", "a.condition_status", null, null, null, null, null,
+                    "a.operating_hours", "a.next_maintenance_due", null, null, null, null, null, "a.out_of_service", null, null, null,
                     "asset_instances a join scope s on s.id = a.item_id where a.active = true"),
             rows("checkout_count", "t.item_id", "t.asset_instance_id", null, null, null, null,
                     "count(*)", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
@@ -81,7 +80,7 @@ public class PlanningStockOrm {
             rows("consumed", "t.item_id", null, null, null, null, null,
                     "sum(t.quantity)", null, null, null, null, null, null, "t.created_at", null, null, null,
                     null, null, null, null,
-                    "ledger t join scope s on s.id = t.item_id where t.type = 'consumed' and s.is_consumable = true and s.availability_policy = 'commitment_required' group by t.item_id, t.created_at"),
+                    "ledger t join scope s on s.id = t.item_id where t.type = 'consumed' and s.inventory_role = 'consumable' and s.availability_policy = 'commitment_required' group by t.item_id, t.created_at"),
             rows("commitment", "c.item_id", "c.id", "c.event_id", null, null, null,
                     "c.quantity", "l.collected", "l.returned", null, null,
                     "c.available_from", "c.available_until", "c.created_at",
@@ -89,17 +88,36 @@ public class PlanningStockOrm {
                     "l.provider_location_id", "l.id",
                     "equipment_commitments c join scope s on s.id = c.item_id left join loan_arrangements l on l.commitment_id = c.id where c.cancelled = false"));
 
+    /**
+     * One snapshot row, mapped once from the shared UNION ALL columns. The meaning of the generic columns depends on
+     * {@code kind}; each branch above documents it by the expression it selects into the column.
+     */
+    public record SnapshotRow(String kind, UUID itemId, UUID entityId, UUID referenceId, String text1, String text2,
+            long quantity1, long quantity2, long quantity3, long quantity4, BigDecimal decimal, LocalDate date1,
+            LocalDate date2, Instant timestamp, String json1, String json2, String json3, boolean flag1, boolean flag2,
+            UUID providerId, UUID loanId) {
+        private static SnapshotRow of(Object[] row) {
+            return new SnapshotRow((String) row[0], (UUID) row[1], (UUID) row[2], (UUID) row[3], (String) row[4],
+                    (String) row[5], count(row[7]), count(row[8]), count(row[9]), count(row[10]), (BigDecimal) row[11],
+                    (LocalDate) row[12], (LocalDate) row[13], row[14] == null ? null : ((OffsetDateTime) row[14]).toInstant(),
+                    (String) row[15], (String) row[16], (String) row[17], Boolean.TRUE.equals(row[18]),
+                    Boolean.TRUE.equals(row[19]), (UUID) row[20], (UUID) row[21]);
+        }
+        private static long count(Object value) { return value == null ? 0 : ((Number) value).longValue(); }
+    }
+
     @SuppressWarnings("unchecked")
-    public List<Object[]> snapshot(List<UUID> itemIds, LocalDate today) {
+    public List<SnapshotRow> snapshot(List<UUID> itemIds, LocalDate today) {
         if (itemIds.isEmpty()) return List.of();
         org.hibernate.query.NativeQuery<Object[]> query = em.createNativeQuery(SNAPSHOT_SQL, Object[].class)
                 .unwrap(org.hibernate.query.NativeQuery.class);
         // Register in SELECT order; JDBC drivers otherwise infer UUIDs as binary values.
         String[] columns = {"kind", "item_id", "entity_id", "reference_id", "text1", "text2", "text3", "quantity1", "quantity2", "quantity3", "quantity4", "decimal_value", "date1", "date2", "timestamp_value", "json1", "json2", "json3", "flag1", "flag2", "provider_id", "loan_id"};
         Class<?>[] types = {String.class, UUID.class, UUID.class, UUID.class, String.class, String.class, String.class,
-                Long.class, Long.class, Long.class, Long.class, java.math.BigDecimal.class, LocalDate.class, LocalDate.class,
-                java.time.OffsetDateTime.class, String.class, String.class, String.class, Boolean.class, Boolean.class, UUID.class, UUID.class};
+                Long.class, Long.class, Long.class, Long.class, BigDecimal.class, LocalDate.class, LocalDate.class,
+                OffsetDateTime.class, String.class, String.class, String.class, Boolean.class, Boolean.class, UUID.class, UUID.class};
         for (int i = 0; i < columns.length; i++) query.addScalar(columns[i], types[i]);
-        return query.setParameter("itemIds", itemIds).setParameter("today", today).getResultList();
+        List<Object[]> rows = query.setParameter("itemIds", itemIds).setParameter("today", today).getResultList();
+        return rows.stream().map(SnapshotRow::of).toList();
     }
 }

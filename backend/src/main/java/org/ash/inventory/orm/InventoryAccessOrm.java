@@ -91,10 +91,6 @@ public class InventoryAccessOrm extends EntityOrm {
         entityManager.createQuery("select k.ancestor from InventoryAccessLink k where k.policy = :policy order by k.ancestor.id", InventoryAccessPolicy.class)
                 .setParameter("policy", policy).getResultList().forEach(this::lock);
     }
-    public List<UUID> ancestorPolicyIds(InventoryAccessPolicy policy) {
-        return entityManager.createQuery("select k.ancestor.id from InventoryAccessLink k where k.policy = :policy", UUID.class)
-                .setParameter("policy", policy).getResultList();
-    }
     /** Replaces the inheritance links of {@code policy}. */
     public void replaceLinks(InventoryAccessPolicy policy, Collection<InventoryAccessPolicy> ancestors) {
         entityManager.createQuery("delete from InventoryAccessLink k where k.policy = :policy").setParameter("policy", policy).executeUpdate();
@@ -194,7 +190,7 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select item_id as source, id as target from member_requests where item_id is not null
                 union all select item_id as source, id as target from custody_handover_lines where item_id is not null
                 union all select item_id as source, id as target from stock_transactions where item_id is not null
-                union all select item_id as source, id as target from faction_order_lines where item_id is not null
+                union all select item_id as source, id as target from order_lines where item_id is not null
                 union all select item_id as source, id as target from inventory_count_lines where item_id is not null
                 union all select item_id as source, id as target from inventory_count_sessions where item_id is not null
                 union all select item_id as source, id as target from inventory_transfer_lines where item_id is not null
@@ -216,13 +212,14 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select provider_location_id as source, id as target from loan_arrangements where provider_location_id is not null
                 union all select location_id as source, id as target from custody_handovers where location_id is not null
                 union all select receiving_location_id as source, id as target from goods_receipts where receiving_location_id is not null
-                union all select pickup_location_id as source, id as target from faction_orders where pickup_location_id is not null
+                union all select pickup_location_id as source, id as target from orders where pickup_location_id is not null
                 union all select damage_report_id as source, id as target from repair_cases where damage_report_id is not null
                 union all select commitment_id as source, id as target from loan_arrangements where commitment_id is not null
                 union all select item_id as source, assembly_id as target from assembly_items where item_id is not null
                 union all select assembly_id as source, id as target from damage_reports where assembly_id is not null
-                union all select source_assembly_id as source, id as target from faction_order_lines where source_assembly_id is not null
-                union all select id as source, faction_order_id as target from faction_order_lines where id is not null
+                union all select source_location_id as source, id as target from order_lines where source_location_id is not null
+                union all select source_assembly_id as source, id as target from order_lines where source_assembly_id is not null
+                union all select id as source, order_id as target from order_lines where id is not null
                 union all select id as source, count_session_id as target from inventory_count_lines where id is not null
                 union all select id as source, transfer_id as target from inventory_transfer_lines where id is not null
                 union all select id as source, purchase_order_id as target from purchase_order_lines where id is not null
@@ -231,14 +228,6 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select purchase_order_id as source, id as target from vendor_documents where purchase_order_id is not null
                 union all select goods_receipt_id as source, id as target from vendor_documents where goods_receipt_id is not null
                 union all select purchase_order_id as source, id as target from goods_receipts where purchase_order_id is not null
-                union all select value::uuid as source, o.id as target from general_orders o,
-                lateral jsonb_each_text(o.source_locations) as source_location
-                where value ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-                union all select key::uuid as source, o.id as target from general_orders o,
-                lateral jsonb_object_keys(o.requested_quantities || o.prepared_quantities || o.handed_over_quantities
-                    || o.returned_quantities || o.consumed_quantities || o.damaged_quantities || o.missing_quantities
-                    || o.written_off_quantities || o.asset_assignments || o.source_locations) as key
-                where key ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
             """;
 
     /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly. */

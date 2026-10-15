@@ -14,7 +14,8 @@ services:
     environment:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-inventory}
+      # Required, never defaulted: compose refuses to start with a missing or empty password.
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a unique secret (openssl rand -hex 32)}
     ports:
       - "${DB_REPLICATION_BIND_ADDRESS:-127.0.0.1}:${DB_REPLICATION_PORT:-5432}:5432"
     volumes:
@@ -34,9 +35,11 @@ services:
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
       DB_URL: jdbc:postgresql://postgres:5432/inventory
       DB_USER: inventory
-      DB_PASSWORD: ${DB_PASSWORD:-inventory}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a unique secret (openssl rand -hex 32)}
       # Single API node: in-process events and rate limiting. docker-compose.cluster.yml adds Valkey.
       API_RATE_LIMIT_BACKEND: memory
+      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-300}
+      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
       EVENT_BACKEND: memory
       INVENTORY_TIMEZONE: ${INVENTORY_TIMEZONE:-Europe/Berlin}
       INVENTORY_ACCESS_GROUP: ${INVENTORY_ACCESS_GROUP:-inventory}
@@ -58,12 +61,12 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://openobserve:5080/api/default}
       OTEL_EXPORTER_OTLP_TOKEN: ${OTEL_EXPORTER_OTLP_TOKEN:-}
       OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-WARN}
-      OTEL_LOGS_LEVEL: ${OTEL_LOGS_LEVEL:-DEBUG}
+      OTEL_LOGS_LEVEL: ${OTEL_LOGS_LEVEL:-INFO}
       OTEL_SERVICE_INSTANCE_ID: ${OTEL_SERVICE_INSTANCE_ID:-}
       OTEL_LOG_STREAM: ${OTEL_LOG_STREAM:-inventory_backend}
       OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15s}
       OTEL_OUTBOX_SNAPSHOT_EVERY: ${OTEL_OUTBOX_SNAPSHOT_EVERY:-30s}
-      INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-DEBUG}
+      INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-INFO}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       APP_VERSION: ${APP_VERSION:-dev}
       MEDIA_MODE: ${MEDIA_MODE:-local}

@@ -3,11 +3,11 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import BadgeIcon from '@mui/icons-material/Badge';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { useAuth } from '../hooks/useAuth';
-import { useT } from '../utils/naming';
+import { useT, type TranslationKey } from '../utils/naming';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { factionKeyOf } from '../utils/access';
 
-const ROLE_KEYS: Record<string, string> = {
+const ROLE_KEYS: Record<string, TranslationKey> = {
   admin: 'profile.roles.admin',
   warehouse_crew: 'profile.roles.warehouseCrew',
   ash: 'profile.roles.ash',

@@ -3,7 +3,7 @@ import { storageLocationApi } from '../services/storageLocationService';
 import { createResourceHooks } from './useResourceApi';
 
 export const {
-  useList: useStorageLocations,
+  useAll: useStorageLocations,
   useDetail: useStorageLocation,
   useCreate: useCreateStorageLocation,
   useUpdate: useUpdateStorageLocation,

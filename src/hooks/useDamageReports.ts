@@ -7,7 +7,7 @@ import {
 } from '../services/damageReportService';
 import { createCreateResourceHooks } from './useResourceApi';
 import type { DamageReport, DamageReportFormData, DamageReportUpdateData, DamageStatus } from '../types';
-import { useProgressiveList } from './useProgressiveList';
+import { usePagedList } from './usePagedList';
 
 const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
   damageReportApi,
@@ -16,13 +16,9 @@ const baseHooks = createCreateResourceHooks<DamageReport, DamageReportFormData>(
 
 export const useCreateDamageReport = baseHooks.useCreate;
 
-export function useDamageReports(itemId?: string, filters?: { assetInstanceId?: string; assemblyId?: string; size?: number }) {
+export function useDamageReports(itemId?: string, filters?: { assetInstanceId?: string; assemblyId?: string; status?: readonly DamageStatus[] }, size?: number) {
   const query = { itemId, ...filters };
-  return useProgressiveList<DamageReport>(
-    ['damageReports', query],
-    (page, size) => getDamageReports({ ...query, page, size }),
-    filters,
-  );
+  return usePagedList<DamageReport>(['damageReports', query], (page, pageSize) => getDamageReports(query, page, pageSize), { size });
 }
 
 export function useUpdateDamageReportStatus() {

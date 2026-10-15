@@ -18,7 +18,7 @@ import {
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { StorageLocation } from '../../../types';
-import { translate, useLocalizedText } from '../../../utils/naming';
+import { translate, useT } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
 export interface OrderPickupMapDialogProps {
@@ -49,7 +49,7 @@ export function OrderPickupMapDialog({
   isTransitionMode = false,
   isConfirming = false,
 }: OrderPickupMapDialogProps) {
-  const t = useLocalizedText();
+  const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -84,23 +84,23 @@ export function OrderPickupMapDialog({
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <LocationOnIcon color="primary" />
         {isTransitionMode
-          ? t('Bereitstellung abschließen & Abholort festlegen', 'Complete preparation & set pickup location')
-          : t('Abholort auf der Karte', 'Pickup location on map')}
+          ? t('orders.detail.orderPickupMapDialog.completePreparationSetPickupLocation')
+          : t('orders.detail.orderPickupMapDialog.pickupLocationOnMap')}
       </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
         {isTransitionMode && (
           <FormControl fullWidth>
             <InputLabel id="pickup-loc-select-label">
-              {t('Übergabeort / Lagerort auswählen', 'Select handover / storage location')}
+              {t('orders.detail.orderPickupMapDialog.selectHandoverStorageLocation')}
             </InputLabel>
             <Select
               labelId="pickup-loc-select-label"
               value={locationId}
-              label={t('Übergabeort / Lagerort auswählen', 'Select handover / storage location')}
+              label={t('orders.detail.orderPickupMapDialog.selectHandoverStorageLocation')}
               onChange={(e) => handleSelectLocation(e.target.value)}
             >
               <MenuItem value="">
-                <em>{t('Kein fester Lagerort gewählt', 'No fixed location selected')}</em>
+                <em>{t('orders.detail.orderPickupMapDialog.noFixedLocationSelected')}</em>
               </MenuItem>
               {storageLocations.map((loc) => (
                 <MenuItem key={loc.id} value={loc.id}>
@@ -126,13 +126,13 @@ export function OrderPickupMapDialog({
 
         {latitude != null && longitude != null && (
           <Typography variant="caption" color="text.secondary">
-            {t('Ausgewählte GPS-Koordinaten', 'Selected GPS coordinates')}: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+            {t('orders.detail.orderPickupMapDialog.selectedGPSCoordinates')}: {latitude.toFixed(6)}, {longitude.toFixed(6)}
           </Typography>
         )}
 
         {isTransitionMode && (
           <TextField
-            label={t('Hinweis zur Übergabe / Bereitstellung (optional)', 'Handover / staging notes (optional)')}
+            label={t('orders.detail.orderPickupMapDialog.handoverStagingNotesOptional')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             multiline
@@ -142,9 +142,9 @@ export function OrderPickupMapDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button title={translate('Diesen Dialog schließen', 'Close this dialog')} onClick={onClose}>{t('Schließen', 'Close')}</Button>
+        <Button title={translate('common.closeThisDialog')} onClick={onClose}>{t('common.close')}</Button>
         {isTransitionMode && onConfirm && (
-          <Button title={translate('Den gewählten Abholort speichern und Abholbereitschaft melden', 'Save the pickup location and mark this list ready')}
+          <Button title={translate('orders.detail.orderPickupMapDialog.saveThePickupLocationAndMarkThisListReady')}
             variant="contained"
             color="success"
             disabled={isConfirming}
@@ -157,7 +157,7 @@ export function OrderPickupMapDialog({
               })
             }
           >
-            {t('Bereit melden', 'Mark ready')}
+            {t('orders.detail.orderPickupMapDialog.markReady')}
           </Button>
         )}
       </DialogActions>

@@ -2,7 +2,7 @@ import { useUIStore } from '../store/uiStore';
 import { translate } from '../utils/naming';
 import { isOfflineQueuedError } from '../utils/offline';
 
-export function useMutationFeedback(fallback = translate('Aktion fehlgeschlagen', 'Action failed')) {
+export function useMutationFeedback(fallback = translate('hooks.useMutationFeedback.actionFailed')) {
   const show = useUIStore((state) => state.showSnackbar);
   const success = (message: string) => show(message, 'success');
   const failure = (message: string) => show(message, 'error');

@@ -19,7 +19,7 @@ The API exposes:
 For a local JVM run, use a Java 25 installation and Maven:
 
 ```bash
-mvn -Ddev quarkus:dev
+mvn quarkus:dev
 ```
 
 All profiles use PostgreSQL, the single Flyway baseline, and Hibernate validation. Tests clean and recreate the dedicated database configured with `TEST_DB_URL`, `TEST_DB_USER`, and `TEST_DB_PASSWORD` at startup.

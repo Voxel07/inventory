@@ -26,21 +26,21 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
-import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, Item, User } from '../../types';
+import type { Assembly, DamageReport, DamageReportUpdateData, DamageSeverity, DamageStatus, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
 import { formatDateTime } from '../../utils/dateFormat';
-import { useClientPagination } from '../../hooks/useClientPagination';
-import { translate, nameFor, useLocalizedText } from '../../utils/naming';
+import { useItemsByIds } from '../../hooks/useItems';
+import { translate, nameFor, useT } from '../../utils/naming';
 import { SEVERITY_LEVELS } from '../../utils/constants';
-import { ListPagination } from '../shared/ListPagination';
+import { LoadMore } from '../shared/LoadMore';
 
+/** `reports` are filtered on the server; `list` loads further pages on demand. */
 interface Props {
     reports: DamageReport[] | undefined;
-    items: Item[] | undefined;
+    list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
     assemblies?: Assembly[];
     users?: User[];
     isLoading: boolean;
-    loadingMore?: boolean;
     loadError?: boolean;
     onRetry?: () => void;
     view?: 'open' | 'history';
@@ -53,16 +53,14 @@ const severityColors: Record<string, 'info' | 'warning' | 'error' | 'default'> =
     low: 'info', medium: 'warning', high: 'error', critical: 'error',
 };
 
-export function DamageReportsList({ reports, items, assemblies, users, isLoading, loadingMore, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
-    const t = useLocalizedText();
+export function DamageReportsList({ reports, list, assemblies, users, isLoading, loadError, onRetry, view = 'open', isUpdating, onUpdateStatus, onEdit }: Props) {
+    const t = useT();
     const { user } = useAuth();
     const canMaintain = canPerformMaintenance(user);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const visibleReports = (reports ?? []).filter((report) => view === 'history'
-        ? true
-        : report.status === 'reported' || report.status === 'in_review');
-    const { pageItems: pageReports, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(visibleReports);
+    const visibleReports = reports ?? [];
+    const pageReports = visibleReports;
     const [resolution, setResolution] = useState<{ report: DamageReport; status: 'repaired' | 'written_off' } | null>(null);
     const [resolutionAmount, setResolutionAmount] = useState('1');
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -70,22 +68,21 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const [editing, setEditing] = useState<DamageReport | null>(null);
     const [editDescription, setEditDescription] = useState('');
     const [editSeverity, setEditSeverity] = useState<DamageSeverity>('medium');
+    const resolutionItem = useItemsByIds(resolution?.report.itemId ? [resolution.report.itemId] : []).data?.[0];
 
     if (isLoading) return <Paper sx={{ p: 2 }}>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={48} />)}</Paper>;
     if (!visibleReports.length) return (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography color="text.secondary">
-                {loadingMore
-                    ? t('Weitere Berichte werden geladen…', 'Loading more reports…')
-                    : view === 'history' ? t('Noch kein Schadensverlauf vorhanden', 'No damage history yet') : t('Keine offenen Schadensberichte', 'No open damage reports')}
+                {view === 'history' ? t('lists.damageReportsList.noDamageHistoryYet') : t('lists.damageReportsList.noOpenDamageReports')}
             </Typography>
-            {loadError && <Button title={translate('Die Daten erneut laden', 'Retry loading the data')} onClick={onRetry}>{t('Erneut versuchen', 'Retry')}</Button>}
+            {loadError && <Button title={translate('common.retryLoadingTheData')} onClick={onRetry}>{t('lists.damageReportsList.retry')}</Button>}
         </Paper>
     );
 
     const getTargetName = (report: DamageReport) => {
         if (report.assemblyId) return report.assemblyName ?? assemblies?.find((assembly) => assembly.id === report.assemblyId)?.name ?? report.assemblyId;
-        const itemName = report.itemId ? items?.find((item) => item.id === report.itemId)?.name ?? report.itemId : t('Unbekanntes Ziel', 'Unknown target');
+        const itemName = report.itemId ? report.itemName ?? report.itemId : t('lists.damageReportsList.unknownTarget');
         return report.assetCode ? `${itemName} · ${report.assetCode}` : itemName;
     };
     const getUserName = (userId?: string, expanded?: User) => {
@@ -117,9 +114,9 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     };
     const statusControl = (report: DamageReport) => canMaintain && onUpdateStatus && getUnresolvedAmount(report) > 0 ? (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            {report.status === 'reported' && <Button title={translate('Diesen Schadensbericht in Prüfung nehmen', 'Start reviewing this damage report')} size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('Prüfung starten', 'Start review')}</Button>}
-            <Button title={translate('Die Menge reparierter Einheiten erfassen', 'Enter the number of repaired units')} size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('Teil reparieren', 'Repair units')}</Button>
-            <Button title={translate('Die Menge abzuschreibender Einheiten erfassen', 'Enter the number of units to write off')} size="small" variant="contained" color="error" disabled={isUpdating || !canManageUsers(user)} onClick={() => openResolution(report, 'written_off')}>{t('Teil abschreiben', 'Write off units')}</Button>
+            {report.status === 'reported' && <Button title={translate('lists.damageReportsList.startReviewingThisDamageReport')} size="small" variant="outlined" disabled={isUpdating} onClick={() => onUpdateStatus(report.id, 'in_review')}>{t('lists.damageReportsList.startReview')}</Button>}
+            <Button title={translate('lists.damageReportsList.enterTheNumberOfRepairedUnits')} size="small" variant="contained" color="success" disabled={isUpdating} onClick={() => openResolution(report, 'repaired')}>{t('lists.damageReportsList.repairUnits')}</Button>
+            <Button title={translate('lists.damageReportsList.enterTheNumberOfUnitsToWriteOff')} size="small" variant="contained" color="error" disabled={isUpdating || !canManageUsers(user)} onClick={() => openResolution(report, 'written_off')}>{t('lists.damageReportsList.writeOffUnits')}</Button>
         </Stack>
     ) : <Chip label={formatStatus(report.status)} size="small" />;
     const openEdit = (report: DamageReport) => {
@@ -132,36 +129,36 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
     const resolutionAmountValid = Number.isInteger(parsedResolutionAmount) && parsedResolutionAmount >= 1 && parsedResolutionAmount <= maxResolutionAmount;
     const resolutionDialog = (
         <Dialog open={Boolean(resolution)} onClose={() => setResolution(null)} maxWidth="xs" fullWidth>
-            <DialogTitle>{resolution?.status === 'repaired' ? t('Teilmenge reparieren', 'Repair quantity') : t('Teilmenge abschreiben', 'Write off quantity')}</DialogTitle>
+            <DialogTitle>{resolution?.status === 'repaired' ? t('lists.damageReportsList.repairQuantity') : t('lists.damageReportsList.writeOffQuantity')}</DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Typography sx={{ mb: 2 }}>{resolution ? getTargetName(resolution.report) : ''}</Typography>
                 <TextField
                     autoFocus
                     fullWidth
                     type="number"
-                    label={t('Menge', 'Quantity')}
+                    label={t('common.quantity')}
                     value={resolutionAmount}
                     onChange={(event) => setResolutionAmount(event.target.value)}
-                    helperText={t(`Noch ${maxResolutionAmount} beschädigte Einheiten offen`, `${maxResolutionAmount} damaged units remain`)}
+                    helperText={t('lists.damageReportsList.maxResolutionAmountDamagedUnitsRemain', { maxResolutionAmount: maxResolutionAmount })}
                     error={resolutionAmount !== '' && !resolutionAmountValid}
                     slotProps={{ htmlInput: { min: 1, max: maxResolutionAmount, step: 1 } }}
                 />
                 <TextField
                     fullWidth multiline minRows={2} sx={{ mt: 2 }}
-                    label={t('Was wurde getan?', 'What was done?')}
+                    label={t('lists.damageReportsList.whatWasDone')}
                     value={resolutionNotes} onChange={(event) => setResolutionNotes(event.target.value)}
                 />
                 {resolution?.report.itemId && <TextField
                     fullWidth multiline minRows={2} sx={{ mt: 2 }}
-                    label={t('Artikelhinweis aktualisieren (optional)', 'Update item hint (optional)')}
-                    helperText={items?.find((item) => item.id === resolution.report.itemId)?.hint || t('Dieser Hinweis erscheint beim Artikel.', 'This hint appears on the item.')}
+                    label={t('lists.damageReportsList.updateItemHintOptional')}
+                    helperText={resolutionItem?.hint || t('lists.damageReportsList.thisHintAppearsOnTheItem')}
                     value={itemHint} onChange={(event) => setItemHint(event.target.value)}
                     slotProps={{ htmlInput: { maxLength: 255 } }}
                 />}
             </DialogContent>
             <DialogActions>
-                <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} color="inherit" onClick={() => setResolution(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                <Button title={translate('Die erfasste Reparatur oder Abschreibung buchen', 'Record the entered repair or write-off')}
+                <Button title={translate('common.discardChangesAndClose')} color="inherit" onClick={() => setResolution(null)}>{t('common.cancel')}</Button>
+                <Button title={translate('lists.damageReportsList.recordTheEnteredRepairOrWriteOff')}
                     variant="contained"
                     color={resolution?.status === 'written_off' ? 'error' : 'success'}
                     disabled={!resolution || !resolutionAmountValid || isUpdating}
@@ -172,30 +169,30 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                         setResolution(null);
                     }}
                 >
-                    {resolution?.status === 'repaired' ? t('Reparatur buchen', 'Record repair') : t('Abschreibung buchen', 'Record write-off')}
+                    {resolution?.status === 'repaired' ? t('lists.damageReportsList.recordRepair') : t('lists.damageReportsList.recordWriteOff')}
                 </Button>
             </DialogActions>
         </Dialog>
     );
     const editDialog = (
         <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} maxWidth="sm" fullWidth>
-            <DialogTitle>{t('Schadensbericht bearbeiten', 'Edit damage report')}</DialogTitle>
+            <DialogTitle>{t('lists.damageReportsList.editDamageReport')}</DialogTitle>
             <DialogContent sx={{ pt: '20px !important' }}>
                 <Stack spacing={2}>
                     <Typography variant="body2" color="text.secondary">{editing ? getTargetName(editing) : ''}</Typography>
-                    <TextField select label={t('Schweregrad', 'Severity')} value={editSeverity} onChange={(event) => setEditSeverity(event.target.value as DamageSeverity)} fullWidth>
+                    <TextField select label={t('common.severity')} value={editSeverity} onChange={(event) => setEditSeverity(event.target.value as DamageSeverity)} fullWidth>
                         {SEVERITY_LEVELS.map((severity) => <MenuItem key={severity} value={severity}>{nameFor('severity', severity)}</MenuItem>)}
                     </TextField>
-                    <TextField label={t('Beschreibung', 'Description')} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} multiline rows={4} required fullWidth />
+                    <TextField label={t('common.description')} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} multiline rows={4} required fullWidth />
                 </Stack>
             </DialogContent>
             <DialogActions>
-                <Button title={translate('Änderungen verwerfen und schließen', 'Discard changes and close')} color="inherit" onClick={() => setEditing(null)}>{t('Abbrechen', 'Cancel')}</Button>
-                <Button title={translate('Die Änderungen am Schadensbericht speichern', 'Save changes to this damage report')} variant="contained" disabled={!editing || !editDescription.trim() || isUpdating} onClick={() => {
+                <Button title={translate('common.discardChangesAndClose')} color="inherit" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
+                <Button title={translate('lists.damageReportsList.saveChangesToThisDamageReport')} variant="contained" disabled={!editing || !editDescription.trim() || isUpdating} onClick={() => {
                     if (!editing || !editDescription.trim()) return;
                     onEdit?.(editing.id, { description: editDescription.trim(), severity: editSeverity });
                     setEditing(null);
-                }}>{t('Speichern', 'Save')}</Button>
+                }}>{t('common.save')}</Button>
             </DialogActions>
         </Dialog>
     );
@@ -210,23 +207,23 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
                         <Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" />
                     </Box>
                     <Typography variant="body2" sx={{ my: 1.5 }}>{report.description}</Typography>
-                    {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}
-                    <Typography variant="body2" color="text.secondary">{t('Gemeldet von', 'Reported by')}: {getUserName(report.reportedBy, report.expand?.reportedBy)}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('Bearbeitet von', 'Handled by')}: {getUserName(report.handledBy, report.expand?.handledBy)}</Typography>
+                    {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>{t('lists.damageReportsList.actionTaken')}: {report.resolutionNotes}</Typography>}
+                    <Typography variant="body2" color="text.secondary">{t('lists.damageReportsList.reportedBy')}: {getUserName(report.reportedBy, report.expand?.reportedBy)}</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('lists.damageReportsList.handledBy')}: {getUserName(report.handledBy, report.expand?.handledBy)}</Typography>
                     {view === 'history' && <Typography component="div" variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line', mt: 1.5 }}>{getActivity(report)}</Typography>}
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, my: 2, textAlign: 'center' }}>
-                        <Box><Typography variant="caption" color="text.secondary">{t('Offen', 'Remaining')}</Typography><Typography sx={{ fontWeight: 700 }}>{getUnresolvedAmount(report)}</Typography></Box>
-                        <Box><Typography variant="caption" color="text.secondary">{t('Repariert', 'Repaired')}</Typography><Typography sx={{ fontWeight: 700, color: 'success.main' }}>{getRepairedAmount(report)}</Typography></Box>
-                        <Box><Typography variant="caption" color="text.secondary">{t('Abgeschrieben', 'Written off')}</Typography><Typography sx={{ fontWeight: 700, color: 'error.main' }}>{getWrittenOffAmount(report)}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">{t('common.remaining')}</Typography><Typography sx={{ fontWeight: 700 }}>{getUnresolvedAmount(report)}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">{t('enum.damageStatus.repaired')}</Typography><Typography sx={{ fontWeight: 700, color: 'success.main' }}>{getRepairedAmount(report)}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">{t('enum.damageStatus.written_off')}</Typography><Typography sx={{ fontWeight: 700, color: 'error.main' }}>{getWrittenOffAmount(report)}</Typography></Box>
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                         {statusControl(report)}
-                        {canMaintain && onEdit && <Button title={translate('Beschreibung und Schweregrad des Schadens bearbeiten', 'Edit the damage description and severity')} size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('Bearbeiten', 'Edit')}</Button>}
+                        {canMaintain && onEdit && <Button title={translate('lists.damageReportsList.editTheDamageDescriptionAndSeverity')} size="small" startIcon={<EditIcon />} onClick={() => openEdit(report)}>{t('common.edit')}</Button>}
                     </Stack>
                 </Paper>
             ))}
         </Stack>
-        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <LoadMore list={list} />
         {resolutionDialog}
         {editDialog}
         </>
@@ -237,32 +234,32 @@ export function DamageReportsList({ reports, items, assemblies, users, isLoading
         <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
             <Table size="small">
                 <TableHead><TableRow>
-                    <TableCell>{t('Datum', 'Date')}</TableCell><TableCell>{t('Objekt', 'Target')}</TableCell><TableCell align="right">{t('Menge', 'Quantity')}</TableCell>
-                    <TableCell>{t('Schweregrad', 'Severity')}</TableCell><TableCell>{t('Beschreibung', 'Description')}</TableCell>
-                    <TableCell>{t('Gemeldet von', 'Reported by')}</TableCell><TableCell>{t('Bearbeitet von', 'Handled by')}</TableCell>
-                    {view === 'history' && <TableCell>{t('Verlauf', 'Activity')}</TableCell>}<TableCell>{t('Status', 'Status')}</TableCell>
+                    <TableCell>{t('common.date')}</TableCell><TableCell>{t('lists.damageReportsList.target')}</TableCell><TableCell align="right">{t('common.quantity')}</TableCell>
+                    <TableCell>{t('common.severity')}</TableCell><TableCell>{t('common.description')}</TableCell>
+                    <TableCell>{t('lists.damageReportsList.reportedBy')}</TableCell><TableCell>{t('lists.damageReportsList.handledBy')}</TableCell>
+                    {view === 'history' && <TableCell>{t('lists.damageReportsList.activity')}</TableCell>}<TableCell>{t('common.status')}</TableCell>
                 </TableRow></TableHead>
                 <TableBody>{pageReports.map((report) => (
                     <TableRow key={report.id} hover>
                         <TableCell>{formatDateTime(report.timestamp)}</TableCell><TableCell>{getTargetName(report)}</TableCell><TableCell align="right">
-                            <Typography>{getUnresolvedAmount(report)} {t('offen', 'remaining')}</Typography>
-                            <Typography variant="caption" color="text.secondary">{report.amount} {t('gesamt', 'total')} · {getRepairedAmount(report)} {t('repariert', 'repaired')} · {getWrittenOffAmount(report)} {t('abgeschrieben', 'written off')}</Typography>
+                            <Typography>{getUnresolvedAmount(report)} {t('lists.damageReportsList.remaining')}</Typography>
+                            <Typography variant="caption" color="text.secondary">{report.amount} {t('lists.damageReportsList.total')} · {getRepairedAmount(report)} {t('lists.damageReportsList.repaired')} · {getWrittenOffAmount(report)} {t('lists.damageReportsList.writtenOff')}</Typography>
                         </TableCell>
                         <TableCell><Chip label={formatStatus(report.severity)} color={severityColors[report.severity] ?? 'default'} size="small" /></TableCell>
-                        <TableCell>{report.description}{report.resolutionNotes && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{t('Maßnahme', 'Action taken')}: {report.resolutionNotes}</Typography>}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
+                        <TableCell>{report.description}{report.resolutionNotes && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{t('lists.damageReportsList.actionTaken')}: {report.resolutionNotes}</Typography>}</TableCell><TableCell>{getUserName(report.reportedBy, report.expand?.reportedBy)}</TableCell>
                         <TableCell>{getUserName(report.handledBy, report.expand?.handledBy)}{report.handledAt && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{formatDateTime(report.handledAt)}</Typography>}</TableCell>
                         {view === 'history' && <TableCell><Typography variant="caption" sx={{ whiteSpace: 'pre-line' }}>{getActivity(report)}</Typography></TableCell>}
                         <TableCell>
                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                 {statusControl(report)}
-                                {canMaintain && onEdit && <IconButton title={t('Schadensbericht bearbeiten', 'Edit damage report')} size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton>}
+                                {canMaintain && onEdit && <IconButton title={t('lists.damageReportsList.editDamageReport')} size="small" onClick={() => openEdit(report)}><EditIcon fontSize="small" /></IconButton>}
                             </Stack>
                         </TableCell>
                     </TableRow>
                 ))}</TableBody>
             </Table>
         </TableContainer>
-        <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={visibleReports.length} page={currentPage} onChange={setPage} loadingMore={loadingMore} loadError={loadError} onRetry={onRetry} />
+        <LoadMore list={list} />
         {resolutionDialog}
         {editDialog}
         </>

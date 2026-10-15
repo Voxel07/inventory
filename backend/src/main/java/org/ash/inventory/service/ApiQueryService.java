@@ -9,7 +9,6 @@ import org.ash.inventory.model.DomainEnums;
 import org.ash.inventory.model.EventOccurrence;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.StorageLocation;
-import org.ash.inventory.orm.GeneralOrderOrm;
 import org.ash.inventory.orm.NotificationOrm;
 import org.ash.inventory.orm.OperationsOrm;
 import org.ash.inventory.orm.OrderOrm;
@@ -39,11 +38,11 @@ public class ApiQueryService {
     private final InventoryOperationsService inventory;
     private final OrderOrm orders;
     private final OperationsOrm operations;
-    private final GeneralOrderOrm generalOrders;
     private final NotificationOrm notifications;
     private final UserOrm users;
     private final ApiMapper mapper;
     @jakarta.inject.Inject PlanningService planning;
+    @jakarta.inject.Inject CustodyBalanceService custody;
     @jakarta.inject.Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
     @jakarta.inject.Inject org.ash.inventory.orm.PurchasingOrm purchasing;
     @jakarta.inject.Inject EventMetricsService eventMetrics;
@@ -51,14 +50,13 @@ public class ApiQueryService {
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
-            GeneralOrderOrm generalOrders, NotificationOrm notifications, UserOrm users, ApiMapper mapper) {
+            NotificationOrm notifications, UserOrm users, ApiMapper mapper) {
         this.actors = actors;
         this.catalog = catalog;
         this.orderService = orderService;
         this.inventory = inventory;
         this.orders = orders;
         this.operations = operations;
-        this.generalOrders = generalOrders;
         this.notifications = notifications;
         this.users = users;
         this.mapper = mapper;
@@ -66,10 +64,38 @@ public class ApiQueryService {
 
     @org.ash.inventory.helper.ConsistentRead
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<ApiResponses.ItemResponse> items(String search, int page, int size) {
-        actors.current();
+    /** {@code mine}: private items the actor owns and items in the actor's custody. */
+    public List<ApiResponses.ItemResponse> items(String search, String category, String eventType, boolean includeUntagged,
+            List<UUID> locationIds, List<UUID> ids, boolean mine, String sort, boolean maintenanceAttention, int page, int size) {
+        var actor = actors.current();
         var bounds = bounds(page, size);
-        return projectItems(catalog.getItems(search, bounds.offset(), bounds.limit()));
+        var held = mine ? custody.list(true).stream().filter(balance -> balance.checkedOut() > 0)
+                .map(CustodyBalanceService.Balance::itemId).distinct().toList() : List.<UUID>of();
+        var filter = new org.ash.inventory.orm.CatalogOrm.ItemFilter(search, category, eventType, includeUntagged, locationIds, ids,
+                mine ? actor.id : null, held, sort, maintenanceAttention);
+        return projectItems(catalog.getItems(filter, bounds.offset(), bounds.limit()));
+    }
+
+    /** Overview counts over the caller's visible catalog, ledger and damage, without sending the catalog. */
+    @Transactional
+    public ApiResponses.InventorySummaryResponse summary() {
+        var actor = actors.current();
+        actors.requireReader();
+        var ids = catalog.getVisibleItemIds();
+        long units = 0, low = 0;
+        for (int from = 0; from < ids.size(); from += 500) {
+            var items = catalogOrm.itemsByIds(ids.subList(from, Math.min(ids.size(), from + 500)));
+            var stock = inventory.stock(items);
+            for (var item : items) {
+                var state = stock.get(item.id);
+                if (state == null) continue;
+                units += state.onHand() + state.checkedOut() + state.inTransit();
+                if (state.available() <= item.minStock) low++;
+            }
+        }
+        return new ApiResponses.InventorySummaryResponse(ids.size(), units, low,
+                operations.visibleTransactionsSince(actor, java.time.Instant.now().minus(java.time.Duration.ofDays(7))),
+                operations.visibleOpenDamageReports(actor));
     }
 
     @org.ash.inventory.helper.ConsistentRead
@@ -106,9 +132,10 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.AssemblyResponse> assemblies() {
+    public List<ApiResponses.AssemblyResponse> assemblies(String search, String eventTag, boolean mine, int page, int size) {
         actors.current();
-        var visible = catalog.getVisibleAssemblies();
+        var bounds = bounds(page, size);
+        var visible = catalog.getVisibleAssemblies(search, eventTag, mine, bounds.offset(), bounds.limit());
         // List clients already load the item catalog; do not duplicate every component projection.
         return visible.assemblies().stream().map(value -> mapper.assembly(value,
                 visible.components().getOrDefault(value.id, List.of()), Map.of())).toList();
@@ -127,14 +154,24 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode, int page, int size) {
+    public ApiResponses.OrderResponse previousFactionOrder(String eventType, String faction, java.time.LocalDate before, UUID excludeId) {
+        actors.requireReader();
+        if (eventType == null || eventType.isBlank() || faction == null || faction.isBlank() || before == null)
+            throw ApiException.badRequest("Event type, faction and comparison date are required");
+        var value = orders.previousFactionOrder(eventType, faction, before, excludeId);
+        return value == null ? null : projectOrder(value);
+    }
+
+    @Transactional
+    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode,
+            List<DomainEnums.OrderStatus> statuses, UUID eventId, int page, int size) {
         // Every organization member reads all faction orders; writing is limited per faction.
         actors.requireReader();
         var bounds = bounds(page, size);
-        var values = orders.orders(eventType, faction, orderCode, null, bounds.offset(), bounds.limit());
+        var values = orders.orders(eventType, faction, orderCode, null, statuses, eventId, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
-        var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.FactionOrderLine>>();
+        var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.model.OrderLine>>();
         var assemblyIds = new ArrayList<UUID>();
         for (var line : lines) {
             linesByOrder.computeIfAbsent(line.order.id, ignored -> new ArrayList<>()).add(line);
@@ -155,26 +192,27 @@ public class ApiQueryService {
     @Transactional
     public ApiResponses.OrderResponse order(UUID id) {
         var value = orders.findOrder(id);
-        if (value == null) throw ApiException.notFound("Faction order not found");
+        if (value == null || value.kind != org.ash.inventory.model.InventoryOrder.Kind.faction) throw ApiException.notFound("Faction order not found");
         orderService.assertCanView(value);
         return projectOrder(value);
     }
 
     @Transactional
     public List<ApiResponses.TransactionResponse> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type,
-            Instant start, Instant end, int page, int size) {
+            Instant start, Instant end, String search, int page, int size) {
         requireHistory(itemId != null || assetInstanceId != null, userId, DomainEnums.UserRole.warehouse_crew);
         var bounds = bounds(page, size);
-        var values = operations.transactions(itemId, assetInstanceId, userId, type, start, end, bounds.offset(), bounds.limit());
+        var values = operations.transactions(itemId, assetInstanceId, userId, type, start, end, search, bounds.offset(), bounds.limit());
         mapper.prepareLocations(values.stream().filter(t -> t.assetInstance != null).map(t -> t.assetInstance.currentLocation).toList());
         return values.stream().map(mapper::transaction).toList();
     }
 
     @Transactional
-    public List<ApiResponses.DamageResponse> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId, int page, int size) {
+    public List<ApiResponses.DamageResponse> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId,
+            List<DomainEnums.DamageStatus> statuses, String search, int page, int size) {
         requireHistory(itemId != null || assetInstanceId != null || assemblyId != null, null, DomainEnums.UserRole.warehouse_crew);
         var bounds = bounds(page, size);
-        return operations.damageReports(itemId, assetInstanceId, assemblyId, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
+        return operations.damageReports(itemId, assetInstanceId, assemblyId, statuses, search, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
     }
 
     @Transactional
@@ -202,19 +240,19 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(int page, int size) {
+    public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(org.ash.inventory.orm.OrderOrm.Filter filter, int page, int size) {
         actors.requireReader();
         var actor = actors.current();
         var bounds = bounds(page, size);
-        var values = generalOrders.orders(actor, bounds.offset(), bounds.limit());
+        var values = orders.orders(actor, filter, bounds.offset(), bounds.limit());
         var names = generalOrderNames(values);
         return values.stream().map(o -> mapper.generalOrderSummary(o, namesFor(o, names))).toList();
     }
 
     @Transactional
     public ApiResponses.GeneralOrderResponse generalOrder(UUID id) {
-        var order = generalOrders.find(org.ash.inventory.model.GeneralOrder.class, id);
-        if (order == null) throw ApiException.notFound("General order not found");
+        var order = orders.find(org.ash.inventory.model.InventoryOrder.class, id);
+        if (order == null || order.kind != org.ash.inventory.model.InventoryOrder.Kind.general) throw ApiException.notFound("General order not found");
         actors.requireReader();
         return projectGeneralOrder(order);
     }
@@ -256,21 +294,33 @@ public class ApiQueryService {
         return projectEvents(List.of(value)).getFirst();
     }
 
-    private Map<String, String> generalOrderNames(List<org.ash.inventory.model.GeneralOrder> values) {
-        return catalogOrm.itemNames(values.stream().flatMap(o -> o.requestedQuantities.keySet().stream()).map(UUID::fromString).distinct().toList());
+    private Map<String, String> generalOrderNames(List<org.ash.inventory.model.InventoryOrder> values) {
+        return catalogOrm.itemNames(values.stream().flatMap(o -> o.lines.stream()).map(line -> line.item.id).distinct().toList());
     }
 
-    private Map<String, String> namesFor(org.ash.inventory.model.GeneralOrder order, Map<String, String> names) {
+    private Map<String, String> namesFor(org.ash.inventory.model.InventoryOrder order, Map<String, String> names) {
         var result = new LinkedHashMap<String, String>();
-        order.requestedQuantities.keySet().forEach(id -> { if (names.containsKey(id)) result.put(id, names.get(id)); });
+        order.lines.forEach(line -> { var id = line.item.id.toString(); if (names.containsKey(id)) result.put(id, names.get(id)); });
         return result;
     }
 
-    public ApiResponses.GeneralOrderResponse projectGeneralOrder(org.ash.inventory.model.GeneralOrder value) {
-        return mapper.generalOrder(value, generalOrderNames(List.of(value)), generalOrders.history(value));
+    public ApiResponses.GeneralOrderResponse projectGeneralOrder(org.ash.inventory.model.InventoryOrder value) {
+        return mapper.generalOrder(value, generalOrderNames(List.of(value)), orders.history(value));
     }
 
-    public ApiResponses.OrderResponse projectOrder(org.ash.inventory.model.FactionOrder value) {
+    public ApiResponses.OrderDetail projectAnyOrder(org.ash.inventory.model.InventoryOrder value) {
+        return value.kind == org.ash.inventory.model.InventoryOrder.Kind.general ? projectGeneralOrder(value) : projectOrder(value);
+    }
+
+    @Transactional
+    public ApiResponses.OrderDetail orderDetail(UUID id) {
+        actors.requireReader();
+        var value = orders.find(org.ash.inventory.model.InventoryOrder.class, id);
+        if (value == null) throw ApiException.notFound("Order not found");
+        return projectAnyOrder(value);
+    }
+
+    public ApiResponses.OrderResponse projectOrder(org.ash.inventory.model.InventoryOrder value) {
         var actor = actors.current();
         var lines = orders.lines(List.of(value));
         var assemblies = lines.stream().filter(l -> l.sourceAssembly != null).map(l -> l.sourceAssembly).distinct().toList();
@@ -327,14 +377,14 @@ public class ApiQueryService {
     public List<ApiResponses.UserResponse> users(int page, int size) {
         actors.requireAdmin();
         var bounds = bounds(page, size);
-        return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        return users.users(null, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
     @Transactional
-    public List<ApiResponses.UserResponse> assignableUsers(int page, int size) {
+    public List<ApiResponses.UserResponse> assignableUsers(String search, int page, int size) {
         actors.requireWarehouse();
         var bounds = bounds(page, size);
-        return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        return users.users(search, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
 

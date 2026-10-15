@@ -6,17 +6,19 @@ import { parseFactionOrdersFromCsv, parseGeneralOrdersFromCsv } from './orders';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../../types/csvImport';
 import { parseReturnsFromCsv, parseCheckoutsFromCsv } from './custody';
 import type { Item, Assembly, StorageLocation } from '../../types';
-import type { CsvReference } from './reference';
+import { planCsvReferences, type CsvReference } from './reference';
 import { parseOperationsFromCsv } from '../csvOperations';
 
-interface Input { csvContent: string; tabType: CsvImportType; items: Item[]; assemblies: Assembly[]; storageLocations: StorageLocation[]; updateExistingItems: boolean; reference: CsvReference }
+interface Input { csvContent: string; tabType: CsvImportType; items: Item[]; assemblies: Assembly[]; storageLocations: StorageLocation[]; updateExistingItems: boolean; reference: CsvReference; autoCreateReferences?: boolean }
 
-export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, reference }: Input) {
+export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, reference: catalog, autoCreateReferences = false }: Input) {
   // Parse CSV
   const { rows } = (() => {
     if (!csvContent.trim()) return { rows: [] };
     return parseCsv(csvContent);
   })();
+
+  const reference = autoCreateReferences ? planCsvReferences(rows, catalog) : { ...catalog, newFactions: [] };
 
   // Parsed Items and Assemblies
   const parsedItems: ParsedItemRow[] = (() => {
@@ -32,14 +34,20 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
     }
     for (const p of parsedItems) {
       if (p.data.name && !map.has(p.data.name.toLowerCase().trim())) {
-        // Keep every parsed attribute (consumable, tracking mode, ...) so dependent rows validate like real items.
-        map.set(p.data.name.toLowerCase().trim(), {
+        // Keep every parsed attribute (role, tracking mode, ...) so dependent rows validate like real items.
+        const planned: Item = {
           ...p.data,
           id: `csv-new-${p.index}`,
-          storageLocation: p.storageLocationId || '',
+          storageLocation: p.storageLocationId || null,
+          returnLocation: p.data.returnLocation || null,
+          isConsumable: p.data.inventoryRole === 'consumable',
+          status: 'available',
+          maintenanceStatus: 'certified',
+          stock: null,
           created: '',
           updated: '',
-        } as Item);
+        };
+        map.set(p.data.name.toLowerCase().trim(), planned);
       }
     }
     return Array.from(map.values());
@@ -99,5 +107,16 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
     + validGeneralOrdersCount
     + validReturnsCount + validCheckoutsCount + validOperationsCount;
 
-  return { rows, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validItemsCount, validAssembliesCount, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport };
+  // Only create factions used by valid rows in the selected tab.
+  const factionIds = new Set(parsedEvents.filter((row) => row.status === 'valid')
+    .flatMap((row) => row.attendees.flatMap((attendee) => attendee.roles.map((role) => role.factionId))));
+  const factionRows = [
+    ...parsedOrders.filter((row) => row.status === 'valid').map((row) => row.data),
+    ...parsedCheckouts.filter((row) => row.status === 'valid'),
+  ];
+  const newFactions = reference.newFactions.filter((faction) => factionIds.has(faction.id)
+    || factionRows.some((row) => row.eventType === faction.eventType
+      && row.faction?.trim().toLowerCase() === faction.name.toLowerCase()));
+
+  return { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validItemsCount, validAssembliesCount, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport };
 }

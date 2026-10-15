@@ -25,7 +25,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
 import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
-import { translate, useLocalizedText } from '../../../utils/naming';
+import { translate, useT } from '../../../utils/naming';
 
 export interface OrderPickListTableProps {
   order: FactionOrder;
@@ -74,7 +74,7 @@ function SerializedAssetPicker({
   editable: boolean;
   onChange: (ids: string[]) => void;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const { data: assets = [], isLoading } = useItemAssets(editable ? item.id : undefined);
   const knownAssets = editable ? assets : persistedAssets;
   const equipment = useEquipmentAvailability(eventId);
@@ -84,7 +84,7 @@ function SerializedAssetPicker({
     || (asset.availabilityStatus === 'available'
       && (!commitment || commitment.assetIds.includes(asset.id))
       && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
-      && !['overdue', 'in_service'].includes(asset.serviceStatus ?? 'certified'))
+      && !['overdue', 'in_service'].includes(asset.serviceStatus))
   ));
   const selected = knownAssets.filter((asset) => selectedIds.includes(asset.id));
 
@@ -110,7 +110,7 @@ function SerializedAssetPicker({
           renderInput={(params) => (
             <TextField
               {...params}
-              label={t(`Genau ${required} Seriengerät${required === 1 ? '' : 'e'} wählen`, `Select exactly ${required} asset${required === 1 ? '' : 's'}`)}
+              label={t('orders.detail.orderPickListTable.selectAssets', { count: required })}
               error={!isLoading && selectedIds.length !== required}
             />
           )}
@@ -154,7 +154,7 @@ function PickRow({
   done?: boolean;
   children?: ReactNode;
 }) {
-  const t = useLocalizedText();
+  const t = useT();
   const complete = (Number(value) || 0) === requested;
   return (
     <Box component="li" sx={{ borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 }, bgcolor: done ? 'action.hover' : undefined }}>
@@ -166,15 +166,15 @@ function PickRow({
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 'auto', flexShrink: 0 }}>
           <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-            {t('Bestellt', 'Ordered')} <strong>{requested}</strong>
+            {t('enum.value.ordered')} <strong>{requested}</strong>
             {!editing && <> · {storedLabel} <Box component="strong" sx={{ color: stored === requested ? 'success.main' : undefined }}>{stored}</Box></>}
           </Typography>
           {editing && <>
             <QuantityControl label={quantityLabel} value={value} max={requested} onChange={onChange} />
-            <Button title={translate('Die angefragte Menge als vorbereitet eintragen', 'Set the prepared quantity to the requested amount')}
+            <Button title={translate('orders.detail.orderPickListTable.setThePreparedQuantityToTheRequestedAmount')}
               size="small" variant={complete ? 'contained' : 'outlined'} color={complete ? 'success' : 'primary'} onClick={onMax}
               sx={{ minWidth: 48, height: 28, px: 1, fontSize: '0.75rem' }}>
-              {complete ? 'OK' : t('Max', 'Max')}
+              {complete ? 'OK' : t('orders.detail.orderPickListTable.max')}
             </Button>
           </>}
         </Stack>
@@ -207,14 +207,14 @@ export function OrderPickListTable({
   onSetPreparedAssemblies,
   onSetAssetAssignments,
 }: OrderPickListTableProps) {
-  const t = useLocalizedText();
+  const t = useT();
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [sortByLocation, setSortByLocation] = useState(false);
   const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
   const [assemblyChecked, setAssemblyChecked] = useState<Record<string, Record<string, boolean>>>({});
   const editing = order.status === 'preparing';
-  const storedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) ? t('Verwendet', 'Used') : t('Bereit', 'Prepared');
+  const storedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) ? t('common.used') : t('orders.detail.orderPickListTable.prepared');
 
   // Serialized components of assemblies need concrete assets as well.
   const serializedItems = lineItems.filter((item) => item.trackingMode === 'serialized').map((item) => {
@@ -240,13 +240,13 @@ export function OrderPickListTable({
     <Box sx={{ mb: 2 }}>
       {(orderAssemblies.length > 0 || orderItems.length > 0) && (
         <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-          <CatalogSearchField label={t('Artikel oder Baugruppen suchen', 'Search items or assemblies')} value={itemSearch} onChange={setItemSearch}
+          <CatalogSearchField label={t('orders.detail.orderPickListTable.searchItemsOrAssemblies')} value={itemSearch} onChange={setItemSearch}
             sx={{ flex: '1 1 260px' }} />
           {orderItems.length > 0 && orderItemCategories.length > 1 && (
             <FormControl size="small" sx={{ flex: '1 1 160px', maxWidth: { sm: 240 } }}>
-              <InputLabel>{t('Kategorie', 'Category')}</InputLabel>
-              <Select label={t('Kategorie', 'Category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
-                <MenuItem value="">{t('Alle Kategorien', 'All categories')}</MenuItem>
+              <InputLabel>{t('common.category')}</InputLabel>
+              <Select label={t('common.category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
+                <MenuItem value="">{t('common.allCategories')}</MenuItem>
                 {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
               </Select>
             </FormControl>
@@ -258,18 +258,18 @@ export function OrderPickListTable({
               color={sortByLocation ? 'primary' : 'inherit'}
               startIcon={<LocationOnIcon fontSize="small" />}
               aria-pressed={sortByLocation}
-              title={translate('Die Sortierung nach Lagerort ein- oder ausschalten', 'Toggle sorting by storage location')}
+              title={translate('orders.detail.orderPickListTable.toggleSortingByStorageLocation')}
               onClick={() => setSortByLocation((prev) => !prev)}
               sx={{ height: 40, flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'none' }}
             >
-              {t('Nach Lagerort', 'By location')}
+              {t('orders.detail.orderPickListTable.byLocation')}
             </Button>
           )}
         </Stack>
       )}
 
       {serializedItems.length > 0 && <>
-        <SectionTitle count={serializedItems.length}>{t('Seriengeräte', 'Serialized assets')}</SectionTitle>
+        <SectionTitle count={serializedItems.length}>{t('orders.detail.orderPickListTable.serializedAssets')}</SectionTitle>
         <Paper variant="outlined" sx={{ '& > * + *': { borderTop: 1, borderColor: 'divider' } }}>
           {serializedItems.map(({ item, required, persisted }) => (
             <SerializedAssetPicker
@@ -287,7 +287,7 @@ export function OrderPickListTable({
       </>}
 
       {orderAssemblies.length > 0 && <>
-        <SectionTitle count={orderAssemblies.length}>{t('Baugruppen', 'Assemblies')}</SectionTitle>
+        <SectionTitle count={orderAssemblies.length}>{t('nav.assemblies')}</SectionTitle>
         <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {visibleOrderAssemblies.map((assembly) => {
             const requested = order.requestedAssemblyQuantities?.[assembly.id] ?? 0;
@@ -299,15 +299,15 @@ export function OrderPickListTable({
             return (
               <PickRow
                 key={assembly.id}
-                leading={<IconButton title={translate('Die Komponenten dieser Baugruppe ein- oder ausblenden', 'Show or hide the components of this assembly')}
+                leading={<IconButton title={translate('orders.detail.orderPickListTable.showOrHideTheComponentsOfThisAssembly')}
                   size="small" onClick={() => setExpandedAssemblies((prev) => ({ ...prev, [assembly.id]: !prev[assembly.id] }))} aria-expanded={isExpanded}>
                   {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                 </IconButton>}
                 title={assembly.name}
                 caption={<>
                   <CategoryIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
-                  {componentEntries.length} {t('Komponenten', 'components')}
-                  {componentEntries.length > 0 && <> · <Box component="span" sx={{ color: allChecked ? 'success.main' : undefined }}>{checkedCount}/{componentEntries.length} {t('abgehakt', 'checked')}</Box></>}
+                  {componentEntries.length} {t('orders.detail.orderPickListTable.components')}
+                  {componentEntries.length > 0 && <> · <Box component="span" sx={{ color: allChecked ? 'success.main' : undefined }}>{checkedCount}/{componentEntries.length} {t('orders.detail.orderPickListTable.checked')}</Box></>}
                 </>}
                 requested={requested}
                 stored={order.preparedAssemblyQuantities?.[assembly.id] ?? 0}
@@ -316,7 +316,7 @@ export function OrderPickListTable({
                 value={preparedAssemblies[assembly.id] ?? ''}
                 onChange={(value) => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: value }))}
                 onMax={() => onSetPreparedAssemblies((current) => ({ ...current, [assembly.id]: String(requested) }))}
-                quantityLabel={`${assembly.name} ${t('Bereit', 'Prepared')}`}
+                quantityLabel={`${assembly.name} ${t('orders.detail.orderPickListTable.prepared')}`}
                 done={allChecked}
               >
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -328,15 +328,15 @@ export function OrderPickListTable({
                       return (
                         <Stack key={itemId} component="li" direction="row" spacing={1} sx={{ alignItems: 'center', pr: 1 }}>
                           <Checkbox size="small" checked={isChecked} onChange={() => toggleItemCheck(assembly.id, itemId)}
-                            slotProps={{ input: { 'aria-label': `${component?.name ?? itemId}: ${t('abgehakt', 'checked')}` } }} sx={{ p: 0.5 }} />
+                            slotProps={{ input: { 'aria-label': `${component?.name ?? itemId}: ${t('orders.detail.orderPickListTable.checked')}` } }} sx={{ p: 0.5 }} />
                           <Typography variant="body2" sx={{ flex: 1, minWidth: 0, textDecoration: isChecked ? 'line-through' : 'none' }} noWrap>
                             {component?.name ?? itemId}
                             <Typography component="span" variant="caption" color="text.secondary">
-                              {' · '}{locationName(component) || t('Kein Lagerort', 'No storage location')}{component?.hint ? ` · ${component.hint}` : ''}
+                              {' · '}{locationName(component) || t('orders.detail.orderPickListTable.noStorageLocation')}{component?.hint ? ` · ${component.hint}` : ''}
                             </Typography>
                           </Typography>
                           <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-                            <strong>{totalNeeded}×</strong> ({perAssembly}/{t('Satz', 'kit')})
+                            <strong>{totalNeeded}×</strong> ({perAssembly}/{t('orders.detail.orderPickListTable.kit')})
                           </Typography>
                         </Stack>
                       );
@@ -346,12 +346,12 @@ export function OrderPickListTable({
               </PickRow>
             );
           })}
-          {!visibleOrderAssemblies.length && <Typography component="li" variant="body2" color="text.secondary" sx={{ p: 1 }}>{t('Keine passenden Baugruppen.', 'No matching assemblies.')}</Typography>}
+          {!visibleOrderAssemblies.length && <Typography component="li" variant="body2" color="text.secondary" sx={{ p: 1 }}>{t('common.noMatchingAssemblies')}</Typography>}
         </Paper>
       </>}
 
       {orderItems.length > 0 && <>
-        <SectionTitle count={orderItems.length}>{t('Einzelartikel', 'Individual items')}</SectionTitle>
+        <SectionTitle count={orderItems.length}>{t('orders.detail.orderPickListTable.individualItems')}</SectionTitle>
         <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {visibleOrderItems.map((item) => {
             const requested = order.requestedQuantities[item.id] ?? 0;
@@ -359,7 +359,7 @@ export function OrderPickListTable({
               <PickRow
                 key={item.id}
                 title={item.name}
-                caption={[locationName(item) || t('Kein Lagerort', 'No storage location'), item.category].filter(Boolean).join(' · ')}
+                caption={[locationName(item) || t('orders.detail.orderPickListTable.noStorageLocation'), item.category].filter(Boolean).join(' · ')}
                 requested={requested}
                 stored={order.preparedQuantities[item.id] ?? 0}
                 storedLabel={storedLabel}
@@ -367,11 +367,11 @@ export function OrderPickListTable({
                 value={prepared[item.id] ?? ''}
                 onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))}
                 onMax={() => onSetPrepared((current) => ({ ...current, [item.id]: String(requested) }))}
-                quantityLabel={`${item.name} ${t('Bereit', 'Prepared')}`}
+                quantityLabel={`${item.name} ${t('orders.detail.orderPickListTable.prepared')}`}
               />
             );
           })}
-          {!visibleOrderItems.length && <Typography component="li" variant="body2" color="text.secondary" sx={{ p: 1 }}>{t('Keine passenden Artikel.', 'No matching items.')}</Typography>}
+          {!visibleOrderItems.length && <Typography component="li" variant="body2" color="text.secondary" sx={{ p: 1 }}>{t('common.noMatchingItems')}</Typography>}
         </Paper>
       </>}
     </Box>

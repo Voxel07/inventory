@@ -22,6 +22,18 @@ public final class StockPolicy {
                 ? DomainEnums.AssetState.damaged : DomainEnums.AssetState.available;
     }
 
+    /**
+     * Availability after a condition change. Condition is independent of physical custody: only an idle warehouse
+     * asset moves between available and damaged. Reservation, staging, transit, custody, repair and maintenance
+     * keep their lifecycle state, which only their own commands may change.
+     */
+    public static DomainEnums.AssetState conditionedState(AssetInstance asset) {
+        return switch (asset.availabilityStatus) {
+            case available, damaged -> returnedState(asset);
+            default -> asset.availabilityStatus;
+        };
+    }
+
     /** State after a repair is released: only warehouse-held damage/repair states return to availability. */
     public static DomainEnums.AssetState releasedState(AssetInstance asset) {
         return switch (asset.availabilityStatus) {

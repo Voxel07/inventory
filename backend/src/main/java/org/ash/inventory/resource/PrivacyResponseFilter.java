@@ -10,6 +10,7 @@ import org.ash.inventory.service.PrivacyProjectionService;
 @Provider @Priority(Priorities.USER + 100)
 public class PrivacyResponseFilter implements ContainerResponseFilter {
     @Inject PrivacyProjectionService projections;
+    @jakarta.ws.rs.core.Context ResourceInfo resource;
     public void filter(ContainerRequestContext request, ContainerResponseContext response) {
         String path = request.getUriInfo().getPath();
         if (path.startsWith("/")) path = path.substring(1);
@@ -21,14 +22,25 @@ public class PrivacyResponseFilter implements ContainerResponseFilter {
             response.getHeaders().putSingle("Cache-Control", "private, no-store"); return;
         }
         try {
-            var filtered = projections.filter(response.getEntity());
+            boolean read = "GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod());
+            var filtered = projections.filter(response.getEntity(), read);
             response.setEntity(filtered.value());
             if (filtered.containsPrivateReference()) response.getHeaders().putSingle("X-Private-Inventory", "true");
-            if (filtered.removedRows() > 0) response.getHeaders().putSingle("X-Filtered-Rows", filtered.removedRows());
+            // Continuation is decided by the page the query returned, not by the rows left after privacy filtering.
+            if (read && filtered.value().isArray() && paged()) {
+                var size = request.getUriInfo().getQueryParameters().getFirst("size");
+                int limit = size != null && size.matches("\\d{1,4}") ? Integer.parseInt(size) : 100;
+                response.getHeaders().putSingle("X-Has-More", filtered.queriedRows() >= limit);
+            }
         } catch (ApiException denied) {
             response.setStatus(denied.status);
             response.setEntity(java.util.Map.of("message", denied.getMessage()));
         }
         response.getHeaders().putSingle("Cache-Control", "private, no-store");
+    }
+
+    private boolean paged() {
+        var method = resource == null ? null : resource.getResourceMethod();
+        return method != null && method.isAnnotationPresent(Paged.class);
     }
 }

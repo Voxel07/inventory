@@ -2,13 +2,14 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
-import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
-import { translate, useLocalizedText } from '../../../utils/naming';
+import type { Assembly, FactionOrder, FactionOrderSummary, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
+import { translate, useT } from '../../../utils/naming';
 import { factionOrderAssemblyBaseline, factionOrderItemBaseline, findPreviousFactionOrder } from '../../../utils/factionOrderHistory';
 
 interface OrderTraceabilityProps {
   order: FactionOrder;
-  allOrders: FactionOrder[];
+  /** Orders of the same faction and event type; the previous one is compared. */
+  allOrders: FactionOrderSummary[];
   itemMap: Map<string, Item>;
   assemblyMap: Map<string, Assembly>;
   onOpenOrder: (id: string) => void;
@@ -19,7 +20,7 @@ function relationName(value: { name?: string; username?: string; email?: string 
 }
 
 export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
-  const t = useLocalizedText();
+  const t = useT();
   const [comparePrevious, setComparePrevious] = useState(false);
   const previousOrder = findPreviousFactionOrder(allOrders, {
     eventType: order.eventType,
@@ -49,20 +50,20 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
   })();
 
   const labels: Record<FactionOrderHistoryAction, string> = {
-    created: t('Liste erstellt', 'List created'),
-    updated: t('Liste geändert', 'List updated'),
-    historical_correction: t('Historische Verwendung korrigiert', 'Historical usage corrected'),
-    submitted: t('Bedarf freigegeben', 'Request submitted'),
-    submission_reopened: t('Freigabe zurückgenommen', 'Submission reopened'),
-    preparation_started: t('Vorbereitung begonnen', 'Preparation started'),
-    preparation_saved: t('Vorbereitung gespeichert', 'Preparation saved'),
-    preparation_reopened: t('Vorbereitung wieder geöffnet', 'Preparation reopened'),
-    ready: t('Abholbereit markiert', 'Marked ready'),
-    picked_up: t('Liste ausgegeben', 'Order checked out'),
-    partially_returned: t('Teilrückgabe erfasst', 'Partial return recorded'),
-    returned: t('Liste zurückgegeben', 'Order returned'),
-    closed: t('Liste abgeschlossen', 'Order closed'),
-    cancelled: t('Liste storniert', 'Order cancelled'),
+    created: t('orders.detail.orderTraceability.listCreated'),
+    updated: t('orders.detail.orderTraceability.listUpdated'),
+    historical_correction: t('orders.detail.orderTraceability.historicalUsageCorrected'),
+    submitted: t('orders.detail.orderTraceability.requestSubmitted'),
+    submission_reopened: t('orders.detail.orderTraceability.submissionReopened'),
+    preparation_started: t('orders.detail.orderTraceability.preparationStarted'),
+    preparation_saved: t('orders.detail.orderTraceability.preparationSaved'),
+    preparation_reopened: t('orders.detail.orderTraceability.preparationReopened'),
+    ready: t('orders.detail.orderTraceability.markedReady'),
+    picked_up: t('orders.detail.orderTraceability.orderCheckedOut'),
+    partially_returned: t('orders.detail.orderTraceability.partialReturnRecorded'),
+    returned: t('orders.detail.orderTraceability.orderReturned'),
+    closed: t('orders.detail.orderTraceability.orderClosed'),
+    cancelled: t('orders.detail.orderTraceability.orderCancelled'),
   };
 
   function deltaChips(entry: FactionOrderHistoryEntry) {
@@ -71,7 +72,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
     const add = (kind: string, values: Record<string, number> | undefined, lookup: Map<string, Item | Assembly>, color: 'success' | 'error') => {
       Object.entries(values ?? {}).forEach(([id, quantity]) => chips.push({
         key: `${kind}-${id}`,
-        label: `${kind === 'added' ? t('Hinzugefügt', 'Added') : t('Entfernt', 'Removed')}: ${quantity}× ${lookup.get(id)?.name ?? id}`,
+        label: `${kind === 'added' ? t('orders.detail.orderTraceability.added') : t('orders.detail.orderTraceability.removed')}: ${quantity}× ${lookup.get(id)?.name ?? id}`,
         color,
       }));
     };
@@ -99,16 +100,16 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
   const returnedHistory = latestHistory('returned', 'partially_returned', 'closed');
 
   const metadata = [
-    [t('Erstellt von', 'Created by'), relationName(order.expand?.createdBy, createdHistory?.userName), createdHistory?.timestamp ?? order.created],
-    [t('Vorbereitet von', 'Prepared by'), relationName(order.expand?.preparedBy, preparedHistory?.userName), preparedHistory?.timestamp],
-    [t('Abholbereit durch', 'Made ready by'), relationName(order.expand?.readyBy, readyHistory?.userName), readyHistory?.timestamp],
-    [t('Ausgegeben von', 'Checked out by'), relationName(order.expand?.pickedUpBy, pickupHistory?.userName), pickupHistory?.timestamp],
-    [t('Zurückgenommen von', 'Returned by'), relationName(order.expand?.returnedBy, returnedHistory?.userName), returnedHistory?.timestamp],
+    [t('orders.detail.orderTraceability.createdBy'), relationName(order.expand?.createdBy, createdHistory?.userName), createdHistory?.timestamp ?? order.created],
+    [t('orders.detail.orderTraceability.preparedBy'), relationName(order.expand?.preparedBy, preparedHistory?.userName), preparedHistory?.timestamp],
+    [t('orders.detail.orderTraceability.madeReadyBy'), relationName(order.expand?.readyBy, readyHistory?.userName), readyHistory?.timestamp],
+    [t('orders.detail.orderTraceability.checkedOutBy'), relationName(order.expand?.pickedUpBy, pickupHistory?.userName), pickupHistory?.timestamp],
+    [t('orders.detail.orderTraceability.returnedBy'), relationName(order.expand?.returnedBy, returnedHistory?.userName), returnedHistory?.timestamp],
   ];
 
   return (
     <Box sx={{ mt: 3 }}>
-      <Typography variant="h6" sx={{ mb: 1 }}>{t('Nachvollziehbarkeit', 'Traceability')}</Typography>
+      <Typography variant="h6" sx={{ mb: 1 }}>{t('orders.detail.orderTraceability.traceability')}</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>
         {metadata.map(([label, actor, timestamp]) => (
           <Paper key={label} variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
@@ -120,26 +121,26 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
       </Box>
 
       {previousOrder && <Button size="small" aria-pressed={comparePrevious} sx={{ mb: 2 }} onClick={() => setComparePrevious(value => !value)}>
-        {comparePrevious ? t('Vergleich ausblenden', 'Hide comparison') : t('Mit vorheriger Liste vergleichen', 'Compare with previous list')}
+        {comparePrevious ? t('orders.detail.orderTraceability.hideComparison') : t('orders.detail.orderTraceability.compareWithPreviousList')}
       </Button>}
       {comparePrevious && previousOrder && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Änderungen zur vorherigen Liste', 'Changes from the previous list')}</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('orders.detail.orderTraceability.changesFromThePreviousList')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {t('Vergleichsbasis', 'Comparison baseline')}: {previousOrder.orderCode} · {formatDate(previousOrder.eventDate)}
+            {t('orders.detail.orderTraceability.comparisonBaseline')}: {previousOrder.orderCode} · {formatDate(previousOrder.eventDate)}
           </Typography>
           {comparison.length ? (
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {comparison.map((change) => <Chip key={change.key} color={change.after > change.before ? 'primary' : 'default'} label={`${change.name}: ${change.before} → ${change.after}`} />)}
             </Stack>
-          ) : <Alert severity="success">{t('Keine Mengenänderungen.', 'No quantity changes.')}</Alert>}
-          <Button title={translate('Die vorherige Bestellliste öffnen', 'Open the previous order list')} size="small" sx={{ mt: 1.5 }} onClick={() => onOpenOrder(previousOrder.id)}>{t('Vorherige Liste öffnen', 'Open previous list')}</Button>
+          ) : <Alert severity="success">{t('orders.detail.orderTraceability.noQuantityChanges')}</Alert>}
+          <Button title={translate('orders.detail.orderTraceability.openThePreviousOrderList')} size="small" sx={{ mt: 1.5 }} onClick={() => onOpenOrder(previousOrder.id)}>{t('orders.detail.orderTraceability.openPreviousList')}</Button>
         </Paper>
       )}
 
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{t('Unveränderlicher Listenverlauf', 'Immutable order history')}</Typography>
-        {!order.history?.length ? <Alert severity="warning">{t('Für diese Liste liegt kein Verlauf vor.', 'No history is available for this order.')}</Alert> : (
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{t('orders.detail.orderTraceability.immutableOrderHistory')}</Typography>
+        {!order.history?.length ? <Alert severity="warning">{t('orders.detail.orderTraceability.noHistoryIsAvailableForThisOrder')}</Alert> : (
           <Stack divider={<Divider flexItem />}>
             {[...order.history].reverse().map((entry, index) => (
               <Stack key={`${entry.timestamp}-${entry.action}-${index}`} direction="row" spacing={1.5} sx={{ py: 1.25 }}>

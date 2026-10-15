@@ -1,6 +1,7 @@
 import type { StorageLocation } from '../types';
 
 export function locationPath(location: StorageLocation, locations: StorageLocation[]): string {
+  if (location.hierarchyPath) return location.hierarchyPath;
   const names: string[] = []; const visited = new Set<string>();
   let current: StorageLocation | undefined = location;
   while (current && !visited.has(current.id)) {

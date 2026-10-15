@@ -13,6 +13,8 @@ import java.util.*;
 /** Live, recipient-scoped tasks. Completed work disappears without a stale notification queue. */
 @ApplicationScoped
 public class ActionInboxService {
+    /** Lots whose expiry or best-before date falls within this window appear as warehouse tasks. */
+    static final int LOT_EXPIRY_WARNING_DAYS = 30;
     @Inject org.ash.inventory.orm.ActionInboxOrm orm;
     @Inject ActorService actors;
     @Inject CustodyBalanceService custody;
@@ -57,9 +59,9 @@ public class ActionInboxService {
             for (var p : orm.incomingPurchases())
                 add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts");
         if (warehouse)
-            for (var l : orm.availableLots(today.plusDays(30))) {
+            for (var l : orm.availableLots(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) {
                 var due = l.expiryDate == null ? l.bestBeforeDate : l.bestBeforeDate == null || l.expiryDate.isBefore(l.bestBeforeDate) ? l.expiryDate : l.bestBeforeDate;
-                if (due != null && !due.isAfter(today.plusDays(30))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots");
+                if (due != null && !due.isAfter(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots");
             }
         var schedules = orm.activeSchedules(maintenance ? null : actor.id);
         var statuses = maintenancePolicy.statuses(schedules, Instant.now());

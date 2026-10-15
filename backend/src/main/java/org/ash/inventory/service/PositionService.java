@@ -5,7 +5,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.ash.inventory.model.*;
 import org.ash.inventory.orm.PositionOrm;
 import org.ash.inventory.resource.ApiException;
-import java.time.LocalDate;
 import java.util.*;
 
 /** Location movements run inside the same item lock and transaction as the stock ledger. */
@@ -51,46 +50,54 @@ public class PositionService {
         return orm.positions(item).stream().mapToInt(p -> p.quantityInTransit).sum();
     }
 
-    public int availableAt(Item item, StorageLocation source, UUID exceptFaction, UUID exceptGeneral) {
-        if (source == null) return Integer.MAX_VALUE;
-        return Math.max(0, orm.positions(item).stream().filter(p -> p.location.id.equals(source.id))
-                .mapToInt(InventoryPosition::availableQuantity).sum() - orm.reserved(item, source, exceptFaction, exceptGeneral));
+    /** Stock and open reservations of one item per location, read once per command. */
+    public record Capacity(List<InventoryPosition> positions, Map<UUID, Integer> reserved) {
+        public int availableAt(StorageLocation source) {
+            if (source == null) return Integer.MAX_VALUE;
+            return Math.max(0, positions.stream().filter(p -> p.location.id.equals(source.id))
+                    .mapToInt(InventoryPosition::availableQuantity).sum() - reserved.getOrDefault(source.id, 0));
+        }
+
+        /** Locations currently holding stock of the item, in FEFO position order. */
+        public List<StorageLocation> stockLocations() {
+            var result = new ArrayList<StorageLocation>();
+            for (var p : positions)
+                if (p.quantityOnHand > 0 && result.stream().noneMatch(l -> l.id.equals(p.location.id))) result.add(p.location);
+            return result;
+        }
+
+        /** FEFO share of the location's reservations held by one position. */
+        public int reservedAt(InventoryPosition position) {
+            int left = reserved.getOrDefault(position.location.id, 0);
+            for (var p : positions) {
+                if (!p.location.id.equals(position.location.id)) continue;
+                int share = Math.min(left, p.availableQuantity());
+                if (p.id.equals(position.id)) return share;
+                left -= share;
+            }
+            return 0;
+        }
     }
 
-    /** Locations currently holding stock of the item, in FEFO position order. */
-    public List<StorageLocation> stockLocations(Item item) {
-        var result = new ArrayList<StorageLocation>();
-        for (var p : orm.positions(item))
-            if (p.quantityOnHand > 0 && result.stream().noneMatch(l -> l.id.equals(p.location.id))) result.add(p.location);
-        return result;
+    public Capacity capacity(Item item, UUID exceptOrder) {
+        return new Capacity(orm.positions(item),
+                orm.reservedByLocation(List.of(item.id), exceptOrder).getOrDefault(item.id, Map.of()));
+    }
+
+    public int availableAt(Item item, StorageLocation source, UUID exceptOrder) {
+        if (source == null) return Integer.MAX_VALUE;
+        return capacity(item, exceptOrder).availableAt(source);
     }
 
     public int reservedAt(InventoryPosition position) {
-        int left = orm.reserved(position.item, position.location, null, null);
-        for (var p : orm.positions(position.item)) {
-            if (!p.location.id.equals(position.location.id)) continue;
-            int reserved = Math.min(left, p.availableQuantity());
-            if (p.id.equals(position.id)) return reserved;
-            left -= reserved;
-        }
-        return 0;
+        return capacity(position.item, null).reservedAt(position);
     }
 
     /** Same FEFO allocation as reservedAt(position), materialized once for a report batch. */
     public Map<UUID, Integer> reservedAt(List<Item> items, List<InventoryPosition> orderedPositions) {
-        var itemById = items.stream().collect(java.util.stream.Collectors.toMap(i -> i.id, i -> i));
+        var reserved = orm.reservedByLocation(items.stream().map(item -> item.id).toList(), null);
         var remaining = new HashMap<String, Integer>();
-        for (var reservation : orm.reservations(itemById.keySet())) {
-            var source = reservation.location == null ? reservation.item.storageLocation : reservation.location;
-            if (source != null) remaining.merge(reservation.item.id + ":" + source.id, reservation.openQuantity(), Integer::sum);
-        }
-        for (var order : orm.reservedGeneralOrders()) order.preparedQuantities.forEach((id, quantity) -> {
-            var item = itemById.get(UUID.fromString(id));
-            if (item == null) return;
-            String source = order.sourceLocations.get(id);
-            if (source == null && item.storageLocation != null) source = item.storageLocation.id.toString();
-            if (source != null) remaining.merge(id + ":" + source, quantity, Integer::sum);
-        });
+        reserved.forEach((itemId, byLocation) -> byLocation.forEach((locationId, quantity) -> remaining.put(itemId + ":" + locationId, quantity)));
         var result = new LinkedHashMap<UUID, Integer>();
         for (var position : orderedPositions) {
             String key = position.item.id + ":" + position.location.id;
@@ -110,6 +117,17 @@ public class PositionService {
             if (amount <= 0) continue;
             p.quantityDamaged += amount; held.put(p.id.toString(), amount); left -= amount;
             if (left == 0) break;
+        }
+        report.positionQuantities = held;
+    }
+
+    /** Returned damage belongs to the exact positions credited by its check-in. */
+    public void reportReturnedDamage(DamageReport report, StockTransaction checkin) {
+        var held = new LinkedHashMap<String, Integer>();
+        for (var entry : checkin.positionQuantities.entrySet()) {
+            var position = orm.find(InventoryPosition.class, UUID.fromString(entry.getKey()));
+            position.quantityDamaged += entry.getValue();
+            held.put(entry.getKey(), entry.getValue());
         }
         report.positionQuantities = held;
     }
@@ -159,7 +177,7 @@ public class PositionService {
         if (tx.type == DomainEnums.TransactionType.checkout) equipment.assertSource(tx.item, source);
         var all = orm.positions(tx.item);
         if (tx.type == DomainEnums.TransactionType.checkout && source != null
-                && tx.quantity > availableAt(tx.item, source, tx.factionOrder == null ? null : tx.factionOrder.id, null)) {
+                && tx.quantity > availableAt(tx.item, source, tx.order == null ? null : tx.order.id)) {
             throw ApiException.conflict("Stock at the source is reserved or unavailable");
         }
         if (source == null && all.isEmpty() && tx.item.trackingMode != DomainEnums.TrackingMode.lot_tracked) return;

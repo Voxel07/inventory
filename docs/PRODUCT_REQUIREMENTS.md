@@ -85,7 +85,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
-| ORD-01 | Order lifecycle in [App Flow](APP_FLOW.md), including cancellation; transitions under an order lock | Partial | `OrderService`, `GeneralOrderService`. Two separate order models [PLAN-02](IMPLEMENTATION_PLAN.md) |
+| ORD-01 | Order lifecycle in [App Flow](APP_FLOW.md), including cancellation; transitions under an order lock | Implemented | `InventoryOrder.kind`, one `OrderService`, shared reservations/history/custody [PLAN-02](IMPLEMENTATION_PLAN.md); runtime acceptance pending |
 | ORD-02 | Commission items, assemblies and exact assets on desktop and mobile | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` |
 | ORD-03 | Preparation reserves; pickup atomically converts reservations to custody | Implemented | `OrderService`, `OrderAllocationService` |
 | ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
@@ -95,7 +95,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ORD-08 | Group ordered/prepared items by responsible person; separate pickup points per group and recipient-scoped in-app notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components |
 | RET-01 | Expected return location per item; the returner can attach a placement photo | Implemented | `Item.returnLocation`, `ReturnSubmissionForm` |
 | RET-02 | A submitted return isn't stock until a warehouse worker accepts it; pending/history view with accept/reject | Implemented | `ReturnSubmissionService`, `ReturnedItems` |
-| AUD-01 | Append-only order and stock history: actor, UTC time, action, from/to, delta, note, idempotency key | Implemented | `FactionOrderHistory`, `GeneralOrderHistory`, `StockTransaction` |
+| AUD-01 | Append-only order and stock history: actor, UTC time, action, from/to, delta, note, idempotency key | Implemented | `OrderHistory`, `StockTransaction` |
 | AUD-02 | Show create/prepare/ready/pickup/return actors and timestamps | Implemented | `OrderTraceability` |
 
 **Lifecycle, planning and purchasing**
@@ -108,8 +108,8 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
 | PRC-02 | Purchase orders: supplier, dates, buyer, quantity, unit price, reference; partial goods receipts; vendor documents restricted to authorized purchasing roles | Implemented | `PurchasingService`, `PurchasingOperations` |
 | PRC-03 | Unreceived purchase quantity is shown separately as ordered supply and excluded from owned/available until received | Implemented | `PurchasingService`, item stock DTO |
-| EVT-01 | Per-event attendee list drawn from a shared people registry (renames apply at every event; optional, not required, Authentik account link); one or more predefined roles per attendance — faction leader, faction deputy and HQ crew per faction, AS-Held, event crew with assigned work; optional arrival/departure times, four main-meal stamps plus one breakfast stamp per person, total/remaining issuance and notes | Implemented | `EventAttendees`, `EventLogisticsService`, `event_people`/`event_attendees`/`event_attendee_roles`; staff reads and planner/admin writes; `EventLogisticsApiTest` |
-| EVT-02 | Event timeline with in-game and setup/preparation tabs, chronological day groups, start/optional end, owner/team, area, progress and notes; preparation can extend beyond event dates | Implemented | `EventTimeline`, `EventLogisticsService`, `event_timeline_entries`; event-local times, online writes and SSE invalidation |
+| EVT-01 | Per-event attendee list drawn from a shared people registry (renames apply at every event; optional, not required, Authentik account link); one or more predefined roles per attendance — faction leader, faction deputy and HQ crew per faction, AS-Held, event crew with assigned work; arrival/departure defaulting to the event dates; day-based food stamps with editable event rates (4 regular + 1 breakfast on full days, 2 regular on the first catering day, breakfast only on the last), total/remaining issuance, role/arrival sorting, faction colors and notes | Implemented | `EventAttendees`, `EventLogisticsService`, `event_people`/`event_attendees`/`event_attendee_roles`; staff reads and planner/admin writes; `EventLogisticsApiTest` |
+| EVT-02 | Event timeline with in-game, setup/preparation and crew catering tabs, chronological day groups, start/optional end, owner/team, area, progress and notes; preparation can extend beyond event dates | Implemented | `EventTimeline`, `EventLogisticsService`, `event_timeline_entries`; event-local times, online writes and SSE invalidation |
 
 **Ownership, members and operations**
 
@@ -160,7 +160,7 @@ Exact storage semantics and current exceptions are in [Database Schema and Data 
 
 ## 6. Offline scope
 
-Queueable commands: direct stock transaction; damage creation without media; faction-order create, prepare, transition and reconcile. Save each under the original account with a UUID, then re-authorize and validate during replay. Private mutations, uploads, general orders, member return submissions and the other operational workflows require connectivity.
+Queueable commands: direct stock transaction; damage creation without media; faction/general order create, prepare, transition and reconcile. Save each under the original account with a UUID, then re-authorize and validate during replay. Private mutations, uploads, order edits, member return submissions and the other operational workflows require connectivity.
 
 Previously downloaded organizational catalogs can be read offline within the saved access context; private projections are excluded from durable catalog caching. A cold offline start can reach the cache because query readers use `offlineFirst`, but actual device/browser acceptance remains pending. Show freshness and incomplete coverage. A queued result is saved locally, not an accepted movement. Conflicts require a new linked correction command; never overwrite original evidence. See [Offline Mode](OFFLINE_MODE.md).
 

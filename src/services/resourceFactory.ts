@@ -1,9 +1,8 @@
 import { containsPrivateInventory } from './privateInventoryCache';
-import { apiRequest, ApiError } from './apiClient';
+import { apiPage, apiRequest, ApiError, type ApiQuery } from './apiClient';
+import { LIST_PAGE_SIZE, loadAllPages, type Page } from './apiPagination';
 import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog, setOfflineCatalogEntries } from './offlineQueue';
 import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
-
-export type ResourceQuery = Record<string, string | number | boolean | undefined>;
 
 export interface ResourceOptions<TForm, T = unknown> {
   /** List rows have the full detail projection and can seed exact offline entries. */
@@ -14,7 +13,10 @@ export interface ResourceOptions<TForm, T = unknown> {
 }
 
 export interface CollectionResourceApi<T> {
-  getAll: (query?: ResourceQuery) => Promise<T[]>;
+  /** One server page; screens read pages on demand. */
+  getPage: (query: ApiQuery | undefined, page: number, size?: number) => Promise<Page<T>>;
+  /** Explicit exhaustive read (imports, exports, hierarchy pickers, offline snapshots). */
+  getAll: (query?: ApiQuery) => Promise<T[]>;
 }
 
 export interface ReadResourceApi<T> extends CollectionResourceApi<T> {
@@ -34,7 +36,7 @@ export interface CrudResourceApi<T, TForm> extends MutableResourceApi<T, TForm> 
   deleteMany: (ids: string[]) => Promise<string[]>;
 }
 
-function queryCacheKey(base: string, query?: ResourceQuery): string {
+function queryCacheKey(base: string, query?: ApiQuery): string {
   const entries = Object.entries(query ?? {})
     .filter(([, value]) => value !== undefined)
     .sort(([left], [right]) => left.localeCompare(right));
@@ -56,32 +58,38 @@ function operations<T extends { id: string }, TForm>(
     assertAuthSession(context);
     return data;
   }
-  return {
-    async getAll(query?: ResourceQuery) {
-      const context = captureAuthSession();
-      const scopedCacheKey = cacheKey ? queryCacheKey(cacheKey, query) : undefined;
-      try {
-        const data = await apiRequest<T[]>(basePath, { query, session: context });
+  /** The page envelope (rows and continuation) is what the offline cache stores, so a cached page keeps `more`. */
+  async function getPage(query: ApiQuery | undefined, page: number, size = LIST_PAGE_SIZE): Promise<Page<T>> {
+    const context = captureAuthSession();
+    const scopedCacheKey = cacheKey ? queryCacheKey(cacheKey, { ...query, page, size }) : undefined;
+    try {
+      const data = await apiPage<T>(basePath, page, size, { query, session: context });
+      assertAuthSession(context);
+      if (scopedCacheKey && !containsPrivateInventory(data.rows)) await setOfflineCatalogEntries([
+        { key: scopedCacheKey, data },
+        ...data.rows.flatMap((item) => {
+          const key = detailKey(item.id);
+          return key ? [{ key, data: item }] : [];
+        }),
+      ], context);
+      if (scopedCacheKey && containsPrivateInventory(data.rows)) await removeOfflineCatalog(scopedCacheKey, context);
+      assertAuthSession(context);
+      return data;
+    } catch (error) {
+      assertAuthSession(context);
+      if (scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
+        const cached = await getOfflineCatalog<Page<T>>(scopedCacheKey, context);
         assertAuthSession(context);
-        if (scopedCacheKey && !containsPrivateInventory(data)) await setOfflineCatalogEntries([
-          { key: scopedCacheKey, data },
-          ...data.flatMap((item) => {
-            const key = detailKey(item.id);
-            return key ? [{ key, data: item }] : [];
-          }),
-        ], context);
-        if (scopedCacheKey && containsPrivateInventory(data)) await removeOfflineCatalog(scopedCacheKey, context);
-        assertAuthSession(context);
-        return data;
-      } catch (error) {
-        assertAuthSession(context);
-        if (scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
-          const cached = await getOfflineCatalog<T[]>(scopedCacheKey, context);
-          assertAuthSession(context);
-          if (cached) return cached;
-        }
-        throw error;
+        if (cached) return cached;
       }
+      throw error;
+    }
+  }
+  return {
+    getPage,
+
+    getAll(query?: ApiQuery) {
+      return loadAllPages((page, size) => getPage(query, page, size));
     },
 
     async getById(id: string) {
@@ -104,9 +112,9 @@ function operations<T extends { id: string }, TForm>(
             if (cached) return cached;
             throw error;
           }
-          const cached = await getOfflineCatalog<T[]>(cacheKey, context);
+          const cached = await getOfflineCatalog<Page<T>>(queryCacheKey(cacheKey, { page: 0, size: LIST_PAGE_SIZE }), context);
           assertAuthSession(context);
-          const found = cached?.find((item) => item.id === id);
+          const found = cached?.rows.find((item) => item.id === id);
           if (found) return found;
         }
         throw error;
@@ -167,7 +175,7 @@ export function createCreateResourceApi<T extends { id: string }, TForm>(
   options?: ResourceOptions<TForm, T>,
 ): CreateResourceApi<T, TForm> {
   const resource = operations<T, TForm>(basePath, cacheKey, options);
-  return { getAll: resource.getAll, create: resource.create };
+  return { getPage: resource.getPage, getAll: resource.getAll, create: resource.create };
 }
 
 export function createMutableResourceApi<T extends { id: string }, TForm>(
@@ -176,7 +184,7 @@ export function createMutableResourceApi<T extends { id: string }, TForm>(
   options?: ResourceOptions<TForm, T>,
 ): MutableResourceApi<T, TForm> {
   const resource = operations<T, TForm>(basePath, cacheKey, options);
-  return { getAll: resource.getAll, getById: resource.getById, create: resource.create, update: resource.update };
+  return { getPage: resource.getPage, getAll: resource.getAll, getById: resource.getById, create: resource.create, update: resource.update };
 }
 
 export function createCrudResourceApi<T extends { id: string }, TForm>(

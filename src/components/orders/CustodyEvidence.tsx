@@ -2,22 +2,26 @@ import { formatDateTime } from '../../utils/dateFormat';
 import { AccordionSummary } from '../shared/ActionButtons';
 import { Accordion, AccordionDetails, Alert, Card, CardContent, Stack, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { apiRequest } from '../../services/apiClient';
+import { apiPage } from '../../services/apiClient';
+import { LoadMore } from '../shared/LoadMore';
 import { useOperationList } from '../../hooks/useOperations';
-import { translate, useLocalizedText } from '../../utils/naming';
+import { translate, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
+import { orderPath } from '../../services/orderCommands';
+import type { OrderKind } from '../../types/orderCommands';
 
 type Handover = { id: string; handoverCode: string; type: string; collectorName?: string; occurredAt: string; conditionConfirmed: boolean; notes?: string; lines: { id: string; itemName: string; assetCode?: string; quantity: number; conditionNotes?: string }[] };
 type Reconciliation = { id: string; itemName: string; assetCode?: string; outcome: string; quantity: number; notes?: string; createdAt: string };
 
-export function CustodyEvidence({ orderId }: { orderId: string }) {
-  const t = useLocalizedText();
-  const handovers = useOperationList(`handovers:${orderId}`, (page, size) => apiRequest<Handover[]>(`/api/orders/${orderId}/handovers`, { query: { page, size } }));
-  const returns = useOperationList(`reconciliations:${orderId}`, (page, size) => apiRequest<Reconciliation[]>(`/api/orders/${orderId}/reconciliations`, { query: { page, size } }));
-  return <Accordion><AccordionSummary title={translate('Übergabe- und Rückgabenachweise ein- oder ausblenden', 'Show or hide handover and return evidence')} expandIcon={<ExpandMoreIcon />}>{t('Übergabe- und Rückgabenachweise', 'Handover and return evidence')}</AccordionSummary><AccordionDetails><Stack spacing={2}>
+export function CustodyEvidence({ orderId, kind }: { orderId: string; kind: OrderKind }) {
+  const t = useT();
+  const handovers = useOperationList(`handovers:${orderId}`, (page, size) => apiPage<Handover>(`${orderPath(kind, orderId)}/handovers`, page, size));
+  const returns = useOperationList(`reconciliations:${orderId}`, (page, size) => apiPage<Reconciliation>(`${orderPath(kind, orderId)}/reconciliations`, page, size));
+  return <Accordion><AccordionSummary title={translate('orders.custodyEvidence.showOrHideHandoverAndReturnEvidence')} expandIcon={<ExpandMoreIcon />}>{t('orders.custodyEvidence.handoverAndReturnEvidence')}</AccordionSummary><AccordionDetails><Stack spacing={2}>
     {(handovers.error || returns.error) && <Alert severity="error">{(handovers.error || returns.error)?.message}</Alert>}
     {handovers.data?.map((entry) => <Card key={entry.id}><CardContent><Typography variant="subtitle1">{entry.handoverCode} · {formatStatus(entry.type)} · {formatDateTime(entry.occurredAt)}</Typography><Typography>{entry.collectorName} · {entry.notes}</Typography>{entry.lines.map((line) => <Typography key={line.id}>{line.itemName} · {line.assetCode} · {line.quantity} · {line.conditionNotes}</Typography>)}</CardContent></Card>)}
     {returns.data?.map((entry) => <Typography key={entry.id}>{formatDateTime(entry.createdAt)} · {entry.itemName} {entry.assetCode} · {formatStatus(entry.outcome)}: {entry.quantity} · {entry.notes}</Typography>)}
-    {!handovers.isLoading && !returns.isLoading && !handovers.data?.length && !returns.data?.length && <Typography>{t('Noch keine Übergaben.', 'No handovers recorded yet.')}</Typography>}
+    <LoadMore list={handovers} /><LoadMore list={returns} />
+    {!handovers.isLoading && !returns.isLoading && !handovers.data?.length && !returns.data?.length && <Typography>{t('orders.custodyEvidence.noHandoversRecordedYet')}</Typography>}
   </Stack></AccordionDetails></Accordion>;
 }

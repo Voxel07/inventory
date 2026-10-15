@@ -16,6 +16,8 @@ import java.util.UUID;
 public final class ApiResponses {
     private ApiResponses() {}
 
+    public sealed interface OrderDetail permits OrderResponse, GeneralOrderResponse {}
+
     public record StockDto(
             int totalOwned,
             int onHand,
@@ -41,6 +43,7 @@ public final class ApiResponses {
     ) {}
 
     public record GeneralOrderResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -60,11 +63,12 @@ public final class ApiResponses {
             Map<String, Integer> missingQuantities,
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
-            List<Map<String, Object>> history,
+            List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
-    ) {}
+    ) implements OrderDetail {}
 
     public record GeneralOrderSummaryResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -112,7 +116,8 @@ public final class ApiResponses {
             String warehouseId,
             String warehouseName,
             String parentLocationId,
-            boolean active, org.ash.inventory.service.InventoryAccessService.View access
+            boolean active, org.ash.inventory.service.InventoryAccessService.View access,
+            String hierarchyPath, UUID keeperUserId, String keeperUserName, String keeperUserEmail
     ) {}
 
     public record ItemResponse(
@@ -127,10 +132,6 @@ public final class ApiResponses {
             String category,
             String subcategory,
             String supplier,
-            String visibilityScope,
-            String assignedUserId,
-            String assignedUserName,
-            String assignedGroup,
             List<String> eventTypes,
             @com.fasterxml.jackson.annotation.JsonProperty("isConsumable") boolean isConsumable,
             String trackingMode,
@@ -170,7 +171,7 @@ public final class ApiResponses {
             String returnedForUserName,
             String submittedById,
             String submittedByName,
-            String factionOrderId,
+            String orderId,
             String expectedReturnLocationId,
             String expectedReturnLocationName,
             String placementImage,
@@ -238,11 +239,16 @@ public final class ApiResponses {
             Boolean active
     ) {}
 
+    /** Overview metrics computed on the server over every item visible to the caller. */
+    public record InventorySummaryResponse(long items, long totalUnits, long lowStockItems, long transactionsLast7Days,
+            long openDamageReports) {}
+
     public record TransactionResponse(
             UUID id,
             Instant created,
             Instant updated,
             String itemId,
+            String itemName,
             String userId,
             String transactionType,
             int quantityChanged,
@@ -251,7 +257,7 @@ public final class ApiResponses {
             String destinationLocationId,
             Integer availabilityBefore,
             Integer availabilityAfter,
-            String factionOrderId,
+            String orderId,
             String eventType,
             String faction,
             String damageReportId,
@@ -281,6 +287,7 @@ public final class ApiResponses {
     ) {}
 
     public record OrderHistoryResponse(
+            String id,
             String action,
             String userId,
             String userName,
@@ -292,6 +299,7 @@ public final class ApiResponses {
     ) {}
 
     public record OrderResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -333,10 +341,11 @@ public final class ApiResponses {
             List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
             , Map<String, String> sourceLocations
-    ) {}
+    ) implements OrderDetail {}
 
     /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */
     public record OrderSummaryResponse(
+            String kind,
             UUID id,
             Instant created,
             Instant updated,
@@ -376,6 +385,7 @@ public final class ApiResponses {
             Instant created,
             Instant updated,
             String itemId,
+            String itemName,
             String assemblyId,
             String assemblyName,
             int amount,
@@ -383,7 +393,7 @@ public final class ApiResponses {
             int writtenOffAmount,
             String reportedBy,
             String handledBy,
-            String factionOrderId,
+            String orderId,
             String description,
             String severity,
             String status,
@@ -399,6 +409,7 @@ public final class ApiResponses {
     public record MaintenanceResponse(
             UUID id,
             String itemId,
+            String itemName,
             String type,
             String inspectorUserId,
             Instant performedAt,
@@ -425,6 +436,7 @@ public final class ApiResponses {
             String conditionStatus,
             String availabilityStatus,
             String serviceStatus,
+            LocalDate nextMaintenanceDue,
             BigDecimal operatingHours,
             String currentLocationId,
             String currentLocationName,

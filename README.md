@@ -22,12 +22,12 @@ Backend (Java 25):
 
 ```bash
 cd backend
-mvn -Ddev quarkus:dev
+mvn quarkus:dev
 ```
 
 Every profile (dev, test, prod) creates the schema from the single Flyway baseline `V1.0.0__init.sql`; Hibernate only validates it. Data is disposable: after a baseline change, recreate the database. Tests recreate the `TEST_DB_URL` database on every start. Architecture and schema rules: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs, then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
+Copy `.env.example` to `.env`, set the public API, frontend, and Authentik URLs and a unique `DB_PASSWORD` (required, no default), then run the complete stack with `docker compose up --build`. Runtime settings are written to a separate `config.js`; compiled frontend bundles are not modified. The SPA uses OIDC Authorization Code + PKCE and Quarkus validates its bearer access tokens. For local development without Authentik, use the development overrides documented at the bottom of `.env.example`.
 
 The Authentik OAuth2/OIDC provider must use client type **Public**, because the React application cannot securely hold a client secret. Its Client ID must match `OIDC_CLIENT_ID`, and its redirect URI must exactly match `VITE_OIDC_REDIRECT_URI`. A confidential provider will complete the browser redirect but reject the subsequent token exchange with `invalid_client`. Enable the `offline_access` scope mapping when refresh tokens are required, keep the access-token lifetime short (≤ 5 minutes) and enable refresh-token rotation: the API validates JWTs locally, so the access-token lifetime bounds how long a revoked token is still accepted (or set `OIDC_REQUIRE_INTROSPECTION=true`).
 
@@ -41,9 +41,11 @@ Import [`sample_stock.csv`](sample_imports/sample_stock.csv) through **My dashbo
 
 Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). General-order rows use `Typ=Allgemeine Bestellung`, `Zweck`, `Bestellte Artikel`, `Bestellstatus`, and optionally `Rückgabeartikel` / `Verbrauchte Artikel`. Preparation runs before marking orders ready, including exact serialized asset assignments.
 
+Admin CSV imports enable “Auto-create missing event types and factions” by default, so `sample_imports/sample_stock.csv` also works with an empty reference catalog. The preview lists new factions; import creates only those used by valid selected rows, before resolving attendee roles to database IDs. Disable this option to require existing references. Preview and import wait for all catalog dependencies; failed catalog reads show an error with retry.
+
 Event rows include `Name`, `Eventtyp`, `Eventdatum`, optional `Startdatum` / `Enddatum` (YYYY-MM-DD), and JSON arrays in `Teilnehmer` / `Zeitplan` (English headers: `attendees` / `timeline`). `Startdatum` is the first event day and takes precedence over `Eventdatum` when both are set; `Enddatum` defaults to the start date. The sample has six fictional attendees and four timeline entries for each of its 14 events, including preparation and in-game activities. Item and assembly previews search all rows and show the first 50 matches plus every error row; action previews scroll within a fixed-height table.
 
-An attendee uses `personName`, optional `arrivesAt`, `leavesAt`, `foodStampsIssued` (boolean), `notes`, and a nonempty `roles` array. Each role uses `role` (`faction_leader`, `faction_deputy`, `faction_hq_crew`, `as_held`, or `event_crew`); faction roles require `faction` containing a faction name of that event type, and event crew may set `assignment`. A timeline entry uses `category` (`preparation` / `in_game`), `title`, `startsAt`, optional `endsAt`, `owner`, `location`, `description`, and `status` (`planned`, `in_progress`, or `completed`; defaults to `planned`). Times use local event wall-clock values such as `2027-06-12T09:00`, without a timezone. CSV-quote JSON cells and double their internal quotes, as in the downloadable combined template. Invalid lists, roles, dates, or reversed ranges mark the event row as an error before import. Retries reuse people by name, preserve linked accounts, update attendances by person, and update timeline entries by category/title/start time; records absent from the CSV are retained. Ambiguous person names require correction before import can finish.
+An attendee uses `personName`, optional `arrivesAt`, `leavesAt`, `foodStampsIssued` (boolean), `notes`, and a nonempty `roles` array. Each role uses `role` (`faction_leader`, `faction_deputy`, `faction_hq_crew`, `as_held`, or `event_crew`); faction roles require `faction` containing a faction name of that event type, and event crew may set `assignment`. A timeline entry uses `category` (`preparation` / `in_game` / `catering`), `title`, `startsAt`, optional `endsAt`, `owner`, `location`, `description`, and `status` (`planned`, `in_progress`, or `completed`; defaults to `planned`). Times use local event wall-clock values such as `2027-06-12T09:00`, without a timezone. CSV-quote JSON cells and double their internal quotes, as in the downloadable combined template. Invalid lists, roles, dates, or reversed ranges mark the event row as an error before import. Retries reuse people by name, preserve linked accounts, update attendances by person, and update timeline entries by category/title/start time; records absent from the CSV are retained. Ambiguous person names require correction before import can finish.
 
 Operational rows use `Typ=Aktion`, a unique `Name`, an `Aktion` command, and a JSON object in `Daten`. Supported commands are `stock`, `damage`, `repair`, `repair_transition`, `lot`, `maintenance`, `purchase`, `receipt`, `equipment`, `commitment`, `loan`, `loan_collect`, `transfer`, `count`, `member_request`, and `member_return`. After items, assets and events, import applies a leading dated stock/repair history before orders and checkouts to establish their stock balances. It then runs the remaining actions in file order; named action outputs are shared across both phases. References such as `@item:Demo-Klapptisch`, `@location:Palettenlager`, `@event:LS:2027-06-12`, and `@row:Demo Zusage Leihzelt` resolve to the imported records; row references must point to an earlier action. `@date:+14` and `@datetime:-7` resolve relative to the local import date, keeping lot and maintenance warnings reproducible. Member requests and return submissions belong to the importing user; reminders can then be scheduled from the action inbox.
 
@@ -103,10 +105,21 @@ The exact online/offline boundary, queue semantics, and conflict handling are do
 ## Internationalization
 
 Localization runs on [i18next](https://www.i18next.com/) with German (`de`) and
-English (`en`) catalogs in [`src/i18n`](src/i18n). Shared copy uses the
+English (`en`) catalogs in [`src/i18n`](src/i18n). Bilingual copy uses the
 key-based `useT()` hook from `src/utils/naming` (e.g.
 `t('header.queuedActions', { count })`), which supports interpolation and
-pluralization. Context-specific bilingual copy uses `useLocalizedText()`.
+pluralization. Non-React code uses `translate(key, options)`; both APIs accept
+catalog keys only. Shared labels live under `common`; feature copy follows its
+screen/component/service namespace. Keep whole sentences in the catalogs and
+use `_one` / `_other` entries with a numeric `count` for plurals.
+
+Keys and export/import translation callbacks are typed with `TranslationKey`
+and `Translator`. German must match the English catalog structure. Hook
+callbacks retain their selected language during asynchronous exports/imports;
+changing the language rerenders components with a new callback.
+
+Run `bun run check:i18n` to check catalog keys, interpolation parameters,
+plural forms and translation call sites. It also runs as part of `bun run lint`.
 
 ## Faction order workflow
 

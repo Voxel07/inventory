@@ -13,7 +13,7 @@ import org.ash.inventory.service.CustodyQueryService;
 import java.util.List;
 import java.util.UUID;
 
-@Path("/api/orders/{orderId}")
+@Path("/api/orders/{kind}/{orderId}")
 @Produces(MediaType.APPLICATION_JSON)
 public class CustodyResource {
     private final CustodyQueryService service;
@@ -22,19 +22,19 @@ public class CustodyResource {
         this.service = service;
     }
 
-    @GET
+    @Paged @GET
     @Path("/handovers")
-    public List<CustodyDtos.HandoverResponse> handovers(@PathParam("orderId") UUID orderId,
+    public List<CustodyDtos.HandoverResponse> handovers(@PathParam("kind") org.ash.inventory.model.InventoryOrder.Kind kind, @PathParam("orderId") UUID orderId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.handovers(orderId, page, size);
+        return service.handovers(kind, orderId, page, size);
     }
 
-    @GET
+    @Paged @GET
     @Path("/reconciliations")
-    public List<CustodyDtos.ReconciliationResponse> reconciliations(@PathParam("orderId") UUID orderId,
+    public List<CustodyDtos.ReconciliationResponse> reconciliations(@PathParam("kind") org.ash.inventory.model.InventoryOrder.Kind kind, @PathParam("orderId") UUID orderId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.reconciliations(orderId, page, size);
+        return service.reconciliations(kind, orderId, page, size);
     }
 }

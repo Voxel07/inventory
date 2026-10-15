@@ -1,20 +1,22 @@
+import type { MaintenanceResult, MaintenanceType } from '../types/operations';
 import { apiRequest } from './apiClient';
 
 export type MaintenanceRecord = {
   id: string;
   itemId: string;
+  itemName: string;
   assetInstanceId?: string;
   scheduleId?: string;
   certificateObjectKey?: string;
-  type: 'dguv_v3' | 'generator_service' | 'battery_test' | 'chrono_fps';
+  type: MaintenanceType;
   inspectorUserId: string;
   performedAt: string;
   nextDueAt?: string;
   operatingHours?: number;
-  result: 'passed' | 'failed' | 'advisory';
+  result: MaintenanceResult;
   certificateNumber?: string;
   notes?: string;
 };
 
 export function getMaintenanceRecords(itemId?: string): Promise<MaintenanceRecord[]> { return apiRequest('/api/maintenance', { query: { itemId } }); }
-export function createMaintenanceRecord(data: Omit<MaintenanceRecord, 'id' | 'inspectorUserId'>): Promise<MaintenanceRecord> { return apiRequest('/api/maintenance', { method: 'POST', body: data }); }
+export function createMaintenanceRecord(data: Omit<MaintenanceRecord, 'id' | 'inspectorUserId' | 'itemName'>): Promise<MaintenanceRecord> { return apiRequest('/api/maintenance', { method: 'POST', body: data }); }

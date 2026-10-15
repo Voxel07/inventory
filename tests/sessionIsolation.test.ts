@@ -2,6 +2,9 @@ import { beforeEach, afterEach, expect, mock, test } from 'bun:test';
 import { QueryObserver } from '@tanstack/react-query';
 import type { User, UserRole } from '../src/types';
 import type { OidcTokenSet } from '../src/services/oidcClient';
+import { createInstance } from 'i18next';
+import en from '../src/i18n/en';
+import type { Translator } from '../src/utils/naming';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -33,12 +36,18 @@ mock.module('../src/services/oidcClient', () => ({
   beginOidcLogin: async () => {}, completeOidcLogin: async () => null, oidcLogoutUrl: async () => '', revokeOidcToken: async () => {},
 }));
 mock.module('../src/services/authStorage', () => ({
-  loadStoredAuthSession: () => loadSession(), saveStoredAuthSession: async () => {}, clearStoredAuthSession: async () => {},
+  loadStoredAuthSession: () => loadSession(), saveStoredAuthSession: async () => {}, clearStoredAuthSession: async () => {}, signedOutRevision: () => 0,
 }));
 mock.module('../src/store/uiStore', () => ({ useUIStore: { getState: () => ({
   resetTransactionFilters: () => {}, hideSnackbar: () => {}, showSnackbar: () => {},
 }) } }));
-mock.module('../src/utils/naming', () => ({ translate: (_de: string, en: string) => en }));
+const translations = createInstance();
+void translations.init({
+  resources: { en: { translation: en } }, lng: 'en', initAsync: false,
+  interpolation: { escapeValue: false },
+});
+const translate: Translator = (key, options) => translations.t(key, options);
+mock.module('../src/utils/naming', () => ({ translate }));
 
 // Controllable stores make IndexedDB completion races deterministic.
 const catalogs = new Map<string, unknown>();
@@ -88,6 +97,7 @@ const pagination = await import('../src/services/apiPagination');
 const codes = await import('../src/utils/codeResolver');
 const reports = await import('../src/services/reportService');
 const { createCsvEventLogisticsImporter } = await import('../src/services/csvEventLogisticsImport');
+const { importCsvFactions } = await import('../src/services/csvReferenceImport');
 const { parseEventReportsFromCsv } = await import('../src/utils/csv/events');
 import type { EventAttendee, EventPersonSummary, EventTimelineEntry } from '../src/types/eventLogistics';
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
@@ -102,6 +112,40 @@ function logisticsRow() {
     Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' }]),
   }], [], { eventTypes: ['DE'], factions: [] })[0];
 }
+
+test('CSV imports create missing factions once and save attendee roles with database IDs', async () => {
+  signIn('admin');
+  connectivity.onLine = true;
+  const factions = [{ id: 'existing', eventType: 'DE', name: 'KGG', slug: 'kgg' }];
+  const planned = [{ id: 'csv-faction-1', eventType: 'DE', name: 'kgg', slug: '' },
+    { id: 'csv-faction-2', eventType: 'LS', name: 'TERA', slug: '' }];
+  const writes: { path: string; body: Record<string, unknown> }[] = [];
+  fetchRequest = (async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    if (!options?.method || options.method === 'GET') return Response.json(path === '/api/factions' ? factions : []);
+    const body = JSON.parse(String(options.body));
+    writes.push({ path, body });
+    if (path === '/api/factions') {
+      const saved = { ...body, id: 'created', slug: 'tera' };
+      factions.push(saved);
+      return Response.json(saved);
+    }
+    return Response.json({ ...body, id: 'attendee', person: { id: 'person', name: body.personName } });
+  }) as typeof fetch;
+  const ids = await importCsvFactions(planned);
+  expect([...ids]).toEqual([['csv-faction-1', 'existing'], ['csv-faction-2', 'created']]);
+  expect([...(await importCsvFactions(planned))]).toEqual([...ids]);
+  expect(writes.filter((write) => write.path === '/api/factions')).toHaveLength(1);
+  const row = parseEventReportsFromCsv([{
+    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '2026-10-17',
+    Teilnehmer: JSON.stringify([{ personName: 'Alex', roles: [{ role: 'faction_leader', faction: 'TERA' }] }]),
+  }], [], { eventTypes: ['LS'], factions: planned })[0];
+  expect(row.status).toBe('valid');
+  await createCsvEventLogisticsImporter(ids)('event', row);
+  const attendee = writes.find((write) => write.path.endsWith('/attendees'));
+  expect(attendee?.body.roles).toEqual([{ role: 'faction_leader', factionId: 'created', assignment: null }]);
+  expect(row.attendees[0].roles[0].factionId).toBe('csv-faction-2');
+});
 
 test('CSV logistics retries reuse people, preserve linked accounts, and update existing records', async () => {
   signIn('planner');
@@ -247,6 +291,36 @@ test('private catalog responses remove durable snapshots and private writes cann
   expect(await offline.getOfflineCatalog('items')).toBeNull();
   await expect(offline.enqueueOfflineAction({ idempotencyKey: 'secret-write', type: 'checkout', payload: { itemId: 'secret-item' }, localTimestamp: '2026-10-01' })).rejects.toThrow('online connection');
   expect(await offline.getOfflineActions()).toEqual([]);
+});
+
+test('a mixed catalog produces a public-only snapshot that supports a new offline search', async () => {
+  signIn('mixed-snapshot-owner');
+  const inventory = await import('../src/services/inventoryService');
+  const rows = [
+    { id: 'mixed-public', name: 'Public radio', category: 'Comms', access: { privateResource: false } },
+    { id: 'mixed-private', name: 'Private radio', category: 'Comms', access: { privateResource: true } },
+  ];
+  fetchRequest = async () => new Response(JSON.stringify(rows), { headers: { 'X-Private-Inventory': 'true', 'X-Has-More': 'false' } });
+  await inventory.snapshotItemCatalog(auth.captureAuthSession());
+  expect(await offline.getOfflineCatalog('items:offline-snapshot')).toEqual([rows[0]]);
+  fetchRequest = async () => { throw new TypeError('Offline'); };
+  expect((await inventory.searchItems('radio', 25)).rows).toEqual([rows[0]]);
+});
+
+test('an absent previous faction order is a null result from one targeted request', async () => {
+  signIn('previous-order-reader');
+  const { getPreviousFactionOrder } = await import('../src/services/factionOrderService');
+  let calls = 0;
+  fetchRequest = async input => {
+    calls++;
+    const url = new URL(String(input));
+    expect(url.pathname).toBe('/api/orders/faction/previous');
+    expect(url.searchParams.get('faction')).toBe('Search & Rescue');
+    expect(url.searchParams.get('before')).toBe('2027-06-12');
+    return new Response(null, { status: 204 });
+  };
+  expect(await getPreviousFactionOrder('LS', 'Search & Rescue', '2027-06-12')).toBeNull();
+  expect(calls).toBe(1);
 });
 
 test('losing connectivity evicts private query data while retaining public snapshots', async () => {
@@ -491,16 +565,27 @@ test('a queue write committed during account switching keeps its original owner 
   expect(await offline.getOfflineHistory()).toEqual([]);
 });
 
-test('pagination preserves filtered-page ordering and stops fetching after an account switch', async () => {
+test('pagination follows the server continuation, not the row count, and stops after an account switch', async () => {
   signIn('A');
-  const calls: number[] = [];
-  const first = [{ id: 'one' }];
-  const completeness = await import('../src/services/pageCompleteness');
-  completeness.recordFilteredRows(first, 1);
-  const rows = await pagination.loadAllPages(async page => { calls.push(page); return page === 0 ? first : [{ id: 'two' }]; }, 2);
-  expect(rows).toEqual([{ id: 'one' }, { id: 'two' }]);
-  expect(calls).toEqual([0, 1]);
-  await expect(pagination.loadAllPages(async () => { signIn('B'); return first; }, 2)).rejects.toBeInstanceOf(auth.SessionChangedError);
+  connectivity.onLine = true;
+  const requested: string[] = [];
+  fetchRequest = (async (url) => {
+    requested.push(String(url));
+    const page = new URL(String(url)).searchParams.get('page');
+    // Page 0 lost a row to privacy filtering (1 of 2 rows) but the server still reports more rows.
+    return page === '0'
+      ? new Response(JSON.stringify([{ id: 'one' }]), { headers: { 'Content-Type': 'application/json', 'X-Has-More': 'true' } })
+      : new Response(JSON.stringify([{ id: 'two' }, { id: 'three' }]), { headers: { 'Content-Type': 'application/json', 'X-Has-More': 'false' } });
+  }) as typeof fetch;
+  const first = await api.apiPage<{ id: string }>('/api/paged-test', 0, 2);
+  expect(first).toEqual({ rows: [{ id: 'one' }], page: 0, size: 2, more: true });
+  const rows = await pagination.loadAllPages((page, size) => api.apiPage<{ id: string }>('/api/paged-test', page, size), 2);
+  expect(rows).toEqual([{ id: 'one' }, { id: 'two' }, { id: 'three' }]);
+  expect(requested.map((url) => new URL(url).searchParams.get('page'))).toEqual(['0', '0', '1']);
+  expect(pagination.mapPage(first, (row) => row.id)).toEqual({ rows: ['one'], page: 0, size: 2, more: true });
+  await expect(pagination.loadAllPages(async () => { signIn('B'); return { rows: [{ id: 'one' }], page: 0, size: 2, more: true }; }, 2))
+    .rejects.toBeInstanceOf(auth.SessionChangedError);
+  connectivity.onLine = false;
 });
 
 test('QR links resolve exact assets and locations without making a request or changing stock', async () => {
@@ -529,11 +614,11 @@ test('SKU and order fallback searches are targeted, exact and read-only', async 
   fetchRequest = async input => {
     const url = new URL(String(input)); calls.push(url);
     if (url.pathname === '/api/items') return Response.json([]);
-    if (url.pathname === '/api/orders') return Response.json([{ id: 'order', orderCode: 'DE26-KGG-01' }]);
+    if (url.pathname === '/api/orders/faction') return Response.json([{ id: 'order', orderCode: 'DE26-KGG-01' }]);
     return Response.json({ error: 'Missing' }, { status: 404 });
   };
   expect(await codes.resolveScannedCode('DE26-KGG-01')).toMatchObject({ found: true, path: '/orders/faction/order' });
-  expect(calls.find(url => url.pathname === '/api/orders')?.searchParams.get('orderCode')).toBe('DE26-KGG-01');
+  expect(calls.find(url => url.pathname === '/api/orders/faction')?.searchParams.get('orderCode')).toBe('DE26-KGG-01');
 });
 
 test('report exports retain the initial generation and filters across the export request', async () => {
@@ -569,4 +654,43 @@ test('offline replay archives each outcome without requeueing applied or conflic
   expect((await offline.getSyncFailures()).map(row => row.status).sort()).toEqual(['conflict', 'rejected']);
   await offline.flushOfflineQueue();
   expect(sent).toBe(1);
+});
+
+test('offline replay pauses on terminal failures, honours Retry-After and resumes with the same command UUIDs', async () => {
+  signIn('replay');
+  await offline.enqueueOfflineAction({ idempotencyKey: 'cmd-1', type: 'transaction', payload: { itemId: 'public-item' }, localTimestamp: '1' });
+  connectivity.onLine = true;
+  const sentKeys: string[] = [];
+  let respond: () => Response = () => new Response('', { status: 403 });
+  fetchRequest = async (_input, options) => {
+    sentKeys.push(...JSON.parse(String(options?.body)).actions.map((action: { idempotencyKey: string }) => action.idempotencyKey));
+    return respond();
+  };
+
+  await offline.flushOfflineQueue();
+  expect(offline.getSyncState()).toMatchObject({ kind: 'paused', reason: 'forbidden' });
+  await offline.flushOfflineQueue();
+  expect(sentKeys).toEqual(['cmd-1']);
+
+  respond = () => new Response(JSON.stringify({ error: 'Slow down' }), { status: 429, headers: { 'Retry-After': '7' } });
+  const before = Date.now();
+  await offline.flushOfflineQueue({ resume: true });
+  const state = offline.getSyncState();
+  expect(state).toMatchObject({ kind: 'retrying', reason: 'rate_limited' });
+  expect(Date.parse((state as { retryAt: string }).retryAt) - before).toBeGreaterThanOrEqual(7000);
+
+  respond = () => new Response('<html>proxy</html>', { status: 200 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toMatchObject({ kind: 'paused', reason: 'invalid_response' });
+
+  respond = () => new Response('', { status: 503 });
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toMatchObject({ kind: 'retrying', reason: 'server' });
+
+  respond = () => Response.json({ results: [{ idempotencyKey: 'cmd-1', status: 'applied' }] });
+  await offline.flushOfflineQueue({ resume: true });
+  expect(offline.getSyncState()).toEqual({ kind: 'idle' });
+  expect(new Set(sentKeys)).toEqual(new Set(['cmd-1']));
+  expect(await offline.getOfflineActions()).toEqual([]);
 });

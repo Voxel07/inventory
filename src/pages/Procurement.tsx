@@ -39,13 +39,13 @@ import { getProcurementDeficits, type ProcurementDeficit } from '../services/pro
 import { PurchaseDraft } from '../components/operations/PurchasingOperations';
 import { PlanningDetails } from '../components/procurement/PlanningDetails';
 import { useEventReports } from '../hooks/useEvents';
-import { translate, useLocalizedText } from '../utils/naming';
+import { translate, useT } from '../utils/naming';
 import { formatDate } from '../utils/dateFormat';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
 
 export function Procurement() {
-  const t = useLocalizedText();
+  const t = useT();
   const { eventTypes } = useFactionCatalog();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -121,24 +121,24 @@ export function Procurement() {
     const selectedEvent = events.find((e) => e.id === eventId);
     const scopeLabel = selectedEvent
       ? `${selectedEvent.name || selectedEvent.eventType} (${formatDate(selectedEvent.eventDate)})`
-      : t('Alle geplanten Events', 'All planned events');
+      : t('pages.procurement.allPlannedEvents');
 
     let y = 18;
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(t('Beschaffungsliste / Fehlmengen', 'Procurement / Shortage List'), 14, y);
+    doc.text(t('pages.procurement.procurementShortageList'), 14, y);
     y += 7;
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `${t('Umfang', 'Scope')}: ${scopeLabel} · ${t('Stand', 'Date')}: ${formatDate(new Date())}`,
+      `${t('common.scope')}: ${scopeLabel} · ${t('pages.procurement.date')}: ${formatDate(new Date())}`,
       14,
       y
     );
     y += 5;
     doc.text(
-      `${t('Noch zu bestellen', 'Still to order')}: ${consumableDeficitUnits + assetDeficitUnits} ${t('Einheiten', 'units')} · ${groups.length} ${t('Lieferanten', 'suppliers')}`,
+      `${t('pages.procurement.stillToOrder')}: ${consumableDeficitUnits + assetDeficitUnits} ${t('pages.procurement.units')} · ${groups.length} ${t('pages.procurement.suppliers')}`,
       14,
       y
     );
@@ -155,19 +155,19 @@ export function Procurement() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       const supplierDeficit = rows.reduce((sum, r) => sum + toOrder(r), 0);
-      doc.text(`${supplier} (${supplierDeficit} ${t('Einheiten', 'units')})`, 16, y + 1);
+      doc.text(`${supplier} (${supplierDeficit} ${t('pages.procurement.units')})`, 16, y + 1);
       y += 6;
 
       // Table headers
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
-      doc.text(t('SKU', 'SKU'), 14, y + 3);
-      doc.text(t('Artikelname', 'Item name'), 40, y + 3);
-      doc.text(t('Typ', 'Type'), 105, y + 3);
-      doc.text(t('Bedarf', 'Demand'), 130, y + 3);
-      doc.text(t('Bestand', 'Stock'), 148, y + 3);
-      doc.text(t('Bestellen', 'To order'), 168, y + 3);
-      doc.text(t('Aktion', 'Action'), 184, y + 3);
+      doc.text(t('pages.procurement.sKU'), 14, y + 3);
+      doc.text(t('pages.procurement.itemName'), 40, y + 3);
+      doc.text(t('common.type'), 105, y + 3);
+      doc.text(t('pages.procurement.demand'), 130, y + 3);
+      doc.text(t('common.stock'), 148, y + 3);
+      doc.text(t('pages.procurement.toOrder'), 168, y + 3);
+      doc.text(t('common.action'), 184, y + 3);
       y += 6;
 
       doc.setFont('helvetica', 'normal');
@@ -178,13 +178,13 @@ export function Procurement() {
         }
         doc.text(row.sku || '—', 14, y + 2);
         doc.text(doc.splitTextToSize(row.name, 62), 40, y + 2);
-        doc.text(row.classification === 'consumable' ? t('Verbrauch', 'Consumable') : 'Asset', 105, y + 2);
+        doc.text(row.classification === 'consumable' ? t('pages.procurement.consumable') : 'Asset', 105, y + 2);
         doc.text(String(row.demand), 130, y + 2);
         doc.text(String(row.availableStock), 148, y + 2);
         doc.setFont('helvetica', 'bold');
         doc.text(String(toOrder(row)), 168, y + 2);
         doc.setFont('helvetica', 'normal');
-        doc.text(row.recommendedAction === 'obtain_commitment' ? t('Zusage einholen', 'Obtain commitment') : row.recommendedAction === 'purchase' ? t('Kaufen', 'Buy') : t('Mieten', 'Rent'), 184, y + 2);
+        doc.text(row.recommendedAction === 'obtain_commitment' ? t('pages.procurement.obtainCommitment') : row.recommendedAction === 'purchase' ? t('pages.procurement.buy') : t('pages.procurement.rent'), 184, y + 2);
         y += 6;
       }
       y += 4;
@@ -201,17 +201,17 @@ export function Procurement() {
         sx={{ mb: 3, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
       >
         <Box>
-          <Typography variant="h4">{t('Beschaffung & Fehlmengen', 'Procurement & shortages')}</Typography>
+          <Typography variant="h4">{t('pages.procurement.procurementShortages')}</Typography>
           <Typography color="text.secondary">
-            {t('Aktiver Bedarf und Mindestbestandslücken, nach Lieferant gruppiert.', 'Active demand and minimum stock shortages, grouped by supplier.')}
+            {t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button title={translate('Die aktuellen Fehlmengen als CSV herunterladen', 'Download the current shortages as CSV')} variant="outlined" startIcon={<DownloadIcon />} disabled={!deficits.length} onClick={exportCsv}>
-            {t('CSV', 'CSV')}
+          <Button title={translate('pages.procurement.downloadTheCurrentShortagesAsCSV')} variant="outlined" startIcon={<DownloadIcon />} disabled={!deficits.length} onClick={exportCsv}>
+            {t('pages.procurement.cSV')}
           </Button>
-          <Button title={translate('Den Bestellschein als PDF herunterladen', 'Download the purchase order sheet as PDF')} variant="contained" startIcon={<PrintIcon />} disabled={!deficits.length} onClick={exportPdf}>
-            {t('Bestellschein PDF', 'Purchase order PDF')}
+          <Button title={translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF')} variant="contained" startIcon={<PrintIcon />} disabled={!deficits.length} onClick={exportPdf}>
+            {t('pages.procurement.purchaseOrderPDF')}
           </Button>
         </Stack>
       </Stack>
@@ -229,12 +229,12 @@ export function Procurement() {
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
             <WarningAmberIcon color="error" fontSize="small" />
             <Typography variant="caption" color="text.secondary">
-              {t('Gesamte Fehlmenge', 'Total deficit')}
+              {t('pages.procurement.totalDeficit')}
             </Typography>
           </Stack>
           {renderKpiValue(totalDeficitUnits, 'error.main')}
           <Typography variant="caption" color="text.secondary">
-            {t('Fehlende Einheiten', 'Missing units')}
+            {t('pages.procurement.missingUnits')}
           </Typography>
         </Paper>
 
@@ -242,12 +242,12 @@ export function Procurement() {
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
             <CategoryIcon color="warning" fontSize="small" />
             <Typography variant="caption" color="text.secondary">
-              {t('Verbrauchsmaterial', 'Consumables')}
+              {t('pages.procurement.consumables')}
             </Typography>
           </Stack>
           {renderKpiValue(consumableDeficitUnits)}
           <Typography variant="caption" color="text.secondary">
-              {t('Noch nachzukaufen', 'Still to purchase')}
+              {t('pages.procurement.stillToPurchase')}
           </Typography>
         </Paper>
 
@@ -255,12 +255,12 @@ export function Procurement() {
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
             <ShoppingCartIcon color="info" fontSize="small" />
             <Typography variant="caption" color="text.secondary">
-              {t('Anlagen / Assets', 'Assets & gear')}
+              {t('pages.procurement.assetsGear')}
             </Typography>
           </Stack>
           {renderKpiValue(assetDeficitUnits)}
           <Typography variant="caption" color="text.secondary">
-              {t('Noch zu mieten oder kaufen', 'Still to rent or buy')}
+              {t('pages.procurement.stillToRentOrBuy')}
           </Typography>
         </Paper>
 
@@ -268,20 +268,20 @@ export function Procurement() {
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
             <LocalShippingIcon color="primary" fontSize="small" />
             <Typography variant="caption" color="text.secondary">
-              {t('Lieferanten', 'Suppliers')}
+              {t('pages.procurement.suppliers2')}
             </Typography>
           </Stack>
           {renderKpiValue(groups.length)}
           <Typography variant="caption" color="text.secondary">
-            {t('Betroffene Bezugsquellen', 'Affected sources')}
+            {t('pages.procurement.affectedSources')}
           </Typography>
         </Paper>
       </Box>
 
       <FormControl sx={{ minWidth: 260, mb: 3 }}>
-        <InputLabel>{t('Event-Umfang', 'Event scope')}</InputLabel>
-        <Select value={eventId} label={t('Event-Umfang', 'Event scope')} onChange={(event) => setEventId(event.target.value)}>
-          <MenuItem value="">{t('Alle geplanten Events', 'All planned events')}</MenuItem>
+        <InputLabel>{t('pages.procurement.eventScope')}</InputLabel>
+        <Select value={eventId} label={t('pages.procurement.eventScope')} onChange={(event) => setEventId(event.target.value)}>
+          <MenuItem value="">{t('pages.procurement.allPlannedEvents')}</MenuItem>
           {eventTypes.flatMap((type) => {
             const occurrences = events.filter((event) => event.eventType === type);
             return occurrences.length ? [
@@ -294,19 +294,19 @@ export function Procurement() {
 
       {error && (
         <Alert severity="error">
-          {error instanceof Error ? error.message : t('Fehlmengen konnten nicht geladen werden.', 'Could not load deficits.')}
+          {error instanceof Error ? error.message : t('pages.procurement.couldNotLoadDeficits')}
         </Alert>
       )}
       {!isPending && !error && !deficits.length && (
-        <Alert severity="success">{t('Keine Fehlmengen im gewählten Umfang.', 'No shortages in the selected scope.')}</Alert>
+        <Alert severity="success">{t('pages.procurement.noShortagesInTheSelectedScope')}</Alert>
       )}
 
       <Stack spacing={2}>
         {isPending && <>
           <Typography role="status" variant="body2" color="text.secondary">
             {fetchStatus === 'paused'
-              ? t('Warte auf eine Netzwerkverbindung…', 'Waiting for a network connection…')
-              : t('Bestände, Bedarf und Lieferungen werden geladen…', 'Loading stock, demand and deliveries…')}
+              ? t('pages.procurement.waitingForANetworkConnection')
+              : t('pages.procurement.loadingStockDemandAndDeliveries')}
           </Typography>
           {[0, 1].map((group) => <Paper key={group} aria-hidden="true" sx={{ p: 2 }}>
             <Skeleton variant="text" width="40%" height={36} sx={{ mb: 2 }} />
@@ -324,7 +324,7 @@ export function Procurement() {
           </Paper>)}
         </>}
         {isFetching && !isPending && <Typography role="status" variant="body2" color="text.secondary">
-          {t('Fehlmengen werden aktualisiert…', 'Updating shortages…')}
+          {t('pages.procurement.updatingShortages')}
         </Typography>}
         {groups.map(([supplier, rows]) => (
           <Paper key={supplier}>
@@ -340,7 +340,7 @@ export function Procurement() {
                 size="small"
                 color="error"
                 variant="outlined"
-                label={`${rows.reduce((sum, row) => sum + row.netDeficit, 0)} ${t('Einheiten fehlend', 'units deficit')}`}
+                label={`${rows.reduce((sum, row) => sum + row.netDeficit, 0)} ${t('pages.procurement.unitsDeficit')}`}
               />
             </Stack>
 
@@ -352,7 +352,7 @@ export function Procurement() {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
                         <Box sx={{ minWidth: 0, mr: 1 }}>
                           <Typography sx={{ fontWeight: 700 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link></Typography>
-                          {row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} />}
+                          {row.demand === 0 && <Chip size="small" color="warning" label={t('pages.procurement.belowMinimumStock')} />}
                           {row.sku && (
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                               SKU: {row.sku}
@@ -363,20 +363,20 @@ export function Procurement() {
                           <Chip
                             size="small"
                             color={row.classification === 'consumable' ? 'warning' : 'info'}
-                            label={row.classification === 'consumable' ? t('Verbrauch', 'Consumable') : t('Asset', 'Asset')}
+                            label={row.classification === 'consumable' ? t('pages.procurement.consumable') : t('pages.procurement.asset')}
                           />
                           <Chip
                             size="small"
                             variant="outlined"
-                            label={row.recommendedAction === 'obtain_commitment' ? t('Zusage einholen', 'Obtain commitment') : row.recommendedAction === 'purchase' ? t('Kaufen', 'Purchase') : t('Mieten', 'Rent')}
+                            label={row.recommendedAction === 'obtain_commitment' ? t('pages.procurement.obtainCommitment') : row.recommendedAction === 'purchase' ? t('pages.procurement.purchase') : t('pages.procurement.rent')}
                           />
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
-                        <Chip size="small" color="info" variant="outlined" label={`${row.orderedStock ?? 0} ${t('unterwegs', 'in transit')}`} />
+                        <Chip size="small" color="info" variant="outlined" label={`${row.orderedStock ?? 0} ${t('pages.procurement.inTransit')}`} />
                         {row.recommendedAction === 'obtain_commitment'
-                          ? <Button title={translate('Den Artikel öffnen, um eine Zusage einzuholen', 'Open the item to obtain an availability commitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
-                          : <Button title={translate('Eine Bestellung für diese Fehlmenge erfassen', 'Record a purchase for this shortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellung erfassen', 'Record order')}</Button>}
+                          ? <Button title={translate('pages.procurement.openTheItemToObtainAnAvailabilityCommitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('pages.procurement.obtainCommitment')}</Button>
+                          : <Button title={translate('pages.procurement.recordAPurchaseForThisShortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('pages.procurement.recordOrder')}</Button>}
                       </Stack>
                       <Box
                         sx={{
@@ -392,7 +392,7 @@ export function Procurement() {
                       >
                         <Box>
                           <Typography variant="caption" color="text.secondary">
-                            {t('Bedarf', 'Demand')}
+                            {t('pages.procurement.demand')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {row.demand}
@@ -400,7 +400,7 @@ export function Procurement() {
                         </Box>
                         <Box>
                           <Typography variant="caption" color="text.secondary">
-                            {t('Lager', 'Stock')}
+                            {t('pages.procurement.stock')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {row.availableStock}
@@ -408,7 +408,7 @@ export function Procurement() {
                         </Box>
                         <Box>
                           <Typography variant="caption" color="text.secondary">
-                            {t('Rest', 'Rest')}
+                            {t('pages.procurement.rest')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>
                             {row.projectedStock}
@@ -416,7 +416,7 @@ export function Procurement() {
                         </Box>
                         <Box>
                           <Typography variant="caption" color="text.secondary">
-                            {t('Zu bestellen', 'To order')}
+                            {t('pages.procurement.toOrder2')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 900, color: 'error.main' }}>
                           {toOrder(row)}
@@ -433,26 +433,26 @@ export function Procurement() {
                   <TableHead>
                     <TableRow>
                       <TableCell>SKU</TableCell>
-                      <TableCell>{t('Artikel', 'Item')}</TableCell>
-                      <TableCell>{t('Typ', 'Type')}</TableCell>
-                      <TableCell align="right">{t('Bedarf', 'Demand')}</TableCell>
-                      <TableCell align="right">{t('Verfügbar', 'Available')}</TableCell>
-                      <TableCell align="right">{t('Nach Bedarf', 'After demand')}</TableCell>
-                      <TableCell align="right">{t('Zu bestellen', 'To order')}</TableCell>
-                      <TableCell align="right">{t('Unterwegs', 'In transit')}</TableCell>
-                      <TableCell>{t('Aktion', 'Action')}</TableCell>
+                      <TableCell>{t('common.item')}</TableCell>
+                      <TableCell>{t('common.type')}</TableCell>
+                      <TableCell align="right">{t('pages.procurement.demand')}</TableCell>
+                      <TableCell align="right">{t('enum.itemStatus.available')}</TableCell>
+                      <TableCell align="right">{t('pages.procurement.afterDemand')}</TableCell>
+                      <TableCell align="right">{t('pages.procurement.toOrder2')}</TableCell>
+                      <TableCell align="right">{t('enum.value.in_transit')}</TableCell>
+                      <TableCell>{t('common.action')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.itemId} hover>
                         <TableCell>{row.sku || '—'}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link>{row.demand === 0 && <Chip size="small" color="warning" label={t('Unter Mindestbestand', 'Below minimum stock')} sx={{ ml: 1 }} />}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}><Link component={RouterLink} to={`/items/${row.itemId}`}>{row.name}</Link>{row.demand === 0 && <Chip size="small" color="warning" label={t('pages.procurement.belowMinimumStock')} sx={{ ml: 1 }} />}</TableCell>
                         <TableCell>
                           <Chip
                             size="small"
                             color={row.classification === 'consumable' ? 'warning' : 'info'}
-                            label={row.classification === 'consumable' ? t('Verbrauch', 'Consumable') : t('Asset', 'Asset')}
+                            label={row.classification === 'consumable' ? t('pages.procurement.consumable') : t('pages.procurement.asset')}
                           />
                         </TableCell>
                         <TableCell align="right">{row.demand}</TableCell>
@@ -466,8 +466,8 @@ export function Procurement() {
                         <TableCell align="right">{row.orderedStock ?? 0}</TableCell>
                         <TableCell>
                           {row.recommendedAction === 'obtain_commitment'
-                            ? <Button title={translate('Den Artikel öffnen, um eine Zusage einzuholen', 'Open the item to obtain an availability commitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('Zusage einholen', 'Obtain commitment')}</Button>
-                            : <Button title={translate('Eine Bestellung für diese Fehlmenge erfassen', 'Record a purchase for this shortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('Bestellen', 'Order')}</Button>}
+                            ? <Button title={translate('pages.procurement.openTheItemToObtainAnAvailabilityCommitment')} size="small" component={RouterLink} to={`/items/${row.itemId}`}>{t('pages.procurement.obtainCommitment')}</Button>
+                            : <Button title={translate('pages.procurement.recordAPurchaseForThisShortage')} size="small" disabled={toOrder(row) === 0} onClick={() => setOrderItem(row)}>{t('pages.procurement.order')}</Button>}
                         </TableCell>
                       </TableRow>
                     ))}
