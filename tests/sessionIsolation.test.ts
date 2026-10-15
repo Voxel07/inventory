@@ -97,6 +97,7 @@ const pagination = await import('../src/services/apiPagination');
 const codes = await import('../src/utils/codeResolver');
 const reports = await import('../src/services/reportService');
 const { createCsvEventLogisticsImporter } = await import('../src/services/csvEventLogisticsImport');
+const { importCsvFactions } = await import('../src/services/csvReferenceImport');
 const { parseEventReportsFromCsv } = await import('../src/utils/csv/events');
 import type { EventAttendee, EventPersonSummary, EventTimelineEntry } from '../src/types/eventLogistics';
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
@@ -111,6 +112,40 @@ function logisticsRow() {
     Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' }]),
   }], [], { eventTypes: ['DE'], factions: [] })[0];
 }
+
+test('CSV imports create missing factions once and save attendee roles with database IDs', async () => {
+  signIn('admin');
+  connectivity.onLine = true;
+  const factions = [{ id: 'existing', eventType: 'DE', name: 'KGG', slug: 'kgg' }];
+  const planned = [{ id: 'csv-faction-1', eventType: 'DE', name: 'kgg', slug: '' },
+    { id: 'csv-faction-2', eventType: 'LS', name: 'TERA', slug: '' }];
+  const writes: { path: string; body: Record<string, unknown> }[] = [];
+  fetchRequest = (async (url, options) => {
+    const path = new URL(String(url)).pathname;
+    if (!options?.method || options.method === 'GET') return Response.json(path === '/api/factions' ? factions : []);
+    const body = JSON.parse(String(options.body));
+    writes.push({ path, body });
+    if (path === '/api/factions') {
+      const saved = { ...body, id: 'created', slug: 'tera' };
+      factions.push(saved);
+      return Response.json(saved);
+    }
+    return Response.json({ ...body, id: 'attendee', person: { id: 'person', name: body.personName } });
+  }) as typeof fetch;
+  const ids = await importCsvFactions(planned);
+  expect([...ids]).toEqual([['csv-faction-1', 'existing'], ['csv-faction-2', 'created']]);
+  expect([...(await importCsvFactions(planned))]).toEqual([...ids]);
+  expect(writes.filter((write) => write.path === '/api/factions')).toHaveLength(1);
+  const row = parseEventReportsFromCsv([{
+    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '2026-10-17',
+    Teilnehmer: JSON.stringify([{ personName: 'Alex', roles: [{ role: 'faction_leader', faction: 'TERA' }] }]),
+  }], [], { eventTypes: ['LS'], factions: planned })[0];
+  expect(row.status).toBe('valid');
+  await createCsvEventLogisticsImporter(ids)('event', row);
+  const attendee = writes.find((write) => write.path.endsWith('/attendees'));
+  expect(attendee?.body.roles).toEqual([{ role: 'faction_leader', factionId: 'created', assignment: null }]);
+  expect(row.attendees[0].roles[0].factionId).toBe('csv-faction-2');
+});
 
 test('CSV logistics retries reuse people, preserve linked accounts, and update existing records', async () => {
   signIn('planner');

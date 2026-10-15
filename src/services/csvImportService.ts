@@ -3,7 +3,8 @@ import { loadAllPages } from './apiPagination';
 import { withApiRequestBatch } from './apiClient';
 import type { CsvImportCounts } from '../types/csvImport';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../types/csvImport';
-import type { Item, StorageLocation } from '../types';
+import type { Faction, Item, StorageLocation } from '../types';
+import { importCsvFactions } from './csvReferenceImport';
 import { createItem, updateItem, createItemAssets, getAllItemAssets, getItem } from './inventoryService';
 import { createAssembly } from './assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from './eventService';
@@ -21,6 +22,7 @@ import { translate, type Translator } from '../utils/naming';
 export interface CsvImportResult { successItems: number; updatedItems: number; successAssemblies: number; successEvents: number; successOrders: number; successGeneralOrders: number; successReturns: number; successCheckouts: number; successOperations: number; errors: string[] }
 
 interface ImportPlan {
+  newFactions: Faction[];
   parsedItems: ParsedItemRow[];
   parsedAssemblies: ParsedAssemblyRow[];
   parsedEvents: ParsedEventReportRow[];
@@ -52,7 +54,7 @@ export function runCsvImport(plan: ImportPlan): Promise<CsvImportResult> {
   });
 }
 
-async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts }: ImportPlan): Promise<CsvImportResult> {
+async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts }: ImportPlan): Promise<CsvImportResult> {
   const context = captureAuthSession();
   const errors: string[] = [
     ...parsedItems.filter((row) => row.status === 'error').map((row) => `Artikel Zeile ${row.index}: ${row.statusMessage}`),
@@ -92,6 +94,8 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
   }
 
   try {
+    const factionIds = await importCsvFactions(newFactions);
+    assertAuthSession(context);
     const locCache = new Map<string, string>();
     for (const loc of storageLocations) {
       locCache.set(loc.name.toLowerCase().trim(), loc.id);
@@ -240,7 +244,7 @@ async function runCsvImportBatch({ parsedItems, parsedAssemblies, parsedEvents, 
     // Step 4: Import event history after all referenced items exist. Matching
     // type/date records are updated so retrying a sample import is safe.
     const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 || parsedOperations.length > 0 ? await getEventReports() : [];
-    const importEventLogistics = createCsvEventLogisticsImporter();
+    const importEventLogistics = createCsvEventLogisticsImporter(factionIds);
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
       setImportStatusText(t('services.csvImportService.creatingEventTypeEventOnEventDate', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate) }));
 

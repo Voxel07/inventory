@@ -5,7 +5,7 @@ import type { ParsedEventReportRow } from '../types/csvImport';
 import { translate } from '../utils/naming';
 
 /** Reuse people across events and update matching records when an import is retried. */
-export function createCsvEventLogisticsImporter() {
+export function createCsvEventLogisticsImporter(factionIds: ReadonlyMap<string, string> = new Map()) {
   const context = captureAuthSession();
   let people: EventPersonSummary[] | undefined;
   return async (eventId: string, row: ParsedEventReportRow) => {
@@ -26,7 +26,8 @@ export function createCsvEventLogisticsImporter() {
         const existing = attendees.find((attendee) => attendee.person.id === person?.id);
         const saved = await apiRequest<EventAttendee>(existing ? `${base}/attendees/${existing.id}` : `${base}/attendees`, {
           method: existing ? 'PUT' : 'POST',
-          body: { ...input, personId: person?.id ?? null, personName: person?.name ?? input.personName, personUserId: person?.userId ?? null },
+          body: { ...input, personId: person?.id ?? null, personName: person?.name ?? input.personName, personUserId: person?.userId ?? null,
+            roles: input.roles.map((role) => ({ ...role, factionId: role.factionId ? factionIds.get(role.factionId) ?? role.factionId : null })) },
         });
         if (!person) people.push(saved.person);
       }

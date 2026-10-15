@@ -1,6 +1,8 @@
 import { Chip, Button, Tab } from '../shared/ActionButtons';
 import { buildCsvImportPlan } from '../../utils/csv/importPlan';
-import { useFactionCatalog } from '../../hooks/useFactionCatalog';
+import { useAuth } from '../../hooks/useAuth';
+import { canEditEvents, canViewOrganization } from '../../utils/access';
+import { getEventTypes, getFactions } from '../../services/referenceDataService';
 import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
 import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
@@ -41,12 +43,17 @@ export function CsvImportDialog({
   initialType,
 }: Props) {
   const t = useT();
+  const { user } = useAuth();
+  const canCreateReferences = canEditEvents(user);
   // Import is an explicit exhaustive workflow: while the dialog is open it reads the complete catalog
   // once, so duplicates and references are matched against every item, assembly and location.
   const catalog = useQuery({ queryKey: ['items', 'all', 'csv-import'], enabled: open, networkMode: 'offlineFirst', staleTime: 0,
     queryFn: async () => {
-      const [items, assemblies, storageLocations] = await Promise.all([itemApi.getAll(), assemblyApi.getAll(), storageLocationApi.getAll()]);
-      return { items, assemblies, storageLocations };
+      const [items, assemblies, storageLocations, eventTypes, factions] = await Promise.all([
+        itemApi.getAll(), assemblyApi.getAll(), storageLocationApi.getAll(), getEventTypes(),
+        canViewOrganization(user) ? getFactions() : Promise.resolve([]),
+      ]);
+      return { items, assemblies, storageLocations, eventTypes, factions };
     } });
   const items: Item[] = useMemo(() => catalog.data?.items ?? [], [catalog.data]);
   const assemblies: Assembly[] = useMemo(() => catalog.data?.assemblies ?? [], [catalog.data]);
@@ -73,9 +80,9 @@ export function CsvImportDialog({
   // Options
   const [updateExistingItems, setUpdateExistingItems] = useState(false);
   const [autoCreateLocations, setAutoCreateLocations] = useState(true);
+  const [autoCreateReferences, setAutoCreateReferences] = useState(true);
 
   // Import execution state
-  const { eventTypes, factions } = useFactionCatalog();
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStatusText, setImportStatusText] = useState('');
@@ -84,9 +91,11 @@ export function CsvImportDialog({
   const [importTotal, setImportTotal] = useState(0);
   const totalImported = Object.values(importedCounts).reduce((sum, count) => sum + count, 0);
 
-  const { rows, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
-    () => buildCsvImportPlan({ csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, reference: { eventTypes, factions } }),
-    [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, eventTypes, factions],
+  const { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
+    () => buildCsvImportPlan({ csvContent: catalogComplete ? csvContent : '', tabType, items, assemblies, storageLocations, updateExistingItems,
+      reference: { eventTypes: catalog.data?.eventTypes ?? [], factions: catalog.data?.factions ?? [] },
+      autoCreateReferences: canCreateReferences && autoCreateReferences }),
+    [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, catalogComplete, catalog.data, canCreateReferences, autoCreateReferences],
   );
 
   function firstErrorTarget(section: 'items' | 'assemblies' | 'events' | 'orders' | 'returns' | 'checkouts' | 'operations', rows: { index: number; status: string }[]) {
@@ -173,7 +182,7 @@ export function CsvImportDialog({
     setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
     setImportTotal(totalToImport);
 
-    const { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors } = await runCsvImport({ parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts });
+    const { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors } = await runCsvImport({ newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts });
 
     setIsImporting(false);
     setImportProgress(100);
@@ -370,7 +379,7 @@ export function CsvImportDialog({
 
             {/* Options */}
             <Paper variant="outlined" sx={{ p: 1.5, mb: 2, backgroundColor: 'background.default' }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ flexWrap: 'wrap' }}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -391,13 +400,28 @@ export function CsvImportDialog({
                   }
                   label={t('dialogs.csvImportDialog.autoCreateMissingStorageLocations')}
                 />
+                {canCreateReferences && (
+                  <FormControlLabel
+                    control={<Checkbox checked={autoCreateReferences} onChange={(e) => setAutoCreateReferences(e.target.checked)} disabled={isImporting} />}
+                    label={t('dialogs.csvImportDialog.autoCreateMissingReferences')}
+                  />
+                )}
               </Stack>
             </Paper>
 
             {/* Statistics Banner */}
-            {!catalogComplete && (
+            {catalog.isError ? (
+              <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => void catalog.refetch()}>{t('common.retry')}</Button>}>
+                {t('dialogs.csvImportDialog.catalogLoadFailed', { message: catalog.error.message })}
+              </Alert>
+            ) : !catalogComplete && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                {t('dialogs.csvImportDialog.itemsAndAssembliesAreStillLoadingImportWillBeAvailable')}
+                {t('dialogs.csvImportDialog.catalogLoading')}
+              </Alert>
+            )}
+            {catalogComplete && newFactions.length > 0 && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('dialogs.csvImportDialog.factionsToCreate', { factions: newFactions.map((faction) => `${faction.eventType}: ${faction.name}`).join(', ') })}
               </Alert>
             )}
             <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }} useFlexGap>

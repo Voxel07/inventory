@@ -57,3 +57,54 @@ test('sample orders are closed except those for 2027', () => {
   expect(orders.filter((order) => !order.date.startsWith('2027') && order.status !== 'closed')).toEqual([]);
   expect(orders.filter((order) => order.date.startsWith('2027') && order.status === 'closed')).toEqual([]);
 });
+
+test('admin combined import bootstraps the sample from an empty reference catalog', () => {
+  const result = buildCsvImportPlan({ csvContent: sample, tabType: 'combined', items: [], assemblies: [],
+    storageLocations: [], updateExistingItems: false, reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
+  expect(result.totalErrorsCount).toBe(0);
+  expect(result.validEventsCount).toBe(14);
+  expect(result.validOrdersCount).toBe(22);
+  expect(result.validGeneralOrdersCount).toBe(11);
+  expect(result.validCheckoutsCount).toBe(countType('Ausleihe'));
+  expect(result.validCheckoutsCount).toBeGreaterThan(0);
+  expect(result.newFactions.map((faction) => `${faction.eventType}:${faction.name}`).sort()).toEqual(
+    factions.map(([type, name]) => `${type}:${name}`).sort());
+  expect(result.parsedItems.find((row) => row.data.name === 'Hesco-Barriere klein (1x1m)')?.data.eventTypes)
+    .toEqual(['LS', 'DE', 'TNO']);
+  const ids = new Set(result.newFactions.map((faction) => faction.id));
+  expect(result.parsedEvents.flatMap((row) => row.attendees.flatMap((person) => person.roles))
+    .filter((role) => role.factionId).every((role) => ids.has(role.factionId!))).toBe(true);
+});
+
+test('strict reference validation remains available when auto-creation is disabled', () => {
+  const result = buildCsvImportPlan({ csvContent: sample, tabType: 'combined', items: [], assemblies: [],
+    storageLocations: [], updateExistingItems: false, reference: { eventTypes: [], factions: [] } });
+  expect(result.validEventsCount).toBe(0);
+  expect(result.validOrdersCount).toBe(0);
+  expect(result.validGeneralOrdersCount).toBe(0);
+  expect(result.validCheckoutsCount).toBe(0);
+  expect(result.newFactions).toEqual([]);
+});
+
+test('reference planning reuses catalog IDs and does not create factions for excluded or invalid rows', () => {
+  const input = { csvContent: sample, tabType: 'combined' as const, items: [], assemblies: [], storageLocations: [],
+    updateExistingItems: false, reference, autoCreateReferences: true };
+  const existing = buildCsvImportPlan(input);
+  expect(existing.totalErrorsCount).toBe(0);
+  expect(existing.newFactions).toEqual([]);
+  expect(existing.parsedEvents.find((row) => row.data.eventType === 'DE')?.attendees[0].roles[0].factionId).toBe('KGG');
+  expect(buildCsvImportPlan({ ...input, tabType: 'items', reference: { eventTypes: [], factions: [] } }).newFactions).toEqual([]);
+  const invalid = buildCsvImportPlan({ ...input, reference: { eventTypes: [], factions: [] },
+    csvContent: 'Typ;Name;Eventtyp;Eventdatum;Fraktion\nBestellung;Invalid;DE;2026-10-17;New\nAusleihe;Unknown;DE;;Other' });
+  expect(invalid.newFactions).toEqual([]);
+  expect(invalid.totalErrorsCount).toBe(2);
+});
+
+test('reference auto-creation does not accept missing event types or checkout factions', () => {
+  const result = buildCsvImportPlan({ csvContent: 'Typ;Name;Kategorie;Menge;Eventtyp;Eventdatum;Fraktion\nArtikel;Radio;Equipment;2;;;\nEvent;Unnamed;;;;2026-10-17;\nAusleihe;Radio;;1;DE;;',
+    tabType: 'combined', items: [], assemblies: [], storageLocations: [], updateExistingItems: false,
+    reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
+  expect(result.parsedEvents[0].status).toBe('error');
+  expect(result.parsedCheckouts[0].status).toBe('error');
+  expect(result.newFactions).toEqual([]);
+});
