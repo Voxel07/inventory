@@ -33,7 +33,7 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
   const selectedLocation = locationId ?? String(filters.locationId || '');
   const positions = useOperationList(`positions:${selectedItem}:${selectedLocation}`, operationsApi.positions({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const assets = useOperationList(`assets:${selectedItem}:${selectedLocation}`, operationsApi.assets({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
-  const lots = useOperationList(`stock-lot-labels:${itemId ?? ''}`, operationsApi.lots({ itemId }), Boolean(itemId));
+  const lots = useCompleteList(['operations', `stock-lot-labels:${itemId ?? ''}`], operationsApi.lots({ itemId }), { enabled: Boolean(itemId) });
   const lookup = useStockLookups(itemId ? [] : (positions.data ?? []).map((position) => position.itemId));
   return <Stack spacing={1}>
     <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}>

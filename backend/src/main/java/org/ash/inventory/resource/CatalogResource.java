@@ -113,9 +113,10 @@ public class CatalogResource {
     @Paged @GET @Path("/storage-locations") @Transactional
     public List<ApiResponses.StorageLocationResponse> locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive,
             @QueryParam("search") String search, @QueryParam("warehouseId") UUID warehouseId,
+            @QueryParam("subtreeId") UUID subtreeId,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         var bounds = org.ash.inventory.helper.PageBounds.of(page, size);
-        return mapper.locations(service.getLocations(includeInactive, search, warehouseId, bounds.offset(), bounds.limit()));
+        return mapper.locations(service.getLocations(includeInactive, search, warehouseId, subtreeId, bounds.offset(), bounds.limit()));
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }

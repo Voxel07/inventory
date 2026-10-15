@@ -36,9 +36,9 @@ public class PurchasingService {
     }
 
     @Transactional
-    public List<PurchasingDtos.VendorResponse> vendors(int page, int size) {
+    public List<PurchasingDtos.VendorResponse> vendors(String search, int page, int size) {
         actors.requireWarehouse();
-        return orm.vendors(PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
+        return orm.vendors(search, PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
     }
 
     @Transactional

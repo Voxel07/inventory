@@ -2,6 +2,7 @@ import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from '@mui/material';
 import { getWarehouses, saveWarehouse, type Warehouse } from '../../services/warehouseService';
+import { LoadMore } from '../shared/LoadMore';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
 import { translate, useT } from '../../utils/naming';
 
@@ -13,6 +14,7 @@ export function WarehousesPanel() {
     {(list.error || command.error) && <Alert severity="error">{(list.error || command.error)?.message}</Alert>}
     <Typography variant="h6">{t('operations.warehousesPanel.warehousesSites')}</Typography>
     {list.data?.map((w) => <Card key={w.id}><CardContent><Typography>{w.code} · {w.name} · {w.active ? t('enum.value.active') : t('common.inactive')}</Typography><Typography>{w.description}</Typography><Button title={translate('operations.warehousesPanel.editTheWarehouseDetails')} onClick={() => { setEditing(w); setForm({ code: w.code, name: w.name, description: w.description ?? '', active: w.active }); }}>{t('common.edit')}</Button></CardContent></Card>)}
+    <LoadMore list={list} />
     <Stack component="form" spacing={2} onSubmit={(event) => { event.preventDefault(); command.mutate(() => saveWarehouse(form, editing?.id), { onSuccess: () => { setEditing(null); setForm({ code: '', name: '', description: '', active: true }); } }); }}>
       <Typography>{editing ? t('operations.warehousesPanel.editSite') : t('operations.warehousesPanel.addSite')}</Typography>
       <TextField required label={t('operations.warehousesPanel.code')} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />

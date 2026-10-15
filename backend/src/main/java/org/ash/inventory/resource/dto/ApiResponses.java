@@ -116,7 +116,8 @@ public final class ApiResponses {
             String warehouseId,
             String warehouseName,
             String parentLocationId,
-            boolean active, org.ash.inventory.service.InventoryAccessService.View access
+            boolean active, org.ash.inventory.service.InventoryAccessService.View access,
+            String hierarchyPath, UUID keeperUserId, String keeperUserName, String keeperUserEmail
     ) {}
 
     public record ItemResponse(

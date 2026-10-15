@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { itemApi } from '../../services/inventoryService';
+import { itemApi, getItemCategories } from '../../services/inventoryService';
 import { useItemsByIds } from '../../hooks/useItems';
-import { loadAllPages } from '../../services/apiPagination';
-import { getFactionOrders } from '../../services/factionOrderService';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { QueryFeedback } from '../common/QueryFeedback';
+import { getPreviousFactionOrder } from '../../services/factionOrderService';
 import { formatDate } from '../../utils/dateFormat';
 import { Button, ToggleButton, IconButton } from '../shared/ActionButtons';
 import { MediaImage } from '../common/MediaImage';
@@ -42,7 +43,6 @@ import { useEventReports } from '../../hooks/useEvents';
 import {
   factionOrderAssemblyBaseline,
   factionOrderItemBaseline,
-  findPreviousFactionOrder,
 } from '../../utils/factionOrderHistory';
 import { useUIStore } from '../../store/uiStore';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
@@ -56,14 +56,10 @@ import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from '../orders/OrderCatalogPager';
 import { QuantityControl } from '../orders/QuantityControl';
 import { CatalogSearchField } from '../orders/CatalogSearchField';
-import { catalogPage, filterCatalogItems, filterCatalogAssemblies } from '../../utils/orderCatalog';
+import { catalogPage, filterCatalogAssemblies } from '../../utils/orderCatalog';
 
 type ResourceViewMode = 'list' | 'tiles';
 
-/**
- * The order editor compares stock across everything orderable for the event type, so it reads that catalog
- * explicitly while open (plus the items already on the order); the previous order comes from this faction only.
- */
 interface Props {
   assemblies: Assembly[];
   storageLocations: StorageLocation[];
@@ -131,15 +127,24 @@ export function FactionOrderForm({
   });
   const [comparison, setComparison] = useState<FactionOrderSummary | undefined>();
   const [infoAssembly, setInfoAssembly] = useState<Assembly | null>(null);
-  const orderable = useQuery({ queryKey: ['items', 'all', 'orderable', eventType], networkMode: 'offlineFirst',
-    queryFn: () => itemApi.getAll({ eventType, includeUntagged: true, sort: 'name' }) });
-  const onOrder = useItemsByIds(Object.keys(quantities));
-  const items = [...new Map([...(orderable.data ?? []), ...(onOrder.data ?? [])].map((item) => [item.id, item])).values()];
-  const { data: orders = [] } = useQuery({ queryKey: ['faction-orders', 'faction', eventType, faction], enabled: Boolean(faction), networkMode: 'offlineFirst',
-    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType, faction }, page, size)) });
-  const categories = [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
+  const catalogSearch = useDebouncedValue(search.trim());
+  const orderable = useQuery({
+    queryKey: ['items', 'orderable', eventType, catalogSearch, category, itemPage],
+    networkMode: 'offlineFirst',
+    queryFn: () => itemApi.getPage({ eventType, includeUntagged: Boolean(catalogSearch), search: catalogSearch || undefined, category: category || undefined, sort: 'name' }, itemPage - 1, ORDER_CATALOG_PAGE_SIZE),
+  });
   const sortedAssemblies = [...assemblies].sort((a, b) => a.name.localeCompare(b.name));
+  const visibleAssemblies = filterCatalogAssemblies(sortedAssemblies, search,
+    assembly => assembly.id in assemblyQuantities || Boolean(assembly.eventTypes?.includes(eventType)));
+  const { page: currentAssemblyPage, entries: pageAssemblies } = catalogPage(visibleAssemblies, assemblyPage, ORDER_CATALOG_PAGE_SIZE);
+  const requiredItemIds = [...Object.keys(quantities), ...Object.keys(comparison?.requestedQuantities ?? {}),
+    ...[...pageAssemblies, ...assemblies.filter(assembly => Number(assemblyQuantities[assembly.id]) > 0)].flatMap(assembly => Object.keys(assembly.itemQuantities ?? {}))];
+  const onOrder = useItemsByIds(requiredItemIds);
+  const items = [...new Map([...(orderable.data?.rows ?? []), ...(onOrder.data ?? [])].map(item => [item.id, item])).values()];
+  const previous = useQuery({ queryKey: ['faction-orders', 'previous', eventType, faction, eventDate, initialData?.id],
+    enabled: Boolean(faction && eventDate), networkMode: 'offlineFirst',
+    queryFn: () => getPreviousFactionOrder(eventType, faction, eventDate, initialData?.id) });
+  const { data: categories = [] } = useQuery({ queryKey: ['item-categories'], queryFn: getItemCategories, networkMode: 'offlineFirst' });
 
   const availableByItem = new Map(items.map((item) => [
     item.id,
@@ -156,20 +161,10 @@ export function FactionOrderForm({
     }
   }
 
-  const previousOrder = findPreviousFactionOrder(orders, {
-    eventType,
-    faction,
-    eventDate,
-    excludeId: initialData?.id,
-  });
+  const previousOrder = previous.data;
 
-  // Entries the user has touched stay in place (even at 0) until removed, so the catalog does not reflow while editing.
-  const visibleItems = filterCatalogItems(sortedItems, search, category,
-    (item) => item.id in quantities || Boolean(item.eventTypes?.includes(eventType)));
-  const visibleAssemblies = filterCatalogAssemblies(sortedAssemblies, search,
-    (assembly) => assembly.id in assemblyQuantities || Boolean(assembly.eventTypes?.includes(eventType)));
-  const { page: currentItemPage, entries: pageItems } = catalogPage(visibleItems, itemPage, ORDER_CATALOG_PAGE_SIZE);
-  const { page: currentAssemblyPage, entries: pageAssemblies } = catalogPage(visibleAssemblies, assemblyPage, ORDER_CATALOG_PAGE_SIZE);
+  const currentItemPage = itemPage;
+  const pageItems = orderable.data?.rows ?? [];
 
   const selectedAssemblies = assemblies
     .filter((assembly) => Number(assemblyQuantities[assembly.id]) > 0)
@@ -542,8 +537,12 @@ export function FactionOrderForm({
               })}
             </Stack>
           )}
-          {!visibleItems.length && <Typography color="text.secondary">{t('common.noMatchingItems')}</Typography>}
-          <OrderCatalogPager count={visibleItems.length} page={currentItemPage} onPageChange={setItemPage} />
+          <QueryFeedback isLoading={orderable.isLoading || onOrder.isLoading} error={orderable.error || onOrder.error || previous.error} />
+          {!orderable.isLoading && !pageItems.length && <Typography color="text.secondary">{t('common.noMatchingItems')}</Typography>}
+          <Stack direction="row" sx={{ justifyContent: 'space-between', mt: 1 }}>
+            <Button disabled={itemPage <= 1 || orderable.isFetching} onClick={() => setItemPage(page => page - 1)}>{t('orders.orderCatalogPager.previous')}</Button>
+            <Button disabled={!orderable.data?.more || orderable.isFetching} onClick={() => setItemPage(page => page + 1)}>{t('common.next')}</Button>
+          </Stack>
         </Box>
 
         {selectedEntryCount > 0 && (

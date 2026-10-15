@@ -1,5 +1,9 @@
 import type { InventoryAccess } from './inventoryAccess';
 export interface StorageLocation {
+  hierarchyPath?: string;
+  keeperUserId?: string;
+  keeperUserName?: string;
+  keeperUserEmail?: string;
   access?: InventoryAccess;
   warehouseId?: string;
   warehouseName?: string;

@@ -52,14 +52,17 @@ public class OperationsOrm extends EntityOrm {
     }
 
     public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId,
-            Collection<DomainEnums.DamageStatus> statuses, int offset, int limit) {
-        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly left join fetch d.assetInstance where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
+            Collection<DomainEnums.DamageStatus> statuses, String search, int offset, int limit) {
+        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly da left join fetch d.assetInstance asset where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
         if (itemId != null) jpql.append(" and d.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
         if (!statuses.isEmpty()) jpql.append(" and d.status in :statuses");
+        boolean searching = search != null && !search.isBlank();
+        if (searching) jpql.append(" and (lower(d.description) like :search or lower(di.name) like :search or lower(da.name) like :search or lower(asset.assetCode) like :search)");
         jpql.append(" order by d.createdAt desc, d.id desc");
         var query = entityManager.createQuery(jpql.toString(), DamageReport.class);
+        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (assemblyId != null) query.setParameter("assemblyId", assemblyId);

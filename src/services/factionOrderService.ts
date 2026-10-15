@@ -16,6 +16,10 @@ export function getFactionOrders(filters: FactionOrderFilters | undefined, page:
 }
 const orderDetailKey = (id: string) => `faction-orders:detail:${encodeURIComponent(id)}`;
 
+export async function getPreviousFactionOrder(eventType: string, faction: string, before: string, excludeId?: string): Promise<FactionOrder | null> {
+  return await apiRequest<FactionOrder | null>('/api/orders/faction/previous', { query: { eventType, faction, before, excludeId } }) ?? null;
+}
+
 /** Order detail with an account-scoped IndexedDB fallback for opened orders (offline preparation and returns). */
 export async function getFactionOrder(id: string): Promise<FactionOrder> {
   const context = captureAuthSession();

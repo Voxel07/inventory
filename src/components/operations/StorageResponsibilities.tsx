@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Alert, Chip, Checkbox, FormControlLabel, Stack, Tooltip, Typography, useMediaQuery } from '@mui/material';
+import { Chip, Checkbox, FormControlLabel, Stack, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Button } from '../shared/ActionButtons';
 import { OperationForm } from './OperationForm';
-import { useMemberAssignments } from '../../hooks/useMember';
-import { useAssignableUsers } from '../../hooks/useUsers';
+import { keeperOptions } from '../../services/assignmentOptions';
 import { memberApi } from '../../services/memberService';
 import type { StorageLocation } from '../../types';
 import type { MemberAssignment } from '../../types/member';
 import { optionalText } from '../../utils/inputValues';
-import { atLeast } from '../../utils/access';
 import { locationPath } from '../../utils/locationHierarchy';
 import { useAppLanguage, useT } from '../../utils/naming';
 
@@ -22,15 +20,12 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
     const t = useT();
     const language = useAppLanguage();
     const isMobile = useMediaQuery('(max-width:599.95px)');
-    const assignments = useMemberAssignments();
-    const users = useAssignableUsers();
     const [editing, setEditing] = useState<MemberAssignment | null>(null);
     const [missingOnly, setMissingOnly] = useState(false);
-    const pending = loading || assignments.isLoading || users.isLoading || (!users.isError && !users.isComplete);
-    const error = assignments.error || users.error;
+    const pending = loading;
     const rows = locations.filter((location) => location.active).map((location) => {
-        const assignment = assignments.data?.find((row) => row.id === location.id);
-        const keeper = users.data?.find((person) => person.id === assignment?.userId);
+        const assignment = { id: location.id, name: location.name, userId: location.keeperUserId };
+        const keeper = location.keeperUserId ? { name: location.keeperUserName, email: location.keeperUserEmail } : undefined;
         const missing = [
             ...(!assignment?.userId ? [t('operations.storageResponsibilities.responsiblePersonMissing')] : []),
             ...(!location.warehouseId ? [t('operations.storageResponsibilities.warehouseMissing')] : []),
@@ -62,14 +57,13 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
             <FormControlLabel label={t('operations.storageResponsibilities.showOnlyMissingInformation')}
                 control={<Checkbox size="small" checked={missingOnly} onChange={(_, checked) => setMissingOnly(checked)} />} />
         </Stack>
-        {error && <Alert severity="error" action={<Button onClick={() => { void assignments.refetch(); void users.refetch(); }}>{t('common.retry')}</Button>}>{error.message}</Alert>}
-        <DataGrid rows={error ? [] : rows} columns={columns} loading={pending} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight
+        <DataGrid rows={rows} columns={columns} loading={pending} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight
             disableRowSelectionOnClick initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }} pageSizeOptions={[20, 50, 100]}
             localeText={{ ...(language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText),
                 noRowsLabel: missingOnly ? t('operations.storageResponsibilities.noMissingInformation') : t('operations.storageResponsibilities.noActiveStorageLocations') }}
             sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' } }} />
         {editing && <OperationForm title={editing.name} onClose={() => setEditing(null)} initial={{ userId: editing.userId ?? '' }}
-            fields={[{ key: 'userId', label: t('operations.storageResponsibilities.responsiblePersonEmptyRemove'), options: (users.data ?? []).filter((person) => atLeast(person, 'faction_leader')).map((person) => ({ value: person.id, label: person.name })) }]}
+            fields={[{ key: 'userId', label: t('operations.storageResponsibilities.responsiblePersonEmptyRemove'), pagedOptions: { queryKey: ['users', 'assignable', 'keepers'], getPage: keeperOptions, selectedLabel: locations.find(location => location.id === editing.id)?.keeperUserName } }]}
             onSave={(values) => memberApi.assign(editing.id, optionalText(values.userId))} />}
     </Stack>;
 }

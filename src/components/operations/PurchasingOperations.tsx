@@ -22,6 +22,9 @@ import { canOperateWarehouse } from '../../utils/access';
 import { translate, useT, type Translator } from '../../utils/naming';
 import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type ProcurementDeficit, type PurchaseOrder, type Vendor } from '../../services/procurementService';
 import { operationsApi } from '../../services/operationsService';
+import { LoadMore } from '../shared/LoadMore';
+import { useCompleteList } from '../../hooks/usePagedList';
+import { vendorOptions } from '../../services/assignmentOptions';
 import { Fields, OperationForm } from './OperationForm';
 import type { Field, Values } from '../../types/operationForm';
 import { formatStatus } from '../../utils/formatters';
@@ -50,6 +53,7 @@ export function PurchasingPanel() {
 
       {history === order.id && <><ReceiptsPanel purchaseOrderId={order.id} /><DocumentsPanel order={order} /></>}
     </OperationListEntry>)}
+    <LoadMore list={orders} />
     {edit && <PurchaseDraft key={edit === 'new' ? 'new' : edit.id} order={edit === 'new' ? undefined : edit} eventId="" onClose={() => setEdit(null)} />}
     {receive && <ReceiveForm order={receive} onClose={() => setReceive(null)} />}
     {transition && <OperationForm title={`${transition.order.orderNumber} · ${formatStatus(transition.status)}`} fields={[]} onClose={() => setTransition(null)} onSave={() => transitionPurchaseOrder(transition.order.id, transition.status)}><Alert severity="info">{transition.status === 'cancelled' ? t('operations.purchasingOperations.receivedStockRemainsInInventoryOnlyTheOutstandingDeliveryIs') : t('operations.purchasingOperations.theOrderWillAppearAsIncomingStockBecomesAvailableThrough')}</Alert></OperationForm>}
@@ -57,7 +61,7 @@ export function PurchasingPanel() {
 }
 
 export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose }: { order?: PurchaseOrder; selected?: ProcurementDeficit; selectedRows?: ProcurementDeficit[]; eventId: string; onClose: () => void }) {
-  const t = useT(); const vendors = useOperationList('vendors', getVendors); const events = useEventReports(); const command = useOperationCommand();
+  const t = useT(); const events = useEventReports(); const command = useOperationCommand();
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? selectedRows?.map((row) => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock), price: 0 })) ?? [{ itemId: selected?.itemId ?? '', orderedQuantity: selected ? Math.max(1, selected.netDeficit - selected.orderedStock) : 1, price: 0 }]);
   const [newVendor, setNewVendor] = useState(false);
@@ -68,7 +72,7 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
     <Fields values={header} onChange={setHeader} fields={[
-      { key: 'vendorId', label: t('common.supplier'), required: true, options: (vendors.data ?? []).filter((vendor) => vendor.active).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
+      { key: 'vendorId', label: t('common.supplier'), required: true, pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions, selectedLabel: order?.vendorName } },
       { key: 'orderNumber', label: t('operations.purchasingOperations.referenceOptional') }, { key: 'orderDate', label: t('operations.purchasingOperations.orderDate'), type: 'date', required: true },
       { key: 'expectedDeliveryDate', label: t('operations.purchasingOperations.expectedDelivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('operations.purchasingOperations.eventOptional'), options: (events.data ?? []).map((event) => ({ value: event.id, label: `${event.name || event.eventType} · ${formatDate(event.eventDate)}` })) }, { key: 'notes', label: t('common.notes2'), multiline: true },
     ]} />
@@ -179,12 +183,12 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
 
 export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string }) {
   const t = useT(); const receipts = useOperationList(`receipts:${purchaseOrderId ?? ''}`, operationsApi.receipts(purchaseOrderId));
-  return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.receiptHistory')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <OperationListEntry key={receipt.id} title={<>{receipt.receiptNumber} · {formatDateTime(receipt.receivedAt)}</>} status={receipt.status}><OperationLines label={t('operations.purchasingOperations.receiptLines')} headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]} rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>, line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity] }))} /></OperationListEntry>)}</Stack>;
+  return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.receiptHistory')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <OperationListEntry key={receipt.id} title={<>{receipt.receiptNumber} · {formatDateTime(receipt.receivedAt)}</>} status={receipt.status}><OperationLines label={t('operations.purchasingOperations.receiptLines')} headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]} rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>, line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity] }))} /></OperationListEntry>)}<LoadMore list={receipts} /></Stack>;
 }
 
 export function VendorsPanel() {
   const t = useT(); const vendors = useOperationList('vendors', getVendors); const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
-  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={<Button title={translate('operations.purchasingOperations.editTheSupplierDetails')} onClick={() => setEdit(vendor)}>{t('common.edit')}</Button>} title={vendor.name} status={vendor.active ? t('enum.value.active') : t('common.inactive')}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
+  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={<Button title={translate('operations.purchasingOperations.editTheSupplierDetails')} onClick={() => setEdit(vendor)}>{t('common.edit')}</Button>} title={vendor.name} status={vendor.active ? t('enum.value.active') : t('common.inactive')}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
 }
 
 function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: () => void; onSaved?: (vendor: Vendor) => void }) {
@@ -196,10 +200,11 @@ function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: ()
 
 export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
   const t = useT(); const documents = useOperationList(`documents:${order.id}`, operationsApi.documents(order.id)); const command = useOperationCommand();
-  const receipts = useOperationList(`document-receipts:${order.id}`, operationsApi.receipts(order.id));
+  const receipts = useCompleteList(['operations', `document-receipts:${order.id}`], operationsApi.receipts(order.id));
   const [attach, setAttach] = useState(false); const [file, setFile] = useState<File | null>(null);
   return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.documents')}</Typography><Button title={translate('operations.purchasingOperations.attachADocumentToThisOrder')} onClick={() => setAttach(true)}>{t('operations.purchasingOperations.attachDocument')}</Button>{(documents.error || command.error) && <Alert severity="error">{(documents.error || command.error)?.message}</Alert>}
     {documents.data?.map((document) => <OperationListEntry key={document.id} actions={<Button title={translate('operations.purchasingOperations.downloadTheSelectedDocument')} disabled={command.isPending} onClick={() => command.mutate(() => operationsApi.downloadDocument(document))}>{t('operations.purchasingOperations.download')}</Button>} title={<>{document.originalFilename} · {document.documentType} · {document.referenceNumber}</>}><Typography>{formatDate(document.documentDate)} {document.totalAmountCents != null ? formatCents(document.totalAmountCents, document.currency || 'EUR') : ''}</Typography></OperationListEntry>)}
+    <LoadMore list={documents} />
     {attach && <OperationForm title={t('operations.purchasingOperations.attachDocument')} initial={{ documentType: 'invoice', currency: 'EUR' }} onClose={() => { setAttach(false); setFile(null); }} fields={[
       { key: 'goodsReceiptId', label: t('operations.purchasingOperations.goodsReceiptOptional'), options: (receipts.data ?? []).map((receipt) => ({ value: receipt.id, label: `${receipt.receiptNumber} · ${formatDate(receipt.receivedAt)}` })) },
       { key: 'documentType', label: t('operations.purchasingOperations.documentType'), required: true, options: ['invoice', 'delivery_note', 'quote', 'warranty', 'certificate', 'other'].map((value) => ({ value, label: value })) }, { key: 'documentDate', label: t('common.date'), type: 'date' }, { key: 'referenceNumber', label: t('operations.purchasingOperations.reference') }, { key: 'amount', label: t('operations.purchasingOperations.totalAmount'), type: 'number', min: 0, step: 0.01 }, { key: 'currency', label: t('operations.purchasingOperations.currency') }, { key: 'retentionUntil', label: t('operations.purchasingOperations.retainUntil'), type: 'date' }, { key: 'notes', label: t('common.notes2'), multiline: true },
@@ -209,4 +214,3 @@ export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
     }}><TextField type="file" required slotProps={{ htmlInput: { accept: '.pdf,.png,.jpg,.jpeg,.webp' } }} onChange={(event) => setFile((event.target as HTMLInputElement).files?.[0] ?? null)} /></OperationForm>}
   </Stack>;
 }
-

@@ -7,4 +7,3 @@ export function getUsers(page: number, size: number): Promise<Page<User>> { retu
 export function updateUserAccess(id: string, data: { roles: UserRole[]; factions: string[]; revision: number; reason: string }): Promise<User> {
   return apiRequest(`/api/users/${id}`, { method: 'PATCH', body: data });
 }
-export function getAssignableUsers(page: number, size: number): Promise<Page<User>> { return apiPage('/api/users/assignable', page, size); }

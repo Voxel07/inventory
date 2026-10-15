@@ -4,6 +4,7 @@ import { useOperationCommand } from '../../hooks/useOperations';
 import { DialogForm, FormDialog } from '../shared/FormDialog';
 
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
+import { PagedAutocomplete } from '../shared/PagedAutocomplete';
 import type { Field, Values } from '../../types/operationForm';
 
 export function Fields({ fields, values, onChange }: { fields: Field[]; values: Values; onChange: (values: Values) => void }) {
@@ -13,6 +14,7 @@ export function Fields({ fields, values, onChange }: { fields: Field[]; values: 
     if (field.type === 'item') return <ItemAutocomplete key={field.key} label={field.label} required={field.required} helperText={field.help}
       value={value === '' ? null : String(value)} filter={field.itemFilter} onChange={(item) => update(item?.id ?? '')} />;
     if (field.type === 'checkbox') return <FormControlLabel key={field.key} label={field.label} control={<Checkbox checked={Boolean(value)} onChange={(_, checked) => update(checked)} />} />;
+    if (field.pagedOptions) return <PagedAutocomplete key={field.key} {...field.pagedOptions} value={String(value)} onChange={update} label={field.label} required={field.required} helperText={field.help} />;
     if (field.options) return <Autocomplete key={field.key} options={field.options} value={field.options.find((option) => option.value === value) ?? null} getOptionLabel={(option) => option.label} isOptionEqualToValue={(a, b) => a.value === b.value} onChange={(_, option) => update(option?.value ?? '')} renderInput={(params) => <TextField {...params} label={field.label} required={field.required} helperText={field.help} />} />;
     return <TextField key={field.key} fullWidth label={field.label} value={value} type={field.type ?? 'text'} required={field.required} multiline={field.multiline} minRows={field.multiline ? 2 : undefined} helperText={field.help} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: field.min, max: field.max, step: field.step ?? 1 } }} onChange={(event) => update(field.type === 'number' && event.target.value !== '' ? Number(event.target.value) : event.target.value)} />;
   })}</Stack>;

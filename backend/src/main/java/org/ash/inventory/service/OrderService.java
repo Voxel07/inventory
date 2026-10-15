@@ -362,6 +362,7 @@ public class OrderService {
             if (relevant.stream().noneMatch(line -> line.handedOverQuantity > 0)) throw ApiException.badRequest("Item was not handed over on this order");
             int outstanding = relevant.stream().mapToInt(this::outstandingQuantity).sum();
             var outcome = entry.getValue();
+            StockTransaction damagedCheckin = null;
             OrderReturnPolicy.validate(item, new OrderReturnPolicy.Outcome(outcome.returned(), outcome.consumed(), outcome.damaged(),
                     outcome.writtenOff(), outcome.missing(), outcome.notes()), outstanding, actors);
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
@@ -378,7 +379,7 @@ public class OrderService {
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.consumed,
                             outcome.consumed(), input.idempotencyKey(), "consumed", outcome.notes());
                 if (outcome.damaged() > 0)
-                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
+                    damagedCheckin = createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
                 if (outcome.writtenOff() > 0)
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.written_off,
@@ -393,7 +394,7 @@ public class OrderService {
                 damage.severity = OrderReturnPolicy.RETURN_DAMAGE_SEVERITY;
                 damage.description = OrderReturnPolicy.damageDescription(outcome.notes(), order.label());
                 orm.persist(damage);
-                positions.reportDamage(damage);
+                positions.reportReturnedDamage(damage, damagedCheckin);
             }
             if (outcome.operatingHours() != null
                     && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
@@ -415,11 +416,12 @@ public class OrderService {
     public InventoryOrder returnAll(UUID id, UUID idempotencyKey) {
         actors.requireWarehouse();
         var order = lockedOrder(id);
+        if (idempotent(order, idempotencyKey)) return order;
         var lines = orm.lines(order);
         var outcomes = new LinkedHashMap<UUID, ApiModels.ReturnLine>();
         var assetOutcomes = new LinkedHashMap<UUID, ApiModels.AssetReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet())
-            outcomes.put(entry.getKey().id,
+            if (entry.getValue() > 0) outcomes.put(entry.getKey().id,
                     new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, 0, null, "Full order return"));
         for (var assignment : orm.assetAssignments(order)) {
             if (assignment.reconciled) continue;

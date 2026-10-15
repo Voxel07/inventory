@@ -1,6 +1,7 @@
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
 import { apiPage, apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
+import { containsPrivateInventory } from './privateInventoryCache';
 import { loadAllPages, type Page } from './apiPagination';
 import { stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
@@ -81,7 +82,7 @@ export async function searchItems(search: string, size: number): Promise<Page<It
 export async function snapshotItemCatalog(context: AuthSessionContext): Promise<void> {
   const items = await itemApi.getAll();
   assertAuthSession(context);
-  await setOfflineCatalog(OFFLINE_ITEM_SNAPSHOT, items, context);
+  await setOfflineCatalog(OFFLINE_ITEM_SNAPSHOT, items.filter(item => !containsPrivateInventory(item)), context);
 }
 export const createItem = itemApi.create;
 export const updateItem = itemApi.update;

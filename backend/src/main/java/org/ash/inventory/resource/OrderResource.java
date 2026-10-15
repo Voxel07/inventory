@@ -47,6 +47,13 @@ public class OrderResource {
         return queries.orders(eventType, faction, orderCode, statuses, eventId, page, size);
     }
 
+    @GET @Path("/previous")
+    public ApiResponses.OrderResponse previous(@QueryParam("eventType") String eventType,
+            @QueryParam("faction") String faction, @QueryParam("before") java.time.LocalDate before,
+            @QueryParam("excludeId") UUID excludeId) {
+        return queries.previousFactionOrder(eventType, faction, before, excludeId);
+    }
+
     @GET
     @Path("/{id}")
     public ApiResponses.OrderResponse order(@PathParam("id") UUID id) {

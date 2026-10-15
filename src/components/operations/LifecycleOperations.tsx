@@ -4,8 +4,7 @@ import { OperationDetail, OperationHistory, OperationListEntry } from './Operati
 import { Button } from '../shared/ActionButtons';
 import { scheduleInput, repairInput, repairTransitionInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
-import { useAssignableUsers } from '../../hooks/useUsers';
-import { getVendors } from '../../services/procurementService';
+import { personOptions, vendorOptions, damageOptions } from '../../services/assignmentOptions';
 import { createMaintenanceRecord } from '../../services/maintenanceService';
 import { LoadMore } from '../shared/LoadMore';
 import { oneOf, optionalValues } from '../../utils/operationForm';
@@ -13,7 +12,6 @@ import { useState } from 'react';
 import { Alert, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
-import { useDamageReports } from '../../hooks/useDamageReports';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import { MAINTENANCE_RESULTS, type Repair, type Schedule } from '../../types/operations';
@@ -25,7 +23,6 @@ import { canManageUsers } from '../../utils/access';
 
 export function SchedulesPanel() {
   const t = useT();
-  const people = useAssignableUsers();
   const schedules = useOperationList('schedules', operationsApi.schedules());
   const [chooseItem, setChooseItem] = useState(false);
   const [edit, setEdit] = useState<{ itemId: string; schedule?: Schedule } | null>(null);
@@ -52,7 +49,7 @@ export function SchedulesPanel() {
     {chooseItem && <OperationForm title={t('operations.lifecycleOperations.scheduleMaintenance')} fields={[{ key: 'itemId', label: t('common.item'), type: 'item', required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('common.next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
     {edit && <OperationForm title={t('operations.lifecycleOperations.maintenanceSchedule')} initial={edit.schedule ? Object.fromEntries(Object.entries(edit.schedule).filter(([, value]) => value != null).map(([key, value]) => [key, key === 'nextDueAt' ? String(value).slice(0, 16) : value])) as Values : { maintenanceType: 'generator_service', intervalType: 'date', intervalValue: 365, warningWindow: 14, active: true, checkoutBlocking: true }} onClose={() => setEdit(null)} fields={(values) => [
       { key: 'assetInstanceId', label: t('operations.lifecycleOperations.assetEmptyEntireItem'), options: (assets.data ?? []).map((asset) => ({ value: asset.id, label: asset.assetCode })) },
-      { key: 'responsiblePersonId', label: t('operations.lifecycleOperations.responsiblePerson'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
+      { key: 'responsiblePersonId', label: t('operations.lifecycleOperations.responsiblePerson'), pagedOptions: { queryKey: ['users', 'assignable'], getPage: personOptions } },
       { key: 'maintenanceType', label: t('operations.lifecycleOperations.maintenanceType'), required: true, options: ['dguv_v3', 'generator_service', 'battery_test', 'chrono_fps'].map((value) => ({ value, label: value })) },
       { key: 'intervalType', label: t('operations.lifecycleOperations.intervalType'), required: true, options: [{ value: 'date', label: t('enum.value.date') }, { value: 'operating_hours', label: t('enum.value.operating_hours') }, { value: 'usage_count', label: t('operations.lifecycleOperations.usageCount') }] },
       { key: 'intervalValue', label: t('operations.lifecycleOperations.interval'), type: 'number', min: 0.01, step: 0.01, required: true },
@@ -75,9 +72,7 @@ export function SchedulesPanel() {
 const repairNext: Record<string, string> = { reported: 'triaged', triaged: 'awaiting_repair', awaiting_repair: 'in_repair', in_repair: 'repaired', repaired: 'verified', verified: 'returned_to_service' };
 export function RepairsPanel() {
   const t = useT(); const { user } = useAuth();
-  const people = useAssignableUsers();
-  const vendors = useOperationList('repair-vendors', getVendors);
-  const repairs = useOperationList('repairs', operationsApi.repairs); const damage = useDamageReports();
+  const repairs = useOperationList('repairs', operationsApi.repairs);
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ repair: Repair; status: string; key: string } | null>(null);
   const closed = (repair: Repair) => ['returned_to_service', 'written_off'].includes(repair.status);
@@ -98,24 +93,23 @@ export function RepairsPanel() {
   const labels: Record<string, string> = { triaged: t('operations.lifecycleOperations.triage'), awaiting_repair: t('operations.lifecycleOperations.queueRepair'), in_repair: t('operations.lifecycleOperations.startRepair'), repaired: t('operations.lifecycleOperations.completeRepair'), verified: t('operations.lifecycleOperations.verify'), returned_to_service: t('operations.lifecycleOperations.returnToService'), written_off: t('common.writeOff') };
   return <Stack spacing={2}>
     <Button title={translate('operations.lifecycleOperations.createANewRepairCase')} variant="contained" onClick={() => setCreate(true)}>{t('operations.lifecycleOperations.newRepairCase')}</Button>
-    <QueryFeedback isLoading={repairs.isLoading || damage.isLoading} error={repairs.error || damage.error} isEmpty={!repairs.data?.length} emptyMessage={t('operations.lifecycleOperations.noRepairCasesYet')} />
+    <QueryFeedback isLoading={repairs.isLoading} error={repairs.error} isEmpty={!repairs.data?.length} emptyMessage={t('operations.lifecycleOperations.noRepairCasesYet')} />
     {openRepairs.length > 0 && <Typography variant="h6" component="h2">{t('operations.lifecycleOperations.openRepairs')} ({openRepairs.length})</Typography>}
     {openRepairs.map(repairEntry)}
     <OperationHistory title={t('operations.lifecycleOperations.repairHistory')} count={closedRepairs.length}>{closedRepairs.map(repairEntry)}</OperationHistory>
     <LoadMore list={repairs} />
     {create && <OperationForm title={t('operations.lifecycleOperations.newRepairCase')} fields={[
-      { key: 'damageReportId', label: t('common.damageReport'), required: true, options: (damage.data ?? []).filter((report) => !['resolved', 'written_off'].includes(report.status)).map((report) => ({ value: report.id, label: `${report.itemName ?? report.assemblyName ?? ''} ${report.assetCode ?? ''} · ${report.description}` })) },
-      { key: 'repairOwnerId', label: t('operations.lifecycleOperations.repairOwner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
-      { key: 'vendorId', label: t('operations.lifecycleOperations.repairVendor'), options: (vendors.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
+      { key: 'damageReportId', label: t('common.damageReport'), required: true, pagedOptions: { queryKey: ['damageReports'], getPage: damageOptions } },
+      { key: 'repairOwnerId', label: t('operations.lifecycleOperations.repairOwner'), pagedOptions: { queryKey: ['users', 'assignable'], getPage: personOptions } },
+      { key: 'vendorId', label: t('operations.lifecycleOperations.repairVendor'), pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions } },
       { key: 'partsAndCostNotes', label: t('operations.lifecycleOperations.partsAndCostNotes'), multiline: true }, { key: 'notes', label: t('common.notes2'), multiline: true },
     ]} onSave={(values) => operationsApi.createRepair(repairInput(optionalValues(values)))} onClose={() => setCreate(false)} />}
     {action && <OperationForm title={labels[action.status]} onClose={() => setAction(null)} initial={action.repair.assetInstanceId ? { amount: 1 } : {}} fields={[
       ...(['repaired', 'written_off'].includes(action.status) ? [{ key: 'amount', label: t('common.quantity'), type: 'number' as const, min: 1, max: action.repair.assetInstanceId ? 1 : undefined, required: true }] : []),
       ...(action.status === 'verified' ? [{ key: 'verificationResult', label: t('operations.lifecycleOperations.verificationResult'), required: true, multiline: true }] : []),
-      { key: 'repairOwnerId', label: t('operations.lifecycleOperations.repairOwner'), options: (people.data ?? []).map((person) => ({ value: person.id, label: person.name || person.email || person.id })) },
-      { key: 'vendorId', label: t('operations.lifecycleOperations.repairVendor'), options: (vendors.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })) },
+      { key: 'repairOwnerId', label: t('operations.lifecycleOperations.repairOwner'), pagedOptions: { queryKey: ['users', 'assignable'], getPage: personOptions } },
+      { key: 'vendorId', label: t('operations.lifecycleOperations.repairVendor'), pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions } },
       { key: 'notes', label: t('operations.lifecycleOperations.workPerformedReason'), required: true, multiline: true },
     ]} onSave={(values) => operationsApi.repairCommand(action.repair.id,repairTransitionInput({ ...optionalValues(values), status: action.status, idempotencyKey: action.key }))} />}
   </Stack>;
 }
-

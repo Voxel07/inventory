@@ -154,6 +154,15 @@ public class ApiQueryService {
     }
 
     @Transactional
+    public ApiResponses.OrderResponse previousFactionOrder(String eventType, String faction, java.time.LocalDate before, UUID excludeId) {
+        actors.requireReader();
+        if (eventType == null || eventType.isBlank() || faction == null || faction.isBlank() || before == null)
+            throw ApiException.badRequest("Event type, faction and comparison date are required");
+        var value = orders.previousFactionOrder(eventType, faction, before, excludeId);
+        return value == null ? null : projectOrder(value);
+    }
+
+    @Transactional
     public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode,
             List<DomainEnums.OrderStatus> statuses, UUID eventId, int page, int size) {
         // Every organization member reads all faction orders; writing is limited per faction.
@@ -200,10 +209,10 @@ public class ApiQueryService {
 
     @Transactional
     public List<ApiResponses.DamageResponse> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId,
-            List<DomainEnums.DamageStatus> statuses, int page, int size) {
+            List<DomainEnums.DamageStatus> statuses, String search, int page, int size) {
         requireHistory(itemId != null || assetInstanceId != null || assemblyId != null, null, DomainEnums.UserRole.warehouse_crew);
         var bounds = bounds(page, size);
-        return operations.damageReports(itemId, assetInstanceId, assemblyId, statuses, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
+        return operations.damageReports(itemId, assetInstanceId, assemblyId, statuses, search, bounds.offset(), bounds.limit()).stream().map(mapper::damage).toList();
     }
 
     @Transactional
@@ -368,14 +377,14 @@ public class ApiQueryService {
     public List<ApiResponses.UserResponse> users(int page, int size) {
         actors.requireAdmin();
         var bounds = bounds(page, size);
-        return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        return users.users(null, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
     @Transactional
-    public List<ApiResponses.UserResponse> assignableUsers(int page, int size) {
+    public List<ApiResponses.UserResponse> assignableUsers(String search, int page, int size) {
         actors.requireWarehouse();
         var bounds = bounds(page, size);
-        return users.users(bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        return users.users(search, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
 

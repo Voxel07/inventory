@@ -47,6 +47,18 @@ public class OrderOrm extends EntityOrm {
         return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
+    public InventoryOrder previousFactionOrder(String eventType, String faction, java.time.LocalDate before, UUID excludeId) {
+        var denied = privacyScopes.deniedReferences(accessActor.current());
+        var query = entityManager.createQuery("from InventoryOrder o join fetch o.eventOccurrence event join fetch o.faction f"
+                + " where o.kind = faction and event.eventType = :eventType and f.name = :faction"
+                + " and event.startDate < :before and o.status <> cancelled"
+                + (excludeId == null ? "" : " and o.id <> :excludeId")
+                + InventoryAccessOrm.excluding("o", denied) + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
+                .setParameter("eventType", eventType).setParameter("faction", faction).setParameter("before", before.withDayOfYear(1));
+        if (excludeId != null) query.setParameter("excludeId", excludeId);
+        return InventoryAccessOrm.bindDenied(query, denied).setMaxResults(1).getResultStream().findFirst().orElse(null);
+    }
+
     public InventoryOrder findOrder(UUID id) { return entityManager.find(InventoryOrder.class, id); }
     public InventoryOrder findLockedOrder(UUID id) { return entityManager.find(InventoryOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
 

@@ -1,4 +1,5 @@
 import type { Item } from './item';
+import type { Page } from '../services/apiPagination';
 
 /** Values of the generic operation forms; field types live here so services need no UI import. */
 export type Values = Record<string, string | number | boolean>;
@@ -11,4 +12,5 @@ export type Field = {
   key: string; label: string; type?: 'number' | 'date' | 'datetime-local' | 'checkbox' | 'text' | 'item'; required?: boolean;
   min?: number; max?: number; step?: number; options?: Option[]; multiline?: boolean; help?: string; reset?: Values;
   itemFilter?: (item: Item) => boolean;
+  pagedOptions?: { queryKey: readonly unknown[]; getPage: (search: string, page: number, size: number) => Promise<Page<Option>>; selectedLabel?: string };
 };

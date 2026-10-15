@@ -7,11 +7,15 @@ export function markPrivateInventoryResponse(value: unknown): void {
   const explicit = hasPrivacyFlag(value);
   function remember(child: unknown, inherited: boolean): void {
     if (!child || typeof child !== 'object') return;
-    protectedResponses.add(child);
-    if (Array.isArray(child)) { child.forEach(row => remember(row, inherited)); return; }
+    if (Array.isArray(child)) {
+      if (inherited) protectedResponses.add(child);
+      child.forEach(row => remember(row, inherited));
+      return;
+    }
     const record = child as Record<string, unknown>;
     const access = record.access as { privateResource?: boolean } | undefined;
     const privateRecord = access?.privateResource ?? (typeof record.privateResource === 'boolean' ? record.privateResource : inherited);
+    if (privateRecord) protectedResponses.add(child);
     if (privateRecord && typeof record.id === 'string') privateResourceIds.add(record.id);
     Object.values(record).forEach(nested => remember(nested, privateRecord));
   }

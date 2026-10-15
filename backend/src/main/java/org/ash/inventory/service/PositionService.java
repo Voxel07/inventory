@@ -121,6 +121,17 @@ public class PositionService {
         report.positionQuantities = held;
     }
 
+    /** Returned damage belongs to the exact positions credited by its check-in. */
+    public void reportReturnedDamage(DamageReport report, StockTransaction checkin) {
+        var held = new LinkedHashMap<String, Integer>();
+        for (var entry : checkin.positionQuantities.entrySet()) {
+            var position = orm.find(InventoryPosition.class, UUID.fromString(entry.getKey()));
+            position.quantityDamaged += entry.getValue();
+            held.put(entry.getKey(), entry.getValue());
+        }
+        report.positionQuantities = held;
+    }
+
     private boolean resolveLocatedDamage(StockTransaction tx) {
         if (tx.damageReport == null || tx.damageReport.positionQuantities.isEmpty()
                 || (tx.type != DomainEnums.TransactionType.repaired && tx.type != DomainEnums.TransactionType.written_off)) return false;

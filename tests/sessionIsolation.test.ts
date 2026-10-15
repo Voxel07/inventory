@@ -258,6 +258,36 @@ test('private catalog responses remove durable snapshots and private writes cann
   expect(await offline.getOfflineActions()).toEqual([]);
 });
 
+test('a mixed catalog produces a public-only snapshot that supports a new offline search', async () => {
+  signIn('mixed-snapshot-owner');
+  const inventory = await import('../src/services/inventoryService');
+  const rows = [
+    { id: 'mixed-public', name: 'Public radio', category: 'Comms', access: { privateResource: false } },
+    { id: 'mixed-private', name: 'Private radio', category: 'Comms', access: { privateResource: true } },
+  ];
+  fetchRequest = async () => new Response(JSON.stringify(rows), { headers: { 'X-Private-Inventory': 'true', 'X-Has-More': 'false' } });
+  await inventory.snapshotItemCatalog(auth.captureAuthSession());
+  expect(await offline.getOfflineCatalog('items:offline-snapshot')).toEqual([rows[0]]);
+  fetchRequest = async () => { throw new TypeError('Offline'); };
+  expect((await inventory.searchItems('radio', 25)).rows).toEqual([rows[0]]);
+});
+
+test('an absent previous faction order is a null result from one targeted request', async () => {
+  signIn('previous-order-reader');
+  const { getPreviousFactionOrder } = await import('../src/services/factionOrderService');
+  let calls = 0;
+  fetchRequest = async input => {
+    calls++;
+    const url = new URL(String(input));
+    expect(url.pathname).toBe('/api/orders/faction/previous');
+    expect(url.searchParams.get('faction')).toBe('Search & Rescue');
+    expect(url.searchParams.get('before')).toBe('2027-06-12');
+    return new Response(null, { status: 204 });
+  };
+  expect(await getPreviousFactionOrder('LS', 'Search & Rescue', '2027-06-12')).toBeNull();
+  expect(calls).toBe(1);
+});
+
 test('losing connectivity evicts private query data while retaining public snapshots', async () => {
   signIn('privacy-owner');
   const client = queries.getSessionQueryClient();

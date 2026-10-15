@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Alert, Box, Chip, FormControlLabel, MenuItem, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
-import { useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
 import { formatDate } from '../../utils/dateFormat';
@@ -34,7 +34,7 @@ function daysFromToday(days: number): string {
 export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: AssetInstance; canEdit: boolean }) {
   const t = useT();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
-  const schedules = useOperationList<Schedule>(`schedules:item:${item.id}`, operationsApi.schedules({ itemId: item.id }));
+  const schedules = useCompleteList<Schedule>(['operations', `schedules:item:${item.id}`], operationsApi.schedules({ itemId: item.id }));
   const active = (schedules.data ?? []).filter((schedule) => schedule.active);
   const own = active.filter((schedule) => schedule.assetInstanceId === asset.id);
   const inherited = active.filter((schedule) => !schedule.assetInstanceId && !own.some((mine) => mine.maintenanceType === schedule.maintenanceType));

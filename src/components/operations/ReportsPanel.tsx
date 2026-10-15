@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
 import type { ReportFilters } from '../../types/report';
-import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
+import { useOperationCommand } from '../../hooks/useOperations';
 import { useItemsByIds } from '../../hooks/useItems';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
@@ -25,7 +26,7 @@ export function ReportsPanel() {
   const t = useT(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReportFilters>({}); const command = useOperationCommand();
   const definitions = useReportDefinitions();
-  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useOperationList('warehouses', getWarehouses);
+  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useCompleteList(['operations', 'warehouses'], getWarehouses);
   const report = useOperationalReport(name, filters, page);
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));

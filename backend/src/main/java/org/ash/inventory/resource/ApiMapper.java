@@ -121,7 +121,17 @@ public class ApiMapper {
         prepareLocations(values);
         return values.stream().map(this::location).toList();
     }
+    private String locationPath(StorageLocation value) {
+        var names = new java.util.LinkedList<String>();
+        var seen = new java.util.HashSet<UUID>();
+        for (var current = value; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
+            names.addFirst(current.name);
+        if (value.warehouse != null) names.addFirst(value.warehouse.name);
+        return String.join(" / ", names);
+    }
+
     public ApiResponses.StorageLocationResponse location(StorageLocation value) {
+        boolean staff = actors.current().role.atLeast(DomainEnums.UserRole.warehouse_crew);
         return new ApiResponses.StorageLocationResponse(
                 value.id,
                 value.createdAt,
@@ -140,7 +150,10 @@ public class ApiMapper {
                 value.warehouse == null ? null : value.warehouse.id.toString(),
                 value.warehouse == null ? null : value.warehouse.name,
                 canViewLocation(value.parent) ? value.parent.id.toString() : null,
-                value.active, accessPolicies.projection(value.accessPolicy)
+                value.active, accessPolicies.projection(value.accessPolicy), locationPath(value),
+                !staff || value.keeperUser == null ? null : value.keeperUser.id,
+                !staff || value.keeperUser == null ? null : value.keeperUser.name,
+                !staff || value.keeperUser == null ? null : value.keeperUser.email
         );
     }
 

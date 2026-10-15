@@ -10,7 +10,12 @@ import { useAuth } from '../hooks/useAuth';
 import { canCreateInventory, canEditCatalog, canViewOrganization } from '../utils/access';
 import { ItemsList } from '../components/lists/ItemsList';
 import { getLocationInventory } from '../utils/locationStock';
-import { useOperationList } from '../hooks/useOperations';
+import { useQuery } from '@tanstack/react-query';
+import { storageLocationApi } from '../services/storageLocationService';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { PagedAutocomplete } from '../components/shared/PagedAutocomplete';
+import { mapPage } from '../services/apiPagination';
+import { LoadMore } from '../components/shared/LoadMore';
 import { operationsApi } from '../services/operationsService';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState } from 'react';
@@ -22,9 +27,9 @@ import RoomIcon from '@mui/icons-material/Room';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MapIcon from '@mui/icons-material/Map';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useStorageLocations, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
+import { useStorageLocation, useCreateStorageLocation, useUpdateStorageLocation, useDeleteStorageLocation } from '../hooks/useStorageLocations';
 import { useItemsByIds } from '../hooks/useItems';
-import { useCompleteList } from '../hooks/usePagedList';
+import { usePagedList, useCompleteList } from '../hooks/usePagedList';
 import { queryKeys } from '../utils/queryKeys';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
@@ -33,8 +38,6 @@ import type { StorageLocationFormData } from '../types';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
-import { ListPagination } from '../components/shared/ListPagination';
-import { useClientPagination } from '../hooks/useClientPagination';
 import { formatStatus } from '../utils/formatters';
 
 export function StorageLocations() {
@@ -49,7 +52,6 @@ export function StorageLocations() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = useStorageLocations({ includeInactive: true });
 
     const createMutation = useCreateStorageLocation();
     const updateMutation = useUpdateStorageLocation();
@@ -74,7 +76,18 @@ export function StorageLocations() {
     const [showInactive, setShowInactive] = useState(false);
     const [warehousesOpen, setWarehousesOpen] = useState(false);
     const [tab, setTab] = useState('locations');
-    const warehouses = useOperationList('warehouses', getWarehouses, organization);
+    const warehouses = useCompleteList(['operations', 'warehouses'], getWarehouses, { enabled: organization });
+    const search = useDebouncedValue(searchQuery.trim());
+    const locationFilters = tab === 'responsibilities' ? { includeInactive: false } : { includeInactive: showInactive, search: search || undefined, warehouseId: warehouseFilter || undefined, subtreeId: parentFilter || undefined };
+    const locationList = usePagedList(['storageLocations', 'list', locationFilters], (page, size) => storageLocationApi.getPage(locationFilters, page, size));
+    const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = locationList;
+    const selectedLocation = useStorageLocation(selectedLocId ?? undefined);
+    // The edit dialog explicitly needs the hierarchy to exclude descendant parent choices.
+    const hierarchy = useQuery({ queryKey: ['storageLocations', 'hierarchy'], enabled: dialogOpen,
+      queryFn: () => storageLocationApi.getAll({ includeInactive: true }), networkMode: 'offlineFirst' });
+    const locationOptions = async (needle: string, page: number, size: number) =>
+      mapPage(await storageLocationApi.getPage({ includeInactive: true, search: needle || undefined, warehouseId: warehouseFilter || undefined }, page, size),
+        location => ({ value: location.id, label: locationPath(location, []) }));
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
@@ -88,20 +101,9 @@ export function StorageLocations() {
     });
     const overlayPreview = useObjectUrl(dialogOpen ? formData.mapOverlayFile : undefined);
 
-    const activeLocation = locations?.find((l) => l.id === selectedLocId) || null;
+    const activeLocation = selectedLocation.data ?? locations?.find((l) => l.id === selectedLocId) ?? null;
 
-    const filteredLocations = (() => {
-        if (!locations) return [];
 
-        const lower = searchQuery.toLowerCase();
-        return locations.filter(
-            (l) =>
-                (showInactive || l.active) && (!warehouseFilter || l.warehouseId === warehouseFilter)
-                && (!parentFilter || isDescendant(l, parentFilter, locations))
-                && (locationPath(l, locations).toLowerCase().includes(lower) || (l.area ?? '').toLowerCase().includes(lower))
-        );
-    })();
-    const { pageItems: pageLocations, page: currentLocationPage, setPage: setLocationPage, pageSize: locationPageSize, onPageSizeChange: onLocationPageSizeChange } = useClientPagination(filteredLocations);
 
     // One location's stock is bounded: read all of it, then exactly the items stored there.
     const positions = useCompleteList(queryKeys.operations(`storage-positions:${selectedLocId}`), operationsApi.positions({ locationId: selectedLocId ?? undefined }), { enabled: Boolean(selectedLocId) });
@@ -149,7 +151,7 @@ export function StorageLocations() {
         setDeleteConfirmOpen(true);
     }
 
-    const parentIsPrivate = Boolean(locations?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
+    const parentIsPrivate = Boolean(hierarchy.data?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -192,7 +194,7 @@ export function StorageLocations() {
 
     return (
         <Box>
-            {locationsError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('common.retry')}</Button>}>{locationsError.message}</Alert>}
+            {(locationsError || selectedLocation.error || hierarchy.error) && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void refetchLocations(); }}>{t('common.retry')}</Button>}>{(locationsError || selectedLocation.error || hierarchy.error)?.message}</Alert>}
             <Dialog open={warehousesOpen} onClose={() => setWarehousesOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('pages.storageLocations.warehouses')}</DialogTitle><DialogContent><WarehousesPanel /></DialogContent><DialogActions><Button title={translate('common.closeThisDialog')} onClick={() => setWarehousesOpen(false)}>{t('common.close')}</Button></DialogActions></Dialog>
             {(tab !== 'locations' || !isMobile || !selectedLocId) && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
@@ -218,6 +220,7 @@ export function StorageLocations() {
             </Box>
             {tab === 'responsibilities' && canEdit && !locationsError && <Box role="tabpanel" id="storage-panel-responsibilities" aria-labelledby="storage-tab-responsibilities">
                 <StorageResponsibilities locations={locations ?? []} loading={locationsLoading} onEditLocation={handleOpenEdit} />
+                <LoadMore list={locationList} />
             </Box>}
             <Box hidden={tab !== 'locations'} role="tabpanel" id="storage-panel-locations" aria-labelledby="storage-tab-locations">
             {isMobile && selectedLocId && (
@@ -238,26 +241,27 @@ export function StorageLocations() {
                             <TextField
                                 label={t('pages.storageLocations.searchStorageLocations')}
                                 value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setLocationPage(1); }}
+                                onChange={(e) => { setSearchQuery(e.target.value); }}
                                 size="small"
                                 fullWidth
                                 sx={{ mb: 2 }}
                             />
 
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                              <TextField select size="small" label={t('pages.storageLocations.warehouse')} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setParentFilter(''); setLocationPage(1); }}><MenuItem value="">{t('common.all')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
-                              <TextField select size="small" label={t('pages.storageLocations.locationSubtree')} value={parentFilter} onChange={(e) => { setParentFilter(e.target.value); setLocationPage(1); }}><MenuItem value="">{t('common.all')}</MenuItem>{locations?.filter((l) => !warehouseFilter || l.warehouseId === warehouseFilter).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
-                              <FormControlLabel label={t('pages.storageLocations.showInactive')} control={<Checkbox checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); setLocationPage(1); }} />} />
+                              <TextField select size="small" label={t('pages.storageLocations.warehouse')} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setParentFilter(''); }}><MenuItem value="">{t('common.all')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
+                              <PagedAutocomplete size="small" label={t('pages.storageLocations.locationSubtree')} value={parentFilter}
+                                queryKey={['storageLocations', 'subtree-picker', warehouseFilter]} getPage={locationOptions} onChange={setParentFilter} />
+                              <FormControlLabel label={t('pages.storageLocations.showInactive')} control={<Checkbox checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); }} />} />
                             </Stack>
                             {locationsLoading ? (
                                 <Typography sx={{ p: 2 }}>{t('pages.storageLocations.loadingStorageLocations')}</Typography>
-                            ) : filteredLocations.length === 0 ? (
+                            ) : locations?.length === 0 ? (
                                 <Typography sx={{ p: 2 }} color="text.secondary">
                                     {t('pages.storageLocations.noStorageLocationsFound')}
                                 </Typography>
                             ) : (
                                 <List sx={{ overflowY: isMobile ? 'visible' : 'auto', flexGrow: 1, px: 0 }}>
-                                    {pageLocations.map((loc) => {
+                                    {locations?.map((loc) => {
                                         return (
                                             <ListItemButton title={translate('pages.storageLocations.displayThisStorageLocationSDetailsAndStock')}
                                                 key={loc.id}
@@ -312,7 +316,7 @@ export function StorageLocations() {
                                     })}
                                 </List>
                             )}
-                            <ListPagination count={filteredLocations.length} page={currentLocationPage} onChange={setLocationPage} pageSize={locationPageSize} onPageSizeChange={onLocationPageSizeChange} />
+                            <LoadMore list={locationList} />
                         </Paper>
                     </Grid>
                 )}
@@ -434,9 +438,9 @@ export function StorageLocations() {
                             <TextField select label={t('pages.storageLocations.parentLocation')} value={formData.parentLocationId ?? ''} onChange={(e) => {
                                 const parentId = e.target.value || null;
                                 // Shares flow down a private location tree, so children of private locations are private.
-                                const privateParent = Boolean(locations?.find((l) => l.id === parentId)?.access?.privateResource);
+                                const privateParent = Boolean(hierarchy.data?.find((l) => l.id === parentId)?.access?.privateResource);
                                 setFormData({ ...formData, parentLocationId: parentId, ...(privateParent ? { privateResource: true } : {}) });
-                            }}><MenuItem value="">{t('pages.storageLocations.topLevel')}</MenuItem>{locations?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, locations))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations)}</MenuItem>)}</TextField>
+                            }}><MenuItem value="">{t('pages.storageLocations.topLevel')}</MenuItem>{hierarchy.data?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, hierarchy.data ?? []))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, hierarchy.data ?? [])}</MenuItem>)}</TextField>
                             <TextField select label={t('pages.storageLocations.locationType')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
                             <FormControlLabel label={t('enum.value.active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
                             <Alert severity="info">{t('pages.storageLocations.inactiveLocationsRemainVisibleForStockAndHistoryDeactivateChild')}</Alert>

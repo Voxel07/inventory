@@ -80,11 +80,12 @@ public class OperationsResource {
     @Paged @GET
     @Path("/damage-reports")
     public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,
+            @QueryParam("search") String search,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("assemblyId") UUID assemblyId,
             @QueryParam("status") List<org.ash.inventory.model.DomainEnums.DamageStatus> statuses,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.damageReports(itemId, assetInstanceId, assemblyId, statuses, page, size);
+        return queries.damageReports(itemId, assetInstanceId, assemblyId, statuses, search, page, size);
     }
 
     @POST

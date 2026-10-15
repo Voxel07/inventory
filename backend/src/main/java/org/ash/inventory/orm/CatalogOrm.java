@@ -150,14 +150,25 @@ public class CatalogOrm extends EntityOrm {
     }
 
     /** One page of visible locations, newest first; access policy and filters apply before pagination. */
-    public List<StorageLocation> locations(boolean includeInactive, String search, UUID warehouseId, int offset, int limit) {
+    public List<StorageLocation> locations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
+        var subtree = new java.util.LinkedHashSet<UUID>();
+        if (subtreeId != null) {
+            var frontier = List.of(subtreeId);
+            while (!frontier.isEmpty()) {
+                subtree.addAll(frontier);
+                frontier = entityManager.createQuery("select l.id from StorageLocation l where l.parent.id in :parents", UUID.class)
+                        .setParameter("parents", frontier).getResultList().stream().filter(id -> !subtree.contains(id)).toList();
+            }
+        }
         var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where "
                 + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
                 + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(coalesce(l.area, '')) like :search or lower(coalesce(l.position, '')) like :search)")
                 + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
+                + (subtreeId == null ? "" : " and l.id in :subtree")
                 + " order by l.createdAt desc, l.id", StorageLocation.class);
         if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
         if (warehouseId != null) query.setParameter("warehouse", warehouseId);
+        if (subtreeId != null) query.setParameter("subtree", subtree);
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

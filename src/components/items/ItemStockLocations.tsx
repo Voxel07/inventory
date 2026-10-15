@@ -2,7 +2,7 @@ import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow 
 import { DetailPanel } from './CompactDetail';
 import { Link as RouterLink } from 'react-router-dom';
 import type { Item } from '../../types';
-import { useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { operationsApi } from '../../services/operationsService';
 import { locationPath } from '../../utils/locationHierarchy';
@@ -14,8 +14,8 @@ import { isAssetStored } from '../../utils/locationStock';
 export function ItemStockLocations({ item }: { item: Item }) {
   const t = useT();
   const serialized = item.trackingMode === 'serialized';
-  const positions = useOperationList(`positions:${item.id}:`, operationsApi.positions({ itemId: item.id }), !serialized);
-  const assets = useOperationList(`assets:${item.id}:`, operationsApi.assets({ itemId: item.id }), serialized);
+  const positions = useCompleteList(['operations', `positions:${item.id}:`], operationsApi.positions({ itemId: item.id }), { enabled: !serialized });
+  const assets = useCompleteList(['operations', `assets:${item.id}:`], operationsApi.assets({ itemId: item.id }), { enabled: serialized });
   const locations = useStorageLocations({ includeInactive: true });
   const quantities = new Map<string, { quantity: number; name?: string }>();
   if (serialized) {

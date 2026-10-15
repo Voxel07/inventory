@@ -231,7 +231,7 @@ public class SyncService {
         var result = new java.util.LinkedHashMap<String, Object>();
         result.put("command", mapper.syncAudit(audit));
         result.put("checkedAt", java.time.Instant.now());
-        if (audit.payload.get("orderId") != null) result.put("order", queries.order(uuid(audit.payload, "orderId")));
+        if (audit.payload.get("orderId") != null) result.put("order", queries.orderDetail(uuid(audit.payload, "orderId")));
         if (audit.payload.get("itemId") != null) {
             UUID item = uuid(audit.payload, "itemId");
             result.put("item", queries.item(item));

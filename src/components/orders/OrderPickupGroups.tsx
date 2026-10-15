@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Box, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Button } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
-import { useAssignableUsers } from '../../hooks/useUsers';
+import { PagedAutocomplete } from '../shared/PagedAutocomplete';
+import { personOptions } from '../../services/assignmentOptions';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { orderPickupApi, type OrderKind, type PickupAssignment } from '../../services/orderPickupService';
@@ -15,7 +16,6 @@ export function OrderPickupGroups({ kind, orderId }: { kind: OrderKind; orderId:
   const key = ['order-pickup-groups', kind, orderId];
   const query = useQuery({ queryKey: key, queryFn: () => orderPickupApi.get(kind, orderId), refetchInterval: 60_000 });
   const [draft, setDraft] = useState<Record<string, PickupAssignment> | null>(null);
-  const people = useAssignableUsers(draft !== null);
   const { data: locations = [] } = useStorageLocations();
   const save = useMutation({ mutationFn: (assignments: Record<string, PickupAssignment>) => orderPickupApi.save(kind, orderId, assignments),
     onSuccess: (plan) => { client.setQueryData(key, plan); setDraft(null); feedback.success(t('orders.orderPickupGroups.pickupGroupsSaved')); }, onError: feedback.error });
@@ -62,11 +62,11 @@ export function OrderPickupGroups({ kind, orderId }: { kind: OrderKind; orderId:
         <Stack spacing={2}>{draft && lines.map(item => <Paper key={item.itemId} variant="outlined" sx={{ p: 1.5 }}>
           <Typography sx={{ fontWeight: 700, mb: 1 }}>{item.name}</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <TextField select fullWidth size="small" label={t('common.responsiblePerson')} value={draft[item.itemId]?.responsiblePersonId ?? ''} onChange={e => update(item.itemId, { responsiblePersonId: e.target.value || null })}>
-              <MenuItem value="">{t('common.unassigned')}</MenuItem>
-              {draft[item.itemId]?.responsiblePersonId && !people.data?.some(p => p.id === draft[item.itemId].responsiblePersonId) && <MenuItem value={draft[item.itemId].responsiblePersonId!}>{groups.find(g => g.items.some(i => i.itemId === item.itemId))?.responsiblePersonName}</MenuItem>}
-              {(people.data ?? []).map(p => <MenuItem key={p.id} value={p.id}>{p.name || p.email}</MenuItem>)}
-            </TextField>
+            <PagedAutocomplete size="small" label={t('common.responsiblePerson')}
+              value={draft[item.itemId]?.responsiblePersonId}
+              selectedLabel={groups.find(g => g.items.some(i => i.itemId === item.itemId))?.responsiblePersonName}
+              queryKey={['users', 'assignable']} getPage={personOptions}
+              onChange={value => update(item.itemId, { responsiblePersonId: value || null })} />
             <TextField fullWidth size="small" label={t('orders.orderPickupGroups.itemGroup')} value={draft[item.itemId]?.groupName ?? ''} slotProps={{ htmlInput: { maxLength: 160 } }} onChange={e => update(item.itemId, { groupName: e.target.value })} />
             <TextField select fullWidth size="small" label={t('orders.orderPickupGroups.pickupPoint')} value={draft[item.itemId]?.pickupLocationId ?? ''} onChange={e => update(item.itemId, { pickupLocationId: e.target.value || null })}>
               <MenuItem value="">{t('orders.orderPickupGroups.notSet')}</MenuItem>
@@ -74,7 +74,6 @@ export function OrderPickupGroups({ kind, orderId }: { kind: OrderKind; orderId:
             </TextField>
           </Stack>
         </Paper>)}</Stack>
-        {people.isError && <Alert severity="error">{t('orders.orderPickupGroups.couldNotLoadPeople')}</Alert>}
       </DialogContent>
       <DialogActions><Button disabled={save.isPending} onClick={() => setDraft(null)}>{t('common.cancel')}</Button><Button variant="contained" disabled={save.isPending || !draft || Object.values(draft).some(a => !a.groupName.trim())} onClick={() => { if (draft) save.mutate(draft); }}>{t('common.save')}</Button></DialogActions>
     </Dialog>

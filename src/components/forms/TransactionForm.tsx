@@ -3,7 +3,7 @@ import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../shared/ActionButtons';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
-import { useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
 import { operationsApi } from '../../services/operationsService';
 import { useState } from 'react';
 import {
@@ -80,7 +80,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
     const canCheckout = canTakeOut(user) && (!selectedItem?.access?.privateResource || selectedItem.access.canEdit || selectedItem.access.publicUse);
-    const lots = useOperationList(`transaction-lots:${formData.itemId}`, operationsApi.lots({ itemId: formData.itemId }), Boolean(formData.itemId));
+    const lots = useCompleteList(['operations', `transaction-lots:${formData.itemId}`], operationsApi.lots({ itemId: formData.itemId }), { enabled: Boolean(formData.itemId) });
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = getItemStock(selectedItem);

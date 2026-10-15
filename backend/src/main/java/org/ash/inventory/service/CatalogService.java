@@ -69,9 +69,9 @@ public class CatalogService {
         return item;
     }
 
-    public List<StorageLocation> getLocations(boolean includeInactive, String search, UUID warehouseId, int offset, int limit) {
+    public List<StorageLocation> getLocations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
         actorService.current();
-        return orm.locations(includeInactive, search, warehouseId, offset, limit);
+        return orm.locations(includeInactive, search, warehouseId, subtreeId, offset, limit);
     }
 
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}

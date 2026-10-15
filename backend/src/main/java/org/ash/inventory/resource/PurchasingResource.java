@@ -32,9 +32,10 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/vendors")
     public List<PurchasingDtos.VendorResponse> vendors(
+            @QueryParam("search") String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.vendors(page, size);
+        return service.vendors(search, page, size);
     }
 
     @POST @Path("/vendors")
