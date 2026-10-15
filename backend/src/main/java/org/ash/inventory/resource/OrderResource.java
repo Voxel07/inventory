@@ -2,6 +2,7 @@ package org.ash.inventory.resource;
 
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -13,11 +14,15 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.ash.inventory.model.DomainEnums;
+import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.helper.security.ActorService;
 import org.ash.inventory.service.ApiQueryService;
+import org.ash.inventory.service.CustodyQueryService;
+import org.ash.inventory.service.OrderPickupService;
 import org.ash.inventory.service.OrderService;
 
 import org.ash.inventory.resource.dto.ApiResponses;
+import org.ash.inventory.resource.dto.CustodyDtos;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,11 +34,16 @@ public class OrderResource {
     private final OrderService service;
     private final ActorService actor;
     private final ApiQueryService queries;
+    private final OrderPickupService pickups;
+    private final CustodyQueryService custody;
 
-    public OrderResource(OrderService service, ActorService actor, ApiQueryService queries) {
+    public OrderResource(OrderService service, ActorService actor, ApiQueryService queries,
+            OrderPickupService pickups, CustodyQueryService custody) {
         this.service = service;
         this.actor = actor;
         this.queries = queries;
+        this.pickups = pickups;
+        this.custody = custody;
     }
 
     @Paged @GET
@@ -108,5 +118,39 @@ public class OrderResource {
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
         queries.order(id);
         return queries.projectOrder(service.returnAll(id, input == null ? null : input.idempotencyKey()));
+    }
+
+    @GET
+    @Path("/{id}/pickup-groups")
+    public OrderPickupService.Plan pickupGroups(@PathParam("id") UUID id) {
+        return pickups.get("faction", id);
+    }
+
+    @PATCH
+    @Path("/{id}/pickup-groups")
+    public OrderPickupService.Plan savePickupGroups(@PathParam("id") UUID id, @NotNull @Valid OrderPickupService.Input input) {
+        return pickups.save("faction", id, input);
+    }
+
+    @POST
+    @Path("/{id}/pickup-groups/notify")
+    public int notifyPickupGroups(@PathParam("id") UUID id) {
+        return pickups.notify("faction", id);
+    }
+
+    @Paged @GET
+    @Path("/{id}/handovers")
+    public List<CustodyDtos.HandoverResponse> handovers(@PathParam("id") UUID id,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return custody.handovers(InventoryOrder.Kind.faction, id, page, size);
+    }
+
+    @Paged @GET
+    @Path("/{id}/reconciliations")
+    public List<CustodyDtos.ReconciliationResponse> reconciliations(@PathParam("id") UUID id,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return custody.reconciliations(InventoryOrder.Kind.faction, id, page, size);
     }
 }
