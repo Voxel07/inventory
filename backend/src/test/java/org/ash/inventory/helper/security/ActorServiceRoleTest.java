@@ -30,9 +30,14 @@ class ActorServiceRoleTest {
                     case "getRoles" -> Set.of("inventory");
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
-        var users = new org.ash.inventory.orm.UserOrm(null) {
+        var users = new org.ash.inventory.orm.UserOrm(null, null) {
             @Override public org.ash.inventory.model.UserAccount findByIdentity(String issuer, String subject) { return null; }
-            @Override public void persist(org.ash.inventory.model.UserAccount user) {}
+            @Override public org.ash.inventory.model.UserAccount provision(String issuer, String subject, String name, String email,
+                    Set<DomainEnums.UserRole> roles, java.util.Collection<String> factions) {
+                var user = new org.ash.inventory.model.UserAccount();
+                user.setRoles(roles);
+                return user;
+            }
         };
         var actor = new ActorService(identity, null, users, false, "inventory", java.util.Optional.empty());
         assertEquals(DomainEnums.UserRole.read_only, actor.current().role);

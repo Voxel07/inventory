@@ -13,6 +13,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -103,14 +104,9 @@ public class ActorService {
         cached = users.findByIdentity(issuer, subject);
         boolean bootstrap = isBootstrapAdmin(email, username);
         if (cached == null) {
-            cached = new UserAccount();
-            cached.issuer = issuer;
-            cached.externalSubject = subject;
-            cached.name = name;
-            cached.email = email;
-            cached.setRoles(headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only));
-            cached.factions = headerFactions == null ? new ArrayList<>() : new ArrayList<>(headerFactions);
-            users.persist(cached);
+            cached = users.provision(issuer, subject, name, email,
+                    headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only),
+                    headerFactions == null ? List.of() : headerFactions);
         } else {
             if (!Objects.equals(cached.name, name)) cached.name = name;
             if (email != null && !Objects.equals(cached.email, email)) cached.email = email;

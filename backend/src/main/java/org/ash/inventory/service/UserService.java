@@ -56,15 +56,9 @@ public class UserService {
     @Transactional
     public UserAccount devLogin(ApiModels.DevLoginInput input) {
         var user = users.findByIdentity(ActorService.DEV_ISSUER, input.email());
-        if (user == null) {
-            user = new UserAccount();
-            user.issuer = ActorService.DEV_ISSUER;
-            user.externalSubject = input.email();
-            user.email = input.email();
-            user.name = input.email().contains("@") ? input.email().substring(0, input.email().indexOf('@')) : input.email();
-            user.setRoles(java.util.Set.of(DomainEnums.UserRole.admin));
-            users.persist(user);
-        }
-        return user;
+        if (user != null) return user;
+        String name = input.email().contains("@") ? input.email().substring(0, input.email().indexOf('@')) : input.email();
+        return users.provision(ActorService.DEV_ISSUER, input.email(), name, input.email(),
+                java.util.Set.of(DomainEnums.UserRole.admin), java.util.List.of());
     }
 }
