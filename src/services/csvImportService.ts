@@ -245,6 +245,9 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     // type/date records are updated so retrying a sample import is safe.
     const existingEvents = parsedEvents.length > 0 || parsedGeneralOrders.length > 0 || parsedOperations.length > 0 ? await getEventReports() : [];
     const importEventLogistics = createCsvEventLogisticsImporter(factionIds);
+    // A completed event accepts no new orders or checkouts, so completed rows stay
+    // open until their history is imported and are closed in the final step.
+    const eventsToClose: { id: string; row: ParsedEventReportRow; data: ParsedEventReportRow['data'] }[] = [];
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
       setImportStatusText(t('services.csvImportService.creatingEventTypeEventOnEventDate', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate) }));
 
@@ -273,11 +276,15 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         const existing = existingEvents.find((event) => (
           event.eventType === data.eventType && event.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
         ));
+        // Existing completed events reopen too, so a retry can add the orders a failed run missed.
+        const closeLater = data.status === 'completed';
+        const openData = closeLater ? { ...data, status: 'planned' as const } : data;
         const saved = existing
-          ? await updateEventReport(existing.id, data)
-          : await createEventReport(data);
+          ? await updateEventReport(existing.id, openData)
+          : await createEventReport(openData);
         if (!existing) existingEvents.push(saved);
         else existingEvents.splice(existingEvents.findIndex((event) => event.id === existing.id), 1, saved);
+        if (closeLater) eventsToClose.push({ id: saved.id, row, data });
         successEvents++;
         // The event itself is saved; a logistics failure is reported separately.
         try {
@@ -565,6 +572,18 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
 
     // Remaining workflows can reference history operations and newly created custody.
     for (const row of operations.slice(historyEnd)) await applyOperation(row);
+
+    // Step 9: Close completed events. Closing freezes the usage derived from the
+    // imported orders; a "Verwendet" cell replaces it as the explicit report.
+    for (const { id, row, data } of eventsToClose) {
+      setImportStatusText(t('services.csvImportService.closingEventTypeEventOnEventDate', { eventType: String(data.eventType), eventDate: String(data.eventDate) }));
+      try {
+        await updateEventReport(id, { ...data, usedQuantities: row.usedItems.length ? data.usedQuantities : undefined });
+      } catch (err: unknown) {
+        assertAuthSession(context);
+        errors.push(`Event ${data.eventType} ${data.eventDate}: ${(err as Error).message || err}`);
+      }
+    }
   } catch (error) {
     assertAuthSession(context);
     errors.push(t('services.csvImportService.importStopped') + (error instanceof Error ? error.message : String(error)));

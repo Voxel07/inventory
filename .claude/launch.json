@@ -6,6 +6,22 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["x", "vite", "--port", "5173", "--strictPort"],
       "port": 5173
+    },
+    {
+      "name": "vite-dev-node",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173", "--strictPort"],
+      "port": 5173
+    },
+    {
+      "name": "backend-throwaway-db",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["-o", "-f", "backend/pom.xml", "quarkus:dev",
+        "-Dquarkus.datasource.jdbc.url=jdbc:postgresql://localhost:55432/inventory_test",
+        "-Dquarkus.datasource.username=test", "-Dquarkus.datasource.password=test",
+        "-Dquarkus.redis.hosts=redis://localhost:56379", "-Dquarkus.analytics.disabled=true",
+        "-Dquarkus.console.enabled=false"],
+      "port": 8080
     }
   ]
 }

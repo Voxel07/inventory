@@ -2682,6 +2682,7 @@ export default {
       importingItemItemIndexItemsToProcesCountName: 'Importiere Artikel {{itemIndex}}/{{itemsToProcesCount}}: {{name}}',
       creatingAssemblyAssemIndexAssembliesToProcesCountName: 'Erstelle Baugruppe {{assemIndex}}/{{assembliesToProcesCount}}: {{name}}',
       creatingEventTypeEventOnEventDate: 'Erstelle {{eventType}}-Event vom {{eventDate}}...',
+      closingEventTypeEventOnEventDate: 'Schließe {{eventType}}-Event vom {{eventDate}}...',
       itemItemNameCouldNotBeFound: 'Artikel "{{itemName}}" konnte nicht gefunden werden',
       eventEventTypeEventDateSavedAttendeesTimelineIncompleteMessage: 'Event {{eventType}} {{eventDate}} gespeichert, Teilnehmer/Zeitplan unvollständig: {{message}}',
       importingActionName: 'Importiere Aktion {{name}}...',
