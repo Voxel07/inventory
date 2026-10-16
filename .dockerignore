@@ -1,5 +1,6 @@
 node_modules
 dist
+backend/
 .git
 .agents
 graphify-out

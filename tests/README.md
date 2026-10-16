@@ -94,6 +94,7 @@ Every remaining file in `tests/` has one of these roles:
 | `refactoring.browser.html`, `refactoring.browser.jsx` | **Removed:** older operations/catalog/inbox preview superseded by `ui-cleanup.browser.*` |
 | `refactoring.sample-smoke.ts` | Keep opt-in live REST/MCP sample import; use DB reference data, finish count posting and new-lot receipt assertions instead of leaving a browser exercise |
 | `tools/endpoint_coverage.py` | Added: repeatable REST handler audit and detailed Markdown evidence |
+| `tools/native_memory_benchmark.py` | Opt-in Docker JVM/native memory comparison with isolated PostgreSQL, synthetic OIDC, MCP fixture creation and authenticated HTTP workloads; see [benchmark report](../docs/NATIVE_MEMORY_BENCHMARK.md) |
 | `README.md` | Added: inventory, execution instructions, requirement mapping and acceptance limits |
 
 The `.browser.*` files are browser fixtures, not Bun-discovered tests. The TSX previews and `fixtures/` are

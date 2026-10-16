@@ -1,0 +1,29 @@
+####
+# Packages a pre-built native binary into an ultra-minimal container image.
+#
+# Run from backend/ with Java 25, Maven and Docker/Podman installed.
+# Build a Linux runner for the container's CPU architecture first:
+#   mvn package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 -DskipTests
+#
+# Then build the docker container:
+#   docker build -f src/main/docker/Dockerfile.native-micro -t inventory-api:native .
+####
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+WORKDIR /work/
+
+RUN mkdir -p /data/media \
+    && chown -R 1001:root /work /data/media \
+    && chmod -R g+rwX /work /data/media
+
+COPY --chown=1001:root --chmod=755 target/*-runner /work/application
+
+EXPOSE 8080
+USER 1001
+
+ENV QUARKUS_HTTP_HOST=0.0.0.0
+ENV MEDIA_LOCAL_DIRECTORY=/data/media
+
+# Same runtime sizing as Dockerfile.native; container arguments replace these flags.
+# JAVA_OPTS is not read.
+ENTRYPOINT ["/work/application"]
+CMD ["-Xmx512m", "-Xmn256m"]

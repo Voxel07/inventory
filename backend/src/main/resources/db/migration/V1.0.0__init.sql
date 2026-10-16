@@ -477,7 +477,7 @@ create table items (
     return_location_id uuid,
     storage_location_id uuid,
     category varchar(255) not null,
-    description varchar(255),
+    description text,
     hint varchar(255),
     inventory_role varchar(255) not null check ((inventory_role in ('consumable','returnable'))),
     out_of_service boolean not null,

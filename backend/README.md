@@ -34,6 +34,85 @@ Stock catalog, planning and report read boundaries establish PostgreSQL REPEATAB
 
 Loan and member-request lists and item-asset GETs accept `page` and `size` (maximum 200); the web client loads further pages explicitly.
 
+## Native executable memory experiment
+
+`Dockerfile.native` compiles the backend inside a Java 25 Mandrel builder and
+packages the executable in UBI 9 Micro. `src/main/docker/Dockerfile.native-micro`
+only packages an already compiled Linux executable. They use the same runtime
+base: the second Dockerfile does not provide an additional runtime RAM saving.
+No JRE or Maven is shipped in either final image.
+
+From the repository root, opt into native for the single-node stack:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.native.yml up -d --build inventory-api
+```
+
+This uses the existing database, authentication, environment and media volume.
+For comparison, the normal `docker compose up -d --build inventory-api` selects
+the JVM build again. Tag builds in CI publish the native image
+(`backend/Dockerfile.native`) as the backend package. Do not apply this override
+to `docker-compose.cluster.yml`: its API healthcheck requires curl, which is
+absent from the micro image.
+
+To build just the native image from the repository root:
+
+```bash
+docker build -f backend/Dockerfile.native -t inventory-api:native backend
+```
+
+Alternatively, from `backend/`, use a local Java 25 installation, Maven and a
+container runtime to compile and then package a prebuilt runner:
+
+```bash
+mvn package -Pnative -DskipTests -Dquarkus.native.container-build=true -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25
+docker build -f src/main/docker/Dockerfile.native-micro -t inventory-api:native .
+```
+
+The runner must match the runtime OS/CPU architecture. The default AMD64 target
+requires x86-64-v3 CPU features. Set `-Dquarkus.native.march=compatibility` on the
+Maven command only if deployment hardware needs it; use `native` only when the
+build host's CPU features match every deployment host. The multistage build keeps
+the compiler defaults. For repeatable release comparisons, record the resolved
+builder/runtime image digests: `jdk-25` and `2.0` are moving tags.
+
+Both runtime images run as UID 1001 and provide `/data/media` for local storage.
+Existing named volumes or host mounts must permit UID 1001 to write; image
+ownership cannot change the permissions of an existing mount.
+
+Memory and performance policy:
+
+- Both native images default to `-Xmx512m -Xmn256m`, and the native Compose
+  override sets `mem_limit: 768m`. Measured: ~97% of uncapped throughput at
+  ~380 MiB peak instead of ~1 GiB. Serial GC sizes the young generation from
+  `-Xmx`, so a heap cap without `-Xmn` costs 10–18% throughput. Total process
+  memory also includes stacks, native buffers and GC overhead; keep the limit.
+- Keep default `-O2` optimization. Avoid `-Os`, quick builds and UPX as memory
+  tuning: executable/image size and runtime memory are different measurements.
+- Mandrel's default Serial GC suits small heaps but can lose throughput or
+  increase pauses under allocation-heavy concurrency. Native is an experiment,
+  not a guaranteed runtime performance improvement. G1 and full PGO are options
+  for a separate Oracle GraalVM evaluation, not switches to enable on Mandrel.
+- Warm both variants, then compare identical data, concurrency and CPU allocation:
+  idle and peak container memory, RSS, CPU, throughput, p95/p99 latency and errors.
+  Include reports, media uploads/downloads, long-lived SSE and MCP. Use
+  `docker stats` for container trends; also observe the process RSS and peaks
+  during GC. Keep the same telemetry settings and observe memory after load ends.
+- `-XX:MaxHeapFree` returns more memory when idle but cost ~25% throughput in
+  testing. `quarkus.native.native-image-xmx` controls compilation memory only
+  and does not tune the running application.
+
+Native runtime flags go directly in container arguments (Compose `command:`, or
+after the image name in `docker run`); these replace the default heap flags, so
+repeat `-Xmx`/`-Xmn` when adding others. `JAVA_OPTS` and `JAVA_TOOL_OPTIONS` are not
+read by the executable. `QUARKUS_HTTP_HOST` remains overridable at runtime.
+
+See the [local Docker memory comparison](../docs/NATIVE_MEMORY_BENCHMARK.md) and
+[prioritized findings and acceptance status](../docs/NATIVE_MEMORY_REVIEW.md).
+Reference: [Quarkus native builds](https://quarkus.io/guides/building-native-image/),
+[GraalVM 25 memory management](https://www.graalvm.org/jdk25/reference-manual/native-image/optimizations-and-performance/MemoryManagement/)
+and [compiler optimization options](https://www.graalvm.org/jdk25/reference-manual/native-image/optimizations-and-performance/).
+
 ## Backend package structure
 
 The required dependency direction is:

@@ -23,7 +23,7 @@ jobs:
             build_args: APP_VERSION=${{ github.ref_name }}
           - component: backend
             context: ./backend
-            dockerfile: ./backend/Dockerfile
+            dockerfile: ./backend/Dockerfile.native
             build_args: ""
 
     steps:

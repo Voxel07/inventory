@@ -37,6 +37,7 @@ public class Item extends BaseEntity {
     public String sku;
     @Column(nullable = false)
     public String name;
+    @Column(columnDefinition = "text")
     public String description;
     @Column(nullable = false)
     public String category;

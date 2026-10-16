@@ -1,0 +1,44 @@
+# Build from the repository root:
+#   docker build -f backend/Dockerfile.native -t inventory-api:native backend
+## Stage 1: Build native executable with Quarkus Mandrel (GraalVM)
+FROM quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 AS build
+# The Mandrel builder supplies native-image, but not Maven. Reuse the same
+# Maven distribution as the JVM build; Java still comes from Mandrel.
+COPY --from=maven:3.9.11-eclipse-temurin-25 /usr/share/maven /usr/share/maven
+ENV MAVEN_HOME=/usr/share/maven
+ENV PATH="${MAVEN_HOME}/bin:${PATH}"
+USER root
+RUN mkdir -p /workspace && chown quarkus:quarkus /workspace
+USER quarkus
+WORKDIR /workspace
+
+# Copy dependencies definition and source
+COPY --chown=quarkus:quarkus pom.xml .
+COPY --chown=quarkus:quarkus src ./src
+
+# Preserve normal compiler optimizations and adaptive runtime heap sizing.
+# Compilation runs directly in this builder; no nested container is needed.
+RUN mvn -B -DskipTests -Dquarkus.native.container-build=false package -Pnative
+
+## Stage 2: Ultra-lightweight native runner container
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+WORKDIR /work/
+
+RUN mkdir -p /data/media \
+    && chown -R 1001:root /work /data/media \
+    && chmod -R g+rwX /work /data/media
+
+COPY --from=build --chown=1001:root --chmod=755 /workspace/target/*-runner /work/application
+
+EXPOSE 8080
+USER 1001
+
+ENV QUARKUS_HTTP_HOST=0.0.0.0
+ENV MEDIA_LOCAL_DIRECTORY=/data/media
+
+# Serial GC sizes the young generation from -Xmx; an explicit -Xmn keeps ~97% of
+# uncapped throughput at ~380 MiB peak (docs/NATIVE_MEMORY_BENCHMARK.md). Run with a
+# 768m container limit. docker run arguments or a Compose command replace these
+# flags. JAVA_OPTS/JAVA_TOOL_OPTIONS do not configure this binary.
+ENTRYPOINT ["/work/application"]
+CMD ["-Xmx512m", "-Xmn256m"]

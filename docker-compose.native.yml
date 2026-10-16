@@ -1,0 +1,8 @@
+# Opt-in native experiment with docker-compose.yml; see backend/README.md.
+services:
+  inventory-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.native
+    # Hard ceiling for -Xmx512m -Xmn256m plus off-heap; measured peak ~385 MiB.
+    mem_limit: 768m

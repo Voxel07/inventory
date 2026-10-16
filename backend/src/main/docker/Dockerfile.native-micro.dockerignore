@@ -1,0 +1,6 @@
+# This Dockerfile-specific allowlist overrides backend/.dockerignore, which
+# excludes target/ for source builds. Only send native runners to this build.
+*
+!target/
+target/*
+!target/*-runner
