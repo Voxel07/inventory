@@ -184,6 +184,7 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select item_id as source, id as target from inventory_positions where item_id is not null
                 union all select item_id as source, id as target from damage_reports where item_id is not null
                 union all select item_id as source, id as target from maintenance_records where item_id is not null
+                union all select item_id as source, id as target from runtime_entries where item_id is not null
                 union all select item_id as source, id as target from maintenance_schedules where item_id is not null
                 union all select item_id as source, id as target from equipment_commitments where item_id is not null
                 union all select item_id as source, id as target from return_submissions where item_id is not null

@@ -5,6 +5,8 @@ import type { EventType } from './event';
 export interface Assembly {
   id: string;
   name: string;
+  category?: string;
+  subcategory?: string;
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;
@@ -24,6 +26,8 @@ export interface AssemblyFormData {
   imageFile?: File;
   removeImage?: boolean;
   name: string;
+  category?: string;
+  subcategory?: string;
   itemIds: string[];
   itemQuantities: Record<string, number>;
   description: string;

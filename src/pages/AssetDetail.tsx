@@ -1,14 +1,21 @@
 import { Button } from '../components/shared/ActionButtons';
 import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     Alert,
     Box,
     Chip,
     Divider,
+    Link,
     Paper,
     Skeleton,
     Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
     Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -16,13 +23,17 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import HistoryIcon from '@mui/icons-material/History';
-import { useItem, useItemAssets } from '../hooks/useItems';
+import EditIcon from '@mui/icons-material/Edit';
+import AvTimerIcon from '@mui/icons-material/AvTimer';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAssetRuntime, useItem, useItemAssets, useUpdateItemAsset } from '../hooks/useItems';
 import { LoadMore } from '../components/shared/LoadMore';
 import { useTransactions } from '../hooks/useTransactions';
 import { useDamageReports } from '../hooks/useDamageReports';
 import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { formatStatus } from '../utils/formatters';
-import { formatDateTime } from '../utils/dateFormat';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
+import { formatMoney } from '../utils/money';
 import { translate, useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformCustody, canPerformMaintenance } from '../utils/access';
@@ -32,29 +43,40 @@ import { useStorageLocations } from '../hooks/useStorageLocations';
 import { apiRequest } from '../services/apiClient';
 import { OperatingHoursDialog } from '../components/items/OperatingHoursDialog';
 import { AssetMaintenance } from '../components/maintenance/AssetMaintenance';
+import { AssetEditFields } from '../components/items/AssetDetailsFields';
+import { assetEditInput } from '../components/items/assetInput';
+import { DialogForm, FormDialog } from '../components/shared/FormDialog';
+import { DetailPanel } from '../components/items/CompactDetail';
 import { isOpenDamage } from '../utils/damage';
-import AvTimerIcon from '@mui/icons-material/AvTimer';
+import { locationLabel } from '../utils/locationHierarchy';
+import { useUIStore } from '../store/uiStore';
+import type { AssetInstanceInput, RuntimeEntry } from '../types';
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
     available: 'success', in_custody: 'warning', in_field: 'warning', damaged: 'error',
     in_repair: 'warning', in_maintenance: 'info', written_off: 'default',
 };
 
+/** One serialized unit: edited like an item, while ownership, keeper and commitments are shared by all units of its item. */
 export function AssetDetail() {
     const { user } = useAuth();
     const canReportDamage = canPerformCustody(user);
     const t = useT();
     const navigate = useNavigate();
+    const client = useQueryClient();
+    const showSnackbar = useUIStore((s) => s.showSnackbar);
     const { itemId, assetId } = useParams<{ itemId: string; assetId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const [damageOpen, setDamageOpen] = useState(canReportDamage && searchParams.get('reportDamage') === '1');
     const { data: item, isLoading: itemLoading } = useItem(itemId ?? '');
     const { data: locations = [] } = useStorageLocations();
-    const canEditPrivate = Boolean(item?.access?.privateResource && item.access.canEdit);
-    const [privateAction, setPrivateAction] = useState<'relocate' | 'condition' | null>(null);
     const canEditAsset = item ? (item.access?.privateResource ? Boolean(item.access.canEdit) : canEditCatalog(user)) : false;
+    const [action, setAction] = useState<'relocate' | 'condition' | null>(null);
+    const [editing, setEditing] = useState<AssetInstanceInput | null>(null);
     const [hoursOpen, setHoursOpen] = useState(false);
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
+    const updateAsset = useUpdateItemAsset(itemId);
+    const runtime = useAssetRuntime(itemId, assetId);
     const transactionPages = useTransactions({ assetInstanceId: assetId }, 200);
     const { data: transactions, isLoading: transactionsLoading } = transactionPages;
     const { data: reports, isLoading: reportsLoading } = useDamageReports(undefined, { assetInstanceId: assetId }, 200);
@@ -102,8 +124,23 @@ export function AssetDetail() {
         }
     }
 
+    function refreshAsset() {
+        void client.invalidateQueries({ queryKey: ['items', itemId] });
+    }
+
+    function saveEdit() {
+        if (!asset || !editing) return;
+        updateAsset.mutate({ assetId: asset.id, input: editing }, {
+            onSuccess: () => { setEditing(null); refreshAsset(); showSnackbar(t('pages.assetDetail.assetSaved'), 'success'); },
+            onError: (error) => showSnackbar(error instanceof Error ? error.message : t('items.operatingHoursDialog.couldNotSave'), 'error'),
+        });
+    }
+
     if (itemLoading || assetsLoading) return <Box><Skeleton height={70} /><Skeleton height={240} /><Skeleton height={240} /></Box>;
     if (!item || !asset) return <Alert severity="error">{t('pages.assetDetail.assetNotFound')}</Alert>;
+
+    const currentLocation = locations.find((location) => location.id === asset.currentLocationId);
+    const movable = ['available', 'damaged', 'in_repair', 'in_maintenance'].includes(asset.availabilityStatus);
 
     return (
         <Box>
@@ -112,12 +149,15 @@ export function AssetDetail() {
             </Button>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <Box>
-                    <Typography variant="overline" color="text.secondary">{item.name}</Typography>
+                    <Link component={RouterLink} to={`/items/${item.id}`} variant="overline" color="text.secondary" underline="hover">{item.name}</Link>
                     <Typography variant="h4" className="mono" sx={{ overflowWrap: 'anywhere' }}>{asset.assetCode}</Typography>
                     {asset.serialNumber && <Typography color="text.secondary">S/N {asset.serialNumber}</Typography>}
                 </Box>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
+                    {canEditAsset && <Button title={translate('pages.assetDetail.editAssetInformation')} variant="outlined" startIcon={<EditIcon />} onClick={() => setEditing(assetEditInput(asset))}>
+                        {t('common.edit')}
+                    </Button>}
                     {canReportDamage && <Button title={translate('pages.assetDetail.reportDamageToThisAsset')} variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
                         {t('common.reportDamage')}
                     </Button>}
@@ -128,15 +168,27 @@ export function AssetDetail() {
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>{t('pages.assetDetail.assetInformation')}</Typography>
                     <Stack spacing={1.5} divider={<Divider flexItem />}>
-                        <InfoRow label={t('pages.assetDetail.condition')} value={formatStatus(asset.conditionStatus)} />
+                        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
+                            <InfoRow label={t('pages.assetDetail.condition')} value={formatStatus(asset.conditionStatus)} />
+                            {canEditAsset && <Button size="small" title={t('pages.assetDetail.updateCondition')} onClick={() => setAction('condition')}>{t('common.edit')}</Button>}
+                        </Box>
                         <InfoRow label={t('pages.assetDetail.manufacturerModel')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
+                        <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate ? formatDate(asset.purchaseDate) : '—'} />
+                        <InfoRow label={t('items.assetDetailsFields.purchasePrice')} value={asset.purchasePrice == null ? '—' : formatMoney(asset.purchasePrice)} />
+                        <InfoRow label={t('items.assetDetailsFields.replacementValue')} value={asset.replacementValue == null ? '—' : formatMoney(asset.replacementValue)} />
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow label={t('enum.value.operating_hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
                             {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>
                                 {t('pages.assetDetail.log')}
                             </Button>}
                         </Box>
-                        <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')} value={asset.currentLocationName || '—'} />
+                        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
+                            <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')}
+                                value={currentLocation ? locationLabel(currentLocation, locations) : asset.currentLocationName || '—'} />
+                            {canEditAsset && <Button size="small" disabled={!movable} title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} onClick={() => setAction('relocate')}>
+                                {t('pages.assetDetail.moveAsset')}
+                            </Button>}
+                        </Box>
                         <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('pages.assetDetail.currentCustodian')} value={asset.currentCustodianName || '—'} />
                         <InfoRow label={t('pages.assetDetail.notes')} value={asset.notes || '—'} />
                         <InfoRow label={t('pages.assetDetail.registered')} value={formatDateTime(asset.createdAt)} />
@@ -164,6 +216,9 @@ export function AssetDetail() {
                     <LoadMore list={transactionPages} />
                 </Paper>
             </Box>
+
+            <RuntimePanel entries={runtime.data ?? []} loading={runtime.isLoading} error={runtime.isError} onRetry={() => void runtime.refetch()}
+                actions={canEditAsset ? <Button size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>{t('pages.assetDetail.log')}</Button> : undefined} />
 
             <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -197,17 +252,26 @@ export function AssetDetail() {
 
             <AssetMaintenance item={item} asset={asset} canEdit={canPerformMaintenance(user)} />
 
-            <EquipmentOwnership item={item} canEdit={canEditPrivate} />
-            {canEditPrivate && <Stack direction="row" spacing={1} sx={{ my: 2 }}>
-                <Button title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} onClick={() => setPrivateAction('relocate')}>{t('pages.assetDetail.moveAsset')}</Button>
-                <Button title={t('pages.assetDetail.updatePrivateAssetCondition')} onClick={() => setPrivateAction('condition')}>{t('pages.assetDetail.updateCondition')}</Button>
-            </Stack>}
-            {canEditPrivate && privateAction && <OperationForm title={privateAction === 'relocate' ? t('pages.assetDetail.moveAsset') : t('pages.assetDetail.updateCondition')}
-                onClose={() => setPrivateAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
-                fields={privateAction === 'relocate'
-                    ? [{ key: 'locationId', label: t('enum.value.location'), required: true, options: locations.filter(l => l.active).map(l => ({ value: l.id, label: l.name })) }]
+            <DetailPanel title={t('pages.itemDetail.ownershipKeeper')} sx={{ mt: 3 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem')}</Typography>
+                <EquipmentOwnership item={item} canEdit={canEditAsset} embedded highlightAssetId={asset.id} />
+            </DetailPanel>
+
+            {canEditAsset && action && <OperationForm title={action === 'relocate' ? t('pages.assetDetail.moveAsset') : t('pages.assetDetail.updateCondition')}
+                onClose={() => setAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
+                fields={action === 'relocate'
+                    ? [{ key: 'locationId', label: t('enum.value.location'), required: true, options: locations.filter(l => l.active).sort((a, b) => a.fullCode.localeCompare(b.fullCode, undefined, { numeric: true })).map(l => ({ value: l.id, label: locationLabel(l, locations) })) }, { key: 'notes', label: t('common.notes') }]
                     : [{ key: 'conditionStatus', label: t('pages.assetDetail.condition'), required: true, options: ['new_condition', 'good', 'fair', 'damaged', 'unsafe'].map(value => ({ value, label: formatStatus(value) })) }]}
-                onSave={values => apiRequest(`/api/items/${item.id}/assets/${asset.id}/${privateAction}`, { method: 'POST', body: { expectedVersion: asset.version, ...(privateAction === 'relocate' ? { locationId: values.locationId } : { conditionStatus: values.conditionStatus }) } })} />}
+                onSave={async values => {
+                    await apiRequest(`/api/items/${item.id}/assets/${asset.id}/${action}`, { method: 'POST', body: { expectedVersion: asset.version, ...(action === 'relocate' ? { locationId: values.locationId, notes: values.notes || undefined } : { conditionStatus: values.conditionStatus }) } });
+                    refreshAsset();
+                }} />}
+            {editing && <FormDialog open onClose={() => { if (!updateAsset.isPending) setEditing(null); }}>
+                <DialogForm title={`${t('items.assetInstancesList.editAsset')}: ${asset.assetCode}`} onSubmit={saveEdit} onCancel={() => setEditing(null)}
+                    pending={updateAsset.isPending} submitLabel={t('common.save')}>
+                    <AssetEditFields value={editing} onChange={(patch) => setEditing((prev) => prev && ({ ...prev, ...patch }))} />
+                </DialogForm>
+            </FormDialog>}
             <OperatingHoursDialog itemId={item.id} asset={hoursOpen ? asset : null} onClose={() => setHoursOpen(false)} />
             <DamageReportDialog
                 key={asset.id}
@@ -223,9 +287,61 @@ export function AssetDetail() {
     );
 }
 
+/** Runtime bookings with a per-event summary, so it is visible which event a unit ran at and for how long. */
+function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: RuntimeEntry[]; loading: boolean; error: boolean; onRetry: () => void; actions?: React.ReactNode }) {
+    const t = useT();
+    const sources: Record<RuntimeEntry['source'], string> = {
+        manual: t('pages.assetDetail.runtimeSourceManual'), return_check: t('pages.assetDetail.runtimeSourceReturnCheck'),
+        maintenance: t('pages.assetDetail.runtimeSourceMaintenance'), correction: t('pages.assetDetail.runtimeSourceCorrection'),
+    };
+    const byEvent = new Map<string, { label: string; hours: number }>();
+    for (const entry of entries) {
+        if (entry.source === 'correction') continue;
+        const key = entry.eventOccurrenceId ?? '';
+        const label = entry.eventName ? `${entry.eventName}${entry.eventStartDate ? ` · ${formatDate(entry.eventStartDate)}` : ''}` : t('pages.assetDetail.withoutEvent');
+        const current = byEvent.get(key) ?? { label, hours: 0 };
+        current.hours = Math.round((current.hours + Number(entry.hours)) * 100) / 100;
+        byEvent.set(key, current);
+    }
+    return <DetailPanel title={t('pages.assetDetail.runtimeByEvent')} actions={actions} sx={{ mt: 3 }}>
+        {error ? <Alert severity="error" action={<Button size="small" onClick={onRetry}>{t('common.retry')}</Button>}>{t('pages.assetDetail.couldNotLoadRuntime')}</Alert>
+            : loading ? <Skeleton height={80} />
+            : entries.length === 0 ? <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noRuntimeRecordedYet')}</Typography>
+            : <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                    {[...byEvent.values()].map((summary) => <Chip key={summary.label} variant="outlined" label={`${summary.label}: ${summary.hours} h`} />)}
+                </Stack>
+                <TableContainer sx={{ maxHeight: 320 }}>
+                    <Table size="small" stickyHeader>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>{t('common.date')}</TableCell>
+                                <TableCell>{t('items.operatingHoursDialog.event')}</TableCell>
+                                <TableCell align="right">{t('items.operatingHoursDialog.hoursRun')}</TableCell>
+                                <TableCell align="right">{t('pages.assetDetail.meterReading')}</TableCell>
+                                <TableCell>{t('pages.assetDetail.source')}</TableCell>
+                                <TableCell>{t('common.notes')}</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {entries.map((entry) => <TableRow key={entry.id} hover>
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(entry.recordedAt)}</TableCell>
+                                <TableCell>{entry.eventName ?? '—'}{entry.orderLabel && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.orderLabel}</Typography>}</TableCell>
+                                <TableCell align="right" className="tabular">{Number(entry.hours) > 0 ? `+${entry.hours}` : entry.hours} h</TableCell>
+                                <TableCell align="right" className="tabular">{entry.readingAfter} h</TableCell>
+                                <TableCell>{sources[entry.source]}{entry.recordedByName && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.recordedByName}</Typography>}</TableCell>
+                                <TableCell>{entry.notes || '—'}</TableCell>
+                            </TableRow>)}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Stack>}
+    </DetailPanel>;
+}
+
 function InfoRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
     return (
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>{icon}{label}</Typography>
             <Typography sx={{ overflowWrap: 'anywhere' }}>{value}</Typography>
         </Box>

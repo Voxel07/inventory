@@ -162,10 +162,10 @@ public class CatalogOrm extends EntityOrm {
         }
         var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where "
                 + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
-                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(coalesce(l.area, '')) like :search or lower(coalesce(l.position, '')) like :search)")
+                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(l.fullCode) like :search or lower(coalesce(l.description, '')) like :search)")
                 + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
                 + (subtreeId == null ? "" : " and l.id in :subtree")
-                + " order by l.createdAt desc, l.id", StorageLocation.class);
+                + " order by lower(l.fullCode), l.id", StorageLocation.class);
         if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
         if (warehouseId != null) query.setParameter("warehouse", warehouseId);
         if (subtreeId != null) query.setParameter("subtree", subtree);
@@ -200,7 +200,7 @@ public class CatalogOrm extends EntityOrm {
         var query = entityManager.createQuery("from Assembly a where a.active = true and " + InventoryAccessOrm.visible("a.accessPolicy")
                 + " and not exists (select ai.quantity from AssemblyItem ai join ai.item component where ai.assembly = a and (component.active = false or not "
                 + InventoryAccessOrm.visible("component.accessPolicy") + "))"
-                + (search == null || search.isBlank() ? "" : " and lower(a.name) like :search")
+                + (search == null || search.isBlank() ? "" : " and (lower(a.name) like :search or lower(coalesce(a.category, '')) like :search or lower(coalesce(a.subcategory, '')) like :search)")
                 + (eventTag == null || eventTag.isBlank() ? "" : " and cast(a.eventTags as String) like :eventTag escape '!'")
                 + (mineOwner == null ? "" : " and a.accessPolicy.owner.id = :mineOwner")
                 + " order by a.createdAt desc, a.id", Assembly.class);

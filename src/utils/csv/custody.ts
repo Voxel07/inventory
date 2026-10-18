@@ -3,6 +3,7 @@ import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedReturnRow, type ParsedCheckoutRow } from '../../types/csvImport';
 import { getField, ITEM_NAME_ALIASES, AMOUNT_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, ASSET_CODE_ALIASES, LOCATION_ALIASES, EVENT_REPORT_TYPE_ALIASES, EVENT_TYPES_ALIASES, ORDER_FACTION_ALIASES, RETURN_PERSON_ALIASES, EVENT_DATE_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES } from './core';
 import { parseAssetCodes } from './items';
+import { buildLocationIndex, resolveCsvLocation } from './locations';
 
 /** Parses standalone return / checkin rows from a combined CSV. */
 export function parseReturnsFromCsv(
@@ -18,11 +19,7 @@ export function parseReturnsFromCsv(
     if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
   }
 
-  const locMap = new Map<string, StorageLocation>();
-  for (const loc of storageLocations) {
-    locMap.set(loc.name.toLowerCase().trim(), loc);
-    locMap.set(loc.id.toLowerCase().trim(), loc);
-  }
+  const locationIndex = buildLocationIndex(storageLocations);
 
   const results: ParsedReturnRow[] = [];
   for (let index = 0; index < rows.length; index++) {
@@ -43,7 +40,8 @@ export function parseReturnsFromCsv(
     const assetCode = assetCodes[0] || undefined;
 
     const rawLoc = getField(raw, LOCATION_ALIASES);
-    const loc = rawLoc ? locMap.get(rawLoc.toLowerCase().trim()) : undefined;
+    const locMatch = rawLoc ? resolveCsvLocation(rawLoc, locationIndex) : undefined;
+    const loc = locMatch?.kind === 'found' ? locMatch.location : undefined;
 
     const rawEventType = getField(raw, EVENT_REPORT_TYPE_ALIASES) || getField(raw, EVENT_TYPES_ALIASES);
     const eventType = knownEventType(reference, rawEventType);

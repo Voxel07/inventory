@@ -12,6 +12,13 @@ export function locationPath(location: StorageLocation, locations: StorageLocati
   return names.join(' / ');
 }
 
+/** "WH1-E1-R3 · Warehouse 1 / Electronics 1 / Shelf 3": the code identifies, the path explains. */
+export function locationLabel(location: StorageLocation | null | undefined, locations: StorageLocation[] = []): string {
+  if (!location) return '';
+  const path = locationPath(location, locations);
+  return location.fullCode ? `${location.fullCode} · ${path}` : path;
+}
+
 export function isDescendant(location: StorageLocation, ancestorId: string, locations: StorageLocation[]): boolean {
   const visited = new Set<string>(); let current: StorageLocation | undefined = location;
   while (current && !visited.has(current.id)) {

@@ -137,11 +137,10 @@ public class ApiMapper {
                 value.createdAt,
                 value.updatedAt,
                 value.name,
+                value.code,
+                value.fullCode,
                 value.locationType == null ? DomainEnums.LocationType.bin.name() : value.locationType.name(),
                 value.description,
-                value.area,
-                value.location,
-                value.position,
                 value.latitude,
                 value.longitude,
                 value.mapZoom,
@@ -206,6 +205,7 @@ public class ApiMapper {
                 value.maintenanceIntervalDays,
                 value.nextMaintenanceDue,
                 value.currentOperatingHours,
+                value.tracksRuntime,
                 value.fuelConsumptionLitersPer100Km,
                 value.batteryReplacementDue,
                 value.bestBeforeDate,
@@ -240,8 +240,16 @@ public class ApiMapper {
                 value.acknowledgedBy == null ? null : value.acknowledgedBy.name,
                 value.acknowledgedAt,
                 value.acknowledgementNotes,
-                reportedDamage
+                reportedDamage,
+                value.item.tracksRuntime,
+                value.assetInstance != null ? value.assetInstance.operatingHours : value.item.currentOperatingHours,
+                value.runtimeHours,
+                runtimeEvent(value) == null ? null : runtimeEvent(value).name
         );
+    }
+
+    private static org.ash.inventory.model.EventOccurrence runtimeEvent(ReturnSubmission value) {
+        return value.eventOccurrence != null ? value.eventOccurrence : value.order == null ? null : value.order.eventOccurrence;
     }
 
     public ApiResponses.AssemblyResponse assembly(Assembly value, List<org.ash.inventory.model.AssemblyItem> components,
@@ -258,6 +266,8 @@ public class ApiMapper {
                 value.createdAt,
                 value.updatedAt,
                 value.name,
+                value.category,
+                value.subcategory,
                 value.description,
                 value.hint,
                 media.mediaReference(value.imageObjectKey),
@@ -563,6 +573,21 @@ public class ApiMapper {
         return result;
     }
 
+    private static java.math.BigDecimal cents(Integer value) {
+        return value == null ? null : java.math.BigDecimal.valueOf(value, 2);
+    }
+
+    public ApiResponses.RuntimeEntryResponse runtime(org.ash.inventory.model.RuntimeEntry value) {
+        var event = value.eventOccurrence;
+        return new ApiResponses.RuntimeEntryResponse(value.id, value.item.id,
+                value.assetInstance == null ? null : value.assetInstance.id,
+                value.assetInstance == null ? null : value.assetInstance.assetCode,
+                event == null ? null : event.id, event == null ? null : event.name, event == null ? null : event.startDate,
+                value.order == null ? null : value.order.id, value.order == null ? null : value.order.label(),
+                value.hours, value.readingAfter, value.source.name(), value.recordedAt,
+                value.recordedBy == null ? null : value.recordedBy.name, value.notes);
+    }
+
     /** Resolves the holder of a reserved or staged asset, like the list projection. */
     public ApiResponses.AssetInstanceResponse asset(AssetInstance value) { return assets(List.of(value)).getFirst(); }
 
@@ -576,13 +601,17 @@ public class ApiMapper {
                 value.serialNumber,
                 value.manufacturer,
                 value.model,
+                value.purchaseDate,
+                cents(value.purchasePriceCents),
+                cents(value.replacementValueCents),
                 value.conditionStatus == null ? "good" : value.conditionStatus.name(),
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
                 MaintenancePolicy.assetStatus(value, BusinessTime.today()).name(),
                 MaintenancePolicy.assetDue(value.item, value),
                 value.operatingHours,
                 canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
-                canViewLocation(value.currentLocation) ? value.currentLocation.name : null,
+                canViewLocation(value.currentLocation) ? value.currentLocation.fullCode : null,
+                canViewLocation(value.currentLocation) ? locationPath(value.currentLocation) : null,
                 value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
                 value.currentCustodian == null ? null : value.currentCustodian.name,
                 value.notes,

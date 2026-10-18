@@ -141,7 +141,11 @@ export const MIN_STOCK_ALIASES = ['minstock', 'mindestbestand', 'min_stock', 'mi
 
 export const VALUE_ALIASES = ['value', 'wert', 'einzelwert', 'preis', 'price', 'unitvalue', 'stueckpreis', 'stückpreis'];
 
-export const LOCATION_ALIASES = ['storagelocation', 'storage_location', 'lagerort', 'ort', 'location', 'lagerplatz', 'fach', 'regal'];
+/** A location code (`WH1-E1-R3`), a path (`Lager 1 / Regal 3`) or a unique location name. */
+export const LOCATION_ALIASES = ['storagelocation', 'storage_location', 'lagerort', 'ort', 'location', 'lagerortcode', 'locationcode'];
+
+/** Free-text place inside the storage location, e.g. "obere Kiste links". */
+export const POSITION_ALIASES = ['positiondetails', 'position', 'positionimlagerort', 'lagerplatz', 'platz', 'fach'];
 
 export const SUBCATEGORY_ALIASES = ['subcategory', 'unterkategorie', 'subkategorie'];
 
@@ -162,6 +166,9 @@ export const CONTAINER_COUNT_ALIASES = ['containercount', 'gebindeanzahl', 'pack
 export const MAINTENANCE_DAYS_ALIASES = ['maintenanceintervaldays', 'wartungsintervall', 'wartungsintervalltage'];
 
 export const NEXT_MAINTENANCE_DUE_ALIASES = ['nextmaintenancedue', 'naechstewartung', 'nächstewartung', 'wartungfaellig', 'wartungfällig'];
+
+/** Yes/no: the warehouse records the hours run when it checks a return. */
+export const TRACKS_RUNTIME_ALIASES = ['tracksruntime', 'betriebsstundenerfassen', 'laufzeiterfassen', 'laufzeit'];
 
 export const CURRENT_OPERATING_HOURS_ALIASES = ['currentoperatinghours', 'operatinghours', 'betriebsstunden', 'laufstunden'];
 

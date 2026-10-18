@@ -1,3 +1,4 @@
+import { locationLabel as storageLocationLabel } from '../../../utils/locationHierarchy';
 import type { Translator } from '../../../utils/naming';
 import { formatDate } from '../../../utils/dateFormat';
 import { generateQRCodeDataURL } from '../../../utils/qrCode';
@@ -29,7 +30,7 @@ export async function generateOrderPdfSlip({
   const locationLabel = (item: Item) => {
     const location = item.expand?.storageLocation;
     return location
-      ? [location.name, location.area, location.location, location.position].filter(Boolean).join(' · ')
+      ? storageLocationLabel(location)
       : item.storageLocation || t('orders.detail.orderPdfSlip.noLocation');
   };
 

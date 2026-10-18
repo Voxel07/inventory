@@ -400,6 +400,9 @@ export function CsvImportDialog({
                   }
                   label={t('dialogs.csvImportDialog.autoCreateMissingStorageLocations')}
                 />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  {t('dialogs.csvImportDialog.locationColumnHelp')}
+                </Typography>
                 {canCreateReferences && (
                   <FormControlLabel
                     control={<Checkbox checked={autoCreateReferences} onChange={(e) => setAutoCreateReferences(e.target.checked)} disabled={isImporting} />}

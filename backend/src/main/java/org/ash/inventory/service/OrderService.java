@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.model.RuntimeEntry;
+
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -42,6 +44,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
+    @jakarta.inject.Inject RuntimeService runtime;
     @jakarta.inject.Inject OrderPickupService pickupGroups;
     @jakarta.inject.Inject org.ash.inventory.orm.ItemLocks itemLocks;
     @jakarta.inject.Inject OrderAllocationService allocation;
@@ -412,7 +415,7 @@ public class OrderService {
             }
             if (outcome.operatingHours() != null
                     && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
-                item.currentOperatingHours = outcome.operatingHours();
+                runtime.record(item, null, outcome.operatingHours(), null, order, RuntimeEntry.Source.return_check, null);
             }
         }
         createReturnHandover(order, actor, input.idempotencyKey(), input, handoverDetails);
@@ -978,7 +981,9 @@ public class OrderService {
                 default -> throw ApiException.badRequest("Unsupported serialized asset return outcome " + assetOutcome.outcome());
             }
             if (assetOutcome.outcome() != DomainEnums.ReconciliationOutcome.missing) assignment.reconciled = true;
-            if (assetOutcome.operatingHours() != null) asset.operatingHours = assetOutcome.operatingHours();
+            // Returned hours are the meter after the event; an older reading is a typing error and must not book negative runtime.
+            if (assetOutcome.operatingHours() != null && assetOutcome.operatingHours().compareTo(asset.operatingHours) >= 0)
+                runtime.record(item, asset, assetOutcome.operatingHours(), null, order, RuntimeEntry.Source.return_check, assetOutcome.notes());
         }
         int remainingMissing = assignmentsByAsset.values().stream()
                 .filter(assignment -> !assignment.reconciled && assignment.assetInstance.item.id.equals(item.id))

@@ -4,6 +4,9 @@ import { Alert, Box, DialogActions, MenuItem, Stack, TextField, Typography } fro
 import type { AssetInstance, FactionOrder, Item } from '../../types';
 import type { AssetReturnOutcome, ReturnLineInput } from '../../services/factionOrderService';
 import { translate, useT } from '../../utils/naming';
+import { RuntimeReturnField } from '../items/RuntimeReturnField';
+import { parseHoursRun, readingAfter } from '../../utils/runtimeHours';
+import { useEventReports } from '../../hooks/useEvents';
 
 type Outcome = ReturnLineInput;
 
@@ -32,6 +35,12 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     ]).filter(([, assets]) => (assets as AssetInstance[]).length > 0),
   ) as Record<string, AssetInstance[]>;
   const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>({});
+  // Hours run per returned unit (asset id) or per runtime-tracked bulk item (item id), booked to the order's event.
+  const [hoursRun, setHoursRun] = useState<Record<string, string>>({});
+  const { data: events = [] } = useEventReports();
+  const eventName = events.find((event) => event.id === order.eventOccurrenceId)?.name;
+  const tracksRuntime = (itemId: string) => Boolean(items.find((candidate) => candidate.id === itemId)?.tracksRuntime);
+  const assetBackInStock = (assetId: string) => ['returned_good', 'returned_damaged'].includes(assetOutcomes[assetId]?.outcome ?? '');
   const [lines, setLines] = useState<Record<string, Outcome>>(() => Object.fromEntries(
     Object.entries(outstanding).map(([itemId, quantity]) => {
       const assets = outstandingAssets[itemId] ?? [];
@@ -82,7 +91,26 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0 || value.writtenOff < 0
     || value.returned + value.consumed + value.missing + value.damaged + value.writtenOff > Number(outstanding[itemId]));
   const writeOffWithoutReason = Object.values(lines).some((value) => value.writtenOff > 0 && !value.notes?.trim());
-  const invalid = exceedsOutstanding || writeOffWithoutReason;
+  const runtimeMissing = Object.keys(lines).some((itemId) => tracksRuntime(itemId) && ((outstandingAssets[itemId] ?? []).length
+    ? outstandingAssets[itemId].some((asset) => assetBackInStock(asset.id) && parseHoursRun(hoursRun[asset.id]) == null)
+    : lines[itemId].returned + lines[itemId].damaged > 0 && parseHoursRun(hoursRun[itemId]) == null));
+  const invalid = exceedsOutstanding || writeOffWithoutReason || runtimeMissing;
+
+  /** Converts the entered hours into the meter readings the return command books against the event. */
+  function submit() {
+    const withRuntime = Object.fromEntries(Object.entries(lines).map(([itemId, value]) => {
+      const item = items.find((candidate) => candidate.id === itemId);
+      return [itemId, tracksRuntime(itemId) && !(outstandingAssets[itemId] ?? []).length
+        ? { ...value, operatingHours: readingAfter(item?.currentOperatingHours, parseHoursRun(hoursRun[itemId])) } : value];
+    }));
+    const assets = Object.fromEntries(Object.entries(assetOutcomes).map(([assetId, outcome]) => {
+      const entry = Object.entries(outstandingAssets).find(([, list]) => list.some((asset) => asset.id === assetId));
+      const asset = entry?.[1].find((candidate) => candidate.id === assetId);
+      return [assetId, entry && tracksRuntime(entry[0]) && assetBackInStock(assetId)
+        ? { ...outcome, operatingHours: readingAfter(asset?.operatingHours, parseHoursRun(hoursRun[assetId])) } : outcome];
+    }));
+    onSubmit(withRuntime, assets);
+  }
 
   function markAllReturned() {
     setAssetOutcomes(Object.fromEntries(Object.values(outstandingAssets).flatMap((assets) =>
@@ -272,6 +300,8 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
                           {asset.availabilityStatus !== 'lost' && <MenuItem value="missing">{t('enum.transactionType.missing')}</MenuItem>}
                           {canWriteOff && <MenuItem value="written_off">{t('common.writeOff')}</MenuItem>}
                         </TextField>
+                        {item?.tracksRuntime && assetBackInStock(asset.id) && <RuntimeReturnField value={hoursRun[asset.id] ?? ''}
+                          onChange={(next) => setHoursRun((current) => ({ ...current, [asset.id]: next }))} current={asset.operatingHours} eventName={eventName} />}
                       </Stack>
                     ))}
                   </Stack>
@@ -282,7 +312,8 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
                     <TextField size="small" type="number" label={t('forms.orderReturnChecklist.missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     <TextField size="small" type="number" label={t('enum.itemStatus.damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     {canWriteOff && <TextField size="small" type="number" label={t('common.writeOff')} value={value.writtenOff} onChange={(e) => setValue(itemId, 'writtenOff', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} helperText={t('forms.orderReturnChecklist.missingUnitsFirst')} />}
-                    {(item?.maintenanceIntervalDays || Number(item?.currentOperatingHours) > 0) && <TextField size="small" type="number" label={t('enum.value.operating_hours')} value={value.operatingHours ?? ''} onChange={(e) => setValue(itemId, 'operatingHours', e.target.value)} />}
+                    {item?.tracksRuntime && value.returned + value.damaged > 0 && <RuntimeReturnField value={hoursRun[itemId] ?? ''}
+                      onChange={(next) => setHoursRun((current) => ({ ...current, [itemId]: next }))} current={item.currentOperatingHours} eventName={eventName} />}
                   </>
                 )}
               </Stack>
@@ -293,9 +324,10 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       </Stack>
       {exceedsOutstanding && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.theOutcomeTotalCannotExceedTheOutstandingQuantityWrittenOff')}</Alert>}
       {writeOffWithoutReason && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.aReasonIsRequiredForWriteOffs')}</Alert>}
+      {runtimeMissing && <Alert severity="warning" sx={{ mt: 2 }}>{t('items.runtimeReturnField.enterHoursForEveryReturnedUnit')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
         <Button title={translate('common.discardChangesAndClose')} onClick={onCancel}>{t('common.cancel')}</Button>
-        <Button title={translate('forms.orderReturnChecklist.recordTheReviewedReturnQuantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={() => onSubmit(lines, assetOutcomes)}>{t('forms.orderReturnChecklist.recordReturn')}</Button>
+        <Button title={translate('forms.orderReturnChecklist.recordTheReviewedReturnQuantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={submit}>{t('forms.orderReturnChecklist.recordReturn')}</Button>
       </DialogActions>
     </>
   );

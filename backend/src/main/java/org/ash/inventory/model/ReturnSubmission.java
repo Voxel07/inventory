@@ -38,6 +38,9 @@ public class ReturnSubmission extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_occurrence_id")
     public EventOccurrence eventOccurrence;
+    /** Hours run that the warehouse recorded when it accepted the return. */
+    @jakarta.persistence.Column(name = "runtime_hours", precision = 12, scale = 2)
+    public java.math.BigDecimal runtimeHours;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "returned_for_user_id")

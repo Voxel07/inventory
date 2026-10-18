@@ -25,7 +25,7 @@ public final class ApiModels {
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
-            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource) {}
+            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime) {}
 
     public record ReturnSubmissionInput(
             @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
@@ -36,16 +36,17 @@ public final class ApiModels {
         }
     }
 
-    public record ReturnDecisionInput(String notes) {}
+    /** Accepting a return of a runtime-tracked item records the hours run (or the new meter reading). */
+    public record ReturnDecisionInput(String notes, @Min(0) BigDecimal hoursRun, @Min(0) BigDecimal meterReading) {}
 
     public record StorageLocationInput(
-            @NotBlank String name, String description, String area, String location, String position,
+            @NotBlank String name, @jakarta.validation.constraints.Size(max = 32) String code, String description,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
             DomainEnums.LocationType locationType, UUID warehouseId, UUID parentLocationId, Boolean active, Boolean privateResource) {}
 
 
     public record AssemblyInput(
-            @NotBlank String name, String description, String hint, List<String> eventTypes,
+            @NotBlank String name, String category, String subcategory, String description, String hint, List<String> eventTypes,
             @NotEmpty Map<UUID, Integer> itemQuantities, String image, boolean removeImage, Boolean privateResource) {}
 
     public record TransactionInput(
@@ -136,9 +137,13 @@ public final class ApiModels {
 
     public record AssetInstanceInput(
             String assetCode, String serialNumber, String manufacturer, String model,
+            LocalDate purchaseDate, @Min(0) BigDecimal purchasePrice, @Min(0) BigDecimal replacementValue,
             DomainEnums.ConditionStatus conditionStatus, DomainEnums.AssetState availabilityStatus,
             UUID currentLocationId, UUID currentCustodianId, BigDecimal operatingHours, String notes,
             Integer batchCount, String codePrefix, Integer startNumber, Long expectedVersion) {}
+
+    /** Either {@code hours} run or the new meter {@code reading}; the event says where the unit ran. */
+    public record RuntimeInput(BigDecimal hours, BigDecimal reading, UUID eventOccurrenceId, String notes, @NotNull Long expectedVersion) {}
 
     public record AssetRelocationInput(@NotNull UUID locationId, @NotNull Long expectedVersion, String notes) {}
 

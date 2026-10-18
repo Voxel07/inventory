@@ -29,7 +29,7 @@ export function useCreateReturnSubmission() {
 }
 
 export function useAcknowledgeReturnSubmission() {
-  return useReturnMutation<{ id: string; notes?: string }>(({ id, notes }) => acknowledgeReturnSubmission(id, notes));
+  return useReturnMutation<{ id: string; notes?: string; hoursRun?: number }>(({ id, notes, hoursRun }) => acknowledgeReturnSubmission(id, notes, hoursRun));
 }
 
 export function useRejectReturnSubmission() {

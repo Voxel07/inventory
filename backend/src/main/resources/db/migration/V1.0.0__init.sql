@@ -27,6 +27,8 @@ create table assemblies (
     updated_at timestamp(6) with time zone not null,
     id uuid not null,
     image_object_key varchar(1024),
+    category varchar(255),
+    subcategory varchar(255),
     description varchar(255),
     hint varchar(255),
     name varchar(255) not null,
@@ -466,6 +468,7 @@ create table items (
     container_size numeric(38,2),
     containers_opened integer,
     current_operating_hours numeric(38,2) not null,
+    tracks_runtime boolean not null default false,
     fuel_consumption_l_100km numeric(38,2),
     maintenance_interval_days integer,
     min_stock integer not null,
@@ -649,6 +652,7 @@ create table return_submissions (
     placement_image_object_key varchar(255),
     previous_asset_state varchar(255) check ((previous_asset_state in ('available','reserved','staged','in_transit','in_custody','in_field','returned_pending_check','damaged','in_repair','in_maintenance','lost','written_off'))),
     status varchar(255) not null check ((status in ('pending','accepted','rejected'))),
+    runtime_hours numeric(12,2),
     primary key (id)
 );
 
@@ -716,15 +720,31 @@ create table storage_locations (
     id uuid not null,
     warehouse_id uuid,
     map_overlay_url varchar(1000),
-    area varchar(255),
+    code varchar(32) not null,
+    full_code varchar(400) not null,
     description varchar(255),
-    location varchar(255),
-    location_type varchar(255) not null check ((location_type in ('warehouse','bin','staging','event_site','vehicle','in_custody','quarantine','repair','scrap'))),
+    location_type varchar(255) not null check ((location_type in ('warehouse','area','section','shelf','compartment','bin','staging','event_site','vehicle','in_custody','quarantine','repair','scrap'))),
     name varchar(255) not null,
-    position varchar(255),
     overlay_bounds jsonb,
     primary key (id),
     constraint storage_location_not_own_parent check (parent_location_id <> id)
+);
+
+create table runtime_entries (
+    id uuid not null,
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone not null,
+    item_id uuid not null references items(id),
+    asset_instance_id uuid references asset_instances(id),
+    event_occurrence_id uuid references event_occurrences(id),
+    order_id uuid references orders(id),
+    recorded_by_id uuid not null references app_users(id),
+    hours numeric(12,2) not null,
+    reading_after numeric(12,2) not null check (reading_after >= 0),
+    source varchar(255) not null check ((source in ('manual','return_check','maintenance','correction'))),
+    recorded_at timestamp(6) with time zone not null,
+    notes varchar(255),
+    primary key (id)
 );
 
 create table sync_command_audit (
@@ -1044,6 +1064,10 @@ create index member_requests_item_state on member_requests(item_id, kind, status
 alter table damage_reports add constraint fk_damage_reports_assembly foreign key (assembly_id) references assemblies;
 create index ix_transaction_event_occurrence on stock_transactions(event_occurrence_id);
 create index idx_location_parent on storage_locations(parent_location_id);
+create index idx_location_full_code on storage_locations(lower(full_code));
+create index ix_runtime_asset on runtime_entries(asset_instance_id, recorded_at);
+create index ix_runtime_item on runtime_entries(item_id, recorded_at);
+create index ix_runtime_event on runtime_entries(event_occurrence_id);
 create index idx_sync_resolution_root on sync_command_audit(resolution_root);
 create index equipment_commitments_item_dates on equipment_commitments(item_id, available_from, available_until);
 create index ix_overrides_latest on planning_overrides (event_id, item_id, created_at desc, id desc);

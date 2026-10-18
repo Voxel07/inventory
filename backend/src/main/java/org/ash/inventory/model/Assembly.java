@@ -21,6 +21,8 @@ public class Assembly extends BaseEntity {
     @Column(nullable = false) public String name;
     /** Retired assemblies keep their codes, composition and history but leave the catalog. */
     @Column(nullable = false) public boolean active = true;
+    public String category;
+    public String subcategory;
     public String description;
     public String hint;
     @Column(name = "image_object_key", length = 1024)

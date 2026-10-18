@@ -1,4 +1,4 @@
-import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, RuntimeEntry, RuntimeInput } from '../types';
 import { apiPage, apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import { containsPrivateInventory } from './privateInventoryCache';
@@ -114,6 +114,14 @@ export async function updateItemAsset(itemId: string, assetId: string, input: As
     method: 'PATCH',
     body: input,
   });
+}
+
+export function logAssetRuntime(itemId: string, assetId: string, input: RuntimeInput): Promise<RuntimeEntry> {
+  return apiRequest<RuntimeEntry>(`/api/items/${itemId}/assets/${assetId}/runtime`, { method: 'POST', body: input });
+}
+
+export function getAssetRuntime(itemId: string, assetId: string, page: number, size: number): Promise<Page<RuntimeEntry>> {
+  return apiPage<RuntimeEntry>(`/api/items/${itemId}/assets/${assetId}/runtime`, page, size);
 }
 
 export async function deleteItemAsset(itemId: string, assetId: string): Promise<void> {

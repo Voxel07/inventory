@@ -131,7 +131,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                               )}
                             </Box>
                           </TableCell>
-                          <TableCell>{row.data.category || '—'}</TableCell>
+                          <TableCell>{[row.data.category, row.data.subcategory].filter(Boolean).join(' · ') || '—'}</TableCell>
                           <TableCell align="right">{row.data.amount ?? 0}</TableCell>
                           <TableCell align="right">{row.data.minStock ?? 5}</TableCell>
                           <TableCell align="right">{formatMoney(row.data.value ?? 0)}</TableCell>
@@ -166,6 +166,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                         <TableCell>#</TableCell>
                         <TableCell>{t('common.status')}</TableCell>
                         <TableCell>{t('enum.value.assembly')}</TableCell>
+                        <TableCell>{t('common.category')}</TableCell>
                         <TableCell>{t('dialogs.csvImportPreview.components')}</TableCell>
                         <TableCell>{t('common.description')}</TableCell>
                       </TableRow>
@@ -188,6 +189,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                             )}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 500 }}>{row.data.name || '—'}</TableCell>
+                          <TableCell>{[row.data.category, row.data.subcategory].filter(Boolean).join(' · ') || '—'}</TableCell>
                           <TableCell>
                             <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
                               {row.components.map((comp, cIdx) => (
@@ -204,7 +206,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           <TableCell>{row.data.description || '—'}</TableCell>
                         </TableRow>
                       ))}
-                      {!visibleAssemblies.length && <TableRow><TableCell colSpan={5}>{t('common.noMatchingAssemblies')}</TableCell></TableRow>}
+                      {!visibleAssemblies.length && <TableRow><TableCell colSpan={6}>{t('common.noMatchingAssemblies')}</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TableContainer>

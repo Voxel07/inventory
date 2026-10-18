@@ -12,6 +12,7 @@ import org.ash.inventory.model.InventoryOrder;
 import org.ash.inventory.model.Item;
 import org.ash.inventory.model.MemberRequest;
 import org.ash.inventory.model.ReturnSubmission;
+import org.ash.inventory.model.RuntimeEntry;
 import org.ash.inventory.model.UserAccount;
 import org.ash.inventory.orm.ReturnSubmissionOrm;
 import org.ash.inventory.resource.ApiException;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class ReturnSubmissionService {
     @jakarta.inject.Inject CustodyBalanceService custody;
+    @jakarta.inject.Inject RuntimeService runtime;
     private final ReturnSubmissionOrm orm;
     private final ActorService actors;
     private final InventoryOperationsService inventory;
@@ -118,14 +120,18 @@ public class ReturnSubmissionService {
         actors.requireWarehouse();
         var value = pendingForDecision(id);
         var worker = actors.current();
+        var before = currentReading(value);
+        var reading = runtimeReading(value, input);
         if (value.order != null) {
             var relevant = value.order.lines.stream().filter(line -> line.item.id.equals(value.item.id)).toList();
             int outstanding = relevant.stream().mapToInt(CustodyQuantities::outstanding).sum();
             int missing = relevant.stream().mapToInt(line -> line.missingQuantity).sum();
-            var line = new ApiModels.ReturnLine(value.quantity, 0, Math.min(missing, Math.max(0, outstanding - value.quantity)), 0, 0, null, value.notes);
+            // The order books the reading against its event (OrderService.returnItems).
+            var line = new ApiModels.ReturnLine(value.quantity, 0, Math.min(missing, Math.max(0, outstanding - value.quantity)), 0, 0,
+                    value.assetInstance == null ? reading : null, value.notes);
             Map<UUID, ApiModels.AssetReturnLine> assets = value.assetInstance == null ? Map.of()
                     : Map.of(value.assetInstance.id, new ApiModels.AssetReturnLine(
-                            DomainEnums.ReconciliationOutcome.returned_good, null, value.notes));
+                            DomainEnums.ReconciliationOutcome.returned_good, reading, value.notes));
             orders.returnItems(value.order.id,
                     new ApiModels.ReturnInput(Map.of(value.item.id, line), assets, value.id, value.notes));
         } else {
@@ -135,7 +141,12 @@ public class ReturnSubmissionService {
                     value.assetInstance == null ? null : value.assetInstance.id,
                     value.returnedFor.id, null, value.id,
                     value.eventOccurrence == null ? null : value.eventOccurrence.id));
+            if (reading != null) {
+                var asset = value.assetInstance == null ? null : orm.requireLocked(AssetInstance.class, value.assetInstance.id, "Asset instance");
+                runtime.record(value.item, asset, reading, value.eventOccurrence, null, RuntimeEntry.Source.return_check, input == null ? null : input.notes());
+            }
         }
+        if (reading != null) value.runtimeHours = reading.subtract(before);
         value.status = DomainEnums.ReturnSubmissionStatus.accepted;
         value.acknowledgedBy = worker;
         value.acknowledgedAt = Instant.now();
@@ -143,6 +154,25 @@ public class ReturnSubmissionService {
         events.record("return.accepted", "return_submission", value.id, worker.id, value.id,
                 Map.of("itemId", value.item.id.toString(), "quantity", value.quantity));
         return value;
+    }
+
+    private static java.math.BigDecimal currentReading(ReturnSubmission value) {
+        var current = value.assetInstance != null ? value.assetInstance.operatingHours : value.item.currentOperatingHours;
+        return current == null ? java.math.BigDecimal.ZERO : current;
+    }
+
+    /** Runtime-tracked items need the hours run (or the new meter reading) before they go back to stock. */
+    private java.math.BigDecimal runtimeReading(ReturnSubmission value, ApiModels.ReturnDecisionInput input) {
+        var hours = input == null ? null : input.hoursRun();
+        var meter = input == null ? null : input.meterReading();
+        if (hours != null && meter != null) throw ApiException.badRequest("Provide either hoursRun or meterReading");
+        if (hours == null && meter == null) {
+            if (value.item.tracksRuntime) throw ApiException.badRequest("Record the hours run before returning " + value.item.name + " to stock");
+            return null;
+        }
+        var reading = meter != null ? meter : currentReading(value).add(hours);
+        if (reading.compareTo(currentReading(value)) < 0) throw ApiException.badRequest("The meter reading cannot be lower than " + currentReading(value));
+        return reading;
     }
 
     @Transactional

@@ -103,11 +103,10 @@ public final class ApiResponses {
             Instant created,
             Instant updated,
             String name,
+            String code,
+            String fullCode,
             String locationType,
             String description,
-            String area,
-            String location,
-            String position,
             Double latitude,
             Double longitude,
             Integer mapZoom,
@@ -149,6 +148,7 @@ public final class ApiResponses {
             Integer maintenanceIntervalDays,
             LocalDate nextMaintenanceDue,
             BigDecimal currentOperatingHours,
+            boolean tracksRuntime,
             BigDecimal fuelConsumptionLitersPer100Km,
             LocalDate batteryReplacementDue,
             LocalDate bestBeforeDate,
@@ -181,7 +181,11 @@ public final class ApiResponses {
             String acknowledgedByName,
             Instant acknowledgedAt,
             String acknowledgementNotes,
-            List<ReturnDamageResponse> reportedDamage
+            List<ReturnDamageResponse> reportedDamage,
+            boolean tracksRuntime,
+            BigDecimal currentOperatingHours,
+            BigDecimal runtimeHours,
+            String eventName
     ) {}
 
     /** Open damage the warehouse should see before returning the item to stock; contributor requests carry no severity. */
@@ -201,6 +205,8 @@ public final class ApiResponses {
             Instant created,
             Instant updated,
             String name,
+            String category,
+            String subcategory,
             String description,
             String hint,
             String image,
@@ -433,12 +439,16 @@ public final class ApiResponses {
             String serialNumber,
             String manufacturer,
             String model,
+            LocalDate purchaseDate,
+            BigDecimal purchasePrice,
+            BigDecimal replacementValue,
             String conditionStatus,
             String availabilityStatus,
             String serviceStatus,
             LocalDate nextMaintenanceDue,
             BigDecimal operatingHours,
             String currentLocationId,
+            String currentLocationCode,
             String currentLocationName,
             String currentCustodianId,
             String currentCustodianName,
@@ -447,6 +457,14 @@ public final class ApiResponses {
             long version,
             @JsonInclude(JsonInclude.Include.NON_NULL) AssetReservationResponse reservedFor
     ) {}
+
+    /** One runtime booking; {@code eventName} is null for hours run outside an event. */
+    public record RuntimeEntryResponse(
+            UUID id, UUID itemId, UUID assetInstanceId, String assetCode,
+            UUID eventOccurrenceId, String eventName, java.time.LocalDate eventStartDate,
+            UUID orderId, String orderLabel,
+            BigDecimal hours, BigDecimal readingAfter, String source,
+            Instant recordedAt, String recordedByName, String notes) {}
 
     /** The open order holding a reserved or staged asset. */
     public record AssetReservationResponse(String kind, UUID orderId, String label) {}

@@ -13,6 +13,7 @@ import { LoadMore } from '../shared/LoadMore';
 import { translate, useT } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
+import { useItemCategories } from '../../hooks/useItems';
 
 interface Props {
     title: string;
@@ -28,9 +29,13 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
     const { eventTypes } = useFactionCatalog();
     const { user } = useAuth();
     const canCreatePublic = canEditCatalog(user);
+    const { data: categories = [] } = useItemCategories();
     const [formData, setFormData] = useState<AssemblyFormData>({
-        privateResource: initialData ? Boolean(initialData.access?.privateResource) : true,
+        // Staff add to the shared catalog by default; members can only create private assemblies.
+        privateResource: initialData ? Boolean(initialData.access?.privateResource) : !canCreatePublic,
         name: initialData?.name ?? '',
+        category: initialData?.category ?? '',
+        subcategory: initialData?.subcategory ?? '',
         itemIds: Array.isArray(initialData?.itemIds) ? initialData.itemIds : [],
         itemQuantities: initialData?.itemQuantities ?? {},
         description: initialData?.description ?? '',
@@ -84,6 +89,23 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                     required
                     fullWidth
                 />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <Autocomplete
+                        freeSolo
+                        fullWidth
+                        options={categories}
+                        value={formData.category ?? ''}
+                        onInputChange={(_e, value) => setFormData((prev) => ({ ...prev, category: value }))}
+                        renderInput={(params) => <TextField {...params} label={t('common.category')} fullWidth />}
+                    />
+                    <TextField
+                        label={t('forms.itemForm.subcategory')}
+                        value={formData.subcategory ?? ''}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, subcategory: e.target.value }))}
+                        helperText={t('forms.itemForm.optional')}
+                        fullWidth
+                    />
+                </Stack>
                 <TextField
                     label={t('common.description')}
                     value={formData.description}

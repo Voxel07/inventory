@@ -1,3 +1,4 @@
+import { locationLabel } from '../../utils/locationHierarchy';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Stack, TextField, Typography } from '@mui/material';
@@ -33,7 +34,7 @@ export function ReturnSubmissionForm({
   const [image, setImage] = useState<File>();
   const returnLocation = item.expand?.returnLocation;
   const returnLocationLabel = returnLocation
-    ? [returnLocation.name, returnLocation.location, returnLocation.position].filter(Boolean).join(' / ')
+    ? locationLabel(returnLocation)
     : (!item.returnLocation || item.returnLocation === item.storageLocation ? item.expand?.storageLocation?.name : undefined);
 
   function submit(event: React.FormEvent) {

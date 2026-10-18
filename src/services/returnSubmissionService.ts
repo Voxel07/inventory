@@ -26,8 +26,8 @@ export async function createReturnSubmission(data: ReturnSubmissionFormData): Pr
   });
 }
 
-export function acknowledgeReturnSubmission(id: string, notes?: string): Promise<ReturnSubmission> {
-  return apiRequest(`/api/returns/${id}/acknowledge`, { method: 'POST', body: { notes } });
+export function acknowledgeReturnSubmission(id: string, notes?: string, hoursRun?: number): Promise<ReturnSubmission> {
+  return apiRequest(`/api/returns/${id}/acknowledge`, { method: 'POST', body: { notes, hoursRun } });
 }
 
 export function rejectReturnSubmission(id: string, notes?: string): Promise<ReturnSubmission> {

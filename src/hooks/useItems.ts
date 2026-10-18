@@ -1,8 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
-import { itemApi, getItemAssets, getItemCategories, createItemAssets, updateItemAsset, deleteItemAsset } from '../services/inventoryService';
+import { itemApi, getItemAssets, getItemCategories, createItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
 import { useCompleteList, usePagedList } from './usePagedList';
-import type { Item, ItemFormData, AssetInstance, AssetInstanceInput } from '../types';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, RuntimeEntry, RuntimeInput } from '../types';
 
 export const {
   useDetail: useItem,
@@ -52,6 +52,22 @@ export function useUpdateItemAsset(itemId: string | undefined) {
   return useMutation({
     mutationFn: ({ assetId, input }: { assetId: string; input: AssetInstanceInput }) =>
       updateItemAsset(itemId!, assetId, input),
+  });
+}
+
+export function useAssetRuntime(itemId: string | undefined, assetId: string | undefined) {
+  return useCompleteList<RuntimeEntry>(['items', itemId, 'assets', assetId, 'runtime'], (page, size) => getAssetRuntime(itemId!, assetId!, page, size),
+    { enabled: Boolean(itemId && assetId) });
+}
+
+export function useLogAssetRuntime(itemId: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assetId, input }: { assetId: string; input: RuntimeInput }) => logAssetRuntime(itemId!, assetId, input),
+    onSuccess: (_entry, { assetId }) => {
+      void client.invalidateQueries({ queryKey: ['items', itemId, 'assets'] });
+      void client.invalidateQueries({ queryKey: ['items', itemId, 'assets', assetId, 'runtime'] });
+    },
   });
 }
 

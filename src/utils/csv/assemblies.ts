@@ -1,7 +1,7 @@
 import { type Item, type Assembly, type EventType } from '../../types';
 import { type ParsedAssemblyRow, type ParsedAssemblyComponent } from '../../types/csvImport';
 import type { CsvReference } from './reference';
-import { catalogRowKind, getField, ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_NAME_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, DESCRIPTION_ALIASES, HINT_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, parseInlineComponents } from './core';
+import { catalogRowKind, CATEGORY_ALIASES, SUBCATEGORY_ALIASES, getField, ASSEMBLY_COMPONENTS_ALIASES, COMPONENT_ITEM_ALIASES, ASSEMBLY_NAME_ALIASES, COMPONENT_QTY_ALIASES, parseNumber, DESCRIPTION_ALIASES, HINT_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, parseInlineComponents } from './core';
 
 /**
  * Parses raw CSV rows into Assembly structures, supporting both inline components and multi-row format
@@ -34,6 +34,8 @@ export function parseAssembliesFromCsv(
       string,
       {
         index: number;
+        category?: string;
+        subcategory?: string;
         description: string;
         hint: string;
         eventTypes: EventType[];
@@ -56,6 +58,8 @@ export function parseAssembliesFromCsv(
       if (!grouped.has(name)) {
         grouped.set(name, {
           index: i + 1,
+          category: getField(raw, CATEGORY_ALIASES) || undefined,
+          subcategory: getField(raw, SUBCATEGORY_ALIASES) || undefined,
           description: getField(raw, DESCRIPTION_ALIASES) || '',
           hint: getField(raw, HINT_ALIASES) || '',
           eventTypes: parseEventTypes(getField(raw, EVENT_TYPES_ALIASES), reference.eventTypes),
@@ -106,6 +110,8 @@ export function parseAssembliesFromCsv(
         index: g.index,
         data: {
           name,
+          category: g.category,
+          subcategory: g.subcategory,
           description: g.description,
           hint: g.hint,
           eventTypes: g.eventTypes,
@@ -186,6 +192,8 @@ export function parseAssembliesFromCsv(
       index: i + 1,
       data: {
         name,
+        category: getField(raw, CATEGORY_ALIASES) || undefined,
+        subcategory: getField(raw, SUBCATEGORY_ALIASES) || undefined,
         description,
         hint,
         eventTypes,

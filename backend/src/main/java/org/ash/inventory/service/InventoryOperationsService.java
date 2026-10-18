@@ -1,5 +1,7 @@
 package org.ash.inventory.service;
 
+import org.ash.inventory.model.RuntimeEntry;
+
 import org.ash.inventory.helper.Inputs;
 import org.ash.inventory.helper.BusinessTime;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,6 +35,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class InventoryOperationsService {
+    @jakarta.inject.Inject RuntimeService runtime;
     @jakarta.inject.Inject org.ash.inventory.helper.storage.MediaService media;
     @jakarta.inject.Inject EquipmentService equipment;
     @jakarta.inject.Inject PositionService positions;
@@ -670,13 +673,13 @@ public class InventoryOperationsService {
         var asset = record.assetInstance;
         if (asset == null) {
             if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
-                item.currentOperatingHours = input.operatingHours();
+                runtime.record(item, null, input.operatingHours(), null, null, RuntimeEntry.Source.maintenance, "Maintenance " + record.type.name());
             if (record.schedule == null && !failed) item.nextMaintenanceDue = calendarDue;
             item.outOfService = failed;
         } else {
             // The result belongs to this asset only; the item calendar and sibling assets are untouched.
             if (input.operatingHours() != null && input.operatingHours().compareTo(asset.operatingHours) > 0)
-                asset.operatingHours = input.operatingHours();
+                runtime.record(item, asset, input.operatingHours(), null, null, RuntimeEntry.Source.maintenance, "Maintenance " + record.type.name());
             if (record.schedule == null && !failed) asset.nextMaintenanceDue = calendarDue;
             asset.outOfService = failed;
             // Only an idle warehouse asset changes physical state; custody, reservation and transit keep theirs.

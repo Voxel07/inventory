@@ -1,4 +1,5 @@
 import { assertAuthSession, captureAuthSession } from './authManager';
+import { normalizeLocationRef } from '../utils/csv/locations';
 import { apiRequest } from './apiClient';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
@@ -39,7 +40,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     if (typeof value !== 'string' || !value.startsWith('@')) return value;
     let result: string | undefined;
     if (value.startsWith('@item:')) result = items.find((item) => item.name.toLowerCase().trim() === value.slice(6).toLowerCase().trim())?.id;
-    else if (value.startsWith('@location:')) result = locations.get(value.slice(10).toLowerCase().trim());
+    else if (value.startsWith('@location:')) result = locations.get(normalizeLocationRef(value.slice(10)));
     else if (value.startsWith('@event:')) {
       const [type, start] = value.slice(7).split(':');
       result = events.find((event) => event.eventType === type && event.startDate.slice(0, 10) === start)?.id;

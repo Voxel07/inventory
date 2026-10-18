@@ -304,6 +304,11 @@ export function AssemblyDetail() {
                             )}
                         </Box>
 
+                        {assembly.category && <Box>
+                            <Typography variant="caption" color="text.secondary">{t('common.category')}</Typography>
+                            <Typography variant="body2">{[assembly.category, assembly.subcategory].filter(Boolean).join(' · ')}</Typography>
+                        </Box>}
+
                         {assembly.description && <Typography variant="body1">{assembly.description}</Typography>}
 
                         {assembly.hint && (

@@ -16,7 +16,7 @@ import { useAppLanguage, useT } from '../../utils/naming';
 import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useItemCategories, type ItemQuery } from '../../hooks/useItems';
-import { locationPath } from '../../utils/locationHierarchy';
+import { locationPath, locationLabel } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
 import { catalogGridSx } from './catalogGrid';
@@ -131,7 +131,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 totalStock: stock.totalStock,
                 damaged: stock.damaged,
                 availability: stock.remaining <= 0 ? 'none' : !locationStock && stock.remaining <= (item.minStock ?? 5) ? 'low' : 'ok',
-                location: location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item.storageLocation || '—',
+                location: location ? [locationLabel(location), item.positionDetails].filter(Boolean).join(' · ') : item.storageLocation || '—',
                 events: item.eventTypes?.join(', ') || '—',
             };
         });

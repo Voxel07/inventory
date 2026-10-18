@@ -52,6 +52,7 @@ public class StockManagementService {
         var warehouse = orm.requireLocked(Warehouse.class, id, "Warehouse");
         if (orm.warehouseCodeExists(input.code(), id)) throw ApiException.conflict("Warehouse code already exists");
         apply(warehouse, input);
+        hierarchy.refreshWarehouseCodes(warehouse);
         events.record("warehouse.updated", "warehouse", id, actors.current().id, null, Map.of("code", warehouse.code));
         return warehouse;
     }

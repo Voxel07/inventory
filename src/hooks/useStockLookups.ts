@@ -1,4 +1,4 @@
-import { locationPath } from '../utils/locationHierarchy';
+import { locationLabel } from '../utils/locationHierarchy';
 import { useItemsByIds } from './useItems';
 import { useStorageLocations } from './useStorageLocations';
 
@@ -12,6 +12,6 @@ export function useStockLookups(itemIds: readonly string[] = []) {
   return { items: items.data ?? [], locations: locations.data ?? [], error: items.error || locations.error, loading: items.isLoading || locations.isLoading,
     complete: !items.isLoading && !locations.isLoading,
     itemName: (id: string) => items.data?.find((item) => item.id === id)?.name ?? id,
-    locationOptions: (locations.data ?? []).map((location) => ({ value: location.id, label: locationPath(location, locations.data ?? []) })),
+    locationOptions: (locations.data ?? []).map((location) => ({ value: location.id, label: locationLabel(location, locations.data ?? []) })),
   };
 }

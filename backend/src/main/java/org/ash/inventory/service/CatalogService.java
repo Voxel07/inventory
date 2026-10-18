@@ -31,6 +31,7 @@ public class CatalogService {
     @jakarta.inject.Inject PositionService positions;
     @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
     @Inject EventMetricsService eventMetrics;
+    @Inject RuntimeService runtime;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -175,6 +176,16 @@ public class CatalogService {
             tx.idempotencyKey = UUID.randomUUID();
             tx.occurredAt = Instant.now();
             tx.destinationLocation = item.storageLocation;
+            // Lot-less stock of a lot-tracked item is never available; opening stock forms the first lot.
+            if (item.trackingMode == DomainEnums.TrackingMode.lot_tracked) {
+                var lot = new InventoryLot();
+                lot.item = item;
+                lot.lotNumber = item.sku + "-L001";
+                lot.bestBeforeDate = item.bestBeforeDate;
+                lot.notes = "Initial stock on item creation";
+                orm.persist(lot);
+                tx.lot = lot;
+            }
             tx.availabilityBefore = 0;
             tx.availabilityAfter = initialAmount;
             positions.apply(tx);
@@ -269,6 +280,7 @@ public class CatalogService {
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
+        if (input.tracksRuntime() != null) item.tracksRuntime = input.tracksRuntime();
     }
 
     public boolean managesInventory(UserAccount actor) { return canManageInventory(actor); }
@@ -328,9 +340,6 @@ public class CatalogService {
         target.name = input.name().trim();
         target.locationType = input.locationType() == null ? DomainEnums.LocationType.bin : input.locationType();
         target.description = input.description();
-        target.area = input.area();
-        target.location = input.location();
-        target.position = input.position();
         target.latitude = input.latitude();
         target.longitude = input.longitude();
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
@@ -390,6 +399,8 @@ public class CatalogService {
         if (target.id != null && input.privateResource() != null && input.privateResource() != (target.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
         target.name = input.name().trim();
+        target.category = org.ash.inventory.helper.Inputs.blankToNull(input.category());
+        target.subcategory = org.ash.inventory.helper.Inputs.blankToNull(input.subcategory());
         target.description = input.description();
         target.hint = input.hint();
         target.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
@@ -625,6 +636,9 @@ public class CatalogService {
                 asset.currentCustodian = orm.require(UserAccount.class, input.currentCustodianId(), "User");
             }
             if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
+            asset.purchaseDate = input.purchaseDate();
+            asset.purchasePriceCents = cents(input.purchasePrice());
+            asset.replacementValueCents = cents(input.replacementValue());
             asset.notes = input.notes();
             asset.active = true;
             orm.persist(asset);
@@ -674,8 +688,15 @@ public class CatalogService {
             if (orm.assetCodeExists(input.assetCode())) throw ApiException.conflict("Asset code already exists");
             asset.assetCode = input.assetCode().trim().toUpperCase(Locale.ROOT);
         }
-        if (input.serialNumber() != null) asset.serialNumber = input.serialNumber().trim();
-        if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
+        if (input.serialNumber() != null) asset.serialNumber = org.ash.inventory.helper.Inputs.blankToNull(input.serialNumber());
+        if (input.manufacturer() != null) asset.manufacturer = org.ash.inventory.helper.Inputs.blankToNull(input.manufacturer());
+        if (input.model() != null) asset.model = org.ash.inventory.helper.Inputs.blankToNull(input.model());
+        if (input.purchaseDate() != null) asset.purchaseDate = input.purchaseDate();
+        if (input.purchasePrice() != null) asset.purchasePriceCents = cents(input.purchasePrice());
+        if (input.replacementValue() != null) asset.replacementValueCents = cents(input.replacementValue());
+        // Editing the meter is a correction; regular hours are booked per event through the runtime log.
+        if (input.operatingHours() != null)
+            runtime.record(item, asset, input.operatingHours(), null, null, RuntimeEntry.Source.correction, "Meter reading corrected");
         if (input.notes() != null) asset.notes = input.notes();
         catalogChanged("items", item.id);
         events.record("asset.updated", "asset", asset.id, actorService.current().id, null,
@@ -772,6 +793,10 @@ public class CatalogService {
                 Map.of("itemId", item.id.toString(), "from", previous.name(), "to", input.conditionStatus().name()));
         orm.flush();
         return asset;
+    }
+
+    private static Integer cents(java.math.BigDecimal value) {
+        return value == null ? null : value.movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
     }
 
     private void assertOwnedActiveAsset(Item item, AssetInstance asset) {

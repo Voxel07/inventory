@@ -5,8 +5,11 @@ export interface ParsedItemRow {
   index: number;
   data: ItemFormData;
   rawRow: Record<string, string>;
+  /** Location as written in the CSV (code, path or name). */
   storageLocationName?: string;
   storageLocationId?: string;
+  /** Path to create when the location does not exist yet; existing leading levels are reused. */
+  storageLocationPath?: string[];
   assetCodes?: string[];
   status: 'valid' | 'warning' | 'error' | 'duplicate';
   statusMessage?: string;

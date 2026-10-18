@@ -25,10 +25,13 @@ public class StorageLocation extends BaseEntity {
     public DomainEnums.LocationType locationType = DomainEnums.LocationType.bin;
     @Column(nullable = false)
     public String name;
+    /** Short identifier of this level (e.g. {@code R3}); unique among its siblings. */
+    @Column(nullable = false, length = 32)
+    public String code;
+    /** Warehouse code and all level codes from the root, e.g. {@code WH1-E1-R3-F2}; maintained by the hierarchy service. */
+    @Column(name = "full_code", nullable = false, length = 400)
+    public String fullCode;
     public String description;
-    public String area;
-    public String location;
-    public String position;
     public Double latitude;
     public Double longitude;
     @Column(name = "map_zoom", nullable = false)
@@ -39,4 +42,11 @@ public class StorageLocation extends BaseEntity {
     @Column(name = "overlay_bounds", columnDefinition = "jsonb")
     public List<List<Double>> overlayBounds;
     @Column(nullable = false) public boolean active = true;
+
+    /** Rows created outside the hierarchy service (fixtures) still satisfy the code invariant. */
+    @jakarta.persistence.PrePersist
+    void defaultCodes() {
+        if (code == null || code.isBlank()) code = org.ash.inventory.service.LocationHierarchyService.deriveCode(name);
+        if (fullCode == null || fullCode.isBlank()) fullCode = code;
+    }
 }

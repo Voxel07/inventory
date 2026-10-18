@@ -1,3 +1,4 @@
+import { locationLabel } from '../utils/locationHierarchy';
 import { Button } from '../components/shared/ActionButtons';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 import { CustodyEvidence } from '../components/orders/CustodyEvidence';
@@ -261,7 +262,7 @@ export function FactionOrderDetail() {
   const pickupLocationLabel = pickupGroups.data?.pickupPointsComplete
     ? pickupGroups.data.groups.map(group => `${group.name}: ${group.pickupLocationName}`).join(' · ')
     : pickupLocation
-    ? [...[pickupLocation.name, pickupLocation.area, pickupLocation.location, pickupLocation.position].filter(Boolean), pickupPoint].filter(Boolean).join(' · ')
+    ? [locationLabel(pickupLocation), pickupPoint].filter(Boolean).join(' · ')
     : pickupPoint ?? t('pages.factionOrderDetail.notSpecified');
 
   const isManager = canManageInventory(currentUser);

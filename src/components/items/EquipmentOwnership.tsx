@@ -16,7 +16,8 @@ import type { Field } from '../../types/operationForm';
 import { ItemResponsiblePerson } from './ItemResponsiblePerson';
 
 /** `showSummary` repeats owner, keeper and stock facts; hide it where the page already shows them. */
-export function EquipmentOwnership({ item, canEdit, embedded = false, showSummary = true }: { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean }) {
+/** `highlightAssetId` marks the commitments that name this unit (asset detail page). */
+export function EquipmentOwnership({ item, canEdit, embedded = false, showSummary = true, highlightAssetId }: { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean; highlightAssetId?: string }) {
   const t = useT();
   const profile = useEquipmentProfile(item.id);
   const { data: events = [] } = useEventReports();
@@ -53,7 +54,7 @@ export function EquipmentOwnership({ item, canEdit, embedded = false, showSummar
           <Button title={translate('items.equipmentOwnership.recordAnAvailabilityCommitmentForAnEvent')} variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('items.equipmentOwnership.recordCommitment')}</Button>
         </Stack>}
         {data.availabilityPolicy === 'commitment_required' && data.commitments.length === 0 && <Typography variant="body2" color="text.secondary">{t('items.equipmentOwnership.noCommitmentsRecorded')}</Typography>}
-        {data.commitments.map(c => <Card key={c.id} variant="outlined"><CardContent><Stack spacing={1}>
+        {data.commitments.map(c => <Card key={c.id} variant="outlined" sx={highlightAssetId && c.assetIds.includes(highlightAssetId) ? { borderColor: 'primary.main', borderWidth: 2 } : undefined}><CardContent><Stack spacing={1}>
           <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('items.equipmentOwnership.dateRangeWithoutEventRestriction')} · {c.quantity} · {statuses[c.status]}</Typography>
           <Typography>{formatDate(c.availableFrom)} – {formatDate(c.availableUntil)}</Typography>
           <Typography variant="body2">{t('common.pickup')}: {c.pickupDetails}</Typography>

@@ -11,16 +11,17 @@ export interface StorageLocation {
   active: boolean;
   id: string;
   name: string;
+  /** Short code of this level, e.g. `R3`. */
+  code: string;
+  /** Warehouse and level codes from the root, e.g. `WH1-E1-R3-F2`. */
+  fullCode: string;
   description?: string;
-  area?: string;
-  location?: string;
-  position?: string;
   latitude?: number;
   longitude?: number;
   mapZoom?: number;
   mapOverlay?: string;
   overlayBounds?: MapBounds;
-  locationType?: 'warehouse' | 'bin' | 'staging' | 'event_site' | 'vehicle' | 'in_custody' | 'quarantine' | 'repair' | 'scrap';
+  locationType?: 'warehouse' | 'area' | 'section' | 'shelf' | 'compartment' | 'bin' | 'staging' | 'event_site' | 'vehicle' | 'in_custody' | 'quarantine' | 'repair' | 'scrap';
   created: string;
   updated: string;
 }
@@ -35,10 +36,8 @@ export interface StorageLocationFormData {
   locationType?: StorageLocation['locationType'];
   active?: boolean;
   name: string;
+  code?: string;
   description?: string;
-  area?: string;
-  location?: string;
-  position?: string;
   latitude?: number;
   longitude?: number;
   mapZoom?: number;
@@ -73,6 +72,8 @@ export interface Item {
   eventTypes?: EventType[];
   /** Null when the item has no storage location or the caller may not see it (`locationRestricted`). */
   storageLocation: string | null;
+  /** Free-text place inside the storage location, e.g. "left side, top box". */
+  positionDetails?: string;
   returnLocation: string | null;
   status: ItemStatus;
   images?: string[];
@@ -88,6 +89,8 @@ export interface Item {
   maintenanceIntervalDays?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
+  /** The warehouse records the hours run per unit and event when it checks a return. */
+  tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;
   batteryReplacementDue?: string;
   bestBeforeDate?: string;
@@ -118,6 +121,7 @@ export interface ItemFormData {
   supplier?: string;
   eventTypes?: EventType[];
   storageLocation: string;
+  positionDetails?: string;
   returnLocation?: string;
   hint?: string;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
@@ -132,6 +136,7 @@ export interface ItemFormData {
   maintenanceIntervalDays?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
+  tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;
   batteryReplacementDue?: string;
   bestBeforeDate?: string;
@@ -164,6 +169,14 @@ export interface ReturnSubmission {
   acknowledgementNotes?: string;
   /** Open damage reports on the returned asset, or by the returning people for bulk items. */
   reportedDamage: ReturnDamage[];
+  /** The item needs the hours run before it goes back to stock. */
+  tracksRuntime: boolean;
+  /** Meter of the returned unit (or bulk item) before this return. */
+  currentOperatingHours?: number;
+  /** Hours run recorded when the return was accepted. */
+  runtimeHours?: number;
+  /** Event the hours are booked to. */
+  eventName?: string;
 }
 
 export interface ReturnDamage {
@@ -201,6 +214,9 @@ export interface AssetInstance {
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  replacementValue?: number;
   conditionStatus: AssetConditionStatus;
   availabilityStatus: AssetAvailabilityStatus;
   /** Derived from the asset's out-of-service flag and its own or its item's calendar. */
@@ -209,6 +225,9 @@ export interface AssetInstance {
   nextMaintenanceDue?: string;
   operatingHours?: number;
   currentLocationId?: string;
+  /** Full location code, e.g. `WH1-E1-R3`. */
+  currentLocationCode?: string;
+  /** Location path, e.g. `Warehouse 1 / Electronics 1 / Shelf 3`. */
   currentLocationName?: string;
   currentCustodianId?: string;
   currentCustodianName?: string;
@@ -220,11 +239,41 @@ export interface AssetInstance {
   reservedFor?: { kind: 'faction_order' | 'general_order'; orderId?: string; label: string };
 }
 
+/** One booking of running hours; the event says where the unit ran. */
+export interface RuntimeEntry {
+  id: string;
+  itemId: string;
+  assetInstanceId?: string;
+  assetCode?: string;
+  eventOccurrenceId?: string;
+  eventName?: string;
+  eventStartDate?: string;
+  orderId?: string;
+  orderLabel?: string;
+  hours: number;
+  readingAfter: number;
+  source: 'manual' | 'return_check' | 'maintenance' | 'correction';
+  recordedAt: string;
+  recordedByName?: string;
+  notes?: string;
+}
+
+export interface RuntimeInput {
+  hours?: number;
+  reading?: number;
+  eventOccurrenceId?: string;
+  notes?: string;
+  expectedVersion: number;
+}
+
 export interface AssetInstanceInput {
   assetCode?: string;
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  replacementValue?: number;
   conditionStatus?: AssetConditionStatus;
   availabilityStatus?: AssetAvailabilityStatus;
   currentLocationId?: string;

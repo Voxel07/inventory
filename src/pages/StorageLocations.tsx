@@ -5,7 +5,7 @@ import { StorageResponsibilities } from '../components/operations/StorageRespons
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { WarehousesPanel } from '../components/operations/WarehousesPanel';
 import { getWarehouses } from '../services/warehouseService';
-import { locationPath, isDescendant } from '../utils/locationHierarchy';
+import { locationPath, locationLabel, isDescendant } from '../utils/locationHierarchy';
 import { useAuth } from '../hooks/useAuth';
 import { canCreateInventory, canEditCatalog, canViewOrganization } from '../utils/access';
 import { ItemsList } from '../components/lists/ItemsList';
@@ -83,18 +83,17 @@ export function StorageLocations() {
     const { data: locations, isLoading: locationsLoading, error: locationsError, refetch: refetchLocations } = locationList;
     const selectedLocation = useStorageLocation(selectedLocId ?? undefined);
     // The edit dialog explicitly needs the hierarchy to exclude descendant parent choices.
-    const hierarchy = useQuery({ queryKey: ['storageLocations', 'hierarchy'], enabled: dialogOpen,
+    // The edit dialog needs the hierarchy to exclude descendant parent choices; the detail panel lists children.
+    const hierarchy = useQuery({ queryKey: ['storageLocations', 'hierarchy'], enabled: dialogOpen || Boolean(selectedLocId),
       queryFn: () => storageLocationApi.getAll({ includeInactive: true }), networkMode: 'offlineFirst' });
     const locationOptions = async (needle: string, page: number, size: number) =>
       mapPage(await storageLocationApi.getPage({ includeInactive: true, search: needle || undefined, warehouseId: warehouseFilter || undefined }, page, size),
-        location => ({ value: location.id, label: locationPath(location, []) }));
+        location => ({ value: location.id, label: locationLabel(location) }));
 
     const [formData, setFormData] = useState<StorageLocationFormData>({
         name: '',
-        area: '',
+        code: '',
         description: '',
-        location: '',
-        position: '',
         latitude: 52.375953,
         longitude: 11.826278,
         mapZoom: 19,
@@ -120,9 +119,15 @@ export function StorageLocations() {
         void locatedAssets.refetch();
     }
 
-    function handleOpenCreate() {
+    /** Next level below `parent` by default: warehouse → area → section → shelf → compartment. */
+    const childType: Partial<Record<NonNullable<StorageLocation['locationType']>, StorageLocation['locationType']>> = { warehouse: 'area', area: 'section', section: 'shelf', shelf: 'compartment' };
+
+    function handleOpenCreate(parent?: StorageLocation) {
         setEditingLoc(null);
-        setFormData({ privateResource: true, warehouseId: null, parentLocationId: null, locationType: 'bin', active: true, name: '', area: '', description: '', location: '', position: '', latitude: 52.375953, longitude: 11.826278, mapZoom: 19 });
+        // Staff add shared locations by default; members and children of private locations are private.
+        setFormData({ privateResource: !canEdit || Boolean(parent?.access?.privateResource), warehouseId: parent?.warehouseId ?? null, parentLocationId: parent?.id ?? null,
+            locationType: parent ? childType[parent.locationType ?? 'bin'] ?? 'bin' : 'warehouse', active: true, name: '', code: '', description: '',
+            latitude: parent?.latitude ?? 52.375953, longitude: parent?.longitude ?? 11.826278, mapZoom: Math.max(parent?.mapZoom ?? 19, 19) });
         setDialogOpen(true);
     }
 
@@ -132,11 +137,9 @@ export function StorageLocations() {
         setFormData({
             privateResource: Boolean(loc.access?.privateResource), warehouseId: loc.warehouseId ?? null, parentLocationId: loc.parentLocationId ?? null, locationType: loc.locationType, active: loc.active,
             name: loc.name,
+            code: loc.code,
             mapOverlay: loc.mapOverlay ?? null,
-            area: loc.area || '',
             description: loc.description || '',
-            location: loc.location || '',
-            position: loc.position || '',
             latitude: loc.latitude ?? 52.375953,
             longitude: loc.longitude ?? 11.826278,
             mapZoom: Math.max(loc.mapZoom ?? 19, 19),
@@ -151,6 +154,8 @@ export function StorageLocations() {
         setDeleteConfirmOpen(true);
     }
 
+    const children = (hierarchy.data ?? []).filter((location) => location.parentLocationId === selectedLocId)
+        .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
     const parentIsPrivate = Boolean(hierarchy.data?.find((l) => l.id === formData.parentLocationId)?.access?.privateResource);
 
     function handleSubmit(e: React.FormEvent) {
@@ -204,7 +209,7 @@ export function StorageLocations() {
                     {canCreate && <Button title={translate('pages.storageLocations.createANewStorageLocation')}
                         variant="contained"
                         startIcon={<AddIcon />}
-                        onClick={handleOpenCreate}
+                        onClick={() => handleOpenCreate()}
                     >
                         {t('pages.storageLocations.addStorageLocation')}
                     </Button>}
@@ -291,8 +296,8 @@ export function StorageLocations() {
                                                         </Typography>
                                                     }
                                                     secondary={
-                                                        <Typography variant="body2" color="text.secondary" noWrap>
-                                                            {locationPath(loc, locations ?? [])}
+                                                        <Typography variant="body2" color="text.secondary" noWrap title={locationLabel(loc, locations ?? [])}>
+                                                            <Box component="span" className="mono" sx={{ color: 'primary.main' }}>{loc.fullCode}</Box> · {locationPath(loc, locations ?? [])}
                                                         </Typography>
                                                     }
                                                 />
@@ -334,26 +339,14 @@ export function StorageLocations() {
                                             <Typography variant="h5">
                                                 {locationPath(activeLocation, locations ?? [])}
                                             </Typography>
-                                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 0.5 }}>
-                                                {activeLocation.area && (
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {t('pages.storageLocations.areaSection')}: {activeLocation.area}
-                                                    </Typography>
-                                                )}
-                                                {activeLocation.location && (
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {t('pages.storageLocations.place')}: {activeLocation.location}
-                                                    </Typography>
-                                                )}
-                                                {activeLocation.position && (
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        Position: {activeLocation.position}
-                                                    </Typography>
-                                                )}
-                                            </Box>
+                                            <Typography variant="subtitle2" color="text.secondary" className="mono">{activeLocation.fullCode}</Typography>
                                         </Box>
                                     </Box>
                                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
+                                        {canCreate && activeLocation.active && <Button size="small" variant="outlined" startIcon={<AddIcon />} title={t('pages.storageLocations.addALocationInsideThisOne')}
+                                            onClick={() => handleOpenCreate(activeLocation)}>
+                                            {t('pages.storageLocations.addSubLocation')}
+                                        </Button>}
                                         <Button size="small" title={t('pages.storageLocations.openLabelsScanningAndTransfersForThisLocation')}
                                             onClick={() => navigate(`/locations/${activeLocation.id}`)}>
                                             {t('pages.storageLocations.labelsScanTransfer')}
@@ -387,6 +380,14 @@ export function StorageLocations() {
                                         />
                                     </Box>
                                 )}
+
+                                {children.length > 0 && <Box sx={{ mb: 1 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>{t('pages.storageLocations.subLocations')} ({children.length})</Typography>
+                                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                                        {children.map((child) => <Chip key={child.id} clickable variant={child.active ? 'outlined' : 'filled'} onClick={() => setSelectedLocId(child.id)}
+                                            label={<><Box component="span" className="mono" sx={{ mr: 0.75 }}>{child.code}</Box>{child.name}</>} />)}
+                                    </Stack>
+                                </Box>}
 
                                 <Divider sx={{ my: 2 }} />
 
@@ -440,39 +441,30 @@ export function StorageLocations() {
                                 // Shares flow down a private location tree, so children of private locations are private.
                                 const privateParent = Boolean(hierarchy.data?.find((l) => l.id === parentId)?.access?.privateResource);
                                 setFormData({ ...formData, parentLocationId: parentId, ...(privateParent ? { privateResource: true } : {}) });
-                            }}><MenuItem value="">{t('pages.storageLocations.topLevel')}</MenuItem>{hierarchy.data?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, hierarchy.data ?? []))).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, hierarchy.data ?? [])}</MenuItem>)}</TextField>
-                            <TextField select label={t('pages.storageLocations.locationType')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
+                            }}><MenuItem value="">{t('pages.storageLocations.topLevel')}</MenuItem>{hierarchy.data?.filter((l) => (l.warehouseId ?? null) === (formData.warehouseId ?? null) && (!editingLoc || !isDescendant(l, editingLoc.id, hierarchy.data ?? []))).sort((a, b) => a.fullCode.localeCompare(b.fullCode, undefined, { numeric: true })).map((l) => <MenuItem key={l.id} value={l.id}>{locationLabel(l, hierarchy.data ?? [])}</MenuItem>)}</TextField>
+                            <TextField select label={t('pages.storageLocations.locationType')} value={formData.locationType ?? 'bin'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value as StorageLocation['locationType'] })}>{['warehouse', 'area', 'section', 'shelf', 'compartment', 'bin', 'staging', 'event_site', 'vehicle', 'in_custody', 'quarantine', 'repair', 'scrap'].map((type) => <MenuItem key={type} value={type}>{formatStatus(type)}</MenuItem>)}</TextField>
                             <FormControlLabel label={t('enum.value.active')} control={<Checkbox checked={formData.active ?? true} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} />
                             <Alert severity="info">{t('pages.storageLocations.inactiveLocationsRemainVisibleForStockAndHistoryDeactivateChild')}</Alert>
-                            <TextField
-                                label={t('pages.storageLocations.storageLocationName')}
-                                value={formData.name}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                                required
-                                fullWidth
-                                autoFocus
-                            />
-                            <TextField
-                                        label={t('pages.storageLocations.areaSection2')}
-                                        placeholder={t('pages.storageLocations.eGShelfARoom204')}
-                                        value={formData.area}
-                                        onChange={(e) => setFormData((prev) => ({ ...prev, area: e.target.value }))}
-                                        fullWidth
-                                    />
-                                    <TextField
-                                        label={t('pages.storageLocations.locationBuilding')}
-                                        placeholder={t('pages.storageLocations.eGBuildingBRoom204')}
-                                        value={formData.location}
-                                        onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                                        fullWidth
-                                    />
-                                    <TextField
-                                        label={t('pages.storageLocations.positionShelf')}
-                                        placeholder={t('pages.storageLocations.eGRow3Compartment2')}
-                                        value={formData.position}
-                                        onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                                        fullWidth
-                                    />
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                <TextField
+                                    label={t('pages.storageLocations.storageLocationName')}
+                                    placeholder={t('pages.storageLocations.eGShelf3')}
+                                    value={formData.name}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                                    required
+                                    fullWidth
+                                    autoFocus
+                                />
+                                <TextField
+                                    label={t('forms.itemForm.locationCode')}
+                                    placeholder="R3"
+                                    value={formData.code ?? ''}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                                    helperText={t('forms.itemForm.locationCodeHelp')}
+                                    slotProps={{ htmlInput: { maxLength: 32 } }}
+                                    sx={{ minWidth: { sm: 180 } }}
+                                />
+                            </Stack>
                             <TextField
                                 label={t('common.description')}
                                 value={formData.description}

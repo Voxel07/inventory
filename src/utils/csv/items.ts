@@ -1,7 +1,8 @@
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
 import type { CsvReference } from './reference';
-import { catalogRowKind, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
+import { buildLocationIndex, resolveCsvLocation } from './locations';
+import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
   if (!val) return undefined;
@@ -36,11 +37,7 @@ export function parseItemsFromCsv(
   reference: CsvReference,
 ): ParsedItemRow[] {
   const results: ParsedItemRow[] = [];
-  const locMap = new Map<string, StorageLocation>();
-  for (const loc of storageLocations) {
-    locMap.set(loc.name.toLowerCase().trim(), loc);
-    locMap.set(loc.id.toLowerCase().trim(), loc);
-  }
+  const locationIndex = buildLocationIndex(storageLocations);
 
   const existingMap = new Map<string, Item>();
   for (const item of existingItems) {
@@ -93,15 +90,21 @@ export function parseItemsFromCsv(
     const locInput = getField(raw, LOCATION_ALIASES);
     let storageLocationId = '';
     let storageLocationName: string | undefined = undefined;
+    let storageLocationPath: string[] | undefined = undefined;
     let locationWarning: string | undefined = undefined;
+    let locationError: string | undefined = undefined;
 
     if (locInput) {
-      const match = locMap.get(locInput.toLowerCase().trim());
-      if (match) {
-        storageLocationId = match.id;
+      const match = resolveCsvLocation(locInput, locationIndex);
+      if (match.kind === 'found') {
+        storageLocationId = match.location.id;
+        storageLocationName = match.location.fullCode ? `${match.location.fullCode} · ${match.location.hierarchyPath ?? match.location.name}` : match.location.name;
+      } else if (match.kind === 'ambiguous') {
         storageLocationName = match.name;
+        locationError = `Lagerort "${match.name}" ist mehrdeutig – Code (z. B. WH1-R3) oder Pfad (Lager / Regal) angeben`;
       } else {
-        storageLocationName = locInput.trim();
+        storageLocationName = match.segments.join(' / ');
+        storageLocationPath = match.segments;
         locationWarning = `Lagerort "${storageLocationName}" existiert nicht und wird neu angelegt`;
       }
     }
@@ -122,6 +125,7 @@ export function parseItemsFromCsv(
       minStock,
       value,
       storageLocation: storageLocationId,
+      positionDetails: getField(raw, POSITION_ALIASES) || undefined,
       subcategory,
       supplier,
       hint,
@@ -133,6 +137,8 @@ export function parseItemsFromCsv(
       maintenanceIntervalDays: maintenanceDaysStr ? Math.round(parseNumber(maintenanceDaysStr, 0)) : undefined,
       nextMaintenanceDue,
       currentOperatingHours: currentOperatingHoursStr ? parseNumber(currentOperatingHoursStr, 0) : undefined,
+      // A meter column implies runtime tracking unless the row says otherwise.
+      tracksRuntime: getField(raw, TRACKS_RUNTIME_ALIASES) ? parseBoolean(getField(raw, TRACKS_RUNTIME_ALIASES)) : Boolean(currentOperatingHoursStr),
       fuelConsumptionLitersPer100Km: fuelConsumptionStr ? parseNumber(fuelConsumptionStr, 0) : undefined,
       batteryReplacementDue,
       bestBeforeDate,
@@ -142,7 +148,10 @@ export function parseItemsFromCsv(
     let status: ParsedItemRow['status'] = 'valid';
     let statusMessage: string | undefined = undefined;
 
-    if (existing) {
+    if (locationError) {
+      status = 'error';
+      statusMessage = locationError;
+    } else if (existing) {
       status = 'duplicate';
       statusMessage = `Artikel "${name}" existiert bereits (kann übersprungen oder aktualisiert werden)`;
     } else if (locationWarning) {
@@ -156,6 +165,7 @@ export function parseItemsFromCsv(
       rawRow: raw,
       storageLocationName,
       storageLocationId,
+      storageLocationPath,
       assetCodes: assetCodes.length > 0 ? assetCodes : undefined,
       status,
       statusMessage,

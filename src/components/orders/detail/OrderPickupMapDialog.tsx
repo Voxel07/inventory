@@ -1,3 +1,4 @@
+import { locationLabel } from '../../../utils/locationHierarchy';
 import { Button } from '../../shared/ActionButtons';
 import { Dialog } from '../../shared/ClosableDialog';
 import { useState } from 'react';
@@ -104,7 +105,7 @@ export function OrderPickupMapDialog({
               </MenuItem>
               {storageLocations.map((loc) => (
                 <MenuItem key={loc.id} value={loc.id}>
-                  {[loc.name, loc.area, loc.location, loc.position].filter(Boolean).join(' · ')}
+                  {locationLabel(loc)}
                 </MenuItem>
               ))}
             </Select>

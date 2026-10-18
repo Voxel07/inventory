@@ -12,6 +12,7 @@ import { createFactionOrder, getFactionOrders, getFactionOrder, submitFactionOrd
 import { createTransaction, getTransactions } from './transactionService';
 import { createOrder, generalOrderCommand, getOrders, returnOrder, transitionOrder } from './orderService';
 import { createStorageLocation } from './storageLocationService';
+import { buildLocationIndex, normalizeLocationRef } from '../utils/csv/locations';
 import { getItemStock } from '../utils/stock';
 import { createCsvOperationImporter } from './csvOperationImport';
 import { createCsvEventLogisticsImporter } from './csvEventLogisticsImport';
@@ -96,28 +97,38 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
   try {
     const factionIds = await importCsvFactions(newFactions);
     assertAuthSession(context);
+    // Keys: id, full code, path and unique names (see buildLocationIndex); values are location ids.
     const locCache = new Map<string, string>();
-    for (const loc of storageLocations) {
-      locCache.set(loc.name.toLowerCase().trim(), loc.id);
-    }
+    for (const [key, location] of buildLocationIndex(storageLocations)) if (location) locCache.set(key, location.id);
+    const locationsById = new Map(storageLocations.map((location) => [location.id, location]));
 
-    // Step 1: Auto-create missing storage locations if enabled
+    // Step 1: Auto-create missing storage locations level by level, reusing existing leading levels of the path.
     if (autoCreateLocations && tabType !== 'assemblies') {
-      const missingLocNames = new Set<string>();
+      const missingPaths = new Map<string, string[]>();
       for (const row of parsedItems) {
-        if (row.storageLocationName && !row.storageLocationId && !locCache.has(row.storageLocationName.toLowerCase().trim())) {
-          missingLocNames.add(row.storageLocationName.trim());
-        }
+        if (row.storageLocationPath && !row.storageLocationId) missingPaths.set(normalizeLocationRef(row.storageLocationPath.join(' / ')), row.storageLocationPath);
       }
 
-      for (const locName of missingLocNames) {
-        try {
-          setImportStatusText(t('services.csvImportService.creatingStorageLocationLocName', { locName: locName }));
-          const newLoc = await createStorageLocation({ name: locName });
-          locCache.set(locName.toLowerCase().trim(), newLoc.id);
-        } catch (err: unknown) {
-          assertAuthSession(context);
-          errors.push(`Fehler beim Erstellen von Lagerort "${locName}": ${(err as Error).message || err}`);
+      for (const segments of missingPaths.values()) {
+        let parent: StorageLocation | undefined;
+        for (let depth = 1; depth <= segments.length; depth++) {
+          const key = normalizeLocationRef(segments.slice(0, depth).join(' / '));
+          const existingId = locCache.get(key);
+          if (existingId) { parent = locationsById.get(existingId); continue; }
+          const name = segments[depth - 1];
+          try {
+            setImportStatusText(t('services.csvImportService.creatingStorageLocationLocName', { locName: segments.slice(0, depth).join(' / ') }));
+            const created = await createStorageLocation({ name, parentLocationId: parent?.id ?? null, warehouseId: parent?.warehouseId ?? null,
+              locationType: depth === segments.length ? 'bin' : depth === 1 ? 'warehouse' : 'area' });
+            locCache.set(key, created.id);
+            if (created.fullCode) locCache.set(created.fullCode.toLowerCase(), created.id);
+            locationsById.set(created.id, created);
+            parent = created;
+          } catch (err: unknown) {
+            assertAuthSession(context);
+            errors.push(`Fehler beim Erstellen von Lagerort "${segments.slice(0, depth).join(' / ')}": ${(err as Error).message || err}`);
+            break;
+          }
         }
       }
     }
@@ -136,8 +147,8 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
 
         // Resolve location ID if created on the fly
         let locationId = row.data.storageLocation;
-        if (!locationId && row.storageLocationName) {
-          locationId = locCache.get(row.storageLocationName.toLowerCase().trim()) || '';
+        if (!locationId && row.storageLocationPath) {
+          locationId = locCache.get(normalizeLocationRef(row.storageLocationPath.join(' / '))) || '';
         }
 
         const hasCustomAssets = row.data.trackingMode === 'serialized' && Boolean(row.assetCodes && row.assetCodes.length > 0);

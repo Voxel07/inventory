@@ -47,7 +47,8 @@ import {
     CartesianGrid,
     Tooltip as ChartTooltip,
 } from 'recharts';
-import { useItem, useUpdateItem } from '../hooks/useItems';
+import { useItem, useUpdateItem, useItemCategories } from '../hooks/useItems';
+import { locationLabel } from '../utils/locationHierarchy';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { getItemStock } from '../utils/stock';
 import { buildStockHistory } from '../utils/stockHistory';
@@ -140,7 +141,7 @@ export function ItemDetail() {
 
     const itemTransactions = itemTransactionsData ?? [];
 
-    const categories = item?.category ? [item.category] : [];
+    const { data: categories = [] } = useItemCategories();
 
     const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
@@ -226,7 +227,6 @@ export function ItemDetail() {
     const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 5) ? 'low' : 'ok';
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' }[availability];
     const location = item.expand?.storageLocation;
-    const exactLocation = [location?.location, location?.position].filter(Boolean).join(' / ');
     const profile = equipment.data;
     const sortedTransactions = [...itemTransactions].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const userName = (tx: typeof itemTransactions[number]) => tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—';
@@ -385,19 +385,21 @@ export function ItemDetail() {
                 <DetailPanel title={t('common.overview')}>
                     <FieldGrid>
                         <Field label={t('common.category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
-                        <Field label={t('common.storageLocation')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location?.name || item.storageLocation}</Link> : '—'}</Field>
-                        <Field label={t('pages.itemDetail.exactLocation')}>{exactLocation || '—'}</Field>
-                        <Field label={t('common.returnLocation')}>{item.expand?.returnLocation?.name || (!item.returnLocation || item.returnLocation === item.storageLocation ? location?.name : undefined) || '—'}</Field>
+                        <Field label={t('common.storageLocation')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location ? locationLabel(location) : item.storageLocation}</Link> : '—'}</Field>
+                        <Field label={t('forms.itemForm.positionInLocation')}>{item.positionDetails || '—'}</Field>
+                        <Field label={t('common.returnLocation')}>{locationLabel(item.expand?.returnLocation ?? (!item.returnLocation || item.returnLocation === item.storageLocation ? location : undefined)) || '—'}</Field>
                         <Field label={t('pages.itemDetail.ownerProvider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
                         <Field label={t('pages.itemDetail.keeperContact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
                         <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{item.stock?.totalOwned ?? 0}</Field>
                         <Field label={t('pages.itemDetail.trackingMode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
+                        {item.tracksRuntime && <Field label={t('enum.value.operating_hours')}>{t('forms.itemForm.recordOperatingHoursOnReturn')}</Field>}
                         {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
                         <Field label={t('common.visibility')}>{item.access?.privateResource ? t('pages.itemDetail.private') : t('enum.value.organization')}</Field>
                         <Field label={t('pages.itemDetail.created')}>{formatDate(item.created)}</Field>
                         {isVehicle && <Field label={t('pages.itemDetail.fuelConsumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
                         {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
-                        {isGenerator && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
+                        {/* Serialized units carry their own meters (see each unit's runtime log). */}
+                        {isGenerator && item.trackingMode !== 'serialized' && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
                         {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
                         {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
                         <Field label={t('pages.itemDetail.itemID')}><span className="mono">{item.id}</span></Field>

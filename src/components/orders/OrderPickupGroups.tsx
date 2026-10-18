@@ -1,3 +1,4 @@
+import { locationLabel } from '../../utils/locationHierarchy';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -70,7 +71,7 @@ export function OrderPickupGroups({ kind, orderId }: { kind: OrderKind; orderId:
             <TextField fullWidth size="small" label={t('orders.orderPickupGroups.itemGroup')} value={draft[item.itemId]?.groupName ?? ''} slotProps={{ htmlInput: { maxLength: 160 } }} onChange={e => update(item.itemId, { groupName: e.target.value })} />
             <TextField select fullWidth size="small" label={t('orders.orderPickupGroups.pickupPoint')} value={draft[item.itemId]?.pickupLocationId ?? ''} onChange={e => update(item.itemId, { pickupLocationId: e.target.value || null })}>
               <MenuItem value="">{t('orders.orderPickupGroups.notSet')}</MenuItem>
-              {locations.filter(l => l.active).map(l => <MenuItem key={l.id} value={l.id}>{[l.name, l.area, l.position].filter(Boolean).join(' · ')}</MenuItem>)}
+              {locations.filter(l => l.active).map(l => <MenuItem key={l.id} value={l.id}>{locationLabel(l)}</MenuItem>)}
             </TextField>
           </Stack>
         </Paper>)}</Stack>

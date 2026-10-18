@@ -1,3 +1,4 @@
+import { locationLabel } from '../utils/locationHierarchy';
 import { formatDate } from '../utils/dateFormat';
 import { Button } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
@@ -141,7 +142,7 @@ export function FactionOrders() {
       ? `${order.pickupLatitude.toFixed(5)}, ${order.pickupLongitude.toFixed(5)}`
       : undefined;
     return location
-      ? [...[location.name, location.area, location.location, location.position].filter(Boolean), point].filter(Boolean).join(' · ')
+      ? [locationLabel(location), point].filter(Boolean).join(' · ')
       : point ?? '—';
   }
 

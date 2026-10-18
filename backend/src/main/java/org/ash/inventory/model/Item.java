@@ -84,6 +84,9 @@ public class Item extends BaseEntity {
     public LocalDate nextMaintenanceDue;
     @Column(name = "current_operating_hours", nullable = false)
     public BigDecimal currentOperatingHours = BigDecimal.ZERO;
+    /** The warehouse records the hours run (per unit, per event) when it checks a return. */
+    @Column(name = "tracks_runtime", nullable = false)
+    public boolean tracksRuntime;
     @Column(name = "fuel_consumption_l_100km")
     public BigDecimal fuelConsumptionLitersPer100Km;
     @Column(name = "battery_replacement_due")

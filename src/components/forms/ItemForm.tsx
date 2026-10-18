@@ -26,6 +26,7 @@ import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { useUIStore } from '../../store/uiStore';
 import { type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useT } from '../../utils/naming';
+import { LocationPicker } from '../shared/LocationPicker';
 
 interface Props {
     title: string;
@@ -54,7 +55,8 @@ export function ItemForm({
     const canCreatePublic = canEditCatalog(user);
     const canCreateLocation = canCreateInventory(user);
     const [formData, setFormData] = useState<ItemFormData>({
-        privateResource: initialData ? Boolean(initialData.access?.privateResource) : true,
+        // Staff add to the shared catalog by default; members can only create private items.
+        privateResource: initialData ? Boolean(initialData.access?.privateResource) : !canCreatePublic,
         name: initialData?.name ?? '',
         description: initialData?.description ?? '',
         amount: undefined,
@@ -65,6 +67,7 @@ export function ItemForm({
         supplier: initialData?.supplier ?? '',
         eventTypes: initialData ? (initialData.eventTypes ?? []) : [...eventTypes],
         storageLocation: initialData?.storageLocation ?? '',
+        positionDetails: initialData?.positionDetails ?? '',
         returnLocation: initialData?.returnLocation ?? initialData?.storageLocation ?? '',
         hint: initialData?.hint ?? '',
         trackingMode: initialData?.trackingMode ?? 'bulk',
@@ -78,6 +81,7 @@ export function ItemForm({
         maintenanceIntervalDays: initialData?.maintenanceIntervalDays,
         nextMaintenanceDue: initialData?.nextMaintenanceDue ?? '',
         currentOperatingHours: initialData?.currentOperatingHours,
+        tracksRuntime: initialData?.tracksRuntime ?? false,
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
         batteryReplacementDue: initialData?.batteryReplacementDue ?? '',
         bestBeforeDate: initialData?.bestBeforeDate ?? '',
@@ -98,14 +102,8 @@ export function ItemForm({
     const [nameError, setNameError] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
     const [addLocationOpen, setAddLocationOpen] = useState(false);
-    const [newLocData, setNewLocData] = useState({
-        name: '',
-        area: '',
-        location: '',
-        position: '',
-        description: '',
-        privateResource: true,
-    });
+    const emptyLocation = { name: '', code: '', parentLocationId: null as string | null, warehouseId: null as string | null, description: '', privateResource: !canCreatePublic };
+    const [newLocData, setNewLocData] = useState(emptyLocation);
 
     const createLoc = useCreateStorageLocation();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -141,7 +139,7 @@ export function ItemForm({
             onSuccess: (newLoc) => {
                 setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), ...storageLocationChange(prev, newLoc.id) }));
                 setAddLocationOpen(false);
-                setNewLocData({ name: '', area: '', location: '', position: '', description: '', privateResource: true });
+                setNewLocData(emptyLocation);
                 showSnackbar(t('forms.itemForm.storageLocationCreated'), 'success');
             },
             onError: () => {
@@ -323,6 +321,13 @@ export function ItemForm({
                         />
                         <FormHelperText sx={{ mt: 0 }}>{t('forms.itemForm.severalIdenticalItemsPerBoxEG500Screws')}</FormHelperText>
                     </Box>}
+                    {formData.inventoryRole !== 'consumable' && <Box>
+                        <FormControlLabel
+                            control={<Checkbox checked={Boolean(formData.tracksRuntime)} onChange={(event) => setFormData((prev) => ({ ...prev, tracksRuntime: event.target.checked }))} />}
+                            label={t('forms.itemForm.recordOperatingHoursOnReturn')}
+                        />
+                        <FormHelperText sx={{ mt: 0 }}>{t('forms.itemForm.recordOperatingHoursOnReturnHelp')}</FormHelperText>
+                    </Box>}
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                         {!initialData && (
                             <TextField
@@ -334,6 +339,7 @@ export function ItemForm({
                                 fullWidth
                                 helperText={formData.trackingMode === 'serialized'
                                     ? t('forms.itemForm.createsOneAssetPerUnitEGSKU001')
+                                    : formData.trackingMode === 'lot_tracked' ? t('forms.itemForm.openingStockBecomesTheFirstLot')
                                     : isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : undefined}
                                 slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
                             />
@@ -371,30 +377,24 @@ export function ItemForm({
 
                 <FormSection title={t('enum.value.location')}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                        <Autocomplete
-                            options={storageLocations}
-                            getOptionLabel={(option) => option.name || ''}
-                            isOptionEqualToValue={(option, val) => option.id === val.id}
-                            value={storageLocations.find((loc) => loc.id === formData.storageLocation) || null}
-                            onChange={(_e, newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), ...storageLocationChange(prev, newValue?.id ?? '') }))}
-                            renderInput={(params) => <TextField {...params} label={t('common.storageLocation')} fullWidth />}
-                            sx={{ flexGrow: 1, minWidth: 0 }}
-                        />
+                        <LocationPicker locations={storageLocations} value={formData.storageLocation} label={t('common.storageLocation')}
+                            helperText={t('forms.itemForm.searchByCodeOrPath')}
+                            onChange={(newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), ...storageLocationChange(prev, newValue?.id ?? '') }))} />
                         {canCreateLocation && <Button variant="outlined" startIcon={<AddLocationAltOutlinedIcon />} onClick={() => setAddLocationOpen(true)}
                             aria-label={t('forms.itemForm.createANewStorageLocation')} sx={{ height: 56, flexShrink: 0 }}>
                             {t('forms.itemForm.new')}
                         </Button>}
                     </Box>
-                    <Autocomplete
-                        options={storageLocations}
-                        getOptionLabel={(option) => option.name || ''}
-                        isOptionEqualToValue={(option, val) => option.id === val.id}
-                        value={storageLocations.find((loc) => loc.id === formData.returnLocation) || null}
-                        onChange={(_event, value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))}
-                        renderInput={(params) => (
-                            <TextField {...params} label={t('common.returnLocation')} helperText={t('forms.itemForm.whereTheItemGoesBackAfterUse')} fullWidth />
-                        )}
+                    <TextField
+                        label={t('forms.itemForm.positionInLocation')}
+                        value={formData.positionDetails ?? ''}
+                        onChange={handleChange('positionDetails')}
+                        helperText={t('forms.itemForm.positionInLocationHelp')}
+                        fullWidth
                     />
+                    <LocationPicker locations={storageLocations} value={formData.returnLocation} label={t('common.returnLocation')}
+                        helperText={t('forms.itemForm.whereTheItemGoesBackAfterUse')}
+                        onChange={(value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))} />
                 </FormSection>
 
                 <Accordion defaultExpanded={hasAdditionalDetails || categorySpecific}>
@@ -451,13 +451,13 @@ export function ItemForm({
                                     )}
                                     {isGenerator && (
                                         <>
-                                            <TextField
+                                            {formData.trackingMode !== 'serialized' && <TextField
                                                 label={t('forms.itemForm.runningHours')}
                                                 type="number"
                                                 value={numericInputs.currentOperatingHours}
                                                 onChange={handleNumberChange('currentOperatingHours')}
                                                 slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }}
-                                            />
+                                            />}
                                             <TextField
                                                 label={t('forms.itemForm.maintenanceIntervalDays')}
                                                 type="number"
@@ -494,6 +494,10 @@ export function ItemForm({
             <FormDialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs">
                 <DialogForm title={t('forms.itemForm.addStorageLocation')} onSubmit={handleCreateLocSubmit} onCancel={() => setAddLocationOpen(false)}
                     noValidate pending={createLoc.isPending} submitDisabled={!newLocData.name.trim()} submitLabel={t('forms.itemForm.create')}>
+                    <LocationPicker locations={storageLocations} value={newLocData.parentLocationId} label={t('forms.itemForm.insideLocation')}
+                        helperText={t('forms.itemForm.insideLocationHelp')}
+                        onChange={(parent) => setNewLocData((prev) => ({ ...prev, parentLocationId: parent?.id ?? null, warehouseId: parent?.warehouseId ?? null,
+                            privateResource: prev.privateResource || Boolean(parent?.access?.privateResource) }))} />
                     <TextField
                         label={t('profile.name')}
                         value={newLocData.name}
@@ -503,25 +507,12 @@ export function ItemForm({
                         autoFocus
                     />
                     <TextField
-                        label={t('forms.itemForm.area')}
-                        helperText={t('forms.itemForm.optional')}
-                        value={newLocData.area}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, area: e.target.value }))}
+                        label={t('forms.itemForm.locationCode')}
+                        helperText={t('forms.itemForm.locationCodeHelp')}
+                        value={newLocData.code}
+                        onChange={(e) => setNewLocData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
                         fullWidth
-                    />
-                    <TextField
-                        label={t('forms.itemForm.location')}
-                        helperText={t('forms.itemForm.optional')}
-                        value={newLocData.location}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, location: e.target.value }))}
-                        fullWidth
-                    />
-                    <TextField
-                        label={t('forms.itemForm.position')}
-                        helperText={t('forms.itemForm.optional')}
-                        value={newLocData.position}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, position: e.target.value }))}
-                        fullWidth
+                        slotProps={{ htmlInput: { maxLength: 32 } }}
                     />
                     <TextField
                         label={t('common.description')}

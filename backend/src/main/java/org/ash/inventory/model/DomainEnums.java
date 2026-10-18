@@ -16,7 +16,7 @@ public final class DomainEnums {
     public enum InventoryRole { consumable, returnable }
     public enum AssetState { available, reserved, staged, in_transit, in_custody, in_field, returned_pending_check, damaged, in_repair, in_maintenance, lost, written_off }
     public enum ConditionStatus { new_condition, good, fair, damaged, unsafe, lost }
-    public enum LocationType { warehouse, bin, staging, event_site, vehicle, in_custody, quarantine, repair, scrap }
+    public enum LocationType { warehouse, area, section, shelf, compartment, bin, staging, event_site, vehicle, in_custody, quarantine, repair, scrap }
     public enum MaintenanceStatus { certified, due_soon, overdue, in_service }
     public enum MaintenanceType { dguv_v3, generator_service, battery_test, chrono_fps }
     public enum MaintenanceResult { passed, failed, advisory }

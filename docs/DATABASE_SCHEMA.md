@@ -90,10 +90,10 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 |---|---|
 | `items` | UUID, unique SKU, category/subcategory, description/hint, event tags, active flag, tracking mode, inventory role, minimum stock, value cents, ownership/consent metadata; storage/return locations; category meters/dates |
 | `item_images` | UUID; item FK, object key and display order |
-| `assemblies` | UUID; name/description/hint, image object key, event tags, active flag and optional access policy |
+| `assemblies` | UUID; name, category/subcategory, description/hint, image object key, event tags, active flag and optional access policy |
 | `assembly_items` | Composite `(assembly_id, item_id)` PK; component quantity |
 | `warehouses` | UUID; unique code, name/description and active flag |
-| `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type, address-like fields, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
+| `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type (warehouse/area/section/shelf/compartment/bin/…), level `code` (unique among siblings) and maintained `full_code` (`WH1-E1-R3-F2`), description, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
 
 Location services enforce no cycles and same-warehouse parentage. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
@@ -143,6 +143,7 @@ Both order kinds use `OrderService` and the same relational foreign keys and sto
 | `damage_reports` | UUID; item XOR assembly; optional asset/order/handover, reporter/handler; severity/status, quantities, notes, safety impact, position map and idempotency key |
 | `repair_cases` | UUID; unique damage-report FK; asset/handover/repair owner/vendor/approver links; status, parts/cost/verification notes and pending repaired quantity |
 | `maintenance_schedules` | UUID; item/asset/responsible user; date/hour/usage interval, warning, next due, checklist, active/checkout-block flags |
+| `runtime_entries` | UUID; item, optional asset/event/order, recording user; hours booked, meter reading after, source (manual/order_return/maintenance/correction), time and notes. Every meter change is booked here |
 | `maintenance_records` | UUID; item/asset/schedule/inspector links; inspection type/result/time, hours, next due, certificate key/number and notes |
 
 Item-level maintenance status/calendar columns still duplicate schedule-based state. They are used in current evaluation/report fallback paths; schedules-only maintenance is a target (PLAN-10).
@@ -242,7 +243,7 @@ Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still 
 | Collector name, pickup coordinates, notes | `orders`, `custody_handovers` | Staff input | Permanent |
 | Handover acknowledgements, placement photos, certificates | Media store (local disk or Garage S3) referenced from `custody_handovers`, `return_submissions`, `maintenance_records` | Uploads | Permanent once attached; staged uploads purged after 24 h |
 | Display owner, keeper name/contact | `items` | Staff/owner input | Until edited; items are retired, not deleted |
-| Private location address fields and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |
+| Private location codes, descriptions and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |
 | Loan contact and terms, pickup/return details, consent evidence | `loan_arrangements`, `equipment_commitments` | Owner/staff input | Permanent |
 | Requests, reminders, notifications | `member_requests`, `action_reminders`, `notifications` | Member actions | Indefinite |
 | Event attendee names, optional account link, roles, arrival/departure times, notes | `event_people`, `event_attendees`, `event_attendee_roles` | Planner input; event crew often has no app account | People kept indefinitely for reuse; attendances until the event occurrence is deleted |

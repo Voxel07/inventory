@@ -92,6 +92,26 @@ public class CatalogResource {
         return mapper.asset(service.updateAsset(id, assetId, input));
     }
 
+    @jakarta.inject.Inject org.ash.inventory.service.RuntimeService runtime;
+
+    @POST @Path("/items/{id}/assets/{assetId}/runtime") @Transactional
+    public ApiResponses.RuntimeEntryResponse logRuntime(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
+            @Valid ApiModels.RuntimeInput input) {
+        return mapper.runtime(runtime.log(id, assetId, input));
+    }
+
+    @Paged @GET @Path("/items/{id}/assets/{assetId}/runtime") @Transactional
+    public List<ApiResponses.RuntimeEntryResponse> assetRuntime(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return runtime.forAsset(id, assetId, page, size).stream().map(mapper::runtime).toList();
+    }
+
+    @Paged @GET @Path("/items/{id}/runtime") @Transactional
+    public List<ApiResponses.RuntimeEntryResponse> itemRuntime(@PathParam("id") UUID id,
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return runtime.forItem(id, page, size).stream().map(mapper::runtime).toList();
+    }
+
     @POST @Path("/items/{id}/assets/{assetId}/relocate") @Transactional
     public ApiResponses.AssetInstanceResponse relocateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
             @Valid ApiModels.AssetRelocationInput input) {

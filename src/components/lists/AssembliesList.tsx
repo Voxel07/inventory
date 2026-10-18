@@ -1,3 +1,4 @@
+import { locationLabel } from '../../utils/locationHierarchy';
 import { useItemsByIds } from '../../hooks/useItems';
 import { LoadMore } from '../shared/LoadMore';
 import { useAuth } from '../../hooks/useAuth';
@@ -79,17 +80,17 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
             const expandedById = new Map((assembly.expand?.itemIds ?? []).map((item) => [item.id, item]));
             const componentIds = [...new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})])];
             const componentItems = componentIds.map((id) => itemById.get(id) ?? expandedById.get(id));
-            const categories = componentItems.map((item) => [item?.category, item?.subcategory].filter(Boolean).join(' · '));
+            const category = [assembly.category, assembly.subcategory].filter(Boolean).join(' · ');
             const locations = [...new Set(componentItems.map((item) => {
                 const location = item?.expand?.storageLocation;
-                return location ? [location.name, location.location, location.position].filter(Boolean).join(' / ') : item?.storageLocation;
+                return location ? locationLabel(location) : item?.storageLocation;
             }).filter((location): location is string => Boolean(location)))];
             return {
                 id: assembly.id,
                 assembly,
                 name: assembly.name,
-                category: [...new Set(categories.filter(Boolean))].join(', ') || '—',
-                categories: componentItems.map((item) => item?.category).filter((category): category is string => Boolean(category)),
+                category: category || '—',
+                categories: assembly.category ? [assembly.category] : [],
                 location: locations.join(', ') || '—',
                 locations,
                 events: assembly.eventTypes?.join(', ') || '—',

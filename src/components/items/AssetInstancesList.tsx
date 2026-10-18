@@ -47,6 +47,9 @@ import { OperatingHoursDialog } from './OperatingHoursDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
 import { formatStatus } from '../../utils/formatters';
+import { LocationPicker } from '../shared/LocationPicker';
+import { AssetDetailsFields, AssetEditFields } from './AssetDetailsFields';
+import { assetEditInput } from './assetInput';
 
 interface Props {
     item: Item;
@@ -199,13 +202,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
 
     function handleOpenEdit(asset: AssetInstance) {
         setEditAsset(asset);
-        setEditInput({
-            assetCode: asset.assetCode,
-            serialNumber: asset.serialNumber || '',
-            operatingHours: asset.operatingHours,
-            notes: asset.notes || '',
-            expectedVersion: asset.version,
-        });
+        setEditInput(assetEditInput(asset));
     }
 
     function handleSaveSingle() {
@@ -338,9 +335,10 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                                     <Box>
-                                        <Typography sx={{ fontWeight: 700, fontSize: '1rem' }}>
+                                        <Link component={RouterLink} to={`/items/${item.id}/assets/${asset.id}`} underline="hover"
+                                            sx={{ fontWeight: 700, fontSize: '1rem', display: 'block' }} title={t('items.assetInstancesList.openAssetInfoPage')}>
                                             {asset.assetCode}
-                                        </Typography>
+                                        </Link>
                                         {asset.serialNumber && (
                                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                                                 S/N: {asset.serialNumber}
@@ -355,7 +353,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                 </Box>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
                                     <div>{t('items.assetInstancesList.condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
-                                    <div>{t('enum.value.location')}: <strong>{asset.currentLocationName || '—'}</strong></div>
+                                    <div>{t('enum.value.location')}: <strong>{asset.currentLocationCode || asset.currentLocationName || '—'}</strong></div>
                                     {asset.operatingHours != null && (
                                         <div>{t('items.assetInstancesList.hours')}: <strong>{asset.operatingHours} h</strong></div>
                                     )}
@@ -398,7 +396,9 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                         />
                                     </TableCell>}
                                     <TableCell sx={{ fontWeight: 700 }}>
-                                        {asset.assetCode}
+                                        <Link component={RouterLink} to={`/items/${item.id}/assets/${asset.id}`} underline="hover" title={t('items.assetInstancesList.openAssetInfoPage')}>
+                                            {asset.assetCode}
+                                        </Link>
                                     </TableCell>
                                     <TableCell>{asset.serialNumber || '—'}</TableCell>
                                     <TableCell>
@@ -410,7 +410,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                         {reservationNote(asset)}
                                     </TableCell>
                                     <TableCell>{formatStatus(asset.conditionStatus)}</TableCell>
-                                    <TableCell>{asset.currentLocationName || '—'}</TableCell>
+                                    <TableCell title={asset.currentLocationName}>{asset.currentLocationCode || asset.currentLocationName || '—'}</TableCell>
                                     <TableCell>
                                         {canEdit ? <Link component="button" type="button" underline="hover" onClick={() => setHoursAsset(asset)}
                                             title={t('items.assetInstancesList.logOperatingHours')}>
@@ -474,17 +474,9 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         <MenuItem value="damaged">{t('enum.itemStatus.damaged')}</MenuItem>
                         <MenuItem value="unsafe">{t('enum.value.unsafe')}</MenuItem>
                     </TextField>
-                    <TextField
-                        select
-                        label={t('common.storageLocation')}
-                        value={singleInput.currentLocationId || ''}
-                        onChange={(e) => updateSingle({ currentLocationId: e.target.value })}
-                        fullWidth
-                    >
-                        {storageLocations?.map((loc) => (
-                            <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
-                        ))}
-                    </TextField>
+                    <LocationPicker locations={storageLocations ?? []} value={singleInput.currentLocationId} label={t('common.storageLocation')}
+                        onChange={(location) => updateSingle({ currentLocationId: location?.id })} />
+                    <AssetDetailsFields value={singleInput} onChange={updateSingle} />
                     <TextField
                         label={t('enum.value.operating_hours')}
                         type="number"
@@ -539,17 +531,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         fullWidth
                         slotProps={{ htmlInput: { min: 1 } }}
                     />
-                    <TextField
-                        select
-                        label={t('common.storageLocation')}
-                        value={batchInput.currentLocationId || ''}
-                        onChange={(e) => setBatchInput((prev) => ({ ...prev, currentLocationId: e.target.value }))}
-                        fullWidth
-                    >
-                        {storageLocations?.map((loc) => (
-                            <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
-                        ))}
-                    </TextField>
+                    <LocationPicker locations={storageLocations ?? []} value={batchInput.currentLocationId} label={t('common.storageLocation')}
+                        onChange={(location) => setBatchInput((prev) => ({ ...prev, currentLocationId: location?.id }))} />
                 </DialogContent>
                 <DialogActions>
                     <Button title={translate('common.discardChangesAndClose')} onClick={() => setBatchOpen(false)}>{t('common.cancel')}</Button>
@@ -563,33 +546,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             <Dialog open={!!editAsset} onClose={() => setEditAsset(null)} maxWidth="xs" fullWidth>
                 <DialogTitle>{t('items.assetInstancesList.editAsset')}: {editAsset?.assetCode}</DialogTitle>
                 <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <TextField
-                        label={t('items.assetInstancesList.assetCode')}
-                        value={editInput.assetCode || ''}
-                        onChange={(e) => updateEdit({ assetCode: e.target.value })}
-                        fullWidth
-                    />
-                    <TextField
-                        label={t('items.assetInstancesList.serialNumber2')}
-                        value={editInput.serialNumber || ''}
-                        onChange={(e) => updateEdit({ serialNumber: e.target.value })}
-                        fullWidth
-                    />
-                    <TextField
-                        label={t('enum.value.operating_hours')}
-                        type="number"
-                        value={editInput.operatingHours ?? ''}
-                        onChange={(e) => updateEdit({ operatingHours: e.target.value ? Number(e.target.value) : undefined })}
-                        fullWidth
-                    />
-                    <TextField
-                        label={t('items.assetInstancesList.notes')}
-                        multiline
-                        rows={2}
-                        value={editInput.notes || ''}
-                        onChange={(e) => updateEdit({ notes: e.target.value })}
-                        fullWidth
-                    />
+                    <AssetEditFields value={editInput} onChange={updateEdit} />
                 </DialogContent>
                 <DialogActions>
                     <Button title={translate('common.discardChangesAndClose')} onClick={() => setEditAsset(null)}>{t('common.cancel')}</Button>

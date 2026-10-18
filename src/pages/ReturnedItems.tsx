@@ -37,6 +37,8 @@ import { useAppLanguage, useT } from '../utils/naming';
 import { formatDateTime } from '../utils/dateFormat';
 import { formatStatus } from '../utils/formatters';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import { RuntimeReturnField } from '../components/items/RuntimeReturnField';
+import { parseHoursRun } from '../utils/runtimeHours';
 
 const statusColors: Record<ReturnSubmissionStatus, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -148,7 +150,9 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
   const acknowledge = useAcknowledgeReturnSubmission();
   const reject = useRejectReturnSubmission();
   const [notes, setNotes] = useState('');
+  const [hoursRun, setHoursRun] = useState('');
   const [rejectAttempted, setRejectAttempted] = useState(false);
+  const runtimeMissing = submission.tracksRuntime && parseHoursRun(hoursRun) == null;
   const pending = acknowledge.isPending || reject.isPending;
   const canDecide = submission.status === 'pending' && canOperateWarehouse(user);
   const error = acknowledge.error || reject.error;
@@ -156,7 +160,9 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
 
   function decide(accept: boolean) {
     if (!accept && !notes.trim()) { setRejectAttempted(true); return; }
-    (accept ? acknowledge : reject).mutate({ id: submission.id, notes: notes.trim() }, { onSuccess: onClose });
+    if (accept && runtimeMissing) return;
+    if (accept) acknowledge.mutate({ id: submission.id, notes: notes.trim(), hoursRun: submission.tracksRuntime ? parseHoursRun(hoursRun) : undefined }, { onSuccess: onClose });
+    else reject.mutate({ id: submission.id, notes: notes.trim() }, { onSuccess: onClose });
   }
 
   return <FormDialog open onClose={close}>
@@ -189,6 +195,7 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
           <Fact label={t('common.returnLocation')}>{submission.expectedReturnLocationName || '—'}</Fact>
           <Fact label={t('pages.returnedItems.submitted2')}>{formatDateTime(submission.created)}</Fact>
           {submission.assetCode && <Fact label={t('common.asset')}><span className="mono">{submission.assetCode}</span></Fact>}
+          {submission.runtimeHours != null && <Fact label={t('items.runtimeReturnField.hoursRun')}>{`${submission.runtimeHours} h${submission.eventName ? ` · ${submission.eventName}` : ''}`}</Fact>}
         </FactList>
         {submission.notes && <Box>
           <Typography variant="body2" color="text.secondary">{t('pages.returnedItems.placementNotes')}</Typography>
@@ -205,6 +212,8 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
         </Box>}
         {canDecide && <>
           <Alert severity="info">{t('pages.returnedItems.returningToStockMakesTheQuantityAvailableAgainRejectingKeeps')}</Alert>
+          {submission.tracksRuntime && <RuntimeReturnField size="medium" value={hoursRun} onChange={setHoursRun}
+            current={submission.currentOperatingHours} eventName={submission.eventName} />}
           <TextField label={t('pages.returnedItems.inspectionNotesReason')} value={notes} multiline minRows={2}
             onChange={(event) => setNotes(event.target.value)} error={rejectAttempted && !notes.trim()}
             helperText={rejectAttempted && !notes.trim() ? t('pages.returnedItems.aReasonIsRequiredToReject') : t('pages.returnedItems.optionalWhenReturningToStock')} />
@@ -216,7 +225,7 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
       {canDecide ? <>
         <Button onClick={close} disabled={pending} sx={{ mr: 'auto' }}>{t('common.cancel')}</Button>
         <Button color="error" variant="outlined" disabled={pending} onClick={() => decide(false)}>{t('pages.returnedItems.reject')}</Button>
-        <Button variant="contained" disabled={pending} onClick={() => decide(true)}>{t('pages.returnedItems.returnToStock')}</Button>
+        <Button variant="contained" disabled={pending || runtimeMissing} onClick={() => decide(true)}>{t('pages.returnedItems.returnToStock')}</Button>
       </> : <Button onClick={close}>{t('common.close')}</Button>}
     </DialogActions>
   </FormDialog>;

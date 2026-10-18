@@ -34,8 +34,8 @@ import { byIds, installFixtureApi } from './fixtures/api';
 
 const query = new URLSearchParams(location.search);
 const locations = [
-  fixtureLocation({ id: 'location-a', name: 'Shelf A', position: 'Left', location: 'Warehouse' }),
-  fixtureLocation({ id: 'location-b', name: 'Shelf B', position: 'Right', location: 'Warehouse' }),
+  fixtureLocation({ id: 'location-a', name: 'Shelf A', code: 'A', fullCode: 'WH-A', hierarchyPath: 'Warehouse / Shelf A' }),
+  fixtureLocation({ id: 'location-b', name: 'Shelf B', code: 'B', fullCode: 'WH-B', hierarchyPath: 'Warehouse / Shelf B' }),
   fixtureLocation({ id: 'location-empty', name: 'Empty shelf' }),
 ];
 const items: Item[] = [7, 3].map((quantity, index) => fixtureItem({
@@ -67,7 +67,7 @@ items.push({ ...items[1], id: 'rental-1', name: 'My checked-out rental', eventTy
 const custody: CheckedOutRow[] = [{ key: 'rental:preview', itemId: 'rental-1', personId: 'preview', person: 'Preview user', name: 'My checked-out rental', checkedOut: 1,
   category: 'Equipment', event: 'LightSim', storageLocation: 'Shelf A', eventKey: 'LS', pendingQuantity: 0 }];
 const returns: ReturnSubmission[] = [{ id: 'return-1', itemId: 'item-1', itemName: 'Radio', quantity: 1, returnedForUserName: 'Preview user', returnedForUserId: 'preview',
-  submittedById: 'preview', submittedByName: 'Preview user', expectedReturnLocationName: 'Shelf A', status: 'pending', created: now, updated: now, reportedDamage: [],
+  submittedById: 'preview', submittedByName: 'Preview user', expectedReturnLocationName: 'Shelf A', status: 'pending', created: now, updated: now, reportedDamage: [], tracksRuntime: false,
   notes: 'Left on the labelled return shelf; warehouse acknowledgement outstanding.' }];
 const asset = (id: string, itemId: string, availabilityStatus: AssetInstance['availabilityStatus'], extra: Partial<AssetInstance> = {}): AssetInstance => ({
   id, itemId, assetCode: id.toUpperCase(), availabilityStatus, conditionStatus: 'good', serviceStatus: 'certified', active: true, version: 0,
