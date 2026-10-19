@@ -47,6 +47,7 @@ const Procurement = lazy(() => import('./pages/Procurement').then((m) => ({ defa
 const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ default: m.Maintenance })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
 const LocationScan = lazy(() => import('./pages/LocationScan').then(m => ({ default: m.LocationScan })));
+const StorageLabels = lazy(() => import('./pages/StorageLabels').then(m => ({ default: m.StorageLabels })));
 const Operations = lazy(() => import('./pages/Operations').then((m) => ({ default: m.Operations })));
 const SharingGroups = lazy(() => import('./pages/SharingGroups').then((m) => ({ default: m.SharingGroups })));
 
@@ -151,6 +152,7 @@ function AppContent() {
               <Route path="/locations/:locationId" element={<LocationScan />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/storage-locations" element={<CatalogAccessGuard><StorageLocations /></CatalogAccessGuard>} />
+              <Route path="/storage-locations/:locationId/labels" element={<CatalogAccessGuard><StorageLabels /></CatalogAccessGuard>} />
               <Route path="/operations" element={<InventoryManagerGuard><Operations /></InventoryManagerGuard>} />
               <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
               <Route path="/sharing" element={<SharingGroups />} />

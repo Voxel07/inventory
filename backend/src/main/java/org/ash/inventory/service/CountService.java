@@ -46,16 +46,10 @@ public class CountService {
     public CountDtos.CountResponse create(CountDtos.CountInput input) {
         var actor = actors.current();
         actors.requireWarehouse();
-        var warehouse = input.warehouseId() == null ? null : orm.require(Warehouse.class, input.warehouseId(), "Warehouse");
         var location = input.locationId() == null ? null : orm.require(StorageLocation.class, input.locationId(), "Location");
         var item = input.itemId() == null ? null : orm.require(Item.class, input.itemId(), "Item");
-        if (warehouse != null && location != null
-                && (location.warehouse == null || !location.warehouse.id.equals(warehouse.id))) {
-            throw ApiException.badRequest("Location does not belong to count warehouse");
-        }
         var session = new InventoryCountSession();
         session.sessionNumber = uniqueNumber(input.sessionNumber());
-        session.warehouse = warehouse;
         session.location = location;
         session.category = Inputs.blankToNull(input.category());
         session.item = item;
@@ -66,7 +60,7 @@ public class CountService {
         session.startedAt = Instant.now();
         orm.persist(session);
         var lines = new ArrayList<InventoryCountLine>();
-        for (var position : orm.scopedPositions(warehouse, location, item, input.category())) {
+        for (var position : orm.scopedPositions(location, item, input.category())) {
             if (position.item.trackingMode == DomainEnums.TrackingMode.serialized) continue;
             var line = new InventoryCountLine();
             line.session = session;
@@ -77,7 +71,7 @@ public class CountService {
             orm.persist(line);
             lines.add(line);
         }
-        for (var asset : orm.scopedAssets(warehouse, location, item, input.category())) {
+        for (var asset : orm.scopedAssets(location, item, input.category())) {
             if (asset.item.trackingMode != DomainEnums.TrackingMode.serialized) continue;
             var line = new InventoryCountLine();
             line.session = session;
@@ -273,7 +267,6 @@ public class CountService {
                 && (value.status == DomainEnums.CountStatus.draft || value.status == DomainEnums.CountStatus.counting
                     || value.status == DomainEnums.CountStatus.awaiting_recount);
         return new CountDtos.CountResponse(value.id, value.sessionNumber,
-                value.warehouse == null ? null : value.warehouse.id,
                 value.location == null ? null : value.location.id, value.category,
                 value.item == null ? null : value.item.id, value.blindCount, value.status.name(),
                 value.createdBy.id, value.approvedBy == null ? null : value.approvedBy.id,

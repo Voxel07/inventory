@@ -8,6 +8,7 @@ import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -150,16 +151,18 @@ public class CatalogResource {
 
     @Paged @GET @Path("/storage-locations") @Transactional
     public List<ApiResponses.StorageLocationResponse> locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive,
-            @QueryParam("search") String search, @QueryParam("warehouseId") UUID warehouseId,
-            @QueryParam("subtreeId") UUID subtreeId,
+            @QueryParam("search") String search, @QueryParam("subtreeId") UUID subtreeId,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         var bounds = org.ash.inventory.helper.PageBounds.of(page, size);
-        return mapper.locations(service.getLocations(includeInactive, search, warehouseId, subtreeId, bounds.offset(), bounds.limit()));
+        return mapper.locations(service.getLocations(includeInactive, search, subtreeId, bounds.offset(), bounds.limit()));
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }
     @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { return mapper.location(service.createLocation(input)); }
     @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.updateLocation(id, input)); }
+    /** Creates or extends a top-level location with its sections and storage places; returns the whole location tree. */
+    @PUT @Path("/storage-locations/structure") @Transactional
+    public List<ApiResponses.StorageLocationResponse> saveStructure(@Valid ApiModels.StorageStructureInput input) { return mapper.locations(service.saveStructure(input)); }
     @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { service.deleteLocation(id); return Response.noContent().build(); }
 
     @Paged @GET @Path("/assemblies")

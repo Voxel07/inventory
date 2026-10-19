@@ -4,14 +4,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ash.inventory.model.*;
 import org.ash.inventory.resource.ApiException;
-import org.ash.inventory.resource.ApiModels;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.Pattern;
 
 /**
- * Warehouse → area → section → shelf → compartment. Every level has a short code unique among the siblings visible to its editor;
- * the full code ({@code WH1-E1-R3-F2}) identifies a location without encoding the hierarchy into its name.
+ * Location → section → storage places (nestable). A top-level location only groups its sections and holds no stock.
+ * Every level has a short code unique among the siblings visible to its editor;
+ * the full code ({@code BH-CE-R2-F7}) identifies a location without encoding the hierarchy into its name.
  */
 @ApplicationScoped
 public class LocationHierarchyService {
@@ -21,14 +21,11 @@ public class LocationHierarchyService {
     @Inject org.ash.inventory.orm.LocationHierarchyOrm orm;
     @Inject org.ash.inventory.helper.security.ActorService actors;
     public void lockHierarchy() {
-        orm.lockWarehouses();
         orm.lockLocations();
     }
-    public void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
-        var warehouse = input.warehouseId() == null ? null : orm.find(Warehouse.class, input.warehouseId());
-        if (input.warehouseId() != null && warehouse == null) throw ApiException.badRequest("Warehouse not found");
-        var parent = input.parentLocationId() == null ? null : orm.find(StorageLocation.class, input.parentLocationId());
-        if (input.parentLocationId() != null && parent == null) throw ApiException.badRequest("Parent location not found");
+
+    /** Places {@code target} under {@code parent} (null = top-level location) with the requested code and active flag. */
+    public void apply(StorageLocation target, StorageLocation parent, String code, Boolean requestedActive) {
         // Moving under a parent needs sight of it; a private parent (someone's building) also needs edit rights,
         // because its owner and grantees inherit access to what is placed inside.
         if (parent != null && (target.parent == null || !parent.id.equals(target.parent.id)))
@@ -37,16 +34,27 @@ public class LocationHierarchyService {
         for (var cursor = parent; cursor != null; cursor = cursor.parent) {
             if (Objects.equals(cursor.id, target.id) || !visited.add(cursor.id)) throw ApiException.conflict("A location cannot be its own ancestor");
         }
-        boolean active = input.active() == null ? target.active : input.active();
-        if (parent != null && !Objects.equals(id(parent.warehouse), id(warehouse))) throw ApiException.conflict("Parent and child must belong to the same warehouse");
-        if (active && ((warehouse != null && !warehouse.active) || (parent != null && !parent.active))) throw ApiException.conflict("Activate the warehouse and parent first");
-        if (target.id != null) for (var child : orm.children(target)) {
-            if (!Objects.equals(id(child.warehouse), id(warehouse))) throw ApiException.conflict("Move child locations before changing warehouse");
-            if (!active && child.active) throw ApiException.conflict("Deactivate child locations first");
+        boolean active = requestedActive == null ? target.active : requestedActive;
+        if (active && parent != null && !parent.active) throw ApiException.conflict("Activate the parent location first");
+        if (target.id != null) {
+            if (parent == null && target.parent != null && orm.holdsStock(target))
+                throw ApiException.conflict("Move the stock out first: top-level locations hold no stock");
+            if (!active) for (var child : orm.children(target))
+                if (child.active) throw ApiException.conflict("Deactivate child locations first");
         }
-        target.parent = parent; target.warehouse = warehouse; target.active = active;
-        target.code = siblingUniqueCode(target, input.code());
+        target.parent = parent; target.active = active;
+        // Storage places show the map of their section or location.
+        if (target.depth() >= 2) {
+            target.latitude = null; target.longitude = null; target.mapOverlayUrl = null; target.overlayBounds = null;
+        }
+        target.code = siblingUniqueCode(target, code);
         refreshCodes(target);
+    }
+
+    /** Stock, assets and home locations live in sections and storage places, never directly in a top-level location. */
+    public static void requireStockLocation(StorageLocation location) {
+        if (location != null && !location.holdsStock())
+            throw ApiException.badRequest("Location " + location.name + " holds no stock; choose a section or storage place");
     }
 
     /**
@@ -62,6 +70,8 @@ public class LocationHierarchyService {
         var taken = new HashSet<String>();
         for (var sibling : orm.siblings(target))
             if (sibling.code != null && actors.canViewLocation(sibling)) taken.add(sibling.code.toUpperCase(Locale.ROOT));
+        // Without an explicit code an existing location keeps its code, even when it is renamed.
+        if (!explicit && target.id != null && target.code != null && !taken.contains(target.code.toUpperCase(Locale.ROOT))) return target.code;
         if (!taken.contains(base)) return base;
         if (explicit) throw ApiException.conflict("Location code " + base + " is already used on this level");
         for (int n = 2; ; n++) {
@@ -72,15 +82,8 @@ public class LocationHierarchyService {
 
     /** Recomputes the full code of {@code location} and its whole subtree. */
     public void refreshCodes(StorageLocation location) {
-        String prefix = location.parent != null ? location.parent.fullCode
-                : location.warehouse != null ? location.warehouse.code : null;
-        location.fullCode = prefix == null ? location.code : prefix + CODE_SEPARATOR + location.code;
+        location.fullCode = location.parent == null ? location.code : location.parent.fullCode + CODE_SEPARATOR + location.code;
         if (location.id != null) for (var child : orm.children(location)) refreshCodes(child);
-    }
-
-    /** After a warehouse code change, every location in the warehouse carries the new prefix. */
-    public void refreshWarehouseCodes(Warehouse warehouse) {
-        for (var root : orm.roots(warehouse)) refreshCodes(root);
     }
 
     /** {@code "Technik-Lager 1"} → {@code TL1}, {@code "Regal 3"} → {@code R3}, {@code "Funkraum"} → {@code FUNK}. */
@@ -99,13 +102,11 @@ public class LocationHierarchyService {
         return code.length() > 32 ? code.substring(0, 32) : code;
     }
 
+    /** {@code root} and every location below it. */
+    public Set<UUID> subtreeIds(UUID root) { return orm.subtreeIds(root); }
+
     public void deactivate(StorageLocation location) {
         if (orm.activeChildren(location) > 0) throw ApiException.conflict("Deactivate child locations first");
         location.active = false;
-    }
-    private UUID id(Warehouse value) { return value == null ? null : value.id; }
-
-    public void validateWarehouseState(Warehouse warehouse, boolean active) {
-        if (!active && warehouse.id != null && orm.activeLocations(warehouse) > 0) throw ApiException.conflict("Deactivate warehouse locations first");
     }
 }

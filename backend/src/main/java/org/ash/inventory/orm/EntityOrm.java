@@ -27,6 +27,18 @@ public abstract class EntityOrm {
     public <T> T require(Class<T> type, Object id, String label) { return found(find(type, id), label); }
     public <T> T requireLocked(Class<T> type, Object id, String label) { return found(findLocked(type, id), label); }
     public <T> T requireLockedFresh(Class<T> type, Object id, String label) { return found(findLockedFresh(type, id), label); }
+    /** {@code root} and every storage location below it (unscoped ids; visibility is applied by the caller's query). */
+    public java.util.Set<java.util.UUID> subtreeIds(java.util.UUID root) {
+        var subtree = new java.util.LinkedHashSet<java.util.UUID>();
+        java.util.List<java.util.UUID> frontier = java.util.List.of(root);
+        while (!frontier.isEmpty()) {
+            subtree.addAll(frontier);
+            frontier = entityManager.createQuery("select l.id from StorageLocation l where l.parent.id in :parents", java.util.UUID.class)
+                    .setParameter("parents", frontier).getResultList().stream().filter(id -> !subtree.contains(id)).toList();
+        }
+        return subtree;
+    }
+
     public static <T> T found(T value, String label) {
         if (value == null) throw org.ash.inventory.resource.ApiException.notFound(label + " not found");
         return value;

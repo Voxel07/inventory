@@ -15,16 +15,7 @@ import { createPurchaseOrder, createVendor, getPurchaseOrders, getVendors, trans
 import type { DamageReport, EventReport, Item, StockTransaction } from '../types';
 import type { ParsedOperationRow } from '../utils/csvOperations';
 import { translate } from '../utils/naming';
-
-
-async function commandId(name: string): Promise<string> {
-  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`inventory-csv:${name}`))).slice(0, 16);
-  bytes[6] = (bytes[6] & 15) | 80;
-  bytes[8] = (bytes[8] & 63) | 128;
-  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
+import { csvCommandId } from './csvImportIdentity';
 
 export function createCsvOperationImporter(items: Item[], locations: Map<string, string>, events: EventReport[]) {
   const context = captureAuthSession();
@@ -75,7 +66,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
   return async (row: ParsedOperationRow): Promise<void> => {
     assertAuthSession(context);
     const data = resolve(row.data) as Record<string, unknown>;
-    const key = await commandId(row.name);
+    const key = await csvCommandId(row.name);
     assertAuthSession(context);
     const itemId = String(data.itemId ?? '');
     let result: { id: string };
@@ -184,9 +175,9 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
       case 'transfer': {
         let transfer: Transfer = await operationsApi.createTransfer(transferInput({ ...data, idempotencyKey: key }));
         if (data.status === 'received') {
-          if (['requested', 'picking'].includes(transfer.status)) transfer = await operationsApi.transferCommand(transfer.id, 'dispatch', { idempotencyKey: await commandId(`${row.name}:dispatch`), notes: optionalText(data.notes) });
+          if (['requested', 'picking'].includes(transfer.status)) transfer = await operationsApi.transferCommand(transfer.id, 'dispatch', { idempotencyKey: await csvCommandId(`${row.name}:dispatch`), notes: optionalText(data.notes) });
           if (transfer.status === 'in_transit') transfer = await operationsApi.transferCommand(transfer.id, 'receive', {
-            idempotencyKey: await commandId(`${row.name}:receive`), notes: optionalText(data.notes),
+            idempotencyKey: await csvCommandId(`${row.name}:receive`), notes: optionalText(data.notes),
             lines: transfer.lines.map((line) => ({ transferLineId: line.id, receivedQuantity: line.pickedQuantity, discrepancyQuantity: 0 })),
           });
         }

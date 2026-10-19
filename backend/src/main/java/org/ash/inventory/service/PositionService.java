@@ -14,10 +14,12 @@ public class PositionService {
     private final PositionOrm orm;
     public PositionService(PositionOrm orm) { this.orm = orm; }
 
+    /** A location stock is booked into or taken from; top-level locations hold none. */
     public StorageLocation location(UUID id) {
         if (id == null) return null;
         var value = orm.find(StorageLocation.class, id);
         if (value == null) throw ApiException.notFound("Storage location not found");
+        LocationHierarchyService.requireStockLocation(value);
         return value;
     }
     public InventoryLot lot(Item item, UUID id) {
@@ -167,6 +169,7 @@ public class PositionService {
         if (direction > 0) {
             var destination = tx.destinationLocation == null ? tx.item.storageLocation : tx.destinationLocation;
             if (destination == null) return; // Unlocated stock remains visible in the item total.
+            LocationHierarchyService.requireStockLocation(destination);
             tx.destinationLocation = destination;
             var p = orm.position(tx.item, destination, tx.lot);
             p.quantityOnHand += tx.quantity;

@@ -3,9 +3,20 @@ import type { EventType } from '../types';
 
 const ACTIVE_EVENT_STORAGE_KEY = 'inventory-active-event';
 const THEME_MODE_STORAGE_KEY = 'inventory-theme-mode';
+const STORAGE_VIEW_STORAGE_KEY = 'inventory-storage-location-view';
 const MOBILE_NAVIGATION_QUERY = '(max-width: 899.95px)';
 
 type ThemeMode = 'light' | 'dark';
+/** Storage locations page: grouped by top-level location, or one flat list. */
+export type StorageLocationView = 'grouped' | 'flat';
+
+function storedStorageLocationView(): StorageLocationView {
+  try {
+    return localStorage.getItem(STORAGE_VIEW_STORAGE_KEY) === 'flat' ? 'flat' : 'grouped';
+  } catch {
+    return 'grouped';
+  }
+}
 
 function storedThemeMode(): ThemeMode {
   try {
@@ -50,6 +61,9 @@ interface UIState {
 
   themeMode: ThemeMode;
   toggleThemeMode: () => void;
+
+  storageLocationView: StorageLocationView;
+  setStorageLocationView: (view: StorageLocationView) => void;
 
   snackbar: { open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' };
   showSnackbar: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
@@ -100,6 +114,16 @@ export const useUIStore = create<UIState>((set) => ({
       }
       return { themeMode: next };
     }),
+
+  storageLocationView: storedStorageLocationView(),
+  setStorageLocationView: (view) => {
+    try {
+      localStorage.setItem(STORAGE_VIEW_STORAGE_KEY, view);
+    } catch {
+      // Keep the in-memory selection even when persistence is unavailable.
+    }
+    set({ storageLocationView: view });
+  },
 
   snackbar: { open: false, message: '', severity: 'info' },
   showSnackbar: (message, severity = 'info') =>

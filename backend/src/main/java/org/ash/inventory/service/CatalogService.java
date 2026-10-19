@@ -32,6 +32,7 @@ public class CatalogService {
     @Inject org.ash.inventory.orm.CategoryMaintenanceOrm categoryMaintenance;
     @Inject EventMetricsService eventMetrics;
     @Inject RuntimeService runtime;
+    @Inject LifecycleService lifecycle;
     private final org.ash.inventory.helper.storage.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -71,9 +72,9 @@ public class CatalogService {
         return item;
     }
 
-    public List<StorageLocation> getLocations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
+    public List<StorageLocation> getLocations(boolean includeInactive, String search, UUID subtreeId, int offset, int limit) {
         actorService.current();
-        return orm.locations(includeInactive, search, warehouseId, subtreeId, offset, limit);
+        return orm.locations(includeInactive, search, subtreeId, offset, limit);
     }
 
     public record VisibleAssemblies(List<Assembly> assemblies, Map<UUID, List<AssemblyItem>> components) {}
@@ -226,6 +227,7 @@ public class CatalogService {
                 orm.persist(asset);
             }
         }
+        createSchedules(item, input.maintenanceSchedules());
         if (initialAmount > 0) {
             var tx = new StockTransaction();
             tx.item = item;
@@ -263,6 +265,9 @@ public class CatalogService {
         actorService.requireItemEdit(item);
         if (input.amount() != null) {
             throw ApiException.badRequest("Stock cannot be edited on the item; create a stock adjustment instead");
+        }
+        if (input.maintenanceSchedules() != null && !input.maintenanceSchedules().isEmpty()) {
+            throw ApiException.badRequest("Maintenance schedules of an existing item are managed through /api/maintenance-schedules");
         }
         var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
         if (targetTrackingMode != item.trackingMode) {
@@ -324,6 +329,8 @@ public class CatalogService {
         item.storageLocation = input.storageLocation() == null ? null : orm.require(StorageLocation.class, input.storageLocation(), "Storage location");
         item.returnLocation = input.returnLocation() == null ? item.storageLocation
                 : orm.require(StorageLocation.class, input.returnLocation(), "Return location");
+        LocationHierarchyService.requireStockLocation(item.storageLocation);
+        LocationHierarchyService.requireStockLocation(item.returnLocation);
         item.positionDetails = input.positionDetails();
         item.hint = input.hint();
         item.containerSize = input.containerSize();
@@ -342,6 +349,19 @@ public class CatalogService {
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
         if (input.tracksRuntime() != null) item.tracksRuntime = input.tracksRuntime();
+    }
+
+    /** Item-wide plans entered on the creation form; same rules and permissions as the schedule endpoint. */
+    private void createSchedules(Item item, List<ApiModels.ItemScheduleInput> schedules) {
+        if (schedules == null) return;
+        for (var schedule : schedules) {
+            if (schedule.intervalType() == DomainEnums.MaintenanceIntervalType.operating_hours && !item.tracksRuntime)
+                throw ApiException.badRequest("Operating-hour maintenance requires recording operating hours on return");
+            lifecycle.createSchedule(new org.ash.inventory.resource.dto.LifecycleDtos.ScheduleInput(item.id, null,
+                    schedule.maintenanceType(), schedule.intervalType(), schedule.intervalValue(),
+                    schedule.nextDueAt(), schedule.nextDueValue(), schedule.warningWindow(),
+                    null, null, schedule.checkoutBlocking(), true));
+        }
     }
 
     /** The item meter only moves through the runtime log; a reading entered on the item form is a correction. */
@@ -367,12 +387,9 @@ public class CatalogService {
         actorService.requireInventoryCreation();
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         hierarchy.lockHierarchy();
-        var location = new StorageLocation();
-        location.name = input.name().trim();
-        if (Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current())) location.accessPolicy = accessPolicies.create();
-        else actorService.requireWarehouse();
-        orm.persist(location);
-        apply(location, input);
+        var parent = parentLocation(input.parentLocationId());
+        var location = newLocation(input.name(), Boolean.TRUE.equals(input.privateResource()) || (parent != null && parent.accessPolicy != null));
+        apply(location, parent, input);
         inheritance.refreshLocationSubtree(location);
         catalogChanged("storage-locations", location.id);
         return location;
@@ -384,10 +401,78 @@ public class CatalogService {
         hierarchy.lockHierarchy();
         var location = orm.requireLocked(StorageLocation.class, id, "Storage location");
         actorService.requireLocationEdit(location);
-        apply(location, input);
+        apply(location, parentLocation(input.parentLocationId()), input);
         inheritance.refreshLocationSubtree(location);
         catalogChanged("storage-locations", location.id);
         return location;
+    }
+
+    /**
+     * Creates or extends a top-level location with its sections and nested storage places in one step.
+     * Nodes with an id are renamed in place, nodes without one are created under their parent;
+     * locations missing from the input stay untouched (removal is deactivation).
+     */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<StorageLocation> saveStructure(ApiModels.StorageStructureInput input) {
+        hierarchy.lockHierarchy();
+        StorageLocation root;
+        if (input.id() == null) {
+            actorService.requireInventoryCreation();
+            if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
+            root = newLocation(input.name(), Boolean.TRUE.equals(input.privateResource()));
+        } else {
+            root = orm.requireLocked(StorageLocation.class, input.id(), "Storage location");
+            actorService.requireLocationEdit(root);
+            if (root.parent != null) throw ApiException.badRequest("Only top-level locations have sections");
+            if (input.privateResource() != null && input.privateResource() != (root.accessPolicy != null))
+                throw ApiException.badRequest("Privacy cannot be changed through location edits");
+        }
+        root.name = input.name().trim();
+        root.description = input.description();
+        hierarchy.apply(root, null, input.code(), null);
+        saveNodes(root, input.sections());
+        inheritance.refreshLocationSubtree(root);
+        catalogChanged("storage-locations", root.id);
+        return orm.locationsIn(hierarchy.subtreeIds(root.id)).stream().filter(actorService::canViewLocation).toList();
+    }
+
+    private void saveNodes(StorageLocation parent, List<ApiModels.StorageNodeInput> nodes) {
+        if (nodes == null) return;
+        for (var node : nodes) {
+            StorageLocation location;
+            if (node.id() == null) location = newLocation(node.name(), parent.accessPolicy != null);
+            else {
+                location = orm.requireLocked(StorageLocation.class, node.id(), "Storage location");
+                actorService.requireLocationEdit(location);
+                if (location.parent == null || !location.parent.id.equals(parent.id))
+                    throw ApiException.badRequest("Location " + location.name + " is not inside " + parent.name);
+            }
+            location.name = node.name().trim();
+            location.description = node.description();
+            hierarchy.apply(location, parent, node.code(), null);
+            // Grants flow down a private location tree, so it must not contain public sub-locations.
+            if (parent.accessPolicy != null && location.accessPolicy == null)
+                throw ApiException.badRequest("Sub-locations of a private location must be private");
+            saveNodes(location, node.children());
+        }
+    }
+
+    /** Members without inventory management, and everything inside a private location, are private. */
+    private StorageLocation newLocation(String name, boolean privateResource) {
+        var location = new StorageLocation();
+        location.name = name.trim();
+        if (privateResource || !canManageInventory(actorService.current())) location.accessPolicy = accessPolicies.create();
+        else actorService.requireWarehouse();
+        orm.persist(location);
+        return location;
+    }
+
+    private StorageLocation parentLocation(UUID id) {
+        if (id == null) return null;
+        var parent = orm.find(StorageLocation.class, id);
+        if (parent == null) throw ApiException.badRequest("Parent location not found");
+        return parent;
     }
 
     @Transactional
@@ -401,21 +486,17 @@ public class CatalogService {
         catalogChanged("storage-locations", location.id);
     }
 
-    private void apply(StorageLocation target, ApiModels.StorageLocationInput input) {
+    private void apply(StorageLocation target, StorageLocation parent, ApiModels.StorageLocationInput input) {
         if (input.privateResource() != null && input.privateResource() != (target.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through location edits");
         target.name = input.name().trim();
-        target.locationType = input.locationType() == null ? DomainEnums.LocationType.bin : input.locationType();
         target.description = input.description();
         target.latitude = input.latitude();
         target.longitude = input.longitude();
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
         target.mapOverlayUrl = input.mapOverlay() == null ? null : media.attachToLocation(input.mapOverlay(), target.id);
         target.overlayBounds = input.overlayBounds();
-        // Warehouses are organization sites; tenants keep their buildings outside of them.
-        if (input.warehouseId() != null && !ActorService.seesOrganization(actorService.current()))
-            throw ApiException.badRequest("Warehouse not found");
-        hierarchy.apply(target, input);
+        hierarchy.apply(target, parent, input.code(), input.active());
         // Grants flow down a private location tree, so it must not contain public sub-locations.
         if (target.parent != null && target.parent.accessPolicy != null && target.accessPolicy == null)
             throw ApiException.badRequest("Sub-locations of a private location must be private");
@@ -670,6 +751,7 @@ public class CatalogService {
         asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
         asset.availabilityStatus = DomainEnums.AssetState.available;
         asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
+        LocationHierarchyService.requireStockLocation(asset.currentLocation);
         if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
         asset.purchaseDate = input.purchaseDate();
         asset.purchasePriceCents = cents(input.purchasePrice());
@@ -862,6 +944,7 @@ public class CatalogService {
             throw ApiException.conflict("Asset cannot be relocated while it is " + asset.availabilityStatus);
         }
         var destination = orm.require(StorageLocation.class, input.locationId(), "Storage location");
+        LocationHierarchyService.requireStockLocation(destination);
         if (asset.currentLocation != null && asset.currentLocation.id.equals(destination.id)) return asset;
         var actor = actorService.current();
         var transaction = new StockTransaction();

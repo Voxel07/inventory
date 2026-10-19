@@ -366,7 +366,6 @@ create table inventory_count_sessions (
     id uuid not null,
     item_id uuid,
     location_id uuid,
-    warehouse_id uuid,
     category varchar(255),
     notes varchar(255),
     session_number varchar(255) not null unique,
@@ -718,12 +717,10 @@ create table storage_locations (
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
     id uuid not null,
-    warehouse_id uuid,
     map_overlay_url varchar(1000),
     code varchar(32) not null,
     full_code varchar(400) not null,
     description varchar(255),
-    location_type varchar(255) not null check ((location_type in ('warehouse','area','section','shelf','compartment','bin','staging','event_site','vehicle','in_custody','quarantine','repair','scrap'))),
     name varchar(255) not null,
     overlay_bounds jsonb,
     primary key (id),
@@ -805,17 +802,6 @@ create table vendors (
     payment_notes varchar(255),
     phone varchar(255),
     website varchar(255),
-    primary key (id)
-);
-
-create table warehouses (
-    active boolean not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
-    id uuid not null,
-    code varchar(255) not null unique,
-    description varchar(255),
-    name varchar(255) not null,
     primary key (id)
 );
 
@@ -989,7 +975,6 @@ alter table if exists inventory_count_sessions add constraint FKnwlssfgd3c4qy2ts
 alter table if exists inventory_count_sessions add constraint FKjtgetwus8ico71elk512fjkjq foreign key (created_by) references app_users;
 alter table if exists inventory_count_sessions add constraint FKsrmxe4wlb4v7djhkynsgp0hr5 foreign key (item_id) references items;
 alter table if exists inventory_count_sessions add constraint FKi4iu22vc1rjsm9im3rmvd0g4n foreign key (location_id) references storage_locations;
-alter table if exists inventory_count_sessions add constraint FKacnvwdevsytaj3281q0s5q6w3 foreign key (warehouse_id) references warehouses;
 alter table if exists inventory_lots add constraint FK4h0x1nou1xh6hmxr3021qlg4h foreign key (item_id) references items;
 alter table if exists inventory_positions add constraint FKfyqp6h4cmoxv0g7qgk9v4ljjr foreign key (item_id) references items;
 alter table if exists inventory_positions add constraint FKpme5x3av41i391twhp89f1tqe foreign key (location_id) references storage_locations;
@@ -1053,7 +1038,6 @@ alter table if exists stock_transactions add constraint FKsdp6k6b14fehh151m2s8fi
 alter table if exists stock_transactions add constraint FK7fugsbc704m7063vy0q3851ma foreign key (item_id) references items;
 alter table if exists stock_transactions add constraint FKlcvjkirperrl89dw99j5twham foreign key (source_location_id) references storage_locations;
 alter table if exists stock_transactions add constraint FKajynergjacpmi9gft58h26uk foreign key (user_id) references app_users;
-alter table if exists storage_locations add constraint FK94deej4le4g06iglvdj1oxobn foreign key (warehouse_id) references warehouses;
 alter table if exists sync_command_audit add constraint FK204w71qvomhrci4bv3p212gbx foreign key (user_id) references app_users;
 alter table if exists vendor_documents add constraint FKeuhya1ea21gyq5odbrci7n1bi foreign key (goods_receipt_id) references goods_receipts;
 alter table if exists vendor_documents add constraint FKsyyhv6b9ypn90u5s3sm6iyomf foreign key (purchase_order_id) references purchase_orders;
@@ -1180,8 +1164,6 @@ INSERT INTO source_revisions (name, shard) SELECT 'items', shard FROM generate_s
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'storage_locations', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON storage_locations FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
-INSERT INTO source_revisions (name, shard) SELECT 'warehouses', shard FROM generate_series(0, 15) AS shard;
-CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON warehouses FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'event_occurrences', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON event_occurrences FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 INSERT INTO source_revisions (name, shard) SELECT 'orders', shard FROM generate_series(0, 15) AS shard;

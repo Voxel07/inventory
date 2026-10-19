@@ -20,7 +20,8 @@ export function fixtureStock(quantity: number, overrides: Partial<ItemStock> = {
 
 export function fixtureLocation(fields: Pick<StorageLocation, 'id' | 'name'> & Partial<StorageLocation>): StorageLocation {
   const code = fields.code ?? fields.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase();
-  return { active: true, created: FIXTURE_TIME, updated: FIXTURE_TIME, code, fullCode: code, ...fields };
+  // Sections by default: they hold stock, top-level locations (depth 0) do not.
+  return { active: true, depth: 1, created: FIXTURE_TIME, updated: FIXTURE_TIME, code, fullCode: code, ...fields };
 }
 
 export function fixtureItem(fields: Pick<Item, 'id' | 'name'> & Partial<Item>): Item {

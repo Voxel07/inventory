@@ -70,7 +70,8 @@ public class CatalogOrm extends EntityOrm {
                     + " or exists (select p.id from InventoryPosition p where p.item = i and p.location.id in :locations and p.quantityOnHand > 0)"
                     + " or exists (select a.id from AssetInstance a where a.item = i and a.active = true and a.currentLocation.id in :locations"
                     + " and a.availabilityStatus not in (:gone)))");
-            parameters.put("locations", filter.locationIds());
+            // A location filter covers everything stored below it.
+            parameters.put("locations", filter.locationIds().stream().flatMap(id -> subtreeIds(id).stream()).collect(java.util.stream.Collectors.toSet()));
             parameters.put("gone", List.of(DomainEnums.AssetState.lost, DomainEnums.AssetState.written_off));
         }
         if (filter.maintenanceAttention()) {
@@ -90,8 +91,8 @@ public class CatalogOrm extends EntityOrm {
         String order = ITEM_SORTS.getOrDefault(filter.sort() == null ? "-created" : filter.sort(), ITEM_SORTS.get("-created"));
         // Only to-one associations are fetched, so rows stay unique and paging runs in SQL.
         var query = visible(entityManager.createQuery("select i from Item i left join i.accessPolicy ap"
-                + " left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent"
-                + " left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent"
+                + " left join fetch i.storageLocation sl left join fetch sl.parent"
+                + " left join fetch i.returnLocation rl left join fetch rl.parent"
                 + where + " order by " + order, Item.class));
         parameters.forEach(query::setParameter);
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
@@ -125,12 +126,12 @@ public class CatalogOrm extends EntityOrm {
                 + " and i.category is not null" + visibility() + " order by i.category", String.class)).getResultList();
     }
 
-    /** One page of visible active locations, optionally within one warehouse. */
-    public List<StorageLocation> locations(UUID warehouseId, int offset, int limit) {
-        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.active = true and "
-                + InventoryAccessOrm.visible("l.accessPolicy") + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
-                + " order by l.createdAt desc, l.id", StorageLocation.class);
-        if (warehouseId != null) query.setParameter("warehouse", warehouseId);
+    /** One page of visible active locations, optionally within one location's subtree. */
+    public List<StorageLocation> locations(UUID subtreeId, int offset, int limit) {
+        var query = entityManager.createQuery("from StorageLocation l left join fetch l.parent where l.active = true and "
+                + InventoryAccessOrm.visible("l.accessPolicy") + (subtreeId == null ? "" : " and l.id in :subtree")
+                + " order by lower(l.fullCode), l.id", StorageLocation.class);
+        if (subtreeId != null) query.setParameter("subtree", subtreeIds(subtreeId));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -150,26 +151,20 @@ public class CatalogOrm extends EntityOrm {
     }
 
     /** One page of visible locations, newest first; access policy and filters apply before pagination. */
-    public List<StorageLocation> locations(boolean includeInactive, String search, UUID warehouseId, UUID subtreeId, int offset, int limit) {
-        var subtree = new java.util.LinkedHashSet<UUID>();
-        if (subtreeId != null) {
-            var frontier = List.of(subtreeId);
-            while (!frontier.isEmpty()) {
-                subtree.addAll(frontier);
-                frontier = entityManager.createQuery("select l.id from StorageLocation l where l.parent.id in :parents", UUID.class)
-                        .setParameter("parents", frontier).getResultList().stream().filter(id -> !subtree.contains(id)).toList();
-            }
-        }
-        var query = entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where "
+    public List<StorageLocation> locations(boolean includeInactive, String search, UUID subtreeId, int offset, int limit) {
+        var query = entityManager.createQuery("from StorageLocation l left join fetch l.parent where "
                 + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
                 + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(l.fullCode) like :search or lower(coalesce(l.description, '')) like :search)")
-                + (warehouseId == null ? "" : " and l.warehouse.id = :warehouse")
                 + (subtreeId == null ? "" : " and l.id in :subtree")
                 + " order by lower(l.fullCode), l.id", StorageLocation.class);
         if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
-        if (warehouseId != null) query.setParameter("warehouse", warehouseId);
-        if (subtreeId != null) query.setParameter("subtree", subtree);
+        if (subtreeId != null) query.setParameter("subtree", subtreeIds(subtreeId));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<StorageLocation> locationsIn(java.util.Collection<UUID> ids) {
+        return entityManager.createQuery("from StorageLocation l left join fetch l.parent where l.id in :ids order by lower(l.fullCode), l.id", StorageLocation.class)
+                .setParameter("ids", ids).getResultList();
     }
 
     /** Orders, movements, returns and owner commitments are history that must keep their event. */
@@ -251,7 +246,7 @@ public class CatalogOrm extends EntityOrm {
     }
 
     public List<AssemblyItem> assemblyItems(Assembly assembly) {
-        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent where ai.assembly = :assembly", AssemblyItem.class)
+        return entityManager.createQuery("from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.parent where ai.assembly = :assembly", AssemblyItem.class)
                 .setParameter("assembly", assembly).getResultList();
     }
 
@@ -260,7 +255,7 @@ public class CatalogOrm extends EntityOrm {
             return java.util.Map.of();
         }
         var items = entityManager.createQuery(
-                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent where ai.assembly in :assemblies", AssemblyItem.class)
+                "from AssemblyItem ai join fetch ai.item i left join fetch i.storageLocation sl left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.parent where ai.assembly in :assemblies", AssemblyItem.class)
                 .setParameter("assemblies", assemblies)
                 .getResultList();
         return items.stream().collect(java.util.stream.Collectors.groupingBy(ai -> ai.assembly.id));

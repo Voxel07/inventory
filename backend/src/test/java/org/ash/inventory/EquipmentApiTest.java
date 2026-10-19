@@ -134,8 +134,8 @@ class EquipmentApiTest {
     }
 
     @Test void privateBulkTransferPreservesOwnershipAndReportsDoNotPromiseIt() {
-        String source = admin().body(Map.of("name", "F19 garage")).post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String destination = admin().body(Map.of("name", "F19 central")).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String source = TestLocations.section(() -> admin(), Map.of("name", "F19 garage"));
+        String destination = TestLocations.section(() -> admin(), Map.of("name", "F19 central"));
         String item = admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "Private bulk", "category", "F19", "amount", 3, "storageLocation", source))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         makePrivate(item);
@@ -157,10 +157,8 @@ class EquipmentApiTest {
     }
 
     @Test void externalEquipmentRemainsTransferableBeforeCheckoutCommitment() {
-        String source = admin().body(Map.of("name", "External equipment provider"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String destination = admin().body(Map.of("name", "External equipment intake"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String source = TestLocations.section(() -> admin(), Map.of("name", "External equipment provider"));
+        String destination = TestLocations.section(() -> admin(), Map.of("name", "External equipment intake"));
         String item = admin().body(Map.of("name", "External transferable bulk", "category", "F19", "amount", 3, "value", 0, "storageLocation", source))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         makePrivate(item);

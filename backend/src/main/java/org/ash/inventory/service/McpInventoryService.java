@@ -173,10 +173,15 @@ public class McpInventoryService {
         return result;
     }
 
-    public List<ApiResponses.StorageLocationResponse> locations(UUID warehouseId, Integer page, Integer limit) {
+    public List<ApiResponses.StorageLocationResponse> locations(UUID locationId, Integer page, Integer limit) {
         actors.current();
         var bounds = bounds(page, limit);
-        return mapper.locations(catalogOrm.locations(warehouseId, bounds.offset(), bounds.limit()));
+        return mapper.locations(catalogOrm.locations(locationId, bounds.offset(), bounds.limit()));
+    }
+
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<ApiResponses.StorageLocationResponse> saveStorageStructure(ApiModels.StorageStructureInput input) {
+        return mapper.locations(catalog.saveStructure(valid(input)));
     }
 
     public List<String> categories() { return catalog.getVisibleCategories(); }

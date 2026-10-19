@@ -141,7 +141,7 @@ export const MIN_STOCK_ALIASES = ['minstock', 'mindestbestand', 'min_stock', 'mi
 
 export const VALUE_ALIASES = ['value', 'wert', 'einzelwert', 'preis', 'price', 'unitvalue', 'stueckpreis', 'stückpreis'];
 
-/** A location code (`WH1-E1-R3`), a path (`Lager 1 / Regal 3`) or a unique location name. */
+/** A location code (`BH-L-R3`), a path (`Betriebshof / Lager / Regal 3`) or a unique location name. */
 export const LOCATION_ALIASES = ['storagelocation', 'storage_location', 'lagerort', 'ort', 'location', 'lagerortcode', 'locationcode'];
 
 /** Free-text place inside the storage location, e.g. "obere Kiste links". */

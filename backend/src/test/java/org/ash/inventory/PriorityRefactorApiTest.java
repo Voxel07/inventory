@@ -29,8 +29,7 @@ class PriorityRefactorApiTest {
     }
     private RequestSpecification admin() { return actor("priority-admin", "admin"); }
     private String location() {
-        return admin().body(Map.of("name", "Priority " + UUID.randomUUID())).post("/api/storage-locations")
-                .then().statusCode(200).extract().path("id");
+        return TestLocations.section(() -> admin(), Map.of("name", "Priority " + UUID.randomUUID()));
     }
     private String item(String location, int amount) {
         return admin().body(Map.of("sku", "PRIORITY-" + UUID.randomUUID(), "name", "Priority asset",

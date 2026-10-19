@@ -17,7 +17,7 @@ public class PositionOrm {
     }
     public List<InventoryPosition> positions(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return em.createQuery("from InventoryPosition p join fetch p.item left join fetch p.lot join fetch p.location location left join fetch location.warehouse where p.item.id in :ids order by p.lot.expiryDate nulls last, p.lot.bestBeforeDate nulls last, p.id", InventoryPosition.class)
+        return em.createQuery("from InventoryPosition p join fetch p.item left join fetch p.lot join fetch p.location location where p.item.id in :ids order by p.lot.expiryDate nulls last, p.lot.bestBeforeDate nulls last, p.id", InventoryPosition.class)
                 .setParameter("ids", itemIds).getResultList();
     }
     public InventoryPosition position(Item item, StorageLocation location, InventoryLot lot) {

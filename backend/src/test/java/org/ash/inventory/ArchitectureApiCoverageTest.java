@@ -36,8 +36,7 @@ class ArchitectureApiCoverageTest {
     private RequestSpecification admin() { return actor("admin", "admin"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
     private String location() {
-        return admin().body(Map.of("name", "Architecture shelf " + UUID.randomUUID()))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        return TestLocations.section(() -> admin(), Map.of("name", "Architecture shelf " + UUID.randomUUID()));
     }
     private String item(String location, int amount, String mode) {
         return admin().body(Map.of("name", "Architecture equipment", "sku", "ARC-" + UUID.randomUUID(),
@@ -51,26 +50,32 @@ class ArchitectureApiCoverageTest {
         return input;
     }
 
-    @Test void warehouseAndLocationAdministrationPreservesHierarchyAndRetirement() {
-        String code = "ARC-" + UUID.randomUUID();
-        String warehouse = admin().body(Map.of("code", code, "name", "Review warehouse"))
-                .post("/api/warehouses").then().statusCode(201).extract().path("id");
-        reader().body(Map.of("code", code, "name", "Unauthorized"))
-                .put("/api/warehouses/" + warehouse).then().statusCode(403);
-        admin().body(Map.of("code", code, "name", "Updated warehouse", "active", true))
-                .put("/api/warehouses/" + warehouse).then().statusCode(200).body("name", equalTo("Updated warehouse"));
-        reader().get("/api/warehouses?size=200").then().statusCode(200).body("id", hasItem(warehouse));
-        String shelf = admin().body(Map.of("name", "Initial shelf", "warehouseId", warehouse))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        admin().body(Map.of("name", "Mapped shelf", "warehouseId", warehouse, "latitude", 52.5, "longitude", 13.4))
-                .patch("/api/storage-locations/" + shelf).then().statusCode(200);
-        reader().get("/api/storage-locations/" + shelf).then().statusCode(200)
-                .body("name", equalTo("Mapped shelf")).body("latitude", equalTo(52.5f));
-        admin().delete("/api/warehouses/" + warehouse).then().statusCode(409);
-        admin().delete("/api/storage-locations/" + shelf).then().statusCode(204);
-        admin().delete("/api/warehouses/" + warehouse).then().statusCode(204);
-        admin().get("/api/warehouses?size=200").then().statusCode(200)
-                .body("find { it.id == '" + warehouse + "' }.active", equalTo(false));
+    @Test void storageStructureSavesSectionsAndPlacesAndKeepsStockOutOfTopLevelLocations() {
+        String name = "Review site " + UUID.randomUUID(), code = "RS" + Math.abs(name.hashCode());
+        var saved = admin().body(Map.of("name", name, "code", code, "sections", List.of(
+                        Map.of("name", "Container Elektronik", "children", List.of(Map.of("name", "Regal 1", "children", List.of(Map.of("name", "Fach 1", "children", List.of()))))),
+                        Map.of("name", "Büro 1", "children", List.of()))))
+                .put("/api/storage-locations/structure").then().statusCode(200)
+                .body("find { it.name == 'Fach 1' }.fullCode", equalTo(code + "-CE-R1-F1"))
+                .body("find { it.name == 'Fach 1' }.depth", equalTo(3))
+                .body("find { it.name == 'Büro 1' }.rootLocationName", equalTo(name)).extract().jsonPath();
+        String site = saved.getString("find { it.depth == 0 }.id");
+        String office = saved.getString("find { it.name == 'Büro 1' }.id");
+        // Extending: a known location gets new sections, existing ones are renamed in place.
+        admin().body(Map.of("id", site, "name", name, "sections", List.of(Map.of("id", office, "name", "Büro 2", "children", List.of()),
+                        Map.of("name", "Lager", "children", List.of()))))
+                .put("/api/storage-locations/structure").then().statusCode(200)
+                .body("find { it.id == '" + office + "' }.name", equalTo("Büro 2")).body("findAll { it.depth == 1 }.size()", equalTo(3));
+        // Top-level locations hold no stock.
+        admin().body(Map.of("sku", "ARC-ROOT-" + UUID.randomUUID(), "name", "Root stock", "category", "Review", "amount", 1, "value", 0, "storageLocation", site))
+                .post("/api/items").then().statusCode(400);
+        admin().body(Map.of("name", "Mapped office", "parentLocationId", site, "latitude", 52.5, "longitude", 13.4))
+                .patch("/api/storage-locations/" + office).then().statusCode(200);
+        reader().get("/api/storage-locations/" + office).then().statusCode(200)
+                .body("name", equalTo("Mapped office")).body("latitude", equalTo(52.5f));
+        reader().get("/api/storage-locations/" + saved.getString("find { it.name == 'Fach 1' }.id")).then().statusCode(200).body("latitude", nullValue());
+        admin().delete("/api/storage-locations/" + site).then().statusCode(409);
+        admin().delete("/api/storage-locations/" + office).then().statusCode(204);
     }
 
     @Test void assemblyEditsReuseComponentsAndRemoveOnlyOmittedOnes() {

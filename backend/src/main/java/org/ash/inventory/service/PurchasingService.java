@@ -179,6 +179,7 @@ public class PurchasingService {
         }
         var location = orm.require(StorageLocation.class, input.receivingLocationId(), "Receiving location");
         if (!location.active) throw ApiException.conflict("Receiving location is inactive");
+        LocationHierarchyService.requireStockLocation(location);
         var receipt = new GoodsReceipt();
         receipt.receiptNumber = uniqueReceiptNumber(input.receiptNumber());
         receipt.purchaseOrder = order;

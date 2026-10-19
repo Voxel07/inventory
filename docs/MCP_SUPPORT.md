@@ -53,7 +53,7 @@ This replaces the old individual create/update parameters and MCP-specific catal
 
 | Tool | Arguments | Behavior |
 |---|---|---|
-| `create_item` | `input: ItemInput` | Requires name/category; optional amount initializes the canonical ledger and bulk/serialized stock |
+| `create_item` | `input: ItemInput` | Requires name/category; optional amount initializes the canonical ledger and bulk/serialized stock; optional `maintenanceSchedules[]` create item-wide plans in the same transaction (warehouse access; `operating_hours` needs `tracksRuntime`) |
 | `save_items` | `input: ItemBatchInput` | Bulk create/update of 1–100 `{id?, item, assetCodes?}` entries in one transaction (one rate-limit slot); all or nothing, errors carry `details.index` of the failing entry |
 | `get_item_details` | `itemId` | Active, visible item with canonical stock and metadata |
 | `search_items` | Optional `query`, `category`, `limit`, `page` | Name/SKU/category search; exact category filter applied before pagination; page defaults to 0, limit to 20, maximum 100 |
@@ -69,7 +69,8 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `list_events` | Optional `status`, `page`, `limit` | Matching events in start-date order; page defaults to 0, limit to 20, maximum 100; scoped item maps |
 | `update_event` | `eventId`, `input: EventInput` | Requires eventType/startDate; null quota maps retain existing values, supplied maps replace them |
 | `delete_event` | `eventId` | Rejected (409) once orders, stock movements, return submissions or owner commitments reference the event; planning overrides are removed with it |
-| `list_storage_locations` | Optional `warehouseId`, `page`, `limit` | Active locations with warehouse metadata; same paging bounds, paged in SQL |
+| `list_storage_locations` | Optional `locationId`, `page`, `limit` | Active locations in tree order with `depth` (0 = location, 1 = section, 2+ = storage place) and root location; `locationId` limits to that subtree; same paging bounds, paged in SQL |
+| `save_storage_structure` | `input: StorageStructureInput` | Creates or extends a top-level location with nested sections and storage places in one step; nodes with an id are renamed, omitted nodes stay; returns the location tree |
 | `get_inventory_positions` | `itemId` | Bulk/lot positions with FEFO command reservations, damage/quarantine and policy holds; serialized items return an empty list |
 | `list_asset_instances` | `itemId`; optional `status`, `page`, `limit` | Visible item's active assets; typed availability-state filter applied before pagination; default limit 20, maximum 100. A reservation held by an order hidden from the caller shows only `reservedFor.kind` and `label: "restricted"` |
 | `check_low_stock_items` | Optional nonnegative `threshold`, `page`, `limit` | Evaluates one catalog page (default 20, maximum 100 items) and returns `{alerts, page, limit, hasMore}`; alerts have availability ≤ minStock + buffer; deficit = max(0, minStock − available) |

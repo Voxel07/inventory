@@ -1,6 +1,6 @@
 import type { StorageLocation } from '../../types';
 
-/** `Lager 1 / Regal 3`, `Lager 1 > Regal 3` and `Lager 1\Regal 3` all name the same path. */
+/** `Betriebshof / Regal 3`, `Betriebshof > Regal 3` and `Betriebshof\Regal 3` all name the same path. */
 const PATH_SEPARATOR = /\s*(?:\/|>|\\)\s*/;
 
 export function locationPathSegments(value: string): string[] {
@@ -12,7 +12,7 @@ export function normalizeLocationRef(value: string): string {
 }
 
 /**
- * Lookup keys of every location: id, full code (`WH1-E1-R3`), full path and, when unique, the bare name.
+ * Lookup keys of every location: id, full code (`BH-L-R3`), full path and, when unique, the bare name.
  * Ambiguous names map to `null` so that the CSV has to name the location by code or path.
  */
 export function buildLocationIndex(locations: StorageLocation[]): Map<string, StorageLocation | null> {

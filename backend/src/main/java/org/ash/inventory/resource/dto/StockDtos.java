@@ -12,9 +12,6 @@ import java.util.UUID;
 public final class StockDtos {
     private StockDtos() {}
 
-    public record WarehouseInput(@NotBlank String code, @NotBlank String name, String description, Boolean active) {}
-    public record WarehouseResponse(UUID id, Instant createdAt, Instant updatedAt, String code, String name,
-            String description, boolean active) {}
 
     /** A lot belongs to its item for life: the item is chosen once, at creation. */
     public record LotCreateInput(@NotNull UUID itemId, @NotBlank String lotNumber, String supplierLot,

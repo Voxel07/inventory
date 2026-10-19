@@ -48,9 +48,12 @@ class InventoryMcpTest {
     @BeforeEach
     void setupTestData() {
         QuarkusTransaction.requiringNew().run(() -> {
+            var site = new StorageLocation();
+            site.name = "MCP Site " + UUID.randomUUID();
+            em.persist(site);
             location = new StorageLocation();
             location.name = "MCP Armory " + UUID.randomUUID();
-            location.locationType = DomainEnums.LocationType.warehouse;
+            location.parent = site;
             em.persist(location);
             bulk = item("MCP Bulk", DomainEnums.TrackingMode.bulk);
             bulk.minStock = 5;

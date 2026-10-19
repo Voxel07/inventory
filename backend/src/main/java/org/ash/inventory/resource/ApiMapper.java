@@ -126,12 +126,28 @@ public class ApiMapper {
         var seen = new java.util.HashSet<UUID>();
         for (var current = value; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
             names.addFirst(current.name);
-        if (value.warehouse != null) names.addFirst(value.warehouse.name);
         return String.join(" / ", names);
+    }
+    /** The topmost ancestor the viewer may see (normally the top-level location). */
+    private StorageLocation visibleRoot(StorageLocation value) {
+        var root = value;
+        var seen = new java.util.HashSet<UUID>(java.util.List.of(value.id));
+        while (root.parent != null && seen.add(root.parent.id) && canViewLocation(root.parent)) root = root.parent;
+        return root;
+    }
+    /** Storage places show the map of their nearest visible section or location. */
+    private StorageLocation mapSource(StorageLocation value) {
+        if (value.depth() < 2) return value;
+        var seen = new java.util.HashSet<UUID>();
+        for (var current = value.parent; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
+            if (current.latitude != null && current.longitude != null) return current;
+        return value;
     }
 
     public ApiResponses.StorageLocationResponse location(StorageLocation value) {
         boolean staff = actors.current().role.atLeast(DomainEnums.UserRole.warehouse_crew);
+        var root = visibleRoot(value);
+        var map = mapSource(value);
         return new ApiResponses.StorageLocationResponse(
                 value.id,
                 value.createdAt,
@@ -139,15 +155,15 @@ public class ApiMapper {
                 value.name,
                 value.code,
                 value.fullCode,
-                value.locationType == null ? DomainEnums.LocationType.bin.name() : value.locationType.name(),
+                value.depth(),
                 value.description,
-                value.latitude,
-                value.longitude,
-                value.mapZoom,
-                media.mediaReference(value.mapOverlayUrl),
-                value.overlayBounds,
-                value.warehouse == null ? null : value.warehouse.id.toString(),
-                value.warehouse == null ? null : value.warehouse.name,
+                map.latitude,
+                map.longitude,
+                map.mapZoom,
+                media.mediaReference(map.mapOverlayUrl),
+                map.overlayBounds,
+                root.id.toString(),
+                root.name,
                 canViewLocation(value.parent) ? value.parent.id.toString() : null,
                 value.active, accessPolicies.projection(value.accessPolicy), locationPath(value),
                 !staff || value.keeperUser == null ? null : value.keeperUser.id,

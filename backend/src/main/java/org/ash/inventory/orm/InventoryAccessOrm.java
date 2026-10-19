@@ -73,7 +73,7 @@ public class InventoryAccessOrm extends EntityOrm {
     }
     public List<StorageLocation> projectionLocations(Collection<UUID> ids) {
         if (ids.isEmpty()) return List.of();
-        return entityManager.createQuery("from StorageLocation l left join fetch l.warehouse left join fetch l.parent where l.id in :ids", StorageLocation.class)
+        return entityManager.createQuery("from StorageLocation l left join fetch l.parent where l.id in :ids", StorageLocation.class)
                 .setParameter("ids", ids).getResultList();
     }
     /** Direct or inherited grant, or ownership of a private location the resource is stored in. */

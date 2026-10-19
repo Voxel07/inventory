@@ -152,8 +152,10 @@ public class OperationalReportService {
     }
     private void location(Map<String, Object> row, StorageLocation location) {
         row.put("locationId", location == null ? null : location.id.toString()); row.put("location", location == null ? "Unassigned" : location.name);
-        row.put("warehouseId", location == null || location.warehouse == null ? null : location.warehouse.id.toString());
-        row.put("warehouse", location == null || location.warehouse == null ? "Unassigned" : location.warehouse.name);
+        // The top-level location (site) the stock belongs to, e.g. Betriebshof.
+        var site = location == null ? null : location.root();
+        row.put("siteId", site == null ? null : site.id.toString());
+        row.put("site", site == null ? "Unassigned" : site.name);
         row.put("locationActive", location != null && location.active);
     }
     private List<Map<String, Object>> events() {

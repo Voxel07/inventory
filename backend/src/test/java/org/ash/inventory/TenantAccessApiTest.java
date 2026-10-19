@@ -30,8 +30,8 @@ class TenantAccessApiTest {
 
     @Test void tenantsOnlySeeTheirOwnPrivateInventory() {
         String company = publicItem();
-        String building = tenant().body(Map.of("name", "Rented hall " + UUID.randomUUID())).post("/api/storage-locations")
-                .then().statusCode(200).body("access.privateResource", equalTo(true)).extract().path("id");
+        String building = TestLocations.section(() -> tenant(), Map.of("name", "Rented hall " + UUID.randomUUID()));
+        tenant().get("/api/storage-locations/" + building).then().statusCode(200).body("access.privateResource", equalTo(true));
         String own = tenant().body(Map.of("sku", "TENANT-OWN-" + UUID.randomUUID(), "name", "Own generator", "category", "Power",
                         "amount", 1, "value", 0, "storageLocation", building))
                 .post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true)).extract().path("id");
@@ -48,7 +48,7 @@ class TenantAccessApiTest {
     }
 
     @Test void tenantsCannotReachOrganizationApis() {
-        for (String path : List.of("/api/orders/faction", "/api/orders/general", "/api/events", "/api/factions", "/api/warehouses",
+        for (String path : List.of("/api/orders/faction", "/api/orders/general", "/api/events", "/api/factions",
                 "/api/transactions", "/api/custody-balances", "/api/member/custody", "/api/sync/audit", "/api/users",
                 "/api/reports", "/api/purchase-orders"))
             tenant().get(path).then().statusCode(403);
@@ -57,8 +57,7 @@ class TenantAccessApiTest {
 
     @Test void tenantsCannotAttachOrganizationResources() {
         String company = publicItem();
-        String shelf = admin().body(Map.of("name", "Company shelf " + UUID.randomUUID(), "privateResource", false))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String shelf = TestLocations.section(() -> admin(), Map.of("name", "Company shelf " + UUID.randomUUID(), "privateResource", false));
         tenant().body(Map.of("sku", "TENANT-ATTACH-" + UUID.randomUUID(), "name", "Sneaky", "category", "Power",
                 "amount", 0, "value", 0, "storageLocation", shelf)).post("/api/items").then().statusCode(404);
         tenant().body(Map.of("name", "Sneaky kit", "itemQuantities", Map.of(company, 1))).post("/api/assemblies")

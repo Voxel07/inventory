@@ -27,7 +27,7 @@ export interface TransferInput { transferNumber?: string | null; sourceLocationI
 export interface TransferCommandInput { idempotencyKey: string; notes?: string | null }
 export interface TransferReceiveInput extends TransferCommandInput { lines: { transferLineId: string; receivedQuantity: number; discrepancyQuantity: number; discrepancyNotes?: string | null }[] }
 export type TransferCommands = { dispatch: TransferCommandInput; cancel: TransferCommandInput; receive: TransferReceiveInput };
-export interface CountInput { sessionNumber?: string | null; warehouseId?: string | null; locationId?: string | null; category?: string | null; itemId?: string | null; blindCount: boolean; notes?: string | null }
+export interface CountInput { sessionNumber?: string | null; locationId?: string | null; category?: string | null; itemId?: string | null; blindCount: boolean; notes?: string | null }
 export interface CountCommandInput { notes?: string | null }
 export interface CountSubmissionInput extends CountCommandInput { lines: { lineId: string; quantity: number; notes?: string | null }[] }
 export type CountCommands = { start: CountCommandInput; submit: CountSubmissionInput; recount: CountSubmissionInput; approve: CountCommandInput; post: CountCommandInput; cancel: CountCommandInput };

@@ -38,7 +38,7 @@ Every account can own private resources and share them. Roles do not bypass priv
 | Product area | Features and functions | Detailed requirement families |
 |---|---|---|
 | Catalog | Metadata/images/category-specific fields, serialized asset drill-down, assemblies and QR/label identity | CAT, ORD-06/07 |
-| Locations and stock | Warehouse/location hierarchy, maps, positions, exact assets, lots/FEFO, quarantine, transfers and counts | LOC, INV |
+| Locations and stock | Location → section → storage place tree, maps, positions, exact assets, lots/FEFO, quarantine, transfers and counts | LOC, INV |
 | Planning and purchasing | Occurrences/factions, demand/supply deficits and overrides, purchase orders, partial receipts and vendor evidence | PRC |
 | Orders and custody | Faction/general demand, preparation, pickup, partial returns, reconciliation, cancellation and history | ORD, AUD |
 | Return verification | Member placement evidence and warehouse accept/reject before stock changes | RET |
@@ -66,7 +66,8 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
 | CAT-08 | Unique SKU/asset codes; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
-| LOC-01 | Warehouses and a hierarchical, georeferenced location tree with pickup points; no cycles, same-warehouse parent; each level has a short code unique among the siblings its editor can see and a derived full code; a private parent accepts sub-locations only from its editors (`WH1-E1-R3-F2`) | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
+| LOC-01 | Georeferenced storage tree ([Storage locations](STORAGE_LOCATIONS.md)): top-level locations (sites, no stock) → sections → nestable storage places; no cycles; each level has a short code unique among the siblings its editor can see and a derived full code (`BH-CE-R2-F7`); a private parent accepts sub-locations only from its editors | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
+| LOC-03 | One structure dialog finds or creates a location by name and adds sections and storage places (bulk generation such as Regal 1–4 × Fach 1–8) in one save; the list is grouped by location or flat; QR label sheets per location or section | Implemented | `CatalogService.saveStructure`, `StorageStructureDialog`, `StorageLocationList`, `StorageLabels` |
 | LOC-02 | Private locations protect address, coordinates, overlays, hierarchy and contents | Implemented | `StorageLocation.accessPolicy`, `ApiMapper` redaction, `InventorySharing` |
 
 **Stock**

@@ -84,6 +84,8 @@ public class OrderPickupService {
                 var location = orm.require(StorageLocation.class, a.pickupLocationId(), "Pickup location");
                 actors.requireLocationAccess(location, false);
                 if (!location.active) throw ApiException.badRequest("Pickup location must be active");
+                // Handed-out assets are booked into the pickup location.
+                LocationHierarchyService.requireStockLocation(location);
             }
             var name = a.groupName() == null || a.groupName().isBlank() ? item.category : a.groupName().trim();
             if (name.length() > 160) throw ApiException.badRequest("Pickup group name must be at most 160 characters");

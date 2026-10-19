@@ -1,6 +1,6 @@
 import { Autocomplete, Box, TextField, Typography, createFilterOptions } from '@mui/material';
 import type { StorageLocation } from '../../types';
-import { locationPath } from '../../utils/locationHierarchy';
+import { holdsStock, locationPath } from '../../utils/locationHierarchy';
 
 interface Props {
     locations: StorageLocation[];
@@ -11,20 +11,27 @@ interface Props {
     required?: boolean;
     disabled?: boolean;
     size?: 'small' | 'medium';
+    /**
+     * Only sections and storage places can be chosen (default): stock is never kept directly in a top-level location.
+     * Filters and parent choices pass `false`.
+     */
+    stockOnly?: boolean;
 }
 
 const filter = createFilterOptions<StorageLocation>({
     stringify: (location) => `${location.fullCode} ${location.hierarchyPath ?? location.name} ${location.name}`,
 });
 
-/** Locations in tree order, found by code (`WH1-E1-R3`), name or any part of their path. */
-export function LocationPicker({ locations, value, onChange, label, helperText, required, disabled, size }: Props) {
-    const options = [...locations].sort((a, b) => (a.fullCode ?? '').localeCompare(b.fullCode ?? '', undefined, { numeric: true }));
+/** Locations in tree order, grouped by top-level location and found by code (`BH-CE-R3`), name or any part of their path. */
+export function LocationPicker({ locations, value, onChange, label, helperText, required, disabled, size, stockOnly = true }: Props) {
+    const options = [...locations].sort((a, b) => (a.rootLocationName ?? '').localeCompare(b.rootLocationName ?? '')
+        || (a.fullCode ?? '').localeCompare(b.fullCode ?? '', undefined, { numeric: true }));
     return <Autocomplete
         options={options}
         filterOptions={filter}
-        groupBy={(location) => location.warehouseName ?? ''}
+        groupBy={(location) => location.rootLocationName ?? ''}
         getOptionLabel={(location) => location.fullCode ? `${location.fullCode} · ${locationPath(location, locations)}` : locationPath(location, locations)}
+        getOptionDisabled={(location) => stockOnly && !holdsStock(location)}
         isOptionEqualToValue={(option, selected) => option.id === selected.id}
         value={locations.find((location) => location.id === value) ?? null}
         onChange={(_event, location) => onChange(location)}
@@ -32,8 +39,7 @@ export function LocationPicker({ locations, value, onChange, label, helperText, 
         size={size}
         fullWidth
         renderOption={({ key, ...props }, location) => {
-            const depth = location.fullCode ? location.fullCode.split('-').length - (location.warehouseId ? 2 : 1) : 0;
-            return <Box component="li" key={key} {...props} sx={{ pl: `${16 + Math.max(0, depth) * 12}px !important` }}>
+            return <Box component="li" key={key} {...props} sx={{ pl: `${16 + Math.max(0, location.depth) * 12}px !important` }}>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         <Box component="span" className="mono" sx={{ mr: 1 }}>{location.fullCode}</Box>{location.name}

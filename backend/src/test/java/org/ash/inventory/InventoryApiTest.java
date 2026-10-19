@@ -381,8 +381,7 @@ class InventoryApiTest {
 
     @Test
     void purchaseReceiptPostsStockDamageAndPositionIdempotently() {
-        String locationId = request().body(Map.of("name", "Receipt bay 001", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String locationId = TestLocations.section(() -> request(), Map.of("name", "Receipt bay 001", "mapZoom", 16));
         String itemId = request().body(Map.of(
                         "sku", "RECEIPT-BULK-001", "name", "Receipt bulk item", "category", "Test",
                         "amount", 0, "value", 0, "trackingMode", "bulk"))
@@ -452,10 +451,8 @@ class InventoryApiTest {
 
     @Test
     void serializedTransferPreservesIdentityAcrossTransit() {
-        String sourceId = request().body(Map.of("name", "Transfer source 001", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String destinationId = request().body(Map.of("name", "Transfer destination 001", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String sourceId = TestLocations.section(() -> request(), Map.of("name", "Transfer source 001", "mapZoom", 16));
+        String destinationId = TestLocations.section(() -> request(), Map.of("name", "Transfer destination 001", "mapZoom", 16));
         String itemId = request().body(Map.of(
                         "sku", "TRANSFER-ASSET-001", "name", "Transferred asset", "category", "Test",
                         "amount", 1, "value", 0, "trackingMode", "serialized", "storageLocation", sourceId))
@@ -494,8 +491,7 @@ class InventoryApiTest {
 
     @Test
     void partialCountPersistsZeroAndResumesBothCountAndRecount() {
-        String location = request().body(Map.of("name", "Partial count location"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> request(), Map.of("name", "Partial count location"));
         String first = request().body(Map.of("name", "Partial count first", "category", "Test", "amount", 3, "value", 0, "storageLocation", location))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String second = request().body(Map.of("name", "Partial count second", "category", "Test", "amount", 5, "value", 0, "storageLocation", location))
@@ -527,10 +523,8 @@ class InventoryApiTest {
 
     @Test
     void transfersRejectEmptySourcesAndAmountsAboveAvailableStock() {
-        String source = request().body(Map.of("name", "Limited transfer source"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String destination = request().body(Map.of("name", "Limited transfer destination"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String source = TestLocations.section(() -> request(), Map.of("name", "Limited transfer source"));
+        String destination = TestLocations.section(() -> request(), Map.of("name", "Limited transfer destination"));
         String item = request().body(Map.of("name", "Limited transfer stock", "category", "Test", "amount", 2, "value", 0, "storageLocation", source))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         request().body(Map.of("sourceLocationId", destination, "destinationLocationId", source, "idempotencyKey", java.util.UUID.randomUUID().toString(),
@@ -554,8 +548,7 @@ class InventoryApiTest {
 
     @Test
     void approvedInventoryCountPostsSignedAdjustment() {
-        String locationId = request().body(Map.of("name", "Count location 001", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String locationId = TestLocations.section(() -> request(), Map.of("name", "Count location 001", "mapZoom", 16));
         String itemId = request().body(Map.of(
                         "sku", "COUNT-BULK-001", "name", "Count bulk item", "category", "Test",
                         "amount", 2, "value", 0, "trackingMode", "bulk", "storageLocation", locationId))
@@ -742,11 +735,9 @@ class InventoryApiTest {
 
     @Test
     void unopenedConsumablesReturnToStockAndConsumedUnitsDoNot() {
-        String warehouseId = request().body(Map.of("name", "Consumable warehouse", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String eventSiteId = request().body(Map.of("name", "Consumable event site", "mapZoom", 16,
-                        "latitude", 52.5, "longitude", 13.4, "locationType", "event_site"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String warehouseId = TestLocations.section(() -> request(), Map.of("name", "Consumable warehouse", "mapZoom", 16));
+        String eventSiteId = TestLocations.section(() -> request(), Map.of("name", "Consumable event site", "mapZoom", 16,
+                        "latitude", 52.5, "longitude", 13.4));
         String itemId = request().body(Map.of("sku", "CONSUMABLE-RETURN-001", "name", "Returnable boxes",
                         "category", "Test", "amount", 4, "value", 0, "inventoryRole", "consumable",
                         "storageLocation", warehouseId))
@@ -1044,7 +1035,7 @@ class InventoryApiTest {
 
     @Test
     void directCustodyKeepsPendingReturnsAndOccurrenceUntilAcknowledged() {
-        String location = request().body(Map.of("name", "Custody source" )).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> request(), Map.of("name", "Custody source" ));
         String item = request().body(Map.of("sku", "CUSTODY-NEW-01", "name", "Custody balances", "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String event = request().body(Map.of("eventType", "DE", "startDate", "2039-01-01", "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
         String person = factionLeaderRequest().get("/api/auth/me").then().statusCode(200).extract().path("id");
@@ -1062,7 +1053,7 @@ class InventoryApiTest {
 
     @Test
     void lotCheckoutUsesFefoAndBlocksHeldStock() {
-        String location = request().body(Map.of("name", "FEFO source")).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> request(), Map.of("name", "FEFO source"));
         String item = request().body(Map.of("sku", "FEFO-NEW-01", "name", "FEFO stock", "category", "Test", "amount", 0, "trackingMode", "lot_tracked", "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String early = request().body(Map.of("itemId", item, "lotNumber", "EARLY", "expiryDate", "2040-01-01")).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
         String late = request().body(Map.of("itemId", item, "lotNumber", "LATE", "expiryDate", "2041-01-01")).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
@@ -1076,7 +1067,7 @@ class InventoryApiTest {
 
     @Test
     void generalReservationsProtectSourcesAndMissingRemainsInCustody() {
-        String location = request().body(Map.of("name", "Reserved source")).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> request(), Map.of("name", "Reserved source"));
         String item = request().body(Map.of("sku", "GENERAL-BULK-NEW", "name", "Reserved bulk", "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String event = request().body(Map.of("eventType", "DE", "startDate", "2039-02-01", "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
         String order = request().body(Map.of("name", "Reserved", "purpose", "Test reservation", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 3))).post("/api/orders/general").then().statusCode(200).extract().path("id");
@@ -1124,7 +1115,7 @@ class InventoryApiTest {
 
     @Test
     void repairedBulkStockRemainsUnavailableUntilVerifiedAndReleased() {
-        String location = request().body(Map.of("name", "Repair source")).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> request(), Map.of("name", "Repair source"));
         String item = request().body(Map.of("sku", "REPAIR-NEW-01", "name", "Repair stock", "category", "Test", "amount", 2, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String damage = request().body(Map.of("itemId", item, "amount", 2, "description", "Damaged handles", "severity", "medium")).post("/api/damage-reports").then().statusCode(200).extract().path("id");
         String repair = request().body(Map.of("damageReportId", damage)).post("/api/repairs").then().statusCode(201).extract().path("id");
@@ -1273,11 +1264,7 @@ class InventoryApiTest {
 
     @Test
     void catalogAndMaintenanceBlockerFlow() {
-        String locationId = request()
-                .body(Map.of("name", "Test Shelf", "mapZoom", 16))
-                .post("/api/storage-locations")
-                .then().statusCode(200).body("id", notNullValue())
-                .extract().path("id");
+        String locationId = TestLocations.section(() -> request(), Map.of("name", "Test Shelf", "mapZoom", 16));
 
         String itemId = request()
                 .body(Map.of(
@@ -1554,8 +1541,7 @@ class InventoryApiTest {
 
     @Test
     void deactivatingStorageLocationPreservesItemsAndAssets() {
-        String locationId = request().body(Map.of("name", "Location to delete", "mapZoom", 16))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String locationId = TestLocations.section(() -> request(), Map.of("name", "Location to delete", "mapZoom", 16));
         String itemId = request().body(Map.of(
                         "sku", "DELETE-LOCATION-001", "name", "Located serialized item", "category", "Test",
                         "amount", 1, "value", 0, "trackingMode", "serialized", "storageLocation", locationId))
@@ -1740,8 +1726,7 @@ class InventoryApiTest {
     void personScopedItemsAndCategoryDetailsAreOnlyVisibleToTheAssigneeAndManagers() {
         String assigneeId = factionLeaderRequest().get("/api/auth/me").then().statusCode(200)
                 .extract().path("id");
-        String returnLocationId = request().body(Map.of("name", "Private return shelf"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String returnLocationId = TestLocations.section(() -> request(), Map.of("name", "Private return shelf"));
 
         var item = new java.util.HashMap<String, Object>();
         item.put("sku", "PRIVATE-VEHICLE-001");
@@ -1775,8 +1760,7 @@ class InventoryApiTest {
     void submittedReturnDoesNotChangeStockUntilWarehouseAcknowledgement() {
         String userId = factionLeaderRequest().get("/api/auth/me").then().statusCode(200)
                 .extract().path("id");
-        String locationId = request().body(Map.of("name", "Return intake counter"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String locationId = TestLocations.section(() -> request(), Map.of("name", "Return intake counter"));
         String itemId = request().body(Map.of(
                         "sku", "RETURN-STAGE-001",
                         "name", "Staged return item",

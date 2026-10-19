@@ -62,8 +62,7 @@ class ReviewFixesApiTest {
     }
 
     @Test void blindRecountHidesExpectedQuantityUntilReview() { // REV-10
-        String location = admin().body(Map.of("name", "Review shelf " + UUID.randomUUID(), "privateResource", false))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> admin(), Map.of("name", "Review shelf " + UUID.randomUUID(), "privateResource", false));
         String item = item(Map.of("amount", 5, "storageLocation", location));
         String count = admin().body(Map.of("locationId", location, "itemId", item, "blindCount", true))
                 .post("/api/inventory-counts").then().statusCode(201).extract().path("id");

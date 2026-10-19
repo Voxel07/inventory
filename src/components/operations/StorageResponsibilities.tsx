@@ -28,7 +28,6 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
         const keeper = location.keeperUserId ? { name: location.keeperUserName, email: location.keeperUserEmail } : undefined;
         const missing = [
             ...(!assignment?.userId ? [t('operations.storageResponsibilities.responsiblePersonMissing')] : []),
-            ...(!location.warehouseId ? [t('operations.storageResponsibilities.warehouseMissing')] : []),
         ];
         return { id: location.id, name: locationPath(location, locations), location, assignment, keeper, missing };
     }).filter((row) => !missingOnly || row.missing.length > 0);

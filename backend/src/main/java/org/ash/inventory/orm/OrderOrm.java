@@ -89,7 +89,7 @@ public class OrderOrm extends EntityOrm {
         if (orders.isEmpty()) return List.of();
         return entityManager.createQuery(
                 "select line from OrderLine line "
-                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.warehouse left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.warehouse left join fetch rl.parent left join fetch line.sourceAssembly "
+                        + "join fetch line.item i left join fetch i.storageLocation sl left join fetch sl.parent left join fetch i.returnLocation rl left join fetch rl.parent left join fetch line.sourceAssembly "
                         + "where line.order in :orders",
                 OrderLine.class)
                 .setParameter("orders", orders).getResultList();

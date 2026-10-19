@@ -38,10 +38,14 @@ await mcp('notifications/initialized', {}, true);
 const discovery = await mcp('tools/list', {});
 assert.ok(discovery.tools.some((entry: { name: string }) => entry.name === 'create_item'));
 const { rows } = parseCsv(await Bun.file('sample_imports/sample_stock.csv').text());
+// Stock lives in sections: the sample's storage names become sections of one top-level location.
+const known: StorageLocation[] = await api('/storage-locations');
+const missing = [...new Set(rows.filter(row => row.Typ === 'Artikel').map(row => row.Lagerort).filter(Boolean))].filter(name => !known.some(location => location.name === name));
+const depot = known.find(location => location.depth === 0 && location.name === 'Sample depot');
+await tool('save_storage_structure', { input: { id: depot?.id, name: 'Sample depot', sections: missing.map(name => ({ name, children: [] })) } });
 const locations: StorageLocation[] = await api('/storage-locations');
-for (const name of new Set(rows.filter(row => row.Typ === 'Artikel').map(row => row.Lagerort).filter(Boolean))) {
-  if (!locations.some(location => location.name === name)) locations.push(await api('/storage-locations', { name, locationType: 'warehouse', active: true }, 200));
-}
+const depotId = locations.find(location => location.depth === 0 && location.name === 'Sample depot')!.id;
+assert.ok(missing.every(name => locations.some(location => location.name === name && location.parentLocationId === depotId)));
 async function allItems(): Promise<Item[]> {
   const catalog: Item[] = [];
   for (let page = 0; ; page++) {
@@ -83,7 +87,8 @@ assert.equal(received.stock.onHand, before.stock.onHand + 5);
 const transactions: StockTransaction[] = await api(`/transactions?itemId=${target.id}`);
 assert.equal(transactions.filter(entry => entry.transactionType === 'received' && entry.quantityChanged === 5).length, priorTransactions.filter(entry => entry.transactionType === 'received' && entry.quantityChanged === 5).length + 1);
 assert.equal(buildStockHistory(transactions, received.stock.onHand).at(-1)!.stock, received.stock.onHand);
-const destination = await api('/storage-locations', { name: `Sample transfer shelf ${crypto.randomUUID()}`, locationType: 'warehouse', active: true }, 200);
+const destination = await api('/storage-locations', { name: `Sample transfer shelf ${crypto.randomUUID()}`, parentLocationId: depotId, active: true }, 200);
+await api('/transfers', { sourceLocationId: target.storageLocation, destinationLocationId: depotId, idempotencyKey: crypto.randomUUID(), lines: [{ itemId: target.id, quantity: 1 }] }, 400); // top-level locations hold no stock
 const transferInput = { sourceLocationId: target.storageLocation, destinationLocationId: destination.id, idempotencyKey: crypto.randomUUID(), lines: [{ itemId: target.id, quantity: received.stock.onHand + 1 }] };
 await api('/transfers', transferInput, 409);
 const transfer = await api('/transfers', { ...transferInput, idempotencyKey: crypto.randomUUID(), lines: [{ itemId: target.id, quantity: 2 }] });

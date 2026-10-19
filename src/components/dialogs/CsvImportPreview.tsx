@@ -129,6 +129,12 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                                   />
                                 </Tooltip>
                               )}
+                              {row.data.trackingMode === 'lot_tracked' && (
+                                <Tooltip title={row.lots?.map((lot) => `${lot.lotNumber}: ${lot.quantity}${lot.expiryDate || lot.bestBeforeDate ? ` (${lot.expiryDate || lot.bestBeforeDate})` : ''}`).join(', ') || t('enum.value.lot_tracked')} arrow>
+                                  <Chip size="small" variant="outlined" color="primary" sx={{ height: 20, fontSize: '0.7rem' }}
+                                    label={`${t('enum.value.lot_tracked')}${row.lots?.length ? ` (${row.lots.length})` : ''}`} />
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell>{[row.data.category, row.data.subcategory].filter(Boolean).join(' · ') || '—'}</TableCell>

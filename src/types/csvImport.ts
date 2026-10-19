@@ -1,5 +1,8 @@
 import { type ItemFormData, type AssemblyFormData, type EventReportFormData, type FactionOrderFormData, type GeneralOrderFormData, type EventType } from './index';
 import type { EventAttendeeInput, EventTimelineInput } from './eventLogistics';
+import type { LotCreateInput } from './operations';
+
+export type CsvItemLot = Omit<LotCreateInput, 'itemId'> & { quantity: number };
 
 export interface ParsedItemRow {
   index: number;
@@ -11,6 +14,7 @@ export interface ParsedItemRow {
   /** Path to create when the location does not exist yet; existing leading levels are reused. */
   storageLocationPath?: string[];
   assetCodes?: string[];
+  lots?: CsvItemLot[];
   status: 'valid' | 'warning' | 'error' | 'duplicate';
   statusMessage?: string;
   isExisting: boolean;

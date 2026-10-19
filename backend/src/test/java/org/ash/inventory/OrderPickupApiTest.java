@@ -16,7 +16,7 @@ class OrderPickupApiTest {
     private RequestSpecification admin() { return actor("pickup-admin", "admin"); }
     private String user(String subject) { return actor(subject, "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id"); }
     private String location(String name) {
-        return admin().body(Map.of("name", name + " " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        return TestLocations.section(() -> admin(), Map.of("name", name + " " + UUID.randomUUID()));
     }
     private String item(String name, String category, String location) {
         return admin().body(Map.of("name", name, "sku", "PICKUP-" + UUID.randomUUID(), "category", category, "amount", 10, "minStock", 0, "value", 0, "storageLocation", location))
@@ -94,7 +94,7 @@ class OrderPickupApiTest {
     @Test void mixedPrivatePickupLocationsDoNotBlockTheRecipientsPublicGroups() {
         String subject = "public-keeper-" + UUID.randomUUID(), keeper = user(subject), publicPoint = location("Public pickup");
         String light = item("Public light", "Lighting", publicPoint), table = item("Public table", "Furniture", publicPoint);
-        String privatePoint = admin().body(Map.of("name", "Private pickup", "privateResource", true)).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String privatePoint = TestLocations.section(() -> admin(), Map.of("name", "Private pickup", "privateResource", true));
         String order = faction(Map.of(light, 1, table, 1), Map.of()), path = "/api/orders/faction/" + order + "/pickup-groups";
         admin().body(Map.of("assignments", Map.of(light, assignment(keeper, "Lighting", publicPoint), table, assignment(null, "Furniture", privatePoint))))
                 .patch(path).then().statusCode(200);

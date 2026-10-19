@@ -129,7 +129,7 @@ class AuditFixesApiTest {
 
     @Test void catalogFiltersAndContinuationRunOnTheServer() { // H06, H07
         String tag = "AUD-" + UUID.randomUUID();
-        String location = admin().body(Map.of("name", "Audit shelf " + tag)).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> admin(), Map.of("name", "Audit shelf " + tag));
         String first = admin().body(Map.of("sku", tag + "-1", "name", tag + " alpha", "category", tag, "value", 0, "amount", 1,
                 "eventTypes", java.util.List.of("DE"), "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String second = admin().body(Map.of("sku", tag + "-2", "name", tag + " beta", "category", tag, "value", 0, "amount", 1))
@@ -147,7 +147,7 @@ class AuditFixesApiTest {
 
     @Test void lotParentItemIsImmutableAndLotsCarryItemAndStock() { // LOT-H01, LOT-L02, LOT-L03
         String tag = "AUD-LOT-" + UUID.randomUUID();
-        String location = admin().body(Map.of("name", "Lot shelf " + tag)).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> admin(), Map.of("name", "Lot shelf " + tag));
         String first = admin().body(Map.of("sku", tag + "-A", "name", tag + " A", "category", "Audit", "value", 0, "trackingMode", "lot_tracked",
                 "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String other = admin().body(Map.of("sku", tag + "-B", "name", tag + " B", "category", "Audit", "value", 0, "trackingMode", "lot_tracked"))

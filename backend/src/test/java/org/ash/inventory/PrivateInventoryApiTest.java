@@ -90,7 +90,7 @@ class PrivateInventoryApiTest {
 
     @Test void sharingAnItemDoesNotShareItsPrivateWhereaboutsAndLocationSharesCanBeRevoked() {
         String readerId = person("reader");
-        String location = owner().body(Map.of("name", "Secret garage " + UUID.randomUUID())).post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> owner(), Map.of("name", "Secret garage " + UUID.randomUUID()));
         var input = itemInput(); input.put("storageLocation", location); input.put("positionDetails", "Private shelf");
         String item = owner().body(input).post("/api/items").then().statusCode(200).extract().path("id");
         owner().body(shares(0, List.of(Map.of("userId", readerId, "canEdit", false)))).put(policy("items", item)).then().statusCode(200);
@@ -197,7 +197,8 @@ class PrivateInventoryApiTest {
 
     @Test void buildingOwnersManageWhatOthersStoreInTheirBuildingButNotItsSharing() {
         String lodgerId = person("lodger");
-        String hall = building(tenant("host"), null);
+        // Stock is kept in a section of the building, never in the top-level location itself.
+        String hall = building(tenant("host"), building(tenant("host"), null));
         tenant("host").body(shares(0, List.of(Map.of("userId", lodgerId, "canEdit", true)))).put(policy("storage-locations", hall)).then().statusCode(200);
         var input = itemInput(); input.put("storageLocation", hall);
         String lodgerItem = actor("lodger", "faction_leader").body(input).post("/api/items").then().statusCode(200).extract().path("id");

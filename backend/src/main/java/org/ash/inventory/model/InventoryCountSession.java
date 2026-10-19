@@ -15,7 +15,6 @@ import java.time.Instant;
 @Table(name = "inventory_count_sessions")
 public class InventoryCountSession extends BaseEntity {
     @Column(name = "session_number", nullable = false, unique = true) public String sessionNumber;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "warehouse_id") public Warehouse warehouse;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "location_id") public StorageLocation location;
     public String category;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "item_id") public Item item;

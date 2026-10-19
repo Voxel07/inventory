@@ -21,21 +21,21 @@ class RemainingP1ApiTest {
     }
     private Map<String, Object> batch(Map<String, Object> action) { return Map.of("actions", List.of(action)); }
 
-    @Test void hierarchyRejectsCyclesCrossWarehouseParentsAndInvalidDeactivation() {
-        String warehouse = admin().body(Map.of("code", "P1-" + UUID.randomUUID(), "name", "P1 Warehouse"))
-                .post("/api/warehouses").then().statusCode(201).extract().path("id");
-        String parent = admin().body(Map.of("name", "P1 parent", "warehouseId", warehouse, "locationType", "warehouse"))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
-        String child = admin().body(Map.of("name", "P1 child", "warehouseId", warehouse, "parentLocationId", parent, "locationType", "bin"))
-                .post("/api/storage-locations").then().statusCode(200).body("parentLocationId", equalTo(parent)).extract().path("id");
-        admin().body(Map.of("name", "P1 parent", "warehouseId", warehouse, "parentLocationId", child)).patch("/api/storage-locations/" + parent).then().statusCode(409);
-        admin().body(Map.of("name", "Unassigned child", "parentLocationId", parent)).post("/api/storage-locations").then().statusCode(409);
+    @Test void hierarchyRejectsCyclesRootStockAndInvalidDeactivation() {
+        String parent = admin().body(Map.of("name", "P1 parent " + UUID.randomUUID()))
+                .post("/api/storage-locations").then().statusCode(200).body("depth", equalTo(0)).extract().path("id");
+        String child = admin().body(Map.of("name", "P1 child", "parentLocationId", parent))
+                .post("/api/storage-locations").then().statusCode(200).body("parentLocationId", equalTo(parent)).body("depth", equalTo(1)).extract().path("id");
+        admin().body(Map.of("name", "P1 parent", "parentLocationId", child)).patch("/api/storage-locations/" + parent).then().statusCode(409);
+        // A section with stock cannot become a top-level location.
+        admin().body(Map.of("sku", "P1-STOCK-" + UUID.randomUUID(), "name", "P1 stock", "category", "P1", "amount", 1, "value", 0, "storageLocation", child))
+                .post("/api/items").then().statusCode(200);
+        admin().body(Map.of("name", "P1 child")).patch("/api/storage-locations/" + child).then().statusCode(409);
         admin().delete("/api/storage-locations/" + parent).then().statusCode(409);
-        admin().delete("/api/warehouses/" + warehouse).then().statusCode(409);
         admin().delete("/api/storage-locations/" + child).then().statusCode(204);
         admin().get("/api/storage-locations?includeInactive=true").then().statusCode(200).body("find { it.id == '" + child + "' }.active", equalTo(false));
         admin().delete("/api/storage-locations/" + parent).then().statusCode(204);
-        admin().body(Map.of("name", "P1 child", "warehouseId", warehouse, "parentLocationId", parent, "active", true)).patch("/api/storage-locations/" + child).then().statusCode(409);
+        admin().body(Map.of("name", "P1 child", "parentLocationId", parent, "active", true)).patch("/api/storage-locations/" + child).then().statusCode(409);
         reader().body(Map.of("name", "Read-only location")).post("/api/storage-locations").then().statusCode(403);
         reader().body(Map.of("name", "Unauthorized public location", "privateResource", false)).post("/api/storage-locations").then().statusCode(403);
     }

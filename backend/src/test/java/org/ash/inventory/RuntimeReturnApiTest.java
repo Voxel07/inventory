@@ -29,8 +29,7 @@ class RuntimeReturnApiTest {
     }
 
     private String trackedItem() {
-        String location = admin().body(Map.of("name", "Runtime " + UUID.randomUUID())).post("/api/storage-locations")
-                .then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> admin(), Map.of("name", "Runtime " + UUID.randomUUID()));
         return admin().body(Map.of("name", "Runtime generator " + UUID.randomUUID(), "category", "Stromerzeuger",
                 "trackingMode", "serialized", "amount", 1, "storageLocation", location, "tracksRuntime", true))
                 .post("/api/items").then().statusCode(200).body("tracksRuntime", equalTo(true)).extract().path("id");
@@ -71,8 +70,7 @@ class RuntimeReturnApiTest {
     }
 
     @Test void untrackedItemsAcceptReturnsWithoutHours() {
-        String location = admin().body(Map.of("name", "Runtime " + UUID.randomUUID())).post("/api/storage-locations")
-                .then().statusCode(200).extract().path("id");
+        String location = TestLocations.section(() -> admin(), Map.of("name", "Runtime " + UUID.randomUUID()));
         String item = admin().body(Map.of("name", "Untracked " + UUID.randomUUID(), "category", "Funk",
                 "trackingMode", "serialized", "amount", 1, "storageLocation", location))
                 .post("/api/items").then().statusCode(200).body("tracksRuntime", equalTo(false)).extract().path("id");

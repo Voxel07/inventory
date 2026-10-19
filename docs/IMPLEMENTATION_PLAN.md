@@ -20,7 +20,7 @@ Priorities: P1 stock/history/security and release acceptance, P2 architectural c
 | Capability | Status | Source evidence | Remaining issue |
 |---|---|---|---|
 | Item catalog, serialized assets, assemblies, images, labels | Implemented | CatalogService, StockManagementService; ItemForm/ItemDetail/AssetDetail | Privacy filter consolidation PLAN-01 |
-| Warehouse/location hierarchy, sibling-unique location codes and private access | Implemented | LocationHierarchyService, InventoryAccessService/InventoryAccess; StorageLocations/InventorySharing | Predicate simplification PLAN-01; browser policy acceptance |
+| Location → section → storage place tree (no stock at the top level), structure editor with bulk generation, label sheets, sibling-unique location codes and private access | Implemented | LocationHierarchyService, CatalogService.saveStructure, InventoryAccessService/InventoryAccess; StorageLocations/StorageStructureDialog/StorageLabels/InventorySharing | Predicate simplification PLAN-01; browser policy acceptance |
 | Ledger, positions, reservations, exact-asset stock | Implemented | InventoryOperationsService, PositionService, StockPolicy, OrderAllocationService | Contention/load acceptance; DB-enforced append-only FEAT-09 |
 | Transfers, blind counts, lots/FEFO/quarantine | Implemented | TransferService, CountService, PositionService; StockOperations | Integrated and concurrent operation acceptance |
 | Faction/general order lifecycle and custody | Implemented | InventoryOrder, OrderService, CustodyBalanceService; shared commands/history/evidence | PLAN-02 implemented; runtime pickup/reconciliation acceptance pending |

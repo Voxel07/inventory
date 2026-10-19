@@ -15,6 +15,7 @@ import { createStorageLocation } from './storageLocationService';
 import { buildLocationIndex, normalizeLocationRef } from '../utils/csv/locations';
 import { getItemStock } from '../utils/stock';
 import { createCsvOperationImporter } from './csvOperationImport';
+import { createCsvLotImporter } from './csvLotImport';
 import { createCsvEventLogisticsImporter } from './csvEventLogisticsImport';
 import type { ParsedCheckoutRow } from '../types/csvImport';
 import type { ParsedOperationRow } from '../utils/csvOperations';
@@ -121,8 +122,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           const name = segments[depth - 1];
           try {
             setImportStatusText(t('services.csvImportService.creatingStorageLocationLocName', { locName: segments.slice(0, depth).join(' / ') }));
-            const created = await createStorageLocation({ name, parentLocationId: parent?.id ?? null, warehouseId: parent?.warehouseId ?? null,
-              locationType: depth === segments.length ? 'bin' : depth === 1 ? 'warehouse' : 'area' });
+            const created = await createStorageLocation({ name, parentLocationId: parent?.id ?? null });
             locCache.set(key, created.id);
             if (created.fullCode) locCache.set(created.fullCode.toLowerCase(), created.id);
             locationsById.set(created.id, created);
@@ -143,6 +143,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     }
 
     if (tabType !== 'assemblies') {
+      const importLots = createCsvLotImporter();
       const rowsToSave = itemsToProcess.filter((row) => !row.isExisting || (updateExistingItems && row.existingId));
       // Rows that match an existing item but are not updated are complete without a request.
       for (let skipped = itemsToProcess.length - rowsToSave.length; skipped > 0; skipped--) reportCompletedRow();
@@ -153,8 +154,8 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           locationId = locCache.get(normalizeLocationRef(row.storageLocationPath.join(' / '))) || '';
         }
         const assetCodes = row.data.trackingMode === 'serialized' && row.assetCodes?.length ? row.assetCodes : undefined;
-        // Stock is only seeded on creation; explicit asset codes replace the generated SKU-xxx assets.
-        const amount = row.isExisting ? undefined : assetCodes ? 0 : row.data.amount;
+        // Explicit assets and lots book their own opening stock instead of generated units/lots.
+        const amount = row.isExisting ? undefined : assetCodes || row.lots?.length ? 0 : row.data.amount;
         return { id: row.isExisting ? row.existingId : undefined, item: { ...row.data, storageLocation: locationId, amount }, assetCodes };
       };
 
@@ -166,12 +167,25 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           try {
             const saved = await saveItemBatch(chunk.map(entryFor));
             assertAuthSession(context);
-            saved.forEach((item, position) => {
+            for (const [position, item] of saved.entries()) {
+              const row = chunk[position];
               createdItemsMap.set(item.name.toLowerCase().trim(), item);
-              if (chunk[position].isExisting) updatedItems++;
+              if (row.isExisting) updatedItems++;
               else successItems++;
+              if (row.lots?.length) {
+                try {
+                  if (row.storageLocationPath && !locCache.has(normalizeLocationRef(row.storageLocationPath.join(' / ')))) {
+                    throw new Error(`Lagerort "${row.storageLocationName}" konnte nicht aufgelöst werden`);
+                  }
+                  await importLots(item.id, row.lots, item.storageLocation);
+                  assertAuthSession(context);
+                } catch (error) {
+                  assertAuthSession(context);
+                  errors.push(`Artikel "${item.name}" (Zeile ${row.index}) gespeichert, Chargenimport unvollständig: ${error instanceof Error ? error.message : String(error)}`);
+                }
+              }
               reportCompletedRow();
-            });
+            }
             break;
           } catch (err: unknown) {
             assertAuthSession(context);

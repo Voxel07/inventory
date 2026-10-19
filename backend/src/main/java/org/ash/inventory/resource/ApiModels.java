@@ -28,7 +28,15 @@ public final class ApiModels {
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
             LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime,
-            @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber) {}
+            @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber,
+            @Size(max = 20) List<@NotNull @Valid ItemScheduleInput> maintenanceSchedules) {}
+
+    /** Creation only: an item-wide maintenance plan created together with the item. */
+    public record ItemScheduleInput(@NotNull DomainEnums.MaintenanceType maintenanceType,
+            @NotNull DomainEnums.MaintenanceIntervalType intervalType,
+            @NotNull @jakarta.validation.constraints.DecimalMin("0.01") BigDecimal intervalValue,
+            Instant nextDueAt, @jakarta.validation.constraints.DecimalMin("0") BigDecimal nextDueValue,
+            @jakarta.validation.constraints.DecimalMin("0") BigDecimal warningWindow, boolean checkoutBlocking) {}
 
     /** One import row: created when {@code id} is absent, otherwise updated; asset codes register serialized units. */
     public record ItemBatchEntry(UUID id, @NotNull @Valid ItemInput item, List<@NotBlank @Size(max = 255) String> assetCodes) {}
@@ -45,7 +53,17 @@ public final class ApiModels {
     public record StorageLocationInput(
             @NotBlank String name, @jakarta.validation.constraints.Size(max = 32) String code, String description,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
-            DomainEnums.LocationType locationType, UUID warehouseId, UUID parentLocationId, Boolean active, Boolean privateResource) {}
+            UUID parentLocationId, Boolean active, Boolean privateResource) {}
+
+    /** A top-level location (id null = new) with its sections; see {@code CatalogService.saveStructure}. */
+    public record StorageStructureInput(
+            UUID id, @NotBlank String name, @jakarta.validation.constraints.Size(max = 32) String code, String description, Boolean privateResource,
+            List<@Valid StorageNodeInput> sections) {}
+
+    /** A section or storage place; children nest further (shelf â†’ compartment). */
+    public record StorageNodeInput(
+            UUID id, @NotBlank String name, @jakarta.validation.constraints.Size(max = 32) String code, String description,
+            List<@Valid StorageNodeInput> children) {}
 
 
     public record AssemblyInput(

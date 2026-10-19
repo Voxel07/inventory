@@ -16,7 +16,6 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class StockManagementService {
-    @jakarta.inject.Inject LocationHierarchyService hierarchy;
     private final StockManagementOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -25,55 +24,6 @@ public class StockManagementService {
         this.orm = orm;
         this.actors = actors;
         this.events = events;
-    }
-
-    public List<Warehouse> warehouses(int page, int size) {
-        actors.current();
-        return orm.warehouses(PageBounds.of(page, size).offset(), size);
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public Warehouse createWarehouse(StockDtos.WarehouseInput input) {
-        actors.requireWarehouse();
-        if (orm.warehouseCodeExists(input.code(), null)) throw ApiException.conflict("Warehouse code already exists");
-        var warehouse = new Warehouse();
-        apply(warehouse, input);
-        orm.persist(warehouse);
-        events.record("warehouse.created", "warehouse", warehouse.id, actors.current().id, null, Map.of("code", warehouse.code));
-        return warehouse;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public Warehouse updateWarehouse(UUID id, StockDtos.WarehouseInput input) {
-        actors.requireWarehouse();
-        hierarchy.lockHierarchy();
-        var warehouse = orm.requireLocked(Warehouse.class, id, "Warehouse");
-        if (orm.warehouseCodeExists(input.code(), id)) throw ApiException.conflict("Warehouse code already exists");
-        apply(warehouse, input);
-        hierarchy.refreshWarehouseCodes(warehouse);
-        events.record("warehouse.updated", "warehouse", id, actors.current().id, null, Map.of("code", warehouse.code));
-        return warehouse;
-    }
-
-    @Transactional
-    @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public void retireWarehouse(UUID id) {
-        actors.requireWarehouse();
-        hierarchy.lockHierarchy();
-        var warehouse = orm.requireLocked(Warehouse.class, id, "Warehouse");
-        hierarchy.validateWarehouseState(warehouse, false);
-        warehouse.active = false;
-        events.record("warehouse.retired", "warehouse", id, actors.current().id, null, Map.of("code", warehouse.code));
-    }
-
-    private void apply(Warehouse value, StockDtos.WarehouseInput input) {
-        hierarchy.validateWarehouseState(value, input.active() == null ? value.active : input.active());
-        value.code = input.code().trim().toUpperCase(Locale.ROOT);
-        value.name = input.name().trim();
-        value.description = input.description();
-        if (input.active() != null) value.active = input.active();
     }
 
     public List<InventoryLot> lots(UUID itemId, int page, int size) {

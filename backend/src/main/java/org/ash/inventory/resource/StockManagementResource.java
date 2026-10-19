@@ -6,7 +6,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ash.inventory.model.InventoryLot;
 import org.ash.inventory.model.InventoryPosition;
-import org.ash.inventory.model.Warehouse;
 import org.ash.inventory.resource.dto.StockDtos;
 import org.ash.inventory.service.StockManagementService;
 
@@ -23,26 +22,6 @@ public class StockManagementResource {
     private final StockManagementService service;
 
     public StockManagementResource(StockManagementService service) { this.service = service; }
-
-    @Paged @GET @Path("/warehouses")
-    public List<StockDtos.WarehouseResponse> warehouses(@QueryParam("page") @DefaultValue("0") int page,
-            @QueryParam("size") @DefaultValue("100") int size) {
-        return service.warehouses(page, size).stream().map(this::warehouse).toList();
-    }
-
-    @POST @Path("/warehouses")
-    public Response createWarehouse(@Valid StockDtos.WarehouseInput input) {
-        var value = service.createWarehouse(input);
-        return Response.created(URI.create("/api/warehouses/" + value.id)).entity(warehouse(value)).build();
-    }
-
-    @PUT @Path("/warehouses/{id}")
-    public StockDtos.WarehouseResponse updateWarehouse(@PathParam("id") UUID id, @Valid StockDtos.WarehouseInput input) {
-        return warehouse(service.updateWarehouse(id, input));
-    }
-
-    @DELETE @Path("/warehouses/{id}")
-    public Response retireWarehouse(@PathParam("id") UUID id) { service.retireWarehouse(id); return Response.noContent().build(); }
 
     @Paged @GET @Path("/inventory-lots") @jakarta.transaction.Transactional
     public List<StockDtos.LotResponse> lots(@QueryParam("itemId") UUID itemId,
@@ -92,11 +71,6 @@ public class StockManagementResource {
         positions.load(items.stream().map(item -> item.id).toList()).values().stream().flatMap(List::stream)
                 .filter(position -> position.lot != null).forEach(position -> byLot.computeIfAbsent(position.lot.id, ignored -> new java.util.ArrayList<>()).add(position));
         return values.stream().map(value -> lot(value, byLot.getOrDefault(value.id, List.of()), reserved)).toList();
-    }
-
-    private StockDtos.WarehouseResponse warehouse(Warehouse value) {
-        return new StockDtos.WarehouseResponse(value.id, value.createdAt, value.updatedAt, value.code,
-                value.name, value.description, value.active);
     }
 
     private StockDtos.LotResponse lot(InventoryLot value, List<InventoryPosition> held, java.util.Map<UUID, Integer> reserved) {

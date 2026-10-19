@@ -51,6 +51,8 @@ public class TransferService {
         var source = orm.require(StorageLocation.class, input.sourceLocationId(), "Source location");
         var destination = orm.require(StorageLocation.class, input.destinationLocationId(), "Destination location");
         if (!source.active || !destination.active) throw ApiException.conflict("Transfer locations must be active");
+        LocationHierarchyService.requireStockLocation(source);
+        LocationHierarchyService.requireStockLocation(destination);
         if (source.id.equals(destination.id)) throw ApiException.badRequest("Transfer locations must differ");
         var transfer = new InventoryTransfer();
         transfer.transferNumber = uniqueNumber(input.transferNumber());

@@ -1,5 +1,5 @@
-import type { StorageLocation, StorageLocationFormData } from '../types';
-import { uploadMedia } from './apiClient';
+import type { StorageLocation, StorageLocationFormData, StorageStructureInput } from '../types';
+import { apiRequest, uploadMedia } from './apiClient';
 import { createCrudResourceApi } from './resourceFactory';
 
 function cleanPayload(data: Partial<StorageLocationFormData>) {
@@ -29,3 +29,8 @@ export const storageLocationApi = createCrudResourceApi<StorageLocation, Storage
 );
 
 export const createStorageLocation = storageLocationApi.create;
+
+/** Creates or extends a top-level location with its sections and storage places; returns the whole location tree. */
+export function saveStorageStructure(input: StorageStructureInput) {
+  return apiRequest<StorageLocation[]>('/api/storage-locations/structure', { method: 'PUT', body: input });
+}

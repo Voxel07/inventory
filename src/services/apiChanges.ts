@@ -23,7 +23,7 @@ export function decodeServerChange(value: unknown, depth = 0): ApiChangeDetail {
 type LocalChangeType = 'catalog.changed' | 'equipment.changed' | 'asset.updated' | 'order.changed'
   | 'stock.changed' | 'return.changed' | 'damage.updated' | 'maintenance.recorded'
   | 'maintenance_schedule.changed' | 'repair.changed' | 'transfer.changed' | 'count.changed' | 'inventory_lot.changed'
-  | 'warehouse.changed' | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
+  | 'vendor.changed' | 'purchase_order.changed' | 'goods_receipt.posted'
   | 'vendor_document.attached' | 'loan.changed' | 'planning.overridden' | 'report.rebuilt' | 'reminder.changed'
   | 'access.changed' | 'notification.read' | 'user.changed' | 'location.keeper_assigned' | 'member_request.changed' | 'outbox.changed' | 'event_logistics.changed' | 'unknown';
 type LocalWriteChange = ApiChangeDetail & { source: 'local'; type: LocalChangeType };
@@ -48,7 +48,6 @@ export function localWriteChange(path: string): LocalWriteChange {
     case 'transfers': return change('transfer.changed');
     case 'inventory-counts': return change('count.changed');
     case 'inventory-lots': return change('inventory_lot.changed');
-    case 'warehouses': return change('warehouse.changed');
     case 'vendors': return change('vendor.changed');
     case 'purchase-orders': return change('purchase_order.changed');
     case 'goods-receipts': return change('goods_receipt.posted');
@@ -96,7 +95,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
     switch (detail.resource) {
       case 'items': return new Set([...stock, 'member-assignments']);
       case 'assemblies': return new Set(['assemblies', 'faction-orders', 'procurement-deficits', 'action-inbox', 'reports']);
-      case 'storage-locations': return new Set([...stock, 'storageLocations', 'member-assignments', 'operations:warehouses', 'operations:transfers']);
+      case 'storage-locations': return new Set([...stock, 'storageLocations', 'member-assignments', 'operations:transfers']);
       case 'events': return new Set(['event-reports', 'event-logistics', 'event-types', 'faction-orders', 'general-orders', 'procurement-deficits', 'items', 'action-inbox', 'reports', 'loans', ...custody]);
       case 'factions': return new Set(['factions', 'event-types', 'faction-orders', 'event-reports', 'action-inbox', 'reports']);
       case 'category-maintenance': return new Set([...stock, 'category-maintenance']);
@@ -113,7 +112,6 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('vendor.')) return new Set([...purchasing, 'operations:vendors', 'operations:repair-vendors', 'operations:repairs']);
   if (type.startsWith('purchase_order.')) return new Set([...purchasing, 'items']);
   if (type.startsWith('goods_receipt.')) return new Set([...stock, ...purchasing]);
-  if (type.startsWith('warehouse.')) return new Set(['storageLocations', 'items', 'assemblies', 'member-storage', 'member-assignments', 'reports', 'operations:warehouses', 'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets']);
   if (type === 'location.keeper_assigned') return new Set(['storageLocations', 'member-assignments', 'member-storage', 'action-inbox']);
   // Meter bookings change item/asset hours and maintenance due dates, not quantities.
   if (type.startsWith('runtime.')) return new Set(['items', 'maintenance', 'operations:assets', 'operations:storage-assets', 'reports', 'action-inbox']);

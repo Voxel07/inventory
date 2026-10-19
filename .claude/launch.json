@@ -22,6 +22,25 @@
         "-Dquarkus.redis.hosts=redis://localhost:56379", "-Dquarkus.analytics.disabled=true",
         "-Dquarkus.console.enabled=false"],
       "port": 8080
+    },
+    {
+      "name": "backend-throwaway-db-8090",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["-o", "-f", "backend/pom.xml", "quarkus:dev",
+        "-Dquarkus.datasource.jdbc.url=jdbc:postgresql://localhost:55432/inventory_test",
+        "-Dquarkus.datasource.username=test", "-Dquarkus.datasource.password=test",
+        "-Dquarkus.redis.hosts=redis://localhost:56379", "-Dquarkus.analytics.disabled=true",
+        "-Dquarkus.console.enabled=false", "-Dquarkus.http.port=8090", "-Ddebug=false",
+        "-Dquarkus.http.cors.origins=http://localhost:5173,http://localhost:5174"],
+      "port": 8090,
+      "autoPort": false
+    },
+    {
+      "name": "vite-dev-api-8090",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173", "--strictPort"],
+      "env": { "VITE_API_URL": "http://127.0.0.1:8090", "VITE_OIDC_AUTHORITY": "", "VITE_OIDC_CLIENT_ID": "" },
+      "port": 5173
     }
   ]
 }

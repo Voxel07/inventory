@@ -5,18 +5,25 @@
 const quote = (value: string) => /[;"\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 const quoteJson = (value: unknown) => quote(JSON.stringify(value));
 
+const sampleLots = [
+  { lotNumber: 'VB-2026-03', quantity: 12, supplierLot: 'SAG-77812', manufactureDate: '2026-03-02', expiryDate: '2028-03-01', notes: 'Ältere Charge zuerst verwenden' },
+  { lotNumber: 'VB-2026-08', quantity: 6, bestBeforeDate: '2028-08-15', storageRequirements: 'Trocken und unter 25 °C lagern', status: 'available' },
+];
+
 function csv(header: readonly string[], rows: Record<string, string>[]): string {
   return [header.join(';'), ...rows.map((row) => header.map((column) => row[column] ?? '').join(';'))].join('\r\n');
 }
 
 /** `Lagerort` takes a location code (`L1-ELE-R2`), a path (`Lager 1 / Elektro / Regal 2`) or a unique name; `Position` is the place inside it. */
 export function generateSampleItemsCsv(): string {
-  const header = ['Artikel', 'Kategorie', 'Unterkategorie', 'Bestand', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Lieferant', 'Verbrauchsmaterial', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes'] as const;
+  const header = ['Artikel', 'Kategorie', 'Unterkategorie', 'Bestand', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Lieferant', 'Verbrauchsmaterial', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes', 'Lots'] as const;
   return csv(header, [
     { Artikel: 'Stromerzeuger 2kW', Kategorie: 'Elektro', Unterkategorie: 'Generatoren', Bestand: '4', Mindestbestand: '2', Einzelwert: '349,00', Lagerort: 'Lager 1 / Elektro / Regal 1', Lieferant: 'Honda', Verbrauchsmaterial: 'Nein', Events: 'DE,TNO', Hinweis: 'Vor Erstinbetriebnahme Ölstand prüfen', TrackingMode: 'serialized', AssetCodes: quote('GEN-001, GEN-002, GEN-003, GEN-004') },
     { Artikel: 'Kabeltrommel 50m', Kategorie: 'Elektro', Unterkategorie: 'Kabel', Bestand: '10', Mindestbestand: '5', Einzelwert: '59,95', Lagerort: 'Lager 1 / Elektro / Regal 2', Position: 'Unten', Lieferant: 'Brennenstuhl', Verbrauchsmaterial: 'Nein', Events: 'DE,TNO,LS', Hinweis: 'Nach Gebrauch trocken aufrollen', TrackingMode: 'bulk' },
     { Artikel: 'Gaffa Tape 50m schwarz', Kategorie: 'Verbrauchsmaterial', Unterkategorie: 'Klebeband', Bestand: '24', Mindestbestand: '10', Einzelwert: '8,50', Lagerort: 'Lager 1 / Verbrauch / Kiste B', Lieferant: 'Tesa', Verbrauchsmaterial: 'Ja', Events: 'DE,TNO,LS,M24', Hinweis: 'Rückstandslos ablösbar', TrackingMode: 'bulk' },
     { Artikel: 'LED Flutlicht 100W', Kategorie: 'Beleuchtung', Unterkategorie: 'Scheinwerfer', Bestand: '8', Mindestbestand: '4', Einzelwert: '45,00', Lagerort: 'Lager 1 / Elektro / Regal 3', Position: 'Fach 2', Lieferant: 'Osram', Verbrauchsmaterial: 'Nein', Events: 'DE', Hinweis: 'Inkl. Schutzkontaktstecker', TrackingMode: 'bulk' },
+    // Bestand equals the sum of the quantities in Lots; each batch is booked at Lagerort.
+    { Artikel: 'Verbandsmaterial steril', Kategorie: 'Sanität', Unterkategorie: 'Erste Hilfe', Bestand: '18', Mindestbestand: '5', Einzelwert: '3,50', Lagerort: 'Lager 1 / Sanität / Regal 1', Verbrauchsmaterial: 'Ja', Events: 'DE,TNO', TrackingMode: 'lot_tracked', Lots: quoteJson(sampleLots) },
   ]);
 }
 
@@ -29,7 +36,7 @@ export function generateSampleAssembliesCsv(): string {
 }
 
 export function generateSampleCombinedCsv(): string {
-  const header = ['Typ', 'Name', 'Kategorie', 'Unterkategorie', 'Menge', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Komponenten', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes',
+  const header = ['Typ', 'Name', 'Kategorie', 'Unterkategorie', 'Menge', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Komponenten', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes', 'Lots',
     'Eventtyp', 'Eventdatum', 'BestellteArtikel', 'RueckgabeArtikel', 'VerbrauchteArtikel', 'Bestellstatus', 'Zweck', 'Bestellname', 'Fraktion', 'Startdatum', 'Enddatum', 'Teilnehmer', 'Zeitplan', 'Aktion', 'Daten', 'Beschreibung'] as const;
   return csv(header, [
     { Typ: 'Artikel', Name: 'Feld-PC', Kategorie: 'IT & Elektronik', Unterkategorie: 'Computer', Menge: '2', Mindestbestand: '1', Einzelwert: '650,00', Lagerort: 'Lager A / Technik / Regal 1', Events: 'DE,TNO', Hinweis: 'Live-Map Rechner', TrackingMode: 'serialized', AssetCodes: quote('PC-01, PC-02') },
@@ -38,6 +45,7 @@ export function generateSampleCombinedCsv(): string {
     { Typ: 'Artikel', Name: 'Heringe 30cm (10er Set)', Kategorie: 'Infrastruktur', Unterkategorie: 'Zelte', Menge: '12', Mindestbestand: '4', Einzelwert: '15,00', Lagerort: 'Lager A / Zelte', Position: 'Kiste Heringe', Events: 'DE,TNO,LS', Hinweis: 'Immer nachzählen', TrackingMode: 'bulk' },
     // Lot-tracked items start at 0 so each lot below gets its own number, expiry and stock.
     { Typ: 'Artikel', Name: 'Desinfektionsmittel 1L', Kategorie: 'Sanität', Unterkategorie: 'Hygiene', Menge: '0', Mindestbestand: '5', Einzelwert: '6,90', Lagerort: 'Lager A / Sanität', Events: 'DE,TNO', Hinweis: 'Ältere Charge zuerst verwenden', TrackingMode: 'lot' },
+    { Typ: 'Artikel', Name: 'Verbandsmaterial steril', Kategorie: 'Sanität', Unterkategorie: 'Erste Hilfe', Menge: '18', Mindestbestand: '5', Einzelwert: '3,50', Lagerort: 'Lager A / Sanität', Events: 'DE,TNO', TrackingMode: 'lot_tracked', Lots: quoteJson(sampleLots) },
     { Typ: 'Baugruppe', Name: 'SG-Zelt komplett', Kategorie: 'Infrastruktur', Unterkategorie: 'Zelte', Komponenten: quote('Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2'), Events: 'DE,TNO', Hinweis: 'Komplettes Zelt mit Heringen' },
     { Typ: 'Event', Name: 'Beispiel-Event', Eventtyp: 'DE', Eventdatum: '2026-06-13', Startdatum: '2026-06-13', Enddatum: '2026-06-14',
       Teilnehmer: quoteJson([

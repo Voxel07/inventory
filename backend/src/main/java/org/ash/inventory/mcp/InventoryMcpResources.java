@@ -25,7 +25,7 @@ public class InventoryMcpResources {
                 # ASH Inventory Management System
                 - Purpose: Event-driven inventory management for Airsoft events and operations.
                 - Features:
-                  * Multi-location storage tracking (warehouses, bins, staging areas).
+                  * Storage tree: top-level locations (sites, no stock) → sections → nested storage places (shelves, compartments).
                   * Company-owned and privately-owned inventory segregation.
                   * Assembly composition (bills of materials).
                   * Serialized asset tracking (generators, firearms, optics, comms).
@@ -34,7 +34,7 @@ public class InventoryMcpResources {
         return TextResourceContents.create("inventory://system/overview", info);
     }
 
-    @Resource(uri = "inventory://locations", name = "Storage Locations", description = "Current list of active storage locations and warehouses")
+    @Resource(uri = "inventory://locations", name = "Storage Locations", description = "Current list of active storage locations (locations, sections, storage places)")
     @Transactional
     public TextResourceContents locations() throws Exception {
         service.authenticate();

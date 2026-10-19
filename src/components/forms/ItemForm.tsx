@@ -27,6 +27,8 @@ import { useUIStore } from '../../store/uiStore';
 import { type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useT } from '../../utils/naming';
 import { LocationPicker } from '../shared/LocationPicker';
+import { MaintenanceScheduleDialog } from './MaintenanceScheduleDialog';
+import { describeScheduleDraft, toScheduleInput, type ScheduleDraft } from './maintenanceScheduleDrafts';
 
 interface Props {
     title: string;
@@ -104,7 +106,9 @@ export function ItemForm({
     const [nameError, setNameError] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
     const [addLocationOpen, setAddLocationOpen] = useState(false);
-    const emptyLocation = { name: '', code: '', parentLocationId: null as string | null, warehouseId: null as string | null, description: '', privateResource: !canCreatePublic };
+    const [schedules, setSchedules] = useState<ScheduleDraft[]>([]);
+    const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+    const emptyLocation = { name: '', code: '', parentLocationId: null as string | null, description: '', privateResource: !canCreatePublic };
     const [newLocData, setNewLocData] = useState(emptyLocation);
 
     const createLoc = useCreateStorageLocation();
@@ -136,7 +140,7 @@ export function ItemForm({
     }
 
     function handleCreateLocSubmit() {
-        if (!newLocData.name.trim()) return;
+        if (!newLocData.name.trim() || !newLocData.parentLocationId) return;
         createLoc.mutate(newLocData, {
             onSuccess: (newLoc) => {
                 setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), ...storageLocationChange(prev, newLoc.id) }));
@@ -170,6 +174,7 @@ export function ItemForm({
             maintenanceIntervalDays: parseOptional(numericInputs.maintenanceIntervalDays),
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
+            ...(offersSchedules && schedules.length ? { maintenanceSchedules: schedules.map(toScheduleInput) } : {}),
             ...(generatesAssetCodes ? {
                 assetCodePrefix: assetCodePrefix.trim() || undefined,
                 assetStartNumber: parseOptional(numericInputs.assetStartNumber),
@@ -201,6 +206,10 @@ export function ItemForm({
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
     const isFood = ['food', 'lebensmittel', 'verpflegung'].some((value) => normalizedCategory.includes(value));
     const categorySpecific = isVehicle || isGenerator || isFood;
+    // Plans of existing items are managed on the item page; schedules need warehouse access.
+    const offersSchedules = !initialData && canCreatePublic && formData.inventoryRole !== 'consumable';
+    const countsHoursForSchedule = offersSchedules && schedules.some((schedule) => schedule.intervalType === 'operating_hours');
+    const openingHours = formData.trackingMode === 'serialized' ? 0 : Number(numericInputs.currentOperatingHours) || 0;
     const hasAdditionalDetails = Boolean(initialData && (initialData.supplier || initialData.hint || initialData.images?.length));
     const trackingModes: { value: NonNullable<ItemFormData['trackingMode']>; label: string; help: string }[] = [
         { value: 'bulk', label: t('forms.itemForm.bulk'), help: t('forms.itemForm.onlyTheQuantityCountsEGCableTiesOrTent') },
@@ -338,12 +347,30 @@ export function ItemForm({
                         />
                         <FormHelperText sx={{ mt: 0 }}>{t('forms.itemForm.severalIdenticalItemsPerBoxEG500Screws')}</FormHelperText>
                     </Box>}
-                    {formData.inventoryRole !== 'consumable' && <Box>
-                        <FormControlLabel
-                            control={<Checkbox checked={Boolean(formData.tracksRuntime)} onChange={(event) => setFormData((prev) => ({ ...prev, tracksRuntime: event.target.checked }))} />}
-                            label={t('forms.itemForm.recordOperatingHoursOnReturn')}
-                        />
-                        <FormHelperText sx={{ mt: 0 }}>{t('forms.itemForm.recordOperatingHoursOnReturnHelp')}</FormHelperText>
+                    {formData.inventoryRole !== 'consumable' && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: offersSchedules ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }, gap: 2 }}>
+                        <Box>
+                            <FormControlLabel
+                                control={<Checkbox checked={Boolean(formData.tracksRuntime)} disabled={countsHoursForSchedule}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, tracksRuntime: event.target.checked }))} />}
+                                label={t('forms.itemForm.recordOperatingHoursOnReturn')}
+                            />
+                            <FormHelperText sx={{ mt: 0 }}>
+                                {countsHoursForSchedule ? t('forms.itemForm.operatingHoursRequiredBySchedule') : t('forms.itemForm.recordOperatingHoursOnReturnHelp')}
+                            </FormHelperText>
+                        </Box>
+                        {offersSchedules && <Box>
+                            <FormControlLabel
+                                control={<Checkbox checked={schedules.length > 0}
+                                    onChange={(event) => event.target.checked ? setScheduleDialogOpen(true) : setSchedules([])} />}
+                                label={t('forms.itemForm.hasMaintenanceSchedule')}
+                            />
+                            {schedules.length > 0 ? <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <FormHelperText component="div" sx={{ mt: 0, flex: '1 1 auto', minWidth: 0 }}>
+                                    {schedules.map((schedule) => <Box key={schedule.type}>{describeScheduleDraft(schedule, t)}</Box>)}
+                                </FormHelperText>
+                                <Button size="small" onClick={() => setScheduleDialogOpen(true)}>{t('common.edit')}</Button>
+                            </Box> : <FormHelperText sx={{ mt: 0 }}>{t('forms.itemForm.hasMaintenanceScheduleHelp')}</FormHelperText>}
+                        </Box>}
                     </Box>}
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                         {!initialData && (
@@ -532,12 +559,21 @@ export function ItemForm({
                 </Accordion>
             </DialogForm>
 
+            <MaintenanceScheduleDialog open={scheduleDialogOpen} initial={schedules} openingHours={openingHours}
+                onClose={() => setScheduleDialogOpen(false)}
+                onSave={(drafts) => {
+                    setSchedules(drafts);
+                    // Operating-hour intervals only advance when hours are recorded on return.
+                    if (drafts.some((draft) => draft.intervalType === 'operating_hours')) setFormData((prev) => ({ ...prev, tracksRuntime: true }));
+                    setScheduleDialogOpen(false);
+                }} />
+
             <FormDialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs">
                 <DialogForm title={t('forms.itemForm.addStorageLocation')} onSubmit={handleCreateLocSubmit} onCancel={() => setAddLocationOpen(false)}
-                    noValidate pending={createLoc.isPending} submitDisabled={!newLocData.name.trim()} submitLabel={t('forms.itemForm.create')}>
-                    <LocationPicker locations={storageLocations} value={newLocData.parentLocationId} label={t('forms.itemForm.insideLocation')}
+                    noValidate pending={createLoc.isPending} submitDisabled={!newLocData.name.trim() || !newLocData.parentLocationId} submitLabel={t('forms.itemForm.create')}>
+                    <LocationPicker locations={storageLocations} value={newLocData.parentLocationId} label={t('forms.itemForm.insideLocation')} stockOnly={false} required
                         helperText={t('forms.itemForm.insideLocationHelp')}
-                        onChange={(parent) => setNewLocData((prev) => ({ ...prev, parentLocationId: parent?.id ?? null, warehouseId: parent?.warehouseId ?? null,
+                        onChange={(parent) => setNewLocData((prev) => ({ ...prev, parentLocationId: parent?.id ?? null,
                             privateResource: prev.privateResource || Boolean(parent?.access?.privateResource) }))} />
                     <TextField
                         label={t('profile.name')}

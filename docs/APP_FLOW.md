@@ -36,7 +36,8 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/items/:itemId` | Item details, stock, media, assets, ownership and sharing (offer for use) | Catalog guard; backend resource policy |
 | `/items/:itemId/assets/:assetId` | Exact serialized asset detail | Catalog guard; backend resource policy |
 | `/assemblies`, `/assemblies/:assemblyId` | Kit catalog and composition | Catalog guard; all components must be visible |
-| `/storage-locations` | Hierarchical location catalog and map | Catalog guard; backend policy/redaction |
+| `/storage-locations` | Locations → sections → storage places, grouped or flat, structure editor and map ([Storage locations](STORAGE_LOCATIONS.md)) | Catalog guard; backend policy/redaction |
+| `/storage-locations/:locationId/labels` | Printable QR labels for every section and storage place below a location | Catalog guard; backend policy/redaction |
 | `/locations/:locationId` | Location scan destination | Signed-in app shell; backend resource policy |
 | `/sharing` | Own share groups (all groups for the inventory admin) | Any signed-in user |
 | `/orders` | Faction tab by default; `?tab=general` selects general orders | OrganizationGuard (read only and up); writes per faction / ASH crew (general orders) in services |

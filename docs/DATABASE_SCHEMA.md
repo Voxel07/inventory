@@ -35,7 +35,6 @@ erDiagram
     INVENTORY_ACCESS_POLICIES o|--o| ITEMS : protects
     INVENTORY_ACCESS_POLICIES o|--o| STORAGE_LOCATIONS : protects
     INVENTORY_ACCESS_POLICIES o|--o| ASSEMBLIES : protects
-    WAREHOUSES ||--o{ STORAGE_LOCATIONS : contains
     STORAGE_LOCATIONS o|--o{ STORAGE_LOCATIONS : parent
     ITEMS ||--o{ ASSET_INSTANCES : serializes
     ITEMS ||--o{ INVENTORY_LOTS : groups
@@ -92,10 +91,9 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 | `item_images` | UUID; item FK, object key and display order |
 | `assemblies` | UUID; name, category/subcategory, description/hint, image object key, event tags, active flag and optional access policy |
 | `assembly_items` | Composite `(assembly_id, item_id)` PK; component quantity |
-| `warehouses` | UUID; unique code, name/description and active flag |
-| `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type (warehouse/area/section/shelf/compartment/bin/…), level `code` (unique among the siblings visible to the editor, checked under the hierarchy lock; hidden private siblings of other accounts don't count) and maintained `full_code` (`WH1-E1-R3-F2`), description, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
+| `storage_locations` | UUID; parent location and keeper user FKs; the depth is the role (0 = location without stock, 1 = section, 2+ = storage place, see [Storage locations](STORAGE_LOCATIONS.md)), level `code` (unique among the siblings visible to the editor, checked under the hierarchy lock; hidden private siblings of other accounts don't count) and maintained `full_code` (`BH-CE-R2-F7`), description, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
 
-Location services enforce no cycles and same-warehouse parentage; choosing a parent requires view access to it, and edit access when the parent is private. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
+Location services enforce no cycles and keep stock out of top-level locations; choosing a parent requires view access to it, and edit access when the parent is private. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
 **Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them, and their attendance (with roles) and timeline rows cascade on deletion; `event_people` rows are kept for other events.
 
@@ -110,7 +108,7 @@ Location services enforce no cycles and same-warehouse parentage; choosing a par
 | `stock_reservations` | UUID; item/asset/order/line/location/creator links; requested/reserved/released quantities and status; version; unique active asset reservation key |
 | `inventory_transfers` | UUID; source/destination locations, requester/receiver, unique transfer number and idempotency key, status, dispatch/receipt times |
 | `inventory_transfer_lines` | UUID; transfer/item/optional asset/lot FKs; requested/picked/received/discrepancy quantities |
-| `inventory_count_sessions` | UUID; unique session number; warehouse/location/item/category scope, blind flag, creator/approver, status/times |
+| `inventory_count_sessions` | UUID; unique session number; location subtree/item/category scope, blind flag, creator/approver, status/times |
 | `inventory_count_lines` | UUID; session/item/location/lot/asset links; observed/recounted/approved/variance quantities and expected asset version/state |
 
 The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses PostgreSQL's ordinary nullable-key semantics; it does **not** by itself enforce a single null-lot row. Operational uniqueness and locking must also be assessed in the services/ORM, rather than inferred from this constraint.

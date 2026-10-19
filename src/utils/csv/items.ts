@@ -2,6 +2,8 @@ import { type StorageLocation, type Item, type ItemFormData } from '../../types'
 import { type ParsedItemRow } from '../../types/csvImport';
 import type { CsvReference } from './reference';
 import { buildLocationIndex, resolveCsvLocation } from './locations';
+import { holdsStock } from '../locationHierarchy';
+import { parseItemLots } from './lots';
 import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
@@ -78,11 +80,27 @@ export function parseItemsFromCsv(
 
     const rawTrackingMode = parseTrackingMode(getField(raw, TRACKING_MODE_ALIASES));
     const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
-    const trackingMode = rawTrackingMode || (assetCodes.length > 0 ? 'serialized' : undefined);
+    let lots: ParsedItemRow['lots'];
+    let lotError: string | undefined;
+    const lotsInput = getField(raw, ['lots', 'chargen']);
+    try {
+      lots = parseItemLots(lotsInput);
+      if (lots && rawTrackingMode && rawTrackingMode !== 'lot_tracked') throw new Error('Lots benötigt TrackingMode lot_tracked');
+      if (lots && assetCodes.length) throw new Error('Lots und AssetCodes können nicht kombiniert werden');
+    } catch (error) {
+      lotError = error instanceof Error ? error.message : String(error);
+    }
+    const trackingMode = rawTrackingMode || (lotsInput ? 'lot_tracked' : assetCodes.length > 0 ? 'serialized' : undefined);
 
     let amount = amountStr ? Math.max(0, Math.round(parseNumber(amountStr, 0))) : 0;
     if (amount === 0 && assetCodes.length > 0) {
       amount = assetCodes.length;
+    }
+    if (lots) {
+      const quantity = lots.reduce((total, lot) => total + lot.quantity, 0);
+      if (!Number.isSafeInteger(quantity)) lotError = 'Die Gesamtmenge der Chargen ist zu groß';
+      if (amountStr && parseNumber(amountStr, NaN) !== quantity) lotError = 'Bestand/Menge muss der Summe der Chargenmengen entsprechen';
+      amount = quantity;
     }
 
     const isConsumable = trackingMode !== 'serialized' && parseBoolean(getField(raw, CONSUMABLE_ALIASES));
@@ -96,12 +114,18 @@ export function parseItemsFromCsv(
 
     if (locInput) {
       const match = resolveCsvLocation(locInput, locationIndex);
-      if (match.kind === 'found') {
+      if (match.kind === 'found' && !holdsStock(match.location)) {
+        storageLocationName = match.location.name;
+        locationError = `"${match.location.name}" ist ein Standort ohne Bestand – Bereich oder Lagerplatz angeben (z. B. ${match.location.name} / Lager / Regal 1)`;
+      } else if (match.kind === 'found') {
         storageLocationId = match.location.id;
         storageLocationName = match.location.fullCode ? `${match.location.fullCode} · ${match.location.hierarchyPath ?? match.location.name}` : match.location.name;
       } else if (match.kind === 'ambiguous') {
         storageLocationName = match.name;
-        locationError = `Lagerort "${match.name}" ist mehrdeutig – Code (z. B. WH1-R3) oder Pfad (Lager / Regal) angeben`;
+        locationError = `Lagerort "${match.name}" ist mehrdeutig – Code (z. B. BH-L-R3) oder Pfad (Betriebshof / Lager / Regal 3) angeben`;
+      } else if (match.segments.length < 2) {
+        storageLocationName = match.segments.join(' / ');
+        locationError = `Lagerort "${storageLocationName}" unbekannt – neue Lagerorte brauchen mindestens Standort / Bereich (z. B. Betriebshof / Lager)`;
       } else {
         storageLocationName = match.segments.join(' / ');
         storageLocationPath = match.segments;
@@ -148,9 +172,9 @@ export function parseItemsFromCsv(
     let status: ParsedItemRow['status'] = 'valid';
     let statusMessage: string | undefined = undefined;
 
-    if (locationError) {
+    if (lotError || locationError) {
       status = 'error';
-      statusMessage = locationError;
+      statusMessage = lotError || locationError;
     } else if (existing) {
       status = 'duplicate';
       statusMessage = `Artikel "${name}" existiert bereits (kann übersprungen oder aktualisiert werden)`;
@@ -167,6 +191,7 @@ export function parseItemsFromCsv(
       storageLocationId,
       storageLocationPath,
       assetCodes: assetCodes.length > 0 ? assetCodes : undefined,
+      lots,
       status,
       statusMessage,
       isExisting: Boolean(existing),

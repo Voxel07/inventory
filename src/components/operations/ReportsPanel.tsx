@@ -7,14 +7,12 @@ import { Link } from 'react-router-dom';
 import { reportApi } from '../../services/reportService';
 import { useOperationalReport, useReportDefinitions } from '../../hooks/useOperationalReports';
 import type { ReportFilters } from '../../types/report';
-import { useCompleteList } from '../../hooks/usePagedList';
 import { useOperationCommand } from '../../hooks/useOperations';
 import { useItemsByIds } from '../../hooks/useItems';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useEventReports } from '../../hooks/useEvents';
-import { getWarehouses } from '../../services/warehouseService';
-import { locationPath } from '../../utils/locationHierarchy';
+import { holdsStock, locationPath } from '../../utils/locationHierarchy';
 import { translate, useT } from '../../utils/naming';
 import { reportPdf } from './reportPdf';
 
@@ -27,7 +25,7 @@ export function ReportsPanel() {
   const t = useT(); const [name, setName] = useState('events'); const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReportFilters>({}); const command = useOperationCommand();
   const definitions = useReportDefinitions();
-  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const warehouses = useCompleteList(['operations', 'warehouses'], getWarehouses);
+  const selectedItem = useItemsByIds(filters.itemId ? [filters.itemId] : []); const locations = useStorageLocations({ includeInactive: true }); const events = useEventReports(); const sites = (locations.data ?? []).filter((l) => !holdsStock(l));
   const report = useOperationalReport(name, filters, page);
   const change = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(0); };
   const columns = [...new Set(report.data?.rows.flatMap((row) => Object.keys(row)) ?? [])].filter((key) => key !== 'id' && !key.endsWith('Id'));
@@ -37,7 +35,7 @@ export function ReportsPanel() {
     const named: [string, string | undefined][] = [
       [t('common.item'), selectedItem.data?.[0]?.name ?? filters.itemId],
       [t('operations.reportsPanel.event'), events.data?.find((event) => event.id === filters.eventId)?.name ?? filters.eventId],
-      [t('operations.reportsPanel.warehouse'), warehouses.data?.find((w) => w.id === filters.warehouseId)?.name ?? filters.warehouseId],
+      [t('operations.reportsPanel.site'), sites.find((site) => site.id === filters.siteId)?.name ?? filters.siteId],
       [t('enum.value.location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
       [t('operations.reportsPanel.search'), filters.search], [t('common.status'), filters.status], [t('common.category'), filters.category],
       [t('operations.reportsPanel.from'), filters.from], [t('operations.reportsPanel.to'), filters.to],
@@ -84,8 +82,8 @@ export function ReportsPanel() {
       <ItemAutocomplete label={t('operations.reportsPanel.itemEmptyAll')} value={filters.itemId} onChange={(item) => change('itemId', item?.id ?? '')} />
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('operations.reportsPanel.event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}
       {['availability', 'repairs', 'maintenance', 'counts', 'movements'].includes(name) && <>
-        <TextField select fullWidth label={t('operations.reportsPanel.warehouse')} value={filters.warehouseId ?? ''} onChange={(e) => change('warehouseId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{warehouses.data?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}</TextField>
-        <TextField select fullWidth label={t('enum.value.location')} value={filters.locationId ?? ''} onChange={(e) => change('locationId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{locations.data?.map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations.data ?? [])}</MenuItem>)}</TextField>
+        <TextField select fullWidth label={t('operations.reportsPanel.site')} value={filters.siteId ?? ''} onChange={(e) => change('siteId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{sites.map((site) => <MenuItem key={site.id} value={site.id}>{site.name}</MenuItem>)}</TextField>
+        <TextField select fullWidth label={t('enum.value.location')} value={filters.locationId ?? ''} onChange={(e) => change('locationId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{locations.data?.filter(holdsStock).map((l) => <MenuItem key={l.id} value={l.id}>{locationPath(l, locations.data ?? [])}</MenuItem>)}</TextField>
       </>}
     </Stack>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>

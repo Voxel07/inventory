@@ -23,8 +23,7 @@ class LocationCodeApiTest {
     private static String code() { return "C" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT); }
 
     @Test void hiddenPrivateSiblingsNeitherBlockNorRevealACode() {
-        String hall = actor("admin", "admin").body(Map.of("name", "Code hall " + UUID.randomUUID()))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String hall = TestLocations.section(() -> actor("admin", "admin"), Map.of("name", "Code hall " + UUID.randomUUID()));
         String code = code();
         actor("a", "faction_leader").body(Map.of("name", "Shelf A", "code", code, "parentLocationId", hall))
                 .post("/api/storage-locations").then().statusCode(200).body("code", equalTo(code));
@@ -36,8 +35,7 @@ class LocationCodeApiTest {
     }
 
     @Test void placingALocationInsideSomeoneElsesBuildingNeedsEditRights() {
-        String building = actor("owner", "faction_leader").body(Map.of("name", "Private building " + UUID.randomUUID()))
-                .post("/api/storage-locations").then().statusCode(200).extract().path("id");
+        String building = TestLocations.section(() -> actor("owner", "faction_leader"), Map.of("name", "Private building " + UUID.randomUUID()));
         actor("stranger", "faction_leader").body(Map.of("name", "Intruder room", "parentLocationId", building))
                 .post("/api/storage-locations").then().statusCode(anyOf(is(403), is(404)));
         actor("owner", "faction_leader").body(Map.of("name", "Own room", "parentLocationId", building))

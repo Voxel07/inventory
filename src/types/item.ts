@@ -1,19 +1,23 @@
 import type { InventoryAccess } from './inventoryAccess';
+import type { MaintenanceType, ScheduleIntervalType } from './operations';
 export interface StorageLocation {
   hierarchyPath?: string;
   keeperUserId?: string;
   keeperUserName?: string;
   keeperUserEmail?: string;
   access?: InventoryAccess;
-  warehouseId?: string;
-  warehouseName?: string;
+  /** 0 = location (site, holds no stock), 1 = section, 2+ = storage place. */
+  depth: number;
+  /** Top-level location this one belongs to (itself for a location). */
+  rootLocationId?: string;
+  rootLocationName?: string;
   parentLocationId?: string;
   active: boolean;
   id: string;
   name: string;
   /** Short code of this level, e.g. `R3`. */
   code: string;
-  /** Warehouse and level codes from the root, e.g. `WH1-E1-R3-F2`. */
+  /** Level codes from the top-level location, e.g. `BH-CE-R2-F7`. */
   fullCode: string;
   description?: string;
   latitude?: number;
@@ -21,7 +25,6 @@ export interface StorageLocation {
   mapZoom?: number;
   mapOverlay?: string;
   overlayBounds?: MapBounds;
-  locationType?: 'warehouse' | 'area' | 'section' | 'shelf' | 'compartment' | 'bin' | 'staging' | 'event_site' | 'vehicle' | 'in_custody' | 'quarantine' | 'repair' | 'scrap';
   created: string;
   updated: string;
 }
@@ -31,9 +34,7 @@ export type MapBounds = [[number, number], [number, number]];
 export interface StorageLocationFormData {
   privateResource?: boolean;
   mapOverlay?: string | null;
-  warehouseId?: string | null;
   parentLocationId?: string | null;
-  locationType?: StorageLocation['locationType'];
   active?: boolean;
   name: string;
   code?: string;
@@ -44,6 +45,25 @@ export interface StorageLocationFormData {
   mapOverlayFile?: File;
   removeMapOverlay?: boolean;
   overlayBounds?: MapBounds;
+}
+
+/** A section or storage place in the structure editor; nodes without id are created. */
+export interface StorageNodeInput {
+  id?: string;
+  name: string;
+  code?: string;
+  description?: string;
+  children: StorageNodeInput[];
+}
+
+/** A top-level location with its sections, saved in one step (`PUT /api/storage-locations/structure`). */
+export interface StorageStructureInput {
+  id?: string;
+  name: string;
+  code?: string;
+  description?: string;
+  privateResource?: boolean;
+  sections: StorageNodeInput[];
 }
 
 export interface ItemStock {
@@ -143,6 +163,19 @@ export interface ItemFormData {
   /** Creation only: serialized opening units are coded prefix + zero-padded number (server default: SKU- and 1). */
   assetCodePrefix?: string;
   assetStartNumber?: number;
+  /** Creation only: item-wide maintenance plans created together with the item. */
+  maintenanceSchedules?: ItemScheduleInput[];
+}
+
+/** A maintenance plan entered on the item creation form (`ApiModels.ItemScheduleInput`). */
+export interface ItemScheduleInput {
+  maintenanceType: MaintenanceType;
+  intervalType: ScheduleIntervalType;
+  intervalValue: number;
+  nextDueAt?: string | null;
+  nextDueValue?: number | null;
+  warningWindow?: number | null;
+  checkoutBlocking: boolean;
 }
 
 export type ReturnSubmissionStatus = 'pending' | 'accepted' | 'rejected';

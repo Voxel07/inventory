@@ -3,7 +3,8 @@ import type { Assembly, FactionOrder, Item, StorageLocation } from '../src/types
 import { getItemStock } from '../src/utils/stock';
 import { assemblyAvailability } from '../src/utils/factionOrderQuantities';
 import { factionOrderItemBaseline, factionOrderAssemblyBaseline, findPreviousFactionOrder } from '../src/utils/factionOrderHistory';
-import { isDescendant, locationPath } from '../src/utils/locationHierarchy';
+import { buildLocationTree, filterLocationTree, isDescendant, locationPath, locationRole } from '../src/utils/locationHierarchy';
+import { generateStoragePlaces, generatedCount } from '../src/utils/storageGenerator';
 import { calculateImageCrop } from '../src/utils/prepareItemImage';
 import { parseCsv, parseInlineComponents } from '../src/utils/csv/core';
 import { buildCsvImportPlan } from '../src/utils/csv/importPlan';
@@ -52,14 +53,37 @@ test('historical baselines compare handed-over preparation; open orders compare 
 
 test('location paths and subtree membership handle missing ancestors and cycles', () => {
   const root = { id: 'root', name: 'Room' } as StorageLocation;
-  const child = { id: 'child', name: 'Shelf', parentLocationId: 'root', warehouseName: 'Depot' } as StorageLocation;
-  expect(locationPath(child, [root, child])).toBe('Depot / Room / Shelf');
+  const child = { id: 'child', name: 'Shelf', parentLocationId: 'root' } as StorageLocation;
+  expect(locationPath(child, [root, child])).toBe('Room / Shelf');
   expect(isDescendant(child, 'root', [root, child])).toBe(true);
   expect(isDescendant(root, 'child', [root, child])).toBe(false);
-  expect(locationPath(child, [child])).toBe('Depot / Shelf');
+  expect(locationPath(child, [child])).toBe('Shelf');
   const cyclic = { ...root, parentLocationId: 'child' };
-  expect(locationPath(child, [cyclic, child])).toBe('Depot / Room / Shelf');
+  expect(locationPath(child, [cyclic, child])).toBe('Room / Shelf');
   expect(isDescendant(child, 'missing', [cyclic, child])).toBe(false);
+});
+
+test('storage tree groups sections under their location and search keeps the path', () => {
+  const site = { id: 'site', name: 'Betriebshof', code: 'BH', depth: 0 } as StorageLocation;
+  const office = { id: 'office', name: 'Büro 1', code: 'B1', depth: 1, parentLocationId: 'site' } as StorageLocation;
+  const store = { id: 'store', name: 'Lager', code: 'L', depth: 1, parentLocationId: 'site' } as StorageLocation;
+  const shelf = { id: 'shelf', name: 'Regal 2', code: 'R2', depth: 2, parentLocationId: 'store' } as StorageLocation;
+  const tree = buildLocationTree([shelf, store, office, site]);
+  expect(tree.map((node) => node.location.id)).toEqual(['site']);
+  expect(tree[0].children.map((node) => node.location.id)).toEqual(['office', 'store']);
+  const found = filterLocationTree(tree, (location) => location.name === 'Regal 2');
+  expect(found[0].children.map((node) => node.location.id)).toEqual(['store']);
+  expect(found[0].children[0].children[0].location.id).toBe('shelf');
+  expect([site, office, shelf].map(locationRole)).toEqual(['location', 'section', 'place']);
+});
+
+test('storage place generator numbers places and their sub-places', () => {
+  const spec = { prefix: 'Regal', from: 1, to: 2, childPrefix: 'Fach', childFrom: 1, childTo: 3 };
+  const places = generateStoragePlaces(spec);
+  expect(places.map((place) => place.name)).toEqual(['Regal 1', 'Regal 2']);
+  expect(places[1].children.map((place) => place.name)).toEqual(['Fach 1', 'Fach 2', 'Fach 3']);
+  expect(generatedCount(spec)).toBe(8);
+  expect(generateStoragePlaces({ prefix: 'Bay', from: 3, to: 1 })).toEqual([]);
 });
 
 test('crop positions select image boundaries and zoom preserves the requested aspect', () => {

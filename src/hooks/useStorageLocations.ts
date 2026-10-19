@@ -1,5 +1,6 @@
-import type { StorageLocation, StorageLocationFormData } from '../types';
-import { storageLocationApi } from '../services/storageLocationService';
+import { useMutation } from '@tanstack/react-query';
+import type { StorageLocation, StorageLocationFormData, StorageStructureInput } from '../types';
+import { saveStorageStructure, storageLocationApi } from '../services/storageLocationService';
 import { createResourceHooks } from './useResourceApi';
 
 export const {
@@ -13,3 +14,7 @@ export const {
   storageLocationApi,
   'storageLocations',
 );
+
+export function useSaveStorageStructure() {
+  return useMutation({ mutationFn: (input: StorageStructureInput) => saveStorageStructure(input) });
+}

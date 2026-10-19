@@ -316,6 +316,8 @@ public class OrderService {
                 throw ApiException.conflict("An order cannot be ready before any items are prepared");
             order.pickupLocation = input.pickupLocation() == null ? order.pickupLocation
                     : orm.require(StorageLocation.class, input.pickupLocation(), "Pickup location");
+            // Handed-out assets are booked into the pickup location.
+            LocationHierarchyService.requireStockLocation(order.pickupLocation);
             if (order.kind == InventoryOrder.Kind.faction) applyPickupPoint(order, input.pickupLatitude(), input.pickupLongitude());
             order.readyBy = actor;
         }
