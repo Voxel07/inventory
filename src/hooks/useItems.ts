@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
-import { itemApi, getItemAssets, getItemCategories, createItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
+import { itemApi, getItemAssets, getItemCategories, createItemAsset, recodeItemAssets, writeOffItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
 import { useCompleteList, usePagedList } from './usePagedList';
-import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, RuntimeEntry, RuntimeInput } from '../types';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, AssetRecodeInput, RuntimeEntry, RuntimeInput } from '../types';
 
 export const {
   useDetail: useItem,
@@ -44,7 +44,19 @@ export function useItemAssets(itemId: string | undefined) {
 
 export function useCreateItemAsset(itemId: string | undefined) {
   return useMutation({
-    mutationFn: (input: AssetInstanceInput) => createItemAssets(itemId!, input),
+    mutationFn: (input: AssetInstanceInput) => createItemAsset(itemId!, input),
+  });
+}
+
+export function useRecodeItemAssets(itemId: string | undefined) {
+  return useMutation({
+    mutationFn: (input: AssetRecodeInput) => recodeItemAssets(itemId!, input),
+  });
+}
+
+export function useWriteOffItemAssets(itemId: string | undefined) {
+  return useMutation({
+    mutationFn: (assetIds: string[]) => writeOffItemAssets(itemId!, assetIds),
   });
 }
 

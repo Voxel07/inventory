@@ -158,7 +158,7 @@ export function AssetDetail() {
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
                     <ActionBar align="start" actions={[
                         canEditAsset && { key: 'edit', label: t('common.edit'), title: translate('pages.assetDetail.editAssetInformation'), icon: <EditIcon />,
-                            onClick: () => setEditing(assetEditInput(asset)) },
+                            onClick: () => setEditing(assetEditInput(asset, Boolean(item.tracksRuntime))) },
                         canReportDamage && { key: 'damage', label: t('common.reportDamage'), title: translate('pages.assetDetail.reportDamageToThisAsset'), icon: <ReportProblemOutlinedIcon />,
                             variant: 'contained', color: 'error', pinned: true, onClick: () => setDamageOpen(true) },
                     ]} />
@@ -177,12 +177,12 @@ export function AssetDetail() {
                         <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate ? formatDate(asset.purchaseDate) : '—'} />
                         <InfoRow label={t('items.assetDetailsFields.purchasePrice')} value={asset.purchasePrice == null ? '—' : formatMoney(asset.purchasePrice)} />
                         <InfoRow label={t('items.assetDetailsFields.replacementValue')} value={asset.replacementValue == null ? '—' : formatMoney(asset.replacementValue)} />
-                        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
+                        {item.tracksRuntime && <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow label={t('enum.value.operating_hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
                             {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} sx={{ flexShrink: 0 }} onClick={() => setHoursOpen(true)}>
                                 {t('pages.assetDetail.log')}
                             </Button>}
-                        </Box>
+                        </Box>}
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')}
                                 value={currentLocation ? locationLabel(currentLocation, locations) : asset.currentLocationName || '—'} />
@@ -218,8 +218,8 @@ export function AssetDetail() {
                 </Paper>
             </Box>
 
-            <RuntimePanel entries={runtime.data ?? []} loading={runtime.isLoading} error={runtime.isError} onRetry={() => void runtime.refetch()}
-                actions={canEditAsset ? <Button size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>{t('pages.assetDetail.log')}</Button> : undefined} />
+            {item.tracksRuntime && <RuntimePanel entries={runtime.data ?? []} loading={runtime.isLoading} error={runtime.isError} onRetry={() => void runtime.refetch()}
+                actions={canEditAsset ? <Button size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>{t('pages.assetDetail.log')}</Button> : undefined} />}
 
             <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -270,7 +270,7 @@ export function AssetDetail() {
             {editing && <FormDialog open onClose={() => { if (!updateAsset.isPending) setEditing(null); }}>
                 <DialogForm title={`${t('items.assetInstancesList.editAsset')}: ${asset.assetCode}`} onSubmit={saveEdit} onCancel={() => setEditing(null)}
                     pending={updateAsset.isPending} submitLabel={t('common.save')}>
-                    <AssetEditFields value={editing} onChange={(patch) => setEditing((prev) => prev && ({ ...prev, ...patch }))} />
+                    <AssetEditFields value={editing} tracksRuntime={Boolean(item.tracksRuntime)} onChange={(patch) => setEditing((prev) => prev && ({ ...prev, ...patch }))} />
                 </DialogForm>
             </FormDialog>}
             <OperatingHoursDialog itemId={item.id} asset={hoursOpen ? asset : null} onClose={() => setHoursOpen(false)} />

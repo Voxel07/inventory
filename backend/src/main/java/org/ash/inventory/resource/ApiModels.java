@@ -27,7 +27,8 @@ public final class ApiModels {
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
-            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime) {}
+            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime,
+            @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber) {}
 
     /** One import row: created when {@code id} is absent, otherwise updated; asset codes register serialized units. */
     public record ItemBatchEntry(UUID id, @NotNull @Valid ItemInput item, List<@NotBlank @Size(max = 255) String> assetCodes) {}
@@ -124,8 +125,13 @@ public final class ApiModels {
             String assetCode, String serialNumber, String manufacturer, String model,
             LocalDate purchaseDate, @Min(0) BigDecimal purchasePrice, @Min(0) BigDecimal replacementValue,
             DomainEnums.ConditionStatus conditionStatus, DomainEnums.AssetState availabilityStatus,
-            UUID currentLocationId, UUID currentCustodianId, BigDecimal operatingHours, String notes,
-            Integer batchCount, String codePrefix, Integer startNumber, Long expectedVersion) {}
+            UUID currentLocationId, UUID currentCustodianId, BigDecimal operatingHours, String notes, Long expectedVersion) {}
+
+    /** Renames the listed units, in the given order, to {@code codePrefix} + zero-padded consecutive numbers. */
+    public record AssetRecodeInput(@NotBlank @Size(max = 200) String codePrefix, @NotNull @Min(1) Integer startNumber,
+            @NotEmpty @Size(max = 1000) List<@NotNull UUID> assetIds) {}
+
+    public record AssetIdsInput(@NotEmpty @Size(max = 1000) List<@NotNull UUID> assetIds) {}
 
     /** Either {@code hours} run or the new meter {@code reading}; the event says where the unit ran. */
     public record RuntimeInput(BigDecimal hours, BigDecimal reading, UUID eventOccurrenceId, String notes, @NotNull Long expectedVersion) {}

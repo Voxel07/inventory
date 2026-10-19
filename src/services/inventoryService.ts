@@ -1,4 +1,4 @@
-import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, RuntimeEntry, RuntimeInput } from '../types';
+import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, AssetRecodeInput, RuntimeEntry, RuntimeInput } from '../types';
 import { apiPage, apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import { containsPrivateInventory } from './privateInventoryCache';
@@ -124,11 +124,20 @@ export function getAssetByCode(code: string): Promise<AssetInstance> {
   return apiRequest(`/api/assets/by-code/${encodeURIComponent(code)}`);
 }
 
-export async function createItemAssets(itemId: string, input: AssetInstanceInput): Promise<AssetInstance[]> {
-  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets`, {
+export async function createItemAsset(itemId: string, input: AssetInstanceInput): Promise<AssetInstance> {
+  return apiRequest<AssetInstance>(`/api/items/${itemId}/assets`, {
     method: 'POST',
     body: input,
   });
+}
+
+export function recodeItemAssets(itemId: string, input: AssetRecodeInput): Promise<AssetInstance[]> {
+  return apiRequest<AssetInstance[]>(`/api/items/${itemId}/assets/recode`, { method: 'POST', body: input });
+}
+
+/** All or nothing: one unit that cannot be written off rejects the whole request. */
+export async function writeOffItemAssets(itemId: string, assetIds: string[]): Promise<void> {
+  await apiRequest<void>(`/api/items/${itemId}/assets/write-off`, { method: 'POST', body: { assetIds } });
 }
 
 export async function updateItemAsset(itemId: string, assetId: string, input: AssetInstanceInput): Promise<AssetInstance> {

@@ -34,6 +34,7 @@ public class RuntimeService {
         actors.requireItemEdit(item);
         var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id) || !asset.active) throw ApiException.notFound("Asset not found for item");
+        if (!item.tracksRuntime) throw ApiException.badRequest("This item does not record operating hours");
         if (asset.version != input.expectedVersion())
             throw ApiException.conflict("Asset version conflict; current version is " + asset.version);
         if ((input.hours() == null) == (input.reading() == null)) throw ApiException.badRequest("Provide either hours or reading");

@@ -358,6 +358,12 @@ public class CatalogOrm extends EntityOrm {
                 .setParameter("sku", sku).setMaxResults(1).getResultList().isEmpty();
     }
 
+    /** Any unit, active or retired, holding {@code code}; codes stay unique across write-offs. */
+    public AssetInstance assetWithCode(String code) {
+        return entityManager.createQuery("from AssetInstance a where lower(a.assetCode) = :code", AssetInstance.class)
+                .setParameter("code", code.trim().toLowerCase(Locale.ROOT)).setMaxResults(1).getResultStream().findFirst().orElse(null);
+    }
+
     public boolean assetCodeExists(String code) {
         if (code == null || code.isBlank()) return false;
         return entityManager.createQuery("select count(a) from AssetInstance a where lower(a.assetCode) = :code", Long.class)

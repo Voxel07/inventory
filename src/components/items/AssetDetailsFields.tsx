@@ -26,7 +26,7 @@ export function AssetDetailsFields({ value, onChange }: { value: AssetInstanceIn
 }
 
 /** Everything an editor may change on an existing unit; the meter field is a correction that is logged as such. */
-export function AssetEditFields({ value, onChange }: { value: AssetInstanceInput; onChange: Change }) {
+export function AssetEditFields({ value, onChange, tracksRuntime }: { value: AssetInstanceInput; onChange: Change; tracksRuntime: boolean }) {
     const t = useT();
     return <>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -34,9 +34,9 @@ export function AssetEditFields({ value, onChange }: { value: AssetInstanceInput
             <TextField label={t('items.assetInstancesList.serialNumber2')} value={value.serialNumber ?? ''} onChange={(e) => onChange({ serialNumber: e.target.value })} fullWidth />
         </Stack>
         <AssetDetailsFields value={value} onChange={onChange} />
-        <TextField label={t('items.assetDetailsFields.meterCorrection')} type="number" value={value.operatingHours ?? ''}
+        {tracksRuntime && <TextField label={t('items.assetDetailsFields.meterCorrection')} type="number" value={value.operatingHours ?? ''}
             onChange={(e) => onChange({ operatingHours: optionalNumber(e.target.value) })}
-            helperText={t('items.assetDetailsFields.meterCorrectionHelp')} slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }} fullWidth />
+            helperText={t('items.assetDetailsFields.meterCorrectionHelp')} slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }} fullWidth />}
         <TextField label={t('items.assetInstancesList.notes')} multiline rows={2} value={value.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value })} fullWidth />
     </>;
 }

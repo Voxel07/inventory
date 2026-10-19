@@ -140,6 +140,9 @@ export interface ItemFormData {
   fuelConsumptionLitersPer100Km?: number;
   batteryReplacementDue?: string;
   bestBeforeDate?: string;
+  /** Creation only: serialized opening units are coded prefix + zero-padded number (server default: SKU- and 1). */
+  assetCodePrefix?: string;
+  assetStartNumber?: number;
 }
 
 export type ReturnSubmissionStatus = 'pending' | 'accepted' | 'rejected';
@@ -280,10 +283,14 @@ export interface AssetInstanceInput {
   currentCustodianId?: string;
   operatingHours?: number;
   notes?: string;
-  batchCount?: number;
-  codePrefix?: string;
-  startNumber?: number;
   expectedVersion?: number;
+}
+
+/** Renames the listed units, in order, to prefix + zero-padded consecutive numbers; stock is unchanged. */
+export interface AssetRecodeInput {
+  codePrefix: string;
+  startNumber: number;
+  assetIds: string[];
 }
 
 import type { EventType } from './event';

@@ -28,6 +28,7 @@ import {
     useMediaQuery,
     Checkbox,
     Link,
+    Paper,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeed';
@@ -37,9 +38,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import AvTimerIcon from '@mui/icons-material/AvTimer';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus, AssetAvailabilityStatus } from '../../types';
-import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset } from '../../hooks/useItems';
+import type { Item, AssetInstance, AssetInstanceInput, AssetConditionStatus } from '../../types';
+import { useItemAssets, useCreateItemAsset, useUpdateItemAsset, useDeleteItemAsset, useRecodeItemAssets, useWriteOffItemAssets } from '../../hooks/useItems';
+import { useUIStore } from '../../store/uiStore';
+import { downloadAssetLabelsPdf } from '../qr/assetLabelsPdf';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { translate, useT } from '../../utils/naming';
 import { useClientPagination } from '../../hooks/useClientPagination';
@@ -82,6 +86,10 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
     const createAsset = useCreateItemAsset(item.id);
     const updateAsset = useUpdateItemAsset(item.id);
     const deleteAsset = useDeleteItemAsset(item.id);
+    const recodeAssets = useRecodeItemAssets(item.id);
+    const writeOffAssets = useWriteOffItemAssets(item.id);
+    const showSnackbar = useUIStore((state) => state.showSnackbar);
+    const showError = (error: unknown) => showSnackbar(error instanceof Error ? error.message : t('items.assetInstancesList.actionFailed'), 'error');
 
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('');
@@ -119,7 +127,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             ...(canReportDamage ? [{ key: 'damage', label: t('items.assetInstancesList.reportDamageToThisAsset'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => navigate(`${assetPath}?reportDamage=1`), color: 'error' as const }] : []),
             { key: 'qr', label: t('items.assetInstancesList.showQRCode'), icon: <QrCode2Icon fontSize="small" />, onClick: () => setQrAsset(asset) },
             ...(canEdit ? [
-                { key: 'hours', label: t('items.assetInstancesList.logOperatingHours'), icon: <AvTimerIcon fontSize="small" />, onClick: () => setHoursAsset(asset) },
+                ...(item.tracksRuntime ? [{ key: 'hours', label: t('items.assetInstancesList.logOperatingHours'), icon: <AvTimerIcon fontSize="small" />, onClick: () => setHoursAsset(asset) }] : []),
                 { key: 'edit', label: t('common.edit'), icon: <EditIcon fontSize="small" />, onClick: () => handleOpenEdit(asset) },
                 { key: 'retire', label: t('items.assetInstancesList.writeOffRetire'), icon: <DeleteIcon fontSize="small" />, onClick: () => setDeleteTarget(asset), color: 'error' as const },
             ] : []),
@@ -130,42 +138,36 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
 
     // Dialogs
     const [addSingleOpen, setAddSingleOpen] = useState(false);
-    const [batchOpen, setBatchOpen] = useState(false);
+    const [recodeOpen, setRecodeOpen] = useState(false);
+    const [writeOffOpen, setWriteOffOpen] = useState(false);
+    const [printing, setPrinting] = useState(false);
     const [editAsset, setEditAsset] = useState<AssetInstance | null>(null);
     const [qrAsset, setQrAsset] = useState<AssetInstance | null>(null);
     const [hoursAsset, setHoursAsset] = useState<AssetInstance | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AssetInstance | null>(null);
 
     // Form states
-    const [singleInput, setSingleInput] = useState<AssetInstanceInput>({
+    const emptySingle = (): AssetInstanceInput => ({
         assetCode: '',
         serialNumber: '',
         manufacturer: '',
         model: '',
         conditionStatus: 'good',
-        availabilityStatus: 'available',
         currentLocationId: item.storageLocation ?? undefined,
         operatingHours: undefined,
         notes: '',
     });
-
-    const [batchInput, setBatchInput] = useState<{
-        batchCount: number;
-        codePrefix: string;
-        startNumber: number;
-        conditionStatus: AssetConditionStatus;
-        availabilityStatus: AssetAvailabilityStatus;
-        currentLocationId?: string;
-    }>({
-        batchCount: 5,
-        codePrefix: item.sku ? `${item.sku}-` : 'ASSET-',
-        startNumber: 1,
-        conditionStatus: 'good',
-        availabilityStatus: 'available',
-        currentLocationId: item.storageLocation ?? undefined,
-    });
-
+    const [singleInput, setSingleInput] = useState<AssetInstanceInput>(emptySingle);
+    const [recodeInput, setRecodeInput] = useState({ codePrefix: '', startNumber: '1' });
     const [editInput, setEditInput] = useState<AssetInstanceInput>({});
+
+    /** Batch actions apply to the selected units, or to every unit when nothing is selected; always in code order. */
+    const sortedAssets = [...(assets ?? [])].sort((a, b) => a.assetCode.localeCompare(b.assetCode, undefined, { numeric: true }));
+    const selectedAssets = sortedAssets.filter((asset) => selectedIds.has(asset.id));
+    const batchTargets = selectedAssets.length ? selectedAssets : sortedAssets;
+    const recodeStart = Number(recodeInput.startNumber);
+    const recodeValid = recodeInput.codePrefix.trim() !== '' && Number.isInteger(recodeStart) && recodeStart >= 1;
+    const recodeCode = (offset: number) => `${recodeInput.codePrefix.trim().toLocaleUpperCase()}${String(recodeStart + offset).padStart(3, '0')}`;
 
     const updateSingle = (patch: Partial<AssetInstanceInput>) =>
         setSingleInput((prev: AssetInstanceInput) => ({ ...prev, ...patch }));
@@ -173,56 +175,54 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         setEditInput((prev: AssetInstanceInput) => ({ ...prev, ...patch }));
 
     function handleOpenAddSingle() {
-        const nextNum = (assets?.length ?? 0) + 1;
-        setSingleInput({
-            assetCode: item.sku ? `${item.sku}-${String(nextNum).padStart(3, '0')}` : '',
-            serialNumber: '',
-            manufacturer: '',
-            model: '',
-            conditionStatus: 'good',
-            availabilityStatus: 'available',
-            currentLocationId: item.storageLocation ?? undefined,
-            operatingHours: undefined,
-            notes: '',
-        });
+        setSingleInput(emptySingle());
         setAddSingleOpen(true);
     }
 
-    function handleOpenBatch() {
-        const nextNum = (assets?.length ?? 0) + 1;
-        setBatchInput({
-            batchCount: 5,
-            codePrefix: item.sku ? `${item.sku}-` : 'ASSET-',
-            startNumber: nextNum,
-            conditionStatus: 'good',
-            availabilityStatus: 'available',
-            currentLocationId: item.storageLocation ?? undefined,
-        });
-        setBatchOpen(true);
+    function handleOpenRecode() {
+        setRecodeInput({ codePrefix: item.sku ? `${item.sku}-` : '', startNumber: '1' });
+        setRecodeOpen(true);
     }
 
     function handleOpenEdit(asset: AssetInstance) {
         setEditAsset(asset);
-        setEditInput(assetEditInput(asset));
+        setEditInput(assetEditInput(asset, Boolean(item.tracksRuntime)));
     }
 
     function handleSaveSingle() {
         createAsset.mutate(singleInput, {
             onSuccess: () => setAddSingleOpen(false),
+            onError: showError,
         });
     }
 
-    function handleSaveBatch() {
-        createAsset.mutate({
-            batchCount: Number(batchInput.batchCount),
-            codePrefix: batchInput.codePrefix,
-            startNumber: Number(batchInput.startNumber),
-            conditionStatus: batchInput.conditionStatus,
-            availabilityStatus: batchInput.availabilityStatus,
-            currentLocationId: batchInput.currentLocationId,
+    function handleSaveRecode() {
+        recodeAssets.mutate({
+            codePrefix: recodeInput.codePrefix.trim(),
+            startNumber: recodeStart,
+            assetIds: batchTargets.map((asset) => asset.id),
         }, {
-            onSuccess: () => setBatchOpen(false),
+            onSuccess: () => { setRecodeOpen(false); setSelectedIds(new Set()); },
+            onError: showError,
         });
+    }
+
+    function handleWriteOffSelected() {
+        writeOffAssets.mutate(selectedAssets.map((asset) => asset.id), {
+            onSuccess: () => { setWriteOffOpen(false); setSelectedIds(new Set()); },
+            onError: showError,
+        });
+    }
+
+    async function handlePrintLabels() {
+        setPrinting(true);
+        try {
+            await downloadAssetLabelsPdf(item, batchTargets);
+        } catch (error) {
+            showError(error);
+        } finally {
+            setPrinting(false);
+        }
     }
 
     function handleSaveEdit() {
@@ -232,6 +232,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             input: editInput,
         }, {
             onSuccess: () => setEditAsset(null),
+            onError: showError,
         });
     }
 
@@ -239,6 +240,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
         if (!deleteTarget) return;
         deleteAsset.mutate(deleteTarget.id, {
             onSuccess: () => setDeleteTarget(null),
+            onError: showError,
         });
     }
 
@@ -247,6 +249,18 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
+            return next;
+        });
+    }
+
+    const pageAllSelected = pageAssets.length > 0 && pageAssets.every((asset) => selectedIds.has(asset.id));
+    function togglePageSelection() {
+        setSelectedIds((prev: Set<string>) => {
+            const next = new Set(prev);
+            for (const asset of pageAssets) {
+                if (pageAllSelected) next.delete(asset.id);
+                else next.add(asset.id);
+            }
             return next;
         });
     }
@@ -263,13 +277,25 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         {t('items.assetInstancesList.individuallyIdentifiedPhysicalUnitsWithDistinctStatusesQRCodesAnd')}
                     </Typography>
                 </Box>
-                {canEdit && <ActionBar size="small" sx={{ flex: '1 0 auto' }} actions={[
-                    { key: 'batch', label: t('items.assetInstancesList.batchGenerate'), title: translate('items.assetInstancesList.createSeveralAssetsAtOnce'),
-                        icon: <DynamicFeedIcon />, onClick: handleOpenBatch },
-                    { key: 'add', label: t('items.assetInstancesList.addAsset'), title: translate('items.assetInstancesList.registerASingleAsset'),
+                <ActionBar size="small" sx={{ flex: '1 0 auto' }} actions={[
+                    sortedAssets.length > 0 && { key: 'labels', label: t('items.assetInstancesList.qrLabelsPdf'), title: translate('items.assetInstancesList.qrLabelsPdfHelp'),
+                        icon: <PictureAsPdfIcon />, disabled: printing, onClick: () => { void handlePrintLabels(); } },
+                    canEdit && sortedAssets.length > 0 && { key: 'recode', label: t('items.assetInstancesList.assignCodes'), title: translate('items.assetInstancesList.assignCodesHelp'),
+                        icon: <DynamicFeedIcon />, onClick: handleOpenRecode },
+                    canEdit && { key: 'add', label: t('items.assetInstancesList.addAsset'), title: translate('items.assetInstancesList.registerASingleAsset'),
                         icon: <AddIcon />, variant: 'contained', pinned: true, onClick: handleOpenAddSingle },
-                ]} />}
+                ]} />
             </Box>
+
+            {selectedAssets.length > 0 && <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, p: 1, pl: 2, mb: 2 }}>
+                <Typography sx={{ fontWeight: 600 }}>{t('items.assetInstancesList.selectedCountAssetsSelected', { selectedCount: String(selectedAssets.length) })}</Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                    <Button size="small" onClick={() => setSelectedIds(new Set())}>{t('items.assetInstancesList.clearSelection')}</Button>
+                    {canEdit && <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setWriteOffOpen(true)}>
+                        {t('items.assetInstancesList.writeOffSelected')}
+                    </Button>}
+                </Stack>
+            </Paper>}
 
             {/* Toolbar / Search */}
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
@@ -323,7 +349,9 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         <Card key={asset.id} variant="outlined">
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-                                    <Box sx={{ minWidth: 0 }}>
+                                    <Checkbox size="small" sx={{ m: -1, mr: 0 }} checked={selectedIds.has(asset.id)} onChange={() => toggleSelect(asset.id)}
+                                        slotProps={{ input: { 'aria-label': t('items.assetInstancesList.selectAssetCode', { assetCode: asset.assetCode }) } }} />
+                                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
                                         <Link component={RouterLink} to={`/items/${item.id}/assets/${asset.id}`} underline="hover"
                                             sx={{ fontWeight: 700, fontSize: '1rem', display: 'block', overflowWrap: 'anywhere' }} title={t('items.assetInstancesList.openAssetInfoPage')}>
                                             {asset.assetCode}
@@ -344,8 +372,8 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
                                     <div>{t('items.assetInstancesList.condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
                                     <div>{t('enum.value.location')}: <strong>{asset.currentLocationCode || asset.currentLocationName || '—'}</strong></div>
-                                    {asset.operatingHours != null && (
-                                        <div>{t('items.assetInstancesList.hours')}: <strong>{asset.operatingHours} h</strong></div>
+                                    {item.tracksRuntime && (
+                                        <div>{t('items.assetInstancesList.hours')}: <strong>{asset.operatingHours ?? 0} h</strong></div>
                                     )}
                                     {asset.currentCustodianName && (
                                         <div>{t('items.assetInstancesList.custodian')}: <strong>{asset.currentCustodianName}</strong></div>
@@ -362,13 +390,16 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                {canEdit && <TableCell sx={{ width: 40 }} />}
+                                <TableCell padding="checkbox">
+                                    <Checkbox size="small" checked={pageAllSelected} indeterminate={!pageAllSelected && pageAssets.some((asset) => selectedIds.has(asset.id))}
+                                        onChange={togglePageSelection} slotProps={{ input: { 'aria-label': t('items.assetInstancesList.selectAllOnPage') } }} />
+                                </TableCell>
                                 <TableCell><strong>{t('items.assetInstancesList.assetCodeID')}</strong></TableCell>
                                 <TableCell><strong>{t('items.assetInstancesList.serialNumber')}</strong></TableCell>
                                 <TableCell><strong>{t('common.status')}</strong></TableCell>
                                 <TableCell><strong>{t('items.assetInstancesList.condition')}</strong></TableCell>
                                 <TableCell><strong>{t('enum.value.location')}</strong></TableCell>
-                                <TableCell><strong>{t('items.assetInstancesList.operatingHours')}</strong></TableCell>
+                                {item.tracksRuntime && <TableCell><strong>{t('items.assetInstancesList.operatingHours')}</strong></TableCell>}
                                 <TableCell><strong>{t('items.assetInstancesList.custodian2')}</strong></TableCell>
                                 <TableCell align="right"><strong>{t('common.actions')}</strong></TableCell>
                             </TableRow>
@@ -376,13 +407,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         <TableBody>
                             {pageAssets.map((asset) => (
                                 <TableRow key={asset.id} hover selected={selectedIds.has(asset.id)}>
-                                    {canEdit && <TableCell padding="checkbox">
+                                    <TableCell padding="checkbox">
                                         <Checkbox
                                             size="small"
                                             checked={selectedIds.has(asset.id)}
                                             onChange={() => toggleSelect(asset.id)}
+                                            slotProps={{ input: { 'aria-label': t('items.assetInstancesList.selectAssetCode', { assetCode: asset.assetCode }) } }}
                                         />
-                                    </TableCell>}
+                                    </TableCell>
                                     <TableCell sx={{ fontWeight: 700 }}>
                                         <Link component={RouterLink} to={`/items/${item.id}/assets/${asset.id}`} underline="hover" title={t('items.assetInstancesList.openAssetInfoPage')}>
                                             {asset.assetCode}
@@ -399,12 +431,12 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     </TableCell>
                                     <TableCell>{formatStatus(asset.conditionStatus)}</TableCell>
                                     <TableCell title={asset.currentLocationName}>{asset.currentLocationCode || asset.currentLocationName || '—'}</TableCell>
-                                    <TableCell>
+                                    {item.tracksRuntime && <TableCell>
                                         {canEdit ? <Link component="button" type="button" underline="hover" onClick={() => setHoursAsset(asset)}
                                             title={t('items.assetInstancesList.logOperatingHours')}>
                                             {`${asset.operatingHours ?? 0} h`}
-                                        </Link> : asset.operatingHours != null ? `${asset.operatingHours} h` : '—'}
-                                    </TableCell>
+                                        </Link> : `${asset.operatingHours ?? 0} h`}
+                                    </TableCell>}
                                     <TableCell>{asset.currentCustodianName || '—'}</TableCell>
                                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                         <RowActions actions={assetActions(asset)} collapsed={actionsCollapsed} />
@@ -438,19 +470,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     />
                     <TextField
                         select
-                        label={t('common.status')}
-                        value={singleInput.availabilityStatus || 'available'}
-                        onChange={(e) => updateSingle({ availabilityStatus: e.target.value as AssetAvailabilityStatus })}
-                        fullWidth
-                    >
-                        <MenuItem value="available">{t('enum.itemStatus.available')}</MenuItem>
-                        <MenuItem value="in_custody">{t('items.assetInstancesList.inCustody')}</MenuItem>
-                        <MenuItem value="in_maintenance">{t('enum.value.in_maintenance')}</MenuItem>
-                        <MenuItem value="in_repair">{t('enum.value.in_repair')}</MenuItem>
-                        <MenuItem value="damaged">{t('items.assetInstancesList.damaged')}</MenuItem>
-                    </TextField>
-                    <TextField
-                        select
                         label={t('items.assetInstancesList.condition')}
                         value={singleInput.conditionStatus || 'good'}
                         onChange={(e) => updateSingle({ conditionStatus: e.target.value as AssetConditionStatus })}
@@ -465,13 +484,14 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     <LocationPicker locations={storageLocations ?? []} value={singleInput.currentLocationId} label={t('common.storageLocation')}
                         onChange={(location) => updateSingle({ currentLocationId: location?.id })} />
                     <AssetDetailsFields value={singleInput} onChange={updateSingle} />
-                    <TextField
+                    {item.tracksRuntime && <TextField
                         label={t('enum.value.operating_hours')}
                         type="number"
                         value={singleInput.operatingHours ?? ''}
                         onChange={(e) => updateSingle({ operatingHours: e.target.value ? Number(e.target.value) : undefined })}
                         fullWidth
-                    />
+                        slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }}
+                    />}
                     <TextField
                         label={t('items.assetInstancesList.notes')}
                         multiline
@@ -489,52 +509,68 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                 </DialogActions>
             </Dialog>
 
-            {/* Dialog: Batch Generate Assets */}
-            <Dialog open={batchOpen} onClose={() => setBatchOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{t('items.assetInstancesList.batchGenerateAssets')}</DialogTitle>
+            {/* Dialog: Assign codes to existing units */}
+            <Dialog open={recodeOpen} onClose={() => setRecodeOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>{t('items.assetInstancesList.assignAssetCodes')}</DialogTitle>
                 <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                        {t('items.assetInstancesList.createsMultipleConsecutivelyNumberedUnitsAtOnceEGFor')}
+                        {selectedAssets.length
+                            ? t('items.assetInstancesList.renamesTheCountSelectedUnits', { unitCount: String(batchTargets.length) })
+                            : t('items.assetInstancesList.renamesAllCountUnits', { unitCount: String(batchTargets.length) })}
                     </Typography>
                     <TextField
-                        label={t('items.assetInstancesList.numberOfAssetsToGenerate')}
-                        type="number"
-                        value={batchInput.batchCount}
-                        onChange={(e) => setBatchInput((prev) => ({ ...prev, batchCount: Math.max(1, Number(e.target.value)) }))}
-                        fullWidth
-                        slotProps={{ htmlInput: { min: 1, max: 200 } }}
-                    />
-                    <TextField
                         label={t('items.assetInstancesList.codePrefix')}
-                        value={batchInput.codePrefix}
-                        onChange={(e) => setBatchInput((prev) => ({ ...prev, codePrefix: e.target.value }))}
+                        value={recodeInput.codePrefix}
+                        onChange={(e) => setRecodeInput((prev) => ({ ...prev, codePrefix: e.target.value }))}
+                        required
                         fullWidth
-                        helperText={t('items.assetInstancesList.previewCodePrefixStartNumber', { codePrefix: String(batchInput.codePrefix), startNumber: String(String(batchInput.startNumber).padStart(3, '0')) })}
+                        slotProps={{ htmlInput: { maxLength: 200 } }}
                     />
                     <TextField
                         label={t('items.assetInstancesList.startNumber')}
                         type="number"
-                        value={batchInput.startNumber}
-                        onChange={(e) => setBatchInput((prev) => ({ ...prev, startNumber: Math.max(1, Number(e.target.value)) }))}
+                        value={recodeInput.startNumber}
+                        onChange={(e) => setRecodeInput((prev) => ({ ...prev, startNumber: e.target.value }))}
+                        required
                         fullWidth
-                        slotProps={{ htmlInput: { min: 1 } }}
+                        error={recodeInput.startNumber !== '' && !(Number.isInteger(recodeStart) && recodeStart >= 1)}
+                        helperText={recodeValid && batchTargets.length > 0
+                            ? t('items.assetInstancesList.recodePreview', {
+                                from: `${batchTargets[0].assetCode} → ${recodeCode(0)}`,
+                                to: batchTargets.length > 1 ? ` … ${batchTargets[batchTargets.length - 1].assetCode} → ${recodeCode(batchTargets.length - 1)}` : '',
+                            })
+                            : undefined}
+                        slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
                     />
-                    <LocationPicker locations={storageLocations ?? []} value={batchInput.currentLocationId} label={t('common.storageLocation')}
-                        onChange={(location) => setBatchInput((prev) => ({ ...prev, currentLocationId: location?.id }))} />
                 </DialogContent>
                 <DialogActions>
-                    <Button title={translate('common.discardChangesAndClose')} onClick={() => setBatchOpen(false)}>{t('common.cancel')}</Button>
-                    <Button title={translate('items.assetInstancesList.generateAssetsUsingTheEnteredDetails')} variant="contained" onClick={handleSaveBatch} disabled={createAsset.isPending}>
-                        {t('items.assetInstancesList.generate')}
+                    <Button title={translate('common.discardChangesAndClose')} onClick={() => setRecodeOpen(false)}>{t('common.cancel')}</Button>
+                    <Button title={translate('items.assetInstancesList.assignCodesHelp')} variant="contained" onClick={handleSaveRecode} disabled={!recodeValid || recodeAssets.isPending}>
+                        {t('items.assetInstancesList.assignCodes')}
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <ConfirmDialog
+                open={writeOffOpen}
+                title={t('items.assetInstancesList.writeOffSelectedAssets')}
+                message={t('items.assetInstancesList.writeOffSelectedMessage', {
+                    unitCount: String(selectedAssets.length),
+                    codes: selectedAssets.slice(0, 10).map((asset) => asset.assetCode).join(', ') + (selectedAssets.length > 10 ? ', …' : ''),
+                })}
+                actionLabel={t('items.assetInstancesList.writeOff')}
+                actionTooltip={t('items.assetInstancesList.permanentlyWriteOffAsset')}
+                actionColor="error"
+                onClose={() => setWriteOffOpen(false)}
+                onConfirm={handleWriteOffSelected}
+                pending={writeOffAssets.isPending}
+            />
 
             {/* Dialog: Edit Asset */}
             <Dialog open={!!editAsset} onClose={() => setEditAsset(null)} maxWidth="xs" fullWidth>
                 <DialogTitle>{t('items.assetInstancesList.editAsset')}: {editAsset?.assetCode}</DialogTitle>
                 <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <AssetEditFields value={editInput} onChange={updateEdit} />
+                    <AssetEditFields value={editInput} tracksRuntime={Boolean(item.tracksRuntime)} onChange={updateEdit} />
                 </DialogContent>
                 <DialogActions>
                     <Button title={translate('common.discardChangesAndClose')} onClick={() => setEditAsset(null)}>{t('common.cancel')}</Button>

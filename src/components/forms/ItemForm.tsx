@@ -98,7 +98,9 @@ export function ItemForm({
         maintenanceIntervalDays: initialData?.maintenanceIntervalDays == null ? '' : String(initialData.maintenanceIntervalDays),
         currentOperatingHours: initialData?.currentOperatingHours == null ? '' : String(initialData.currentOperatingHours),
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km == null ? '' : String(initialData.fuelConsumptionLitersPer100Km),
+        assetStartNumber: '1',
     });
+    const [assetCodePrefix, setAssetCodePrefix] = useState('');
     const [nameError, setNameError] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
     const [addLocationOpen, setAddLocationOpen] = useState(false);
@@ -168,17 +170,32 @@ export function ItemForm({
             maintenanceIntervalDays: parseOptional(numericInputs.maintenanceIntervalDays),
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
+            ...(generatesAssetCodes ? {
+                assetCodePrefix: assetCodePrefix.trim() || undefined,
+                assetStartNumber: parseOptional(numericInputs.assetStartNumber),
+            } : {}),
         };
         onSubmit(submitData);
     }
 
     const amountValid = !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const generatesAssetCodes = !initialData && formData.trackingMode === 'serialized';
+    const startNumber = Number(numericInputs.assetStartNumber);
+    const assetStartValid = !generatesAssetCodes || (numericInputs.assetStartNumber !== '' && Number.isInteger(startNumber) && startNumber >= 1);
+    /** Mirrors the server: uppercase prefix (SKU- when empty) and a number padded to three digits. */
+    const assetCodePreview = (() => {
+        const count = Math.max(0, Math.floor(Number(numericInputs.amount) || 0));
+        if (!assetStartValid || count === 0) return '';
+        const prefix = assetCodePrefix.trim().toLocaleUpperCase() || 'SKU-';
+        const code = (n: number) => `${prefix}${String(n).padStart(3, '0')}`;
+        return count === 1 ? code(startNumber) : `${code(startNumber)} … ${code(startNumber + count - 1)}`;
+    })();
     const containerSizeValid = !isBulkPackage
         || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
         && numericInputs.value !== '' && Number(numericInputs.value) >= 0;
     const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid
-        || !requiredNumbersValid;
+        || !requiredNumbersValid || !assetStartValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
@@ -344,6 +361,30 @@ export function ItemForm({
                                 slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
                             />
                         )}
+                        {generatesAssetCodes && (<>
+                            <TextField
+                                label={t('forms.itemForm.assetCodePrefix')}
+                                value={assetCodePrefix}
+                                onChange={(event) => setAssetCodePrefix(event.target.value)}
+                                placeholder="SKU-"
+                                fullWidth
+                                helperText={t('forms.itemForm.assetCodePrefixHelp')}
+                                slotProps={{ htmlInput: { maxLength: 200 } }}
+                            />
+                            <TextField
+                                label={t('forms.itemForm.assetStartNumber')}
+                                type="number"
+                                value={numericInputs.assetStartNumber}
+                                onChange={handleNumberChange('assetStartNumber')}
+                                required
+                                fullWidth
+                                error={!assetStartValid}
+                                helperText={assetCodePreview
+                                    ? t('forms.itemForm.assetCodePreview', { codes: assetCodePreview })
+                                    : t('forms.itemForm.assetStartNumberHelp')}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                            />
+                        </>)}
                         {isBulkPackage && (
                             <TextField
                                 label={t('forms.itemForm.itemsPerBox')}

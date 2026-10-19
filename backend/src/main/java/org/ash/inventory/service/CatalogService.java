@@ -206,11 +206,19 @@ public class CatalogService {
         bookMeterReading(item, input, "Opening meter reading");
         persistImages(item, input.images());
         int initialAmount = input.amount() == null ? 0 : input.amount();
+        boolean codePattern = (input.assetCodePrefix() != null && !input.assetCodePrefix().isBlank()) || input.assetStartNumber() != null;
+        if (codePattern && item.trackingMode != DomainEnums.TrackingMode.serialized)
+            throw ApiException.badRequest("Asset code generation only applies to serialized items");
         if (item.trackingMode == DomainEnums.TrackingMode.serialized && initialAmount > 0) {
-            for (int i = 1; i <= initialAmount; i++) {
+            String prefix = input.assetCodePrefix() != null && !input.assetCodePrefix().isBlank()
+                    ? input.assetCodePrefix().trim().toUpperCase(Locale.ROOT) : item.sku + "-";
+            int start = input.assetStartNumber() == null ? 1 : input.assetStartNumber();
+            for (int i = start; i < start + initialAmount; i++) {
+                String code = String.format("%s%03d", prefix, i);
+                if (orm.assetCodeExists(code)) throw ApiException.conflict("Asset code " + code + " already exists");
                 var asset = new AssetInstance();
                 asset.item = item;
-                asset.assetCode = String.format("%s-%03d", item.sku, i);
+                asset.assetCode = code;
                 asset.availabilityStatus = DomainEnums.AssetState.available;
                 asset.conditionStatus = DomainEnums.ConditionStatus.good;
                 asset.currentLocation = item.storageLocation;
@@ -636,7 +644,7 @@ public class CatalogService {
 
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
-    public List<AssetInstance> createAssets(UUID itemId, ApiModels.AssetInstanceInput input) {
+    public AssetInstance createAsset(UUID itemId, ApiModels.AssetInstanceInput input) {
         var item = orm.requireLocked(Item.class, itemId, "Item");
         actorService.requireItemEdit(item);
         if (item.trackingMode != DomainEnums.TrackingMode.serialized) {
@@ -648,64 +656,95 @@ public class CatalogService {
         if (input.currentCustodianId() != null) {
             throw ApiException.badRequest("Custody can only be assigned through a checkout or handover workflow");
         }
-        var created = new ArrayList<AssetInstance>();
-        int batchCount = input.batchCount() != null && input.batchCount() > 1 ? input.batchCount() : 1;
-        String prefix = input.codePrefix() != null && !input.codePrefix().isBlank() ? input.codePrefix().trim() : item.sku + "-";
-        int startNum = input.startNumber() != null && input.startNumber() > 0 ? input.startNumber() : 1;
+        if (input.operatingHours() != null && !item.tracksRuntime)
+            throw ApiException.badRequest("This item does not record operating hours");
+        var asset = new AssetInstance();
+        asset.item = item;
+        String code = input.assetCode();
+        if (code == null || code.isBlank()) code = nextFreeAssetCode(item.sku + "-", orm.countAssets(item) + 1);
+        else if (orm.assetCodeExists(code)) throw ApiException.conflict("Asset code " + code.trim() + " already exists");
+        asset.assetCode = code.trim().toUpperCase(Locale.ROOT);
+        asset.serialNumber = input.serialNumber();
+        asset.manufacturer = input.manufacturer();
+        asset.model = input.model();
+        asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
+        asset.availabilityStatus = DomainEnums.AssetState.available;
+        asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
+        if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
+        asset.purchaseDate = input.purchaseDate();
+        asset.purchasePriceCents = cents(input.purchasePrice());
+        asset.replacementValueCents = cents(input.replacementValue());
+        asset.notes = input.notes();
+        asset.active = true;
+        orm.persist(asset);
+        recordAssetRegistration(item, 1);
+        return asset;
+    }
 
-        if (batchCount > 1) {
-            long existingCount = orm.countAssets(item);
-            int currentSeq = Math.max(startNum, (int) existingCount + 1);
-            for (int i = 0; i < batchCount; i++) {
-                var asset = new AssetInstance();
-                asset.item = item;
-                String code = String.format("%s%03d", prefix, currentSeq + i);
-                if (orm.assetCodeExists(code)) {
-                    code = String.format("%s%03d-%s", prefix, currentSeq + i, UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT));
-                }
-                asset.assetCode = code;
-                asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
-                asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
-                asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
-                asset.active = true;
-                orm.persist(asset);
-                created.add(asset);
-            }
-        } else {
-            var asset = new AssetInstance();
-            asset.item = item;
-            String code = input.assetCode();
-            if (code == null || code.isBlank()) {
-                long existingCount = orm.countAssets(item);
-                code = String.format("%s%03d", prefix, existingCount + 1);
-                if (orm.assetCodeExists(code)) {
-                    code = String.format("%s%03d-%s", prefix, existingCount + 1, UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT));
-                }
-            } else if (orm.assetCodeExists(code)) {
-                throw ApiException.conflict("Asset code " + code + " already exists");
-            }
-            asset.assetCode = code.trim().toUpperCase(Locale.ROOT);
-            asset.serialNumber = input.serialNumber();
-            asset.manufacturer = input.manufacturer();
-            asset.model = input.model();
-            asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
-            asset.availabilityStatus = input.availabilityStatus() == null ? DomainEnums.AssetState.available : input.availabilityStatus();
-            asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
-            if (input.currentCustodianId() != null) {
-                asset.currentCustodian = orm.require(UserAccount.class, input.currentCustodianId(), "User");
-            }
-            if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
-            asset.purchaseDate = input.purchaseDate();
-            asset.purchasePriceCents = cents(input.purchasePrice());
-            asset.replacementValueCents = cents(input.replacementValue());
-            asset.notes = input.notes();
-            asset.active = true;
-            orm.persist(asset);
-            created.add(asset);
+    /** First unused {@code prefix + NNN} at or after {@code from}; write-offs and re-codes leave gaps and holes. */
+    private String nextFreeAssetCode(String prefix, long from) {
+        long number = Math.max(1, from);
+        String code;
+        while (orm.assetCodeExists(code = String.format("%s%03d", prefix, number))) number++;
+        return code;
+    }
+
+    /**
+     * Renames existing units in the given order to {@code prefix + NNN} from {@code startNumber}. Units keep their
+     * identity, history and stock; only a code held by a unit outside this set is a conflict.
+     */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<AssetInstance> recodeAssets(UUID itemId, ApiModels.AssetRecodeInput input) {
+        var item = orm.requireLocked(Item.class, itemId, "Item");
+        actorService.requireItemEdit(item);
+        if (item.trackingMode != DomainEnums.TrackingMode.serialized)
+            throw ApiException.badRequest("Asset codes only exist on serialized items");
+        var assets = ownedActiveAssets(item, input.assetIds());
+        var ids = new HashSet<UUID>();
+        assets.forEach(asset -> ids.add(asset.id));
+        String prefix = input.codePrefix().trim().toUpperCase(Locale.ROOT);
+        var codes = new ArrayList<String>(assets.size());
+        for (int i = 0; i < assets.size(); i++) {
+            String code = String.format("%s%03d", prefix, (long) input.startNumber() + i);
+            var holder = orm.assetWithCode(code);
+            if (holder != null && !ids.contains(holder.id)) throw ApiException.conflict("Asset code " + code + " already exists");
+            codes.add(code);
         }
+        // Units may swap codes within the set; park them on unique placeholders so the unique index never sees a duplicate.
+        for (var asset : assets) asset.assetCode = "~RECODE-" + asset.id;
+        orm.flush();
+        for (int i = 0; i < assets.size(); i++) {
+            var asset = assets.get(i);
+            asset.assetCode = codes.get(i);
+            events.record("asset.updated", "asset", asset.id, actorService.current().id, null,
+                    Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
+        }
+        orm.flush();
+        catalogChanged("items", item.id);
+        return assets;
+    }
 
-        recordAssetRegistration(item, created.size());
-        return created;
+    /** Writes off several units of one item; all or nothing. */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public void writeOffAssets(UUID itemId, List<UUID> assetIds) {
+        var item = orm.requireLocked(Item.class, itemId, "Item");
+        if (item.accessPolicy == null) actorService.requireAdmin(); else actorService.requireItemEdit(item);
+        for (var asset : ownedActiveAssets(item, assetIds)) writeOff(item, asset);
+        catalogChanged("items", item.id);
+    }
+
+    private List<AssetInstance> ownedActiveAssets(Item item, List<UUID> assetIds) {
+        var assets = new ArrayList<AssetInstance>(assetIds.size());
+        var seen = new HashSet<UUID>();
+        for (var id : assetIds) {
+            if (!seen.add(id)) throw ApiException.badRequest("Asset " + id + " is listed twice");
+            var asset = orm.requireLocked(AssetInstance.class, id, "Asset");
+            assertOwnedActiveAsset(item, asset);
+            assets.add(asset);
+        }
+        return assets;
     }
 
     private void recordAssetRegistration(Item item, int count) {
@@ -758,6 +797,9 @@ public class CatalogService {
         if (input.purchasePrice() != null) asset.purchasePriceCents = cents(input.purchasePrice());
         if (input.replacementValue() != null) asset.replacementValueCents = cents(input.replacementValue());
         // Editing the meter is a correction; regular hours are booked per event through the runtime log.
+        var meter = asset.operatingHours == null ? java.math.BigDecimal.ZERO : asset.operatingHours;
+        if (input.operatingHours() != null && !item.tracksRuntime && input.operatingHours().compareTo(meter) != 0)
+            throw ApiException.badRequest("This item does not record operating hours");
         if (input.operatingHours() != null)
             runtime.record(item, asset, input.operatingHours(), null, null, RuntimeEntry.Source.correction, "Meter reading corrected");
         if (input.notes() != null) asset.notes = input.notes();
@@ -776,11 +818,16 @@ public class CatalogService {
         var asset = orm.requireLocked(AssetInstance.class, assetId, "Asset");
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         if (!asset.active) return;
+        writeOff(item, asset);
+        catalogChanged("items", item.id);
+    }
+
+    private void writeOff(Item item, AssetInstance asset) {
         if (asset.availabilityStatus == DomainEnums.AssetState.reserved
                 || asset.availabilityStatus == DomainEnums.AssetState.staged
                 || asset.availabilityStatus == DomainEnums.AssetState.in_custody
                 || asset.availabilityStatus == DomainEnums.AssetState.in_field) {
-            throw ApiException.conflict("Asset must be released from reservations and custody before write-off");
+            throw ApiException.conflict("Asset " + asset.assetCode + " must be released from reservations and custody before write-off");
         }
         var actor = actorService.current();
         var transaction = new StockTransaction();
@@ -796,7 +843,6 @@ public class CatalogService {
         orm.persist(transaction);
         asset.availabilityStatus = DomainEnums.AssetState.written_off;
         asset.active = false;
-        catalogChanged("items", item.id);
         events.record("asset.written_off", "asset", asset.id, actor.id, transaction.idempotencyKey,
                 Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
     }

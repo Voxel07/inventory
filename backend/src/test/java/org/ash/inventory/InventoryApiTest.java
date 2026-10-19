@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -277,15 +278,14 @@ class InventoryApiTest {
                 .patch("/api/items/" + itemId).then().statusCode(200)
                 .body("trackingMode", equalTo("serialized"));
 
-        // 4. Batch add 2 more assets
-        request().body(Map.of("batchCount", 2, "codePrefix", "GEN-HONDA-01-"))
-                .post("/api/items/" + itemId + "/assets").then().statusCode(200)
-                .body("size()", org.hamcrest.Matchers.equalTo(2));
+        // 4. Add one more unit; a blank code takes the next free number
+        request().body(Map.of()).post("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("assetCode", org.hamcrest.Matchers.equalTo("GEN-HONDA-01-004"));
 
-        // 5. Verify total owned stock is now 5
+        // 5. Verify total owned stock is now 4
         request().get("/api/items/" + itemId).then().statusCode(200)
-                .body("stock.totalOwned", org.hamcrest.Matchers.equalTo(5))
-                .body("stock.available", org.hamcrest.Matchers.equalTo(5));
+                .body("stock.totalOwned", org.hamcrest.Matchers.equalTo(4))
+                .body("stock.available", org.hamcrest.Matchers.equalTo(4));
 
         // 6. Create bulk item with stock, then verify attempting to switch to serialized is rejected
         String bulkId = request().body(Map.of("sku", "BULK-BB-01", "name", "BBs 0.28g",
@@ -294,6 +294,40 @@ class InventoryApiTest {
 
         request().body(Map.of("name", "BBs 0.28g", "category", "Ammo", "trackingMode", "serialized"))
                 .patch("/api/items/" + bulkId).then().statusCode(400);
+    }
+
+    @Test
+    void serializedUnitsAreRecodedAndWrittenOffInBatchWithoutCreatingStock() {
+        String itemId = request().body(Map.of("sku", "RECODE-01", "name", "Recode radio", "category", "Radio",
+                        "amount", 3, "value", 0, "trackingMode", "serialized", "assetCodePrefix", "rf-", "assetStartNumber", 5))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        List<String> ids = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
+                .body("assetCode", contains("RF-005", "RF-006", "RF-007")).extract().path("id");
+
+        // Shifting by one makes units swap codes inside the set; the start number is taken as given.
+        request().body(Map.of("codePrefix", "rf-", "startNumber", 6, "assetIds", ids))
+                .post("/api/items/" + itemId + "/assets/recode").then().statusCode(200)
+                .body("assetCode", contains("RF-006", "RF-007", "RF-008"));
+        request().get("/api/items/" + itemId).then().statusCode(200).body("stock.totalOwned", equalTo(3));
+
+        String other = request().body(Map.of("sku", "RECODE-02", "name", "Recode other", "category", "Radio",
+                        "amount", 1, "value", 0, "trackingMode", "serialized", "assetCodePrefix", "OTHER-"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String otherAsset = request().get("/api/items/" + other + "/assets").then().extract().path("[0].id");
+        request().body(Map.of("codePrefix", "RF-", "startNumber", 8, "assetIds", List.of(otherAsset)))
+                .post("/api/items/" + other + "/assets/recode").then().statusCode(409);
+        request().body(Map.of("amount", 1, "sku", "RECODE-03", "name", "Recode clash", "category", "Radio", "value", 0,
+                        "trackingMode", "serialized", "assetCodePrefix", "RF-", "assetStartNumber", 8))
+                .post("/api/items").then().statusCode(409);
+
+        // Without runtime tracking, hours can be neither logged nor corrected.
+        request().body(Map.of("hours", 2, "expectedVersion", 0))
+                .post("/api/items/" + itemId + "/assets/" + ids.get(0) + "/runtime").then().statusCode(400);
+        request().body(Map.of("operatingHours", 3)).post("/api/items/" + itemId + "/assets").then().statusCode(400);
+
+        request().body(Map.of("assetIds", ids.subList(0, 2))).post("/api/items/" + itemId + "/assets/write-off").then().statusCode(204);
+        request().get("/api/items/" + itemId).then().statusCode(200).body("stock.totalOwned", equalTo(1));
+        request().get("/api/items/" + itemId + "/assets").then().body("assetCode", contains("RF-008"));
     }
 
     @Test

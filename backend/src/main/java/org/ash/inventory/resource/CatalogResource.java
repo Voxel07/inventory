@@ -88,8 +88,8 @@ public class CatalogResource {
     }
 
     @POST @Path("/items/{id}/assets") @Transactional
-    public List<ApiResponses.AssetInstanceResponse> createAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
-        return mapper.assets(service.createAssets(id, input));
+    public ApiResponses.AssetInstanceResponse createAsset(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
+        return mapper.asset(service.createAsset(id, input));
     }
 
     @PATCH @Path("/items/{id}/assets/{assetId}") @Transactional
@@ -132,6 +132,19 @@ public class CatalogResource {
     @DELETE @Path("/items/{id}/assets/{assetId}") @Transactional
     public Response deleteAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId) {
         service.deleteAsset(id, assetId);
+        return Response.noContent().build();
+    }
+
+    /** Re-codes existing units; no units are created, so stock is unchanged. */
+    @POST @Path("/items/{id}/assets/recode") @Transactional
+    public List<ApiResponses.AssetInstanceResponse> recodeAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetRecodeInput input) {
+        return mapper.assets(service.recodeAssets(id, input));
+    }
+
+    /** Writes off several units at once; all or nothing. */
+    @POST @Path("/items/{id}/assets/write-off") @Transactional
+    public Response writeOffAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetIdsInput input) {
+        service.writeOffAssets(id, input.assetIds());
         return Response.noContent().build();
     }
 

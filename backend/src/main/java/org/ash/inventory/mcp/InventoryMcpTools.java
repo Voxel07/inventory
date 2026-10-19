@@ -60,7 +60,7 @@ public class InventoryMcpTools {
     @Blocking
     @Tool(description = "Create an item using the REST ItemInput contract. Manager access required; initial stock uses the canonical ledger and asset/position rules.")
     public ApiResponses.ItemResponse create_item(
-            @ToolArg(description = "ItemInput: name/category required; value is decimal currency, locations are UUIDs; optional amount initializes stock", required = true) ApiModels.ItemInput input) {
+            @ToolArg(description = "ItemInput: name/category required; value is decimal currency, locations are UUIDs; optional amount initializes stock; serialized items name those units assetCodePrefix + assetStartNumber (default SKU- and 1, zero-padded to 3 digits)", required = true) ApiModels.ItemInput input) {
         return call("create_item", () -> service.createItem(input));
     }
 
