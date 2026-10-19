@@ -1,4 +1,6 @@
 import { Button } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { SupplierDraft } from '../components/procurement/SupplierDraft';
 import { useState } from 'react';
@@ -195,34 +197,26 @@ export function Procurement() {
 
   return (
     <Box aria-busy={isPending || isFetching}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ mb: 3, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-      >
-        <Box>
-          <Typography variant="h4">{t('pages.procurement.procurementShortages')}</Typography>
-          <Typography color="text.secondary">
-            {t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button title={translate('pages.procurement.downloadTheCurrentShortagesAsCSV')} variant="outlined" startIcon={<DownloadIcon />} disabled={!deficits.length} onClick={exportCsv}>
-            {t('pages.procurement.cSV')}
-          </Button>
-          <Button title={translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF')} variant="contained" startIcon={<PrintIcon />} disabled={!deficits.length} onClick={exportPdf}>
-            {t('pages.procurement.purchaseOrderPDF')}
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title={t('pages.procurement.procurementShortages')}
+        description={t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}
+        actions={<ActionBar actions={[
+          { key: 'csv', label: t('pages.procurement.cSV'), title: translate('pages.procurement.downloadTheCurrentShortagesAsCSV'), icon: <DownloadIcon />,
+            disabled: !deficits.length, onClick: exportCsv },
+          { key: 'pdf', label: t('pages.procurement.purchaseOrderPDF'), title: translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF'), icon: <PrintIcon />,
+            variant: 'contained', pinned: true, disabled: !deficits.length, onClick: exportPdf },
+        ]} />}
+      />
 
       {/* KPI Cards */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
           gap: 1.5,
           mb: 3,
+          // Long German labels must wrap inside the half-width phone cards.
+          '& .MuiTypography-caption': { minWidth: 0, overflowWrap: 'anywhere' },
         }}
       >
         <Paper sx={{ p: 2, borderLeft: 4, borderColor: 'error.main' }}>
@@ -332,10 +326,11 @@ export function Procurement() {
             <Stack
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}
+              useFlexGap
+              sx={{ alignItems: 'center', flexWrap: 'wrap', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}
             >
               <ShoppingCartIcon color="primary" />
-              <Typography variant="h6">{supplier}</Typography>
+              <Typography variant="h6" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{supplier}</Typography>
               <Chip
                 size="small"
                 color="error"
@@ -381,7 +376,7 @@ export function Procurement() {
                       <Box
                         sx={{
                           display: 'grid',
-                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                           gap: 0.5,
                           mt: 1,
                           pt: 1,

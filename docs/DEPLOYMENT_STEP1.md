@@ -55,6 +55,14 @@ limiting), and `inventory-app` behind nginx. To keep media on the same host, add
 docker compose -f docker-compose.yml -f docker-compose.garage.yml up -d --build
 ```
 
+This builds the JVM API image (`backend/Dockerfile`). CI publishes the native image (`backend/Dockerfile.native`); to build and run it locally with the measured heap settings (`-Xmx512m -Xmn256m`, 768m container limit), add the native overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.native.yml up -d --build
+```
+
+The native build needs about 10 GB RAM; see [native memory benchmark](NATIVE_MEMORY_BENCHMARK.md).
+
 Garage templates take `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` and `GARAGE_WEBUI_AUTH` from `.env` and
 refuse to start without them. The admin API (3903) and WebUI (3909) bind to loopback; reach them through
 an SSH tunnel, never through the public interface.

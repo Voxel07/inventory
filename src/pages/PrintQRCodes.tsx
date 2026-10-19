@@ -1,4 +1,6 @@
-import { Button, ToggleButton } from '../components/shared/ActionButtons';
+import { ToggleButton } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useEffect, useState } from 'react';
 import {
     Box,
@@ -176,18 +178,11 @@ export function PrintQRCodesPage() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4">QR-Codes</Typography>
-
-                <Button title={translate('pages.printQRCodes.downloadQRLabelsForTheFilteredEntriesAsPDF')}
-                    variant="contained"
-                    startIcon={<PictureAsPdfIcon />}
-                    onClick={handleGeneratePDF}
-                    disabled={filteredEntries.length === 0 || pdfGenerating}
-                >
-                    {pdfGenerating ? t('pages.printQRCodes.generating') : t('pages.printQRCodes.downloadPDF')}
-                </Button>
-            </Box>
+            <PageHeader title={t('nav.printQr')} actions={<ActionBar actions={[{
+                key: 'pdf', label: pdfGenerating ? t('pages.printQRCodes.generating') : t('pages.printQRCodes.downloadPDF'),
+                title: translate('pages.printQRCodes.downloadQRLabelsForTheFilteredEntriesAsPDF'), icon: <PictureAsPdfIcon />,
+                variant: 'contained', pinned: true, disabled: filteredEntries.length === 0 || pdfGenerating, onClick: () => { void handleGeneratePDF(); },
+            }]} />} />
 
             <Paper sx={{ p: 2, mb: 3 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -204,6 +199,8 @@ export function PrintQRCodesPage() {
                             }
                         }}
                         size="small"
+                        // Five segments do not fit the narrowest phones; scroll the group instead of overflowing the page.
+                        sx={{ maxWidth: '100%', overflowX: 'auto', '& .MuiToggleButton-root': { flexShrink: 0, whiteSpace: 'nowrap' } }}
                     >
                         <ToggleButton title={translate('pages.printQRCodes.displayQRLabelsForItemsAndAssemblies')} value="all">{t('common.all')}</ToggleButton>
                         <ToggleButton title={translate('pages.printQRCodes.displayQRLabelsForItemsOnly')} value="items">{t('pages.printQRCodes.itemsOnly')}</ToggleButton>

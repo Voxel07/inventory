@@ -65,6 +65,13 @@ public class InventoryMcpTools {
     }
 
     @Blocking
+    @Tool(description = "Create or update up to 100 items in one transaction (bulk import). Entries without id are created, others updated with update_item semantics; assetCodes register serialized units. All or nothing: an error names the failing entry index.")
+    public List<ApiResponses.ItemResponse> save_items(
+            @ToolArg(description = "ItemBatchInput: items[] of {id?, item: ItemInput, assetCodes?}; 1–100 entries", required = true) ApiModels.ItemBatchInput input) {
+        return call("save_items", () -> service.saveItems(input));
+    }
+
+    @Blocking
     @Tool(description = "Read an active, visible item with canonical stock availability and metadata")
     public ApiResponses.ItemResponse get_item_details(
             @ToolArg(description = "Item UUID", required = true) UUID itemId) {

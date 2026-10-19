@@ -10,7 +10,6 @@ import { LoadMore } from '../shared/LoadMore';
 import { oneOf, optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
 import { Alert, Stack, Typography } from '@mui/material';
-import { Link } from 'react-router-dom';
 import { useItemAssets } from '../../hooks/useItems';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
@@ -33,12 +32,16 @@ export function SchedulesPanel() {
   return <Stack spacing={2}>
     <Button title={translate('operations.lifecycleOperations.createAMaintenanceScheduleForAnItem')} variant="contained" onClick={() => setChooseItem(true)}>{t('operations.lifecycleOperations.newMaintenanceSchedule')}</Button>
     <QueryFeedback isLoading={schedules.isLoading} error={schedules.error} isEmpty={!schedules.data?.length} emptyMessage={t('operations.lifecycleOperations.noMaintenanceSchedulesYet')} />
-    {schedules.data?.map((schedule) => <OperationListEntry key={schedule.id} actions={<>
-        <Button title={translate('operations.lifecycleOperations.editThisMaintenanceScheduleSIntervalAndChecklist')} onClick={() => setEdit({ itemId: schedule.itemId, schedule })}>{t('common.edit')}</Button>
-        <Button title={translate('operations.lifecycleOperations.openAssetDetailsAndMaintenanceRecords')} component={Link} to={schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}`}>{t('operations.lifecycleOperations.assetMaintenanceRecords')}</Button>
-        {schedule.active && <Button title={translate('operations.lifecycleOperations.recordCompletedMaintenance')} variant="contained" onClick={() => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); }}>{t('operations.lifecycleOperations.recordMaintenance')}</Button>}
-        {schedule.active && <Button title={translate('common.retireThisMaintenanceSchedule')} onClick={() => setRetire(schedule)}>{t('common.retire')}</Button>}
-       </>} title={schedule.itemName} status={schedule.active ? t('enum.value.active') : t('operations.lifecycleOperations.retired')}>
+    {schedules.data?.map((schedule) => <OperationListEntry key={schedule.id} actions={[
+        schedule.active && { key: 'complete', label: t('operations.lifecycleOperations.recordMaintenance'), title: translate('operations.lifecycleOperations.recordCompletedMaintenance'),
+          variant: 'contained', pinned: true,
+          onClick: () => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); } },
+        { key: 'edit', label: t('common.edit'), title: translate('operations.lifecycleOperations.editThisMaintenanceScheduleSIntervalAndChecklist'),
+          onClick: () => setEdit({ itemId: schedule.itemId, schedule }) },
+        { key: 'records', label: t('operations.lifecycleOperations.assetMaintenanceRecords'), title: translate('operations.lifecycleOperations.openAssetDetailsAndMaintenanceRecords'),
+          to: schedule.assetInstanceId ? `/items/${schedule.itemId}/assets/${schedule.assetInstanceId}` : `/items/${schedule.itemId}` },
+        schedule.active && { key: 'retire', label: t('common.retire'), title: translate('common.retireThisMaintenanceSchedule'), onClick: () => setRetire(schedule) },
+      ]} title={schedule.itemName} status={schedule.active ? t('enum.value.active') : t('operations.lifecycleOperations.retired')}>
       <Typography color="text.secondary">{formatStatus(schedule.maintenanceType)}</Typography>
       <Typography>{formatStatus(schedule.intervalType)} · {schedule.intervalValue} · {t('operations.lifecycleOperations.nextDue')}: {schedule.nextDueAt ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}</Typography>
       <Typography>{schedule.active ? t('enum.value.active') : t('operations.lifecycleOperations.retired')} · {schedule.checkoutBlocking ? t('operations.lifecycleOperations.blocksCheckoutWhenDue') : t('enum.value.advisory')}</Typography>
@@ -79,10 +82,12 @@ export function RepairsPanel() {
   const openRepairs = (repairs.data ?? []).filter((repair) => !closed(repair));
   const closedRepairs = (repairs.data ?? []).filter(closed);
   const repairEntry = (repair: Repair) => {
-    return <OperationListEntry key={repair.id} actions={closed(repair) ? undefined : <>
-        {repairNext[repair.status] && <Button title={translate('operations.lifecycleOperations.moveThisRepairCaseToItsNextStatus')} onClick={() => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() })}>{labels[repairNext[repair.status]]}</Button>}
-        {canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && <Button title={translate('operations.lifecycleOperations.recordAWriteOffForThisRepairCase')} color="error" onClick={() => setAction({ repair, status: 'written_off', key: crypto.randomUUID() })}>{labels.written_off}</Button>}
-       </>} title={<>{repair.itemName ?? repair.assemblyName} {repair.assetCode}</>} status={repair.status}>
+    return <OperationListEntry key={repair.id} actions={closed(repair) ? undefined : [
+        !!repairNext[repair.status] && { key: 'next', label: labels[repairNext[repair.status]], title: translate('operations.lifecycleOperations.moveThisRepairCaseToItsNextStatus'),
+          pinned: true, onClick: () => setAction({ repair, status: repairNext[repair.status], key: crypto.randomUUID() }) },
+        canManageUsers(user) && ['reported', 'triaged', 'awaiting_repair', 'in_repair'].includes(repair.status) && { key: 'write-off', label: labels.written_off,
+          title: translate('operations.lifecycleOperations.recordAWriteOffForThisRepairCase'), color: 'error', onClick: () => setAction({ repair, status: 'written_off', key: crypto.randomUUID() }) },
+      ]} title={<>{repair.itemName ?? repair.assemblyName} {repair.assetCode}</>} status={repair.status}>
       <OperationDetail label={t('common.damage')}>{repair.damageDescription}</OperationDetail>
       <OperationDetail label={t('operations.lifecycleOperations.partsAndCosts')}>{repair.partsAndCostNotes}</OperationDetail>
       <OperationDetail label={t('common.notes2')}>{repair.notes}</OperationDetail>

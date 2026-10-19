@@ -1889,7 +1889,7 @@ export default {
       mainNavigation: 'Main navigation',
       quickNavigation: 'Quick navigation',
     },
-    rowActions: {
+    actionMenu: {
       moreActions: 'More actions',
     },
   },
@@ -2728,7 +2728,7 @@ export default {
     csvImportService: {
       aPIRateLimitReachedImportResumesInSecondsS: 'API rate limit reached. Import resumes in {{seconds}}s...',
       creatingStorageLocationLocName: 'Creating storage location "{{locName}}"...',
-      importingItemItemIndexItemsToProcesCountName: 'Importing item {{itemIndex}}/{{itemsToProcesCount}}: {{name}}',
+      importingItemsFromToOfCount: 'Importing items {{from}}–{{to}} of {{count}}...',
       creatingAssemblyAssemIndexAssembliesToProcesCountName: 'Creating assembly {{assemIndex}}/{{assembliesToProcesCount}}: {{name}}',
       creatingEventTypeEventOnEventDate: 'Creating {{eventType}} event on {{eventDate}}...',
       closingEventTypeEventOnEventDate: 'Closing {{eventType}} event on {{eventDate}}...',

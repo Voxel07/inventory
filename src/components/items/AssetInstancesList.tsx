@@ -1,6 +1,7 @@
 import { Button } from '../shared/ActionButtons';
 import { RowActions, type RowAction } from '../shared/RowActions';
-import { useCollapsedRowActions } from '../../hooks/useCollapsedRowActions';
+import { ActionBar } from '../shared/ActionBar';
+import { useOverflowCollapse } from '../../hooks/useOverflowCollapse';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
 import {
@@ -124,7 +125,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             ] : []),
         ];
     }
-    const { ref: tableRef, collapsed: actionsCollapsed } = useCollapsedRowActions<HTMLDivElement>();
+    const { ref: tableRef, collapsed: actionsCollapsed } = useOverflowCollapse<HTMLDivElement>();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialogs
@@ -262,24 +263,12 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         {t('items.assetInstancesList.individuallyIdentifiedPhysicalUnitsWithDistinctStatusesQRCodesAnd')}
                     </Typography>
                 </Box>
-                {canEdit && <Stack direction="row" spacing={1}>
-                    <Button title={translate('items.assetInstancesList.createSeveralAssetsAtOnce')}
-                        variant="outlined"
-                        size="small"
-                        startIcon={<DynamicFeedIcon />}
-                        onClick={handleOpenBatch}
-                    >
-                        {t('items.assetInstancesList.batchGenerate')}
-                    </Button>
-                    <Button title={translate('items.assetInstancesList.registerASingleAsset')}
-                        variant="contained"
-                        size="small"
-                        startIcon={<AddIcon />}
-                        onClick={handleOpenAddSingle}
-                    >
-                        {t('items.assetInstancesList.addAsset')}
-                    </Button>
-                </Stack>}
+                {canEdit && <ActionBar size="small" sx={{ flex: '1 0 auto' }} actions={[
+                    { key: 'batch', label: t('items.assetInstancesList.batchGenerate'), title: translate('items.assetInstancesList.createSeveralAssetsAtOnce'),
+                        icon: <DynamicFeedIcon />, onClick: handleOpenBatch },
+                    { key: 'add', label: t('items.assetInstancesList.addAsset'), title: translate('items.assetInstancesList.registerASingleAsset'),
+                        icon: <AddIcon />, variant: 'contained', pinned: true, onClick: handleOpenAddSingle },
+                ]} />}
             </Box>
 
             {/* Toolbar / Search */}
@@ -333,10 +322,10 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                     {pageAssets.map((asset) => (
                         <Card key={asset.id} variant="outlined">
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                    <Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                                    <Box sx={{ minWidth: 0 }}>
                                         <Link component={RouterLink} to={`/items/${item.id}/assets/${asset.id}`} underline="hover"
-                                            sx={{ fontWeight: 700, fontSize: '1rem', display: 'block' }} title={t('items.assetInstancesList.openAssetInfoPage')}>
+                                            sx={{ fontWeight: 700, fontSize: '1rem', display: 'block', overflowWrap: 'anywhere' }} title={t('items.assetInstancesList.openAssetInfoPage')}>
                                             {asset.assetCode}
                                         </Link>
                                         {asset.serialNumber && (
@@ -349,6 +338,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                         size="small"
                                         label={formatStatus(asset.availabilityStatus)}
                                         color={statusColorMap[asset.availabilityStatus] || 'default'}
+                                        sx={{ flexShrink: 0 }}
                                     />
                                 </Box>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
@@ -362,9 +352,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     )}
                                     {reservationNote(asset, '1 / -1')}
                                 </Box>
-                                <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                    <RowActions actions={assetActions(asset)} collapsed={false} />
-                                </Stack>
+                                <RowActions actions={assetActions(asset)} />
                             </CardContent>
                         </Card>
                     ))}

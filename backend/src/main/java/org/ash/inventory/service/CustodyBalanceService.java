@@ -12,7 +12,9 @@ import java.util.*;
 public class CustodyBalanceService {
     public record Balance(String key, UUID itemId, String name, String category, String storageLocation,
             int checkedOut, int pendingQuantity, UUID personId, String person, String eventKey, String event,
-            UUID factionOrderId, UUID generalOrderId, UUID assetInstanceId, UUID eventOccurrenceId) {}
+            UUID orderId, InventoryOrder.Kind orderKind, UUID assetInstanceId, UUID eventOccurrenceId) {
+        boolean factionOrder() { return orderKind == InventoryOrder.Kind.faction; }
+    }
     private final CustodyOrm orm;
     private final ActorService actors;
     public CustodyBalanceService(CustodyOrm orm, ActorService actors) { this.orm = orm; this.actors = actors; }
@@ -44,42 +46,44 @@ public class CustodyBalanceService {
             if (!faction && line.item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 for (var assignment : line.assets) {
                     if (assignment.reconciled) continue;
-                    var row = balance(line.item, order.createdBy, order.eventOccurrence, null, order.id, assignment.assetInstance.id, 1, null);
+                    var row = balance(line.item, order.createdBy, order.eventOccurrence, order, assignment.assetInstance.id, 1, null);
                     rows.put(row.key(), row);
                 }
             } else {
-                var row = balance(line.item, order.createdBy, order.eventOccurrence, faction ? order.id : null, faction ? null : order.id,
+                var row = balance(line.item, order.createdBy, order.eventOccurrence, order,
                         null, outstanding, faction ? (order.collectorName == null ? order.factionLabel() : order.collectorName) : null);
                 var prior = rows.get(row.key());
                 rows.put(row.key(), copy(row, outstanding + (prior == null ? 0 : prior.checkedOut()), 0));
             }
         }
         for (var tx : direct) {
-            var row = balance(tx.item(), tx.user(), tx.event(), null, null, tx.asset(), tx.quantity(), null);
+            var row = balance(tx.item(), tx.user(), tx.event(), null, tx.asset(), tx.quantity(), null);
             rows.put(row.key(), row);
         }
         for (var pending : orm.pending(recipient)) {
-            var key = key((UUID) pending[0], (UUID) pending[1], (UUID) pending[2], (UUID) pending[3], (UUID) pending[4],
-                    pending[3] != null ? null : (UUID) pending[5]);
+            // Faction-order custody is one row per item; asset-level rows exist for general orders and direct checkouts.
+            var key = key((UUID) pending[0], (UUID) pending[1], (UUID) pending[2], (UUID) pending[3],
+                    pending[4] == InventoryOrder.Kind.faction ? null : (UUID) pending[5]);
             var row = rows.get(key);
             if (row != null) rows.put(key, copy(row, row.checkedOut(), row.pendingQuantity() + Math.toIntExact(((Number) pending[6]).longValue())));
         }
         return rows.values().stream().filter(row -> row.checkedOut() > 0)
                 .sorted(Comparator.comparing(Balance::name).thenComparing(Balance::key)).toList();
     }
-    private Balance balance(Item item, UserAccount user, EventOccurrence event, UUID faction, UUID general, UUID asset, int amount, String person) {
+    private Balance balance(Item item, UserAccount user, EventOccurrence event, InventoryOrder order, UUID asset, int amount, String person) {
         var location = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         UUID eventId = event == null ? null : event.id;
-        return new Balance(key(item.id, user.id, eventId, faction, general, asset), item.id, item.name, item.category,
+        UUID orderId = order == null ? null : order.id;
+        return new Balance(key(item.id, user.id, eventId, orderId, asset), item.id, item.name, item.category,
                 location != null && accessViews.projectionAllows(location.accessPolicy) ? location.name : "", amount, 0, user.id, person == null ? user.name : person,
                 eventId == null ? "" : eventId.toString(), event == null ? "" : event.name,
-                faction, general, asset, eventId);
+                orderId, order == null ? null : order.kind, asset, eventId);
     }
-    private String key(UUID item, UUID user, UUID event, UUID faction, UUID general, UUID asset) {
-        return item + ":" + user + ":" + event + ":" + faction + ":" + general + ":" + asset;
+    private String key(UUID item, UUID user, UUID event, UUID order, UUID asset) {
+        return item + ":" + user + ":" + event + ":" + order + ":" + asset;
     }
     private Balance copy(Balance r, int quantity, int pending) {
         return new Balance(r.key(), r.itemId(), r.name(), r.category(), r.storageLocation(), quantity, pending,
-                r.personId(), r.person(), r.eventKey(), r.event(), r.factionOrderId(), r.generalOrderId(), r.assetInstanceId(), r.eventOccurrenceId());
+                r.personId(), r.person(), r.eventKey(), r.event(), r.orderId(), r.orderKind(), r.assetInstanceId(), r.eventOccurrenceId());
     }
 }

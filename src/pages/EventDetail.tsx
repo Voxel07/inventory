@@ -1,4 +1,5 @@
 import { Button, IconButton } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { useAuth } from '../hooks/useAuth';
 import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
@@ -147,7 +148,7 @@ export function EventDetail() {
       </Button>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
-        <Box>
+        <Box sx={{ minWidth: { sm: 200 }, flex: { sm: '1 1 0' } }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="h4">{report.name || (report.eventType === 'LS' ? 'LightSim' : report.eventType)}</Typography>
             <Chip
@@ -158,25 +159,19 @@ export function EventDetail() {
           </Stack>
           <Typography color="text.secondary">{formatDate(report.eventDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}</Typography>
         </Box>
-        {!editing ? (
-          <Button title={translate('pages.eventDetail.correctTheItemsAndQuantitiesOfThisEvent')} disabled={!canEdit} variant="contained" startIcon={<EditIcon />} onClick={() => setEditing(true)} sx={{ alignSelf: { sm: 'flex-start' } }}>
-            {t('pages.eventDetail.editItems')}
-          </Button>
-        ) : (
-          <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' } }}>
-            <Button title={translate('common.discardChangesAndClose')} startIcon={<CloseIcon />} onClick={cancelEditing}>{t('common.cancel')}</Button>
-            <Button title={translate('pages.eventDetail.saveChangesToThisEvent')} variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={updateReport.isPending}>
-              {t('pages.eventDetail.saveChanges')}
-            </Button>
-          </Stack>
-        )}
+        <ActionBar sx={{ alignSelf: { sm: 'flex-start' } }} actions={editing ? [
+          { key: 'cancel', label: t('common.cancel'), title: translate('common.discardChangesAndClose'), icon: <CloseIcon />, variant: 'text', onClick: cancelEditing },
+          { key: 'save', label: t('pages.eventDetail.saveChanges'), title: translate('pages.eventDetail.saveChangesToThisEvent'), icon: <SaveIcon />,
+            variant: 'contained', pinned: true, disabled: updateReport.isPending, onClick: save },
+        ] : [
+          { key: 'attendees', label: t('pages.eventDetail.attendeesFoodStamps'), onClick: () => navigate(`/events/attendees?eventId=${report.id}`) },
+          { key: 'timeline', label: t('common.eventTimeline'), onClick: () => navigate(`/events/timeline?eventId=${report.id}`) },
+          { key: 'edit', label: t('pages.eventDetail.editItems'), title: translate('pages.eventDetail.correctTheItemsAndQuantitiesOfThisEvent'), icon: <EditIcon />,
+            variant: 'contained', pinned: true, disabled: !canEdit, onClick: () => setEditing(true) },
+        ]} />
       </Stack>
 
       {!editing && <>
-        <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', mb: 3 }}>
-          <Button variant="outlined" onClick={() => navigate(`/events/attendees?eventId=${report.id}`)}>{t('pages.eventDetail.attendeesFoodStamps')}</Button>
-          <Button variant="outlined" onClick={() => navigate(`/events/timeline?eventId=${report.id}`)}>{t('common.eventTimeline')}</Button>
-        </Stack>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
           <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
           <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>

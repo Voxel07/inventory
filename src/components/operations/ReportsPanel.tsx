@@ -1,5 +1,5 @@
 import { formatDateTime } from '../../utils/dateFormat';
-import { Button } from '../shared/ActionButtons';
+import { ActionBar } from '../shared/ActionBar';
 import { useState } from 'react';
 import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
 import { DateRangeField, TextField as MuiTextField } from '../shared/DateTextField';
@@ -70,7 +70,16 @@ export function ReportsPanel() {
     <TextField select label={t('operations.reportsPanel.report')} value={name} onChange={(e) => { setName(e.target.value); setFilters({}); setPage(0); }}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{t(label)}</MenuItem>)}</TextField>
     <Typography variant="body2">{report.data?.definition ?? definitions.data?.[name]}</Typography>
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('operations.reportsPanel.generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('operations.reportsPanel.sourcesOrTimeReferenceChangedRebuildRequired') : t('operations.reportsPanel.asOfTheLastRebuild')}</> : t('operations.reportsPanel.noReportBuiltYetRebuildFromSourceRecordsNow')}</Alert>
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button title={translate('operations.reportsPanel.recalculateThisReportUsingCurrentData')} variant="contained" disabled={command.isPending} onClick={() => command.mutate(() => reportApi.rebuild(name))}>{t('operations.reportsPanel.rebuildReport')}</Button><Button title={translate('operations.reportsPanel.downloadTheFilteredReportDataAsCSV')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('csv'); }}>{t('operations.reportsPanel.exportFilteredCSV')}</Button><Button title={translate('operations.reportsPanel.downloadTheFilteredReportAsPDF')} disabled={exporting || !report.data?.generatedAt} onClick={() => { void download('pdf'); }}>{t('operations.reportsPanel.exportFilteredPDF')}</Button><Button title={translate('operations.reportsPanel.resetAllReportFilters')} onClick={() => { setFilters({}); setPage(0); }}>{t('operations.reportsPanel.resetFilters')}</Button></Stack>
+    <ActionBar align="start" actions={[
+      { key: 'rebuild', label: t('operations.reportsPanel.rebuildReport'), title: translate('operations.reportsPanel.recalculateThisReportUsingCurrentData'),
+        variant: 'contained', pinned: true, disabled: command.isPending, onClick: () => command.mutate(() => reportApi.rebuild(name)) },
+      { key: 'csv', label: t('operations.reportsPanel.exportFilteredCSV'), title: translate('operations.reportsPanel.downloadTheFilteredReportDataAsCSV'),
+        variant: 'text', disabled: exporting || !report.data?.generatedAt, onClick: () => { void download('csv'); } },
+      { key: 'pdf', label: t('operations.reportsPanel.exportFilteredPDF'), title: translate('operations.reportsPanel.downloadTheFilteredReportAsPDF'),
+        variant: 'text', disabled: exporting || !report.data?.generatedAt, onClick: () => { void download('pdf'); } },
+      { key: 'reset', label: t('operations.reportsPanel.resetFilters'), title: translate('operations.reportsPanel.resetAllReportFilters'),
+        variant: 'text', onClick: () => { setFilters({}); setPage(0); } },
+    ]} />
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
       <ItemAutocomplete label={t('operations.reportsPanel.itemEmptyAll')} value={filters.itemId} onChange={(item) => change('itemId', item?.id ?? '')} />
       {['events', 'returns', 'purchases', 'movements'].includes(name) && <TextField select fullWidth label={t('operations.reportsPanel.event')} value={filters.eventId ?? ''} onChange={(e) => change('eventId', e.target.value)}><MenuItem value="">{t('common.all')}</MenuItem>{events.data?.map((event) => <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>)}</TextField>}

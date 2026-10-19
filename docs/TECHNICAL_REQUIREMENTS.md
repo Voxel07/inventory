@@ -35,6 +35,7 @@ Source: [package.json](../package.json), [Vite configuration](../vite.config.ts)
 | UI state | Zustand `^5.0.15` | Keep UI preferences separate from server state |
 | Routing | React Router DOM `^7.18.4`, BrowserRouter, lazy Routes | Data router / loaders remain planned, PLAN-08 |
 | Localization | i18next `^26.4.4`, German and English | Key-only DE/EN translations, typed keys and catalog validation; PLAN-09 complete |
+| Dates | MUI X Date Pickers `^9.15.0`, Day.js `^1.11.23` | Localized DD-MM-YYYY / 24-hour pickers through one `LocalizationProvider` |
 | Maps | Leaflet `^1.9.4`, React Leaflet `^5.0.0` | Location hierarchy, geographic position and overlays |
 | Charts | Recharts `^3.10.1` | Dashboard / reporting presentation |
 | Labels and exports | qrcode `^1.5.4`, jsPDF `^4.2.1` | Generate labels and PDFs; import heavy exports on demand |
@@ -59,7 +60,7 @@ store/       Zustand UI state
 i18n/        language resources
 ```
 
-Pages delegate transport to services. Stock displayed by the client comes from the API projection. UI access checks improve navigation; backend checks authorize commands. `useProgressiveList` currently fetches successive pages automatically, so backend paging does not yet make every screen server-paged (PLAN-03).
+Pages delegate transport to services. Stock displayed by the client comes from the API projection. UI access checks improve navigation; backend checks authorize commands. `usePagedList` loads the first server page and further pages only on demand; `useCompleteList` is reserved for bounded sets such as one item's positions, assets or lots (PLAN-03).
 
 ## 3. Backend framework requirements
 
@@ -77,7 +78,7 @@ Source: [Maven project](../backend/pom.xml), [runtime configuration](../backend/
 | Reference caching | Quarkus Cache / Caffeine, committed revision keys |
 | Cluster support | Quarkus Redis client communicating with Valkey |
 | Media | Quarkus Amazon S3, AWS SDK URL connection client, or local filesystem |
-| AI integration | `quarkus-mcp-server-http:2.0.1`; 27 tools (including shared order commands), 3 resources, 2 prompts |
+| AI integration | `quarkus-mcp-server-http:2.0.1`; 28 tools (including shared order commands), 3 resources, 2 prompts |
 | Verification libraries | Quarkus JUnit and REST Assured; configured tests use PostgreSQL |
 
 H2 is a test-scoped dependency only, used by `TelemetryExportTest`; every profile (dev, test, prod) uses PostgreSQL. There is no integration-test (Failsafe) suite; the `native` profile only builds the native image.
@@ -103,7 +104,7 @@ The outbox is written in the business transaction. After commit, dispatch is wok
 
 SSE sends change families and catalog resource kind, without IDs, actors, quantities or event payloads. The stream ends at token expiry. The frontend coalesces invalidations for 300 ms; reconnect and `access.changed` reset private inventory queries and private media references. SSE is a refresh signal, not a durable client ledger.
 
-Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `loan.*`, `equipment.*`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
+Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `vendor.*`, `vendor_document.*`, `warehouse.*`, `location.*`, `item.*`, `inventory_lot.*`, `maintenance_schedule.*`, `member_request.*`, `planning.*`, `runtime.*`, `loan.*`, `equipment.*`, `event_logistics.changed`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
 
 ## 5. Identity and privacy requirements
 
@@ -113,7 +114,7 @@ Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `cus
 - Production startup rejects development header authentication or disabled OIDC. Production `/api/*`, `/mcp` and `/mcp/*` require authentication.
 - Private policy owners and the inventory admin have implicit access; other roles require resource-specific grants. View, edit, share management and stock operation rights differ. Private location data may remain restricted even when the item is visible.
 - Grants are inherited down private location trees: `inventory_access_links` materializes, per private item or location, the private locations it is stored in (home location `Item.storageLocation` and its ancestors). Grants and the owner of a linked location count as grants on the resource in `InventoryAccess.allows`, the `InventoryAccessOrm.visible` predicate and the sharing projection; share management is never inherited. `InventoryAccessInheritance` refreshes links on item/location create and move; edits lock the ancestor policies. Children of private locations must be private.
-- Tenants see no public resource: the visibility predicate requires `:accessPublic` for rows without a policy, the reference graph treats public roots as denied, entity lookups of public items/locations/assemblies return 404, and `TenantScopeFilter` allows only private-inventory APIs (items, locations, assemblies, access, notifications, media, codes, item-scoped history). MCP requires read-only or higher.
+- Tenants see no public resource: the visibility predicate requires `:accessPublic` for rows without a policy, the reference graph treats public roots as denied, entity lookups of public items/locations/assemblies return 404, and `TenantScopeFilter` allows only private-inventory APIs: items, asset codes, locations, assemblies, access, notifications, media, action inbox, the SSE stream, event-type codes (for item event tags), positions/assets/lots and their lot maintenance, plus item-scoped transaction/damage/maintenance history and stock bookings on own items. The services scope each of these to the tenant's own or granted resources. MCP requires read-only or higher.
 - An owner may offer a private item for use (`inventory_access_policies.public_use`): organization members may view it. Commands annotated `@PrivateInventoryCommand(usage = true)` (orders, pickup and returns, own returns, member requests, damage reports) accept view rights on such items where they would otherwise need edit rights; catalog, stock and lifecycle commands do not. `ItemRequestNotifier` sends the owner one `item_requested` notification per order or request (`notifications.dedupe_key`), without order IDs.
 - Permissions are checked again on replay. Private writes and uploads remain online-only. Private projections are excluded from durable offline catalog caching.
 - API/media responses use private/no-store controls. Policy edits use revisions and audited before/after evidence. The current response/reference-graph privacy mechanism remains alongside query scoping; PLAN-01 tracks its planned simplification.
@@ -128,6 +129,7 @@ Runtime browser settings are supplied through `config.js`; server settings use e
 | Deployment | Checked-in composition | Acceptance boundary |
 |---|---|---|
 | Single node | PostgreSQL 18, one API, nginx PWA; memory events/rate limiting; local media or Garage 2.3.0 | Default application topology; operator setup and recovery remain environment work |
+| Native API image | `backend/Dockerfile.native` (published by CI); local overlay `docker-compose.native.yml` with `-Xmx512m -Xmn256m` and a 768m limit | `docker compose up --build` alone builds the JVM image (`backend/Dockerfile`); see [native memory benchmark](NATIVE_MEMORY_BENCHMARK.md) |
 | Cluster | Two API replicas, shared PostgreSQL, Garage and Valkey 8; Redis protocol for events/rate limiting | One Docker network is described; separate hosts need explicit reachable endpoints |
 | Storage node | Traefik 3.7.12, Garage, logical PostgreSQL replica, monitoring | Logical publication/subscription and off-site backup are operator procedures |
 
@@ -137,20 +139,20 @@ nginx generates CSP connect origins from configured API/OIDC URLs and enables sa
 
 ## 7. Observability
 
-The API exports OpenTelemetry **traces, metrics and correlated application logs** to [OpenObserve](https://openobserve.ai/) when `OTEL_SDK_DISABLED=false`. All three signals and JDBC instrumentation are built into the image; the SDK remains disabled by default until ingestion credentials and a reachable endpoint are configured. Application logs default to DEBUG even when export is off.
+The API exports OpenTelemetry **traces, metrics and correlated application logs** to [OpenObserve](https://openobserve.ai/) when `OTEL_SDK_DISABLED=false`. All three signals are built into the image; per-statement JDBC tracing is off (`quarkus.datasource.jdbc.telemetry=false`), while connection-pool metrics stay on. The SDK remains disabled by default until ingestion credentials and a reachable endpoint are configured. Application logs default to INFO in production (`INVENTORY_LOG_LEVEL`) and DEBUG in dev.
 
 ### What is exported
 
 | Signal | Status | Notes |
 |---|---|---|
-| Traces | Exported when enabled | Full parent-aware sampling; HTTP, Redis, JDBC/connection acquisition, sync commands, MCP tools, media and outbox dispatch/delivery spans |
+| Traces | Exported when enabled | Full parent-aware sampling; HTTP, Redis, sync commands, MCP tools, media and outbox dispatch/delivery spans (no per-statement JDBC spans) |
 | Metrics | Exported when enabled | Native HTTP/JVM metrics plus application operations, DB pool, sync, outbox, Redis/rate limits, media and SSE; default export every 15 seconds |
-| Logs | Exported when enabled | Application DEBUG logs and stack traces with trace/span correlation; log stream `inventory_backend` |
+| Logs | Exported when enabled | Application logs at `INVENTORY_LOG_LEVEL` / `OTEL_LOGS_LEVEL` (default INFO) and stack traces with trace/span correlation; log stream `inventory_backend` |
 | Browser RUM | Not used | The PWA does not ship the OpenObserve RUM SDK; browser traces can send `traceparent`/`tracestate` to the API |
 
 Both API nodes retain `service.name=ash-inventory-api`. Resources also include `service.namespace=ash`, `service.version` from `APP_VERSION`, `deployment.environment.name`, and a process UUID for `service.instance.id`. Optional explicit instance IDs must differ between replicas. REST responses expose `X-Trace-Id` while tracing is active.
 
-Successful operations produce debug summaries with operation, outcome, backend and duration. REST summaries use route templates and report time to response headers; native HTTP duration measures request completion. SSE connections can last an hour and should be excluded from ordinary request latency panels. Request bodies, query strings, tokens, tool arguments and media filenames are not explicitly logged. Review exception messages and JDBC statements before granting broad telemetry access.
+Successful operations produce DEBUG summaries with operation, outcome, backend and duration (visible with `INVENTORY_LOG_LEVEL=DEBUG`). REST summaries use route templates and report time to response headers; native HTTP duration measures request completion. SSE connections can last an hour and should be excluded from ordinary request latency panels. Request bodies, query strings, tokens, tool arguments and media filenames are not explicitly logged. Review exception messages and JDBC statements before granting broad telemetry access.
 
 Outbox rows retain producer trace context in `trace_context`; delivery restores it on every attempt, including after process restart or delivery on another node. Committed business-event counters run after transaction commit. Sync metrics distinguish new commands from idempotent replays, and unexpected sync exceptions receive ERROR logs/spans even if the batch HTTP response succeeds.
 
@@ -207,7 +209,7 @@ No port is published; the UI and ingestion API (port 5080) are reached through t
    OTEL_EXPORTER_OTLP_TOKEN=<base64 email:password>
    ```
 
-4. Deploy the updated backend image. Traces appear under **Traces** with service `ash-inventory-api`, application logs under **Logs → inventory_backend**, and measurements under **Metrics**. Metrics/logs/JDBC enablement is fixed into the image at build time. The directly edited SQL baseline includes the outbox trace-context column; use a freshly recreated disposable database for this baseline.
+4. Deploy the updated backend image. Traces appear under **Traces** with service `ash-inventory-api`, application logs under **Logs → inventory_backend**, and measurements under **Metrics**. Metrics/logs enablement is fixed into the image at build time. The directly edited SQL baseline includes the outbox trace-context column; use a freshly recreated disposable database for this baseline.
 
 The exporter uses OTLP over HTTP/protobuf (`/v1/traces`, `/v1/metrics` or `/v1/logs` is appended to the organization base endpoint); OpenObserve's gRPC port is not used. Export-enabled startup rejects a missing/malformed ingestion token or an invalid organization endpoint without echoing credentials. Set `INVENTORY_LOG_LEVEL` and `OTEL_LOGS_LEVEL` to adjust application and export verbosity; `OTEL_LOG_STREAM`, `OTEL_METRIC_EXPORT_INTERVAL` and `OTEL_OUTBOX_SNAPSHOT_EVERY` control routing and intervals. If nothing arrives, set `OTEL_LOG_LEVEL=DEBUG` and check the API log for exporter `401` (wrong token) or `404` (wrong organization path).
 

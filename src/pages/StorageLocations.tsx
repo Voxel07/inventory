@@ -1,5 +1,6 @@
 import { InventorySharing } from '../components/items/InventorySharing';
 import { Button, ListItemButton, IconButton, Tab } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { Tabs } from '@mui/material';
 import { StorageResponsibilities } from '../components/operations/StorageResponsibilities';
 import { useObjectUrl } from '../hooks/useObjectUrl';
@@ -22,6 +23,7 @@ import { useState } from 'react';
 import { Alert, MenuItem, Checkbox, FormControlLabel, Box, Typography, Paper, List, ListItemText, Grid, TextField, DialogTitle, DialogContent, DialogActions, Chip, Stack, Divider, useTheme, useMediaQuery } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RoomIcon from '@mui/icons-material/Room';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -342,24 +344,14 @@ export function StorageLocations() {
                                             <Typography variant="subtitle2" color="text.secondary" className="mono">{activeLocation.fullCode}</Typography>
                                         </Box>
                                     </Box>
-                                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
-                                        {canCreate && activeLocation.active && <Button size="small" variant="outlined" startIcon={<AddIcon />} title={t('pages.storageLocations.addALocationInsideThisOne')}
-                                            onClick={() => handleOpenCreate(activeLocation)}>
-                                            {t('pages.storageLocations.addSubLocation')}
-                                        </Button>}
-                                        <Button size="small" title={t('pages.storageLocations.openLabelsScanningAndTransfersForThisLocation')}
-                                            onClick={() => navigate(`/locations/${activeLocation.id}`)}>
-                                            {t('pages.storageLocations.labelsScanTransfer')}
-                                        </Button>
-                                        <Button title={translate('pages.storageLocations.editThisStorageLocationSDetails')}
-                                            size="small"
-                                            variant="outlined"
-                                            startIcon={<EditIcon />}
-                                            disabled={!(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit)} onClick={(e) => handleOpenEdit(activeLocation, e)}
-                                        >
-                                            {t('common.edit')}
-                                        </Button>
-                                    </Stack>
+                                    <ActionBar size="small" sx={{ flex: '1 0 auto' }} actions={[
+                                        canCreate && activeLocation.active && { key: 'add', label: t('pages.storageLocations.addSubLocation'), title: t('pages.storageLocations.addALocationInsideThisOne'),
+                                            icon: <AddIcon />, onClick: () => handleOpenCreate(activeLocation) },
+                                        { key: 'labels', label: t('pages.storageLocations.labelsScanTransfer'), title: t('pages.storageLocations.openLabelsScanningAndTransfersForThisLocation'),
+                                            icon: <QrCode2Icon />, variant: 'text', onClick: () => navigate(`/locations/${activeLocation.id}`) },
+                                        { key: 'edit', label: t('common.edit'), title: translate('pages.storageLocations.editThisStorageLocationSDetails'), icon: <EditIcon />, pinned: true,
+                                            disabled: !(activeLocation.access?.privateResource ? activeLocation.access.canEdit : canEdit), onClick: () => handleOpenEdit(activeLocation) },
+                                    ]} />
                                 </Box>
 
                                 {activeLocation.description && (

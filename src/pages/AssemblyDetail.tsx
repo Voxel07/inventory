@@ -2,6 +2,7 @@ import { formatDate } from '../utils/dateFormat';
 import { formatMoney } from '../utils/money';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { Button } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { useEventReports } from '../hooks/useEvents';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
@@ -240,31 +241,16 @@ export function AssemblyDetail() {
                     icon={<ArrowBackIcon />}
                     onClick={() => navigate('/assemblies')}
                 />
-                <Typography variant="h4" sx={{ flexGrow: 1 }}>
+                <Typography variant="h4" sx={{ flex: '1 1 200px', minWidth: 0, overflowWrap: 'anywhere' }}>
                     {assembly.name}
                 </Typography>
-                {canEdit && <TooltipButton
-                    variant="icon"
-                    tooltipText={t('pages.assemblyDetail.editAssemblyDetails')}
-                    icon={<EditIcon />}
-                    onClick={() => setEditOpen(true)}
-                />}
-                {canTransact && <TooltipButton
-                    tooltipText={t('pages.assemblyDetail.reportDamageToThisAssembly')}
-                    icon={<ReportProblemOutlinedIcon />}
-                    label={t('common.reportDamage')}
-                    variant="outlined"
-                    color="error"
-                    onClick={() => setDamageOpen(true)}
-                />}
-                {canTransact && <TooltipButton
-                    tooltipText={t('pages.assemblyDetail.checkOutAllItemsInThisAssembly')}
-                    icon={<ShoppingCartCheckoutIcon />}
-                    label={t('enum.action.checkout')}
-                    variant="contained"
-                    onClick={() => setCheckoutOpen(true)}
-                    disabled={!canCheckout}
-                />}
+                <ActionBar sx={{ flex: '1 0 auto' }} actions={[
+                    canEdit && { key: 'edit', label: t('common.edit'), title: t('pages.assemblyDetail.editAssemblyDetails'), icon: <EditIcon />, onClick: () => setEditOpen(true) },
+                    canTransact && { key: 'damage', label: t('common.reportDamage'), title: t('pages.assemblyDetail.reportDamageToThisAssembly'), icon: <ReportProblemOutlinedIcon />,
+                        color: 'error', onClick: () => setDamageOpen(true) },
+                    canTransact && { key: 'checkout', label: t('enum.action.checkout'), title: t('pages.assemblyDetail.checkOutAllItemsInThisAssembly'), icon: <ShoppingCartCheckoutIcon />,
+                        variant: 'contained', pinned: true, disabled: !canCheckout, onClick: () => setCheckoutOpen(true) },
+                ]} />
             </Box>
 
             <Paper sx={{ p: { xs: 1.5, md: 2 }, mb: 3, overflow: 'hidden' }}>

@@ -64,9 +64,7 @@ public class CustodyOrm {
     }
     public List<Object[]> pending(UUID actor) {
         var query = em.createQuery("""
-                select r.item.id, r.returnedFor.id, e.id,
-                    case when o.kind = faction then o.id else null end,
-                    case when o.kind = general then o.id else null end, a.id, sum(r.quantity)
+                select r.item.id, r.returnedFor.id, e.id, o.id, o.kind, a.id, sum(r.quantity)
                 from ReturnSubmission r left join r.eventOccurrence e left join r.order o left join r.assetInstance a where r.status = pending
                 """ + (actor == null ? "" : " and r.returnedFor.id = :actor")
                 + " group by r.item.id, r.returnedFor.id, e.id, o.kind, o.id, a.id", Object[].class);

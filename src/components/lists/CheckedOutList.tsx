@@ -12,6 +12,7 @@ import type { Assembly, Item } from '../../types';
 import { translate, useT } from '../../utils/naming';
 import { ListPagination } from '../shared/ListPagination';
 import { useClientPagination } from '../../hooks/useClientPagination';
+import { factionOrderOf } from '../../utils/custody';
 
 interface Props {
   rows: CheckedOutRow[];
@@ -28,7 +29,7 @@ interface Props {
 
 interface AssemblyGroup {
   assembly: Assembly;
-  factionOrderId: string;
+  orderId: string;
   rows: CheckedOutRow[];
 }
 
@@ -56,22 +57,23 @@ export function CheckedOutList({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const { pageItems: pageRows, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(rows);
 
-  // Build assembly groups: group rows that share a factionOrderId and belong to an assembly
+  // Build assembly groups: group rows that share a faction order and belong to an assembly
   const { groups, ungroupedRows } = (() => {
     if (!assemblies?.length) return { groups: [], ungroupedRows: pageRows };
-    // For each factionOrderId, figure out which assemblies are represented
+    // For each faction order, figure out which assemblies are represented
     const byOrder = new Map<string, CheckedOutRow[]>();
     for (const row of pageRows) {
-      if (!row.factionOrderId) continue;
-      const existing = byOrder.get(row.factionOrderId) ?? [];
+      const orderId = factionOrderOf(row);
+      if (!orderId) continue;
+      const existing = byOrder.get(orderId) ?? [];
       existing.push(row);
-      byOrder.set(row.factionOrderId, existing);
+      byOrder.set(orderId, existing);
     }
 
     const groupList: AssemblyGroup[] = [];
     const groupedRowKeys = new Set<string>();
 
-    for (const [factionOrderId, orderRows] of byOrder.entries()) {
+    for (const [orderId, orderRows] of byOrder.entries()) {
       const orderItemIds = new Set(orderRows.map((r) => r.itemId));
       for (const assembly of assemblies) {
         const componentIds = Object.keys(assembly.itemQuantities ?? {});
@@ -80,7 +82,7 @@ export function CheckedOutList({
         if (matchingRows.length < 2) continue;
         // Skip if the assembly has very few components (avoid over-grouping 1-item assemblies)
         if (componentIds.length < 2) continue;
-        groupList.push({ assembly, factionOrderId, rows: matchingRows });
+        groupList.push({ assembly, orderId, rows: matchingRows });
         for (const r of matchingRows) groupedRowKeys.add(r.key);
         // Only use each assembly once per order
         break;
@@ -117,7 +119,7 @@ export function CheckedOutList({
       <>
       <Stack spacing={1.25}>
         {groups.map((group) => {
-          const groupKey = `${group.assembly.id}:${group.factionOrderId}`;
+          const groupKey = `${group.assembly.id}:${group.orderId}`;
           const isExpanded = expandedGroups[groupKey] ?? false;
           return (
             <Card
@@ -180,7 +182,7 @@ export function CheckedOutList({
         </TableHead>
         <TableBody>
           {groups.map((group) => {
-            const groupKey = `${group.assembly.id}:${group.factionOrderId}`;
+            const groupKey = `${group.assembly.id}:${group.orderId}`;
             const isExpanded = expandedGroups[groupKey] ?? true;
             return (
               <Fragment key={groupKey}>
@@ -194,10 +196,10 @@ export function CheckedOutList({
                       <Typography sx={{ fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                         {group.assembly.name}
                       </Typography>
-                      {group.rows[0]?.factionOrderId && (
+                      {factionOrderOf(group.rows[0]) && (
                         <Chip title={translate('lists.checkedOutList.openTheRelatedFactionOrder')}
                           component={Link}
-                          to={`/orders/faction/${group.rows[0].factionOrderId}`}
+                          to={`/orders/faction/${group.orderId}`}
                           clickable
                           size="small"
                           color="primary"
@@ -272,8 +274,8 @@ export function CheckedOutList({
         <TableCell>{row.storageLocation}</TableCell>
         {showPerson && <TableCell>{row.person}</TableCell>}
         <TableCell>
-          {row.factionOrderId
-            ? <Chip component={Link} to={`/orders/faction/${row.factionOrderId}`} clickable size="small" variant="outlined" color="primary" label={row.event} />
+          {factionOrderOf(row)
+            ? <Chip component={Link} to={`/orders/faction/${factionOrderOf(row)}`} clickable size="small" variant="outlined" color="primary" label={row.event} />
             : row.event}
         </TableCell>
         <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{row.checkedOut}{!!row.pendingQuantity && <Typography variant="caption" sx={{ display: 'block' }}>{t('lists.checkedOutList.pendingInspection')}: {row.pendingQuantity}</Typography>}</TableCell>

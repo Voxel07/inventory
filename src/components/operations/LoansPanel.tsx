@@ -28,13 +28,14 @@ export function LoansPanel() {
     <Fields fields={[{ key: 'itemId', label: t('common.item'), options: lookup.items.map(i => ({ value: i.id, label: i.name })) }]} values={{ itemId }} onChange={v => setItemId(String(v.itemId))} />
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button title={translate('operations.loansPanel.createANewLoanArrangement')} disabled={!itemId || !profile.data} onClick={() => setCreate(true)}>{t('operations.loansPanel.newArrangement')}</Button>{itemId && <Button title={translate('operations.loansPanel.openOwnershipDetailsAndAvailabilityCommitments')} component={Link} to={`/items/${itemId}`}>{t('operations.loansPanel.editOwnershipCommitment')}</Button>}<Button title={translate('operations.loansPanel.openTheTransportAndTransferOverview')} component={Link} to="/operations?tab=transfers">{t('operations.loansPanel.recordTransport')}</Button></Stack>
     {(loans.isLoading || profile.isLoading) && <LinearProgress />}{(loans.error || profile.error || transfers.error || lookup.error) && <Alert severity="error">{(loans.error || profile.error || transfers.error || lookup.error)?.message}</Alert>}
-    {loans.data?.map(l => <OperationListEntry key={l.id} actions={<>       {!['returned', 'cancelled'].includes(l.status) && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        {l.collected < l.quantity && <Button title={translate('operations.loansPanel.recordCollectionAndHandoverOfTheLoan')} onClick={() => setAction({ loan: l, type: 'collect' })}>{t('operations.loansPanel.recordCollection')}</Button>}
-        {l.returned < l.collected && <Button title={translate('operations.loansPanel.recordReturnToTheProvider')} onClick={() => setAction({ loan: l, type: 'return' })}>{t('operations.loansPanel.recordProviderReturn')}</Button>}
-        <Button title={translate('operations.loansPanel.extendTheLoanPeriod')} onClick={() => setAction({ loan: l, type: 'extend' })}>{t('operations.loansPanel.extend')}</Button>
-        {l.collected === l.returned && <Button title={translate('operations.loansPanel.openTheItemToCancelItsCommitment')} component={Link} to={`/items/${l.itemId}`}>{t('operations.loansPanel.cancelCommitment')}</Button>}
-      </Stack>}
- </>} status={l.status} title={<>{l.item} · {l.provider} · {l.kind === 'rental' ? t('enum.value.rental') : t('operations.loansPanel.borrowing')}</>}><Typography color="text.secondary">{l.contact}</Typography><Typography>{l.terms}</Typography>
+    {loans.data?.map(l => <OperationListEntry key={l.id} actions={['returned', 'cancelled'].includes(l.status) ? undefined : [
+        l.collected < l.quantity && { key: 'collect', label: t('operations.loansPanel.recordCollection'), title: translate('operations.loansPanel.recordCollectionAndHandoverOfTheLoan'),
+          pinned: true, onClick: () => setAction({ loan: l, type: 'collect' }) },
+        l.returned < l.collected && { key: 'return', label: t('operations.loansPanel.recordProviderReturn'), title: translate('operations.loansPanel.recordReturnToTheProvider'),
+          pinned: l.collected >= l.quantity, onClick: () => setAction({ loan: l, type: 'return' }) },
+        { key: 'extend', label: t('operations.loansPanel.extend'), title: translate('operations.loansPanel.extendTheLoanPeriod'), onClick: () => setAction({ loan: l, type: 'extend' }) },
+        l.collected === l.returned && { key: 'cancel', label: t('operations.loansPanel.cancelCommitment'), title: translate('operations.loansPanel.openTheItemToCancelItsCommitment'), to: `/items/${l.itemId}` },
+      ]} status={l.status} title={<>{l.item} · {l.provider} · {l.kind === 'rental' ? t('enum.value.rental') : t('operations.loansPanel.borrowing')}</>}><Typography color="text.secondary">{l.contact}</Typography><Typography>{l.terms}</Typography>
       <Typography>{t('operations.loansPanel.committedCollectedReturned')}: {l.quantity} / {l.collected} / {l.returned}</Typography>
       <Typography>{t('operations.loansPanel.collectionAvailableThroughReturnDue')}: {formatDate(l.collectionDate)} / {formatDate(l.availableUntil)} / {formatDate(l.returnDue)}</Typography>
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('operations.loansPanel.assets')}: {l.assetCodes.join(', ')}</Typography>}

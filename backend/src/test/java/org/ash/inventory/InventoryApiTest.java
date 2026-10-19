@@ -1058,10 +1058,10 @@ class InventoryApiTest {
         request().get("/api/orders/general/" + order + "/handovers").then().statusCode(200)
                 .body("size()", equalTo(1)).body("[0].lines[0].quantity", equalTo(3));
         request().body(Map.of("lines", Map.of(item, Map.of("missing", 2)))).post("/api/orders/general/" + order + "/return").then().statusCode(200);
-        request().get("/api/custody-balances").then().statusCode(200).body("find { it.generalOrderId == '" + order + "' }.checkedOut", equalTo(3));
+        request().get("/api/custody-balances").then().statusCode(200).body("find { it.orderId == '" + order + "' }.checkedOut", equalTo(3));
         request().body(Map.of("lines", Map.of(item, Map.of("returned", 2, "writtenOff", 1, "notes", "Confirmed loss")))).post("/api/orders/general/" + order + "/return").then().statusCode(200).body("status", equalTo("returned"));
         request().get("/api/items/" + item).then().statusCode(200).body("stock.available", equalTo(4)).body("stock.checkedOut", equalTo(0));
-        request().get("/api/custody-balances").then().statusCode(200).body("find { it.generalOrderId == '" + order + "' }", nullValue());
+        request().get("/api/custody-balances").then().statusCode(200).body("find { it.orderId == '" + order + "' }", nullValue());
         request().get("/api/orders/general/" + order + "/reconciliations").then().statusCode(200)
                 .body("outcome", org.hamcrest.Matchers.hasItems("missing", "written_off", "returned_good", "returned_late"));
         request().get("/api/orders/general/" + order).then().statusCode(200)

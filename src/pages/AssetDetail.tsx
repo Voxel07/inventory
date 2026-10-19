@@ -1,4 +1,5 @@
 import { Button } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -153,14 +154,14 @@ export function AssetDetail() {
                     <Typography variant="h4" className="mono" sx={{ overflowWrap: 'anywhere' }}>{asset.assetCode}</Typography>
                     {asset.serialNumber && <Typography color="text.secondary">S/N {asset.serialNumber}</Typography>}
                 </Box>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flex: '1 0 auto', minWidth: 0, maxWidth: '100%' }}>
                     <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
-                    {canEditAsset && <Button title={translate('pages.assetDetail.editAssetInformation')} variant="outlined" startIcon={<EditIcon />} onClick={() => setEditing(assetEditInput(asset))}>
-                        {t('common.edit')}
-                    </Button>}
-                    {canReportDamage && <Button title={translate('pages.assetDetail.reportDamageToThisAsset')} variant="contained" color="error" startIcon={<ReportProblemOutlinedIcon />} onClick={() => setDamageOpen(true)}>
-                        {t('common.reportDamage')}
-                    </Button>}
+                    <ActionBar align="start" actions={[
+                        canEditAsset && { key: 'edit', label: t('common.edit'), title: translate('pages.assetDetail.editAssetInformation'), icon: <EditIcon />,
+                            onClick: () => setEditing(assetEditInput(asset)) },
+                        canReportDamage && { key: 'damage', label: t('common.reportDamage'), title: translate('pages.assetDetail.reportDamageToThisAsset'), icon: <ReportProblemOutlinedIcon />,
+                            variant: 'contained', color: 'error', pinned: true, onClick: () => setDamageOpen(true) },
+                    ]} />
                 </Stack>
             </Box>
 
@@ -170,7 +171,7 @@ export function AssetDetail() {
                     <Stack spacing={1.5} divider={<Divider flexItem />}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow label={t('pages.assetDetail.condition')} value={formatStatus(asset.conditionStatus)} />
-                            {canEditAsset && <Button size="small" title={t('pages.assetDetail.updateCondition')} onClick={() => setAction('condition')}>{t('common.edit')}</Button>}
+                            {canEditAsset && <Button size="small" title={t('pages.assetDetail.updateCondition')} sx={{ flexShrink: 0 }} onClick={() => setAction('condition')}>{t('common.edit')}</Button>}
                         </Box>
                         <InfoRow label={t('pages.assetDetail.manufacturerModel')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
                         <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate ? formatDate(asset.purchaseDate) : '—'} />
@@ -178,14 +179,14 @@ export function AssetDetail() {
                         <InfoRow label={t('items.assetDetailsFields.replacementValue')} value={asset.replacementValue == null ? '—' : formatMoney(asset.replacementValue)} />
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow label={t('enum.value.operating_hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
-                            {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>
+                            {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} sx={{ flexShrink: 0 }} onClick={() => setHoursOpen(true)}>
                                 {t('pages.assetDetail.log')}
                             </Button>}
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
                             <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')}
                                 value={currentLocation ? locationLabel(currentLocation, locations) : asset.currentLocationName || '—'} />
-                            {canEditAsset && <Button size="small" disabled={!movable} title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} onClick={() => setAction('relocate')}>
+                            {canEditAsset && <Button size="small" disabled={!movable} title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} sx={{ flexShrink: 0 }} onClick={() => setAction('relocate')}>
                                 {t('pages.assetDetail.moveAsset')}
                             </Button>}
                         </Box>

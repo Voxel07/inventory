@@ -110,9 +110,6 @@ public class InventoryOperationsService {
             throw ApiException.badRequest("Transaction type " + input.transactionType()
                     + " must be created by its owning inventory workflow");
         }
-        if (input.factionOrderId() != null) {
-            throw ApiException.badRequest("Order-linked stock changes must use the order workflow");
-        }
         if (input.idempotencyKey() != null) {
             requireTransactionAccess(orm.find(Item.class, input.itemId()), input);
             var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
@@ -465,8 +462,8 @@ public class InventoryOperationsService {
         report.severity = input.severity();
         report.safetyImpact = input.safetyImpact();
         report.idempotencyKey = input.idempotencyKey();
-        if (input.factionOrderId() != null)
-            report.order = orm.require(InventoryOrder.class, input.factionOrderId(), "Faction order");
+        if (input.orderId() != null)
+            report.order = orm.require(InventoryOrder.class, input.orderId(), "Order");
         if (input.assetInstanceId() != null) {
             if (report.item == null) throw ApiException.badRequest("An asset can only be reported with its item");
             var asset = orm.findLockedAsset(input.assetInstanceId());

@@ -5,7 +5,7 @@ import type { CsvImportCounts } from '../types/csvImport';
 import { type CsvImportType, type ParsedItemRow, type ParsedAssemblyRow, type ParsedEventReportRow, type ParsedFactionOrderRow, type ParsedGeneralOrderRow, type ParsedReturnRow } from '../types/csvImport';
 import type { Faction, Item, StorageLocation } from '../types';
 import { importCsvFactions } from './csvReferenceImport';
-import { createItem, updateItem, createItemAssets, getAllItemAssets, getItem } from './inventoryService';
+import { getAllItemAssets, getItem, itemBatchErrorIndex, saveItemBatch, ITEM_BATCH_LIMIT, type ItemBatchEntry } from './inventoryService';
 import { createAssembly } from './assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from './eventService';
 import { createFactionOrder, getFactionOrders, getFactionOrder, submitFactionOrder, updateFactionOrder, saveFactionOrderPreparation, markFactionOrderReady, pickUpFactionOrder, returnFactionOrder, closeFactionOrder } from './factionOrderService';
@@ -48,6 +48,9 @@ interface ImportPlan {
   setImportStatusText: (value: string) => void;
   setImportedCounts: (value: CsvImportCounts) => void;
 }
+
+/** Rows per batch request: bounded below the server limit so a chunk stays well inside the request timeout. */
+const ITEM_IMPORT_CHUNK = Math.min(50, ITEM_BATCH_LIMIT);
 
 export function runCsvImport(plan: ImportPlan): Promise<CsvImportResult> {
   return withApiRequestBatch(() => runCsvImportBatch(plan), (seconds) => {
@@ -140,71 +143,46 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     }
 
     if (tabType !== 'assemblies') {
-      let itemIndex = 0;
-      for (const row of itemsToProcess) {
-        itemIndex++;
-        setImportStatusText(t('services.csvImportService.importingItemItemIndexItemsToProcesCountName', { itemIndex: itemIndex, itemsToProcesCount: String(itemsToProcess.length), name: String(row.data.name) }));
-
+      const rowsToSave = itemsToProcess.filter((row) => !row.isExisting || (updateExistingItems && row.existingId));
+      // Rows that match an existing item but are not updated are complete without a request.
+      for (let skipped = itemsToProcess.length - rowsToSave.length; skipped > 0; skipped--) reportCompletedRow();
+      const entryFor = (row: ParsedItemRow): ItemBatchEntry => {
         // Resolve location ID if created on the fly
         let locationId = row.data.storageLocation;
         if (!locationId && row.storageLocationPath) {
           locationId = locCache.get(normalizeLocationRef(row.storageLocationPath.join(' / '))) || '';
         }
+        const assetCodes = row.data.trackingMode === 'serialized' && row.assetCodes?.length ? row.assetCodes : undefined;
+        // Stock is only seeded on creation; explicit asset codes replace the generated SKU-xxx assets.
+        const amount = row.isExisting ? undefined : assetCodes ? 0 : row.data.amount;
+        return { id: row.isExisting ? row.existingId : undefined, item: { ...row.data, storageLocation: locationId, amount }, assetCodes };
+      };
 
-        const hasCustomAssets = row.data.trackingMode === 'serialized' && Boolean(row.assetCodes && row.assetCodes.length > 0);
-        const payload = {
-          ...row.data,
-          storageLocation: locationId,
-          // When serialized and explicit asset codes are provided, start with amount 0 on item creation
-          // so backend does not generate default SKU-xxx assets, then register the explicit codes
-          amount: hasCustomAssets ? 0 : row.data.amount,
-        };
-
-        try {
-          if (row.isExisting && updateExistingItems && row.existingId) {
-            const updated = await updateItem(row.existingId, payload);
-            updatedItems++;
-            createdItemsMap.set(updated.name.toLowerCase().trim(), updated);
-
-            if (hasCustomAssets && row.assetCodes) {
-              const existingAssets = await getAllItemAssets(row.existingId!);
-              for (const code of row.assetCodes) {
-                if (existingAssets.some((asset) => asset.assetCode.toLowerCase() === code.toLowerCase())) continue;
-                try {
-                  await createItemAssets(row.existingId, {
-                    assetCode: code,
-                    currentLocationId: locationId || undefined,
-                  });
-                } catch (assetErr: unknown) {
-                  assertAuthSession(context);
-                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
-                }
-              }
+      for (let from = 0; from < rowsToSave.length; from += ITEM_IMPORT_CHUNK) {
+        let chunk = rowsToSave.slice(from, from + ITEM_IMPORT_CHUNK);
+        setImportStatusText(t('services.csvImportService.importingItemsFromToOfCount', { from: from + 1, to: from + chunk.length, count: rowsToSave.length }));
+        // A rejected row fails its whole chunk; report it and resend the remaining rows.
+        while (chunk.length > 0) {
+          try {
+            const saved = await saveItemBatch(chunk.map(entryFor));
+            assertAuthSession(context);
+            saved.forEach((item, position) => {
+              createdItemsMap.set(item.name.toLowerCase().trim(), item);
+              if (chunk[position].isExisting) updatedItems++;
+              else successItems++;
+              reportCompletedRow();
+            });
+            break;
+          } catch (err: unknown) {
+            assertAuthSession(context);
+            const index = itemBatchErrorIndex(err);
+            const failed = index === undefined || !chunk[index] ? chunk : [chunk[index]];
+            for (const row of failed) {
+              errors.push(`Fehler bei Artikel "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
+              reportCompletedRow();
             }
-          } else if (!row.isExisting) {
-            const created = await createItem(payload);
-            successItems++;
-            createdItemsMap.set(created.name.toLowerCase().trim(), created);
-
-            if (hasCustomAssets && row.assetCodes) {
-              for (const code of row.assetCodes) {
-                try {
-                  await createItemAssets(created.id, {
-                    assetCode: code,
-                    currentLocationId: locationId || undefined,
-                  });
-                } catch (assetErr: unknown) {
-                  assertAuthSession(context);
-                  errors.push(`Fehler beim Erstellen von Asset "${code}" für "${row.data.name}" (Zeile ${row.index}): ${(assetErr as Error).message || assetErr}`);
-                }
-              }
-            }
+            chunk = failed.length === chunk.length ? [] : chunk.filter((_, position) => position !== index);
           }
-        } catch (err: unknown) {
-          assertAuthSession(context);
-          errors.push(`Fehler bei Artikel "${row.data.name}" (Zeile ${row.index}): ${(err as Error).message || err}`);
-        } finally {
-          reportCompletedRow();
         }
       }
     }

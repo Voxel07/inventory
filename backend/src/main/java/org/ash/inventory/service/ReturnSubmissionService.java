@@ -60,8 +60,8 @@ public class ReturnSubmissionService {
 
         var balance = custody.list(false).stream().filter(row -> row.itemId().equals(item.id)
                 && row.personId().equals(returnedFor.id)
-                && java.util.Objects.equals(row.factionOrderId() == null ? row.generalOrderId() : row.factionOrderId(), input.orderId())
-                && (row.factionOrderId() != null || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
+                && java.util.Objects.equals(row.orderId(), input.orderId())
+                && (row.factionOrder() || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
                 && (input.orderId() != null || java.util.Objects.equals(row.eventOccurrenceId(), input.eventOccurrenceId())))
                 .findFirst().orElseThrow(() -> ApiException.conflict("No matching outstanding custody; return order items through their order"));
         if (input.quantity() + balance.pendingQuantity() > balance.checkedOut()) {
@@ -139,8 +139,8 @@ public class ReturnSubmissionService {
                     value.item.id, DomainEnums.TransactionType.checkin, value.quantity,
                     "Return accepted by warehouse", value.notes, null, null,
                     value.assetInstance == null ? null : value.assetInstance.id,
-                    value.returnedFor.id, null, value.id,
-                    value.eventOccurrence == null ? null : value.eventOccurrence.id));
+                    value.returnedFor.id, value.id,
+                    value.eventOccurrence == null ? null : value.eventOccurrence.id, null, null, null));
             if (reading != null) {
                 var asset = value.assetInstance == null ? null : orm.requireLocked(AssetInstance.class, value.assetInstance.id, "Asset instance");
                 runtime.record(value.item, asset, reading, value.eventOccurrence, null, RuntimeEntry.Source.return_check, input == null ? null : input.notes());

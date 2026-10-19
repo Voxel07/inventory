@@ -1,5 +1,6 @@
 import { formatDate } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
+import { ActionBar, type Action } from '../../shared/ActionBar';
 import { useAuth } from '../../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, canTakeOut } from '../../../utils/access';
 import {
@@ -131,60 +132,38 @@ export function OrderDetailHeader({
   }
 
   const usedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status);
-  const workflowActions = <>
-    {canEditOrder && order.status === 'draft' && (
-      <Button title={translate('orders.detail.orderDetailHeader.submitTheRequestAsComplete')}
-        size="small" variant="contained" startIcon={<CheckCircleIcon />} onClick={onSubmit} disabled={isSubmitting}>
-        {t('orders.detail.orderDetailHeader.requestComplete')}
-      </Button>
-    )}
-    {warehouse && order.status === 'submitted' && (
-      <Button title={translate('orders.detail.orderDetailHeader.startPreparingThisOrderList')}
-        size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={onStartPreparation} disabled={isStartingPreparation}>
-        {t('orders.detail.orderDetailHeader.startPreparation')}
-      </Button>
-    )}
-    {warehouse && order.status === 'preparing' && (
-      <>
-        <Button title={translate('orders.detail.orderDetailHeader.fillPreparedQuantitiesUsingAvailableStock')}
-          size="small" variant="outlined" startIcon={<InventoryIcon />} onClick={onFillAvailable}>
-          {t('orders.detail.orderDetailHeader.fillAvailable')}
-        </Button>
-        <Button title={translate('orders.detail.orderDetailHeader.saveThePreparedQuantities')}
-          size="small" variant="contained" startIcon={<SaveIcon />} onClick={onSavePrepared} disabled={isSavingPreparation}>
-          {t('common.save')}
-        </Button>
-        <Button title={translate('orders.detail.orderDetailHeader.chooseAPickupLocationAndMarkThisListReady')}
-          size="small" variant="contained" color="success" startIcon={<CheckCircleIcon />} disabled={!preparationComplete} onClick={onMarkReady}>
-          {t('orders.detail.orderDetailHeader.markReady')}
-        </Button>
-      </>
-    )}
-    {takeout && order.status === 'ready' && (
-      <>
-        <Button title={translate('orders.detail.orderDetailHeader.reopenThisListForPreparation')}
-          size="small" variant="outlined" startIcon={<ReplayIcon />} onClick={onReopenPreparation} disabled={isReopeningPreparation || !warehouse}>
-          {t('orders.detail.orderDetailHeader.backToPreparation')}
-        </Button>
-        <Button title={translate('orders.detail.orderDetailHeader.recordPickupOfTheCompleteList')}
-          size="small" variant="contained" color="success" startIcon={<LocalShippingIcon />} onClick={onPickUp}>
-          {t('orders.detail.orderDetailHeader.pickUpCompleteList')}
-        </Button>
-      </>
-    )}
-    {custody && ['picked_up', 'partially_returned'].includes(order.status) && (
-      <Button title={translate('orders.detail.orderDetailHeader.reviewReturnsForEachComponent')}
-        size="small" variant="contained" startIcon={<ReplayIcon />} onClick={onOpenReturn}>
-        {t('orders.detail.orderDetailHeader.reconcileComponentReturn')}
-      </Button>
-    )}
-    {canCancel && (
-      <Button title={translate('orders.detail.orderDetailHeader.reviewCancellationOfThisOrderList')}
-        size="small" color="error" startIcon={<CancelIcon />} onClick={onCancel}>
-        {t('orders.detail.orderDetailHeader.cancel')}
-      </Button>
-    )}
-  </>;
+  const workflowActions: (Action | false)[] = [
+    canEditOrder && order.status === 'draft' && {
+      key: 'submit', label: t('orders.detail.orderDetailHeader.requestComplete'), title: translate('orders.detail.orderDetailHeader.submitTheRequestAsComplete'),
+      icon: <CheckCircleIcon />, variant: 'contained', pinned: true, disabled: isSubmitting, onClick: onSubmit,
+    },
+    warehouse && order.status === 'submitted' && {
+      key: 'prepare', label: t('orders.detail.orderDetailHeader.startPreparation'), title: translate('orders.detail.orderDetailHeader.startPreparingThisOrderList'),
+      icon: <PlayArrowIcon />, variant: 'contained', pinned: true, disabled: isStartingPreparation, onClick: onStartPreparation,
+    },
+    ...(warehouse && order.status === 'preparing' ? [
+      { key: 'fill', label: t('orders.detail.orderDetailHeader.fillAvailable'), title: translate('orders.detail.orderDetailHeader.fillPreparedQuantitiesUsingAvailableStock'),
+        icon: <InventoryIcon />, onClick: onFillAvailable },
+      { key: 'save', label: t('common.save'), title: translate('orders.detail.orderDetailHeader.saveThePreparedQuantities'),
+        icon: <SaveIcon />, variant: 'contained', pinned: true, disabled: isSavingPreparation, onClick: onSavePrepared },
+      { key: 'ready', label: t('orders.detail.orderDetailHeader.markReady'), title: translate('orders.detail.orderDetailHeader.chooseAPickupLocationAndMarkThisListReady'),
+        icon: <CheckCircleIcon />, variant: 'contained', color: 'success', disabled: !preparationComplete, onClick: onMarkReady },
+    ] satisfies Action[] : []),
+    ...(takeout && order.status === 'ready' ? [
+      { key: 'reopen', label: t('orders.detail.orderDetailHeader.backToPreparation'), title: translate('orders.detail.orderDetailHeader.reopenThisListForPreparation'),
+        icon: <ReplayIcon />, disabled: isReopeningPreparation || !warehouse, onClick: onReopenPreparation },
+      { key: 'pickup', label: t('orders.detail.orderDetailHeader.pickUpCompleteList'), title: translate('orders.detail.orderDetailHeader.recordPickupOfTheCompleteList'),
+        icon: <LocalShippingIcon />, variant: 'contained', color: 'success', pinned: true, onClick: onPickUp },
+    ] satisfies Action[] : []),
+    custody && ['picked_up', 'partially_returned'].includes(order.status) && {
+      key: 'return', label: t('orders.detail.orderDetailHeader.reconcileComponentReturn'), title: translate('orders.detail.orderDetailHeader.reviewReturnsForEachComponent'),
+      icon: <ReplayIcon />, variant: 'contained', pinned: true, onClick: onOpenReturn,
+    },
+    canCancel && {
+      key: 'cancel', label: t('orders.detail.orderDetailHeader.cancel'), title: translate('orders.detail.orderDetailHeader.reviewCancellationOfThisOrderList'),
+      icon: <CancelIcon />, variant: 'text', color: 'error', onClick: onCancel,
+    },
+  ];
 
   return (
     <>
@@ -192,8 +171,9 @@ export function OrderDetailHeader({
         {t('orders.detail.orderDetailHeader.allFactionLists')}
       </Button>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: { md: 'flex-start' } }}>
-        <Box sx={{ minWidth: 0 }}>
+      {/* On phones the document actions collapse next to the title instead of taking a row of their own. */}
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box sx={{ flex: '1 1 0', minWidth: { xs: '55%', md: 200 } }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
             <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
@@ -205,11 +185,11 @@ export function OrderDetailHeader({
             {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('common.pickupLocation')}: {pickupLocationLabel}</>}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
-          <Button title={translate('orders.detail.orderDetailHeader.displayTheQRCodeForThisOrderList')} size="small" variant="outlined" startIcon={<QrCode2Icon />} onClick={onOpenQr}>{t('orders.detail.orderDetailHeader.qR')}</Button>
-          <Button title={translate('orders.detail.orderDetailHeader.downloadThePackingSlipAsPDF')} size="small" variant="outlined" startIcon={<PrintIcon />} onClick={onPrintSlip}>{t('orders.detail.orderDetailHeader.packingSlip')}</Button>
-          {canEditOrderContents && <Button title={translate('orders.detail.orderDetailHeader.editTheItemsAndQuantitiesInThisOrderList')} size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{t('common.edit')}</Button>}
-        </Stack>
+        <ActionBar size="small" align="end" actions={[
+          { key: 'qr', label: t('orders.detail.orderDetailHeader.qR'), title: translate('orders.detail.orderDetailHeader.displayTheQRCodeForThisOrderList'), icon: <QrCode2Icon />, onClick: onOpenQr },
+          { key: 'slip', label: t('orders.detail.orderDetailHeader.packingSlip'), title: translate('orders.detail.orderDetailHeader.downloadThePackingSlipAsPDF'), icon: <PrintIcon />, onClick: onPrintSlip },
+          canEditOrderContents && { key: 'edit', label: t('common.edit'), title: translate('orders.detail.orderDetailHeader.editTheItemsAndQuantitiesInThisOrderList'), icon: <EditIcon />, onClick: onEdit },
+        ]} />
       </Stack>
 
       {/* Progress and the next workflow steps share one panel. */}
@@ -222,7 +202,7 @@ export function OrderDetailHeader({
             <LinearProgress variant="determinate" value={progress} color={preparationComplete ? 'success' : 'primary'}
               aria-label={t('orders.detail.orderDetailHeader.preparationProgress')} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
           </Stack>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>{workflowActions}</Stack>
+          <ActionBar size="small" actions={workflowActions} />
         </Stack>
         {order.notes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
       </Paper>

@@ -51,6 +51,27 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     return result;
   }
 
+  // Lookup collections load once per import run; rows that create or change an entry update the loaded copy.
+  const loaded = new Map<string, Promise<{ id: string }[]>>();
+  function collection<T extends { id: string }>(name: string, load: () => Promise<T[]>): Promise<T[]> {
+    let entry = loaded.get(name);
+    if (!entry) {
+      entry = load();
+      loaded.set(name, entry);
+      entry.catch(() => loaded.delete(name));
+    }
+    return entry as Promise<T[]>;
+  }
+  async function remember<T extends { id: string }>(name: string, value: T): Promise<T> {
+    const entry = loaded.get(name);
+    if (entry) {
+      const list = await entry;
+      const index = list.findIndex((candidate) => candidate.id === value.id);
+      if (index >= 0) list[index] = value; else list.push(value);
+    }
+    return value;
+  }
+
   return async (row: ParsedOperationRow): Promise<void> => {
     assertAuthSession(context);
     const data = resolve(row.data) as Record<string, unknown>;
@@ -79,11 +100,11 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         break;
       }
       case 'repair': {
-        result = await operationsApi.createRepair(repairInput(data));
+        result = await remember('repairs', await operationsApi.createRepair(repairInput(data)));
         break;
       }
       case 'repair_transition': {
-        const repair = (await loadAllPages(operationsApi.repairs)).find((entry) => entry.id === data.repairId);
+        const repair = (await collection('repairs', () => loadAllPages(operationsApi.repairs))).find((entry) => entry.id === data.repairId);
         if (!repair) throw new Error(translate('services.csvOperationImport.repairCaseNotFound'));
         // Re-imports resume the workflow without replaying completed transitions.
         const stages = ['reported', 'triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service'];
@@ -91,27 +112,28 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         const completed = repair.status === target
           || (stages.includes(target) && stages.indexOf(repair.status) > stages.indexOf(target))
           || (repair.status === 'written_off' && ['triaged', 'awaiting_repair', 'in_repair'].includes(target));
-        result = completed ? repair : await operationsApi.repairCommand(repair.id, repairTransitionInput({ ...data, idempotencyKey: key }));
+        result = completed ? repair : await remember('repairs', await operationsApi.repairCommand(repair.id, repairTransitionInput({ ...data, idempotencyKey: key })));
         break;
       }
       case 'lot': {
-        const existing = (await loadAllPages(operationsApi.lots({ itemId }))).find((lot) => lot.lotNumber === data.lotNumber);
-        result = existing ?? await operationsApi.createLot(lotCreateInput(data));
+        const existing = (await collection(`lots:${itemId}`, () => loadAllPages(operationsApi.lots({ itemId })))).find((lot) => lot.lotNumber === data.lotNumber);
+        result = existing ?? await remember(`lots:${itemId}`, await operationsApi.createLot(lotCreateInput(data)));
         break;
       }
       case 'maintenance': {
-        const existing = (await loadAllPages(operationsApi.schedules())).find((schedule) => schedule.itemId === itemId
+        const existing = (await collection('schedules', () => loadAllPages(operationsApi.schedules()))).find((schedule) => schedule.itemId === itemId
           && (schedule.assetInstanceId ?? null) === (data.assetInstanceId ?? null) && schedule.maintenanceType === data.maintenanceType && schedule.intervalType === data.intervalType);
-        result = existing ?? await operationsApi.saveSchedule(scheduleInput(data));
+        result = existing ?? await remember('schedules', await operationsApi.saveSchedule(scheduleInput(data)));
         break;
       }
       case 'purchase': {
         const vendorName = String(data.vendorName);
-        const vendor = (await loadAllPages(getVendors)).find((entry) => entry.name === vendorName) ?? await createVendor(vendorName);
-        let order = (await loadAllPages(getPurchaseOrders)).find((entry) => entry.orderNumber === data.orderNumber);
+        const vendor = (await collection('vendors', () => loadAllPages(getVendors))).find((entry) => entry.name === vendorName)
+          ?? await remember('vendors', await createVendor(vendorName));
+        let order = (await collection('purchase-orders', () => loadAllPages(getPurchaseOrders))).find((entry) => entry.orderNumber === data.orderNumber);
         if (!order) order = await createPurchaseOrder({ ...data, vendorId: vendor.id } as Parameters<typeof createPurchaseOrder>[0]);
         if (data.status === 'ordered' && order.status === 'draft') order = await transitionPurchaseOrder(order.id, 'ordered');
-        result = order;
+        result = await remember('purchase-orders', order);
         break;
       }
       case 'equipment': {
@@ -123,7 +145,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         break;
       }
       case 'receipt': {
-        const order = (await loadAllPages(getPurchaseOrders)).find((entry) => entry.id === data.purchaseOrderId);
+        const order = (await collection('purchase-orders', () => loadAllPages(getPurchaseOrders))).find((entry) => entry.id === data.purchaseOrderId);
         if (!order) throw new Error(translate('services.csvOperationImport.purchaseOrderNotFound'));
         if (!Array.isArray(data.lines)) throw new Error(translate('services.csvOperationImport.receiptLinesAreMissing'));
         const lines = data.lines.map((value: unknown) => {
@@ -172,7 +194,8 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
         break;
       }
       case 'count': {
-        result = (await loadAllPages(operationsApi.counts)).find((entry) => entry.sessionNumber === data.sessionNumber) ?? await operationsApi.createCount(countInput(data));
+        result = (await collection('counts', () => loadAllPages(operationsApi.counts))).find((entry) => entry.sessionNumber === data.sessionNumber)
+          ?? await remember('counts', await operationsApi.createCount(countInput(data)));
         break;
       }
       case 'member_request': {

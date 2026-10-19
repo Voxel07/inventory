@@ -22,7 +22,7 @@ export function ItemResponsiblePerson({ itemId, canEdit }: { itemId: string; can
       <PagedAutocomplete size="small" label={t('common.responsiblePerson')} disabled={query.isLoading || save.isPending}
         value={draft ?? query.data?.responsiblePersonId ?? ''} selectedLabel={query.data?.responsiblePersonName}
         queryKey={['users', 'assignable']} getPage={personOptions} onChange={setDraft} />
-      <Button disabled={draft === null || save.isPending} onClick={() => { if (draft !== null) save.mutate(draft); }}>{t('common.save')}</Button>
+      <Button disabled={draft === null || save.isPending} sx={{ flexShrink: 0 }} onClick={() => { if (draft !== null) save.mutate(draft); }}>{t('common.save')}</Button>
     </Stack> : <Typography variant="body2">{query.data?.responsiblePersonName || t('common.unassigned')}</Typography>}
   </Stack>;
 }

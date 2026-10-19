@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **57 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **58 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway applies the single editable baseline in dev/test/prod; Hibernate validates it. Data is disposable: recreate the database after a baseline change. There are no upgrade migrations or backfills. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -93,9 +93,9 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 | `assemblies` | UUID; name, category/subcategory, description/hint, image object key, event tags, active flag and optional access policy |
 | `assembly_items` | Composite `(assembly_id, item_id)` PK; component quantity |
 | `warehouses` | UUID; unique code, name/description and active flag |
-| `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type (warehouse/area/section/shelf/compartment/bin/…), level `code` (unique among siblings) and maintained `full_code` (`WH1-E1-R3-F2`), description, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
+| `storage_locations` | UUID; warehouse, parent location and keeper user FKs; type (warehouse/area/section/shelf/compartment/bin/…), level `code` (unique among the siblings visible to the editor, checked under the hierarchy lock; hidden private siblings of other accounts don't count) and maintained `full_code` (`WH1-E1-R3-F2`), description, coordinates, zoom, overlay URL/bounds, active flag and optional access policy |
 
-Location services enforce no cycles and same-warehouse parentage. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
+Location services enforce no cycles and same-warehouse parentage; choosing a parent requires view access to it, and edit access when the parent is private. Item tracking mode becomes immutable after stock or movements; serialized items cannot be consumable. Code resolves identities without changing stock. Category data includes vehicle fuel consumption/battery due date, generator operating hours and food best-before.
 
 **Retirement:** items, locations and assemblies have an `active` flag and are retired, never deleted, so order lines, damage reports and codes keep their targets. Event occurrences are deleted only while no orders, movements, return submissions or commitments reference them (`CatalogOrm.hasEventHistory`); their planning overrides are deleted with them, and their attendance (with roles) and timeline rows cascade on deletion; `event_people` rows are kept for other events.
 
@@ -134,16 +134,16 @@ The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses 
 
 Both order kinds use `OrderService` and the same relational foreign keys and stock lifecycle (PLAN-02). The baseline replaces the former tables directly; disposable databases must be recreated.
 
-### Returns, lifecycle and maintenance (6 tables)
+### Returns, lifecycle and maintenance (7 tables)
 
 | Table | Key data and relationships |
 |---|---|
 | `return_reconciliations` | UUID; faction order/line/item/asset/recorder links; outcome, quantity, condition before/after, note and idempotency key |
-| `return_submissions` | UUID; item/asset, submitter/return-for user, expected location, faction/general order/event links; status, placement photo, prior asset state/version and acknowledgement actor/time; unique member command ID |
+| `return_submissions` | UUID; item/asset, submitter/return-for user, expected location, order/event links; status, placement photo, prior asset state/version and acknowledgement actor/time; unique member command ID |
 | `damage_reports` | UUID; item XOR assembly; optional asset/order/handover, reporter/handler; severity/status, quantities, notes, safety impact, position map and idempotency key |
 | `repair_cases` | UUID; unique damage-report FK; asset/handover/repair owner/vendor/approver links; status, parts/cost/verification notes and pending repaired quantity |
 | `maintenance_schedules` | UUID; item/asset/responsible user; date/hour/usage interval, warning, next due, checklist, active/checkout-block flags |
-| `runtime_entries` | UUID; item, optional asset/event/order, recording user; hours booked, meter reading after, source (manual/order_return/maintenance/correction), time and notes. Every meter change is booked here |
+| `runtime_entries` | UUID; item, optional asset/event/order, recording user; hours booked, meter reading after, source (`manual`, `return_check` for order reconciliation and accepted return submissions, `maintenance`, `correction`), time and notes. Every meter change is booked here |
 | `maintenance_records` | UUID; item/asset/schedule/inspector links; inspection type/result/time, hours, next due, certificate key/number and notes |
 
 Item-level maintenance status/calendar columns still duplicate schedule-based state. They are used in current evaluation/report fallback paths; schedules-only maintenance is a target (PLAN-10).
@@ -171,7 +171,7 @@ Receiving is a stock command. An unreceived purchase line is ordered supply, not
 
 Rental/loan economics and evidence live in the agreement's current fields/JSON; there is no separate billing/payment subsystem or relational loan-line table.
 
-### Member work and system support (9 tables)
+### Member work and system support (8 tables)
 
 | Table | Key data and relationships |
 |---|---|
@@ -184,7 +184,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
 | `source_revisions` | Composite `(name, shard)` PK; revision/epoch; 16 shards per tracked source table |
 
-All 59 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
+All 58 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
 
 ## 5. Stock authority and invariants
 

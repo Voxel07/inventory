@@ -20,7 +20,7 @@ function CommandFields({ value, onChange, path = '', names = {}, assetOptions = 
   </Stack>)}</Stack>;
   const label = path.split('.').map((part) => names[part] ?? part.replace(/([a-z])([A-Z])/g, '$1 $2')).join(' · ');
   if (typeof value === 'boolean') return <FormControlLabel label={label} control={<Checkbox checked={value} onChange={(e) => onChange(e.target.checked)} />} />;
-  const fixed = /(^|\.)(itemId|orderId|assemblyId|factionOrderId|userId|idempotencyKey|transactionType)$/.test(path);
+  const fixed = /(^|\.)(itemId|orderId|assemblyId|userId|idempotencyKey|transactionType)$/.test(path);
   if ((path.includes('assetAssignments.') || path.endsWith('assetInstanceId')) && assetOptions.length) return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}><MenuItem value="">{t('dialogs.syncIssuesDialog.selectAsset')}</MenuItem>{[...assetOptions.filter(([id]) => id !== value), ...(value ? [[String(value), names[String(value)] ?? String(value)]] : [])].map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}</TextField>;
   if (path.endsWith('.outcome')) return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['returned_good', 'consumed', 'returned_damaged', 'missing', 'returned_late', 'written_off'].map((outcome) => <MenuItem key={outcome} value={outcome}>{formatStatus(outcome)}</MenuItem>)}</TextField>;
   if (path === 'status') return <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>{['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'closed', 'cancelled'].map((status) => <MenuItem key={status} value={status}>{formatStatus(status)}</MenuItem>)}</TextField>;

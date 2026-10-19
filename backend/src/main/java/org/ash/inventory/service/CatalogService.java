@@ -132,6 +132,58 @@ public class CatalogService {
         return orm.find(type, id);
     }
 
+    /**
+     * Bulk catalog save for imports: entries without an id are created, the others updated, and their asset codes
+     * registered. All or nothing; a failure names the entry by its {@code index}, so the client can drop that row.
+     */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<Item> saveItems(List<ApiModels.ItemBatchEntry> entries) {
+        var saved = new ArrayList<Item>(entries.size());
+        for (int index = 0; index < entries.size(); index++) {
+            var entry = entries.get(index);
+            var codes = entry.assetCodes() == null ? List.<String>of() : entry.assetCodes();
+            try {
+                if (!codes.isEmpty() && entry.item().amount() != null && entry.item().amount() > 0)
+                    throw ApiException.badRequest("Use either an amount or asset codes, not both");
+                var item = entry.id() == null ? createItem(entry.item()) : updateItem(entry.id(), entry.item());
+                if (!codes.isEmpty()) registerAssetCodes(item, codes, entry.id() == null);
+                // Surface constraint violations here, while the failing entry is still known.
+                orm.flush();
+                saved.add(item);
+            } catch (ApiException e) {
+                throw new ApiException(e.status, e.getMessage(), Map.of("index", index));
+            } catch (jakarta.persistence.PersistenceException e) {
+                throw new ApiException(409, "Item could not be saved because it conflicts with existing data", Map.of("index", index));
+            }
+        }
+        return saved;
+    }
+
+    /** Registers explicit codes on a serialized item; codes the item already carries are skipped. */
+    private void registerAssetCodes(Item item, List<String> codes, boolean newItem) {
+        if (item.trackingMode != DomainEnums.TrackingMode.serialized)
+            throw ApiException.badRequest("Asset instances can only be registered for serialized items");
+        var known = new HashSet<String>();
+        if (!newItem) for (var asset : orm.assetInstances(item)) known.add(asset.assetCode.toUpperCase(Locale.ROOT));
+        int created = 0;
+        for (var value : codes) {
+            String code = value.trim().toUpperCase(Locale.ROOT);
+            if (!known.add(code)) continue;
+            if (orm.assetCodeExists(code)) throw ApiException.conflict("Asset code " + code + " already exists");
+            var asset = new AssetInstance();
+            asset.item = item;
+            asset.assetCode = code;
+            asset.availabilityStatus = DomainEnums.AssetState.available;
+            asset.conditionStatus = DomainEnums.ConditionStatus.good;
+            asset.currentLocation = item.storageLocation;
+            asset.active = true;
+            orm.persist(asset);
+            created++;
+        }
+        if (created > 0) recordAssetRegistration(item, created);
+    }
+
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Item createItem(ApiModels.ItemInput input) {
@@ -151,6 +203,7 @@ public class CatalogService {
         apply(item, input);
         orm.persist(item);
         inheritance.refreshItem(item);
+        bookMeterReading(item, input, "Opening meter reading");
         persistImages(item, input.images());
         int initialAmount = input.amount() == null ? 0 : input.amount();
         if (item.trackingMode == DomainEnums.TrackingMode.serialized && initialAmount > 0) {
@@ -213,6 +266,7 @@ public class CatalogService {
         }
         apply(item, input);
         inheritance.refreshItem(item);
+        bookMeterReading(item, input, "Meter reading corrected");
         if (input.images() != null) {
             var previousImages = orm.itemImages(item).stream().map(image -> image.objectKey).toList();
             orm.deleteItemImages(item);
@@ -243,7 +297,7 @@ public class CatalogService {
         if (input.privateResource() != null && input.privateResource() != (item.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
         item.name = input.name().trim();
-        item.sku = input.sku() == null || input.sku().isBlank() ? generateSku(item.name) : input.sku().trim().toUpperCase(Locale.ROOT);
+        item.sku = resolveSku(item, input.sku());
         item.description = input.description();
         item.category = input.category().trim();
         item.subcategory = input.subcategory();
@@ -276,11 +330,16 @@ public class CatalogService {
             item.maintenanceIntervalDays = categoryPolicy.intervalDays;
             if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = BusinessTime.today().plusDays(item.maintenanceIntervalDays);
         }
-        if (input.currentOperatingHours() != null) item.currentOperatingHours = input.currentOperatingHours();
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
         if (input.tracksRuntime() != null) item.tracksRuntime = input.tracksRuntime();
+    }
+
+    /** The item meter only moves through the runtime log; a reading entered on the item form is a correction. */
+    private void bookMeterReading(Item item, ApiModels.ItemInput input, String note) {
+        if (input.currentOperatingHours() != null)
+            runtime.record(item, null, input.currentOperatingHours(), null, null, RuntimeEntry.Source.correction, note);
     }
 
     public boolean managesInventory(UserAccount actor) { return canManageInventory(actor); }
@@ -645,21 +704,25 @@ public class CatalogService {
             created.add(asset);
         }
 
+        recordAssetRegistration(item, created.size());
+        return created;
+    }
+
+    private void recordAssetRegistration(Item item, int count) {
         var tx = new StockTransaction();
         tx.item = item;
         tx.user = actorService.current();
         tx.type = DomainEnums.TransactionType.added;
-        tx.quantity = created.size();
+        tx.quantity = count;
         tx.reason = "Asset registration";
-        tx.notes = "Added " + created.size() + " serialized asset(s)";
+        tx.notes = "Added " + count + " serialized asset(s)";
         tx.idempotencyKey = UUID.randomUUID();
         tx.occurredAt = Instant.now();
         orm.persist(tx);
 
         catalogChanged("items", item.id);
         events.record("asset.created", "item", item.id, actorService.current().id, null,
-                Map.of("itemId", item.id.toString(), "count", created.size()));
-        return created;
+                Map.of("itemId", item.id.toString(), "count", count));
     }
 
     @Transactional
@@ -811,10 +874,23 @@ public class CatalogService {
         }
     }
 
+    /** A blank SKU keeps the current one (or generates one on creation); an explicit SKU must be unused. */
+    private String resolveSku(Item item, String requested) {
+        if (requested == null || requested.isBlank()) return item.sku != null ? item.sku : generateSku(item.name);
+        String sku = requested.trim().toUpperCase(Locale.ROOT);
+        if (!sku.equals(item.sku) && orm.skuExists(sku)) throw ApiException.conflict("SKU " + sku + " already exists");
+        return sku;
+    }
+
     private String generateSku(String name) {
         String prefix = slug(name).replace("-", "").toUpperCase(Locale.ROOT);
         if (prefix.length() > 8) prefix = prefix.substring(0, 8);
-        return prefix + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase(Locale.ROOT);
+        if (prefix.isEmpty()) prefix = "ITEM";
+        // Items sharing a name prefix share the SKU namespace; retry the rare random collision.
+        String sku;
+        do sku = prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        while (orm.skuExists(sku));
+        return sku;
     }
 
     private void catalogChanged(String resource, UUID id) {

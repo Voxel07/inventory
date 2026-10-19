@@ -187,7 +187,7 @@ export function Maintenance() {
             helperText={t('pages.maintenance.0NoScheduledMaintenance')}
             slotProps={{ htmlInput: { min: 0, step: 1 } }} />
           <Button title={translate('pages.maintenance.saveThisCategorySInspectionInterval')} variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
-            onClick={() => policyMutation.mutate()}>{t('common.save')}</Button>
+            sx={{ flexShrink: 0, alignSelf: { sm: 'flex-start' }, mt: { sm: 1 } }} onClick={() => policyMutation.mutate()}>{t('common.save')}</Button>
         </Stack>
       </Paper>
 

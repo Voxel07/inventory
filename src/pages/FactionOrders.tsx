@@ -1,6 +1,8 @@
 import { locationLabel } from '../utils/locationHierarchy';
 import { formatDate } from '../utils/dateFormat';
 import { Button } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
+import { PageHeader } from '../components/shared/PageHeader';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -170,17 +172,9 @@ export function FactionOrders() {
 
   return (
     <Box>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, justifyContent: 'space-between' }}>
-        <Box>
-          <Typography variant="h4">{t('pages.factionOrders.factionOrderLists')}</Typography>
-          <Typography color="text.secondary">
-            {t('pages.factionOrders.planRequirementsTrackPreparationAndCheckCompleteListsOutAnd')}
-          </Typography>
-        </Box>
-        <Button title={translate('pages.factionOrders.createANewFactionOrderList')} variant="contained" startIcon={<AddIcon />} onClick={() => openCreate()} disabled={!canCreateList} sx={{ alignSelf: { sm: 'flex-start' } }}>
-          {t('pages.factionOrders.newList')}
-        </Button>
-      </Stack>
+      <PageHeader title={t('pages.factionOrders.factionOrderLists')} description={t('pages.factionOrders.planRequirementsTrackPreparationAndCheckCompleteListsOutAnd')}
+        actions={<ActionBar actions={[{ key: 'new', label: t('pages.factionOrders.newList'), title: translate('pages.factionOrders.createANewFactionOrderList'),
+          icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canCreateList, onClick: () => openCreate() }]} />} />
 
       <OrderEventFilter
         eventTypes={selectableEvents}

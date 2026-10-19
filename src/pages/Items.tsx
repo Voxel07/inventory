@@ -10,7 +10,8 @@ import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { PageHeader } from '../components/shared/PageHeader';
-import { Button, ToggleButton } from '../components/shared/ActionButtons';
+import { ToggleButton } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { usePagedItems, useItemCategories, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems, type ItemQuery } from '../hooks/useItems';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useStorageLocations } from '../hooks/useStorageLocations';
@@ -52,14 +53,10 @@ export function Items() {
         <Box>
             <PageHeader
                 title={t('nav.items')}
-                actions={<>
-                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>
-                        {t('pages.items.importCSV')}
-                    </Button>}
-                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
-                        {t('common.addItem')}
-                    </Button>}
-                </>}
+                actions={<ActionBar actions={[
+                    catalogManager && { key: 'import', label: t('pages.items.importCSV'), icon: <FileUploadIcon />, onClick: () => setImportOpen(true) },
+                    canCreate && { key: 'create', label: t('common.addItem'), icon: <AddIcon />, variant: 'contained', pinned: true, onClick: crud.openCreate },
+                ]} />}
             />
             <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
                 onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>

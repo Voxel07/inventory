@@ -25,6 +25,7 @@ import { ReturnSubmissionForm } from '../components/forms/ReturnSubmissionForm';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 import type { ReturnSubmissionFormData } from '../types';
 import { GeneralOrderWorkflow } from '../components/orders/GeneralOrderWorkflow';
+import { generalOrderOf } from '../utils/custody';
 
 export function CheckedOutItemsPage() {
     const t = useT();
@@ -39,8 +40,8 @@ export function CheckedOutItemsPage() {
     const [generalReturnRow, setGeneralReturnRow] = useState<CheckedOutRow>();
     // Exactly the item and order a quick return needs, never the catalog or every order page.
     const returnItem = useItemsByIds(returnRow ? [returnRow.itemId] : []).data?.[0];
-    const generalOrder = useQuery({ queryKey: ['general-orders', 'detail', generalReturnRow?.generalOrderId],
-        queryFn: () => generalOrderApi.getById(generalReturnRow!.generalOrderId!), enabled: Boolean(generalReturnRow?.generalOrderId) });
+    const generalOrder = useQuery({ queryKey: ['general-orders', 'detail', generalOrderOf(generalReturnRow)],
+        queryFn: () => generalOrderApi.getById(generalOrderOf(generalReturnRow)!), enabled: Boolean(generalOrderOf(generalReturnRow)) });
     const generalReturnOrder = generalReturnRow && generalOrder.data;
 
     const checkedOutRows: CheckedOutRow[] = custody.data ?? [];
@@ -56,7 +57,7 @@ export function CheckedOutItemsPage() {
 
     // General-order custody is reconciled on the order itself; everything else is submitted for acknowledgement.
     function handleQuickReturn(row: CheckedOutRow) {
-        if (row.generalOrderId) setGeneralReturnRow(row);
+        if (generalOrderOf(row)) setGeneralReturnRow(row);
         else setReturnRow(row);
     }
 
@@ -126,7 +127,7 @@ export function CheckedOutItemsPage() {
                             eventOccurrenceId={returnRow.eventOccurrenceId}
                             assetInstanceId={returnRow.assetInstanceId}
                             returnedForUserId={returnRow.personId}
-                            factionOrderId={returnRow.factionOrderId}
+                            orderId={returnRow.orderId}
                             onSubmit={submitReturn}
                             isLoading={createReturn.isPending}
                         />

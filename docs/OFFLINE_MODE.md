@@ -1,14 +1,14 @@
 # Offline operation and sync
 
-Source: `offlineQueue.ts`, `resourceFactory.ts`, `useProgressiveList.ts`, `useResourceApi.ts`, `referenceDataService.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI. See [App Flow](APP_FLOW.md) for journeys and [Implementation Plan](IMPLEMENTATION_PLAN.md) for acceptance status.
+Source: `offlineQueue.ts`, `resourceFactory.ts`, `usePagedList.ts`, `useResourceApi.ts`, `referenceDataService.ts`, `apiClient.ts`, `SyncResource` and the header/status/conflict UI. See [App Flow](APP_FLOW.md) for journeys and [Implementation Plan](IMPLEMENTATION_PLAN.md) for acceptance status.
 
 ## Supported scope
 
 The PWA service worker caches the application shell. Its cache is versioned per build; navigations are network-first (the cached shell serves offline starts), hashed bundles cache-first, and it never caches `/api` or third-party resources. IndexedDB stores account-scoped catalog reads and a durable command queue. Items, assemblies, storage locations and events can fall back to saved query-specific results on eligible network/server failures. Cache timestamps indicate the last successful download; cached quantities are not a current availability promise.
 
-Collection, detail and reference query readers now use `networkMode: 'offlineFirst'`, allowing a cold offline start to reach service-level IndexedDB fallback. `useProgressiveList` still drains successive pages rather than implementing final server paging; this is [PLAN-03](IMPLEMENTATION_PLAN.md). Actual cold-start/device acceptance remains [ACC-02](IMPLEMENTATION_PLAN.md). Private projections are excluded from durable catalog caching, and all private-resource writes remain online-only.
+Collection, detail and reference query readers now use `networkMode: 'offlineFirst'`, allowing a cold offline start to reach service-level IndexedDB fallback. Lists load further server pages only on demand (`usePagedList`, [PLAN-03](IMPLEMENTATION_PLAN.md)); offline, only pages downloaded earlier are available. Actual cold-start/device acceptance remains [ACC-02](IMPLEMENTATION_PLAN.md). Private projections are excluded from durable catalog caching, and all private-resource writes remain online-only.
 
-Faction-order details are cached per order and account after an online read. A user who opened an order can reopen it offline and queue preparation, transitions and reconciliation; preparation is built from that snapshot and the server revalidates stock, assets and status on replay. Order lists, orders never opened online and general orders have no offline fallback.
+Faction-order details are cached per order and account after an online read. A user who opened an order can reopen it offline and queue preparation, transitions and reconciliation; preparation is built from that snapshot and the server revalidates stock, assets and status on replay. General orders can be created offline; their detail has no offline cache, so preparation, transitions and reconciliation of a general order queue only from a screen that is already open. Order lists and orders never opened online have no offline fallback.
 
 Item details are cached by exact item identity within the account/role/faction namespace. Online detail reads, downloaded list pages (including later and filtered pages), and successful create/update responses populate these entries. A downloaded item can be opened offline even if its detail was never visited; an item never downloaded has no fallback. Query-specific lists remain separate and are not assumed complete. Online 403/404 or successful deletion removes the exact item entry. Offline detail queries run their first attempt so IndexedDB fallback can be reached; fallback timestamps remain the original download time. Item pages cache themselves instead of a separate page-zero reconnect precache.
 
@@ -16,12 +16,12 @@ Item details are cached by exact item identity within the account/role/faction n
 |---|---|
 | Individual stock transaction | `transaction` |
 | Damage report without a new media upload | `damage.create` |
-| Faction-order creation | `order.create` |
-| Faction-order status transition | `order.transition` |
-| Faction-order preparation | `order.prepare` |
-| Faction-order reconciliation | `order.return` |
+| Faction- or general-order creation (`kind` in the payload) | `order.create` |
+| Order status transition (either kind) | `order.transition` |
+| Order preparation (either kind) | `order.prepare` |
+| Order reconciliation (either kind) | `order.return` |
 
-Catalog mutations, general orders, contributor requests/returns, photos/media, assembly batch checkout, ownership/commitments, loans, label management, purchasing/receiving, transfers, counts, lots, repair/maintenance, reminders and report rebuilds require connectivity. Their forms are not durable offline drafts.
+Catalog mutations, general-order edits, contributor requests/returns, photos/media, assembly batch checkout, ownership/commitments, loans, label management, purchasing/receiving, transfers, counts, lots, repair/maintenance, reminders and report rebuilds require connectivity. Their forms are not durable offline drafts.
 
 Initial sign-in requires connectivity. A persisted authenticated session supports cached use; switching accounts scopes commands and catalog access to the signed-in account. Unowned commands are not replayed. Legacy migration/export support has been removed; current storage has one account-scoped format.
 

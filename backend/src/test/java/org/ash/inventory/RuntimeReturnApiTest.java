@@ -99,13 +99,37 @@ class RuntimeReturnApiTest {
         admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
                 .post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
         admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
-        admin().body(Map.of("idempotencyKey", UUID.randomUUID(),
-                        "lines", Map.of(item, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0)),
+        var line = Map.of(item, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0));
+        // A tracked unit going back to stock needs the hours run, and the meter never runs backwards.
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID(), "lines", line,
+                        "assets", Map.of(asset, Map.of("outcome", "returned_good"))))
+                .post("/api/orders/faction/" + order + "/return").then().statusCode(400);
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID(), "lines", line,
+                        "assets", Map.of(asset, Map.of("outcome", "returned_good", "operatingHours", -1))))
+                .post("/api/orders/faction/" + order + "/return").then().statusCode(400);
+        admin().body(Map.of("idempotencyKey", UUID.randomUUID(), "lines", line,
                         "assets", Map.of(asset, Map.of("outcome", "returned_good", "operatingHours", 12))))
                 .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
         admin().get("/api/items/" + item + "/assets/" + asset + "/runtime").then().statusCode(200)
                 .body("[0].eventOccurrenceId", equalTo(event))
                 .body("[0].orderId", equalTo(order))
                 .body("[0].hours", hours(12));
+    }
+
+    @Test void itemMeterEditsAreBookedAsCorrections() {
+        String item = admin().body(Map.of("name", "Runtime pump " + UUID.randomUUID(), "category", "Pumpen",
+                "tracksRuntime", true, "currentOperatingHours", 5))
+                .post("/api/items").then().statusCode(200).body("currentOperatingHours", hours(5)).extract().path("id");
+        admin().get("/api/items/" + item + "/runtime").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].source", equalTo("correction")).body("[0].readingAfter", hours(5));
+
+        var update = new HashMap<String, Object>(Map.of("name", "Runtime pump", "category", "Pumpen", "tracksRuntime", true, "currentOperatingHours", 8));
+        admin().body(update).patch("/api/items/" + item).then().statusCode(200).body("currentOperatingHours", hours(8));
+        admin().body(update).patch("/api/items/" + item).then().statusCode(200);
+        admin().get("/api/items/" + item + "/runtime").then().statusCode(200)
+                .body("size()", equalTo(2)).body("source", everyItem(equalTo("correction")));
+
+        update.put("currentOperatingHours", -1);
+        admin().body(update).patch("/api/items/" + item).then().statusCode(400);
     }
 }

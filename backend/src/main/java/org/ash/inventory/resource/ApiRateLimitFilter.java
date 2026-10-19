@@ -42,7 +42,8 @@ public class ApiRateLimitFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext request) {
-        if (!request.getUriInfo().getPath().startsWith("api/")) return;
+        // Quarkus REST reports the matched path with a leading slash.
+        if (!request.getUriInfo().getPath().startsWith("/api/")) return;
 
         String caller = caller(request);
         RateLimiter.Result result = rateLimiter.tryAcquire(caller, requestLimit, windowSeconds);

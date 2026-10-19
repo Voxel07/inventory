@@ -218,7 +218,7 @@ public class OperationalReportService {
             var event = balance.eventOccurrenceId() == null ? null : events.get(balance.eventOccurrenceId());
             var row = row("id", balance.key(), "person", balance.person(), "eventId", balance.eventOccurrenceId(), "event", balance.event(),
                     "date", event == null ? null : event.endDate, "outstanding", balance.checkedOut(), "pendingAcknowledgement", balance.pendingQuantity(),
-                    "factionOrderId", balance.factionOrderId(), "generalOrderId", balance.generalOrderId(), "assetId", balance.assetInstanceId(), "expectedReturnLocation", balance.storageLocation());
+                    "orderId", balance.orderId(), "orderKind", balance.orderKind() == null ? null : balance.orderKind().name(), "assetId", balance.assetInstanceId(), "expectedReturnLocation", balance.storageLocation());
             item(row, items.get(balance.itemId())); rows.add(row);
         }
         return rows;

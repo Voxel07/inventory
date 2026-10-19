@@ -198,7 +198,7 @@ export function KeyboardShortcuts() {
         [['Enter'], t('shared.keyboardShortcuts.inTheSearchOpenTheFirstMatchInTheResults')],
         [['↑', '↓', 'j', 'k'], t('shared.keyboardShortcuts.moveBetweenResults')],
         [['Esc'], t('shared.keyboardShortcuts.leaveTheSearch')],
-        [['Backspace', 'Alt ←'], t('shared.keyboardShortcuts.goBack')],
+        [['Backspace'], t('shared.keyboardShortcuts.goBack')],
         [['g h'], t('nav.home')],
         [['g i'], t('nav.items')],
         [['g a'], t('nav.assemblies')],

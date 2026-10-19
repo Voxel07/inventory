@@ -60,7 +60,7 @@ Guards follow the role ladder ([Authentik setup §3](AUTHENTIK_SETUP.md#3-access
 
 ## 3. Catalog, private inventory and scanning
 
-1. Open Items, Assemblies or Locations and choose search/filter context.
+1. Open Items, Assemblies or Locations and choose search/filter context. Every location level has a short code unique among the siblings you can see; its full code (`WH1-E1-R3-F2`) is shown in pickers and lists and is searchable.
 2. Open details to inspect API stock, exact assets, images, history, keeper, return location or kit components.
 3. Authorized staff maintain shared catalog records. Every account except read-only maintains its own private resources (read-only accounts cannot add inventory); editors need explicit grants.
 4. Owners/HQ manage view/edit grants and owner transfer. Sharing a location does not reveal its private items. An item can show restricted whereabouts when the location policy is not granted.
@@ -92,10 +92,14 @@ The procurement screen is narrower than access to purchasing tabs: HQ/planners a
 stateDiagram-v2
     [*] --> draft
     draft --> submitted
+    submitted --> draft: withdraw
     submitted --> preparing
+    preparing --> submitted: reopen
     preparing --> ready
+    ready --> preparing: reopen
     ready --> picked_up
     picked_up --> partially_returned
+    partially_returned --> partially_returned
     partially_returned --> returned
     picked_up --> returned
     returned --> closed
@@ -105,14 +109,14 @@ stateDiagram-v2
     ready --> cancelled
 ```
 
-This is the main business lifecycle. Specialized edits, preparation reopening and repeated partial reconciliation remain service-controlled actions; this diagram is not an exhaustive endpoint transition table.
+The diagram matches `OrderService.TRANSITIONS`: faction leaders withdraw submitted lists to draft, and the warehouse reopens preparation or a ready order. Who may take each step is checked in the service.
 
 1. A faction leader selects one of their own factions and an event and builds an order from items and assemblies; every organization member can read all lists. General orders (ASH crew and up) capture purpose and requested quantities for broader needs. Private items their owner offered for use can be ordered too; submission notifies the owner once.
 2. Submission places the order into staff preparation work and creates an in-app notice for each assigned responsible person. Warehouse staff use `/operations?tab=order-preparation` or order details.
 3. Preparation chooses source locations, usable quantities and exact serialized assets. It reserves stock without checking it out. Edits can credit back only that order's reservation.
 4. Mark ready after preparation, record pickup details, and notify the recipient and responsible people. Order details group items (including assembly components) by responsible person, subgroup and pickup location. Item defaults are set in the ownership panel; the order owner or staff can override the person, group name and pickup point per item and manually notify responsible people. Automatic submission/ready notices go to each person once per order; later group or order changes only show on the order page, and the manual button re-sends on request. Fully configured group pickup points replace the single map point requirement. Notices link to the recipient-scoped groups on the orders page; email/push delivery remains deferred.
 5. At pickup, ASH crew or warehouse staff confirm collector/condition/evidence; faction leaders request pickup. The command converts reservations into custody and writes checkout/history atomically.
-6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
+6. Reconcile returned, consumed, damaged, written-off and outstanding quantities against actual handed-over units. Runtime-tracked units coming back (returned or damaged) need the hours run; the reading cannot be lower than the current meter. Missing units remain accounted for within outstanding custody. Repeated submissions must not double-apply.
 7. Units that will not come back are written off by an inventory admin with a reason (missing units first); this ends custody and reduces owned stock. Close after full reconciliation. Cancellation before pickup releases reservations; faction leaders may withdraw their lists while draft or submitted, afterwards only the warehouse cancels. History shows actors, times and deltas; previous event-year comparison is opt-in. The default item view shows ordered and prepared quantities.
 
 Faction and general workflows use one order aggregate distinguished by kind (PLAN-02). The kind-specific forms use shared preparation, transition, return, history and custody contracts under `/api/orders/faction` and `/api/orders/general`. Faction membership and general-order ownership remain separate permissions; general orders are editable only in draft.
@@ -129,7 +133,7 @@ flowchart LR
     Checkin --> Stock[Update stock and custody]
 ```
 
-Members reach self-service from the personal overview (`Contributor` is embedded there). They see equipment/custody/keeper assignments, create requests, and submit returns. A placement photo is optional evidence; uploading it requires connectivity. A pending submission remains custody, including `returned_pending_check` for assets. Stock increases only when the warehouse accepts the submission. Rejection records a reason without manufacturing a stock receipt.
+Members reach self-service from the personal overview (`Contributor` is embedded there). They see equipment/custody/keeper assignments, create requests, and submit returns. A placement photo is optional evidence; uploading it requires connectivity. A pending submission remains custody, including `returned_pending_check` for assets. Stock increases only when the warehouse accepts the submission. Accepting a runtime-tracked item or asset requires the hours run (or the new meter reading). Rejection records a reason without manufacturing a stock receipt.
 
 The inbox collects recipient-scoped pickup, return, damage and other required actions. Users can act or set reminders. Staff decisions are authorized in the same services as the corresponding operation.
 
@@ -153,7 +157,7 @@ Private/external equipment lending starts with owner consent and a commitment wi
 ## 8. Offline and recovery journey
 
 1. Download organizational catalog data while online. Offline reads can only show data previously cached for this access context; freshness and incomplete lists must remain visible.
-2. While disconnected, supported stock transactions, media-free damage reports and faction-order create/prepare/transition/reconcile commands are saved with a UUID and account owner.
+2. While disconnected, supported stock transactions, media-free damage reports and order (faction or general) create/prepare/transition/reconcile commands are saved with a UUID and account owner. Only faction-order details are cached for offline reopening.
 3. Show queued state as saved locally, not accepted by the server. Private writes, uploads, order edits and other operations need connectivity; both order kinds can queue creation, preparation, transitions and reconciliation.
 4. Reconnect under the original account and replay `/api/sync` batches. Each command rechecks rights and current stock.
 5. Applied entries leave the queue and enter history. Rejected/conflicting entries open Sync Issues with preserved evidence.

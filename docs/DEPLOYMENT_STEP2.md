@@ -66,7 +66,9 @@ failures on VPS 2 and adds API capacity, not database availability.
 `inventory-api-2`), a shared `postgres` and `valkey`, `garage`, and one static
 `inventory-app`. Both API nodes point at the same primary database and the same
 Valkey instance, so **rate limiting and live-event fan-out are consistent across
-nodes** (`API_RATE_LIMIT_BACKEND=redis`, `EVENT_BACKEND=redis`).
+nodes** (`API_RATE_LIMIT_BACKEND=redis`, `EVENT_BACKEND=redis`). The cluster template builds the JVM image; `docker-compose.native.yml`
+only overrides the single-node `inventory-api`. To run the CI-published native image here, set `image:` on both API services
+and give each the same `mem_limit: 768m`.
 
 ```bash
 # On VPS 1 (primary)

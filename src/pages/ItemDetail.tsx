@@ -7,6 +7,7 @@ import { FormDialog } from '../components/shared/FormDialog';
 import { DetailPanel, Field, FieldGrid, Metric, MetricList } from '../components/items/CompactDetail';
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { InventorySharing } from '../components/items/InventorySharing';
+import { ActionBar } from '../components/shared/ActionBar';
 import { Button, IconButton } from '../components/shared/ActionButtons';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
@@ -166,7 +167,7 @@ export function ItemDetail() {
         if (data.transactionType === 'checkin') {
             // The form names the exact custody source; the return submission is checked against it.
             createReturn.mutate(
-                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, orderId: data.factionOrderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
+                { itemId: data.itemId, quantity: data.quantityChanged, assetInstanceId: data.assetInstanceId, returnedForUserId: data.userId, orderId: data.orderId, eventOccurrenceId: data.eventOccurrenceId, notes: data.notes },
                 {
                     onSuccess: () => {
                         setCheckoutOpen(false);
@@ -331,11 +332,12 @@ export function ItemDetail() {
                             {profile && <Chip size="small" variant="outlined" sx={tinyChip} color={profile.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
                         </Stack>
                     </Box>
-                    <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-                        {(canTransact || canCheckout) && <Button variant="contained" size="small" sx={compactButton} startIcon={<SwapHorizIcon />} onClick={() => { setLotRequest(undefined); setCheckoutOpen(true); }}>{canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</Button>}
-                        {canEdit && <Button variant={canTransact ? 'outlined' : 'contained'} size="small" sx={compactButton} startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Button>}
-                        <Button variant="outlined" size="small" sx={compactButton} startIcon={<QrCode2Icon />} onClick={() => setQrOpen(true)}>{t('pages.itemDetail.printLabel')}</Button>
-                    </Stack>
+                    <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
+                        (canTransact || canCheckout) && { key: 'checkout', label: canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut'), icon: <SwapHorizIcon />,
+                            variant: 'contained', pinned: true, onClick: () => { setLotRequest(undefined); setCheckoutOpen(true); } },
+                        canEdit && { key: 'edit', label: t('common.edit'), icon: <EditIcon />, variant: canTransact ? 'outlined' : 'contained', pinned: !canTransact && !canCheckout, onClick: () => setEditOpen(true) },
+                        { key: 'label', label: t('pages.itemDetail.printLabel'), icon: <QrCode2Icon />, onClick: () => setQrOpen(true) },
+                    ]} />
                 </Box>
                 {item.hint && <Alert severity="info" icon={false} sx={{ mt: 1, py: 0, px: 1.5, '& .MuiAlert-message': { py: 0.5 } }}>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>

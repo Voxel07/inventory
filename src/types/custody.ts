@@ -9,10 +9,11 @@ export interface CheckedOutRow {
   person: string;
   eventKey: string;
   event: string;
-  generalOrderId?: string;
   eventOccurrenceId?: string;
   pendingQuantity?: number;
-  factionOrderId?: string;
+  /** Order the custody comes from; absent for direct checkouts. */
+  orderId?: string;
+  orderKind?: 'faction' | 'general';
   assetInstanceId?: string;
   /** Resolved assembly this item belongs to (if from a faction order) */
   assemblyId?: string;

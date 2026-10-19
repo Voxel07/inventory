@@ -115,6 +115,9 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('goods_receipt.')) return new Set([...stock, ...purchasing]);
   if (type.startsWith('warehouse.')) return new Set(['storageLocations', 'items', 'assemblies', 'member-storage', 'member-assignments', 'reports', 'operations:warehouses', 'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets']);
   if (type === 'location.keeper_assigned') return new Set(['storageLocations', 'member-assignments', 'member-storage', 'action-inbox']);
+  // Meter bookings change item/asset hours and maintenance due dates, not quantities.
+  if (type.startsWith('runtime.')) return new Set(['items', 'maintenance', 'operations:assets', 'operations:storage-assets', 'reports', 'action-inbox']);
+  if (type.startsWith('item.')) return new Set(['item-responsibility', 'order-pickup-groups', 'faction-orders', 'general-orders', 'action-inbox']);
   if (type.startsWith('outbox.')) return new Set(['operations:outbox', 'operations:dead-letters']);
   if (type === 'sync.completed') return new Set([...stock, 'operations:sync-audit', 'operations:my-sync-audit', 'offline-cache-freshness']);
   if (type.startsWith('transfer.')) return new Set([...stock, 'operations:transfers']);

@@ -49,6 +49,28 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
 
 export const getItem = itemApi.getById;
 
+/** One import row: created without `id`, otherwise updated; `assetCodes` register serialized units. */
+export type ItemBatchEntry = { id?: string; item: Partial<ItemFormData>; assetCodes?: string[] };
+/** Server maximum per request. */
+export const ITEM_BATCH_LIMIT = 100;
+
+/**
+ * Bulk create/update in one request and transaction. All or nothing: a rejected entry fails the whole batch
+ * with its position in `ApiError.details.index` (see {@link itemBatchErrorIndex}).
+ */
+export function saveItemBatch(entries: ItemBatchEntry[]): Promise<Item[]> {
+  return apiRequest<Item[]>('/api/items/batch', {
+    method: 'POST',
+    body: { items: entries.map((entry) => ({ ...entry, item: payload(entry.item) })) },
+  });
+}
+
+export function itemBatchErrorIndex(error: unknown): number | undefined {
+  if (!(error instanceof ApiError) || typeof error.details !== 'object' || error.details === null) return undefined;
+  const index = (error.details as { index?: unknown }).index;
+  return typeof index === 'number' ? index : undefined;
+}
+
 const OFFLINE_ITEM_SNAPSHOT = 'items:offline-snapshot';
 
 /** Overview metrics over the caller's visible inventory, computed on the server. */

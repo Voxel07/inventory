@@ -1,8 +1,6 @@
 import { formatDate } from '../../utils/dateFormat';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Alert, Chip, LinearProgress, Stack, Typography } from '@mui/material';
-import { Button } from '../shared/ActionButtons';
 import { OperationDetail, OperationListEntry } from './OperationListEntry';
 import { GeneralOrderWorkflow } from '../orders/GeneralOrderWorkflow';
 import { useFactionOrders } from '../../hooks/useFactionOrders';
@@ -25,7 +23,6 @@ function sum(values?: Record<string, number>) {
 
 export function OrderPreparationPanel() {
   const t = useT();
-  const navigate = useNavigate();
   const factionOrders = useFactionOrders(undefined, undefined, TO_PREPARE);
   const generalOrders = useOrders({ status: TO_PREPARE });
   const { data: events = [] } = useEventReports();
@@ -55,8 +52,8 @@ export function OrderPreparationPanel() {
     {entries.map((entry) => entry.kind === 'faction'
       ? <OperationListEntry key={`faction-${entry.order.id}`}
           title={<Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}><span>{entry.order.orderCode}</span>{statusChip(entry.order.status)}</Stack>}
-          actions={<Button title={translate('operations.orderPreparationPanel.openTheOrderListToPrepareIt')} size="small" variant="contained"
-            onClick={() => navigate(`/orders/faction/${entry.order.id}`)}>{entry.order.status === 'preparing' ? t('operations.orderPreparationPanel.continue') : t('operations.orderPreparationPanel.prepare')}</Button>}>
+          actions={[{ key: 'prepare', label: entry.order.status === 'preparing' ? t('operations.orderPreparationPanel.continue') : t('operations.orderPreparationPanel.prepare'),
+            title: translate('operations.orderPreparationPanel.openTheOrderListToPrepareIt'), variant: 'contained', pinned: true, to: `/orders/faction/${entry.order.id}` }]}>
           <Typography>{t('common.faction')} {entry.order.faction} · {entry.order.eventType === 'LS' ? 'LightSim' : entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
           <OperationDetail label={t('common.requestedPickup')}>{entry.order.requestedPickupDate ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
           <OperationDetail label={t('operations.orderPreparationPanel.progress')}>
@@ -65,8 +62,8 @@ export function OrderPreparationPanel() {
         </OperationListEntry>
       : <OperationListEntry key={`general-${entry.order.id}`}
           title={<Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}><span>{entry.order.name}</span>{statusChip(entry.order.status)}</Stack>}
-          actions={<Button title={translate('operations.orderPreparationPanel.enterPreparedQuantitiesAndAssetAssignments')} size="small" variant="contained"
-            onClick={() => setPreparing(entry.order)}>{t('operations.orderPreparationPanel.prepare')}</Button>}>
+          actions={[{ key: 'prepare', label: t('operations.orderPreparationPanel.prepare'), title: translate('operations.orderPreparationPanel.enterPreparedQuantitiesAndAssetAssignments'),
+            variant: 'contained', pinned: true, onClick: () => setPreparing(entry.order) }]}>
           <Typography>{t('operations.orderPreparationPanel.generalOrder')} · {(() => {
             const event = entry.order.eventOccurrenceId ? eventMap.get(entry.order.eventOccurrenceId) : undefined;
             return event ? `${event.name} · ${formatDate(event.startDate)}` : t('operations.orderPreparationPanel.noEvent');

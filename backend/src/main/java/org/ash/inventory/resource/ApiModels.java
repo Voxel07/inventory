@@ -1,9 +1,11 @@
 package org.ash.inventory.resource;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.ash.inventory.model.DomainEnums;
 
 import java.math.BigDecimal;
@@ -21,20 +23,20 @@ public final class ApiModels {
             List<String> eventTypes, @Min(0) Integer amount, @Min(0) Integer minStock,
             @Min(0) BigDecimal value, UUID storageLocation, String positionDetails, String hint,
             BigDecimal containerSize, Integer containerCount, Integer containersOpened, Integer containerRemainingPercent,
-            Integer maintenanceIntervalDays, LocalDate nextMaintenanceDue, BigDecimal currentOperatingHours,
+            Integer maintenanceIntervalDays, LocalDate nextMaintenanceDue, @jakarta.validation.constraints.DecimalMin("0") BigDecimal currentOperatingHours,
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
             LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime) {}
 
+    /** One import row: created when {@code id} is absent, otherwise updated; asset codes register serialized units. */
+    public record ItemBatchEntry(UUID id, @NotNull @Valid ItemInput item, List<@NotBlank @Size(max = 255) String> assetCodes) {}
+
+    public record ItemBatchInput(@NotEmpty @Size(max = 100) List<@NotNull @Valid ItemBatchEntry> items) {}
+
     public record ReturnSubmissionInput(
             @NotNull UUID itemId, @Min(1) int quantity, UUID assetInstanceId,
-            UUID returnedForUserId, UUID orderId, String placementImage, String notes, UUID eventOccurrenceId) {
-        public ReturnSubmissionInput(UUID itemId, int quantity, UUID assetInstanceId, UUID returnedForUserId,
-                UUID orderId, String placementImage, String notes) {
-            this(itemId, quantity, assetInstanceId, returnedForUserId, orderId, placementImage, notes, null);
-        }
-    }
+            UUID returnedForUserId, UUID orderId, String placementImage, String notes, UUID eventOccurrenceId) {}
 
     /** Accepting a return of a runtime-tracked item records the hours run (or the new meter reading). */
     public record ReturnDecisionInput(String notes, @Min(0) BigDecimal hoursRun, @Min(0) BigDecimal meterReading) {}
@@ -52,21 +54,8 @@ public final class ApiModels {
     public record TransactionInput(
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
             @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
-            UUID assetInstanceId, UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId,
-            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {
-        public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
-                String reason, String notes, String eventType, String faction, UUID assetInstanceId,
-                UUID userId, UUID factionOrderId, UUID idempotencyKey, UUID eventOccurrenceId) {
-            this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
-                    assetInstanceId, userId, factionOrderId, idempotencyKey, eventOccurrenceId, null, null, null);
-        }
-        public TransactionInput(UUID itemId, DomainEnums.TransactionType transactionType, int quantityChanged,
-                String reason, String notes, String eventType, String faction, UUID assetInstanceId,
-                UUID userId, UUID factionOrderId, UUID idempotencyKey) {
-            this(itemId, transactionType, quantityChanged, reason, notes, eventType, faction,
-                    assetInstanceId, userId, factionOrderId, idempotencyKey, null, null, null, null);
-        }
-    }
+            UUID assetInstanceId, UUID userId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId,
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,
@@ -87,11 +76,7 @@ public final class ApiModels {
 
     public record PreparationInput(Map<@NotNull UUID, @NotNull @Min(0) Integer> preparedQuantities,
             Map<@NotNull UUID, @NotNull List<@NotNull UUID>> assetAssignments,
-            boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {
-        public PreparationInput(Map<UUID, Integer> quantities, Map<UUID, List<UUID>> assets, boolean acknowledge, UUID key, String notes) {
-            this(quantities, assets, acknowledge, key, notes, null);
-        }
-    }
+            boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {}
     /** {@code missing} is the unresolved total after this command; the other quantities are reconciled now. */
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
@@ -111,7 +96,7 @@ public final class ApiModels {
 
     public record DamageInput(
             UUID itemId, @Min(1) int amount, @NotBlank @jakarta.validation.constraints.Size(max = 2000) String description,
-            @NotNull DomainEnums.DamageSeverity severity, UUID factionOrderId, UUID idempotencyKey,
+            @NotNull DomainEnums.DamageSeverity severity, UUID orderId, UUID idempotencyKey,
             UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId,
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     public record DamageResolutionInput(

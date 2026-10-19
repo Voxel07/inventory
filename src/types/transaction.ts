@@ -50,7 +50,8 @@ export interface TransactionFormData {
   reason: string;
   notes: string;
   userId?: string;
-  factionOrderId?: string;
+  /** Order of the custody a check-in settles; the return submission is checked against it. */
+  orderId?: string;
   eventType?: EventType;
   faction?: string;
 }

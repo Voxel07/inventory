@@ -90,7 +90,7 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
             ? t('pages.eventTimeline.briefingsMissionsAndPlannedGameActionsInChronologicalOrder')
             : category === 'catering' ? t('pages.eventTimeline.cateringDescription') : t('pages.eventTimeline.setupPreparationAndTeardownIncludingBeforeAndAfterTheEvent')}</Typography>
         </Box>
-        {canEdit && <Button variant="contained" startIcon={<AddIcon />} disabled={!ready}
+        {canEdit && <Button variant="contained" startIcon={<AddIcon />} disabled={!ready} sx={{ flexShrink: 0 }}
           onClick={() => { save.reset(); setEditing('new'); }}>{category === 'catering' ? t('pages.eventTimeline.addCateringPeriod') : category === 'in_game' ? t('pages.eventTimeline.addAction') : t('pages.eventTimeline.addTask')}</Button>}
       </Stack>
       <QueryFeedback isLoading={query.isLoading} error={query.error} />

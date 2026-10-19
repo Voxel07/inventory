@@ -31,6 +31,7 @@ import { translate, useNames, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canTakeOut } from '../../utils/access';
+import { factionOrderOf, generalOrderOf } from '../../utils/custody';
 
 interface Props {
     items: Item[];
@@ -70,7 +71,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             eventType: initialData?.eventType,
             eventOccurrenceId: initialData?.eventOccurrenceId,
             faction: initialData?.faction ?? '',
-            factionOrderId: initialData?.factionOrderId,
+            orderId: initialData?.orderId,
             lotId: initialData?.lotId,
         };
     };
@@ -93,7 +94,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     // A return settles one exact custody: custodian, event and order. General orders return through their order screen.
     const custody = useCustodyBalances(false, isCheckin);
     const custodySources = (custody.data ?? []).filter((row) => row.itemId === formData.itemId
-        && !row.generalOrderId && returnable(row) > 0);
+        && !generalOrderOf(row) && returnable(row) > 0);
     const [custodyKey, setCustodyKey] = useState('');
     const custodySource = custodySources.find((row) => row.key === custodyKey);
     const returnLimit = custodySource ? returnable(custodySource) : 0;
@@ -134,7 +135,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             userId: row?.personId,
             eventOccurrenceId: row?.eventOccurrenceId || undefined,
             eventType: undefined,
-            factionOrderId: row?.factionOrderId,
+            orderId: row?.orderId,
             assetInstanceId: row?.assetInstanceId,
         }));
         if (row) setQuantityInput(String(Math.min(Number(quantityInput) || 1, returnable(row))));
@@ -169,7 +170,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             transactionType: value,
             assetInstanceId: undefined,
             userId: undefined,
-            factionOrderId: undefined,
+            orderId: undefined,
             eventOccurrenceId: value === 'checkout' ? prev.eventOccurrenceId : undefined,
             eventType: value === 'checkout' ? prev.eventType : undefined,
             faction: value === 'checkout' ? prev.faction : '',
@@ -313,7 +314,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             {custodySources.map((row) => (
                                 <MenuItem key={row.key} value={row.key}>
                                     {[row.person, row.event || t('forms.transactionForm.noEvent'),
-                                        row.factionOrderId && t('forms.transactionForm.factionOrder'),
+                                        factionOrderOf(row) && t('forms.transactionForm.factionOrder'),
                                         `${returnable(row)} ${t('forms.transactionForm.outstanding')}`].filter(Boolean).join(' · ')}
                                 </MenuItem>
                             ))}

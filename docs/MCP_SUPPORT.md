@@ -1,8 +1,8 @@
 # MCP integration
 
-The Quarkus backend exposes 21 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
+The Quarkus backend exposes 28 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
 
-The implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
+The implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `OrderService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
 
 ## Authentication and authorization
 
@@ -26,6 +26,7 @@ This follows the extension's [HTTP security guidance](https://docs.quarkiverse.i
 | Assembly reads | Every component must be active and visible; otherwise the assembly is omitted or returns not found |
 | Event reads | Authenticated actor; item IDs, names and all per-item quantity maps are filtered to visible active items |
 | Locations | Authenticated actor; canonical location policy scopes/redacts private location data |
+| Orders | Same `OrderService` checks as REST: reads for read only and up; faction lists for own factions (warehouse crew: all); general orders for ASH crew and up; preparation and reconciliation for warehouse crew; write-off for the inventory admin |
 | Static overview and prompts | Authenticated actor; static capability/template content does not grant access to private inventory |
 
 Actor identity and role are resolved for each invocation. Authenticated OIDC identity takes precedence over development headers. With explicitly enabled development authentication, REST and MCP use the same `X-Actor-Id`, `X-Actor-Name`, `X-Actor-Role` and optional `X-Actor-Factions` (`EVENT:slug,…`) headers; direct CDI calls use the existing development default. Callers without an inventory role get 403. Role checks run in the services, so MCP tools and REST share them. `ActorService` reads the shared Vert.x request rather than a JAX-RS-only header context.
@@ -53,9 +54,10 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | Tool | Arguments | Behavior |
 |---|---|---|
 | `create_item` | `input: ItemInput` | Requires name/category; optional amount initializes the canonical ledger and bulk/serialized stock |
+| `save_items` | `input: ItemBatchInput` | Bulk create/update of 1–100 `{id?, item, assetCodes?}` entries in one transaction (one rate-limit slot); all or nothing, errors carry `details.index` of the failing entry |
 | `get_item_details` | `itemId` | Active, visible item with canonical stock and metadata |
 | `search_items` | Optional `query`, `category`, `limit`, `page` | Name/SKU/category search; exact category filter applied before pagination; page defaults to 0, limit to 20, maximum 100 |
-| `update_item` | `itemId`, `input: ItemInput` | Uses REST metadata update semantics; name/category required; supply current visibility and assignments to retain them |
+| `update_item` | `itemId`, `input: ItemInput` | Uses REST metadata update semantics; name/category required; omit `amount` (stock changes need a stock command); a changed `currentOperatingHours` is booked as a runtime correction |
 | `delete_item` | `itemId` | Retires while preserving history; subsequent active reads return not found |
 | `create_assembly` | `input: AssemblyInput` | Requires name and nonempty `itemQuantities` map of item UUIDs to positive integers |
 | `get_assembly_details` | `assemblyId` | Authorized detail including component projection |
@@ -73,6 +75,12 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `check_low_stock_items` | Optional nonnegative `threshold`, `page`, `limit` | Evaluates one catalog page (default 20, maximum 100 items) and returns `{alerts, page, limit, hasMore}`; alerts have availability ≤ minStock + buffer; deficit = max(0, minStock − available) |
 | `get_operational_summary` | None | SQL counts of visible active items/serialized assets, shared active locations and upcoming non-cancelled events; maintenance alerts come from `get_maintenance_alerts` |
 | `get_maintenance_alerts` | Optional `page`, `limit` | Evaluates one catalog page and returns `{alerts, page, limit, hasMore}`: item/asset flags and active calendar/hours/usage schedules, including unknown evidence |
+| `get_order_details` | `orderId` | Either order kind with the REST detail projection, scoped to the caller |
+| `create_faction_order` | `input: OrderInput` | REST faction-order creation; faction write permission applies |
+| `create_general_order` | `input: GeneralOrderInput` | REST general-order creation (items only); ASH crew or higher |
+| `prepare_order` | `orderId`, `input: PreparationInput` | Shared preparation for both kinds; warehouse crew or higher |
+| `transition_order` | `orderId`, `status`, `input: TransitionInput` | Shared lifecycle transition; kind-specific permissions and the [order lifecycle](APP_FLOW.md#5-orders-preparation-handover-and-reconciliation) apply |
+| `return_order` | `orderId`, `input: ReturnInput` | Shared reconciliation; missing stays outstanding, write-offs need the inventory admin and a reason, runtime-tracked units need the hours run |
 
 Every MCP tool, resource and prompt call draws from the same per-caller rate-limit budget as the REST API (`inventory.api.rate-limit.*`); an exhausted budget fails the call with `429`.
 

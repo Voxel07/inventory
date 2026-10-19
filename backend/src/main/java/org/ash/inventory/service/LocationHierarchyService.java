@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 /**
- * Warehouse → area → section → shelf → compartment. Every level has a short code unique among its siblings;
+ * Warehouse → area → section → shelf → compartment. Every level has a short code unique among the siblings visible to its editor;
  * the full code ({@code WH1-E1-R3-F2}) identifies a location without encoding the hierarchy into its name.
  */
 @ApplicationScoped
@@ -19,6 +19,7 @@ public class LocationHierarchyService {
     private static final Pattern CODE = Pattern.compile("[A-Z0-9_.]{1,32}");
 
     @Inject org.ash.inventory.orm.LocationHierarchyOrm orm;
+    @Inject org.ash.inventory.helper.security.ActorService actors;
     public void lockHierarchy() {
         orm.lockWarehouses();
         orm.lockLocations();
@@ -28,6 +29,10 @@ public class LocationHierarchyService {
         if (input.warehouseId() != null && warehouse == null) throw ApiException.badRequest("Warehouse not found");
         var parent = input.parentLocationId() == null ? null : orm.find(StorageLocation.class, input.parentLocationId());
         if (input.parentLocationId() != null && parent == null) throw ApiException.badRequest("Parent location not found");
+        // Moving under a parent needs sight of it; a private parent (someone's building) also needs edit rights,
+        // because its owner and grantees inherit access to what is placed inside.
+        if (parent != null && (target.parent == null || !parent.id.equals(target.parent.id)))
+            actors.requireLocationAccess(parent, parent.accessPolicy != null);
         var visited = new HashSet<UUID>();
         for (var cursor = parent; cursor != null; cursor = cursor.parent) {
             if (Objects.equals(cursor.id, target.id) || !visited.add(cursor.id)) throw ApiException.conflict("A location cannot be its own ancestor");
@@ -44,14 +49,19 @@ public class LocationHierarchyService {
         refreshCodes(target);
     }
 
-    /** An explicit code must be free among the siblings; a code derived from the name is numbered until it is. */
+    /**
+     * An explicit code must be free among the siblings; a code derived from the name is numbered until it is.
+     * Only siblings the caller can see count, so a clash never reveals another owner's private location.
+     * {@link #lockHierarchy()} serializes concurrent checks.
+     */
     private String siblingUniqueCode(StorageLocation target, String requested) {
         boolean explicit = requested != null && !requested.isBlank();
         String base = explicit ? requested.trim().toUpperCase(Locale.ROOT) : deriveCode(target.name);
         if (!CODE.matcher(base).matches())
             throw ApiException.badRequest("Location code may only contain A-Z, 0-9, '_' and '.' (max. 32 characters)");
         var taken = new HashSet<String>();
-        for (var sibling : orm.siblings(target)) if (sibling.code != null) taken.add(sibling.code.toUpperCase(Locale.ROOT));
+        for (var sibling : orm.siblings(target))
+            if (sibling.code != null && actors.canViewLocation(sibling)) taken.add(sibling.code.toUpperCase(Locale.ROOT));
         if (!taken.contains(base)) return base;
         if (explicit) throw ApiException.conflict("Location code " + base + " is already used on this level");
         for (int n = 2; ; n++) {

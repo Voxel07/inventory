@@ -163,7 +163,7 @@ function AttendeeList({ event }: { event: EventReport }) {
                   </TableCell>
                   <TableCell sx={{ maxWidth: 300 }}>
                     <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                      {attendee.roles.map((role) => <Chip key={`${role.role}:${role.factionId ?? ''}`} size="small" sx={{ maxWidth: '100%', ...(factionColor(eventType, role.factionName) && { bgcolor: factionColor(eventType, role.factionName), color: role.factionName?.toLowerCase() === 'gof' ? '#161614' : '#fff' }) }}
+                      {attendee.roles.map((role) => <Chip key={`${role.role}:${role.factionId ?? ''}`} size="small" sx={{ maxWidth: '100%', ...(factionColor(eventType, role.factionName) && { bgcolor: factionColor(eventType, role.factionName), color: (theme) => theme.palette.getContrastText(factionColor(eventType, role.factionName)!) }) }}
                         color={FACTION_ROLES.includes(role.role) ? 'primary' : role.role === 'as_held' ? 'secondary' : 'default'}
                         variant={role.role === 'event_crew' ? 'outlined' : 'filled'} label={roleText(role, roleLabels)} />)}
                     </Stack>

@@ -1,6 +1,8 @@
 import { formatDate } from '../../utils/dateFormat';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { Button } from '../shared/ActionButtons';
+import { ActionBar } from '../shared/ActionBar';
+import { PageHeader } from '../shared/PageHeader';
 import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, canTakeOut, canUseGeneralOrders } from '../../utils/access';
@@ -156,11 +158,9 @@ export function GeneralOrders() {
   }
 
   return <Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between' }}>
-      <Box><Typography variant="h4">{t('common.generalOrders')}</Typography>
-        <Typography color="text.secondary">{t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')}</Typography></Box>
-      <Button title={translate('orders.generalOrders.createANewGeneralOrder')} disabled={!canUseGeneralOrders(user)} variant="contained" startIcon={<AddIcon />} onClick={() => startEditing()}>{t('orders.generalOrders.newOrder')}</Button>
-    </Stack>
+    <PageHeader title={t('common.generalOrders')} description={t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')}
+      actions={<ActionBar actions={[{ key: 'new', label: t('orders.generalOrders.newOrder'), title: translate('orders.generalOrders.createANewGeneralOrder'),
+        icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canUseGeneralOrders(user), onClick: () => startEditing() }]} />} />
     <OrderEventFilter
       eventTypes={eventTypes}
       eventType={eventType}

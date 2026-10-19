@@ -35,18 +35,19 @@ public class MemberService {
         var result = new ArrayList<CustodyBalanceService.Balance>();
         var balances = custody.list(true);
         var items = orm.custodyItems(balances.stream().map(CustodyBalanceService.Balance::itemId).distinct().toList());
-        var orders = balances.stream().filter(b -> b.factionOrderId() != null && items.get(b.itemId()).trackingMode == DomainEnums.TrackingMode.serialized)
-                .map(CustodyBalanceService.Balance::factionOrderId).distinct().toList();
+        var orders = balances.stream().filter(b -> b.factionOrder() && b.assetInstanceId() == null
+                        && items.get(b.itemId()).trackingMode == DomainEnums.TrackingMode.serialized)
+                .map(CustodyBalanceService.Balance::orderId).distinct().toList();
         var assets = orm.custodyAssets(orders).stream().collect(java.util.stream.Collectors.groupingBy(a -> a.order() + ":" + a.item()));
         var codes = orm.assetCodes(balances.stream().map(CustodyBalanceService.Balance::assetInstanceId).filter(Objects::nonNull).toList());
         for (var b : balances) {
             var item = items.get(b.itemId());
             if (b.assetInstanceId() != null) { result.add(withName(b, b.name() + " · " + codes.get(b.assetInstanceId()))); continue; }
-            if (b.factionOrderId() == null || item.trackingMode != DomainEnums.TrackingMode.serialized) { result.add(b); continue; }
-            for (var candidate : assets.getOrDefault(b.factionOrderId() + ":" + b.itemId(), List.of())) {
+            if (!b.factionOrder() || item.trackingMode != DomainEnums.TrackingMode.serialized) { result.add(b); continue; }
+            for (var candidate : assets.getOrDefault(b.orderId() + ":" + b.itemId(), List.of())) {
                 var asset = candidate.asset();
                 result.add(new CustodyBalanceService.Balance(b.key() + ":" + asset.id, b.itemId(), b.name() + " · " + asset.assetCode,
-                        b.category(), b.storageLocation(), 1, candidate.pending(), b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), null, asset.id, b.eventOccurrenceId()));
+                        b.category(), b.storageLocation(), 1, candidate.pending(), b.personId(), b.person(), b.eventKey(), b.event(), b.orderId(), b.orderKind(), asset.id, b.eventOccurrenceId()));
             }
         }
         return result;
@@ -106,7 +107,7 @@ public class MemberService {
             // Serialized damage belongs to the asset: it marks its condition and reaches the asset page and return review.
             if (input.severity() == null) throw ApiException.badRequest("Choose the damage severity");
             r.damageReport = inventory.createDamage(new ApiModels.DamageInput(item.id, 1, r.notes, input.severity(),
-                    held == null ? null : held.factionOrderId(), input.commandId(), r.asset.id, null, false, null, null));
+                    held == null ? null : held.orderId(), input.commandId(), r.asset.id, null, false, null, null));
         }
         orm.persist(r);
         events.record("member_request.created", "member_request", r.id, actor.id, input.commandId(), Map.of("kind", r.kind, "itemId", item.id.toString()));
@@ -137,13 +138,13 @@ public class MemberService {
         if (input.quantity() > row.checkedOut() - row.pendingQuantity()) throw ApiException.conflict("Quantity already submitted or no longer outstanding");
         var result = returns.create(new ApiModels.ReturnSubmissionInput(row.itemId(), input.quantity(),
                 row.assetInstanceId() == null ? input.assetId() : row.assetInstanceId(), actor.id,
-                row.factionOrderId() == null ? row.generalOrderId() : row.factionOrderId(), null, input.notes(), row.eventOccurrenceId()));
+                row.orderId(), null, input.notes(), row.eventOccurrenceId()));
         result.memberCommandId = input.commandId();
         return result.id;
     }
     private static CustodyBalanceService.Balance withName(CustodyBalanceService.Balance b, String name) {
         return new CustodyBalanceService.Balance(b.key(), b.itemId(), name, b.category(), b.storageLocation(), b.checkedOut(), b.pendingQuantity(),
-                b.personId(), b.person(), b.eventKey(), b.event(), b.factionOrderId(), b.generalOrderId(), b.assetInstanceId(), b.eventOccurrenceId());
+                b.personId(), b.person(), b.eventKey(), b.event(), b.orderId(), b.orderKind(), b.assetInstanceId(), b.eventOccurrenceId());
     }
     private RequestView view(MemberRequest r) { return new RequestView(r.id, r.item.id, r.item.name, r.requester.name, r.kind, r.quantity, r.notes, r.status, r.response, r.createdAt, r.revision, r.asset == null ? null : r.asset.id, r.location == null ? null : r.location.id, r.damageReport == null ? null : r.damageReport.id); }
     /** Self-service for items in one's own custody starts at faction leader. */

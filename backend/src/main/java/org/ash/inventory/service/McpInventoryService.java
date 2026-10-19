@@ -62,6 +62,11 @@ public class McpInventoryService {
     }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public List<ApiResponses.ItemResponse> saveItems(ApiModels.ItemBatchInput input) {
+        return queries.projectItems(catalog.saveItems(valid(input).items()));
+    }
+
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
     public ApiResponses.ItemResponse updateItem(UUID id, ApiModels.ItemInput input) {
         return queries.projectItem(catalog.updateItem(id, valid(input)));
     }

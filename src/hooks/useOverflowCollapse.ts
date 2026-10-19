@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 
 /**
- * Collapses row actions once a scroll container would overflow horizontally.
+ * Collapses actions once their container would overflow horizontally.
  * Attach the returned ref to the container; it expands again once the
  * container regains the width it needed before collapsing.
  */
-export function useCollapsedRowActions<T extends HTMLElement>() {
+export function useOverflowCollapse<T extends HTMLElement>() {
     const [collapsed, setCollapsed] = useState(false);
     const collapsedRef = useRef(false);
     const neededWidth = useRef(0);

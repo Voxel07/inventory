@@ -3,10 +3,14 @@ import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Button } from '../shared/ActionButtons';
+import { ActionBar, type Action } from '../shared/ActionBar';
 import { formatStatus } from '../../utils/formatters';
 
 /** Visible record rows: reference, working details, and commands stay in view. */
-export function OperationListEntry({ title, status, children, actions }: { title: ReactNode; status?: string; children: ReactNode; actions?: ReactNode }) {
+export function OperationListEntry({ title, status, children, actions: candidates = [] }: {
+  title: ReactNode; status?: string; children: ReactNode; actions?: (Action | false | null | undefined)[];
+}) {
+  const actions = candidates.some(Boolean);
   const color = status && ['cancelled', 'rejected', 'written_off', 'expired', 'failed'].includes(status) ? 'error'
     : status && ['received', 'posted', 'completed', 'verified', 'returned_to_service', 'accepted', 'available'].includes(status) ? 'success'
     : status && ['in_transit', 'awaiting_approval', 'awaiting_recount', 'partially_received', 'in_repair', 'ordered'].includes(status) ? 'warning' : 'default';
@@ -18,9 +22,11 @@ export function OperationListEntry({ title, status, children, actions }: { title
       {status && <Chip size="small" variant="outlined" color={color} label={formatStatus(status)} />}
     </Stack>
     <Stack spacing={0.5} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{children}</Stack>
-    {/* Actions keep the shared touch target; on phones they get a full row below the details. */}
-    {actions && <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center', justifyContent: { md: 'flex-end' },
-      pt: { xs: 1, md: 0 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider' }}>{actions}</Stack>}
+    {/* Actions keep the shared touch target; on phones they get a full row below the details. Pinned steps stay visible
+        when the row is too narrow, the rest move into the "more" menu. */}
+    {actions && <Box sx={{ display: 'flex', minWidth: 0, pt: { xs: 1, md: 0 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider' }}>
+      <ActionBar actions={candidates} align={{ xs: 'start', md: 'end' }} />
+    </Box>}
   </Box>;
 }
 

@@ -29,7 +29,7 @@ const assembly = fixtureAssembly({
 const rows: MemberCustody[] = items.map((item, index) => ({
   key: `${item.id}:person-1:order-1`, itemId: item.id, name: item.name, category: item.category, storageLocation: pallets.name,
   checkedOut: quantities[index], personId: 'person-1', person: 'matze', eventKey: 'LS:UCRF', event: 'LS · UCRF · LS26-UCRF-01',
-  factionOrderId: 'order-1',
+  orderId: 'order-1', orderKind: 'faction',
 }));
 
 installFixtureApi(({ path, url }) => {

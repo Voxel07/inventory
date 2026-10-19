@@ -353,6 +353,11 @@ public class CatalogOrm extends EntityOrm {
                 .getResultStream().findFirst().orElse(null);
     }
 
+    public boolean skuExists(String sku) {
+        return !entityManager.createQuery("select i.id from Item i where i.sku = :sku", UUID.class)
+                .setParameter("sku", sku).setMaxResults(1).getResultList().isEmpty();
+    }
+
     public boolean assetCodeExists(String code) {
         if (code == null || code.isBlank()) return false;
         return entityManager.createQuery("select count(a) from AssetInstance a where lower(a.assetCode) = :code", Long.class)

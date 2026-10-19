@@ -10,7 +10,7 @@ This page is the entry point to the architecture documentation. Current source b
 | [Technical Requirements](TECHNICAL_REQUIREMENTS.md) | Frameworks, dependencies, boundaries, security, runtime constraints and observability | What the app is built with and how components cooperate |
 | [App Flow](APP_FLOW.md) | Routes, navigation, user journeys and lifecycle states | How users reach and complete tasks |
 | [Design Brief](DESIGN_BRIEF.md) | Theme tokens, typography, layout, component patterns and accessibility goals | How screens should look and behave |
-| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 59 tables, relationships, stock authority, media, caches, personal data and recovery | Where data lives and which store is authoritative |
+| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 58 tables, relationships, stock authority, media, caches, personal data and recovery | Where data lives and which store is authoritative |
 | [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) | Prioritized gaps, target refactors, progress and acceptance evidence | What is complete, partial, planned or still unverified |
 
 Each subject has one owner above. Keep detailed requirements in the PRD, stack decisions in Technical Requirements and unfinished work in the progress register rather than duplicating their full tables here.
@@ -40,7 +40,7 @@ A modular monolith keeps stock, order, custody and lifecycle changes in local AC
 - REST, MCP and offline replay delegate to the same services/policies; DTOs separate persistence from API output.
 - Data is disposable; change the single schema baseline/entities directly. No incremental migrations or compatibility adapters are the intended development model.
 
-The source still contains exceptions and unfinished consolidation: guarded master-data deletion, an opening-amount stock fallback, two order models, duplicate maintenance state, legacy visibility and full catalog-page draining. These are explicitly tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md), rather than described as completed target architecture.
+Remaining consolidation: duplicate item/schedule maintenance state (PLAN-10) and the response/reference-graph privacy filter running alongside query predicates (PLAN-01). Master-data retirement, ledger-only opening stock, the single order aggregate and on-demand list paging are in place. These are tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md), rather than described as completed target architecture.
 
 ## Operational guides
 

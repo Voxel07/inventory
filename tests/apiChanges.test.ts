@@ -115,3 +115,21 @@ test('realtime payloads are decoded to string fields and always count as server 
   const nested = decodeServerChange({ type: 'batch', changes: [{ type: 'a', changes: [{ type: 'b', changes: [{ type: 'c', changes: [{ type: 'd' }] }] }] }] });
   expect(nested.changes?.[0]?.changes?.[0]).toEqual({ type: 'b', source: 'server' });
 });
+
+test('runtime bookings and item responsibility changes refresh their readers only', () => {
+  const client = new QueryClient();
+  const keys = [['items', 'item-a', 'assets', 'asset-a', 'runtime'], ['maintenance'], ['item-responsibility', 'item-a'],
+    ['order-pickup-groups', 'order-a'], ['operations', 'vendors'], ['transactions']];
+  keys.forEach(key => client.setQueryData(key, []));
+  invalidateForApiChange(client, { type: 'runtime.changed' });
+  expect(client.getQueryState(['items', 'item-a', 'assets', 'asset-a', 'runtime'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['maintenance'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['item-responsibility', 'item-a'])?.isInvalidated).toBe(false);
+  expect(client.getQueryState(['operations', 'vendors'])?.isInvalidated).toBe(false);
+  expect(client.getQueryState(['transactions'])?.isInvalidated).toBe(false);
+  invalidateForApiChange(client, { type: 'item.changed' });
+  expect(client.getQueryState(['item-responsibility', 'item-a'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['order-pickup-groups', 'order-a'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['operations', 'vendors'])?.isInvalidated).toBe(false);
+  client.clear();
+});

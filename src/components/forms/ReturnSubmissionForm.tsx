@@ -11,7 +11,7 @@ type Props = {
   maxQuantity: number;
   assetInstanceId?: string;
   returnedForUserId?: string;
-  factionOrderId?: string;
+  orderId?: string;
   eventOccurrenceId?: string;
   onSubmit: (data: ReturnSubmissionFormData) => void;
   isLoading?: boolean;
@@ -22,7 +22,7 @@ export function ReturnSubmissionForm({
   maxQuantity,
   assetInstanceId,
   returnedForUserId,
-  factionOrderId,
+  orderId,
   eventOccurrenceId,
   onSubmit,
   isLoading,
@@ -44,7 +44,7 @@ export function ReturnSubmissionForm({
       quantity,
       assetInstanceId,
       returnedForUserId,
-      orderId: factionOrderId,
+      orderId,
       eventOccurrenceId,
       placementImageFile: image,
       notes: notes.trim() || undefined,

@@ -33,6 +33,20 @@ final class OrderReturnPolicy {
             throw ApiException.badRequest("Return quantities exceed outstanding quantity for " + item.name);
     }
 
+    /**
+     * A runtime-tracked unit going back to stock needs the meter reading after the event, and a reading never goes
+     * below the current meter; editing the meter is a separate correction.
+     */
+    static void validateReading(Item item, java.math.BigDecimal reading, java.math.BigDecimal current, boolean backInStock, String unit) {
+        if (reading == null) {
+            if (item.tracksRuntime && backInStock) throw ApiException.badRequest("Record the hours run before returning " + unit + " to stock");
+            return;
+        }
+        var meter = current == null ? java.math.BigDecimal.ZERO : current;
+        if (reading.compareTo(meter) < 0)
+            throw ApiException.badRequest("The meter reading for " + unit + " cannot be lower than " + meter.toPlainString());
+    }
+
     static String damageDescription(String notes, String orderLabel) {
         return notes == null || notes.isBlank() ? "Damage recorded during the return of " + orderLabel : notes;
     }

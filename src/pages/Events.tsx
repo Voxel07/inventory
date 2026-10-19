@@ -6,6 +6,8 @@ import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { PageHeader } from '../components/shared/PageHeader';
+import { ActionBar } from '../components/shared/ActionBar';
+import { useOverflowCollapse } from '../hooks/useOverflowCollapse';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -52,6 +54,7 @@ type UsageRow = { id: string; name: string };
 
 export function Events() {
   const navigate = useNavigate();
+  const { ref: historyRef, collapsed: historyCollapsed } = useOverflowCollapse<HTMLDivElement>();
   const t = useT();
   const language = useAppLanguage();
   const { eventTypes } = useFactionCatalog();
@@ -221,26 +224,23 @@ export function Events() {
         {eventTypes.map((type) => <ToggleButton title={translate('pages.events.filterEventsByThisEventType')} key={type} value={type}>{type}</ToggleButton>)}
       </ToggleButtonGroup>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap sx={{ mb: 3, gap: 2, alignItems: { sm: 'center' }, flexWrap: 'wrap' }}>
+      {/* Wrapping only in rows: a wrapping column sizes to its widest item and would push the select off screen. */}
+      <Stack direction={{ xs: 'column', sm: 'row' }} useFlexGap sx={{ mb: 3, gap: 2, alignItems: { sm: 'center' }, flexWrap: { sm: 'wrap' } }}>
         <TextField select label={t('pages.events.selectEvent')} value={selectedEvent?.id ?? ''}
-          onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: 260 }}>
+          onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: { sm: 260 }, maxWidth: '100%' }}>
           {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
             {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}
           </MenuItem>)}
         </TextField>
-        {canEdit && selectedEvent?.status === 'planned' && <>
-          <Button title={translate('pages.events.editTheEventNameDatesAndNotes')} variant="outlined" startIcon={<EditIcon />} onClick={() => openEdit(selectedEvent)}>
-            {t('pages.events.editEvent')}
-          </Button>
-          <Button title={translate(eventOver ? 'pages.events.closeTheEventAndLockItsReport' : 'pages.events.theEventCanBeClosedOnItsLastDay')} variant="outlined"
-            startIcon={<EventAvailableIcon />} disabled={!eventOver} onClick={() => setCloseOpen(true)}>
-            {t('pages.events.closeEvent')}
-          </Button>
-        </>}
-        {canEdit && selectedEvent && <Button title={translate('pages.events.correctTheItemsAndQuantitiesOfThisEvent')} variant="outlined" startIcon={<Inventory2OutlinedIcon />}
-          onClick={() => navigate(`/events/${selectedEvent.id}?edit=1`)}>
-          {t('pages.events.editItems')}
-        </Button>}
+        {canEdit && selectedEvent && <ActionBar align="start" actions={[
+          selectedEvent.status === 'planned' && { key: 'edit', label: t('pages.events.editEvent'), title: translate('pages.events.editTheEventNameDatesAndNotes'),
+            icon: <EditIcon />, pinned: true, onClick: () => openEdit(selectedEvent) },
+          selectedEvent.status === 'planned' && { key: 'close', label: t('pages.events.closeEvent'),
+            title: translate(eventOver ? 'pages.events.closeTheEventAndLockItsReport' : 'pages.events.theEventCanBeClosedOnItsLastDay'),
+            icon: <EventAvailableIcon />, disabled: !eventOver, onClick: () => setCloseOpen(true) },
+          { key: 'items', label: t('pages.events.editItems'), title: translate('pages.events.correctTheItemsAndQuantitiesOfThisEvent'),
+            icon: <Inventory2OutlinedIcon />, onClick: () => navigate(`/events/${selectedEvent.id}?edit=1`) },
+        ]} />}
         {selectedEvent?.status === 'completed' && <Chip color="success" icon={<EventAvailableIcon />} label={t('pages.events.closedReportLocked')} />}
       </Stack>
 
@@ -303,7 +303,7 @@ export function Events() {
       )}
 
       <Typography variant="h6" sx={{ mb: 1 }}>{t('pages.events.eventHistory')}</Typography>
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} ref={historyRef}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -324,15 +324,13 @@ export function Events() {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Button title={translate('pages.events.openThisEventSDetails')} size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate(`/events/${report.id}`)}>
-                    {t('common.open')}
-                  </Button>
-                  <Button title={translate('pages.events.editThisEventSDetails')} disabled={!canEdit} size="small" startIcon={<EditIcon />} onClick={() => navigate(`/events/${report.id}?edit=1`)}>
-                    {t('common.edit')}
-                  </Button>
-                  <Button title={translate('pages.events.reviewDeletionOfThisEvent')} disabled={!canEdit} size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setDeletingEventId(report.id)}>
-                    {t('common.delete')}
-                  </Button>
+                  <ActionBar size="small" collapsed={historyCollapsed} actions={[
+                    { key: 'open', label: t('common.open'), title: translate('pages.events.openThisEventSDetails'), variant: 'text', pinned: true, onClick: () => navigate(`/events/${report.id}`) },
+                    { key: 'edit', label: t('common.edit'), title: translate('pages.events.editThisEventSDetails'), icon: <EditIcon />,
+                      variant: 'text', disabled: !canEdit, onClick: () => navigate(`/events/${report.id}?edit=1`) },
+                    { key: 'delete', label: t('common.delete'), title: translate('pages.events.reviewDeletionOfThisEvent'), icon: <DeleteIcon />,
+                      variant: 'text', color: 'error', disabled: !canEdit, onClick: () => setDeletingEventId(report.id) },
+                  ]} />
                 </TableCell>
               </TableRow>
             ))}

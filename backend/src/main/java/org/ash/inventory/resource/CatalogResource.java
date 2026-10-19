@@ -68,6 +68,11 @@ public class CatalogResource {
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
     @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }
+    /** Bulk create/update for imports: one request and one transaction per chunk of up to 100 rows. */
+    @POST @Path("/items/batch") @Transactional
+    public List<ApiResponses.ItemResponse> saveItems(@Valid @jakarta.validation.constraints.NotNull ApiModels.ItemBatchInput input) {
+        return queries.projectItems(service.saveItems(input.items()));
+    }
     @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { return queries.projectItem(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { service.retireItem(id); return Response.noContent().build(); }
 

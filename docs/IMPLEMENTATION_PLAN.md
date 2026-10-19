@@ -19,23 +19,24 @@ Priorities: P1 stock/history/security and release acceptance, P2 architectural c
 
 | Capability | Status | Source evidence | Remaining issue |
 |---|---|---|---|
-| Item catalog, serialized assets, assemblies, images, labels | Implemented | CatalogService, StockManagementService; ItemForm/ItemDetail/AssetDetail | Legacy visibility PLAN-01 |
-| Warehouse/location hierarchy and private access | Implemented | LocationHierarchyService, InventoryAccessService/InventoryAccess; StorageLocations/InventorySharing | Predicate simplification PLAN-01; browser policy acceptance |
+| Item catalog, serialized assets, assemblies, images, labels | Implemented | CatalogService, StockManagementService; ItemForm/ItemDetail/AssetDetail | Privacy filter consolidation PLAN-01 |
+| Warehouse/location hierarchy, sibling-unique location codes and private access | Implemented | LocationHierarchyService, InventoryAccessService/InventoryAccess; StorageLocations/InventorySharing | Predicate simplification PLAN-01; browser policy acceptance |
 | Ledger, positions, reservations, exact-asset stock | Implemented | InventoryOperationsService, PositionService, StockPolicy, OrderAllocationService | Contention/load acceptance; DB-enforced append-only FEAT-09 |
 | Transfers, blind counts, lots/FEFO/quarantine | Implemented | TransferService, CountService, PositionService; StockOperations | Integrated and concurrent operation acceptance |
 | Faction/general order lifecycle and custody | Implemented | InventoryOrder, OrderService, CustodyBalanceService; shared commands/history/evidence | PLAN-02 implemented; runtime pickup/reconciliation acceptance pending |
 | Two-stage returns and member self-service | Implemented | ReturnSubmissionService, MemberService; ReturnedItems/Contributor | Real device/photo/custody acceptance |
 | Damage, repair, maintenance blocking | Partial | LifecycleService, MaintenanceEvaluationService, MaintenancePolicy | Duplicate item/schedule maintenance PLAN-10 |
+| Runtime tracking (operating hours per event/order) | Implemented | RuntimeService, `runtime_entries`, `Item.tracksRuntime`; RuntimeReturnField/OperatingHoursDialog; RuntimeReturnApiTest | Browser acceptance |
 | Event planning, purchasing, receipts and supplier evidence | Implemented | PlanningService, PurchasingService; Procurement/PurchasingOperations | Environment export/media acceptance |
-| Event attendees, people registry, predefined roles, daily food stamps and crew catering timeline | Implemented | EventAttendees, EventTimeline, EventLogisticsService; baseline logistics tables | EventLogisticsApiTest and BaselineSchemaTest written, compile; not yet run (need PostgreSQL). Typecheck, changed-file lint and `tests/apiChanges.test.ts` pass; browser acceptance pending |
+| Event attendees, people registry, predefined roles, daily food stamps and crew catering timeline | Implemented | EventAttendees, EventTimeline, EventLogisticsService; baseline logistics tables | EventLogisticsApiTest and BaselineSchemaTest pass in the full PostgreSQL suite ([backend test failures](BACKEND_TEST_FAILURES.md)); browser acceptance pending |
 | Ownership, consent and loan/rental evidence | Implemented | EquipmentService, LoanService; EquipmentOwnership/LoansPanel | Integrated privacy/collection/return acceptance |
 | Action inbox and reminders | Partial | ActionInboxService; ActionInboxContent | In-app only; no delivery channel FEAT-01 |
 | Eight reports, CSV/PDF and imports | Implemented | OperationalReportService; ReportsPanel/CsvImportDialog | Export acceptance ACC-03; large lists PLAN-03; manual rebuild FEAT-06 |
 | Offline queue/cold cached reads/correction | Implemented | offlineQueue, resourceFactory, useProgressiveList, SyncService | Field acceptance ACC-02; replacement PLAN-06; scope FEAT-07 |
 | OIDC roles and session boundaries | Partial | ActorService, ProductionAuthGuard, oidcClient/authManager | Revocation bound GAP-03/ACC-01; library replacement PLAN-05 |
-| REST/MCP policy and DTO boundaries | Partial | ApiModels/ApiResponses, ApiMapper, McpInventoryService; privacy projection/filter | Generated contract PLAN-04; privacy PLAN-01; MCP order/custody reads FEAT-08 |
+| REST/MCP policy and DTO boundaries | Partial | ApiModels/ApiResponses, ApiMapper, McpInventoryService; privacy projection/filter | Generated contract PLAN-04; privacy PLAN-01; MCP custody/movement reads FEAT-08 |
 | Outbox/SSE and cluster coordination | Implemented in source | DomainEventService, OutboxDispatcher, EventBroadcaster, cluster Compose | Real multi-node delivery/failure acceptance ACC-05; alerting OBS-01 |
-| Responsive theme, shared UI, DE/EN | Implemented in source | theme.ts, Navigation, shared controls, i18n | Rendered accessibility/mobile acceptance; localization PLAN-09 |
+| Responsive theme, shared UI, DE/EN | Implemented in source | theme.ts, Navigation, shared controls, i18n | Rendered accessibility/mobile acceptance |
 
 Detailed product IDs and acceptance conditions live in [Product Requirements](PRODUCT_REQUIREMENTS.md). Existing regression ownership is mapped in [tests/README.md](../tests/README.md).
 
@@ -60,13 +61,13 @@ Dependency order is guidance; split into reviewable changes without compatibilit
 |---|---|---|---|
 | PLAN-01 | P2 · Partial (legacy visibility fields removed; typed-reference redaction) | Consolidate privacy into scoped query predicates; remove reference-graph/post-filter dependence where safe and remove legacy visibility fields (old #9/#16) | Measure current reads first. Retain owner/HQ/grantee rules, nested/location/media redaction, accurate paging, REST/MCP parity and cache revocation |
 | PLAN-02 | Implemented · static verification (H12 part 3) | One `orders`/`order_lines` aggregate with `kind=faction/general`, shared lifecycle, reservations, history and REST/MCP/replay commands; replaced aggregates removed | Existing scenarios/fixtures aligned; runtime acceptance still pending against a recreated baseline (no builds/test suites run for this refactor) |
-| PLAN-03 | P2 · Done (on-demand paging, server filters/sort, server-search pickers; no shared DataTable extraction) | Stop automatic full collection download; server paging/filter/sort, DataGrid server mode, targeted autocomplete and shared DataTable (old #11/#31) | Lists load pages on demand (`usePagedList`, `X-Has-More`); pickers search the server (`ItemAutocomplete`); complete reads only for bounded per-item sets, exports, imports and the offline snapshot |
+| PLAN-03 | P2 · Done (on-demand paging, server filters/sort, server-search pickers; no shared DataTable extraction) | Stop automatic full collection download; server paging/filter/sort, DataGrid server mode, targeted autocomplete and shared DataTable (old #11/#31) | Lists load pages on demand (`usePagedList`, `X-Has-More`); pickers search the server (`ItemAutocomplete`); complete reads only for bounded sets (location tree, one item's positions/assets/lots, user pickers, one event's faction orders), exports, imports and the offline snapshot |
 | PLAN-04 | P2 · Planned | Generate frontend contracts/client from OpenAPI with openapi-typescript/openapi-fetch (old #25) | Preserve supported operation interfaces, explicit DTOs, auth/session guards, errors and offline command adapters |
 | PLAN-05 | P3 · Planned | Replace custom PKCE/session implementation with oidc-client-ts and react-oidc-context (old #24) | Only if the custom code causes problems. Preserve issuer/sub, role/faction refresh, rotating refresh token, logout, account isolation and token expiry |
 | PLAN-06 | P3 · Planned | Query persister and persisted paused mutations replacing custom cache/queue plumbing (old #26) | Coordinate with PLAN-04. Keep account ownership, private exclusions, UUID idempotency, correction chains and explicit queued UI. No last-write-wins |
 | PLAN-07 | P3 · Planned | react-hook-form + zod replacing per-field local state (old #27) | Shared form rules, client/API validation parity, media crop/attachments, accessible errors |
 | PLAN-08 | P3 · Planned | React Router 7 data router/loaders (old #28) | Keep current routes, lazy behavior, session/query boundaries, guards and denied-route feedback |
-| PLAN-09 | Done (15 October 2026) | i18next keys only; inline German/English pairs removed (old #22) | 2,488 matching DE/EN resource keys; typed translators, interpolation/plural validation, PDF/import callbacks retain their selected language; date/money helpers unchanged |
+| PLAN-09 | Done (15 October 2026) | i18next keys only; inline German/English pairs removed (old #22) | Matching DE/EN resource keys (2,551 each on 19 October 2026); typed translators, interpolation/plural validation, PDF/import callbacks retain their selected language; date/money helpers unchanged |
 | PLAN-10 | P2 · Partial (status derived from `out_of_service` + calendar; per-asset due dates) | Maintenance state lives in schedules; remove duplicate item status/date/interval representation (old #17) | Update baseline, commands, projections, category defaults, reports and MCP together; preserve warnings and checkout blocking |
 | PLAN-11 | P3 · Planned, measurement-dependent | Cache more reference data by committed revision (old #12) | Add only after profiling; never cache dynamic stock or widen private-resource access |
 
@@ -83,7 +84,7 @@ PLAN-05..09 replace working libraries without direct user value; schedule them o
 | FEAT-05 | P2 · Deferred | No order cut-off per event; no "copy last year's order as draft" (ORD-05 only compares) | Add `orderDeadline` to event occurrences; clone action on faction orders |
 | FEAT-06 | P3 · Deferred | Report snapshots rebuild only manually | Rebuild stale snapshots on a schedule or on open using the existing source tokens |
 | FEAT-07 | P2 · Deferred | Offline scope misses field tasks: blind counts, return acceptance, transfer receipt, member return submission without photo | Extend `/api/sync` command set; same replay/correction rules |
-| FEAT-08 | P3 · Deferred | MCP has no order, custody or movement reads ("who has radio X?", "what is faction Y still holding?") | Read-only tools over existing scoped queries |
+| FEAT-08 | P3 · Partial | MCP reads and drives orders (`get_order_details`, order commands) but has no custody or movement reads ("who has radio X?", "what is faction Y still holding?") | Read-only tools over existing scoped custody/transaction queries |
 | FEAT-09 | P3 · Deferred | Append-only history is not database-enforced | Stock writes set `availability_after` with an UPDATE right after the INSERT, so a plain deny-UPDATE trigger would break every movement. Either compute the value before persisting or allow changes only to rows inserted by the current transaction; needs PostgreSQL integration tests |
 
 ### Operations
@@ -117,6 +118,16 @@ PLAN-05..09 replace working libraries without direct user value; schedule them o
 The PostgreSQL-backed `@QuarkusTest` suites need a disposable database ([tests/README.md](../tests/README.md)); results older than the current revision are not current evidence.
 
 ## 7. Fix log
+
+### 15–19 October 2026 — changes after the documentation baseline
+
+| Priority | Change | Status | Evidence |
+|---|---|---|---|
+| P1 | One order aggregate for faction and general orders (PLAN-02, `7178114`); shadowed order sub-routes moved into the order resources (`c2cf8a4`) | Done | Full PostgreSQL suite 207/0 ([backend test failures](BACKEND_TEST_FAILURES.md)) |
+| P1 | Duplicate-insert races on an account's first overlapping requests (`a72871f`) | Done | Commit only; no separate acceptance record |
+| P2 | Native executable image, `-Xmx512m -Xmn256m`, CI publishes `Dockerfile.native` (`1d63cfa`) | Done | [Native memory benchmark](NATIVE_MEMORY_BENCHMARK.md) |
+| P2 | Runtime tracking (`runtime_entries`, MNT-02) and sibling-unique location codes with full codes (LOC-01) (`0f38e8f`) | Done | `RuntimeReturnApiTest`, `LocationCodeTest` |
+| P2 | Documentation re-aligned with source; open findings in [docs vs code review](REVIEW_DOCS_VS_CODE.md) | Done | Static review |
 
 ### 12 October 2026 — documentation and review fixes
 

@@ -48,5 +48,5 @@ Results are the visible links inside rows, cards or list items that come after t
 
 ## 4. Known limits
 
-- The in-app overview lists `Alt ←` next to Backspace, but the handler ignores `Alt` combinations. Only Backspace is handled by the app; the browser's own back shortcut is unaffected.
+- Only Backspace is handled by the app; the browser's own back shortcut (`Alt ←`) still works but is not part of the shortcut handler.
 - Shortcuts depend on the page markup. A new list that is not a table, card or list, or that has no visible links, will not be reachable with `↓` / `j`.

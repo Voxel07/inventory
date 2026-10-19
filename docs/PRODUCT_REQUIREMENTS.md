@@ -62,11 +62,11 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | CAT-02 | Maintain assemblies with fixed component quantities; an assembly is visible only if every component is | Implemented | `CatalogService`, `ApiQueryService.projectAssemblies`, `AssemblyDetail` |
 | CAT-03 | Serialized equipment is one parent item with aggregate stock and `minStock`, batch asset-ID generation, and asset drill-down (state, location, hours, custodian) | Implemented | `AssetInstance`, `AssetInstancesList`, `AssetDetail` |
 | CAT-04 | Item detail shows free-form product info, stock, images, history and assets | Implemented | `ItemDetail` |
-| CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Partial | `InventoryAccessPolicy`, scoped `CatalogOrm`. Legacy `visibilityScope` runs in parallel [PLAN-01](IMPLEMENTATION_PLAN.md) |
+| CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Implemented | `InventoryAccessPolicy` is the only visibility rule; scoped `CatalogOrm`. Predicate consolidation of the response filter is [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
 | CAT-08 | Unique SKU/asset codes; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
-| LOC-01 | Warehouses and a hierarchical, georeferenced location tree with pickup points; no cycles, same-warehouse parent | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
+| LOC-01 | Warehouses and a hierarchical, georeferenced location tree with pickup points; no cycles, same-warehouse parent; each level has a short code unique among the siblings its editor can see and a derived full code; a private parent accepts sub-locations only from its editors (`WH1-E1-R3-F2`) | Implemented | `LocationHierarchyService`, `StorageLocations`, `StorageLocationMap` |
 | LOC-02 | Private locations protect address, coordinates, overlays, hierarchy and contents | Implemented | `StorageLocation.accessPolicy`, `ApiMapper` redaction, `InventorySharing` |
 
 **Stock**
@@ -86,13 +86,13 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
 | ORD-01 | Order lifecycle in [App Flow](APP_FLOW.md), including cancellation; transitions under an order lock | Implemented | `InventoryOrder.kind`, one `OrderService`, shared reservations/history/custody [PLAN-02](IMPLEMENTATION_PLAN.md); runtime acceptance pending |
-| ORD-02 | Commission items, assemblies and exact assets on desktop and mobile | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` |
+| ORD-02 | Commission items, assemblies and exact assets on desktop and mobile; general orders request items only | Implemented | `OrderPickListTable`, `GeneralOrderWorkflow` (`GeneralOrderInput.requestedQuantities`) |
 | ORD-03 | Preparation reserves; pickup atomically converts reservations to custody | Implemented | `OrderService`, `OrderAllocationService` |
 | ORD-04 | Reconcile returned, consumed, missing, damaged and written-off units against handed-over units; write-off by `admin` with reason lets orders with lost units close | Implemented | `OrderReturnChecklist`, `OrderService.returnItems`, `CustodyBalanceService` |
 | ORD-05 | Opt-in comparison with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve SKU/QR, asset code and order code with targeted queries; returns show the quantity out and can link the originating order | Implemented | `codeResolver.ts`, `TransactionForm` |
 | ORD-07 | Camera and manual code scanning; scanning never changes stock | Implemented | `CameraScanner`, `useBarcodeScanner`; nginx allows `camera=(self)` |
-| ORD-08 | Group ordered/prepared items by responsible person; separate pickup points per group and recipient-scoped in-app notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components |
+| ORD-08 | Group ordered/prepared items by responsible person; separate pickup points per group and recipient-scoped in-app notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components of faction orders |
 | RET-01 | Expected return location per item; the returner can attach a placement photo | Implemented | `Item.returnLocation`, `ReturnSubmissionForm` |
 | RET-02 | A submitted return isn't stock until a warehouse worker accepts it; pending/history view with accept/reject | Implemented | `ReturnSubmissionService`, `ReturnedItems` |
 | AUD-01 | Append-only order and stock history: actor, UTC time, action, from/to, delta, note, idempotency key | Implemented | `OrderHistory`, `StockTransaction` |
@@ -105,6 +105,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | DAM-01 | Report → triage → repair → verify, or write off; repair never creates stock; write-off only by `admin` | Implemented | `LifecycleService`, `DamageReportsList` |
 | DAM-02 | Resolution comment; optionally update the item hint | Implemented | `LifecycleService`, `DamageReportsList` |
 | MNT-01 | Schedules by date, operating hours or usage, per item or per asset; warning window; checkout blocking | Partial | `MaintenancePolicy`, `MaintenanceEvaluationService`, `IndividualSchedules`. Item columns duplicate the schedules [PLAN-10](IMPLEMENTATION_PLAN.md) |
+| MNT-02 | Runtime-tracked items/assets book every meter change as a runtime entry (hours, reading after, event/order, source, actor); returning a runtime-tracked unit to stock requires the hours run; readings never go backwards except through an explicit correction | Implemented | `RuntimeService`, `runtime_entries`, `Item.tracksRuntime`, `RuntimeReturnField`, `OperatingHoursDialog` |
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
 | PRC-02 | Purchase orders: supplier, dates, buyer, quantity, unit price, reference; partial goods receipts; vendor documents restricted to authorized purchasing roles | Implemented | `PurchasingService`, `PurchasingOperations` |
 | PRC-03 | Unreceived purchase quantity is shown separately as ordered supply and excluded from owned/available until received | Implemented | `PurchasingService`, item stock DTO |
@@ -143,7 +144,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | SEC-11 | Owners offer private items for use: organization members view and order them read-only (against owner commitments); the owner is notified once per order or request | Implemented | `InventoryAccessPolicy.publicUse`, `@PrivateInventoryCommand(usage = true)`, `ItemRequestNotifier` (`item_requested`) |
 | API-01 | Explicit DTOs; entities are never serialized | Implemented | `ApiResponses`, `ApiMapper` |
 | API-02 | Each frontend contract exposes only supported operations | Implemented | Capability interfaces in `resourceFactory.ts`. Target: generated client [PLAN-04](IMPLEMENTATION_PLAN.md) |
-| API-03 | Lists are paged, filtered and sorted on the server; clients never download whole collections | Partial | Endpoints support paging and search; the frontend still drains catalog pages but refetches only on relevant events [PLAN-03](IMPLEMENTATION_PLAN.md) |
+| API-03 | Lists are paged, filtered and sorted on the server; clients load further pages on demand | Implemented | `@Paged` + `X-Has-More`, `usePagedList`, server-search pickers [PLAN-03](IMPLEMENTATION_PLAN.md). Complete reads are limited to bounded sets: the location tree, one item's positions/assets/lots, user pickers, one event's faction orders, exports/imports and the offline snapshot |
 
 ## 5. Required business behavior
 

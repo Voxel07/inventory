@@ -120,7 +120,8 @@ export function Header() {
                     color="inherit"
                     edge="start"
                     onClick={toggleSidebar}
-                    sx={{ mr: { xs: 0.5, sm: 1.5 } }}
+                    // The phone toolbar padding is narrower than the edge offset; keep the button fully on screen.
+                    sx={{ ml: { xs: -0.5, sm: -1.5 }, mr: { xs: 0.5, sm: 1.5 } }}
                     aria-label={t('header.toggleNavigation')}
                 >
                     <MenuIcon />

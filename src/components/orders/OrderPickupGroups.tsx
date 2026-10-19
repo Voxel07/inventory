@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Box, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Button } from '../shared/ActionButtons';
+import { ActionBar } from '../shared/ActionBar';
 import { Dialog } from '../shared/ClosableDialog';
 import { PagedAutocomplete } from '../shared/PagedAutocomplete';
 import { personOptions } from '../../services/assignmentOptions';
@@ -29,14 +30,16 @@ export function OrderPickupGroups({ kind, orderId }: { kind: OrderKind; orderId:
     setDraft(Object.fromEntries(groups.flatMap(g => g.items.map(item => [item.itemId, { responsiblePersonId: g.responsiblePersonId ?? null, groupName: g.name, pickupLocationId: g.pickupLocationId ?? null }]))));
   }
   return <Box sx={{ mb: 2 }}>
-    <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 1 }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="h6">{t('orders.orderPickupGroups.responsiblePeoplePickupGroups')}</Typography>
+    <Stack direction="row" useFlexGap sx={{ gap: 1, alignItems: 'center', mb: 1 }}>
+      <Box sx={{ flex: '1 1 0', minWidth: { xs: '55%', sm: 200 } }}><Typography variant="h6">{t('orders.orderPickupGroups.responsiblePeoplePickupGroups')}</Typography>
         {query.data && <Typography variant="body2" color="text.secondary">{query.data.orderName}</Typography>}
       </Box>
-      {query.data?.canEdit && <>
-        <Button title={t('orders.orderPickupGroups.setResponsiblePeopleItemGroupsAndPickupPoints')} onClick={edit}>{t('orders.orderPickupGroups.editGroups')}</Button>
-        <Button title={t('orders.orderPickupGroups.notifyResponsiblePeopleAboutTheirOrderedItems')} disabled={notify.isPending || !groups.some(g => g.responsiblePersonId)} onClick={() => notify.mutate()}>{t('orders.orderPickupGroups.notifyResponsiblePeople')}</Button>
-      </>}
+      {query.data?.canEdit && <ActionBar align="end" actions={[
+        { key: 'edit', label: t('orders.orderPickupGroups.editGroups'), title: t('orders.orderPickupGroups.setResponsiblePeopleItemGroupsAndPickupPoints'),
+          variant: 'text', onClick: edit },
+        { key: 'notify', label: t('orders.orderPickupGroups.notifyResponsiblePeople'), title: t('orders.orderPickupGroups.notifyResponsiblePeopleAboutTheirOrderedItems'),
+          variant: 'text', disabled: notify.isPending || !groups.some(g => g.responsiblePersonId), onClick: () => notify.mutate() },
+      ]} />}
     </Stack>
     {query.isLoading && <LinearProgress />}
     {query.isError && <Alert severity="error" action={<Button onClick={() => { void query.refetch(); }}>{t('common.retry')}</Button>}>{t('orders.orderPickupGroups.couldNotLoadPickupGroups')}</Alert>}

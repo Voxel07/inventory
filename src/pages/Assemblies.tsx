@@ -1,6 +1,7 @@
 import { FormDialog } from '../components/shared/FormDialog';
 import { PageHeader } from '../components/shared/PageHeader';
-import { Button, ToggleButton } from '../components/shared/ActionButtons';
+import { ToggleButton } from '../components/shared/ActionButtons';
+import { ActionBar } from '../components/shared/ActionBar';
 import { useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { Box, ToggleButtonGroup } from '@mui/material';
@@ -44,10 +45,10 @@ export function Assemblies() {
         <Box>
             <PageHeader
                 title={t('nav.assemblies')}
-                actions={<>
-                    {catalogManager && <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportOpen(true)}>{t('pages.assemblies.importCSV')}</Button>}
-                    {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>{t('pages.assemblies.addAssembly')}</Button>}
-                </>}
+                actions={<ActionBar actions={[
+                    catalogManager && { key: 'import', label: t('pages.assemblies.importCSV'), icon: <FileUploadIcon />, onClick: () => setImportOpen(true) },
+                    canCreate && { key: 'create', label: t('pages.assemblies.addAssembly'), icon: <AddIcon />, variant: 'contained', pinned: true, onClick: crud.openCreate },
+                ]} />}
             />
             <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
                 onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>

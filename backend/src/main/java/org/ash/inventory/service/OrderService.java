@@ -382,6 +382,9 @@ public class OrderService {
             StockTransaction damagedCheckin = null;
             OrderReturnPolicy.validate(item, new OrderReturnPolicy.Outcome(outcome.returned(), outcome.consumed(), outcome.damaged(),
                     outcome.writtenOff(), outcome.missing(), outcome.notes()), outstanding, actors);
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized)
+                OrderReturnPolicy.validateReading(item, outcome.operatingHours(), item.currentOperatingHours,
+                        outcome.returned() + outcome.damaged() > 0, item.name);
             if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
                 applySerializedAssetOutcomes(item, order, actor, outcome, input.idempotencyKey(), assetOutcomes,
                         assignmentsByAsset, handoverDetails);
@@ -413,8 +416,7 @@ public class OrderService {
                 orm.persist(damage);
                 positions.reportReturnedDamage(damage, damagedCheckin);
             }
-            if (outcome.operatingHours() != null
-                    && outcome.operatingHours().compareTo(item.currentOperatingHours) >= 0) {
+            if (item.trackingMode != DomainEnums.TrackingMode.serialized && outcome.operatingHours() != null) {
                 runtime.record(item, null, outcome.operatingHours(), null, order, RuntimeEntry.Source.return_check, null);
             }
         }
@@ -921,6 +923,10 @@ public class OrderService {
             if (assignment.reconciled) throw ApiException.conflict("Asset has already been reconciled on this order");
             var line = assignment.orderLine;
             var assetOutcome = entry.getValue();
+            OrderReturnPolicy.validateReading(item, assetOutcome.operatingHours(), asset.operatingHours,
+                    assetOutcome.outcome() == DomainEnums.ReconciliationOutcome.returned_good
+                            || assetOutcome.outcome() == DomainEnums.ReconciliationOutcome.returned_damaged,
+                    asset.assetCode);
             String notes = assetOutcome.notes() == null ? summary.notes() : assetOutcome.notes();
             switch (assetOutcome.outcome()) {
                 case returned_good -> {
@@ -981,8 +987,8 @@ public class OrderService {
                 default -> throw ApiException.badRequest("Unsupported serialized asset return outcome " + assetOutcome.outcome());
             }
             if (assetOutcome.outcome() != DomainEnums.ReconciliationOutcome.missing) assignment.reconciled = true;
-            // Returned hours are the meter after the event; an older reading is a typing error and must not book negative runtime.
-            if (assetOutcome.operatingHours() != null && assetOutcome.operatingHours().compareTo(asset.operatingHours) >= 0)
+            // Returned hours are the meter after the event; validateReading rejected readings below the current meter.
+            if (assetOutcome.operatingHours() != null)
                 runtime.record(item, asset, assetOutcome.operatingHours(), null, order, RuntimeEntry.Source.return_check, assetOutcome.notes());
         }
         int remainingMissing = assignmentsByAsset.values().stream()
