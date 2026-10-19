@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **58 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **59 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway applies the single editable baseline in dev/test/prod; Hibernate validates it. Data is disposable: recreate the database after a baseline change. There are no upgrade migrations or backfills. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -69,11 +69,12 @@ Faction and general orders share `orders` (`kind=faction/general`), relational `
 
 ## 4. Table inventory
 
-### Identity and access (7 tables)
+### Identity and access (8 tables)
 
 | Table | Key data and relationships |
 |---|---|
-| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app |
+| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app  active/deactivation/reason fields; revision-checked lifecycle |
+| `revoked_sessions` | Access-token SHA-256 hash PK; user FK and expiry; expired hashes are purged hourly |
 | `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (item offered for use) and timestamps |
 | `inventory_access_groups` | UUID; optional owner user FK (null = admin group, usable by everyone); name unique per owner, case-insensitive; revision |
 | `inventory_access_group_members` | Composite `(group_id, user_id)` PK; group/user FKs |
@@ -83,7 +84,7 @@ Faction and general orders share `orders` (`kind=faction/general`), relational `
 
 Items, locations and assemblies each have a unique nullable `access_policy_id`. A policy establishes private access and account ownership; it is the only item visibility rule (the former `visibility_scope` and assigned user/group columns were removed). Display `owner_name`, keeper, location keeper and current custodian are different roles. Grants flow down private location trees through `inventory_access_links` (shares and owner of a building apply to what is stored in it); they do not disclose private components, nor an item's private location (a location needs its own share).
 
-### Catalog and storage geography (6 tables)
+### Catalog and storage geography (5 tables)
 
 | Table | Key data and relationships |
 |---|---|
@@ -111,13 +112,13 @@ Location services enforce no cycles and keep stock out of top-level locations; c
 | `inventory_count_sessions` | UUID; unique session number; location subtree/item/category scope, blind flag, creator/approver, status/times |
 | `inventory_count_lines` | UUID; session/item/location/lot/asset links; observed/recounted/approved/variance quantities and expected asset version/state |
 
-The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses PostgreSQL's ordinary nullable-key semantics; it does **not** by itself enforce a single null-lot row. Operational uniqueness and locking must also be assessed in the services/ORM, rather than inferred from this constraint.
+The position constraint uses `UNIQUE NULLS NOT DISTINCT (item_id, location_id, lot_id)`: one null-lot row is enforced by PostgreSQL as well as transaction locking.
 
-### Events, orders and custody (12 tables)
+### Events, orders and custody (13 tables)
 
 | Table | Key data and relationships |
 |---|---|
-| `event_occurrences` | UUID; event type/name/status, start/end dates, editable daily regular/breakfast and first-day regular stamp rates, planned/used JSON quantities |
+| `event_occurrences` | UUID; event type/name/status, start/end dates, editable daily regular/breakfast and first-day regular stamp rates, planned/used JSON quantities  optional UTC order deadline |
 | `event_people` | UUID; shared people registry: name and optional unique `app_users` link (`on delete set null`); event crew usually has no account. A rename applies at every event |
 | `event_attendees` | UUID; event FK with deletion cascade and person FK, unique per `(event, person)`; optional local arrival/departure times, food-stamp-issued flag and notes; API calculates entitlement by attendance and catering days using editable rates on `event_occurrences` (daily main/breakfast and first-day main) and crew `catering` timeline periods |
 | `event_attendee_roles` | Element collection of an attendance (cascade): `faction_leader`/`faction_deputy`/`faction_hq_crew` with a required faction FK of the event type, `as_held`, or `event_crew` with optional assigned work; unique `(attendee, role, faction)` with nulls not distinct |
@@ -128,6 +129,7 @@ The position uniqueness constraint is `(item_id, location_id, lot_id)`. It uses 
 | `order_line_asset_assignments` | UUID; order/line/asset FKs; unique `(order_id, asset_instance_id)`; reconciled flag |
 | `order_history` | Bigint identity; order/actor links, occurrence time, action/from/to, notes, JSON delta and unique idempotency key |
 | `custody_handovers` | UUID; order, marshal, collector and location FKs; unique handover code/idempotency key, type/time, acknowledgement key and condition confirmation |
+| `handover_evidence` | UUID; handover/recording-user FKs; explicit condition attestation/notes, authenticated attachment key, unique command and input hash |
 | `custody_handover_lines` | UUID; handover/order line/item/optional asset FKs; quantity and condition notes |
 
 Both order kinds use `OrderService` and the same relational foreign keys and stock lifecycle (PLAN-02). The baseline replaces the former tables directly; disposable databases must be recreated.
@@ -140,7 +142,7 @@ Both order kinds use `OrderService` and the same relational foreign keys and sto
 | `return_submissions` | UUID; item/asset, submitter/return-for user, expected location, order/event links; status, placement photo, prior asset state/version and acknowledgement actor/time; unique member command ID |
 | `damage_reports` | UUID; item XOR assembly; optional asset/order/handover, reporter/handler; severity/status, quantities, notes, safety impact, position map and idempotency key |
 | `repair_cases` | UUID; unique damage-report FK; asset/handover/repair owner/vendor/approver links; status, parts/cost/verification notes and pending repaired quantity |
-| `maintenance_schedules` | UUID; item/asset/responsible user; date/hour/usage interval, warning, next due, checklist, active/checkout-block flags |
+| `maintenance_schedules` | UUID; item/asset/responsible user; date/hour/usage interval, warning, next due, checklist, active/checkout-block flags and optional category-template origin |
 | `runtime_entries` | UUID; item, optional asset/event/order, recording user; hours booked, meter reading after, source (`manual`, `return_check` for order reconciliation and accepted return submissions, `maintenance`, `correction`), time and notes. Every meter change is booked here |
 | `maintenance_records` | UUID; item/asset/schedule/inspector links; inspection type/result/time, hours, next due, certificate key/number and notes |
 
@@ -174,7 +176,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | Table | Key data and relationships |
 |---|---|
 | `member_requests` | UUID; requester/item/asset/location/handler links; kind/quantity/notes, status/response/time, unique command ID and revision |
-| `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request |
+| `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request  next attempt, lease UUID/expiry and bounded retry delivery state |
 | `action_reminders` | UUID; user FK, action key and reminder time; unique user/action |
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
 | `operational_reports` | Report name PK; generation version/times, source token and JSON rows; eight snapshot kinds |
@@ -182,7 +184,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
 | `source_revisions` | Composite `(name, shard)` PK; revision/epoch; 16 shards per tracked source table |
 
-All 58 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
+All 59 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
 
 ## 5. Stock authority and invariants
 
@@ -201,7 +203,7 @@ The ledger is the only origin of bulk quantities: an item's opening amount is po
 
 Order reconciliation must satisfy `handedOver = returned + consumed + damaged + writtenOff + outstanding`, with missing accounted within outstanding. A custody write-off is a `written_off` movement with `custody_write_off = true`; stock totals treat it like consumption of checked-out units. Reservations can only use eligible availability; an order edit credits its own allocation, not other orders' stock. Position/asset changes, movement evidence and outbox writes commit together under locks.
 
-Stock/order history is append-only by application contract. This baseline does not supply UPDATE/DELETE-denial triggers for ledger/history tables; do not claim database-enforced immutability. Stock commands currently set `availability_after` with an UPDATE right after inserting the movement, so a plain deny-UPDATE trigger would break them (FEAT-09). Outbox rows are delivery records with finite retention, so they do not replace permanent movement/order history.
+Committed stock, order, handover, reconciliation, runtime, maintenance and sync history is database-enforced append-only. Triggers permit finalization only in the inserting transaction (including `availability_after` and attachment binding), then reject UPDATE/DELETE. Online reversal inserts a signed compensating row linked by unique `reverses_id`; it never rewrites the original. Outbox delivery records remain mutable and retain their separate retention policy.
 
 ## 6. Query, indexing and snapshot behavior
 
@@ -209,7 +211,7 @@ FK/location/stock indexes support operational reads. Catalog substring search us
 
 API list mapping batches ledger, damage, reservation, position, asset, maintenance and purchasing facts. Dynamic availability is not globally cached. Faction reference caching uses committed revisions. Privacy query scoping and `PrivacyResponseFilter`/reference-graph projection currently coexist (PLAN-01).
 
-Statement triggers increment the relevant `source_revisions` shard (`pg_backend_pid() % 16`) within the source transaction, including rollback behavior. Readers sum shards; report source tokens and faction cache keys detect committed changes. `operational_reports` stores manually rebuilt snapshots, not continuous materialized live inventory. Kinds: events, availability, returns, repairs, maintenance, purchases, counts, movements.
+Statement triggers increment the relevant `source_revisions` shard (`pg_backend_pid() % 16`) within the source transaction, including rollback behavior. Readers sum shards; report source tokens and faction cache keys detect committed changes. `operational_reports` stores snapshots rebuilt explicitly or on stale/missing reads, not continuous materialized live inventory. Kinds: events, availability, returns, repairs, maintenance, purchases, counts, movements.
 
 ## 7. Files, offline storage and retention
 
@@ -236,15 +238,15 @@ Where the app stores personal data (GDPR/DSGVO Art. 30 input) and what is still 
 
 | Data | Stored in | Source | Retention today |
 |---|---|---|---|
-| Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Name/email/subject from Authentik claims, refreshed at sign-in; role and factions set by the inventory admin | Indefinite; no deactivation or deletion |
+| Name, email, stable subject (`issuer`, `sub`), role, faction memberships | `app_users` | Name/email/subject from Authentik claims, refreshed at sign-in; role and factions set by the inventory admin | Retained identity blocking key/history; explicit deactivation and guarded display-data pseudonymization |
 | Actor references on every movement and transition | `stock_transactions`, `order_history`, `return_reconciliations`, `custody_handovers`, damage/repair/maintenance records, `inventory_count_*`, `goods_receipts` | App actions | Permanent (append-only evidence) |
 | Collector name, pickup coordinates, notes | `orders`, `custody_handovers` | Staff input | Permanent |
 | Handover acknowledgements, placement photos, certificates | Media store (local disk or Garage S3) referenced from `custody_handovers`, `return_submissions`, `maintenance_records` | Uploads | Permanent once attached; staged uploads purged after 24 h |
 | Display owner, keeper name/contact | `items` | Staff/owner input | Until edited; items are retired, not deleted |
 | Private location codes, descriptions and coordinates, keeper user | `storage_locations` | Owner input | Until edited; retired, not deleted |
 | Loan contact and terms, pickup/return details, consent evidence | `loan_arrangements`, `equipment_commitments` | Owner/staff input | Permanent |
-| Requests, reminders, notifications | `member_requests`, `action_reminders`, `notifications` | Member actions | Indefinite |
-| Event attendee names, optional account link, roles, arrival/departure times, notes | `event_people`, `event_attendees`, `event_attendee_roles` | Planner input; event crew often has no app account | People kept indefinitely for reuse; attendances until the event occurrence is deleted |
+| Requests, reminders, notifications | `member_requests`, `action_reminders`, `notifications` | Member actions | Requests indefinite; terminal notices and inactive reminders default 180 days, configurable |
+| Event attendee names, optional account link, roles, arrival/departure times, notes | `event_people`, `event_attendees`, `event_attendee_roles` | Planner input; event crew often has no app account | Unused people deletable; linked accounts follow pseudonymization, unlinked people with only events older than 730 days are pseudonymized by default; attendance evidence retained |
 | Access grants and group membership | `inventory_access_grants`, `inventory_access_group_members` | Owner/admin | Until revoked |
 | Offline command payloads | `sync_command_audit` | Device replay | Indefinite |
 | Actor and payload of domain events | `domain_event_outbox` | Every command | Purged 30 days after publication |
@@ -259,15 +261,15 @@ Vendor contact data in `vendors` concerns businesses, but may name individual co
 
 Personal data of other members is visible according to role and resource policy ([Technical Requirements §5](TECHNICAL_REQUIREMENTS.md)). Exported CSV/PDF reports leave the app's control and cannot be recalled.
 
-### Gaps for data-subject requests
+### Data-subject workflows and remaining manual review
 
 | ID | Gap | Notes |
 |---|---|---|
-| PD-01 | No account deactivation/offboarding | A user removed from Authentik keeps owned private resources, custody, keeper assignments and grants (FEAT-02 in the [plan](IMPLEMENTATION_PLAN.md)) |
-| PD-02 | No erasure path | History is append-only and actor FKs are required. An erasure request needs pseudonymization of `app_users` (name/email → placeholder, keep the UUID) plus scrubbing free-text fields (collector names, keeper contact, loan contact, notes) and removing photos/acknowledgements that are no longer needed as evidence |
-| PD-03 | No export of one person's data | Article 15 access requests currently require manual SQL across the tables above |
-| PD-04 | No retention periods | Decide how long custody evidence, photos, sync audit and notifications must be kept (e.g. until the order is closed plus N years) and add purge jobs like the existing outbox/staged-media purges |
-| PD-05 | Event people registry has no deletion | `event_people` rows survive attendance and event deletion so they can be reused; an erasure request needs a delete or pseudonymize action for unused people |
+| PD-01 | Implemented offboarding | Active flag, obligation overview and private/group owner transfer; IdP directory synchronization is separate |
+| PD-02 | Guarded pseudonymization | Clears account/attendee display data and transient access data after obligations are resolved; retained history/free text/media/backups require operator review |
+| PD-03 | Person-scoped ZIP export | Admin-only relational export, indirect attendance and media manifest, with explicit size limits |
+| PD-04 | Configurable transient retention | Daily bounded notice/reminder/unlinked-attendee expiry; business-history retention remains an explicit indefinite policy |
+| PD-05 | Event registry deletion/pseudonymization | Unused registry people can be deleted in the existing directory; linked accounts use the person workflow and old unlinked attendees use configured retention |
 
 They are tracked as FEAT-02/03 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) and need a decision on retention periods before implementation.
 
@@ -276,3 +278,7 @@ They are tracked as FEAT-02/03 in [Implementation Plan and Progress](IMPLEMENTAT
 Default Compose uses PostgreSQL 18; cluster replicas share the primary database. The storage Compose hosts a separate PostgreSQL instance for logical replication. Publication/subscription, schema copying and backup jobs require operator setup; the replica service alone does not establish replication.
 
 Logical replication is an asynchronous table copy, not physical hot standby or automatic database failover. Matching DDL and sequence management are operator responsibilities. WAL archiving, dump encryption, media synchronization and claimed RPO/RTO values need an exercised recovery plan. See [logical replication](postgres-logical-replication.md), [Step 1](DEPLOYMENT_STEP1.md) and [Step 2](DEPLOYMENT_STEP2.md). Restore, real S3 and cluster acceptance remain open (ACC-04/05).
+
+Maintenance dates/intervals are stored only in `maintenance_schedules`; item/asset due/status fields in responses are derived. `items.sku` is also unique case-insensitively. See [workflow contracts](WORKFLOW_CONTRACTS.md) and [operations](OPERATIONS_RUNBOOK.md) for privacy, evidence and retention boundaries.
+
+Reversal rows retain `user_id` as the custody beneficiary and store the executing administrator in `reversed_by_id`; both are immutable after commit.

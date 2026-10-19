@@ -20,6 +20,7 @@ public final class InventoryMcpDtos {
 
     /** One evaluated catalog page; request {@code page + 1} while {@code hasMore}. */
     public record AlertPage<T>(List<T> alerts, int page, int limit, boolean hasMore) {}
+    public record ResourcePage<T>(List<T> rows, int page, int limit, boolean hasMore, Integer nextPage, String continuationTool) {}
 
     public record MaintenanceAlertDto(String type, UUID entityId, String codeOrSku,
             String name, String issue, String status, String dueDate) {}

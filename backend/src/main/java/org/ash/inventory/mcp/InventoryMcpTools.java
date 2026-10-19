@@ -20,6 +20,20 @@ import java.util.function.Supplier;
 /** MCP transport adapter; all authorized use cases finish in the transactional service. */
 @ApplicationScoped
 public class InventoryMcpTools {
+    @Blocking @Tool(description = "List visible outstanding custody, optionally by item, person or order; warehouse access required. Stable pages, at most 100 rows; balances are computed from the ledger.")
+    public com.fasterxml.jackson.databind.JsonNode list_custody(@ToolArg(description="Item UUID", required=false) UUID itemId,
+            @ToolArg(description="Person UUID", required=false) UUID personId, @ToolArg(description="Order UUID", required=false) UUID orderId,
+            @ToolArg(description="Zero-based page", required=false) Integer page, @ToolArg(description="1–100 rows", required=false) Integer limit) {
+        return call("list_custody", () -> service.custody(itemId, personId, orderId, page, limit));
+    }
+
+    @Blocking @Tool(description = "List visible immutable stock movements with the same access rules as REST transaction history. Stable pages, at most 100 rows.")
+    public com.fasterxml.jackson.databind.JsonNode list_movements(@ToolArg(description="Item UUID", required=false) UUID itemId,
+            @ToolArg(description="Asset UUID", required=false) UUID assetId, @ToolArg(description="Person UUID", required=false) UUID personId,
+            @ToolArg(description="Transaction type", required=false) String type,
+            @ToolArg(description="Zero-based page", required=false) Integer page, @ToolArg(description="1–100 rows", required=false) Integer limit) {
+        return call("list_movements", () -> service.movements(itemId, assetId, personId, type, page, limit));
+    }
     @Inject McpInventoryService service;
     @Inject InventoryTelemetry telemetry;
 

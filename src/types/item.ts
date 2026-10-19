@@ -6,8 +6,8 @@ export interface StorageLocation {
   keeperUserName?: string;
   keeperUserEmail?: string;
   access?: InventoryAccess;
-  /** 0 = location (site, holds no stock), 1 = section, 2+ = storage place. */
-  depth: number;
+  /** Null if an ancestor is hidden; otherwise 0 = site, 1 = section, 2+ = place. */
+  depth: number | null;
   /** Top-level location this one belongs to (itself for a location). */
   rootLocationId?: string;
   rootLocationName?: string;
@@ -32,6 +32,7 @@ export interface StorageLocation {
 export type MapBounds = [[number, number], [number, number]];
 
 export interface StorageLocationFormData {
+  keepParent?: boolean;
   privateResource?: boolean;
   mapOverlay?: string | null;
   parentLocationId?: string | null;
@@ -106,7 +107,6 @@ export interface Item {
   containerCount?: number;
   containersOpened?: number;
   containerRemainingPercent?: number;
-  maintenanceIntervalDays?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
   /** The warehouse records the hours run per unit and event when it checks a return. */
@@ -153,8 +153,6 @@ export interface ItemFormData {
   containerCount?: number;
   containersOpened?: number;
   containerRemainingPercent?: number;
-  maintenanceIntervalDays?: number;
-  nextMaintenanceDue?: string;
   currentOperatingHours?: number;
   tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;

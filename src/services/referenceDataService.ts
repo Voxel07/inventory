@@ -4,15 +4,16 @@ import { assertAuthSession, captureAuthSession } from './authManager';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 
 /** Reference data is cached per account for cold offline starts. */
-async function referenceData<T>(path: string, key: string): Promise<T> {
+async function referenceData<T>(path: string, key: string, required = false): Promise<T> {
   const context = captureAuthSession();
   try {
     const data = await apiRequest<T>(path, { session: context });
     assertAuthSession(context);
-    await setOfflineCatalog(key, data, context);
+    await setOfflineCatalog(key, data, context, required);
     return data;
   } catch (error) {
     assertAuthSession(context);
+    if (required) throw error;
     if (error instanceof ApiError && error.status < 500) throw error;
     const cached = await getOfflineCatalog<T>(key, context);
     assertAuthSession(context);
@@ -21,5 +22,5 @@ async function referenceData<T>(path: string, key: string): Promise<T> {
   }
 }
 
-export const getFactions = () => referenceData<Faction[]>('/api/factions', 'factions');
-export const getEventTypes = () => referenceData<EventType[]>('/api/event-types', 'eventTypes');
+export const getFactions = (required = false) => referenceData<Faction[]>('/api/factions', 'factions', required);
+export const getEventTypes = (required = false) => referenceData<EventType[]>('/api/event-types', 'eventTypes', required);

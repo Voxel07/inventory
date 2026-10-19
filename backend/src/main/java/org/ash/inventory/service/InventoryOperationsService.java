@@ -195,6 +195,10 @@ public class InventoryOperationsService {
         transaction.occurredAt = occurredAt;
         transaction.item = item;
         transaction.assetInstance = asset;
+        transaction.assetBefore.put("state",asset.availabilityStatus.name());
+        transaction.assetBefore.put("version",Long.toString(asset.version));
+        if(asset.currentLocation!=null) transaction.assetBefore.put("location",asset.currentLocation.id.toString());
+        if(asset.currentCustodian!=null) transaction.assetBefore.put("custodian",asset.currentCustodian.id.toString());
         transaction.user = input.userId() == null ? actor : orm.require(UserAccount.class, input.userId(), "User");
         transaction.type = input.transactionType();
         transaction.quantity = 1;
@@ -653,10 +657,7 @@ public class InventoryOperationsService {
         record.inspector = actors.current();
         record.type = input.type();
         record.performedAt = input.performedAt() == null ? Instant.now() : input.performedAt();
-        // A schedule inspection advances only its schedule; a calendar inspection advances the item or asset calendar.
-        record.nextDueAt = input.nextDueAt() != null ? input.nextDueAt()
-                : record.schedule == null && item.maintenanceIntervalDays != null && item.maintenanceIntervalDays > 0
-                    ? record.performedAt.plus(java.time.Duration.ofDays(item.maintenanceIntervalDays)) : null;
+        record.nextDueAt = input.nextDueAt();
         record.operatingHours = input.operatingHours();
         record.result = input.result();
         record.certificateNumber = input.certificateNumber();
@@ -671,13 +672,11 @@ public class InventoryOperationsService {
         if (asset == null) {
             if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
                 runtime.record(item, null, input.operatingHours(), null, null, RuntimeEntry.Source.maintenance, "Maintenance " + record.type.name());
-            if (record.schedule == null && !failed) item.nextMaintenanceDue = calendarDue;
             item.outOfService = failed;
         } else {
             // The result belongs to this asset only; the item calendar and sibling assets are untouched.
             if (input.operatingHours() != null && input.operatingHours().compareTo(asset.operatingHours) > 0)
                 runtime.record(item, asset, input.operatingHours(), null, null, RuntimeEntry.Source.maintenance, "Maintenance " + record.type.name());
-            if (record.schedule == null && !failed) asset.nextMaintenanceDue = calendarDue;
             asset.outOfService = failed;
             // Only an idle warehouse asset changes physical state; custody, reservation and transit keep theirs.
             if (failed && asset.availabilityStatus == DomainEnums.AssetState.available) {

@@ -60,7 +60,7 @@ class RemainingP1ApiTest {
         admin().get("/api/sync/" + originalId + "/context").then().statusCode(200).body("command.payload.quantityChanged", equalTo(99)).body("command.syncStatus", equalTo("conflict"));
     }
 
-    @Test void reportsRetainSnapshotsUntilRebuiltAndNeverWriteStock() {
+    @Test void reportsRefreshOnOpenAndNeverWriteStock() {
         String item = item();
         var event = new HashMap<String, Object>(Map.of("name", "P1 planned-only event", "eventType", "DE", "startDate", "2039-04-12", "endDate", "2039-04-13", "plannedQuantities", Map.of(item, 20)));
         String eventId = admin().body(event).post("/api/events").then().statusCode(200).extract().path("id");
@@ -74,10 +74,9 @@ class RemainingP1ApiTest {
         admin().get("/api/reports/events/export").then().statusCode(400);
         event.put("plannedQuantities", Map.of(item, 25));
         admin().body(event).patch("/api/events/" + eventId).then().statusCode(200);
-        admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(20)).body("stale", equalTo(true));
+        admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25)).body("stale", equalTo(false));
         admin().queryParam("generation", generation).queryParam("eventId", eventId).queryParam("itemId", item)
-                .get("/api/reports/events/export").then().statusCode(200)
-                .body("rows[0].planned", equalTo(20)).body("stale", equalTo(true));
+                .get("/api/reports/events/export").then().statusCode(409);
         admin().post("/api/reports/events/rebuild").then().statusCode(204);
         admin().queryParam("generation", generation).get("/api/reports/events/export").then().statusCode(409);
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25));

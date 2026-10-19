@@ -14,13 +14,13 @@ public class CountOrm extends EntityOrm {
 
 
     public List<InventoryCountSession> sessions(String status, int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var jpql = status == null || status.isBlank()
-                ? "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where 1=1" + InventoryAccessOrm.excluding("session", denied) + " order by session.createdAt desc"
-                : "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status" + InventoryAccessOrm.excluding("session", denied) + " order by session.createdAt desc";
+                ? "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where 1=1" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc"
+                : "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc";
         var query = entityManager.createQuery(jpql, InventoryCountSession.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.CountStatus.valueOf(status));
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryCountLine> lines(Collection<InventoryCountSession> sessions) {
         if (sessions.isEmpty()) return List.of();

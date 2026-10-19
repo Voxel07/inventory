@@ -41,10 +41,11 @@ public class ApiMapper {
     @jakarta.inject.Inject org.ash.inventory.service.InventoryAccessService accessPolicies;
     @jakarta.inject.Inject org.ash.inventory.orm.AssetReservationOrm assetReservations;
     @jakarta.inject.Inject org.ash.inventory.service.PrivacyProjectionService privacy;
+    @jakarta.inject.Inject org.ash.inventory.service.MaintenanceProjectionService maintenance;
     private final MediaService media;
     public ApiMapper(MediaService media) { this.media = media; }
 
-    public void prepareItems(List<Item> items) { accessPolicies.prepareItems(items); }
+    public void prepareItems(List<Item> items) { accessPolicies.prepareItems(items); maintenance.prepare(items); }
     public void prepareLocations(java.util.Collection<StorageLocation> locations) { accessPolicies.prepareLocations(locations); }
     private boolean canViewLocation(StorageLocation value) { return value != null && accessPolicies.projectionAllows(value.accessPolicy); }
 
@@ -59,8 +60,12 @@ public class ApiMapper {
                 value.role.name(),
                 value.roles.stream().map(Enum::name).toList(),
                 value.factions == null ? List.of() : value.factions,
-                value.accessRevision
+                value.accessRevision, value.active
         );
+    }
+
+    public ApiResponses.ActorSummary actor(UserAccount value) {
+        return new ApiResponses.ActorSummary(value.id, value.name, value.name);
     }
 
     public ApiResponses.GeneralOrderResponse generalOrder(InventoryOrder value, Map<String, String> itemNames,
@@ -87,7 +92,7 @@ public class ApiMapper {
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.model.OrderLine::reconciledAssetIds),
                 history.stream().map(this::history).toList(),
-                Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
+                Map.of("createdBy", actor(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
 
@@ -113,7 +118,7 @@ public class ApiMapper {
                 value.quantities(line -> line.missingQuantity),
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.model.OrderLine::reconciledAssetIds),
-                Map.of("createdBy", user(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
+                Map.of("createdBy", actor(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
         );
     }
 
@@ -127,6 +132,22 @@ public class ApiMapper {
         for (var current = value; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
             names.addFirst(current.name);
         return String.join(" / ", names);
+    }
+    private String visibleLocationCode(StorageLocation value) {
+        var codes = new java.util.LinkedList<String>();
+        var seen = new java.util.HashSet<UUID>();
+        for (var current = value; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
+            codes.addFirst(current.code);
+        return String.join(org.ash.inventory.service.LocationHierarchyService.CODE_SEPARATOR, codes);
+    }
+    private Integer visibleDepth(StorageLocation value) {
+        int depth = 0;
+        var seen = new java.util.HashSet<UUID>();
+        for (var current = value; current.parent != null; current = current.parent) {
+            if (!seen.add(current.id) || !canViewLocation(current.parent)) return null;
+            depth++;
+        }
+        return depth;
     }
     /** The topmost ancestor the viewer may see (normally the top-level location). */
     private StorageLocation visibleRoot(StorageLocation value) {
@@ -154,8 +175,8 @@ public class ApiMapper {
                 value.updatedAt,
                 value.name,
                 value.code,
-                value.fullCode,
-                value.depth(),
+                visibleLocationCode(value),
+                visibleDepth(value),
                 value.description,
                 map.latitude,
                 map.longitude,
@@ -218,14 +239,13 @@ public class ApiMapper {
                 value.containerCount,
                 value.containersOpened,
                 value.containerRemainingPercent,
-                value.maintenanceIntervalDays,
-                value.nextMaintenanceDue,
+                maintenance.due(value, null),
                 value.currentOperatingHours,
                 value.tracksRuntime,
                 value.fuelConsumptionLitersPer100Km,
                 value.batteryReplacementDue,
                 value.bestBeforeDate,
-                MaintenancePolicy.itemStatus(value, BusinessTime.today()).name(),
+                maintenance.status(value, null),
                 stockDto,
                 expand, accessPolicies.projection(value.accessPolicy), !canViewLocation(value.storageLocation) && value.storageLocation != null
         );
@@ -311,8 +331,7 @@ public class ApiMapper {
                 metrics.planned(),
                 metrics.used(),
                 metrics.itemNames(),
-                metrics.quantities()
-        );
+                metrics.quantities(), value.orderDeadline);
     }
 
     public ApiResponses.FactionResponse faction(Faction value) {
@@ -328,10 +347,20 @@ public class ApiMapper {
     }
 
     public ApiResponses.TransactionResponse transaction(StockTransaction value) {
+        return transaction(value, value.assetInstance == null ? null : asset(value.assetInstance));
+    }
+
+    public List<ApiResponses.TransactionResponse> transactions(List<StockTransaction> values) {
+        var assetViews = assets(values.stream().map(t -> t.assetInstance).filter(java.util.Objects::nonNull).distinct().toList())
+                .stream().collect(java.util.stream.Collectors.toMap(ApiResponses.AssetInstanceResponse::id, java.util.function.Function.identity()));
+        return values.stream().map(t -> transaction(t, t.assetInstance == null ? null : assetViews.get(t.assetInstance.id))).toList();
+    }
+
+    private ApiResponses.TransactionResponse transaction(StockTransaction value, ApiResponses.AssetInstanceResponse assetView) {
         var expand = new LinkedHashMap<String, Object>();
-        expand.put("userId", user(value.user));
+        expand.put("userId", actor(value.user));
         if (value.assetInstance != null)
-            expand.put("assetInstanceId", asset(value.assetInstance));
+            expand.put("assetInstanceId", assetView);
         if (value.order != null) {
             expand.put("order", orderSummary(value.order));
         }
@@ -357,7 +386,7 @@ public class ApiMapper {
                 value.reason,
                 value.notes,
                 value.occurredAt,
-                expand
+                expand, value.reverses == null ? null : value.reverses.id, value.reversedBy == null ? null : actor(value.reversedBy)
         );
     }
 
@@ -404,15 +433,15 @@ public class ApiMapper {
         expand.put("itemIds", itemViews);
         expand.put("assemblyIds", assemblyViews);
         if (value.createdBy != null)
-            expand.put("createdBy", user(value.createdBy));
+            expand.put("createdBy", actor(value.createdBy));
         if (value.preparedBy != null)
-            expand.put("preparedBy", user(value.preparedBy));
+            expand.put("preparedBy", actor(value.preparedBy));
         if (value.readyBy != null)
-            expand.put("readyBy", user(value.readyBy));
+            expand.put("readyBy", actor(value.readyBy));
         if (value.pickedUpBy != null)
-            expand.put("pickedUpBy", user(value.pickedUpBy));
+            expand.put("pickedUpBy", actor(value.pickedUpBy));
         if (value.returnedBy != null)
-            expand.put("returnedBy", user(value.returnedBy));
+            expand.put("returnedBy", actor(value.returnedBy));
         if (value.pickupLocation != null)
             expand.put("pickupLocation", location(value.pickupLocation));
 
@@ -496,9 +525,9 @@ public class ApiMapper {
 
     public ApiResponses.DamageResponse damage(DamageReport value) {
         var expand = new LinkedHashMap<String, Object>();
-        expand.put("reportedBy", user(value.reporter));
+        expand.put("reportedBy", actor(value.reporter));
         if (value.handler != null)
-            expand.put("handledBy", user(value.handler));
+            expand.put("handledBy", actor(value.handler));
 
         return new ApiResponses.DamageResponse(
                 value.id,
@@ -622,11 +651,11 @@ public class ApiMapper {
                 cents(value.replacementValueCents),
                 value.conditionStatus == null ? "good" : value.conditionStatus.name(),
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
-                MaintenancePolicy.assetStatus(value, BusinessTime.today()).name(),
-                MaintenancePolicy.assetDue(value.item, value),
+                maintenance.status(value.item, value),
+                maintenance.due(value.item, value),
                 value.operatingHours,
                 canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,
-                canViewLocation(value.currentLocation) ? value.currentLocation.fullCode : null,
+                canViewLocation(value.currentLocation) ? visibleLocationCode(value.currentLocation) : null,
                 canViewLocation(value.currentLocation) ? locationPath(value.currentLocation) : null,
                 value.currentCustodian == null ? null : value.currentCustodian.id.toString(),
                 value.currentCustodian == null ? null : value.currentCustodian.name,
@@ -642,6 +671,7 @@ public class ApiMapper {
      * actor (e.g. it references another user's private item) keeps only a restricted indicator, so REST and MCP agree.
      */
     public List<ApiResponses.AssetInstanceResponse> assets(List<AssetInstance> values) {
+        maintenance.prepare(values.stream().map(a -> a.item).distinct().toList());
         prepareLocations(values.stream().map(a -> a.currentLocation).toList());
         var holders = assetReservations.holders(values.stream()
                 .filter(a -> a.availabilityStatus == DomainEnums.AssetState.reserved || a.availabilityStatus == DomainEnums.AssetState.staged)

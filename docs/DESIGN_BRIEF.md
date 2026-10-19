@@ -77,7 +77,7 @@ Phone controls have a product touch target of 44px. Standard buttons start at 40
 | Sharing | `InventorySharing`, `InventoryAccessGroups` | Display owner and view/edit distinctions; show restricted location state |
 | Inbox/sync | `ActionInboxContent`, `QueuedActionsDialog`, `SyncIssuesDialog` | Make pending actions, local queue state and correction evidence distinct |
 
-A generalized `DataTable` remains a target alongside server paging (PLAN-03); do not describe it as an existing standard component.
+Server paging is implemented (PLAN-03). A generalized `DataTable` is an optional component refactor, not an unmet paging feature.
 
 ## 6. Content and state presentation
 

@@ -1,4 +1,4 @@
-import type { User } from './user';
+import type { ActorSummary } from './user';
 import type { OrderPreparationInput, OrderReturnInput, OrderStatus, OrderTransitionInput } from './orderCommands';
 import type { OrderHistoryEntry } from './orderHistory';
 
@@ -27,7 +27,7 @@ export interface GeneralOrder {
   createdBy: string;
   created: string;
   updated: string;
-  expand?: { createdBy?: User };
+  expand?: { createdBy?: ActorSummary };
 }
 
 export interface GeneralOrderFormData {

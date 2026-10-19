@@ -600,16 +600,16 @@ test('QR links resolve exact assets and locations without making a request or ch
 });
 
 test('SKU and order fallback searches are targeted, exact and read-only', async () => {
-  signIn('A');
+  signIn('A'); connectivity.onLine = true;
   const calls: URL[] = [];
   fetchRequest = async (input, options) => {
     expect(options?.method ?? 'GET').toBe('GET');
     const url = new URL(String(input)); calls.push(url);
-    if (url.pathname === '/api/items') return Response.json([{ id: 'wrong', sku: 'SKU-PARTIAL', name: 'Wrong match' }, { id: 'item', sku: 'SKU', name: 'Exact item' }]);
+    if (url.pathname === '/api/items/by-sku/sku') return Response.json({ id: 'item', sku: 'SKU', name: 'Exact item' });
     return Response.json({ error: 'Missing' }, { status: 404 });
   };
   expect(await codes.resolveScannedCode('sku')).toMatchObject({ found: true, path: '/items/item?transaction=1' });
-  expect(calls.find(url => url.pathname === '/api/items')?.searchParams.get('search')).toBe('sku');
+  expect(calls.some(url => url.pathname === '/api/items')).toBe(false);
   calls.length = 0;
   fetchRequest = async input => {
     const url = new URL(String(input)); calls.push(url);
@@ -693,4 +693,13 @@ test('offline replay pauses on terminal failures, honours Retry-After and resume
   expect(offline.getSyncState()).toEqual({ kind: 'idle' });
   expect(new Set(sentKeys)).toEqual(new Set(['cmd-1']));
   expect(await offline.getOfflineActions()).toEqual([]);
+});
+
+test('saved public SKUs resolve offline without requests or writes', async () => {
+  signIn('A'); connectivity.onLine = false;
+  await offline.setOfflineCatalog('items:offline-snapshot', [{ id: 'saved', sku: 'SAVED-SKU', name: 'Saved item' }]);
+  let requests = 0; fetchRequest = async () => { requests++; throw new TypeError('offline'); };
+  expect(await codes.resolveScannedCode('saved-sku')).toMatchObject({ found: true, path: '/items/saved?transaction=1' });
+  expect(await codes.resolveScannedCode('unseen-sku')).toMatchObject({ found: false });
+  expect(requests).toBe(0);
 });

@@ -1,0 +1,10 @@
+[Unit]
+Description=Coordinated encrypted inventory backup
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/inventory
+EnvironmentFile=/etc/inventory/backup.env
+ExecStart=/usr/bin/bash /opt/inventory/scripts/backup-inventory.sh
+UMask=0077

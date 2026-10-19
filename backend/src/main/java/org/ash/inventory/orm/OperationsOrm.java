@@ -29,7 +29,7 @@ public class OperationsOrm extends EntityOrm {
     /** {@code search}: item name, person, reason, notes, event type or faction. */
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
             String search, int offset, int limit) {
-        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.order o left join fetch o.eventOccurrence left join fetch o.faction where " + InventoryAccessOrm.visible("tx.item.accessPolicy"));
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.reversedBy left join tx.sourceLocation source left join tx.destinationLocation destination left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.order o left join fetch o.eventOccurrence left join fetch o.faction where 1=1" + InventoryAccessOrm.transactionScope("tx", "source", "destination"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -99,14 +99,14 @@ public class OperationsOrm extends EntityOrm {
 
     public List<Object[]> checkoutCounts(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return entityManager.createQuery("select t.item.id, a.id, count(t) from StockTransaction t left join t.assetInstance a where t.item.id in :ids and t.type = :type group by t.item.id, a.id", Object[].class)
+        return entityManager.createQuery("select t.item.id, a.id, sum(case when t.quantity > 0 then 1L when t.quantity < 0 then -1L else 0L end) from StockTransaction t left join t.assetInstance a where t.item.id in :ids and t.type = :type group by t.item.id, a.id", Object[].class)
                 .setParameter("ids", itemIds).setParameter("type", DomainEnums.TransactionType.checkout).getResultList();
     }
 
     public long checkoutCount(Item item, AssetInstance asset) {
         var jpql = asset == null
-                ? "select count(tx) from StockTransaction tx where tx.item = :item and tx.type = :type"
-                : "select count(tx) from StockTransaction tx where tx.assetInstance = :asset and tx.type = :type";
+                ? "select coalesce(sum(case when tx.quantity > 0 then 1L when tx.quantity < 0 then -1L else 0L end),0L) from StockTransaction tx where tx.item = :item and tx.type = :type"
+                : "select coalesce(sum(case when tx.quantity > 0 then 1L when tx.quantity < 0 then -1L else 0L end),0L) from StockTransaction tx where tx.assetInstance = :asset and tx.type = :type";
         var query = entityManager.createQuery(jpql, Long.class)
                 .setParameter("type", DomainEnums.TransactionType.checkout);
         if (asset == null) query.setParameter("item", item); else query.setParameter("asset", asset);
@@ -187,15 +187,15 @@ public class OperationsOrm extends EntityOrm {
 
     /** Ledger rows since {@code since} that are not evidence of a resource hidden from the actor. */
     public long visibleTransactionsSince(UserAccount actor, java.time.Instant since) {
-        var denied = privacyScopes.deniedReferences(actor);
-        return InventoryAccessOrm.bindDenied(entityManager.createQuery("select count(t) from StockTransaction t where t.occurredAt >= :since"
-                + InventoryAccessOrm.excluding("t", denied), Long.class), denied).setParameter("since", since).getSingleResult();
+
+        return InventoryAccessOrm.bind(entityManager.createQuery("select count(t) from StockTransaction t where t.occurredAt >= :since"
+                + InventoryAccessOrm.scope("transaction", "t"), Long.class), actor).setParameter("since", since).getSingleResult();
     }
 
     public long visibleOpenDamageReports(UserAccount actor) {
-        var denied = privacyScopes.deniedReferences(actor);
-        return InventoryAccessOrm.bindDenied(entityManager.createQuery("select count(d) from DamageReport d where d.status in :statuses"
-                + InventoryAccessOrm.excluding("d", denied), Long.class), denied)
+
+        return InventoryAccessOrm.bind(entityManager.createQuery("select count(d) from DamageReport d where d.status in :statuses"
+                + InventoryAccessOrm.scope("damage", "d"), Long.class), actor)
                 .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
                         DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review, DomainEnums.DamageStatus.in_repair))
                 .getSingleResult();

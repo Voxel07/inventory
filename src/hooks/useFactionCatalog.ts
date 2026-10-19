@@ -16,8 +16,8 @@ export interface FactionCatalog {
 export function useFactionCatalog(): FactionCatalog {
   const { user } = useAuth();
   // Factions are organization data; tenants only need the event types (item tags).
-  const factionQuery = useQuery({ queryKey: ['factions'], queryFn: getFactions, staleTime: 5 * 60_000, networkMode: 'offlineFirst', enabled: canViewOrganization(user) });
-  const eventTypeQuery = useQuery({ queryKey: ['event-types'], queryFn: getEventTypes, staleTime: 5 * 60_000, networkMode: 'offlineFirst' });
+  const factionQuery = useQuery({ queryKey: ['factions'], queryFn: () => getFactions(), staleTime: 5 * 60_000, networkMode: 'offlineFirst', enabled: canViewOrganization(user) });
+  const eventTypeQuery = useQuery({ queryKey: ['event-types'], queryFn: () => getEventTypes(), staleTime: 5 * 60_000, networkMode: 'offlineFirst' });
   const factions = (factionQuery.data ?? []).filter((faction) => faction.active !== false);
   const factionsFor = (eventType: EventType | undefined) => factions.filter((faction) => faction.eventType === eventType);
   return {

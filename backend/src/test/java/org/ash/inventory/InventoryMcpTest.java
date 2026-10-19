@@ -212,12 +212,12 @@ class InventoryMcpTest {
         assertEquals(4, updated.itemQuantities().get(bulk.id.toString()));
         assertTrue(tools.delete_assembly(created.id()).success());
         var eventInput = new ApiModels.EventInput("MILSIM", "MCP planned " + UUID.randomUUID(),
-                LocalDate.now().plusDays(14), null, "planned", null, Map.of(bulk.id, 5), null);
+                LocalDate.now().plusDays(14), null, "planned", null, Map.of(bulk.id, 5), null, null);
         var createdEvent = tools.create_event(eventInput);
         assertEquals(5, createdEvent.plannedQuantities().get(bulk.id.toString()));
         assertEquals(eventInput.startDate(), tools.get_event_details(createdEvent.id()).startDate());
         assertEquals("active", tools.update_event(createdEvent.id(), new ApiModels.EventInput("MILSIM", eventInput.name(),
-                eventInput.startDate(), null, "active", null, null, null)).status());
+                eventInput.startDate(), null, "active", null, null, null, null)).status());
         assertTrue(tools.delete_event(createdEvent.id()).success());
     }
 

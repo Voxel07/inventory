@@ -27,4 +27,7 @@ public class Notification extends BaseEntity {
     @Column(name = "last_delivery_error", length = 2000) public String lastDeliveryError;
     /** Suppresses repeated notices for the same request source; never exposed. */
     @Column(name = "dedupe_key", length = 512) public String dedupeKey;
+    @Column(name="next_delivery_at") public Instant nextDeliveryAt;
+    @Column(name="delivery_lease_until") public Instant deliveryLeaseUntil;
+    @Column(name="delivery_lease") public java.util.UUID deliveryLease;
 }

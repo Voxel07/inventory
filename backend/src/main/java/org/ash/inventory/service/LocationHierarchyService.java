@@ -16,12 +16,30 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class LocationHierarchyService {
     public static final String CODE_SEPARATOR = "-";
+    public static final int MAX_STRUCTURE_NODES = 1000;
+    public static final int MAX_DEPTH = 16;
     private static final Pattern CODE = Pattern.compile("[A-Z0-9_.]{1,32}");
 
     @Inject org.ash.inventory.orm.LocationHierarchyOrm orm;
     @Inject org.ash.inventory.helper.security.ActorService actors;
     public void lockHierarchy() {
         orm.lockLocations();
+    }
+
+    /** Reject oversized trees before taking the hierarchy fence or creating rows. */
+    public static void validateStructure(org.ash.inventory.resource.ApiModels.StorageStructureInput input) {
+        record Node(org.ash.inventory.resource.ApiModels.StorageNodeInput value, int depth) {}
+        var pending = new ArrayDeque<Node>();
+        if (input.sections() != null) for (var node : input.sections()) pending.add(new Node(node, 1));
+        int count = 1;
+        while (!pending.isEmpty()) {
+            var node = pending.removeFirst();
+            if (node.value() == null) throw ApiException.badRequest("A storage node is required");
+            if (++count > MAX_STRUCTURE_NODES || node.depth() >= MAX_DEPTH)
+                throw ApiException.badRequest("Storage structures allow at most 1000 nodes and 16 levels including the root");
+            if (node.value().children() != null) for (var child : node.value().children())
+                pending.addLast(new Node(child, node.depth() + 1));
+        }
     }
 
     /** Places {@code target} under {@code parent} (null = top-level location) with the requested code and active flag. */
@@ -33,8 +51,11 @@ public class LocationHierarchyService {
         var visited = new HashSet<UUID>();
         for (var cursor = parent; cursor != null; cursor = cursor.parent) {
             if (Objects.equals(cursor.id, target.id) || !visited.add(cursor.id)) throw ApiException.conflict("A location cannot be its own ancestor");
+            if (visited.size() > MAX_DEPTH) throw ApiException.badRequest("Storage location depth exceeds 16");
         }
         boolean active = requestedActive == null ? target.active : requestedActive;
+        if (visited.size() + 1 + (target.id == null ? 0 : orm.subtreeHeight(target.id)) > MAX_DEPTH)
+            throw ApiException.badRequest("Moving this subtree would exceed depth 16");
         if (active && parent != null && !parent.active) throw ApiException.conflict("Activate the parent location first");
         if (target.id != null) {
             if (parent == null && target.parent != null && orm.holdsStock(target))

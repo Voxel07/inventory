@@ -97,7 +97,7 @@ function WorkQueue() {
             id: notification.id,
             title: notificationTitle(notification),
             detail: noticeDetails(notification),
-            label: notification.type === 'item_requested' ? t('pages.userDashboard.request') : labels.pickup, urgent: false,
+            label: notification.type === 'item_requested' ? t('pages.userDashboard.request') : notification.type === 'action_reminder' || notification.type === 'action_digest' ? t('review.taskReminder') : labels.pickup, urgent: false,
             path: notificationPath(notification), notice: true,
         })),
         ...due.map((action) => ({ id: action.key, title: action.title, detail: action.detail ?? '', due: action.due, label: labels[action.kind] ?? action.kind, urgent: action.kind === 'overdue_return', path: action.path, notice: false })),

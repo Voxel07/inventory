@@ -31,6 +31,23 @@ public class McpInventoryService {
     @Inject org.ash.inventory.orm.CatalogOrm catalogOrm;
     @Inject OrderService orders;
     @Inject PrivacyProjectionService privacy;
+    @Inject CustodyBalanceService custody;
+
+    public com.fasterxml.jackson.databind.JsonNode custody(UUID itemId, UUID personId, UUID orderId, Integer page, Integer limit) {
+        actors.requireWarehouse(); var bounds = bounds(page, limit);
+        var rows = custody.list(false).stream().filter(r -> (itemId == null || itemId.equals(r.itemId()))
+                && (personId == null || personId.equals(r.personId())) && (orderId == null || orderId.equals(r.orderId())))
+                .sorted(Comparator.comparing(CustodyBalanceService.Balance::key)).toList();
+        var visible = privacy.filter(rows, false).value();
+        var result = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();
+        for (int index = bounds.offset(); index < Math.min(visible.size(), bounds.offset() + bounds.limit()); index++) result.add(visible.get(index));
+        return result;
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode movements(UUID itemId, UUID assetId, UUID personId, String type, Integer page, Integer limit) {
+        var bounds = bounds(page, limit);
+        return privacy.filter(queries.transactions(itemId, assetId, personId, type, null, null, null, bounds.offset() / bounds.limit(), bounds.limit()), false).value();
+    }
 
     public com.fasterxml.jackson.databind.JsonNode order(UUID id) { return privacy.filter(queries.orderDetail(id), true).value(); }
     public com.fasterxml.jackson.databind.JsonNode createFactionOrder(ApiModels.OrderInput input) {
@@ -140,10 +157,7 @@ public class McpInventoryService {
     public List<ApiResponses.EventResponse> events(String status, Integer page, Integer limit) {
         actors.current();
         var bounds = bounds(page, limit);
-        var values = catalog.getEvents(null).stream()
-                .filter(e -> status == null || status.isBlank() || status.trim().equalsIgnoreCase(e.status))
-                .sorted(Comparator.comparing((org.ash.inventory.model.EventOccurrence e) -> e.startDate).thenComparing(e -> e.id))
-                .skip(bounds.offset()).limit(bounds.limit()).toList();
+        var values = catalogOrm.events(null, status, bounds.offset(), bounds.limit(), true);
         return visibleEvents(queries.projectEvents(values));
     }
 
@@ -156,14 +170,15 @@ public class McpInventoryService {
     }
 
     private List<ApiResponses.EventResponse> visibleEvents(List<ApiResponses.EventResponse> values) {
-        var ids = catalog.getVisibleItemIds().stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
+        var candidates = values.stream().flatMap(e -> e.itemIds().stream()).map(UUID::fromString).distinct().toList();
+        var ids = catalogOrm.visibleItemIds(candidates).stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
         return values.stream().map(e -> {
             var quantities = new LinkedHashMap<String, Map<String, Integer>>();
             e.quantities().forEach((key, amount) -> quantities.put(key, visibleMap(amount, ids)));
             return new ApiResponses.EventResponse(e.id(), e.created(), e.updated(), e.eventType(), e.name(),
                     e.eventDate(), e.startDate(), e.endDate(), e.status(), e.notes(),
                     e.itemIds().stream().filter(ids::contains).toList(), visibleMap(e.plannedQuantities(), ids),
-                    visibleMap(e.usedQuantities(), ids), visibleMap(e.itemNames(), ids), quantities);
+                    visibleMap(e.usedQuantities(), ids), visibleMap(e.itemNames(), ids), quantities, e.orderDeadline());
         }).toList();
     }
 
@@ -177,6 +192,13 @@ public class McpInventoryService {
         actors.current();
         var bounds = bounds(page, limit);
         return mapper.locations(catalogOrm.locations(locationId, bounds.offset(), bounds.limit()));
+    }
+
+    public InventoryMcpDtos.ResourcePage<ApiResponses.StorageLocationResponse> locationResource() {
+        var values = catalogOrm.locations(null, 0, 101);
+        boolean more = values.size() > 100;
+        return new InventoryMcpDtos.ResourcePage<>(mapper.locations(values.stream().limit(100).toList()),
+                0, 100, more, more ? 1 : null, "list_storage_locations");
     }
 
     @org.ash.inventory.helper.security.PrivateInventoryCommand
@@ -244,10 +266,8 @@ public class McpInventoryService {
         var today = BusinessTime.today();
         for (var item : items) {
             var policy = stock.get(item.id).policy();
-            boolean itemScheduled = false;
             for (var schedule : policy.schedules()) {
                 if (schedule.assetInstance != null && !schedule.assetInstance.active) continue;
-                if (schedule.assetInstance == null) itemScheduled = true;
                 var status = policy.status(schedule);
                 if (status == MaintenancePolicy.Status.healthy) continue;
                 alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("schedule", schedule.id,
@@ -256,25 +276,19 @@ public class McpInventoryService {
                         schedule.nextDueAt == null ? null : schedule.nextDueAt.toString()));
             }
             var itemStatus = MaintenancePolicy.itemStatus(item, today);
-            boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.in_service
-                    || (!itemScheduled && itemStatus != DomainEnums.MaintenanceStatus.certified);
+            boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.in_service;
             if (flagged) {
-                String status = switch (itemStatus) {
-                    case overdue -> "due";
-                    case due_soon -> "warning";
-                    default -> itemStatus.name();
-                };
                 alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("item", item.id, item.sku, item.name,
-                        "Item maintenance", status, item.nextMaintenanceDue == null ? null : item.nextMaintenanceDue.toString()));
+                        "Item maintenance", itemStatus.name(), null));
             }
             for (var asset : policy.assets()) {
+                // Schedule alerts above carry due dates; a condition/safety hold has no independent due date.
                 var serviceStatus = MaintenancePolicy.assetStatus(asset, today);
                 if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
                         || serviceStatus != DomainEnums.MaintenanceStatus.certified) {
-                    var due = MaintenancePolicy.assetDue(item, asset);
                     alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("asset", asset.id, asset.assetCode, item.name,
                             "Condition: " + asset.conditionStatus + "; service: " + serviceStatus, serviceStatus.name(),
-                            due == null ? null : due.toString()));
+                            null));
                 }
             }
         }

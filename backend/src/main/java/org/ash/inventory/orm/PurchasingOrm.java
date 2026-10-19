@@ -36,13 +36,13 @@ public class PurchasingOrm extends EntityOrm {
     }
 
     public List<PurchaseOrder> purchaseOrders(String status, int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var jpql = status == null || status.isBlank()
-                ? "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where 1=1" + InventoryAccessOrm.excluding("purchaseOrder", denied) + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc"
-                : "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where purchaseOrder.status = :status" + InventoryAccessOrm.excluding("purchaseOrder", denied) + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc";
+                ? "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where 1=1" + InventoryAccessOrm.scope("purchase", "purchaseOrder") + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc"
+                : "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where purchaseOrder.status = :status" + InventoryAccessOrm.scope("purchase", "purchaseOrder") + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc";
         var query = entityManager.createQuery(jpql, PurchaseOrder.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.PurchaseOrderStatus.valueOf(status));
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public boolean orderNumberExists(String number) {
         return entityManager.createQuery("select count(purchaseOrder) from PurchaseOrder purchaseOrder where lower(purchaseOrder.orderNumber) = :number", Long.class)
@@ -80,13 +80,13 @@ public class PurchasingOrm extends EntityOrm {
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);
     }
     public List<GoodsReceipt> receipts(UUID purchaseOrderId, int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var jpql = purchaseOrderId == null
-                ? "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where 1=1" + InventoryAccessOrm.excluding("receipt", denied) + " order by receipt.receivedAt desc"
-                : "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.purchaseOrder.id = :purchaseOrderId" + InventoryAccessOrm.excluding("receipt", denied) + " order by receipt.receivedAt desc";
+                ? "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where 1=1" + InventoryAccessOrm.scope("receipt", "receipt") + " order by receipt.receivedAt desc"
+                : "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.purchaseOrder.id = :purchaseOrderId" + InventoryAccessOrm.scope("receipt", "receipt") + " order by receipt.receivedAt desc";
         var query = entityManager.createQuery(jpql, GoodsReceipt.class);
         if (purchaseOrderId != null) query.setParameter("purchaseOrderId", purchaseOrderId);
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<GoodsReceiptLine> receiptLines(Collection<GoodsReceipt> receipts) {
         if (receipts.isEmpty()) return List.of();

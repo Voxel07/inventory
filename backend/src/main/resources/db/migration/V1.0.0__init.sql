@@ -64,7 +64,6 @@ create table asset_instances (
     notes varchar(255),
     serial_number varchar(255),
     out_of_service boolean not null,
-    next_maintenance_due date,
     primary key (id)
 );
 
@@ -469,9 +468,7 @@ create table items (
     current_operating_hours numeric(38,2) not null,
     tracks_runtime boolean not null default false,
     fuel_consumption_l_100km numeric(38,2),
-    maintenance_interval_days integer,
     min_stock integer not null,
-    next_maintenance_due date,
     unit_value_cents integer not null,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
@@ -1231,3 +1228,131 @@ SELECT gen_random_uuid(), now(), now(), true, event_type, name, slug FROM (VALUE
     ('M24', 'Militär', 'militar'),
     ('M24', 'Kartell', 'kartell')
 ) AS seed(event_type, name, slug);
+
+-- One policy predicate shared by bounded SQL/ORM queries and report projections.
+create function inventory_policy_visible(policy_id uuid, actor_id uuid, is_admin boolean, sees_public boolean, needs_edit boolean)
+returns boolean language sql stable as $policy$
+select case when policy_id is null then sees_public when is_admin then true else exists (
+ select 1 from inventory_access_policies p where p.id = policy_id and (
+  p.owner_user_id = actor_id or (not needs_edit and p.public_use and sees_public)
+  or exists (select 1 from inventory_access_grants g where
+   (g.policy_id = p.id or exists (select 1 from inventory_access_links k where k.policy_id = p.id and k.ancestor_policy_id = g.policy_id))
+   and (not needs_edit or g.can_edit)
+   and (g.user_id = actor_id or exists (select 1 from inventory_access_group_members m where m.group_id = g.group_id and m.user_id = actor_id)))
+  or exists (select 1 from inventory_access_links k join inventory_access_policies ancestor on ancestor.id = k.ancestor_policy_id
+   where k.policy_id = p.id and ancestor.owner_user_id = actor_id)
+ )) end;
+$policy$;
+
+-- Scope each aggregate before pagination; no organization-wide denied-reference enumeration.
+create function inventory_resource_visible(kind text, resource_id uuid, actor_id uuid, is_admin boolean, sees_public boolean)
+returns boolean language plpgsql stable as $resource$
+begin
+ if resource_id is null or is_admin then return true; end if;
+ case kind
+ when 'item' then return coalesce((select inventory_policy_visible(i.access_policy_id,actor_id,is_admin,sees_public,false) from items i where i.id=resource_id),false);
+ when 'location' then return coalesce((select inventory_policy_visible(l.access_policy_id,actor_id,is_admin,sees_public,false) from storage_locations l where l.id=resource_id),false);
+ when 'assembly' then return exists(select 1 from assemblies a where a.id=resource_id and inventory_policy_visible(a.access_policy_id,actor_id,is_admin,sees_public,false)
+  and not exists(select 1 from assembly_items c where c.assembly_id=a.id and not inventory_resource_visible('item',c.item_id,actor_id,is_admin,sees_public)));
+ when 'order' then return exists(select 1 from orders o where o.id=resource_id and sees_public
+  and inventory_resource_visible('location',o.pickup_location_id,actor_id,is_admin,sees_public)
+  and not exists(select 1 from order_lines l where l.order_id=o.id and
+   (not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)
+    or not inventory_resource_visible('location',l.source_location_id,actor_id,is_admin,sees_public)
+    or not inventory_resource_visible('assembly',l.source_assembly_id,actor_id,is_admin,sees_public))));
+ when 'count' then return exists(select 1 from inventory_count_sessions c where c.id=resource_id and sees_public
+  and inventory_resource_visible('item',c.item_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('location',c.location_id,actor_id,is_admin,sees_public)
+  and not exists(select 1 from inventory_count_lines l where l.count_session_id=c.id and
+   (not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public) or not inventory_resource_visible('location',l.location_id,actor_id,is_admin,sees_public))));
+ when 'purchase' then return exists(select 1 from purchase_orders p where p.id=resource_id and sees_public
+  and not exists(select 1 from purchase_order_lines l where l.purchase_order_id=p.id and not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)));
+ when 'receipt' then return exists(select 1 from goods_receipts r where r.id=resource_id and sees_public
+  and inventory_resource_visible('purchase',r.purchase_order_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('location',r.receiving_location_id,actor_id,is_admin,sees_public)
+  and not exists(select 1 from goods_receipt_lines l where l.goods_receipt_id=r.id and not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)));
+ when 'transfer' then return exists(select 1 from inventory_transfers t where t.id=resource_id and sees_public
+  and inventory_resource_visible('location',t.source_location_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('location',t.destination_location_id,actor_id,is_admin,sees_public)
+  and not exists(select 1 from inventory_transfer_lines l where l.transfer_id=t.id and not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)));
+ when 'loan' then return exists(select 1 from loan_arrangements l join equipment_commitments c on c.id=l.commitment_id where l.id=resource_id and sees_public
+  and inventory_resource_visible('item',c.item_id,actor_id,is_admin,sees_public) and inventory_resource_visible('location',l.provider_location_id,actor_id,is_admin,sees_public));
+ when 'request' then return exists(select 1 from member_requests r where r.id=resource_id and sees_public
+  and inventory_resource_visible('item',r.item_id,actor_id,is_admin,sees_public) and inventory_resource_visible('location',r.location_id,actor_id,is_admin,sees_public));
+ when 'damage' then return exists(select 1 from damage_reports d where d.id=resource_id
+  and inventory_resource_visible('item',d.item_id,actor_id,is_admin,sees_public) and inventory_resource_visible('assembly',d.assembly_id,actor_id,is_admin,sees_public));
+ when 'transaction' then return exists(select 1 from stock_transactions t where t.id=resource_id
+  and inventory_resource_visible('item',t.item_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('location',t.source_location_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('location',t.destination_location_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('order',t.order_id,actor_id,is_admin,sees_public)
+  and inventory_resource_visible('damage',t.damage_report_id,actor_id,is_admin,sees_public));
+ else return false;
+ end case;
+end;
+$resource$;
+
+alter table app_users add column active boolean not null default true;
+alter table app_users add column deactivated_at timestamp with time zone;
+alter table app_users add column offboarding_reason varchar(1000);
+create table revoked_sessions (
+ token_hash varchar(64) primary key, user_id uuid not null references app_users(id), expires_at timestamp with time zone not null
+);
+create index ix_revoked_sessions_expiry on revoked_sessions(expires_at);
+
+create table handover_evidence (
+ id uuid primary key default gen_random_uuid(), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+ handover_id uuid not null references custody_handovers(id), recorded_by_id uuid not null references app_users(id),
+ condition_confirmed boolean not null, condition_notes varchar(2000) not null, acknowledgement_object_key varchar(255), command_id uuid not null unique, input_hash varchar(64) not null
+);
+create index ix_handover_evidence_handover on handover_evidence(handover_id, created_at);
+
+alter table notifications add column next_delivery_at timestamptz;
+alter table notifications add column delivery_lease_until timestamptz;
+alter table notifications add column delivery_lease uuid;
+create index ix_notification_delivery on notifications(delivery_status, next_delivery_at, created_at);
+
+create function inventory_history_immutable() returns trigger language plpgsql as $$
+begin
+ if TG_OP = 'UPDATE' and OLD.xmin = (pg_current_xact_id()::text)::xid then return NEW; end if;
+ raise exception 'Committed inventory history is append-only' using errcode = '23514';
+end $$;
+do $$ declare history_table text; begin
+ foreach history_table in array array['stock_transactions','order_history','return_reconciliations','custody_handovers','custody_handover_lines','handover_evidence','runtime_entries','maintenance_records','sync_command_audit'] loop
+ execute format('create trigger history_immutable before update or delete on %I for each row execute function inventory_history_immutable()', history_table);
+ end loop;
+end $$;
+
+alter table event_occurrences add column order_deadline timestamptz;
+
+alter table maintenance_schedules add column category_template varchar(255);
+
+alter table stock_transactions add column reverses_id uuid unique references stock_transactions(id);
+alter table stock_transactions add column reversed_by_id uuid references app_users(id);
+alter table stock_transactions add constraint ck_reversal_executor check ((reverses_id is null) = (reversed_by_id is null));
+alter table stock_transactions add column asset_before jsonb not null default '{}';
+alter table stock_transactions add constraint ck_movement_signed_quantity check (quantity>0 or type='adjusted' or (reverses_id is not null and quantity<0));
+
+create unique index uq_items_sku_lower on items(lower(sku));
+
+-- Catalog attention filters use schedule-specific warning windows and the same signed usage meter as checkout.
+create function inventory_maintenance_attention(target_item uuid) returns boolean language sql stable as $$
+ select exists(select 1 from items i where i.id=target_item and i.out_of_service)
+ or exists(select 1 from asset_instances a where a.item_id=target_item and a.active and a.out_of_service)
+ or exists(
+  select 1 from maintenance_schedules s join items i on i.id=s.item_id
+  left join asset_instances a on a.id=s.asset_instance_id
+  where s.item_id=target_item and s.active and (s.asset_instance_id is null or a.active) and
+  case s.interval_type
+   when 'date' then s.next_due_at is null or s.warning_window is null
+    or s.next_due_at <= now() + s.warning_window * interval '1 day'
+   when 'operating_hours' then s.next_due_value is null or s.warning_window is null
+    or (case when s.asset_instance_id is null then i.current_operating_hours else a.operating_hours end) is null
+    or (case when s.asset_instance_id is null then i.current_operating_hours else a.operating_hours end) + s.warning_window >= s.next_due_value
+   when 'usage_count' then s.next_due_value is null or s.warning_window is null
+    or coalesce((select sum(sign(t.quantity)) from stock_transactions t where t.item_id=s.item_id and t.type='checkout'
+      and (s.asset_instance_id is null or t.asset_instance_id=s.asset_instance_id)),0) + s.warning_window >= s.next_due_value
+   else true
+  end
+ );
+$$;

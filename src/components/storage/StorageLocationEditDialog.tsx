@@ -26,22 +26,22 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const update = useUpdateStorageLocation();
   const [form, setForm] = useState<StorageLocationFormData>({
-    privateResource: Boolean(location.access?.privateResource), parentLocationId: location.parentLocationId ?? null, active: location.active,
+    privateResource: Boolean(location.access?.privateResource), parentLocationId: location.parentLocationId ?? null, keepParent: location.depth === null, active: location.active,
     name: location.name, code: location.code, description: location.description ?? '', mapOverlay: location.mapOverlay ?? null,
     latitude: location.latitude ?? DEFAULT_CENTER.latitude, longitude: location.longitude ?? DEFAULT_CENTER.longitude,
     mapZoom: Math.max(location.mapZoom ?? 19, 19), overlayBounds: location.overlayBounds,
   });
   const overlayPreview = useObjectUrl(form.mapOverlayFile);
   const parent = locations.find((entry) => entry.id === form.parentLocationId);
-  const depth = parent ? parent.depth + 1 : 0;
+  const depth = form.keepParent ? null : parent ? parent.depth === null ? null : parent.depth + 1 : 0;
   // Storage places show the map of their section or location.
-  const hasMap = depth <= 1;
+  const hasMap = depth !== null && depth <= 1;
   const parentChoices = locations.filter((entry) => entry.active && !isDescendant(entry, location.id, locations)
     && (!location.access?.privateResource || entry.access?.privateResource));
 
   function submit() {
     if (!form.name.trim()) return;
-    const data: StorageLocationFormData = hasMap ? form
+    const data: StorageLocationFormData = hasMap || depth === null ? form
       : { ...form, latitude: undefined, longitude: undefined, mapOverlay: null, overlayBounds: undefined, mapOverlayFile: undefined };
     update.mutate({ id: location.id, data }, {
       onSuccess: () => { showSnackbar(t('pages.storageLocations.storageLocationUpdatedSuccessfully'), 'success'); onClose(); },
@@ -54,8 +54,8 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
       pending={update.isPending} submitDisabled={!form.name.trim()}>
       <Stack spacing={2}>
         <LocationPicker locations={parentChoices} value={form.parentLocationId} stockOnly={false} label={t('pages.storageLocations.insideOf')}
-          helperText={t(`pages.storageLocations.roleHelp.${locationRole({ depth })}`)}
-          onChange={(next) => setForm({ ...form, parentLocationId: next?.id ?? null })} />
+          helperText={form.keepParent ? t('review.hiddenHierarchy') : t(`pages.storageLocations.roleHelp.${locationRole({ depth })}`)}
+          onChange={(next) => setForm({ ...form, parentLocationId: next?.id ?? null, keepParent: false })} />
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField label={t('pages.storageLocations.storageLocationName')} value={form.name} required fullWidth autoFocus
             onChange={(event) => setForm({ ...form, name: event.target.value })} />

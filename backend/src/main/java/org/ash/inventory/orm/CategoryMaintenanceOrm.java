@@ -28,11 +28,13 @@ public class CategoryMaintenanceOrm {
                 .setParameter("name", category).getResultList();
     }
 
-    public void clearAssetCalendars(List<Item> items) {
-        if (items.isEmpty()) return;
-        entityManager.createQuery("update versioned AssetInstance a set a.nextMaintenanceDue = null where a.item in :items")
-                .setParameter("items", items).executeUpdate();
+    public List<org.ash.inventory.model.MaintenanceSchedule> templates(Item item) {
+        return entityManager.createQuery("from MaintenanceSchedule where item = :item and categoryTemplate is not null", org.ash.inventory.model.MaintenanceSchedule.class).setParameter("item",item).getResultList();
     }
+    public List<org.ash.inventory.model.AssetInstance> assets(Item item) {
+        return entityManager.createQuery("from AssetInstance where item=:item and active=true",org.ash.inventory.model.AssetInstance.class).setParameter("item",item).getResultList();
+    }
+    public void persistSchedule(org.ash.inventory.model.MaintenanceSchedule schedule) { entityManager.persist(schedule); }
 
     public void persist(CategoryMaintenancePolicy policy) { entityManager.persist(policy); }
     public void remove(CategoryMaintenancePolicy policy) { entityManager.remove(policy); }

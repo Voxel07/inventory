@@ -37,6 +37,7 @@ public class EventStreamResource {
     private final ActorService actors;
     private final SecurityIdentity identity;
     @jakarta.inject.Inject InventoryTelemetry telemetry;
+    @jakarta.inject.Inject org.ash.inventory.service.AuthSessionService sessions;
 
     public EventStreamResource(EventBroadcaster broadcaster, ActorService actors, SecurityIdentity identity) {
         this.broadcaster = broadcaster;
@@ -49,15 +50,26 @@ public class EventStreamResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<Map<String, Object>> stream() {
-        actors.current();
+        var actorId = actors.current().id;
+        String tokenHash = identity.getPrincipal() instanceof JsonWebToken token ? org.ash.inventory.service.AuthSessionService.fingerprint(token) : null;
         Duration lifetime = lifetime(identity.isAnonymous() ? null : identity.getPrincipal(), Instant.now());
         if (lifetime.isZero()) throw new ApiException(401, "Token expired");
         return Multi.createFrom().deferred(() -> {
             long started = System.nanoTime();
+            var sessionEnded = new java.util.concurrent.atomic.AtomicBoolean();
             telemetry.streamOpened();
-            return broadcaster.stream().map(EventStreamResource::publicEvent).select().first(lifetime)
+            var guard = Multi.createFrom().ticks().every(Duration.ofSeconds(10))
+                    .emitOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool()).map(tick -> {
+                        if (!sessions.streamAllowed(actorId, tokenHash)) {
+                            sessionEnded.set(true);
+                            throw new ApiException(401,"Session ended");
+                        }
+                        return Map.<String,Object>of("type","heartbeat");
+                    });
+            return Multi.createBy().merging().streams(broadcaster.stream().map(EventStreamResource::publicEvent),guard).select().first(lifetime)
+                    .onFailure(ApiException.class).recoverWithCompletion()
                     .onTermination().invoke((failure, cancelled) -> telemetry.streamClosed(
-                            failure != null ? "error" : cancelled ? "client_cancelled" : "lifetime_expired", started));
+                            sessionEnded.get() ? "session_ended" : failure != null ? "error" : cancelled ? "client_cancelled" : "lifetime_expired", started));
         });
     }
 

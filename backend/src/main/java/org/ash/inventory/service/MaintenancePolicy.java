@@ -62,33 +62,12 @@ public final class MaintenancePolicy {
         return DomainEnums.MaintenanceStatus.certified;
     }
 
-    private static boolean calendarBlocks(boolean outOfService, LocalDate due, LocalDate today) {
-        return outOfService || (due != null && due.isBefore(today));
-    }
-
-    /** An individually inspected asset follows its own calendar; an asset never inspected follows its item's. */
-    public static LocalDate assetDue(Item item, AssetInstance asset) {
-        return asset.nextMaintenanceDue != null ? asset.nextMaintenanceDue : item.nextMaintenanceDue;
-    }
-
     public static DomainEnums.MaintenanceStatus itemStatus(Item item, LocalDate today) {
-        return calendarStatus(item.outOfService, item.nextMaintenanceDue, today);
+        return item.outOfService ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
     }
-
     public static DomainEnums.MaintenanceStatus assetStatus(AssetInstance asset, LocalDate today) {
-        return calendarStatus(asset.outOfService, assetDue(asset.item, asset), today);
+        return asset.outOfService ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
     }
-
-    /**
-     * Item-wide calendar block. Serialized items are inspected per asset, so their calendar blocks each asset
-     * through {@link #blocksAsset} instead of the whole item.
-     */
-    public static boolean blocksItem(Item item, LocalDate today) {
-        if (!item.active || item.outOfService) return true;
-        return item.trackingMode != DomainEnums.TrackingMode.serialized && calendarBlocks(false, item.nextMaintenanceDue, today);
-    }
-
-    public static boolean blocksAsset(AssetInstance asset, LocalDate today) {
-        return calendarBlocks(asset.outOfService, assetDue(asset.item, asset), today);
-    }
+    public static boolean blocksItem(Item item, LocalDate today) { return !item.active || item.outOfService; }
+    public static boolean blocksAsset(AssetInstance asset, LocalDate today) { return asset.outOfService; }
 }

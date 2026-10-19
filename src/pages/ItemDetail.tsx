@@ -230,7 +230,7 @@ export function ItemDetail() {
     const location = item.expand?.storageLocation;
     const profile = equipment.data;
     const sortedTransactions = [...itemTransactions].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    const userName = (tx: typeof itemTransactions[number]) => tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.expand?.userId?.email?.trim() || tx.userId || '—';
+    const userName = (tx: typeof itemTransactions[number]) => tx.expand?.userId?.name?.trim() || tx.expand?.userId?.username?.trim() || tx.userId || '—';
     const assetLabel = (tx: typeof itemTransactions[number]) => tx.expand?.assetInstanceId
         ? [tx.expand.assetInstanceId.assetCode, tx.expand.assetInstanceId.serialNumber && `SN ${tx.expand.assetInstanceId.serialNumber}`].filter(Boolean).join(' · ')
         : '';

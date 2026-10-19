@@ -1,6 +1,6 @@
 # Step 1 — Single app VPS + S3/backup storage node
 
-This guide describes the **intended starting deployment**. Provisioning, replication, backup jobs and restore acceptance remain operator work; see [Implementation Plan](IMPLEMENTATION_PLAN.md). It keeps the transactional stack
+This guide describes the **intended starting deployment**. Provisioning, replication, installation of the checked-in backup jobs and deployment restore acceptance remain operator work; see [Implementation Plan](IMPLEMENTATION_PLAN.md). It keeps the transactional stack
 (API + PostgreSQL) on one VPS and moves two things off-box for durability:
 
 1. **Media storage** → Garage S3 on a separate storage VPS.
@@ -94,9 +94,7 @@ S3_ACCESS_KEY=...
 S3_SECRET_KEY=...
 ```
 
-Database backups and WAL archiving are shipped off VPS A. A minimal, pragmatic
-setup is nightly `pg_dump` plus `wal-g`/`pgbackrest` pushing WAL archives to the
-storage box on VPS B (or a Hetzner Storage Box), giving point-in-time recovery.
+Install the coordinated dump/media backup and timer from the [operations runbook](OPERATIONS_RUNBOOK.md). It encrypts snapshots and supports a separate rclone destination. Run the isolated restore drill before relying on it. WAL archiving/PITR with `wal-g` or `pgbackrest` is a separate operator setup; the supplied logical snapshots do not provide point-in-time recovery.
 
 ## Verification checklist
 
@@ -105,7 +103,7 @@ storage box on VPS B (or a Hetzner Storage Box), giving point-in-time recovery.
 - [ ] Signing in through Authentik works; refresh tokens rotate.
 - [ ] Uploading an item image stores it in Garage S3 (visible in Garage WebUI).
 - [ ] `pg_stat_replication` on VPS A shows the replica connected and streaming.
-- [ ] A restore drill: restore the latest dump/WAL onto a scratch DB.
+- [ ] A restore drill: restore the latest encrypted snapshot into the isolated scratch container and verify real media; test WAL recovery separately if configured.
 - [ ] Offline test: toggle airplane mode, scan an item, confirm it queues and
       syncs after reconnect.
 

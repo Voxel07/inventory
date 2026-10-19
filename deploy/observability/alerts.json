@@ -1,0 +1,242 @@
+[
+  {
+    "name": "Inventory API readiness",
+    "description": "api_ready < 1; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'api_ready' group by host having max(value) < 1"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Database probe",
+    "description": "postgres_probe_ok < 1; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'postgres_probe_ok' group by host having max(value) < 1"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Outbox dead letters",
+    "description": "outbox_dead > 0; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'outbox_dead' group by host having max(value) > 0"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Outbox backlog",
+    "description": "outbox_pending > 1000; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'outbox_pending' group by host having max(value) > 1000"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Delivery failures",
+    "description": "notification_failed > 0; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'notification_failed' group by host having max(value) > 0"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Disk usage",
+    "description": "disk_used_percent > 85; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'disk_used_percent' group by host having max(value) > 85"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Retained WAL",
+    "description": "retained_wal_bytes > 8589934592; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'retained_wal_bytes' group by host having max(value) > 8589934592"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Replication lag",
+    "description": "replication_lag_seconds > 60; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'replication_lag_seconds' group by host having max(value) > 60"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory Backup overdue",
+    "description": "backup_age_seconds > 108000; see docs/OPERATIONS_RUNBOOK.md",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select host, max(value) as value from inventory_ops where signal = 'backup_age_seconds' group by host having max(value) > 108000"
+    },
+    "trigger_condition": {
+      "period": 3,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  },
+  {
+    "name": "Inventory collector silence",
+    "description": "No independent operations probe in five minutes; check host, scheduler and ingestion.",
+    "enabled": true,
+    "is_real_time": false,
+    "stream_type": "logs",
+    "stream_name": "inventory_ops",
+    "query_condition": {
+      "type": "sql",
+      "sql": "select count(*) as observations from inventory_ops where signal='collector_alive' having count(*) = 0"
+    },
+    "trigger_condition": {
+      "period": 5,
+      "frequency": 1,
+      "frequency_type": "minutes",
+      "operator": ">=",
+      "threshold": 1,
+      "silence": 15
+    },
+    "destinations": [
+      "inventory-operations"
+    ],
+    "notify_on_recovery": true
+  }
+]

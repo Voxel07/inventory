@@ -27,7 +27,7 @@ public class OrderOrm extends EntityOrm {
     public List<InventoryOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
             Collection<org.ash.inventory.model.DomainEnums.OrderStatus> statuses, UUID eventId, int offset, int limit) {
         if (factionKeys != null && factionKeys.isEmpty()) return List.of();
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var jpql = new StringBuilder("select o from InventoryOrder o "
                 + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where o.kind = faction");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
@@ -36,7 +36,7 @@ public class OrderOrm extends EntityOrm {
         if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
         if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
         if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
-        jpql.append(InventoryAccessOrm.excluding("o", denied)).append(" order by o.eventOccurrence.startDate desc");
+        jpql.append(InventoryAccessOrm.scope("order", "o")).append(" order by o.eventOccurrence.startDate desc");
         var query = entityManager.createQuery(jpql.toString(), InventoryOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
@@ -44,19 +44,19 @@ public class OrderOrm extends EntityOrm {
         if (factionKeys != null) query.setParameter("factionKeys", factionKeys);
         if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
         if (eventId != null) query.setParameter("eventId", eventId);
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public InventoryOrder previousFactionOrder(String eventType, String faction, java.time.LocalDate before, UUID excludeId) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var query = entityManager.createQuery("from InventoryOrder o join fetch o.eventOccurrence event join fetch o.faction f"
                 + " where o.kind = faction and event.eventType = :eventType and f.name = :faction"
                 + " and event.startDate < :before and o.status <> cancelled"
                 + (excludeId == null ? "" : " and o.id <> :excludeId")
-                + InventoryAccessOrm.excluding("o", denied) + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
+                + InventoryAccessOrm.scope("order", "o") + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
                 .setParameter("eventType", eventType).setParameter("faction", faction).setParameter("before", before.withDayOfYear(1));
         if (excludeId != null) query.setParameter("excludeId", excludeId);
-        return InventoryAccessOrm.bindDenied(query, denied).setMaxResults(1).getResultStream().findFirst().orElse(null);
+        return InventoryAccessOrm.bind(query, accessActor.current()).setMaxResults(1).getResultStream().findFirst().orElse(null);
     }
 
     public InventoryOrder findOrder(UUID id) { return entityManager.find(InventoryOrder.class, id); }
@@ -65,19 +65,19 @@ public class OrderOrm extends EntityOrm {
     public record Filter(Collection<org.ash.inventory.model.DomainEnums.OrderStatus> statuses, UUID eventId, String eventType, String search) {}
 
     public List<InventoryOrder> orders(org.ash.inventory.model.UserAccount actor, Filter filter, int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(actor);
+
         var jpql = new StringBuilder("from InventoryOrder o join fetch o.createdBy left join fetch o.eventOccurrence event where o.kind = general");
         if (!filter.statuses().isEmpty()) jpql.append(" and o.status in :statuses");
         if (filter.eventId() != null) jpql.append(" and event.id = :eventId");
         else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
         boolean searching = filter.search() != null && !filter.search().isBlank();
         if (searching) jpql.append(" and (lower(o.name) like :search or lower(o.purpose) like :search)");
-        var query = entityManager.createQuery(jpql + InventoryAccessOrm.excluding("o", denied) + " order by o.createdAt desc, o.id", InventoryOrder.class);
+        var query = entityManager.createQuery(jpql + InventoryAccessOrm.scope("order", "o") + " order by o.createdAt desc, o.id", InventoryOrder.class);
         if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
         if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());
         else if (filter.eventType() != null && !filter.eventType().isBlank()) query.setParameter("eventType", filter.eventType());
         if (searching) query.setParameter("search", "%" + filter.search().trim().toLowerCase(Locale.ROOT) + "%");
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public List<OrderLine> lines(InventoryOrder order) {

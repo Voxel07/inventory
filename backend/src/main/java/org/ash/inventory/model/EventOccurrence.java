@@ -21,6 +21,7 @@ public class EventOccurrence extends BaseEntity {
     @Column(name = "daily_main_meal_stamps", nullable = false) public int dailyMainMealStamps = 4;
     @Column(name = "daily_breakfast_stamps", nullable = false) public int dailyBreakfastStamps = 1;
     @Column(name = "first_day_main_meal_stamps", nullable = false) public int firstDayMainMealStamps = 2;
+    @Column(name="order_deadline") public java.time.Instant orderDeadline;
     public String notes;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "planned_quantities", columnDefinition = "jsonb")

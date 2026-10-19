@@ -38,7 +38,7 @@ export function localWriteChange(path: string): LocalWriteChange {
     case 'events': return change(action === 'attendees' || action === 'timeline' || action === 'catering' ? 'event_logistics.changed' : 'catalog.changed');
     case 'event-people': return change('event_logistics.changed');
     case 'assemblies': case 'storage-locations': case 'factions': case 'category-maintenance': return change('catalog.changed');
-    case 'orders': return change('order.changed');
+    case 'orders': case 'order-copies': case 'handovers': return change('order.changed');
     case 'transactions': return change('stock.changed');
     case 'returns': return change('return.changed');
     case 'damage-reports': return change('damage.updated');
@@ -65,7 +65,7 @@ export function localWriteChange(path: string): LocalWriteChange {
 }
 
 const custody = ['custody-balances', 'member-custody', 'member-storage', 'member-requests', 'return-submissions'];
-const stock = ['items', 'assemblies', 'transactions', 'damageReports', 'maintenance', 'faction-orders', 'general-orders',
+const stock = ['handover-evidence', 'items', 'assemblies', 'transactions', 'damageReports', 'maintenance', 'faction-orders', 'general-orders',
   'order-pickup-groups', 'item-responsibility',
   'event-reports', 'procurement-deficits', 'loans', 'action-inbox', 'reports', 'notifications', ...custody,
   'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets',

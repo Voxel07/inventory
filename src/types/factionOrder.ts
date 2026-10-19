@@ -1,7 +1,7 @@
 import type { AssetInstance, Item } from './item';
 import type { Assembly } from './assembly';
 import type { EventType } from './event';
-import type { User } from './user';
+import type { ActorSummary } from './user';
 import type { OrderStatus } from './orderCommands';
 import type { OrderHistoryEntry } from './orderHistory';
 import type { StorageLocation } from './item';
@@ -60,11 +60,11 @@ export interface FactionOrder {
   expand?: {
     itemIds?: Item[];
     assemblyIds?: Assembly[];
-    createdBy?: User;
-    preparedBy?: User;
-    readyBy?: User;
-    pickedUpBy?: User;
-    returnedBy?: User;
+    createdBy?: ActorSummary;
+    preparedBy?: ActorSummary;
+    readyBy?: ActorSummary;
+    pickedUpBy?: ActorSummary;
+    returnedBy?: ActorSummary;
     pickupLocation?: StorageLocation;
   };
 }

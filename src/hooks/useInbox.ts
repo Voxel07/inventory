@@ -66,6 +66,7 @@ export { noticeDetails, noticeText, notificationPath } from '../utils/notificati
 import { noticeText } from '../utils/notifications';
 
 export function notificationTitle(notification: AppNotification): string {
+  if (notification.type === "action_reminder" || notification.type === "action_digest") return translate("review.taskReminder");
   if (notification.type === 'item_requested') {
     const item = noticeText(notification, 'itemName') ?? translate('hooks.useInbox.yourItem');
     const requester = noticeText(notification, 'requesterName');

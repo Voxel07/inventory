@@ -12,6 +12,10 @@ import { ApiError, authorizedFetch, InvalidResponseError, REQUEST_TIMEOUT_MS, Re
  * conflict-correction UI.
  */
 export type OfflineCommand =
+  | { type: 'count.submit' | 'count.recount'; payload: { countId: string; input: import('../types/operations').CountSubmissionInput } }
+  | { type: 'transfer.receive'; payload: { transferId: string; input: import('../types/operations').TransferReceiveInput } }
+  | { type: 'return.accept'; payload: { returnId: string; input: { notes?: string; hoursRun?: number } } }
+  | { type: 'member.return'; payload: import('../types/member').MemberReturnInput }
   | { type: 'transaction'; payload: TransactionFormData }
   | { type: 'damage.create'; payload: DamageReportFormData }
   | { type: 'order.create'; payload: ({ kind: 'faction' } & FactionOrderFormData) | ({ kind: 'general' } & import('../types').GeneralOrderFormData) }
@@ -60,12 +64,12 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function setOfflineCatalog<T>(key: string, data: T, context = captureAuthSession()): Promise<void> {
-  return setOfflineCatalogEntries([{ key, data }], context);
+export async function setOfflineCatalog<T>(key: string, data: T, context = captureAuthSession(), required = false): Promise<void> {
+  return setOfflineCatalogEntries([{ key, data }], context, required);
 }
 
 /** Save a query page and its exact resource entries with one download timestamp. */
-export async function setOfflineCatalogEntries(entries: { key: string; data: unknown }[], context = captureAuthSession()): Promise<void> {
+export async function setOfflineCatalogEntries(entries: { key: string; data: unknown }[], context = captureAuthSession(), required = false): Promise<void> {
   assertAuthSession(context);
   const protectedEntries = entries.filter(entry => containsPrivateInventory(entry.data));
   await Promise.all(protectedEntries.map(entry => removeOfflineCatalog(entry.key, context)));
@@ -84,6 +88,7 @@ export async function setOfflineCatalogEntries(entries: { key: string; data: unk
     if (cleared) window.dispatchEvent(new Event('ash-offline-cache'));
   } catch (err) {
     assertAuthSession(context);
+    if (required) throw err;
     console.warn('Failed to cache catalog offline', err);
   }
 }

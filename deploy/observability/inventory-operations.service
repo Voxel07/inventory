@@ -1,0 +1,9 @@
+[Unit]
+Description=Inventory infrastructure probes
+After=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/inventory
+EnvironmentFile=/etc/inventory/observability.env
+ExecStart=/usr/bin/python3 /opt/inventory/scripts/collect-operations.py --send
+UMask=0077

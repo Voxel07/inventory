@@ -10,6 +10,7 @@ function formatEventPayload(data: Partial<EventReportFormData>) {
     endDate: (data.endDate ?? data.startDate ?? data.eventDate)?.slice(0, 10),
     status: data.status,
     notes: data.notes,
+    orderDeadline: data.orderDeadline,
     plannedQuantities: data.plannedQuantities,
     usedQuantities: data.usedQuantities,
   };

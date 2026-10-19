@@ -2,6 +2,7 @@ import type { ReturnSubmission, ReturnSubmissionFormData, ReturnSubmissionStatus
 import { apiRequest } from './apiClient';
 import { stageImage } from './stagedImageService';
 import { captureAuthSession } from './authManager';
+import { fieldCommand } from './fieldCommand';
 
 export function getReturnSubmissions(status?: ReturnSubmissionStatus): Promise<ReturnSubmission[]> {
   return apiRequest('/api/returns', { query: { status } });
@@ -27,7 +28,7 @@ export async function createReturnSubmission(data: ReturnSubmissionFormData): Pr
 }
 
 export function acknowledgeReturnSubmission(id: string, notes?: string, hoursRun?: number): Promise<ReturnSubmission> {
-  return apiRequest(`/api/returns/${id}/acknowledge`, { method: 'POST', body: { notes, hoursRun } });
+  return fieldCommand({ type: 'return.accept', payload: { returnId: id, input: { notes, hoursRun } } });
 }
 
 export function rejectReturnSubmission(id: string, notes?: string): Promise<ReturnSubmission> {

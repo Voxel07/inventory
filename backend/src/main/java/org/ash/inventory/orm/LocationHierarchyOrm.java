@@ -8,8 +8,13 @@ import java.util.*;
 /** Persistence queries for the LocationHierarchy use cases. Business rules remain in the service. */
 @ApplicationScoped
 public class LocationHierarchyOrm extends EntityOrm {
-    public List<StorageLocation> lockLocations() {
-        return entityManager.createQuery("from StorageLocation order by id", StorageLocation.class).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+    public int subtreeHeight(UUID id) {
+        return ((Number) entityManager.createNativeQuery("with recursive subtree(id, depth) as (select id, 0 from storage_locations where id=:id union all select l.id, s.depth+1 from storage_locations l join subtree s on l.parent_location_id=s.id where s.depth<17) select coalesce(max(depth),0) from subtree")
+                .setParameter("id",id).getSingleResult()).intValue();
+    }
+    public void lockLocations() {
+        // A transaction fence also protects the empty tree, without loading/locking every location row.
+        entityManager.createNativeQuery("select 1 from pg_advisory_xact_lock(659743251)").getSingleResult();
     }
 
     public List<StorageLocation> children(StorageLocation parent) {

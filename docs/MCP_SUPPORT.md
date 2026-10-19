@@ -1,6 +1,6 @@
 # MCP integration
 
-The Quarkus backend exposes 28 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
+The Quarkus backend exposes 31 tools, three resources and two prompts through `io.quarkiverse.mcp:quarkus-mcp-server-http:2.0.1`. Streamable HTTP uses `/mcp`; the extension also provides its legacy SSE transport below `/mcp/*`.
 
 The implementation delegates MCP reads and writes through shared business services. See [Technical Requirements](TECHNICAL_REQUIREMENTS.md) and [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) for architecture and acceptance status. `InventoryMcpTools` handles arguments and tool errors; `McpInventoryService` completes authorized, transactional use cases through `CatalogService`, `ApiQueryService`, `OrderService`, `InventoryOperationsService`, `PositionService` and existing ORM readers. Resources and prompts also resolve the canonical actor. No MCP entity is serialized as a response.
 
@@ -69,7 +69,7 @@ This replaces the old individual create/update parameters and MCP-specific catal
 | `list_events` | Optional `status`, `page`, `limit` | Matching events in start-date order; page defaults to 0, limit to 20, maximum 100; scoped item maps |
 | `update_event` | `eventId`, `input: EventInput` | Requires eventType/startDate; null quota maps retain existing values, supplied maps replace them |
 | `delete_event` | `eventId` | Rejected (409) once orders, stock movements, return submissions or owner commitments reference the event; planning overrides are removed with it |
-| `list_storage_locations` | Optional `locationId`, `page`, `limit` | Active locations in tree order with `depth` (0 = location, 1 = section, 2+ = storage place) and root location; `locationId` limits to that subtree; same paging bounds, paged in SQL |
+| `list_storage_locations` | Optional `locationId`, `page`, `limit` | Active locations in tree order with `depth` (0 = location, 1 = section, 2+ = storage place; null if any ancestor is hidden) and root location; `locationId` limits to that subtree; same paging bounds, paged in SQL |
 | `save_storage_structure` | `input: StorageStructureInput` | Creates or extends a top-level location with nested sections and storage places in one step; nodes with an id are renamed, omitted nodes stay; returns the location tree |
 | `get_inventory_positions` | `itemId` | Bulk/lot positions with FEFO command reservations, damage/quarantine and policy holds; serialized items return an empty list |
 | `list_asset_instances` | `itemId`; optional `status`, `page`, `limit` | Visible item's active assets; typed availability-state filter applied before pagination; default limit 20, maximum 100. A reservation held by an order hidden from the caller shows only `reservedFor.kind` and `label: "restricted"` |
@@ -116,7 +116,7 @@ Low-stock and maintenance/summary datasets use batch stock/policy facts, includi
 | Resource | Content |
 |---|---|
 | `inventory://system/overview` | Static system capabilities, after actor authentication |
-| `inventory://locations` | Active location DTOs as JSON, scoped by canonical access policy |
+| `inventory://locations` | Explicit `ResourcePage`: first 100 visible active locations, `page=0`, `limit=100`, `hasMore`, `nextPage`, `continuationTool=list_storage_locations`; continue with tool page 1/limit 100 |
 | `inventory://categories` | Distinct categories of active items visible to the caller |
 
 | Prompt | Arguments |
@@ -131,3 +131,7 @@ Prompt templates authenticate the actor and contain no implicit write authorizat
 The existing `InventoryMcpTest` was updated for the shared payloads and targeted regression cases: role changes on the same session, person/group and private item/asset/position/assembly/category/event reads, actual actor/outbox evidence, serialized and unlocated stock, purchase-linked deletion, prepared/partially released reservations, contributor holds, validation rollback and schedule holds. `InventoryMcpAuthenticationTest` enables the production-equivalent MCP path policy with development authentication disabled and covers anonymous root/subpath requests and spoofed actor headers.
 
 These suites need PostgreSQL; see [tests/README.md](../tests/README.md). Production OIDC token/audience validation, expired-token denial, SSE authorization, connected SSE/ETag refresh and measured SQL counts remain runtime acceptance work.
+
+## Custody and movement readers
+
+`list_custody(itemId?, personId?, orderId?, page?, limit?)` requires warehouse access and returns visible outstanding balances in stable key order. It computes balances before paging. `list_movements(itemId?, assetId?, personId?, type?, page?, limit?)` uses the REST transaction-history permissions/projection and SQL paging. Both default to 20 rows, maximum 100; no entities or full account profiles are returned. Event reads also use SQL pagination. See [performance acceptance](PERFORMANCE_ACCEPTANCE.md) for aggregate cost.

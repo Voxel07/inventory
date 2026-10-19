@@ -39,8 +39,11 @@ public final class ApiResponses {
             String role,
             List<String> roles,
             List<String> faction,
-            long revision
+            long revision, boolean active
     ) {}
+
+    /** Attribution outside account administration never discloses contact details or access assignments. */
+    public record ActorSummary(UUID id, String name, String username) {}
 
     public record GeneralOrderResponse(
             String kind,
@@ -105,8 +108,8 @@ public final class ApiResponses {
             String name,
             String code,
             String fullCode,
-            /** 0 = location (holds no stock), 1 = section, 2+ = storage place. */
-            int depth,
+            /** Null when any ancestor is hidden; otherwise 0 = site, 1 = section, 2+ = place. */
+            Integer depth,
             String description,
             Double latitude,
             Double longitude,
@@ -146,7 +149,6 @@ public final class ApiResponses {
             Integer containerCount,
             Integer containersOpened,
             Integer containerRemainingPercent,
-            Integer maintenanceIntervalDays,
             LocalDate nextMaintenanceDue,
             BigDecimal currentOperatingHours,
             boolean tracksRuntime,
@@ -233,7 +235,8 @@ public final class ApiResponses {
             Map<String, Integer> plannedQuantities,
             Map<String, Integer> usedQuantities,
             Map<String, String> itemNames,
-            Map<String, Map<String, Integer>> quantities
+            Map<String, Map<String, Integer>> quantities,
+            Instant orderDeadline
     ) {}
 
     public record FactionResponse(
@@ -272,7 +275,7 @@ public final class ApiResponses {
             String reason,
             String notes,
             Instant timestamp,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, UUID reversesId, ActorSummary reversedBy
     ) {}
 
     public record OrderLineResponse(

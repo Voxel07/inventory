@@ -1,6 +1,7 @@
 import { formatDateTime } from '../../utils/dateFormat';
 import { AccordionSummary, Button } from '../shared/ActionButtons';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { downloadOfflineCatalog, getSnapshotStatus, restoreSnapshotStatus, subscribeSnapshot } from '../../services/offlineSnapshot';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Stack, Typography, Chip, Accordion, AccordionDetails } from '@mui/material';
 import { getCacheFreshness, getOfflineHistory, flushOfflineQueue, type OfflineHistory } from '../../services/offlineQueue';
@@ -16,6 +17,8 @@ const auditPage = (page: number, size: number) => apiPage<Audit>('/api/sync/audi
 export function OfflineStatusPanel() {
   const { cachedAt, sync } = useOfflineStatus();
   const t = useT(); const [history, setHistory] = useState<OfflineHistory[]>([]);
+  const snapshot = useSyncExternalStore(subscribeSnapshot, getSnapshotStatus);
+  useEffect(() => { void restoreSnapshotStatus().catch(() => {}); }, []);
   const cache = useQuery({ queryKey: ['offline-cache-freshness'], queryFn: getCacheFreshness, networkMode: 'always', refetchInterval: 30000 });
   const audit = useOperationList('my-sync-audit', auditPage);
   useEffect(() => { const update = () => { void getOfflineHistory().then(setHistory); }; update(); window.addEventListener('ash-offline-queue', update); return () => window.removeEventListener('ash-offline-queue', update); }, []);
@@ -25,6 +28,12 @@ export function OfflineStatusPanel() {
     {cachedAt && <Alert severity="warning">{t('operations.offlineStatusPanel.cachedDataIsBeingUsedOldestAffectedDownload')} {formatDateTime(cachedAt)}</Alert>}
     <Alert severity="info">{t('operations.offlineStatusPanel.offlineStockTransactionsFactionOrderCreationPreparationTransitionsReturnsAnd')}</Alert>
     <Typography variant="body2">{t('operations.offlineStatusPanel.onlineOnlyPhotosAndReturnSubmissionsGeneralOrdersPurchasesReceipts')}</Typography>
+    <Button disabled={snapshot.kind === 'downloading' || !navigator.onLine} onClick={() => {
+      void downloadOfflineCatalog().catch(() => {});
+    }}>{t('operations.offlineStatusPanel.downloadCatalog')}</Button>
+    {snapshot.kind === 'downloading' && <Typography>{t('operations.offlineStatusPanel.downloadProgress', { completed: snapshot.completed, total: snapshot.total })}</Typography>}
+    {snapshot.kind === 'complete' && <Alert severity="success">{t('operations.offlineStatusPanel.downloadComplete')}</Alert>}
+    {snapshot.kind === 'partial' && <Alert severity="warning">{t('operations.offlineStatusPanel.downloadPartial', { failed: snapshot.failed.join(', ') })}</Alert>}
     <Button title={translate('operations.offlineStatusPanel.sendQueuedOfflineActionsAndRefreshStatus')} onClick={() => { void flushOfflineQueue({ resume: true }); void audit.refetch(); void cache.refetch(); }}>{t('operations.offlineStatusPanel.syncRefresh')}</Button>
     <Accordion><AccordionSummary title={translate('operations.offlineStatusPanel.showOrHideCachedDataFreshness')}>{t('operations.offlineStatusPanel.cacheFreshness')}</AccordionSummary><AccordionDetails>
       <Alert severity="warning">{t('operations.offlineStatusPanel.cacheTimeIsTheLastSuccessfulDownloadOfflineBalancesDo')}</Alert>

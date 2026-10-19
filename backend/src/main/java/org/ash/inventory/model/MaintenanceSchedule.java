@@ -27,4 +27,5 @@ public class MaintenanceSchedule extends BaseEntity {
     @Column(name = "required_checklist", length = 4000) public String requiredChecklist;
     @Column(name = "checkout_blocking", nullable = false) public boolean checkoutBlocking = true;
     @Column(nullable = false) public boolean active = true;
+    @Column(name="category_template") public String categoryTemplate;
 }

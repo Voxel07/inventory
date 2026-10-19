@@ -1,4 +1,4 @@
-import type { User } from './user';
+import type { ActorSummary } from './user';
 
 export interface DamageStatusHistoryEntry {
   status: DamageStatus;
@@ -31,8 +31,8 @@ export interface DamageReport {
   created: string;
   updated: string;
   expand?: {
-    reportedBy?: User;
-    handledBy?: User;
+    reportedBy?: ActorSummary;
+    handledBy?: ActorSummary;
   };
 }
 

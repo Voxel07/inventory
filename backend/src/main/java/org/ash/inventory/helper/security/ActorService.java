@@ -31,6 +31,7 @@ public class ActorService {
     public static final String DEV_ISSUER = "dev";
 
     @jakarta.inject.Inject InventoryAccess privateAccess;
+    @jakarta.inject.Inject org.ash.inventory.service.AuthSessionService sessions;
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
@@ -57,12 +58,14 @@ public class ActorService {
     @Transactional
     public UserAccount current() {
         if (cached != null) {
+            if (!cached.active) throw ApiException.forbidden("This inventory account is deactivated");
             // Sync replay and response filters can open another transaction in the
             // same request. Reuse only an entity managed by the current context.
             if (users.isManaged(cached)) return cached;
             var managed = users.find(cached.id);
             if (managed != null) {
                 cached = managed;
+                if (!cached.active) throw ApiException.forbidden("This inventory account is deactivated");
                 return cached;
             }
         }
@@ -70,7 +73,7 @@ public class ActorService {
         String subject;
         String name;
         String email;
-        String username = null;
+        boolean emailVerified = false;
         // Only development headers set role/factions; real accounts keep the ones managed in the app.
         Set<DomainEnums.UserRole> headerRoles = null;
         Set<String> headerFactions = null;
@@ -82,9 +85,10 @@ public class ActorService {
                 throw new ApiException(401, "Token has no issuer or subject");
             if (!hasAccess(identity.getRoles(), accessGroup))
                 throw ApiException.forbidden("This account has no access to the inventory system");
+            if (sessions != null && sessions.revoked(token)) throw new ApiException(401, "Session revoked");
             name = firstClaim(token, subject, "name", "preferred_username");
             email = firstClaim(token, null, "email");
-            username = firstClaim(token, null, "preferred_username");
+            emailVerified = Boolean.TRUE.equals(token.getClaim("email_verified"));
         } else if (identity != null && !identity.isAnonymous()) {
             throw new ApiException(401, "Unsupported identity");
         } else if (devAuthEnabled) {
@@ -102,7 +106,8 @@ public class ActorService {
         }
 
         cached = users.findByIdentity(issuer, subject);
-        boolean bootstrap = isBootstrapAdmin(email, username);
+        if (cached != null && !cached.active) throw ApiException.forbidden("This inventory account is deactivated");
+        boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email, emailVerified);
         if (cached == null) {
             cached = users.provision(issuer, subject, name, email,
                     headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only),
@@ -132,9 +137,8 @@ public class ActorService {
         return result;
     }
 
-    private boolean isBootstrapAdmin(String email, String username) {
-        return email != null && bootstrapAdmins.contains(email.trim().toLowerCase(Locale.ROOT))
-                || username != null && bootstrapAdmins.contains(username.trim().toLowerCase(Locale.ROOT));
+    static boolean isBootstrapAdmin(Set<String> configured, String email, boolean verified) {
+        return verified && email != null && configured.contains(email.trim().toLowerCase(Locale.ROOT));
     }
 
     /** Marks a private-inventory command; reference lookups inside it require edit rights. */

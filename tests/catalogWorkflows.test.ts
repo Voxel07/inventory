@@ -3,7 +3,7 @@ import type { Assembly, FactionOrder, Item, StorageLocation } from '../src/types
 import { getItemStock } from '../src/utils/stock';
 import { assemblyAvailability } from '../src/utils/factionOrderQuantities';
 import { factionOrderItemBaseline, factionOrderAssemblyBaseline, findPreviousFactionOrder } from '../src/utils/factionOrderHistory';
-import { buildLocationTree, filterLocationTree, isDescendant, locationPath, locationRole } from '../src/utils/locationHierarchy';
+import { buildLocationTree, filterLocationTree, holdsStock, isDescendant, locationPath, locationRole } from '../src/utils/locationHierarchy';
 import { generateStoragePlaces, generatedCount } from '../src/utils/storageGenerator';
 import { calculateImageCrop } from '../src/utils/prepareItemImage';
 import { parseCsv, parseInlineComponents } from '../src/utils/csv/core';
@@ -16,6 +16,12 @@ test('catalog and assemblies use server availability even when legacy amount dis
   expect(assemblyAvailability(kit, id => id === 'radio' ? getItemStock(item).remaining : 5)).toBe(1);
   expect(assemblyAvailability(kit, id => id === 'cable' ? 0 : 3)).toBe(0);
   expect(assemblyAvailability({ itemQuantities: {} } as Assembly, () => 99)).toBe(0);
+});
+
+test('a location with redacted ancestry stays a stock location without inventing a site depth', () => {
+  expect(holdsStock({ depth: null })).toBe(true);
+  expect(locationRole({ depth: null })).toBe('place');
+  expect(holdsStock({ depth: 0 })).toBe(false);
 });
 
 const order = (id: string, date: string, status: FactionOrder['status'] = 'closed', faction = 'KGG', eventType = 'DE'): FactionOrder => ({

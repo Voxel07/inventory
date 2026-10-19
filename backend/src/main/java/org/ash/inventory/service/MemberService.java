@@ -74,7 +74,7 @@ public class MemberService {
         actors.requireWarehouse(); var l = orm.findLocked(StorageLocation.class, id);
         if (l == null) throw ApiException.notFound("Location not found");
         var user = input.userId() == null ? null : orm.find(UserAccount.class, input.userId());
-        if (input.userId() != null && (user == null || !user.role.atLeast(DomainEnums.UserRole.faction_leader))) throw ApiException.badRequest("Choose a contributor account");
+        if (input.userId() != null && (user == null || !user.active || !user.role.atLeast(DomainEnums.UserRole.faction_leader))) throw ApiException.badRequest("Choose a contributor account");
         l.keeperUser = user;
         events.record("location.keeper_assigned", "storage_location", id, actors.current().id, null, Map.of("userId", user == null ? "" : user.id.toString()));
     }

@@ -1,8 +1,10 @@
-import type { User } from './user';
+import type { ActorSummary } from './user';
 import type { EventType } from './event';
 import type { AssetInstance } from './item';
 
 export interface StockTransaction {
+  reversesId?: string;
+  reversedBy?: ActorSummary | null;
   id: string;
   itemId: string;
   itemName: string;
@@ -23,7 +25,7 @@ export interface StockTransaction {
   created: string;
   updated: string;
   expand?: {
-    userId?: User;
+    userId?: ActorSummary;
     assetInstanceId?: AssetInstance;
     order?: {
       kind: 'faction' | 'general';

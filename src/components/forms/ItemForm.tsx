@@ -80,8 +80,6 @@ export function ItemForm({
         containerCount: initialData?.containerCount ?? undefined,
         containersOpened: initialData?.containersOpened ?? undefined,
         containerRemainingPercent: initialData?.containerRemainingPercent ?? undefined,
-        maintenanceIntervalDays: initialData?.maintenanceIntervalDays,
-        nextMaintenanceDue: initialData?.nextMaintenanceDue ?? '',
         currentOperatingHours: initialData?.currentOperatingHours,
         tracksRuntime: initialData?.tracksRuntime ?? false,
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
@@ -97,7 +95,6 @@ export function ItemForm({
         containerCount: initialData?.containerCount == null ? '' : String(initialData.containerCount),
         containersOpened: initialData?.containersOpened == null ? '' : String(initialData.containersOpened),
         containerRemainingPercent: initialData?.containerRemainingPercent == null ? '' : String(initialData.containerRemainingPercent),
-        maintenanceIntervalDays: initialData?.maintenanceIntervalDays == null ? '' : String(initialData.maintenanceIntervalDays),
         currentOperatingHours: initialData?.currentOperatingHours == null ? '' : String(initialData.currentOperatingHours),
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km == null ? '' : String(initialData.fuelConsumptionLitersPer100Km),
         assetStartNumber: '1',
@@ -171,7 +168,6 @@ export function ItemForm({
                 : undefined,
             containersOpened: isBulkPackage ? parseOptional(numericInputs.containersOpened) : undefined,
             containerRemainingPercent: isBulkPackage ? parseOptional(numericInputs.containerRemainingPercent) : undefined,
-            maintenanceIntervalDays: parseOptional(numericInputs.maintenanceIntervalDays),
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
             ...(offersSchedules && schedules.length ? { maintenanceSchedules: schedules.map(toScheduleInput) } : {}),
@@ -526,20 +522,7 @@ export function ItemForm({
                                                 onChange={handleNumberChange('currentOperatingHours')}
                                                 slotProps={{ htmlInput: { min: 0, step: 0.1, inputMode: 'decimal' } }}
                                             />}
-                                            <TextField
-                                                label={t('forms.itemForm.maintenanceIntervalDays')}
-                                                type="number"
-                                                value={numericInputs.maintenanceIntervalDays}
-                                                onChange={handleNumberChange('maintenanceIntervalDays')}
-                                                slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
-                                            />
-                                            <TextField
-                                                label={t('forms.itemForm.nextMaintenance')}
-                                                type="date"
-                                                value={formData.nextMaintenanceDue ?? ''}
-                                                onChange={handleChange('nextMaintenanceDue')}
-                                                slotProps={{ inputLabel: { shrink: true } }}
-                                            />
+
                                         </>
                                     )}
                                     {isFood && (

@@ -22,13 +22,13 @@ const isOptionalString = (value: unknown) => value === undefined || typeof value
 function decodeUser(value: unknown): User | null | undefined {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  const { id, name, email, role, roles, faction, username, revision, created, updated } = value;
+  const { id, name, email, role, roles, faction, username, revision, active, created, updated } = value;
   if (typeof id !== 'string' || typeof name !== 'string' || typeof email !== 'string' || !isRole(role)
     || !Array.isArray(roles) || !roles.every(isRole)
     || (faction !== undefined && !(Array.isArray(faction) && faction.every((entry) => typeof entry === 'string')))
     || !isOptionalString(username) || (revision !== undefined && typeof revision !== 'number')
-    || typeof created !== 'string' || typeof updated !== 'string') return undefined;
-  return { id, name, email, role, roles, faction, username, revision, created, updated };
+    || typeof active !== 'boolean' || typeof created !== 'string' || typeof updated !== 'string') return undefined;
+  return { id, name, email, role, roles, faction, username, revision, active, created, updated };
 }
 
 /** Validates untrusted stored data; anything else (including older record shapes) is discarded, never repaired. */

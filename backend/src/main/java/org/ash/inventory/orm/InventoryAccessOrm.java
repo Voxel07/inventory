@@ -8,6 +8,19 @@ import java.util.*;
 
 @ApplicationScoped
 public class InventoryAccessOrm extends EntityOrm {
+    /** Scoped aggregate predicate: evaluated before ordering/paging, never enumerates denied ledger IDs. */
+    public static String scope(String kind, String alias) {
+        return " and function('inventory_resource_visible', '" + kind + "', " + alias
+                + ".id, :accessActor, :accessAdmin, :accessPublic) = true";
+    }
+    /** Inline simple relationships so deep movement pages do not re-read each movement in PL/pgSQL. */
+    public static String transactionScope(String tx, String source, String destination) {
+        return " and " + visible(tx + ".item.accessPolicy")
+                + " and (" + source + " is null or " + visible(source + ".accessPolicy") + ")"
+                + " and (" + destination + " is null or " + visible(destination + ".accessPolicy") + ")"
+                + " and (" + tx + ".order is null or function('inventory_resource_visible', 'order', " + tx + ".order.id, :accessActor, :accessAdmin, :accessPublic) = true)"
+                + " and (" + tx + ".damageReport is null or function('inventory_resource_visible', 'damage', " + tx + ".damageReport.id, :accessActor, :accessAdmin, :accessPublic) = true)";
+    }
     /**
      * Use this predicate before pagination; :accessActor/:accessAdmin/:accessPublic are bound below.
      * Public rows are organization data (not for tenants). Private rows need ownership, an offer for
@@ -137,16 +150,7 @@ public class InventoryAccessOrm extends EntityOrm {
                 .setParameter("item", item).setParameter("today", BusinessTime.today()).setMaxResults(1).getResultList().isEmpty();
     }
     public List<UserAccount> people() {
-        return entityManager.createQuery("from UserAccount order by name, id", UserAccount.class).getResultList();
-    }
-    /**
-     * Organization-wide scoping for ledgers, orders and other aggregates. Tenants never reach those
-     * (their whole organization data would be denied), so fail closed instead of walking the ledger.
-     */
-    public Set<UUID> deniedReferences(UserAccount actor) {
-        if (!actor.role.atLeast(DomainEnums.UserRole.read_only))
-            throw org.ash.inventory.resource.ApiException.forbidden("Not available for tenant accounts");
-        return relatedReferences(deniedRoots(actor, null));
+        return entityManager.createQuery("from UserAccount where active = true order by name, id", UserAccount.class).getResultList();
     }
     /**
      * One set-based authorization read per resource kind, independent of the number of policies. For
@@ -165,16 +169,6 @@ public class InventoryAccessOrm extends EntityOrm {
             roots.addAll(bind(query, actor).getResultList());
         }
         return roots;
-    }
-    /**
-     * The denied set grows with the ledger. It is bound as one {@code uuid[]} parameter; an IN list would
-     * expand to one bind parameter per ID and hit PostgreSQL's 65,535-parameter limit.
-     */
-    public static String excluding(String alias, Set<UUID> denied) {
-        return denied.isEmpty() ? "" : " and not array_contains(:privateDenied, " + alias + ".id)";
-    }
-    public static <T> TypedQuery<T> bindDenied(TypedQuery<T> query, Set<UUID> denied) {
-        return denied.isEmpty() ? query : query.setParameter("privateDenied", denied.toArray(UUID[]::new));
     }
     // Both traversal directions share the same evidence graph, including JSON
     // order references. UNION in the recursion also terminates cycles.

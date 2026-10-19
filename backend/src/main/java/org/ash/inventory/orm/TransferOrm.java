@@ -15,13 +15,13 @@ public class TransferOrm extends EntityOrm {
 
 
     public List<InventoryTransfer> transfers(String status, int offset, int limit) {
-        var denied = privacyScopes.deniedReferences(accessActor.current());
+
         var jpql = status == null || status.isBlank()
-                ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1" + InventoryAccessOrm.excluding("transfer", denied) + " order by transfer.createdAt desc"
-                : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status" + InventoryAccessOrm.excluding("transfer", denied) + " order by transfer.createdAt desc";
+                ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc"
+                : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc";
         var query = entityManager.createQuery(jpql, InventoryTransfer.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.TransferStatus.valueOf(status));
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryTransferLine> lines(Collection<InventoryTransfer> transfers) {
         if (transfers.isEmpty()) return List.of();

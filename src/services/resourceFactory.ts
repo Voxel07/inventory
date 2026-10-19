@@ -14,7 +14,7 @@ export interface ResourceOptions<TForm, T = unknown> {
 
 export interface CollectionResourceApi<T> {
   /** One server page; screens read pages on demand. */
-  getPage: (query: ApiQuery | undefined, page: number, size?: number) => Promise<Page<T>>;
+  getPage: (query: ApiQuery | undefined, page: number, size?: number, cacheRequired?: boolean) => Promise<Page<T>>;
   /** Explicit exhaustive read (imports, exports, hierarchy pickers, offline snapshots). */
   getAll: (query?: ApiQuery) => Promise<T[]>;
 }
@@ -59,25 +59,25 @@ function operations<T extends { id: string }, TForm>(
     return data;
   }
   /** The page envelope (rows and continuation) is what the offline cache stores, so a cached page keeps `more`. */
-  async function getPage(query: ApiQuery | undefined, page: number, size = LIST_PAGE_SIZE): Promise<Page<T>> {
+  async function getPage(query: ApiQuery | undefined, page: number, size = LIST_PAGE_SIZE, cacheRequired = false): Promise<Page<T>> {
     const context = captureAuthSession();
     const scopedCacheKey = cacheKey ? queryCacheKey(cacheKey, { ...query, page, size }) : undefined;
     try {
       const data = await apiPage<T>(basePath, page, size, { query, session: context });
       assertAuthSession(context);
-      if (scopedCacheKey && !containsPrivateInventory(data.rows)) await setOfflineCatalogEntries([
-        { key: scopedCacheKey, data },
-        ...data.rows.flatMap((item) => {
+      const publicRows = data.rows.filter(row => !containsPrivateInventory(row));
+      if (scopedCacheKey) await setOfflineCatalogEntries([
+        { key: scopedCacheKey, data: { ...data, rows: publicRows } },
+        ...publicRows.flatMap((item) => {
           const key = detailKey(item.id);
           return key ? [{ key, data: item }] : [];
         }),
-      ], context);
-      if (scopedCacheKey && containsPrivateInventory(data.rows)) await removeOfflineCatalog(scopedCacheKey, context);
+      ], context, cacheRequired);
       assertAuthSession(context);
       return data;
     } catch (error) {
       assertAuthSession(context);
-      if (scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
+      if (!cacheRequired && scopedCacheKey && (!(error instanceof ApiError) || error.status >= 500)) {
         const cached = await getOfflineCatalog<Page<T>>(scopedCacheKey, context);
         assertAuthSession(context);
         if (cached) return cached;

@@ -85,9 +85,9 @@ export function DamageReportsList({ reports, list, assemblies, users, isLoading,
         const itemName = report.itemId ? report.itemName ?? report.itemId : t('lists.damageReportsList.unknownTarget');
         return report.assetCode ? `${itemName} · ${report.assetCode}` : itemName;
     };
-    const getUserName = (userId?: string, expanded?: User) => {
+    const getUserName = (userId?: string, expanded?: Pick<User, 'id' | 'name' | 'username'>) => {
         const user = expanded ?? users?.find((candidate) => candidate.id === userId);
-        return user?.name?.trim() || user?.username?.trim() || user?.email?.trim() || userId || '—';
+        return user?.name?.trim() || user?.username?.trim() || userId || '—';
     };
     const getActivity = (report: DamageReport) => {
         const entries = report.statusHistory?.length

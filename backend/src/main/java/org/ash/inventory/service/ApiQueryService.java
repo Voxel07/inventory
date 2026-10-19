@@ -104,6 +104,13 @@ public class ApiQueryService {
         return projectItem(catalog.getVisibleItem(id));
     }
 
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public ApiResponses.ItemResponse itemBySku(String sku) {
+        actors.current();
+        return projectItem(catalogOrm.itemBySku(sku));
+    }
+
     @Transactional
     public List<ApiResponses.AssetInstanceResponse> itemAssets(UUID id) {
         actors.current();
@@ -151,6 +158,13 @@ public class ApiQueryService {
     public ApiResponses.EventResponse event(UUID id) {
         actors.requireReader();
         return projectEvent(org.ash.inventory.orm.EntityOrm.found(catalog.find(EventOccurrence.class, id), "Event occurrence"));
+    }
+
+    @Transactional
+    public List<ApiResponses.EventResponse> events(String eventType, String status, int page, int size) {
+        actors.requireReader();
+        var bounds = bounds(page, size);
+        return projectEvents(catalogOrm.events(eventType, status, bounds.offset(), bounds.limit(), false));
     }
 
     @Transactional
@@ -204,7 +218,7 @@ public class ApiQueryService {
         var bounds = bounds(page, size);
         var values = operations.transactions(itemId, assetInstanceId, userId, type, start, end, search, bounds.offset(), bounds.limit());
         mapper.prepareLocations(values.stream().filter(t -> t.assetInstance != null).map(t -> t.assetInstance.currentLocation).toList());
-        return values.stream().map(mapper::transaction).toList();
+        return mapper.transactions(values);
     }
 
     @Transactional

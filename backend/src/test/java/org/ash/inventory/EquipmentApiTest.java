@@ -153,7 +153,7 @@ class EquipmentApiTest {
         admin().get("/api/reports/availability?itemId=" + item).then().statusCode(200).body("total", equalTo(2))
                 .body("rows.available", everyItem(equalTo(0))).body("rows.ownership", everyItem(equalTo("private_owner")));
         admin().body(profile(1)).put(path(item)).then().statusCode(200);
-        admin().get("/api/reports/availability?itemId=" + item).then().body("stale", equalTo(true));
+        admin().get("/api/reports/availability?itemId=" + item).then().body("stale", equalTo(false));
     }
 
     @Test void externalEquipmentRemainsTransferableBeforeCheckoutCommitment() {

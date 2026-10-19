@@ -11,7 +11,7 @@ export const FIXTURE_TIME = '2026-10-02T10:00:00Z';
 
 /** The signed-in preview user; previews call `setDevelopmentSession('dev:preview', fixtureUser(role))`. */
 export function fixtureUser(role: UserRole): User {
-  return { id: 'preview', name: 'Preview user', email: 'preview@example.test', role, roles: [role], faction: [], created: FIXTURE_TIME, updated: FIXTURE_TIME };
+  return { active: true, id: 'preview', name: 'Preview user', email: 'preview@example.test', role, roles: [role], faction: [], created: FIXTURE_TIME, updated: FIXTURE_TIME };
 }
 
 export function fixtureStock(quantity: number, overrides: Partial<ItemStock> = {}): ItemStock {

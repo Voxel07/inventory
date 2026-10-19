@@ -13,6 +13,7 @@ export function noticeDetails(notification: AppNotification): string {
 
 export function notificationPath(notification: AppNotification): string | undefined {
   const path = noticeText(notification, 'path');
+  if (notification.type === 'action_reminder' || notification.type === 'action_digest') return '/';
   if (path?.startsWith('/orders?') || path?.startsWith('/items/')) return path;
   return notification.orderId ? `/orders/faction/${notification.orderId}` : undefined;
 }

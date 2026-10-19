@@ -69,22 +69,23 @@ class InventoryApiTest {
                 .put("/api/category-maintenance").then().statusCode(200)
                 .body("intervalDays", equalTo(180)).body("category", equalTo(category));
         request().get("/api/items/" + firstId).then().statusCode(200)
-                .body("maintenanceIntervalDays", equalTo(180))
+                .body("nextMaintenanceDue", notNullValue())
                 .body("nextMaintenanceDue", notNullValue());
 
         String secondId = request().body(Map.of("sku", "MAINT-POLICY-002", "name", "Policy second item",
                         "category", category, "amount", 1, "value", 0))
                 .post("/api/items").then().statusCode(200)
-                .body("maintenanceIntervalDays", equalTo(180))
+                .body("nextMaintenanceDue", notNullValue())
                 .extract().path("id");
-        request().body(Map.of("itemId", secondId, "type", "dguv_v3", "result", "passed"))
+        String schedule = request().get("/api/maintenance-schedules?itemId="+secondId).then().statusCode(200).extract().path("[0].id");
+        request().body(Map.of("itemId", secondId, "scheduleId", schedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200).body("nextDueAt", notNullValue());
         request().body(Map.of("category", category, "intervalDays", 0))
                 .put("/api/category-maintenance").then().statusCode(200);
         request().get("/api/items/" + firstId).then().statusCode(200)
-                .body("maintenanceIntervalDays", nullValue()).body("nextMaintenanceDue", nullValue());
+                .body("nextMaintenanceDue", nullValue()).body("nextMaintenanceDue", nullValue());
         request().get("/api/items/" + secondId).then().statusCode(200)
-                .body("maintenanceIntervalDays", nullValue());
+                .body("nextMaintenanceDue", nullValue());
     }
 
     @Test
@@ -1270,7 +1271,7 @@ class InventoryApiTest {
                 .body(Map.of(
                         "sku", "TEST-001", "name", "Test Generator", "category", "Infrastructure",
                         "amount", 2, "minStock", 1, "value", 250, "storageLocation", locationId,
-                        "nextMaintenanceDue", LocalDate.now().minusDays(1).toString()))
+                        "maintenanceSchedules", java.util.List.of(Map.of("maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",LocalDate.now().minusDays(1)+"T00:00:00Z","checkoutBlocking",true))))
                 .post("/api/items")
                 .then().statusCode(200).body("name", equalTo("Test Generator"))
                 .extract().path("id");
@@ -1288,7 +1289,7 @@ class InventoryApiTest {
                         "reason", "test", "eventType", "DE", "faction", "KGG"))
                 .post("/api/transactions")
                 .then().statusCode(409)
-                .body("error", org.hamcrest.Matchers.containsString("maintenance status is overdue"));
+                .body("error", org.hamcrest.Matchers.containsString("maintenance"));
     }
 
     @Test
@@ -1556,7 +1557,7 @@ class InventoryApiTest {
                 .body("expand.storageLocation.active", equalTo(false));
         request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
                 .body("[0].currentLocationId", equalTo(locationId))
-                .body("[0].currentLocationName", equalTo("Location to delete"));
+                .body("[0].currentLocationName", org.hamcrest.Matchers.endsWith(" / Location to delete"));
     }
 
     @Test

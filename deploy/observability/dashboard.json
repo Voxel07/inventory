@@ -1,0 +1,50 @@
+{
+  "version": 8,
+  "title": "Inventory operations",
+  "description": "Application availability, database/WAL, outbox, notification delivery, disk, backups and collector presence.",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "Operations",
+      "panels": [
+        {
+          "id": "inventory-ops",
+          "type": "table",
+          "title": "Inventory infrastructure signals",
+          "description": "Latest independent probes, by host and signal.",
+          "config": {
+            "show_legends": true
+          },
+          "queryType": "sql",
+          "layout": {
+            "i": 1,
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 12
+          },
+          "queries": [
+            {
+              "customQuery": true,
+              "query": "select host, signal, max(_timestamp) as last_seen, max(value) as value from inventory_ops group by host, signal order by host, signal",
+              "fields": {
+                "stream": "inventory_ops",
+                "stream_type": "logs",
+                "x": [],
+                "y": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": ""
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

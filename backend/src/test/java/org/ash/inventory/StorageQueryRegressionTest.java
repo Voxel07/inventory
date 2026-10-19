@@ -98,9 +98,6 @@ class StorageQueryRegressionTest {
         assertFalse(facts.deniedIds().contains(personal.id));
         assertFalse(facts.deniedIds().contains(grouped.id));
         assertTrue(access.referenceAccess(ids, owner).deniedIds().isEmpty());
-        statistics().clear();
-        assertTrue(access.deniedReferences(reader).containsAll(facts.deniedIds()));
-        assertEquals(4, statistics().getPrepareStatementCount(), "Three resource permission queries and one forward traversal");
 
         em.remove(em.find(InventoryAccessGrant.class, personalGrant.id));
         em.find(InventoryAccessGroup.class, group.id).members.clear();

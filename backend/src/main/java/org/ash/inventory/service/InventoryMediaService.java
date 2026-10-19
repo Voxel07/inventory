@@ -15,6 +15,7 @@ public class InventoryMediaService {
     @Inject ActorService actors;
     @Inject CatalogService catalog;
     @Inject PrivacyProjectionService privacy;
+    @Inject OrderService orders;
     @org.eclipse.microprofile.config.inject.ConfigProperty(name = "inventory.media.max-staged-per-user", defaultValue = "50")
     int maxStagedPerUser;
 
@@ -48,6 +49,7 @@ public class InventoryMediaService {
         if (value.resourceType == null) { requireStaged(key); return; }
         if (privacy.denied(value.resourceId)) throw ApiException.notFound("Media not found");
         switch (value.resourceType) {
+            case "handovers" -> { var h = orm.find(CustodyHandover.class, value.resourceId); if (h == null) throw ApiException.notFound("Media not found"); orders.assertCanView(h.order); if (privacy.denied(h.order.id)) throw ApiException.notFound("Media not found"); }
             case "items" -> actors.requireItemAccess(orm.find(Item.class, value.resourceId));
             case "locations" -> actors.requireLocationAccess(orm.find(StorageLocation.class, value.resourceId), false);
             case "returns" -> { var r = orm.find(ReturnSubmission.class, value.resourceId); if (r == null) throw ApiException.notFound("Media not found"); actors.requireItemAccess(r.item); }

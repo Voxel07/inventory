@@ -58,17 +58,17 @@ public class UserOrm {
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public boolean adminExists() {
-        return !entityManager.createQuery("select u.id from UserAccount u where u.role = :role", UUID.class)
+        return !entityManager.createQuery("select u.id from UserAccount u where u.active = true and u.role = :role", UUID.class)
                 .setParameter("role", org.ash.inventory.model.DomainEnums.UserRole.admin).setMaxResults(1).getResultList().isEmpty();
     }
     public long admins() {
-        return entityManager.createQuery("select count(u) from UserAccount u where u.role = :role", Long.class)
+        return entityManager.createQuery("select count(u) from UserAccount u where u.active = true and u.role = :role", Long.class)
                 .setParameter("role", org.ash.inventory.model.DomainEnums.UserRole.admin).getSingleResult();
     }
     public UserAccount findLocked(UUID id) { return entityManager.find(UserAccount.class, id, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE); }
     /** Serializes role changes so the last admin can never be removed concurrently. */
     public void lockAdmins() {
-        entityManager.createQuery("from UserAccount u where u.role = :role order by u.id", UserAccount.class)
+        entityManager.createQuery("from UserAccount u where u.active = true and u.role = :role order by u.id", UserAccount.class)
                 .setParameter("role", org.ash.inventory.model.DomainEnums.UserRole.admin)
                 .setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE).getResultList();
     }

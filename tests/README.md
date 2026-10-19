@@ -1,6 +1,6 @@
 # Test inventory and architecture coverage
 
-Reviewed 5 October 2026 against the **current** behavior in `docs/ARCHITECTURE.md`.
+Historical inventory reviewed 5 October 2026 against the then-current behavior in `docs/ARCHITECTURE.md`.
 Its target designs and known implementation limitations remain separate.
 Coverage below means observable behavior has regression checks; it does not mean
 100% Java/TypeScript line or branch coverage, or exhaustive UI acceptance.
@@ -44,10 +44,13 @@ state changes, permissions, versions, rollback and retry behavior.
 ## File dispositions
 
 Paths in this table are relative to `backend/src/test/java/org/ash/inventory/`.
-All 21 test classes remain useful. The two support classes belong to the suite.
+The original 21 test classes below remain useful; later classes extend this inventory. Current executable results are recorded in [20 October validation](../docs/VALIDATION_2026_10_20.md).
 
 | File | Disposition and purpose |
 |---|---|
+| `ReviewFollowupApiTest.java` | Follow-up privacy, paging, structure limits, SQL report behavior, retention, reversal attribution, grouped copying and live SSE closure |
+| `helper/security/LogoutRevocationTest.java` | Real registry enforcement with controlled bearer identity on subsequent request/stream checks |
+| `DocsRemediationApiTest.java` | Non-Redis review/roadmap regressions: inbox privacy, offboarding/export, reversal/append-only, deadline/copy, handover evidence, reminders, field replay and maintenance meters/category changes |
 | `ArchitectureApiCoverageTest.java` | Added: previously missing REST workflows, policy denials, version/retry checks and real HTTP SSE payload privacy |
 | `BaselineSchemaTest.java` | Keep: canonical PostgreSQL baseline, Hibernate validation, indexes and schema-local revision triggers |
 | `EquipmentApiTest.java` | Keep: ownership, consent, commitments, exact assets and transfers |

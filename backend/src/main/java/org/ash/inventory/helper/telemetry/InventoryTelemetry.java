@@ -30,7 +30,7 @@ import java.util.function.Supplier;
 public class InventoryTelemetry {
     private static final Logger LOG = Logger.getLogger(InventoryTelemetry.class);
     private static final Set<String> SYNC_OPERATIONS = Set.of("order.create", "transaction", "order.prepare",
-            "order.transition", "order.return", "damage.create");
+            "order.transition", "order.return", "damage.create", "count.submit", "count.recount", "transfer.receive", "return.accept", "member.return");
     private final Meter meter;
     private final Tracer tracer;
     private final Map<String, LongCounter> counters = new ConcurrentHashMap<>();

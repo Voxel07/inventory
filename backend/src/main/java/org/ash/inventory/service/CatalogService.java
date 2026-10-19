@@ -25,6 +25,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CatalogService {
+    @jakarta.inject.Inject CategoryMaintenanceService categoryDefaults;
     @Inject LocationHierarchyService hierarchy;
     @Inject InventoryAccessService accessPolicies;
     @Inject InventoryAccessInheritance inheritance;
@@ -182,7 +183,10 @@ public class CatalogService {
             orm.persist(asset);
             created++;
         }
-        if (created > 0) recordAssetRegistration(item, created);
+        if (created > 0) {
+            categoryDefaults.apply(item);
+            recordAssetRegistration(item, created);
+        }
     }
 
     @Transactional
@@ -228,6 +232,7 @@ public class CatalogService {
             }
         }
         createSchedules(item, input.maintenanceSchedules());
+        categoryDefaults.apply(item);
         if (initialAmount > 0) {
             var tx = new StockTransaction();
             tx.item = item;
@@ -277,8 +282,10 @@ public class CatalogService {
                 throw ApiException.badRequest("Cannot change tracking mode for an item with existing stock or transaction history");
             }
         }
+        String previousCategory = item.category;
         apply(item, input);
         inheritance.refreshItem(item);
+        if (!java.util.Objects.equals(previousCategory, item.category)) categoryDefaults.apply(item);
         bookMeterReading(item, input, "Meter reading corrected");
         if (input.images() != null) {
             var previousImages = orm.itemImages(item).stream().map(image -> image.objectKey).toList();
@@ -337,14 +344,6 @@ public class CatalogService {
         item.containerCount = input.containerCount();
         item.containersOpened = input.containersOpened();
         item.containerRemainingPercent = input.containerRemainingPercent();
-        item.maintenanceIntervalDays = input.maintenanceIntervalDays();
-        item.nextMaintenanceDue = input.nextMaintenanceDue();
-        var categoryPolicy = categoryMaintenance.find(item.category);
-        // The category interval is a default; an interval set on the item itself wins.
-        if (categoryPolicy != null && item.maintenanceIntervalDays == null) {
-            item.maintenanceIntervalDays = categoryPolicy.intervalDays;
-            if (item.nextMaintenanceDue == null) item.nextMaintenanceDue = BusinessTime.today().plusDays(item.maintenanceIntervalDays);
-        }
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
@@ -401,7 +400,9 @@ public class CatalogService {
         hierarchy.lockHierarchy();
         var location = orm.requireLocked(StorageLocation.class, id, "Storage location");
         actorService.requireLocationEdit(location);
-        apply(location, parentLocation(input.parentLocationId()), input);
+        if (Boolean.TRUE.equals(input.keepParent()) && input.parentLocationId() != null)
+            throw ApiException.badRequest("Choose either keepParent or a new parent");
+        apply(location, Boolean.TRUE.equals(input.keepParent()) ? location.parent : parentLocation(input.parentLocationId()), input);
         inheritance.refreshLocationSubtree(location);
         catalogChanged("storage-locations", location.id);
         return location;
@@ -415,6 +416,7 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public List<StorageLocation> saveStructure(ApiModels.StorageStructureInput input) {
+        LocationHierarchyService.validateStructure(input);
         hierarchy.lockHierarchy();
         StorageLocation root;
         if (input.id() == null) {
@@ -600,6 +602,7 @@ public class CatalogService {
         if (event.endDate.isBefore(event.startDate)) throw ApiException.badRequest("Event end date cannot be before its start date");
         event.status = input.status() == null ? "planned" : input.status();
         event.notes = input.notes();
+        event.orderDeadline = input.orderDeadline();
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
         if (input.usedQuantities() != null) event.usedQuantities = eventQuantities(input.usedQuantities());
         orm.persist(event);
@@ -622,6 +625,7 @@ public class CatalogService {
         if (closing) event.usedQuantities = new LinkedHashMap<>(eventMetrics.summarize(event).used());
         event.status = input.status() == null ? event.status : input.status();
         event.notes = input.notes();
+        event.orderDeadline = input.orderDeadline();
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
         if (input.usedQuantities() != null && event.closed()) event.usedQuantities = eventQuantities(input.usedQuantities());
         catalogChanged("events", event.id);
@@ -664,7 +668,7 @@ public class CatalogService {
         var event = orm.findEvent(eventType.toUpperCase(Locale.ROOT), date);
         if (event != null) return event;
         if (!actorService.atLeast(DomainEnums.UserRole.admin)) throw ApiException.notFound("Event not found");
-        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of()));
+        return createEvent(new ApiModels.EventInput(eventType, eventType.toUpperCase(Locale.ROOT) + " " + date.getYear(), date, date, "planned", null, Map.of(), Map.of(), null));
     }
 
     private Map<String, Integer> eventQuantities(Map<UUID, Integer> quantities) {
@@ -759,6 +763,7 @@ public class CatalogService {
         asset.notes = input.notes();
         asset.active = true;
         orm.persist(asset);
+        categoryDefaults.apply(asset.item);
         recordAssetRegistration(item, 1);
         return asset;
     }

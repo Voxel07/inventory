@@ -155,9 +155,8 @@ export function Maintenance() {
     } else {
       setType('dguv_v3');
     }
-    const due = new Date();
-    due.setDate(due.getDate() + (item.maintenanceIntervalDays || 365));
-    setNextDueAt(dateInputValue(due));
+    const schedule = dateSchedules.find((candidate) => candidate.itemId === item.id);
+    setNextDueAt(schedule ? scheduleDue(schedule) : '');
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -296,10 +295,6 @@ export function Maintenance() {
               if (schedule) {
                 setType(schedule.maintenanceType);
                 setNextDueAt(scheduleDue(schedule));
-              } else if (item?.maintenanceIntervalDays) {
-                const due = new Date();
-                due.setDate(due.getDate() + item.maintenanceIntervalDays);
-                setNextDueAt(dateInputValue(due));
               } else setNextDueAt('');
             }}
           />

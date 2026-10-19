@@ -42,5 +42,10 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "occurred_at", nullable = false, updatable = false) public Instant occurredAt;
     @Column(name = "idempotency_key", unique = true) public UUID idempotencyKey;
     @Column(name = "client_command_id") public UUID clientCommandId;
+    @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="reverses_id",unique=true) public StockTransaction reverses;
+    /** Executor of a compensating reversal; user remains the original custody beneficiary. */
+    @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="reversed_by_id") public UserAccount reversedBy;
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name="asset_before",columnDefinition="jsonb") public java.util.Map<String,String> assetBefore = new java.util.LinkedHashMap<>();
     @PrePersist void transactionTimestamp() { if (occurredAt == null) occurredAt = Instant.now(); }
 }

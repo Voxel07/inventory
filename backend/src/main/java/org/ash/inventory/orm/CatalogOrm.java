@@ -31,8 +31,8 @@ public class CatalogOrm extends EntityOrm {
      */
     /**
      * {@code includeUntagged}: with {@code eventType}, items without any event tag match too (usable for every event).
-     * {@code maintenanceAttention}: items with a calendar interval that are out of service, undated or due within the
-     * calendar warning window.
+     * {@code maintenanceAttention}: safety flags or active schedules with unknown, due or warning status,
+     * evaluated with the same scope and signed usage counters as checkout eligibility.
      */
     public record ItemFilter(String search, String category, String eventType, boolean includeUntagged, List<UUID> locationIds,
             List<UUID> ids, UUID mineOwner, List<UUID> mineItemIds, String sort, boolean maintenanceAttention) {
@@ -75,8 +75,7 @@ public class CatalogOrm extends EntityOrm {
             parameters.put("gone", List.of(DomainEnums.AssetState.lost, DomainEnums.AssetState.written_off));
         }
         if (filter.maintenanceAttention()) {
-            where.append(" and i.maintenanceIntervalDays > 0 and (i.outOfService = true or i.nextMaintenanceDue is null or i.nextMaintenanceDue <= :warnUntil)");
-            parameters.put("warnUntil", org.ash.inventory.helper.BusinessTime.today().plusDays(org.ash.inventory.service.MaintenancePolicy.CALENDAR_WARNING_DAYS));
+            where.append(" and function('inventory_maintenance_attention', i.id) = true");
         }
         if (!filter.ids().isEmpty()) {
             where.append(" and i.id in :ids");
@@ -117,6 +116,14 @@ public class CatalogOrm extends EntityOrm {
         return entityManager.createQuery("from Item i where i.id in :ids", Item.class).setParameter("ids", ids).getResultList();
     }
 
+    public Item itemBySku(String sku) {
+        var values = visible(entityManager.createQuery("from Item i where i.active = true and lower(i.sku) = :sku" + visibility(), Item.class))
+                .setParameter("sku", sku.trim().toLowerCase(Locale.ROOT)).setMaxResults(2).getResultList();
+        if (values.size() > 1) throw org.ash.inventory.resource.ApiException.conflict("SKU is ambiguous; use the item QR code");
+        if (values.isEmpty()) throw org.ash.inventory.resource.ApiException.notFound("Item not found");
+        return values.getFirst();
+    }
+
     public List<UUID> visibleItemIds() {
         return visible(entityManager.createQuery("select i.id from Item i where i.active = true" + visibility(), UUID.class)).getResultList();
     }
@@ -154,7 +161,7 @@ public class CatalogOrm extends EntityOrm {
     public List<StorageLocation> locations(boolean includeInactive, String search, UUID subtreeId, int offset, int limit) {
         var query = entityManager.createQuery("from StorageLocation l left join fetch l.parent where "
                 + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
-                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(l.fullCode) like :search or lower(coalesce(l.description, '')) like :search)")
+                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(l.code) like :search or lower(coalesce(l.description, '')) like :search)")
                 + (subtreeId == null ? "" : " and l.id in :subtree")
                 + " order by lower(l.fullCode), l.id", StorageLocation.class);
         if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
@@ -212,6 +219,22 @@ public class CatalogOrm extends EntityOrm {
         return entityManager.createQuery("from EventOccurrence e where e.eventType = :eventType order by e.startDate desc", EventOccurrence.class)
                 .setParameter("eventType", eventType)
                 .getResultList();
+    }
+
+    public List<EventOccurrence> events(String eventType, String status, int offset, int limit, boolean ascending) {
+        String typeFilter = eventType == null || eventType.isBlank() ? "" : " and e.eventType = :eventType";
+        String statusFilter = status == null || status.isBlank() ? "" : " and lower(e.status) = :status";
+        var query = entityManager.createQuery("from EventOccurrence e where 1 = 1" + typeFilter + statusFilter
+                + " order by e.startDate" + (ascending ? "" : " desc") + ", e.id", EventOccurrence.class);
+        if (!typeFilter.isEmpty()) query.setParameter("eventType", eventType.trim());
+        if (!statusFilter.isEmpty()) query.setParameter("status", status.trim().toLowerCase(Locale.ROOT));
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
+    public List<UUID> visibleItemIds(java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return visible(entityManager.createQuery("select i.id from Item i where i.active = true and i.id in :ids" + visibility(), UUID.class))
+                .setParameter("ids", ids).getResultList();
     }
 
     public List<Faction> factions(String eventType) {
@@ -349,7 +372,7 @@ public class CatalogOrm extends EntityOrm {
     }
 
     public boolean skuExists(String sku) {
-        return !entityManager.createQuery("select i.id from Item i where i.sku = :sku", UUID.class)
+        return !entityManager.createQuery("select i.id from Item i where lower(i.sku) = lower(:sku)", UUID.class)
                 .setParameter("sku", sku).setMaxResults(1).getResultList().isEmpty();
     }
 

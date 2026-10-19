@@ -78,10 +78,6 @@ public class Item extends BaseEntity {
     public Integer containersOpened;
     @Column(name = "container_remaining_pct")
     public Integer containerRemainingPercent;
-    @Column(name = "maintenance_interval_days")
-    public Integer maintenanceIntervalDays;
-    @Column(name = "next_maintenance_due")
-    public LocalDate nextMaintenanceDue;
     @Column(name = "current_operating_hours", nullable = false)
     public BigDecimal currentOperatingHours = BigDecimal.ZERO;
     /** The warehouse records the hours run (per unit, per event) when it checks a return. */

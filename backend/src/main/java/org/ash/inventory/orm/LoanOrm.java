@@ -10,10 +10,10 @@ import java.util.stream.Stream;
 public class LoanOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm access;
     public List<LoanArrangement> arrangements(int offset, int limit) {
-        var denied = access.deniedReferences(accessActor.current());
+
         var query = entityManager.createQuery("from LoanArrangement l join fetch l.commitment c join fetch c.item join fetch l.providerLocation where 1 = 1"
-                + InventoryAccessOrm.excluding("l", denied) + " order by l.createdAt desc, l.id desc", LoanArrangement.class);
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+                + InventoryAccessOrm.scope("loan", "l") + " order by l.createdAt desc, l.id desc", LoanArrangement.class);
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public java.util.Map<String, String> assetCodes(java.util.Collection<String> ids) {

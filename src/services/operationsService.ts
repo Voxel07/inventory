@@ -1,6 +1,7 @@
 import type { AssetInstance } from '../types';
 import { apiPage, apiRequest, apiFileUrl, fetchMedia, uploadMedia, type ApiQuery } from './apiClient';
 import { assertAuthSession, captureAuthSession } from './authManager';
+import { fieldCommand } from './fieldCommand';
 
 import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, OutboxEvent, SyncAudit, LotCreateInput, LotUpdateInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
 
@@ -14,10 +15,14 @@ export const operationsApi = {
   updateLot: (id: string, data: LotUpdateInput) => save<Lot>('inventory-lots', data, id),
   transfers: list<Transfer>('transfers'),
   createTransfer: (data: TransferInput) => save<Transfer>('transfers', data),
-  transferCommand: <A extends keyof TransferCommands>(id: string, action: A, data: TransferCommands[A]) => apiRequest<Transfer>(`/api/transfers/${id}/${action}`, { method: 'POST', body: data }),
+  transferCommand: <A extends keyof TransferCommands>(id: string, action: A, data: TransferCommands[A]) => action === 'receive'
+    ? fieldCommand<Transfer>({ type: 'transfer.receive', payload: { transferId: id, input: data as TransferCommands['receive'] } }, data.idempotencyKey)
+    : apiRequest<Transfer>(`/api/transfers/${id}/${action}`, { method: 'POST', body: data }),
   counts: list<Count>('inventory-counts'),
   createCount: (data: CountInput) => save<Count>('inventory-counts', data),
-  countCommand: <A extends keyof CountCommands>(id: string, action: A, data: CountCommands[A]) => apiRequest<Count>(`/api/inventory-counts/${id}/${action}`, { method: 'POST', body: data }),
+  countCommand: <A extends keyof CountCommands>(id: string, action: A, data: CountCommands[A]) => action === 'submit' || action === 'recount'
+    ? fieldCommand<Count>({ type: action === 'submit' ? 'count.submit' : 'count.recount', payload: { countId: id, input: data as CountCommands['submit'] } })
+    : apiRequest<Count>(`/api/inventory-counts/${id}/${action}`, { method: 'POST', body: data }),
   schedules: (query: ApiQuery = {}) => list<Schedule>('maintenance-schedules', query),
   saveSchedule: (data: ScheduleInput, id?: string) => save<Schedule>('maintenance-schedules', data, id),
   retireSchedule: (id: string) => apiRequest<void>(`/api/maintenance-schedules/${id}`, { method: 'DELETE' }),

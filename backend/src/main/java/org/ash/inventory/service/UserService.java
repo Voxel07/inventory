@@ -41,7 +41,7 @@ public class UserService {
         var user = users.findLocked(id);
         if (user == null) throw ApiException.notFound("User not found");
         if (user.accessRevision != input.revision()) throw ApiException.conflict("User changed; reload");
-        if (user.role == DomainEnums.UserRole.admin && !roles.contains(DomainEnums.UserRole.admin) && users.admins() <= 1)
+        if (user.active && user.role == DomainEnums.UserRole.admin && !roles.contains(DomainEnums.UserRole.admin) && users.admins() <= 1)
             throw ApiException.conflict("Keep at least one inventory admin");
         var before = java.util.Map.of("roles", java.util.List.copyOf(user.roles), "factions", java.util.List.copyOf(user.factions));
         user.setRoles(roles);

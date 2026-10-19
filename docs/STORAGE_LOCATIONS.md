@@ -55,3 +55,5 @@ The separate organization-only *warehouse* entity was merged into the top-level 
 - Street address and photos on a location
 - Movable sections (a container or vehicle that travels to an event). Moving the section is possible today, but there is no dedicated flow.
 - Virtual locations (transit, quarantine, repair, scrap) are intentionally absent: asset and stock states model them.
+
+For a caller who cannot see every ancestor, API `depth` is null and codes/paths contain only the visible chain. The child remains a stock-holding place. Editing uses `keepParent=true` to preserve an undisclosed parent; selecting a new parent explicitly clears that flag. Structure requests include the root in both limits: 1,000 nodes and 16 total levels.

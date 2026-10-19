@@ -4,7 +4,7 @@ import type { CsvReference } from './reference';
 import { buildLocationIndex, resolveCsvLocation } from './locations';
 import { holdsStock } from '../locationHierarchy';
 import { parseItemLots } from './lots';
-import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, MAINTENANCE_DAYS_ALIASES, NEXT_MAINTENANCE_DUE_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
+import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 export function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
   if (!val) return undefined;
@@ -135,8 +135,6 @@ export function parseItemsFromCsv(
 
     const containerSizeStr = getField(raw, CONTAINER_SIZE_ALIASES);
     const containerCountStr = getField(raw, CONTAINER_COUNT_ALIASES);
-    const maintenanceDaysStr = getField(raw, MAINTENANCE_DAYS_ALIASES);
-    const nextMaintenanceDue = getField(raw, NEXT_MAINTENANCE_DUE_ALIASES) || undefined;
     const currentOperatingHoursStr = getField(raw, CURRENT_OPERATING_HOURS_ALIASES);
     const fuelConsumptionStr = getField(raw, FUEL_CONSUMPTION_ALIASES);
     const batteryReplacementDue = getField(raw, BATTERY_REPLACEMENT_DUE_ALIASES) || undefined;
@@ -158,8 +156,6 @@ export function parseItemsFromCsv(
       eventTypes,
       containerSize: containerSizeStr ? parseNumber(containerSizeStr, 0) : undefined,
       containerCount: containerCountStr ? Math.round(parseNumber(containerCountStr, 0)) : undefined,
-      maintenanceIntervalDays: maintenanceDaysStr ? Math.round(parseNumber(maintenanceDaysStr, 0)) : undefined,
-      nextMaintenanceDue,
       currentOperatingHours: currentOperatingHoursStr ? parseNumber(currentOperatingHoursStr, 0) : undefined,
       // A meter column implies runtime tracking unless the row says otherwise.
       tracksRuntime: getField(raw, TRACKS_RUNTIME_ALIASES) ? parseBoolean(getField(raw, TRACKS_RUNTIME_ALIASES)) : Boolean(currentOperatingHoursStr),

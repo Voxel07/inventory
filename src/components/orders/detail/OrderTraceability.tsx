@@ -1,3 +1,5 @@
+import { HandoverEvidencePanel } from './HandoverEvidencePanel';
+import { CopyOrderDraft } from './CopyOrderDraft';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useState } from 'react';
@@ -109,6 +111,8 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
 
   return (
     <Box sx={{ mt: 3 }}>
+      <CopyOrderDraft orderId={order.id} eventType={order.eventType} />
+      <HandoverEvidencePanel orderId={order.id} />
       <Typography variant="h6" sx={{ mb: 1 }}>{t('orders.detail.orderTraceability.traceability')}</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>
         {metadata.map(([label, actor, timestamp]) => (

@@ -23,6 +23,10 @@ public class SyncService {
     @jakarta.inject.Inject org.ash.inventory.service.ApiQueryService queries;
     @jakarta.inject.Inject jakarta.validation.Validator validator;
     @jakarta.inject.Inject InventoryTelemetry telemetry;
+    @jakarta.inject.Inject CountService counts;
+    @jakarta.inject.Inject TransferService transfers;
+    @jakarta.inject.Inject ReturnSubmissionService returns;
+    @jakarta.inject.Inject MemberService members;
     private final ObjectMapper objectMapper;
     private final OrderService orders;
     private final InventoryOperationsService inventory;
@@ -145,6 +149,20 @@ public class SyncService {
 
     private Object execute(ApiModels.SyncAction action) {
         return switch (action.type()) {
+            case "count.submit", "count.recount" -> counts.submit(uuid(action.payload(), "countId"),
+                    validated(action.payload().get("input"), org.ash.inventory.resource.dto.CountDtos.CountSubmissionInput.class), "count.recount".equals(action.type()));
+            case "transfer.receive" -> {
+                var value = validated(action.payload().get("input"), org.ash.inventory.resource.dto.TransferDtos.ReceiveInput.class);
+                yield transfers.receive(uuid(action.payload(), "transferId"), new org.ash.inventory.resource.dto.TransferDtos.ReceiveInput(action.idempotencyKey(), value.lines(), value.notes()));
+            }
+            case "return.accept" -> {
+                var value = returns.acknowledge(uuid(action.payload(), "returnId"), validated(action.payload().get("input"), ApiModels.ReturnDecisionInput.class));
+                yield mapper.returnSubmission(value, returns.reportedDamage(java.util.List.of(value)).get(value.id));
+            }
+            case "member.return" -> {
+                var value = validated(action.payload(), MemberService.ReturnInput.class);
+                yield Map.of("id", members.submitReturn(new MemberService.ReturnInput(value.custodyKey(), value.quantity(), value.assetId(), value.notes(), action.idempotencyKey())));
+            }
             case "order.create" -> {
                 actors.current();
                 if ("general".equals(action.payload().get("kind"))) {

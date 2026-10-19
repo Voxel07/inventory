@@ -18,6 +18,7 @@ export interface EventReport {
   quantities?: Record<string, Record<string, number>>;
   itemNames?: Record<string, string>;
   notes?: string;
+  orderDeadline?: string | null;
   createdBy?: string;
   created: string;
   updated: string;
@@ -38,4 +39,5 @@ export interface EventReportFormData {
   /** Omitted on update to keep the usage recorded through orders. */
   usedQuantities?: Record<string, number>;
   notes?: string;
+  orderDeadline?: string | null;
 }

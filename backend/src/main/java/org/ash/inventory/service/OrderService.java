@@ -102,6 +102,7 @@ public class OrderService {
                 : catalog.eventForOrder(requiredText(input.eventType(), "eventType"),
                         requiredDate(input.eventDate()));
         requireOpenEvent(event);
+        requireBeforeDeadline(event);
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
                 : catalog.factionForOrder(event.eventType, requiredText(input.faction(), "faction"));
@@ -123,6 +124,34 @@ public class OrderService {
     }
 
     /** Closed events take no new orders, items or handovers; returns and cancellations stay possible. */
+    private static void requireBeforeDeadline(EventOccurrence event) {
+        if (event != null && event.orderDeadline != null && !Instant.now().isBefore(event.orderDeadline))
+            throw ApiException.conflict("The event order deadline has passed");
+    }
+
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
+    public InventoryOrder copyAsDraft(UUID id, UUID eventId, UUID commandId) {
+        var source = orm.require(InventoryOrder.class, id, "Order"); assertCanView(source);
+        var event = orm.require(EventOccurrence.class, eventId, "Event");
+        requireOpenEvent(event); requireBeforeDeadline(event);
+        if (source.eventOccurrence != null && !source.eventOccurrence.eventType.equals(event.eventType))
+            throw ApiException.badRequest("Copy within the same event type");
+        var items = new LinkedHashMap<UUID,Integer>();
+        for (var line : source.lines) {
+            items.merge(line.item.id, line.requestedQuantity, Integer::sum);
+        }
+        if (source.kind == InventoryOrder.Kind.general)
+            return createGeneral(new ApiModels.GeneralOrderInput(source.name, source.purpose, eventId, items, commandId));
+        var contents = requestedContents(source);
+        items.clear();
+        contents.items().forEach((key, quantity) -> items.put(UUID.fromString(key), quantity));
+        var assemblies = new LinkedHashMap<UUID,Integer>();
+        contents.assemblies().forEach((key, quantity) -> assemblies.put(UUID.fromString(key), quantity));
+        return create(new ApiModels.OrderInput(event.eventType, source.faction.slug, event.startDate, eventId, source.faction.id,
+                null, null, null, null, null, source.notes, items, assemblies, commandId));
+    }
+
     private static void requireOpenEvent(EventOccurrence event) {
         if (event != null && event.closed())
             throw ApiException.conflict("Event " + event.name + " is closed; correct its items on the event page instead");
@@ -174,6 +203,7 @@ public class OrderService {
         order.purpose = requiredText(input.purpose(), "purpose").trim();
         order.eventOccurrence = input.eventOccurrenceId() == null ? null : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event");
         requireOpenEvent(order.eventOccurrence);
+        requireBeforeDeadline(order.eventOccurrence);
         if (order.id != null) orm.deleteLines(order);
         if (input.requestedQuantities() == null) return;
         for (var entry : input.requestedQuantities().entrySet()) {
@@ -200,6 +230,7 @@ public class OrderService {
                 ? order.eventOccurrence
                 : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         requireOpenEvent(event);
+        requireBeforeDeadline(event);
         var faction = input.factionId() != null
                 ? orm.require(Faction.class, input.factionId(), "Faction")
                 : input.faction() == null ? order.faction : catalog.factionForOrder(event.eventType, input.faction());
@@ -305,6 +336,7 @@ public class OrderService {
         if (idempotent(order, input.idempotencyKey()))
             return order;
         if (OUTBOUND.contains(target)) requireOpenEvent(order.eventOccurrence);
+        if (target == DomainEnums.OrderStatus.submitted) requireBeforeDeadline(order.eventOccurrence);
         if (order.kind == InventoryOrder.Kind.faction && (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.draft))
             assertFactionAccess(actor, order.faction);
         else if (target == DomainEnums.OrderStatus.cancelled)
@@ -801,7 +833,7 @@ public class OrderService {
         handover.marshal = actor;
         handover.collectorName = order.collectorLabel();
         handover.location = order.pickupLocation;
-        handover.conditionConfirmed = true;
+        handover.conditionConfirmed = false;
         handover.handoverCode = order.label() + "-OUT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
         handover.idempotencyKey = idempotencyKey;
         orm.persist(handover);
@@ -840,7 +872,7 @@ public class OrderService {
         handover.marshal = actor;
         handover.collectorName = order.collectorLabel();
         handover.location = order.pickupLocation;
-        handover.conditionConfirmed = true;
+        handover.conditionConfirmed = false;
         handover.handoverCode = order.label() + "-IN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
         handover.idempotencyKey = idempotencyKey;
         handover.notes = input.notes();

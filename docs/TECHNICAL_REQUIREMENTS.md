@@ -78,7 +78,7 @@ Source: [Maven project](../backend/pom.xml), [runtime configuration](../backend/
 | Reference caching | Quarkus Cache / Caffeine, committed revision keys |
 | Cluster support | Quarkus Redis client communicating with Valkey |
 | Media | Quarkus Amazon S3, AWS SDK URL connection client, or local filesystem |
-| AI integration | `quarkus-mcp-server-http:2.0.1`; 28 tools (including shared order commands), 3 resources, 2 prompts |
+| AI integration | `quarkus-mcp-server-http:2.0.1`; 31 tools (including shared order commands), 3 resources, 2 prompts |
 | Verification libraries | Quarkus JUnit and REST Assured; configured tests use PostgreSQL |
 
 H2 is a test-scoped dependency only, used by `TelemetryExportTest`; every profile (dev, test, prod) uses PostgreSQL. There is no integration-test (Failsafe) suite; the `native` profile only builds the native image.
@@ -98,13 +98,13 @@ Stock-affecting operations must authenticate/authorize, deduplicate the command 
 
 Order kinds share `/api/orders/{kind}` command contracts and `OrderService`; kind-specific list/detail projections include `kind`. Offline `order.create` payloads also require the kind.
 
-Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Paged endpoints (`@Paged`) send `X-Has-More`: whether the page query returned a full page before privacy filtering, so a privacy-shortened page never ends a listing early. Clients load further pages on demand; only explicit exports/imports read every page.
+Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Paged endpoints (`@Paged`) send `X-Has-More`: whether the page query returned a full page before privacy filtering, so a privacy-shortened page never ends a listing early. Clients load further pages on demand; explicit exports/imports, the opt-in offline download and documented complete child/reference/worklist reads may read every page. Event lists now accept `status`, `page` and `size`; not every collection is a paged endpoint.
 
 The outbox is written in the business transaction. After commit, dispatch is woken locally; a default 5-second poll handles other nodes and recovery. Rows are claimed under a lease with `SKIP LOCKED`. Delivery is at least once, consumers deduplicate by event ID, 10 failed attempts cause dead letter, and published events default to 30-day retention. Operator retries require authorization.
 
 SSE sends change families and catalog resource kind, without IDs, actors, quantities or event payloads. The stream ends at token expiry. The frontend coalesces invalidations for 300 ms; reconnect and `access.changed` reset private inventory queries and private media references. SSE is a refresh signal, not a durable client ledger.
 
-Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `vendor.*`, `vendor_document.*`, `warehouse.*`, `location.*`, `item.*`, `inventory_lot.*`, `maintenance_schedule.*`, `member_request.*`, `planning.*`, `runtime.*`, `loan.*`, `equipment.*`, `event_logistics.changed`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
+Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `custody.*`, `return.*`, `damage.*`, `repair.*`, `maintenance.*`, `transfer.*`, `count.*`, `purchase_order.*`, `goods_receipt.*`, `vendor.*`, `vendor_document.*`, `location.*`, `item.*`, `inventory_lot.*`, `maintenance_schedule.*`, `member_request.*`, `planning.*`, `runtime.*`, `loan.*`, `equipment.*`, `event_logistics.changed`, `access.changed` and `user.changed`. Adapters expose refresh classifications rather than raw outbox payloads.
 
 ## 5. Identity and privacy requirements
 
@@ -117,7 +117,7 @@ Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `cus
 - Tenants see no public resource: the visibility predicate requires `:accessPublic` for rows without a policy, the reference graph treats public roots as denied, entity lookups of public items/locations/assemblies return 404, and `TenantScopeFilter` allows only private-inventory APIs: items, asset codes, locations, assemblies, access, notifications, media, action inbox, the SSE stream, event-type codes (for item event tags), positions/assets/lots and their lot maintenance, plus item-scoped transaction/damage/maintenance history and stock bookings on own items. The services scope each of these to the tenant's own or granted resources. MCP requires read-only or higher.
 - An owner may offer a private item for use (`inventory_access_policies.public_use`): organization members may view it. Commands annotated `@PrivateInventoryCommand(usage = true)` (orders, pickup and returns, own returns, member requests, damage reports) accept view rights on such items where they would otherwise need edit rights; catalog, stock and lifecycle commands do not. `ItemRequestNotifier` sends the owner one `item_requested` notification per order or request (`notifications.dedupe_key`), without order IDs.
 - Permissions are checked again on replay. Private writes and uploads remain online-only. Private projections are excluded from durable offline catalog caching.
-- API/media responses use private/no-store controls. Policy edits use revisions and audited before/after evidence. The current response/reference-graph privacy mechanism remains alongside query scoping; PLAN-01 tracks its planned simplification.
+- API/media responses use private/no-store controls. Policy edits use revisions and audited before/after evidence. Main aggregate lists use SQL resource predicates before paging. Targeted response/reference redaction remains for nested/media boundaries; no global denied-history set is constructed for these list reads.
 - Upload defaults: signature-sniffed WebP/PNG/JPEG/PDF, 10 MiB per file, 50 staged uploads per user, purge unattached media after 24 hours. Media is bound to a resource and authorized on download.
 
 ## 6. PWA and runtime requirements
@@ -156,7 +156,7 @@ Successful operations produce DEBUG summaries with operation, outcome, backend a
 
 Outbox rows retain producer trace context in `trace_context`; delivery restores it on every attempt, including after process restart or delivery on another node. Committed business-event counters run after transaction commit. Sync metrics distinguish new commands from idempotent replays, and unexpected sync exceptions receive ERROR logs/spans even if the batch HTTP response succeeds.
 
-Alert rules, dashboards and infrastructure signals are not yet documented as a separate guide; the remaining work is listed under [Not yet covered](#not-yet-covered) and tracked as OBS-01.
+Checked-in alert/dashboard payloads, an independent numeric collector and provisioning commands are documented in [Operations runbook](OPERATIONS_RUNBOOK.md). Live destination and infrastructure acceptance remain separate.
 
 ### OpenObserve container
 
@@ -213,12 +213,14 @@ No port is published; the UI and ingestion API (port 5080) are reached through t
 
 The exporter uses OTLP over HTTP/protobuf (`/v1/traces`, `/v1/metrics` or `/v1/logs` is appended to the organization base endpoint); OpenObserve's gRPC port is not used. Export-enabled startup rejects a missing/malformed ingestion token or an invalid organization endpoint without echoing credentials. Set `INVENTORY_LOG_LEVEL` and `OTEL_LOGS_LEVEL` to adjust application and export verbosity; `OTEL_LOG_STREAM`, `OTEL_METRIC_EXPORT_INTERVAL` and `OTEL_OUTBOX_SNAPSHOT_EVERY` control routing and intervals. If nothing arrives, set `OTEL_LOG_LEVEL=DEBUG` and check the API log for exporter `401` (wrong token) or `404` (wrong organization path).
 
-### Not yet covered
+### Operational provisioning and acceptance
 
-Outbox dead-letter/backlog and sync outcome signals are implemented. Alert rules and notification destinations still need provisioning in the external OpenObserve instance; alert conditions remain to be written up with that provisioning. PostgreSQL replication lag, retained WAL and host/disk metrics need an infrastructure collector/exporter; see [PostgreSQL logical replication](postgres-logical-replication.md). Telemetry absence must be monitored outside the API process. Tracked as OBS-01 in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+Outbox/sync telemetry plus checked-in OpenObserve alert/dashboard provisioning and independent PostgreSQL/WAL/disk/backup probes are supplied. Configure the external destination and install the collector as described in [Operations runbook](OPERATIONS_RUNBOOK.md). Monitor OpenObserve/collector-host absence outside that stack. Live acceptance remains pending.
 
 ## 8. Engineering acceptance
 
 The repository requires direct changes to current contracts and the editable schema baseline: disposable data, no compatibility adapters or incremental migration files. Builds and application tests run only when explicitly authorized by [AGENTS.md](../AGENTS.md).
 
 The pending Authentik, browser/mobile, S3, load, restore and cluster checks are tracked in [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md).
+
+Current paging, report memory/rebuild costs, hierarchy limits and numerical targets are defined in [Performance acceptance](PERFORMANCE_ACCEPTANCE.md). Feature, session and personal-data contracts are in [Workflow contracts](WORKFLOW_CONTRACTS.md).

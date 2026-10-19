@@ -68,6 +68,8 @@ public class CatalogResource {
 
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
+    @GET @Path("/items/by-sku/{sku:.+}")
+    public ApiResponses.ItemResponse itemBySku(@PathParam("sku") String sku) { return queries.itemBySku(sku); }
     @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }
     /** Bulk create/update for imports: one request and one transaction per chunk of up to 100 rows. */
     @POST @Path("/items/batch") @Transactional
@@ -177,10 +179,11 @@ public class CatalogResource {
     @PATCH @Path("/assemblies/{id}") @Transactional public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.updateAssembly(id, input)); }
     @DELETE @Path("/assemblies/{id}") @Transactional public Response deleteAssembly(@PathParam("id") UUID id) { service.retireAssembly(id); return Response.noContent().build(); }
 
-    @GET @Path("/events")
-    public Response events(@QueryParam("eventType") String eventType) {
-        actor.current();
-        return catalogResponse(responses.events(cacheKey(eventType)));
+    @Paged @GET @Path("/events")
+    public List<ApiResponses.EventResponse> events(@QueryParam("eventType") String eventType,
+            @QueryParam("status") String status, @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.events(eventType, status, page, size);
     }
     @GET @Path("/events/{id}")
     public ApiResponses.EventResponse event(@PathParam("id") UUID id) { return queries.event(id); }

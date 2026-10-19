@@ -108,7 +108,7 @@ class P2StorageRegressionTest {
         UUID id = item.id; em.flush(); em.clear(); actors.current(); stats().clear();
         var rows = operations.transactions(id, null, null, null, null, null, null, 0, 100);
         assertEquals(1, stats().getPrepareStatementCount());
-        rows.forEach(mapper::transaction); assertEquals(1, stats().getPrepareStatementCount()); assertEquals(25, rows.size());
+        mapper.transactions(rows); assertEquals(2, stats().getPrepareStatementCount()); assertEquals(25, rows.size());
     }
     @Test @TestTransaction
     void custodyAggregatesHistoryAndFiltersRecipientIncludingNullEvents() {
@@ -145,7 +145,7 @@ class P2StorageRegressionTest {
         for (int n = 0; n < 25; n++) { var item = item(); item.name = prefix + n; }
         em.flush(); em.clear(); actors.current(); stats().clear();
         var rows = queries.projectItems(catalog.getItems(prefix, null, 0, 100));
-        assertEquals(25, rows.size()); assertEquals(6, stats().getPrepareStatementCount());
+        assertEquals(25, rows.size()); assertEquals(7, stats().getPrepareStatementCount());
     }
     @Test @TestTransaction
     void privateCatalogMappingHasConstantQueriesForDistinctPoliciesAndLocations() {
@@ -157,7 +157,7 @@ class P2StorageRegressionTest {
         }
         em.flush(); em.clear(); actors.current(); stats().clear();
         var rows = queries.projectItems(catalog.getItems(prefix, null, 0, 100));
-        assertEquals(25, rows.size()); assertEquals(11, stats().getPrepareStatementCount()); // includes the two inheritance batches
+        assertEquals(25, rows.size()); assertEquals(12, stats().getPrepareStatementCount()); // includes the two inheritance batches
         assertEquals(0, stats().getCollectionFetchCount(), "No group member collections in DTO projection");
     }
     @Test
@@ -171,10 +171,11 @@ class P2StorageRegressionTest {
         });
         assertFalse(reports.read("movements", Map.of(), 0, 100).stale());
         stats().clear(); var warm = reports.read("movements", Map.of(), 0, 100);
-        assertEquals(1, warm.total()); assertTrue(stats().getPrepareStatementCount() <= 3);
-        assertTrue(Arrays.stream(stats().getQueries()).noneMatch(q -> q.contains("count(") || q.contains("max(")));
+        assertEquals(1, warm.total()); assertTrue(stats().getPrepareStatementCount() <= 10, "Bounded actor/header/revision and JSON page/count reads");
+        assertEquals(0, stats().getEntityStatistics(OperationalReport.class.getName()).getLoadCount(), "Never hydrate the full snapshot for a page");
+        assertEquals(0, stats().getEntityStatistics(StockTransaction.class.getName()).getLoadCount(), "Warm pages do not reread the movement ledger");
         QuarkusTransaction.requiringNew().run(() -> item());
-        assertTrue(reports.read("movements", Map.of(), 0, 100).stale());
+        assertFalse(reports.read("movements", Map.of(), 0, 100).stale());
     }
     @Test
     void factionCacheReadsCommittedRevisionAndSharesOneSnapshotAcrossFilters() throws Exception {

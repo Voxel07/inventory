@@ -24,6 +24,9 @@ public class UserAccount extends BaseEntity {
     @Column(nullable = false)
     public String name;
     public String email;
+    @Column(nullable = false) public boolean active = true;
+    @Column(name = "deactivated_at") public java.time.Instant deactivatedAt;
+    @Column(name = "offboarding_reason", length = 1000) public String offboardingReason;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     /** Effective (highest assigned) role, used by database visibility queries. */

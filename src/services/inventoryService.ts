@@ -48,6 +48,7 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
 );
 
 export const getItem = itemApi.getById;
+export const getItemBySku = (sku: string) => apiRequest<Item>(`/api/items/by-sku/${encodeURIComponent(sku)}`);
 
 /** One import row: created without `id`, otherwise updated; `assetCodes` register serialized units. */
 export type ItemBatchEntry = { id?: string; item: Partial<ItemFormData>; assetCodes?: string[] };
@@ -72,6 +73,11 @@ export function itemBatchErrorIndex(error: unknown): number | undefined {
 }
 
 const OFFLINE_ITEM_SNAPSHOT = 'items:offline-snapshot';
+export async function getSavedItemByCode(code: string): Promise<Item | undefined> {
+  const items = await getOfflineCatalog<Item[]>(OFFLINE_ITEM_SNAPSHOT);
+  const needle = code.toLocaleLowerCase();
+  return items?.find(item => item.id === code || item.sku?.toLocaleLowerCase() === needle);
+}
 
 /** Overview metrics over the caller's visible inventory, computed on the server. */
 export type InventorySummary = { items: number; totalUnits: number; lowStockItems: number; transactionsLast7Days: number; openDamageReports: number };
@@ -102,9 +108,12 @@ export async function searchItems(search: string, size: number): Promise<Page<It
 
 /** Explicit exhaustive read that refreshes the offline item snapshot. */
 export async function snapshotItemCatalog(context: AuthSessionContext): Promise<void> {
-  const items = await itemApi.getAll();
+  const items = await loadAllPages((page, size) => {
+    if (page >= 100) throw new Error('Offline catalog exceeds 10,000 items; narrow the catalog before downloading');
+    return itemApi.getPage({}, page, size, true);
+  });
   assertAuthSession(context);
-  await setOfflineCatalog(OFFLINE_ITEM_SNAPSHOT, items.filter(item => !containsPrivateInventory(item)), context);
+  await setOfflineCatalog(OFFLINE_ITEM_SNAPSHOT, items.filter(item => !containsPrivateInventory(item)), context, true);
 }
 export const createItem = itemApi.create;
 export const updateItem = itemApi.update;

@@ -1,3 +1,4 @@
+import { MovementReversalButton } from '../operations/MovementReversalButton';
 import {
     Table,
     TableBody,
@@ -51,10 +52,14 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
     function getUserName(tx: StockTransaction) {
         const expandedUser = tx.expand?.userId;
         if (expandedUser) {
-            return expandedUser.name?.trim() || expandedUser.username?.trim() || expandedUser.email?.trim() || tx.userId || '—';
+            return expandedUser.name?.trim() || expandedUser.username?.trim() || tx.userId || '—';
         }
         const foundUser = users?.find((u) => u.id === tx.userId);
         return foundUser ? foundUser.name?.trim() || foundUser.username?.trim() || foundUser.email?.trim() || tx.userId : tx.userId || '—';
+    }
+
+    function reversalActor(tx: StockTransaction) {
+        return tx.reversedBy ? <Typography variant="caption" color="text.secondary">{t('review.reversedBy', { name: tx.reversedBy.name })}</Typography> : null;
     }
 
     function assetChip(tx: StockTransaction) {
@@ -125,7 +130,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <Chip label={formatStatus(tx.transactionType)} color={transactionColor(tx.transactionType)} size="small" />
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 1.5 }}>
-                        <Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>
+                        <Box><Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>{reversalActor(tx)}</Box><MovementReversalButton movement={tx} />
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
                     {(tx.orderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
@@ -173,7 +178,7 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                                     {orderChip(tx, true)}
                                 </Box>
                             </TableCell>
-                            <TableCell>{tx.notes}</TableCell>
+                            <TableCell>{tx.notes}{reversalActor(tx)}<MovementReversalButton movement={tx} /></TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

@@ -23,7 +23,7 @@ public final class ApiModels {
             List<String> eventTypes, @Min(0) Integer amount, @Min(0) Integer minStock,
             @Min(0) BigDecimal value, UUID storageLocation, String positionDetails, String hint,
             BigDecimal containerSize, Integer containerCount, Integer containersOpened, Integer containerRemainingPercent,
-            Integer maintenanceIntervalDays, LocalDate nextMaintenanceDue, @jakarta.validation.constraints.DecimalMin("0") BigDecimal currentOperatingHours,
+            @jakarta.validation.constraints.DecimalMin("0") BigDecimal currentOperatingHours,
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
@@ -53,7 +53,7 @@ public final class ApiModels {
     public record StorageLocationInput(
             @NotBlank String name, @jakarta.validation.constraints.Size(max = 32) String code, String description,
             Double latitude, Double longitude, Integer mapZoom, String mapOverlay, List<List<Double>> overlayBounds,
-            UUID parentLocationId, Boolean active, Boolean privateResource) {}
+            UUID parentLocationId, Boolean active, Boolean privateResource, Boolean keepParent) {}
 
     /** A top-level location (id null = new) with its sections; see {@code CatalogService.saveStructure}. */
     public record StorageStructureInput(
@@ -78,7 +78,7 @@ public final class ApiModels {
 
     public record EventInput(
             @NotBlank String eventType, String name, @NotNull LocalDate startDate, LocalDate endDate,
-            String status, String notes, Map<UUID, Integer> plannedQuantities, Map<UUID, Integer> usedQuantities) {}
+            String status, String notes, Map<UUID, Integer> plannedQuantities, Map<UUID, Integer> usedQuantities, Instant orderDeadline) {}
 
     public record FactionInput(@NotBlank String eventType, @NotBlank String name, String slug, Boolean active) {}
 

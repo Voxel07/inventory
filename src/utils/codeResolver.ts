@@ -1,5 +1,5 @@
 import { getFactionOrders, getFactionOrder } from '../services/factionOrderService';
-import { getAssetByCode, getItem, itemApi } from '../services/inventoryService';
+import { getAssetByCode, getItem, getItemBySku, getSavedItemByCode, itemApi } from '../services/inventoryService';
 import { ApiError } from '../services/apiClient';
 import { getAssembly } from '../services/assemblyService';
 
@@ -65,6 +65,11 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
     };
   }
 
+  if (!navigator.onLine) {
+    const item = await getSavedItemByCode(code);
+    return item ? { found: true, type: 'item', path: `/items/${item.id}?transaction=1`, name: item.name, code } : { found: false, code };
+  }
+
   // 2. Asset code lookup (/api/assets/by-code/{code})
   const asset = await absentAs404(getAssetByCode(code));
   if (asset?.itemId && asset.id) {
@@ -85,7 +90,11 @@ export async function resolveScannedCode(rawCode: string): Promise<CodeResolutio
 
   const lowerCode = code.toLowerCase();
 
-  // 4. Targeted item search (exact SKU or name among the server matches)
+  // Exact identity must not depend on the first page of substring matches.
+  const exactItem = await absentAs404(getItemBySku(code));
+  if (exactItem) return { found: true, type: 'item', path: `/items/${exactItem.id}?transaction=1`, name: exactItem.name, code };
+
+  // 4. Optional exact-name match among the first search results.
   const items = await itemApi.getPage({ search: code }, 0, 25);
   const matchingItem = items.rows.find((item) => item.sku?.toLowerCase() === lowerCode || item.name.toLowerCase() === lowerCode);
   if (matchingItem) {

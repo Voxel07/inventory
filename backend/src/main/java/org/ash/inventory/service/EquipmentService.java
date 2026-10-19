@@ -64,6 +64,9 @@ public class EquipmentService {
     @org.ash.inventory.helper.security.PrivateInventoryCommand
     public Profile update(UUID itemId, ProfileInput input) {
         var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
+        if (item.accessPolicy != null && (input.availabilityPolicy() == Item.AvailabilityPolicy.available
+                || item.accessPolicy.publicUse && input.availabilityPolicy() != Item.AvailabilityPolicy.commitment_required))
+            throw ApiException.badRequest("Private equipment cannot be freely available; offered equipment requires owner commitments");
         if (input.ownershipType() != Item.Ownership.organization &&
                 (blank(input.ownerName()) || input.availabilityPolicy() == Item.AvailabilityPolicy.available))
             throw ApiException.badRequest("Private/external equipment needs an owner and an explicit commitment or unavailable policy");
@@ -139,7 +142,8 @@ public class EquipmentService {
     }
 
     public static boolean freelyAvailable(Item item) {
-        return item.ownershipType == Item.Ownership.organization && item.availabilityPolicy == Item.AvailabilityPolicy.available;
+        return item.accessPolicy == null && item.ownershipType == Item.Ownership.organization
+                && item.availabilityPolicy == Item.AvailabilityPolicy.available;
     }
 
     /** Event-less catalog totals deliberately exclude event-bound offers. */

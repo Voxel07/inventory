@@ -12,9 +12,6 @@ import java.util.*;
 
 @ApplicationScoped
 public class OperationalReportService {
-    private static final int MAX_FILTER_VARIANTS = 64;
-    private static final int MAX_CACHED_ROWS = 100000;
-    private static final long FILTER_CACHE_SECONDS = 300;
     @Inject org.ash.inventory.orm.OperationalReportOrm orm;
     @Inject ActorService actors;
     @Inject PositionService positions;
@@ -22,17 +19,13 @@ public class OperationalReportService {
     @Inject InventoryOperationsService inventory;
     @Inject ApiQueryService queries;
     @Inject PrivacyProjectionService privacy;
-    private record FilterKey(String name, long version, Instant generation, Map<String, String> filters, UUID actorId, Set<String> denied) {}
-    private record Filtered(List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals, Instant cachedAt) {}
-    private final Map<FilterKey, Filtered> filteredCache = new LinkedHashMap<>(16, 0.75f, true);
-    private int cachedRows;
     public static final Map<String, String> DEFINITIONS = new LinkedHashMap<>();
     static {
         DEFINITIONS.put("events", "One row per event/item, including planned-only items. Planned is total forecast; requested is active order demand. Handed over is historical deployment and survives returns. Outstanding = handed over minus good/damaged returns, consumption and write-offs. Missing remains outstanding. Date filter uses event start date.");
         DEFINITIONS.put("availability", "Current bulk/lot positions and individual serialized assets by actual location. Available is unrestricted organization stock; private/external or commitment-required stock needs event-specific planning and is zero here. Ownership is separate from physical on-hand. Available excludes reservations, damage, quarantine, unusable lots, blocked maintenance and items held by an open contributor damage report. Transit and custody (including pending checks) are separate from on-hand. Unlocated legacy quantities are shown as unassigned with zero location availability until reconciled. Inactive locations remain traceable. Date is snapshot date, not historical stock.");
         DEFINITIONS.put("returns", "Unresolved custody by item/person/order/asset. Pending acknowledgement is a subset of outstanding, never subtracted twice. Missing is still outstanding. Date is event end date where attributable; otherwise unknown. This is an unresolved worklist, not historical custody at a selected date.");
         DEFINITIONS.put("repairs", "Open repair cases, excluding returned-to-service and written-off cases, plus unresolved damage incidents not yet assigned a repair case. Repaired and verified cases remain in backlog until release. Quantity is the originating damage quantity for cases and unresolved quantity for incidents. Date is case/incident creation date.");
-        DEFINITIONS.put("maintenance", "Active schedules with due/warning/healthy status at generation, plus legacy item calendar dates when no active item schedule exists. Calendar warning windows are days; meter windows use hours or checkout count. Missing meter evidence is unknown, not zero. Date is next calendar due date; meter schedules have no calendar date.");
+        DEFINITIONS.put("maintenance", "Active schedules with unknown/due/warning/healthy status at generation. Calendar warning windows are days; meter windows use hours or checkout count. Missing meter evidence is unknown, not zero. Date is next calendar due date; meter schedules have no calendar date.");
         DEFINITIONS.put("purchases", "One row per supplier purchase line, including drafts and cancelled orders. Ordered is recorded line quantity; received is delivered quantity. Open delivery excludes draft/cancelled/closed purchases. Value cents = ordered quantity × unit price cents, not paid cost. Filter status before comparing committed spend. Date is order date.");
         DEFINITIONS.put("counts", "Completed counts only (posted/cancelled), so reports cannot reveal expected quantities during a blind count. Original count, recount, approved count and signed variance are retained separately. Date is completion date, or last update for cancelled sessions. Only posted variances changed stock.");
         DEFINITIONS.put("movements", "Immutable consumed and written-off transactions, one row per ledger record. Quantities are positive outcome amounts; they are not summed with event summaries. Unassigned historical events are not guessed. Date is the transaction occurrence date in the business time zone. Group by month and type for trends.");
@@ -44,11 +37,30 @@ public class OperationalReportService {
     public record View(String name, String definition, Instant startedAt, Instant generatedAt, boolean stale,
             int total, List<Map<String, Object>> rows, List<Map<String, Object>> monthlyTotals) {}
 
-    @org.ash.inventory.helper.ConsistentRead
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public View read(String name, Map<String, String> filters, int page, int size) {
         if (page < 0 || page > 100000 || size < 1 || size > 200) throw ApiException.badRequest("Invalid report page bounds");
-        return readGeneration(name, filters, (long) page * size, size, null);
+        actors.requireWarehouse(); validate(name); validateDates(filters);
+        rebuildIfStale(name);
+        return readSnapshot(name, filters, (long) page * size, size, null);
+    }
+
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public View readSnapshot(String name, Map<String, String> filters, long offset, int size, Instant generation) {
+        return readGeneration(name, filters, offset, size, generation);
+    }
+
+    public void rebuildIfStale(String name) {
+        if (needsRebuild(name)) tryRebuild(name);
+    }
+
+    @org.ash.inventory.helper.ConsistentRead
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean needsRebuild(String name) {
+        actors.requireWarehouse(); validate(name);
+        var header = orm.header(name);
+        return header == null || !Objects.equals(header.sourceToken(), sourceToken())
+                || header.generatedAt().isBefore(Instant.now().minusSeconds(300));
     }
 
     @org.ash.inventory.helper.ConsistentRead
@@ -65,64 +77,21 @@ public class OperationalReportService {
         if (generation != null && (header == null || !generation.equals(header.generatedAt())))
             throw ApiException.conflict("Report generation changed during export; restart the export");
         if (header == null) return new View(name, DEFINITIONS.get(name), null, null, true, 0, List.of(), List.of());
-        var denied = Set.copyOf(privacy.deniedIds());
-        var key = new FilterKey(name, header.version(), header.generatedAt(), Collections.unmodifiableMap(new TreeMap<>(filters)), actors.current().id, denied);
-        var filtered = cached(key);
-        if (filtered == null) {
-            var report = orm.find(OperationalReport.class, name);
-            if (report == null || report.version != header.version() || !Objects.equals(report.generatedAt, header.generatedAt()))
-                throw ApiException.conflict("Report generation changed while reading; reload the report");
-            var rows = report.rows.stream().filter(row -> privacy.visible(row, denied)).filter(row -> matches(row, filters))
-                    .map(row -> Collections.unmodifiableMap(new LinkedHashMap<>(row))).toList();
-            filtered = new Filtered(rows, filters.containsKey("itemId") ? monthlyTotals(name, rows) : List.of(), Instant.now());
-            cache(key, filtered);
-        }
-        // Cache only immutable snapshot filtering. Freshness is checked against committed sources on every request.
-        int from = (int) Math.min(offset, filtered.rows().size());
-        int to = (int) Math.min((long) from + limit, filtered.rows().size());
+        var page = orm.rows(name, filters, actors.current(), offset, limit);
         return new View(name, DEFINITIONS.get(name), header.startedAt(), header.generatedAt(),
                 !Objects.equals(header.sourceToken(), sourceToken()) || header.generatedAt().isBefore(Instant.now().minusSeconds(300)),
-                filtered.rows().size(), filtered.rows().subList(from, to), filtered.monthlyTotals());
+                page.total(), page.rows(), page.monthlyTotals());
     }
 
-    private synchronized Filtered cached(FilterKey key) {
-        var iterator = filteredCache.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            if (entry.getValue().cachedAt().isBefore(Instant.now().minusSeconds(FILTER_CACHE_SECONDS))) {
-                cachedRows -= entry.getValue().rows().size(); iterator.remove();
-            }
-        }
-        return filteredCache.get(key);
-    }
-
-    private synchronized void cache(FilterKey key, Filtered value) {
-        if (value.rows().size() > MAX_CACHED_ROWS) return;
-        var previous = filteredCache.put(key, value);
-        if (previous != null) cachedRows -= previous.rows().size();
-        cachedRows += value.rows().size();
-        var iterator = filteredCache.entrySet().iterator();
-        while (filteredCache.size() > MAX_FILTER_VARIANTS || cachedRows > MAX_CACHED_ROWS) {
-            cachedRows -= iterator.next().getValue().rows().size(); iterator.remove();
-        }
-    }
-
-    private List<Map<String, Object>> monthlyTotals(String name, List<Map<String, Object>> rows) {
-        if (!Set.of("purchases", "movements").contains(name)) return List.of();
-        var grouped = new TreeMap<String, Map<String, Object>>();
-        for (var source : rows) {
-            String key = source.get("month") + ":" + source.get("status");
-            var total = grouped.computeIfAbsent(key, ignored -> row("month", source.get("month"), "status", source.get("status")));
-            for (String metric : name.equals("purchases") ? List.of("ordered", "received", "openDelivery", "valueCents") : List.of("quantity"))
-                total.put(metric, ((Number) total.getOrDefault(metric, 0L)).longValue() + ((Number) source.getOrDefault(metric, 0)).longValue());
-        }
-        return grouped.values().stream().map(Collections::unmodifiableMap).toList();
+    public void rebuild(String name) {
+        if (!tryRebuild(name)) throw ApiException.conflict("Report generation is already running; retry shortly");
     }
 
     @org.ash.inventory.helper.ConsistentRead
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void rebuild(String name) {
+    public boolean tryRebuild(String name) {
         actors.requireWarehouse(); validate(name);
+        if (!orm.tryRebuildLock(name)) return false;
         String before = sourceToken(); Instant start = Instant.now();
         List<Map<String, Object>> rows = switch (name) {
             case "events" -> events(); case "availability" -> availability(); case "returns" -> returns();
@@ -133,6 +102,7 @@ public class OperationalReportService {
         var report = orm.find(OperationalReport.class, name);
         if (report == null) { report = new OperationalReport(); report.name = name; orm.persist(report); }
         report.rows = rows; report.startedAt = start; report.generatedAt = Instant.now(); report.sourceToken = before;
+        return true;
     }
 
     private void validate(String name) { if (!DEFINITIONS.containsKey(name)) throw ApiException.notFound("Unknown report"); }
@@ -221,7 +191,11 @@ public class OperationalReportService {
             var row = row("id", balance.key(), "person", balance.person(), "eventId", balance.eventOccurrenceId(), "event", balance.event(),
                     "date", event == null ? null : event.endDate, "outstanding", balance.checkedOut(), "pendingAcknowledgement", balance.pendingQuantity(),
                     "orderId", balance.orderId(), "orderKind", balance.orderKind() == null ? null : balance.orderKind().name(), "assetId", balance.assetInstanceId(), "expectedReturnLocation", balance.storageLocation());
-            item(row, items.get(balance.itemId())); rows.add(row);
+            var heldItem = items.get(balance.itemId());
+            var returnLocation = heldItem.returnLocation == null ? heldItem.storageLocation : heldItem.returnLocation;
+            row.put("locationId", returnLocation == null ? null : returnLocation.id.toString());
+            row.put("expectedReturnLocation", returnLocation == null ? null : returnLocation.name);
+            item(row, heldItem); rows.add(row);
         }
         return rows;
     }
@@ -234,6 +208,7 @@ public class OperationalReportService {
             var row = row("id", r.id, "date", BusinessTime.date(r.createdAt), "status", r.status, "quantity", r.damageReport.quantity,
                     "owner", r.repairOwner == null ? null : r.repairOwner.name, "vendor", r.repairVendor == null ? null : r.repairVendor.name,
                     "asset", r.assetInstance == null ? null : r.assetInstance.assetCode, "safetyImpact", r.safetyImpact, "partsAndCostNotes", r.partsAndCostNotes, "verification", r.verificationResult);
+            row.put("assemblyId", r.damageReport.assembly == null ? null : r.damageReport.assembly.id);
             item(row, r.damageReport.item); if (r.assetInstance != null) location(row, r.assetInstance.currentLocation); rows.add(row);
         }
         for (var damage : all(DamageReport.class)) {
@@ -242,6 +217,7 @@ public class OperationalReportService {
             if (outstanding == 0) continue;
             var row = row("id", damage.id, "date", BusinessTime.date(damage.createdAt), "status", "awaiting_triage", "quantity", outstanding,
                     "assembly", damage.assembly == null ? null : damage.assembly.name, "safetyImpact", damage.safetyImpact, "notes", damage.description);
+            row.put("assemblyId", damage.assembly == null ? null : damage.assembly.id);
             item(row, damage.item); if (damage.assetInstance != null) location(row, damage.assetInstance.currentLocation); rows.add(row);
         }
         return rows;
@@ -264,16 +240,16 @@ public class OperationalReportService {
         var today = BusinessTime.today();
         for (var item : items) {
             if (!item.active) continue;
-            if (!scheduledItems.contains(item.id) && (item.nextMaintenanceDue != null || item.outOfService)) {
-                var row = row("id", item.id + ":calendar", "date", item.nextMaintenanceDue,
+            if (item.outOfService) {
+                var row = row("id", item.id + ":calendar", "date", null,
                         "status", calendarReportStatus(MaintenancePolicy.itemStatus(item, today)), "type", "item_calendar",
                         "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true);
                 item(row, item); location(row, item.storageLocation); rows.add(row);
             }
             if (item.trackingMode != DomainEnums.TrackingMode.serialized) continue;
             for (var asset : facts.get(item.id).policy().assets()) {
-                if (asset.nextMaintenanceDue == null && !asset.outOfService) continue;
-                var row = row("id", asset.id + ":calendar", "date", MaintenancePolicy.assetDue(item, asset),
+                if (!asset.outOfService) continue;
+                var row = row("id", asset.id + ":calendar", "date", null,
                         "status", calendarReportStatus(MaintenancePolicy.assetStatus(asset, today)), "type", "asset_calendar",
                         "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true,
                         "asset", asset.assetCode);
@@ -330,18 +306,5 @@ public class OperationalReportService {
             LocalDate to = filters.containsKey("to") ? LocalDate.parse(filters.get("to")) : null;
             if (from != null && to != null && from.isAfter(to)) throw ApiException.badRequest("Start date must not follow end date");
         } catch (java.time.format.DateTimeParseException e) { throw ApiException.badRequest("Use YYYY-MM-DD dates"); }
-    }
-    private boolean matches(Map<String, Object> row, Map<String, String> filters) {
-        for (var entry : filters.entrySet()) {
-            String value = entry.getValue(); if (value == null || value.isBlank()) continue;
-            if (entry.getKey().equals("search")) {
-                if (row.values().stream().noneMatch(v -> v != null && v.toString().toLowerCase(Locale.ROOT).contains(value.toLowerCase(Locale.ROOT)))) return false;
-            } else if (entry.getKey().equals("from") || entry.getKey().equals("to")) {
-                Object date = row.get("date"); if (date == null) return false;
-                int compare = date.toString().compareTo(value);
-                if (entry.getKey().equals("from") ? compare < 0 : compare > 0) return false;
-            } else if (!Objects.equals(Objects.toString(row.get(entry.getKey()), ""), value)) return false;
-        }
-        return true;
     }
 }

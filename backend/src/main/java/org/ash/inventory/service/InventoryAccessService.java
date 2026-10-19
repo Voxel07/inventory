@@ -186,7 +186,7 @@ public class InventoryAccessService {
             if (item == null) throw ApiException.badRequest("Only items can be offered for use");
             policy.publicUse = input.publicUse();
             // Offered items are requested through owner commitments, never handed out freely.
-            if (policy.publicUse && item.availabilityPolicy == Item.AvailabilityPolicy.unavailable) {
+            if (policy.publicUse && item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) {
                 item.availabilityPolicy = Item.AvailabilityPolicy.commitment_required;
                 item.equipmentRevision++;
             }
@@ -257,7 +257,7 @@ public class InventoryAccessService {
                 g.owner == null ? null : g.owner.id, g.owner == null ? null : g.owner.name, manage);
     }
     private Grant grant(InventoryAccessGrant g) { return new Grant(g.user == null ? null : g.user.id, g.group == null ? null : g.group.id, g.canEdit); }
-    private UserAccount person(UUID id) { var u = id == null ? null : orm.find(UserAccount.class, id); if (u == null) throw ApiException.badRequest("Person not found"); return u; }
+    private UserAccount person(UUID id) { var u = id == null ? null : orm.find(UserAccount.class, id); if (u == null || !u.active) throw ApiException.badRequest("Active person not found"); return u; }
     private InventoryAccessPolicy lockedPolicy(String kind, UUID id) {
         // Commands lock policies before stock/catalog rows; sharing uses the same order.
         var currentPolicy = policy(kind, id);

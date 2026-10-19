@@ -14,7 +14,7 @@ Quality goals, in order:
 4. **Field resilience:** previously cached reads and supported queued commands, with the server authoritative.
 5. **Simplicity:** one model per concept and explicit contracts; disposable development data.
 
-The last goal is partly a target: order models, maintenance state and visibility mechanisms still need consolidation. This product supports equipment operations, not a separate payment/accounting system. Automatic database failover and universal offline mutation support are not current delivered capabilities.
+The unified order aggregate, schedule-only maintenance policy and scoped visibility predicates are implemented; targeted response/media redaction remains a second boundary. This product supports equipment operations, not a separate payment/accounting system. Automatic database failover and universal offline mutation support are not current delivered capabilities.
 
 ## 2. Users and responsibilities
 
@@ -24,7 +24,7 @@ Roles form a ladder, listed from least to most privileged; each role includes th
 |---|---|
 | Tenant (`tenant`) | Only own private inventory: private items, assemblies and storage locations (e.g. a rented building), own share groups, offering items for use and answering requests. No company data. |
 | Read-only participant (`read_only`) | Reads company catalog, participants, event timing and all orders; adds no items, assemblies or storage locations (not even private ones) |
-| Faction leader (`faction_leader`) | Faction orders for provider-assigned factions; returns and reports for items in own custody |
+| Faction leader (`faction_leader`) | Faction orders for factions assigned by an inventory administrator; returns and reports for items in own custody |
 | ASH crew (`ash`) | Crew members who create general orders, take out items and pick up prepared orders |
 | Warehouse crew (`warehouse_crew`) | Company catalog and storage, preparation, handing out and taking back (pickup, returns, damage reports, custody overview), all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs), history and reports |
 | Inventory admin (`admin`) | Everything: events, participants and timing, procurement planning, write-off, count variance approval, users, recovery, all private resources |
@@ -62,7 +62,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | CAT-02 | Maintain assemblies with fixed component quantities; an assembly is visible only if every component is | Implemented | `CatalogService`, `ApiQueryService.projectAssemblies`, `AssemblyDetail` |
 | CAT-03 | Serialized equipment is one parent item with aggregate stock and `minStock`, batch asset-ID generation, and asset drill-down (state, location, hours, custodian) | Implemented | `AssetInstance`, `AssetInstancesList`, `AssetDetail` |
 | CAT-04 | Item detail shows free-form product info, stock, images, history and assets | Implemented | `ItemDetail` |
-| CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Implemented | `InventoryAccessPolicy` is the only visibility rule; scoped `CatalogOrm`. Predicate consolidation of the response filter is [PLAN-01](IMPLEMENTATION_PLAN.md) |
+| CAT-05 | Shared/event catalog plus private items visible to owner, `admin` and grantees | Implemented | `InventoryAccessPolicy` is the only visibility rule; scoped `CatalogOrm`. Query scoping and targeted redaction are tracked in [PLAN-01](IMPLEMENTATION_PLAN.md) |
 | CAT-06 | Typed category data: vehicle fuel l/100 km and battery date; generator hours and maintenance log; food best-before | Implemented | `Item`, `ItemForm`, `MaintenanceRecord` |
 | CAT-07 | Tracking mode is immutable once stock or movements exist (API and UI); serialized items can't be consumable | Implemented | `CatalogService`, `ItemForm` |
 | CAT-08 | Unique SKU/asset codes; items, locations and assemblies are retired, not deleted; event occurrences are deletable only while unreferenced | Implemented | `CatalogService.retireItem`/`retireAssembly`, location retirement, `CatalogOrm.hasEventHistory` |
@@ -105,7 +105,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 |---|---|:-:|---|
 | DAM-01 | Report → triage → repair → verify, or write off; repair never creates stock; write-off only by `admin` | Implemented | `LifecycleService`, `DamageReportsList` |
 | DAM-02 | Resolution comment; optionally update the item hint | Implemented | `LifecycleService`, `DamageReportsList` |
-| MNT-01 | Schedules by date, operating hours or usage, per item or per asset; warning window; checkout blocking | Partial | `MaintenancePolicy`, `MaintenanceEvaluationService`, `IndividualSchedules`. Item columns duplicate the schedules [PLAN-10](IMPLEMENTATION_PLAN.md) |
+| MNT-01 | Schedules by date, operating hours or usage, per item/asset; warning and checkout blocking | Implemented | Schedules-only storage, category-generated plans and derived item/asset summaries; [contracts](WORKFLOW_CONTRACTS.md) |
 | MNT-02 | Runtime-tracked items/assets book every meter change as a runtime entry (hours, reading after, event/order, source, actor); returning a runtime-tracked unit to stock requires the hours run; readings never go backwards except through an explicit correction | Implemented | `RuntimeService`, `runtime_entries`, `Item.tracksRuntime`, `RuntimeReturnField`, `OperatingHoursDialog` |
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
 | PRC-02 | Purchase orders: supplier, dates, buyer, quantity, unit price, reference; partial goods receipts; vendor documents restricted to authorized purchasing roles | Implemented | `PurchasingService`, `PurchasingOperations` |
@@ -121,7 +121,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | OWN-02 | Users create and maintain their own private items, locations and assemblies without warehouse rights | Implemented | `CatalogService`, `PrivateInventoryCommandInterceptor` |
 | OWN-03 | Lending: owner consent windows, loan agreement before transfer, collection/return evidence, extensions, rental cost | Implemented | `EquipmentService`, `LoanService`, `LoansPanel`, `EquipmentOwnership` |
 | MBR-01 | Member self-service: own custody, keeper assignments, requests, return submissions | Implemented | `MemberService`, `Contributor` |
-| MBR-02 | Recipient-scoped action inbox and reminders (overdue returns, expiry, maintenance) | Implemented | `ActionInboxService`, `ActionInboxContent` |
+| MBR-02 | Recipient-scoped inbox, scheduled reminders and external delivery | Implemented; gateway acceptance pending | Typed-ID task authorization, generic daily notices/reminders, persisted retry/lease gateway delivery; [contracts](WORKFLOW_CONTRACTS.md) |
 | OPS-01 | Eight report snapshots with filters, freshness flag and CSV/PDF export | Implemented | `OperationalReportService`, `ReportsPanel`, `reportPdf`; both exports read one generation-checked snapshot; freshness from sharded, commit-ordered revision counters |
 | OPS-02 | Outbox with lease, retry, dead letter and operator retry; purge after 30 days | Implemented | `DomainEventService`, `OutboxDispatcher` |
 | OPS-03 | CSV import with preview, dependency order and per-row results | Implemented | `CsvImportDialog`, `csvImportService` |
@@ -137,7 +137,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | SEC-03 | New private resources default to owner + `admin`; other staff need an explicit grant. Tenants see no company resources and reach no organization API | Implemented | `InventoryAccess`, ORM visibility predicate (`:accessPublic`), `TenantScopeFilter` |
 | SEC-04 | Owner/admin grant and revoke view access for multiple people and groups; every user manages own share groups; shares of a private location apply to its private sub-locations and the items stored there | Implemented | `InventoryAccessService`, `InventoryAccessInheritance` (`inventory_access_links`), `InventorySharing`, `InventoryAccessGroups`, `/sharing` |
 | SEC-05 | View, edit, share-management and stock-operation rights are separate; viewers can't escalate | Implemented | `InventoryAccess`, `PrivateInventoryCommandInterceptor` |
-| SEC-06 | One policy across REST, MCP, nested records, search, stock, reports, media and realtime | Partial | Present via `PrivacyResponseFilter` and the reference graph; denied sets bound as one `uuid[]`; SSE carries no IDs. Query-predicate migration pending measurement [PLAN-01](IMPLEMENTATION_PLAN.md) |
+| SEC-06 | One policy across REST, MCP, nested records, search, stock, reports, media and realtime | Implemented; load/device acceptance pending | SQL list predicates before paging and targeted response/media redaction; SSE carries no resource IDs |
 | SEC-07 | Audited permission/owner changes with revision check; access rechecked on every operation | Implemented | `InventoryAccessService`, `access.changed` events |
 | SEC-08 | Caches are scoped to the access context and dropped after permission changes; offline limits documented | Implemented | `no-store` private responses, session `QueryClient`, `privateInventoryCache.ts`; `access.changed` resets only queries holding private data |
 | SEC-09 | Uploads are type- and size-restricted, bound to their resource, and staged uploads expire | Implemented | `MediaTypes` (sniffed WebP/PNG/JPEG/PDF), 10 MB, per-user pending quota, `StagedMediaPurge` (24 h), `InventoryMediaService` binding |
@@ -145,7 +145,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | SEC-11 | Owners offer private items for use: organization members view and order them read-only (against owner commitments); the owner is notified once per order or request | Implemented | `InventoryAccessPolicy.publicUse`, `@PrivateInventoryCommand(usage = true)`, `ItemRequestNotifier` (`item_requested`) |
 | API-01 | Explicit DTOs; entities are never serialized | Implemented | `ApiResponses`, `ApiMapper` |
 | API-02 | Each frontend contract exposes only supported operations | Implemented | Capability interfaces in `resourceFactory.ts`. Target: generated client [PLAN-04](IMPLEMENTATION_PLAN.md) |
-| API-03 | Lists are paged, filtered and sorted on the server; clients load further pages on demand | Implemented | `@Paged` + `X-Has-More`, `usePagedList`, server-search pickers [PLAN-03](IMPLEMENTATION_PLAN.md). Complete reads are limited to bounded sets: the location tree, one item's positions/assets/lots, user pickers, one event's faction orders, exports/imports and the offline snapshot |
+| API-03 | Supported lists are paged/filtered/sorted on the server | Implemented | `@Paged`, `X-Has-More`, SQL-paged events and reports; complete reference/worklist/child reads and bounded opt-in downloads are explicit exceptions in [performance acceptance](PERFORMANCE_ACCEPTANCE.md) |
 
 ## 5. Required business behavior
 
@@ -187,7 +187,7 @@ These scenarios define acceptance; the runs are still open. Refer to [tests/READ
 
 Acceptance should measure correct final stock/custody, absence of duplicate application, preserved audit evidence, permitted/denied visibility, successful field recovery and time to complete common pickup/return tasks. No numeric performance SLA, throughput target, RPO or RTO is established by current source inspection.
 
-Verify the logout revocation bound (GAP-03/ACC-01) and decide the deferred workflows (notification channel, offboarding, personal-data retention) listed as FEAT-01..03. Keep future framework replacements out of feature completion claims. The [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) is the single open-work register.
+Verify real-provider and deployment acceptance (GAP-03/ACC-01). The implemented notification gateway, offboarding and bounded personal-data workflows are specified in [Workflow contracts](WORKFLOW_CONTRACTS.md). Keep future framework replacements out of feature completion claims. The [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) is the single open-work register.
 
 ## 9. Glossary
 

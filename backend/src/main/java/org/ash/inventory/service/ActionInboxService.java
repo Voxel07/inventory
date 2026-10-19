@@ -21,6 +21,8 @@ public class ActionInboxService {
     @Inject MaintenanceEvaluationService maintenancePolicy;
     @Inject PrivacyProjectionService privacy;
     public record Action(String key, String kind, String title, String detail, LocalDate due, String path, Instant remindAt) {}
+    /** Authorization references stay typed until filtering; task keys and URLs are display/navigation strings. */
+    private record Candidate(Action action, Set<UUID> references) {}
     public record ReminderInput(@NotNull String key, Instant remindAt) {}
     @Transactional public List<Action> list() {
         var user = actors.current(); var reminders = new HashMap<String, Instant>();
@@ -38,30 +40,30 @@ public class ActionInboxService {
         r.remindAt = input.remindAt();
     }
     private List<Action> live() {
-        var actor = actors.current(); var today = BusinessTime.today(); var out = new ArrayList<Action>();
+        var actor = actors.current(); var today = BusinessTime.today(); var out = new ArrayList<Candidate>();
         // Tenants have no organization work items; their notices arrive as notifications.
         if (!ActorService.seesOrganization(actor)) return List.of();
         boolean warehouse = actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
         boolean maintenance = warehouse;
         for (var o : orm.readyFactionOrders(warehouse ? null : actor.id))
-            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, "/orders/faction/" + o.id);
+            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.orderCode, o.collectorName, o.requestedPickupDate, "/orders/faction/" + o.id, o.id);
         for (var o : orm.readyGeneralOrders(warehouse ? null : actor.id))
-            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.name, o.purpose, o.eventOccurrence == null ? null : o.eventOccurrence.startDate, "/orders?tab=general");
+            if (warehouse || o.createdBy.id.equals(actor.id)) add(out, "pickup:" + o.id, "pickup", o.name, o.purpose, o.eventOccurrence == null ? null : o.eventOccurrence.startDate, "/orders?tab=general", o.id);
         var balances = custody.list(!warehouse);
         var events = orm.events(balances.stream().map(CustodyBalanceService.Balance::eventOccurrenceId).filter(Objects::nonNull).distinct().toList());
         for (var b : balances) {
             var event = b.eventOccurrenceId() == null ? null : events.get(b.eventOccurrenceId());
-            if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : equipment("custody", b.key()));
+            if (event != null && event.endDate.isBefore(today)) add(out, "return:" + b.key(), "overdue_return", b.name(), b.person() + " · " + b.checkedOut(), event.endDate, warehouse ? "/checked-out" : equipment("custody", b.key()), b.itemId(), b.orderId(), b.assetInstanceId());
         }
         for (var r : orm.pendingReturns(warehouse ? null : actor.id))
-            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : equipment("returns", r.id.toString()));
+            if (warehouse || r.returnedFor.id.equals(actor.id)) add(out, "ack:" + r.id, "acknowledgement", r.item.name, r.quantity + " · " + r.returnedFor.name, BusinessTime.date(r.createdAt), warehouse ? "/returns" : equipment("returns", r.id.toString()), r.id, r.item.id);
         if (warehouse)
             for (var p : orm.incomingPurchases())
-                add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts");
+                add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts", p.id);
         if (warehouse)
             for (var l : orm.availableLots(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) {
                 var due = l.expiryDate == null ? l.bestBeforeDate : l.bestBeforeDate == null || l.expiryDate.isBefore(l.bestBeforeDate) ? l.expiryDate : l.bestBeforeDate;
-                if (due != null && !due.isAfter(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots");
+                if (due != null && !due.isAfter(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots", l.id, l.item.id);
             }
         var schedules = orm.activeSchedules(maintenance ? null : actor.id);
         var statuses = maintenancePolicy.statuses(schedules, Instant.now());
@@ -70,21 +72,27 @@ public class ActionInboxService {
             LocalDate due = s.nextDueAt == null ? null : BusinessTime.date(s.nextDueAt);
             if (statuses.get(s.id) != MaintenancePolicy.Status.healthy)
                 add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules"
-                        : s.assetInstance == null ? "/items/" + s.item.id : "/items/" + s.item.id + "/assets/" + s.assetInstance.id);
+                        : s.assetInstance == null ? "/items/" + s.item.id : "/items/" + s.item.id + "/assets/" + s.assetInstance.id, s.id, s.item.id);
         }
         for (var r : orm.openMemberRequests(warehouse ? null : actor.id))
-            if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, equipment("requests", r.id.toString()));
+            if (warehouse || r.requester.id.equals(actor.id)) add(out, "request:" + r.id, r.kind, r.item.name, r.requester.name + " · " + r.notes, null, equipment("requests", r.id.toString()), r.id, r.item.id);
         if (warehouse) for (var l : orm.loans()) {
             var c = l.commitment; if (c.cancelled || l.returned == c.quantity) continue;
             add(out, "loan:" + l.id, l.collected < c.quantity ? "collection" : "provider_return", l.provider + " · " + c.item.name,
-                    (l.collected - l.returned) + " / " + c.quantity, l.collected < c.quantity ? c.availableFrom : c.returnDue, "/operations?tab=loans");
+                    (l.collected - l.returned) + " / " + c.quantity, l.collected < c.quantity ? c.availableFrom : c.returnDue, "/operations?tab=loans", l.id, c.item.id, l.providerLocation.id);
         }
-        var denied = privacy.deniedIds();
-        return out.stream().filter(action -> privacy.visible(action, denied)).toList();
+        var references = out.stream().flatMap(candidate -> candidate.references().stream())
+                .collect(java.util.stream.Collectors.toSet());
+        var denied = privacy.deniedAmong(references);
+        return out.stream().filter(candidate -> Collections.disjoint(candidate.references(), denied))
+                .map(Candidate::action).toList();
     }
     /** Deep link into the personal equipment overview: section plus the task row to focus. */
     private static String equipment(String section, String focus) {
         return "/?equipment=" + section + "&focus=" + java.net.URLEncoder.encode(focus, java.nio.charset.StandardCharsets.UTF_8);
     }
-    private void add(List<Action> out, String key, String kind, String title, String detail, LocalDate due, String path) { out.add(new Action(key, kind, title, detail, due, path, null)); }
+    private void add(List<Candidate> out, String key, String kind, String title, String detail, LocalDate due, String path, UUID... references) {
+        var ids = Arrays.stream(references).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        out.add(new Candidate(new Action(key, kind, title, detail, due, path, null), ids));
+    }
 }

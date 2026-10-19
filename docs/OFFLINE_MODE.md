@@ -20,8 +20,12 @@ Item details are cached by exact item identity within the account/role/faction n
 | Order status transition (either kind) | `order.transition` |
 | Order preparation (either kind) | `order.prepare` |
 | Order reconciliation (either kind) | `order.return` |
+| Blind count / recount submission | `count.submit`, `count.recount` |
+| Transfer receipt | `transfer.receive` |
+| Warehouse return acceptance | `return.accept` |
+| Photo-free personal return | `member.return` |
 
-Catalog mutations, general-order edits, contributor requests/returns, photos/media, assembly batch checkout, ownership/commitments, loans, label management, purchasing/receiving, transfers, counts, lots, repair/maintenance, reminders and report rebuilds require connectivity. Their forms are not durable offline drafts.
+Catalog mutations, general-order edits, contributor requests, photo-backed returns, photos/media, assembly batch checkout, ownership/commitments, loans, label management, purchasing/receiving, transfer creation/dispatch, count creation/start/approval/posting, lots, repair/maintenance, reminders and report rebuilds require connectivity. Their forms are not durable offline drafts.
 
 Initial sign-in requires connectivity. A persisted authenticated session supports cached use; switching accounts scopes commands and catalog access to the signed-in account. Unowned commands are not replayed. Legacy migration/export support has been removed; current storage has one account-scoped format.
 
@@ -42,3 +46,9 @@ The server remains authoritative. Cached data and pending commands never bypass 
 ## Verification limits
 
 Current account switching, cold starts, replay/correction concurrency and browser IndexedDB behavior still require interactive acceptance.
+
+## Explicit catalog download
+
+Sign-in and reconnection do not download the whole catalog. **Save catalog** starts one sequential download per account generation, at most 100 pages of 100 records per main catalog. It includes public item, assembly, location and event projections plus factions/event types; private projections stay excluded. Public rows in a mixed page retain the original continuation without storing private rows. The panel shows downloading, complete or partial state, failed catalog names and completion time; durable storage/network failures cannot report success. Account changes cancel publication into the old scope. This is not an atomic database snapshot across all six catalogs.
+
+Only supported field forms already loaded online can queue counts, transfer receipts and acceptance. No count/transfer workspace is automatically downloaded, and these forms are not durable drafts. Online and queued field actions use the same `/api/sync` audit IDs. Saved public item SKUs/UUIDs can resolve offline without a server request; plain asset/order-code lookup still requires connectivity. Encoded URLs remain direct navigation.

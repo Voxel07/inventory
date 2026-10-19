@@ -109,7 +109,6 @@ public class PlanningStockService {
                     asset.availabilityStatus = DomainEnums.AssetState.valueOf(row.text1());
                     asset.conditionStatus = DomainEnums.ConditionStatus.valueOf(row.text2());
                     asset.outOfService = row.flag1();
-                    asset.nextMaintenanceDue = row.date1();
                     asset.operatingHours = row.decimal(); assets.add(asset);
                 }
                 case "checkout_count" -> {

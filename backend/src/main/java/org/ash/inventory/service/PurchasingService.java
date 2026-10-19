@@ -23,6 +23,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class PurchasingService {
+    @jakarta.inject.Inject CategoryMaintenanceService categoryDefaults;
     private final PurchasingOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -352,6 +353,7 @@ public class PurchasingService {
                 asset.conditionStatus = damaged ? DomainEnums.ConditionStatus.damaged : DomainEnums.ConditionStatus.good;
                 asset.availabilityStatus = damaged ? DomainEnums.AssetState.damaged : DomainEnums.AssetState.available;
                 orm.persist(asset);
+                categoryDefaults.apply(asset.item);
                 appendTransaction(receipt, line, asset, location, DomainEnums.TransactionType.received, 1,
                         derivedKey(receipt.idempotencyKey, line.purchaseOrderLine.id + ":received:" + index), actor);
                 if (damaged) recordReceiptDamage(receipt, line, asset, actor, index);

@@ -29,10 +29,6 @@ public class PrivacyProjectionService {
     @Inject ActorService actors;
     @Inject InventoryAccess access;
 
-    @Transactional
-    public Set<String> deniedIds() {
-        return orm.deniedReferences(actors.current()).stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet());
-    }
     /** Whether one resource is (transitively) hidden from the actor; walks only that resource's ancestors. */
     @Transactional
     public boolean denied(UUID resourceId) {

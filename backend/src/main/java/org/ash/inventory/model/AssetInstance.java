@@ -33,8 +33,6 @@ public class AssetInstance extends BaseEntity {
     public DomainEnums.AssetState availabilityStatus = DomainEnums.AssetState.available;
     /** Set by a failed asset inspection and cleared by a passing one; the service status is derived. */
     @Column(name = "out_of_service", nullable = false) public boolean outOfService;
-    /** The asset's own calendar date once it has been inspected individually; until then it follows its item. */
-    @Column(name = "next_maintenance_due") public LocalDate nextMaintenanceDue;
     @Column(name = "operating_hours", nullable = false) public BigDecimal operatingHours = BigDecimal.ZERO;
     public String notes;
     @Column(nullable = false) public boolean active = true;

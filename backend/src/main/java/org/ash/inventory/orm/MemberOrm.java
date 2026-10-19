@@ -61,10 +61,10 @@ public class MemberOrm extends EntityOrm {
     }
 
     public List<MemberRequest> requests(UserAccount actor, boolean staff, int offset, int limit) {
-        var denied = access.deniedReferences(accessActor.current());
+
         var query = entityManager.createQuery("from MemberRequest r join fetch r.item join fetch r.requester left join fetch r.asset left join fetch r.location left join fetch r.handledBy where 1 = 1"
-                + (staff ? "" : " and r.requester = :actor") + InventoryAccessOrm.excluding("r", denied) + " order by r.createdAt desc, r.id desc", MemberRequest.class);
+                + (staff ? "" : " and r.requester = :actor") + InventoryAccessOrm.scope("request", "r") + " order by r.createdAt desc, r.id desc", MemberRequest.class);
         if (!staff) query.setParameter("actor", actor);
-        return InventoryAccessOrm.bindDenied(query, denied).setFirstResult(offset).setMaxResults(limit).getResultList();
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 }

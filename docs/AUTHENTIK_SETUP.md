@@ -34,7 +34,7 @@ Everything else — the assigned roles and the faction memberships — is set in
 
 **New users start as read only**. The inventory admin can assign one or more roles. Assign only `tenant` to someone who should see private inventory without company data; the highest assigned role determines access.
 
-**First admin.** Set `INVENTORY_BOOTSTRAP_ADMINS` to a comma-separated list of e-mail addresses or Authentik usernames. A listed account becomes inventory admin on its first sign-in, and is promoted again whenever no admin exists (recovery). The app never removes the last inventory admin. Keep e-mail addresses in Authentik verified, because the list matches on them.
+**First admin.** Set `INVENTORY_BOOTSTRAP_ADMINS` to a comma-separated list of verified e-mail addresses. A listed account becomes inventory admin on its first sign-in, and is promoted again whenever no admin exists (recovery). The app never removes the last inventory admin. The access token must explicitly carry the Boolean claim `email_verified=true`; unverified/missing claims and usernames never grant bootstrap administration. Only active administrators count for recovery.
 
 ### 3.2 Roles
 
@@ -104,7 +104,7 @@ Access (the `inventory` group) is re-read from every token, so removing someone 
 
 ## 4. Token lifetimes and logout
 
-Logout revokes the refresh token, but the API validates access tokens locally until they expire. Choose one bound:
+Online logout registers the current access-token SHA-256 hash until expiry and revokes the provider refresh token. Later API requests with that token are rejected; existing SSE streams check the registry/account every ten seconds. Offline/provider-only logout and Authentik group removal still depend on access-token expiry or introspection. Choose a provider-removal bound:
 
 | Option | Settings | Revocation delay |
 |---|---|---|
@@ -128,3 +128,5 @@ The default is one public client shared by SPA and API. With two clients (`VITE_
 - [ ] Logout in one tab signs out the other tabs.
 
 These checks are part of [ACC-01](IMPLEMENTATION_PLAN.md).
+
+Local deactivation on the Users page blocks new REST, MCP and replay requests immediately. It does not automatically mirror IdP directory changes. See [lifecycle and personal-data contracts](WORKFLOW_CONTRACTS.md).

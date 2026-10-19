@@ -165,6 +165,8 @@ public class MediaService {
         return attachToRecord(reference, maintenanceId, "maintenance");
     }
 
+    public String attachToHandover(String reference, UUID handoverId) { return attachToRecord(reference, handoverId, "handovers"); }
+
     public StoredDocument inspectVendorDocument(String reference) {
         return storage("inspect_document", () -> {
             String source = mediaReference(reference);

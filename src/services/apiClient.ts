@@ -43,7 +43,6 @@ export async function initializeAuth(): Promise<void> {
     if (getAuthSnapshot().token) {
       await refreshCurrentUser();
       void startRealtimeEvents();
-      precacheCatalogForOfflineUse();
     }
   } catch (error) {
     if (context.generation !== getAuthSnapshot().generation) return;
@@ -66,7 +65,6 @@ export async function login(): Promise<void> {
   assertAuthSession(context);
   setDevelopmentSession(response.token, response.user);
   void startRealtimeEvents();
-  precacheCatalogForOfflineUse();
 }
 
 /** Ends the local session; throws {@link AuthPersistenceError} when this device could not record the sign-out. */
@@ -76,6 +74,7 @@ async function endLocalSession(): Promise<void> {
 
 export async function logout(): Promise<boolean> {
   const context = captureAuthSession();
+  if (navigator.onLine) await apiRequest('/api/auth/logout', { method: 'POST', session: context }).catch(() => {});
   stopRealtimeEvents();
   announceLogout();
   if (!OIDC_CONFIG) {
@@ -112,7 +111,7 @@ export async function refreshCurrentUser(): Promise<User | null> {
     updateAuthUser(user);
     return user;
   } catch (error) {
-    if (context.generation === getAuthSnapshot().generation && error instanceof ApiError && error.status === 401) clearAuth('Your session has expired. Please sign in again.');
+    if (context.generation === getAuthSnapshot().generation && error instanceof ApiError && (error.status === 401 || error.status === 403)) clearAuth('Your session has expired. Please sign in again.');
     return null;
   }
 }
@@ -468,15 +467,9 @@ export function stopRealtimeEvents(): void {
   }
 }
 
-/** Handled by offlineSnapshot.ts, which owns the explicit exhaustive catalog snapshots. */
-function precacheCatalogForOfflineUse(): void {
-  window.dispatchEvent(new Event('ash-offline-snapshot'));
-}
-
 window.addEventListener('online', () => {
   void flushOfflineQueue();
   void startRealtimeEvents();
-  precacheCatalogForOfflineUse();
 });
 window.addEventListener('offline', stopRealtimeEvents);
 
@@ -499,7 +492,6 @@ subscribeAuth(() => {
   stopRealtimeEvents();
   if (getAuthSnapshot().token && getAuthSnapshot().user) {
     void startRealtimeEvents();
-    precacheCatalogForOfflineUse();
     void flushOfflineQueue();
   }
 });

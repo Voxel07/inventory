@@ -39,7 +39,7 @@ export function LocationPicker({ locations, value, onChange, label, helperText, 
         size={size}
         fullWidth
         renderOption={({ key, ...props }, location) => {
-            return <Box component="li" key={key} {...props} sx={{ pl: `${16 + Math.max(0, location.depth) * 12}px !important` }}>
+            return <Box component="li" key={key} {...props} sx={{ pl: `${16 + Math.max(0, location.depth ?? 0) * 12}px !important` }}>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         <Box component="span" className="mono" sx={{ mr: 1 }}>{location.fullCode}</Box>{location.name}

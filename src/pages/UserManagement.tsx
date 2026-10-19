@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AccountLifecyclePanel } from '../components/operations/AccountLifecyclePanel';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
 import { Alert, Autocomplete, Box, Chip, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography } from '@mui/material';
@@ -74,6 +75,7 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
         renderInput={(params) => <TextField {...params} label={t('pages.userManagement.factionsEditOrderLists')} />} />
       <TextField required label={t('pages.userManagement.reasonForChange')} value={reason} disabled={save.isPending} onChange={(e) => setReason(e.target.value)} />
       {save.error && <Alert severity="error">{save.error.message}</Alert>}
+      <AccountLifecyclePanel user={user} />
     </Stack></DialogContent>
     <DialogActions>
       <Button title={t('common.close')} disabled={save.isPending} onClick={onClose}>{t('common.cancel')}</Button>

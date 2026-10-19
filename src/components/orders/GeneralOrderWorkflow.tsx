@@ -1,3 +1,4 @@
+import { HandoverEvidencePanel } from './detail/HandoverEvidencePanel';
 import { parseHoursRun, readingAfter } from '../../utils/runtimeHours';
 import { useEventReports } from '../../hooks/useEvents';
 import { formatDateTime } from '../../utils/dateFormat';
@@ -103,6 +104,6 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     {assets.error && <Alert severity="error">{assets.error.message}</Alert>}
     {action === 'pickup' && <Alert severity="info">{t('orders.generalOrderWorkflow.theReservedItemsWillNowBeHandedOver')}{Object.entries(order.preparedQuantities ?? {}).map(([id, quantity]) => <Typography key={id}>{order.itemNames?.[id]}: {quantity}</Typography>)}</Alert>}
     {action === 'history' && <Stack spacing={2}>{history.data?.history.map((entry) => <Stack key={entry.id}><Typography>{entry.action} · {entry.userName} · {formatDateTime(entry.timestamp)}</Typography><Typography>{entry.note}</Typography></Stack>)}</Stack>}
-    {action === 'history' && <CustodyEvidence orderId={order.id} kind={order.kind} />}
+    {action === 'history' && <><HandoverEvidencePanel orderId={order.id} /><CustodyEvidence orderId={order.id} kind={order.kind} /></>}
   </OperationForm>;
 }

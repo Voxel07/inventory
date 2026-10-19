@@ -4,12 +4,12 @@ export type LocationRole = 'location' | 'section' | 'place';
 
 /** Location (site, holds no stock) → section → storage places, which may nest (shelf → compartment). */
 export function locationRole(location: Pick<StorageLocation, 'depth'>): LocationRole {
-  return location.depth <= 0 ? 'location' : location.depth === 1 ? 'section' : 'place';
+  return location.depth === 0 ? 'location' : location.depth === 1 ? 'section' : 'place';
 }
 
 /** Stock lives in sections and storage places, never directly in a top-level location. */
 export function holdsStock(location: Pick<StorageLocation, 'depth'>): boolean {
-  return location.depth > 0;
+  return location.depth === null || location.depth > 0;
 }
 
 export function locationPath(location: StorageLocation, locations: StorageLocation[]): string {

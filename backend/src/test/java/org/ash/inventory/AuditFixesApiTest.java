@@ -69,10 +69,12 @@ class AuditFixesApiTest {
 
     @Test void assetInspectionIsScopedToThatAsset() { // H02
         String due = LocalDate.now().plusDays(200).toString();
-        String item = serializedItem(2, Map.of("maintenanceIntervalDays", 365, "nextMaintenanceDue", due));
+        String item = serializedItem(2, Map.of());
         var list = assets(item);
         String first = list.getString("[0].id"), second = list.getString("[1].id");
-        admin().body(Map.of("itemId", item, "assetInstanceId", first, "type", "dguv_v3", "result", "failed",
+        String firstSchedule = dateSchedule(item, first, due);
+        String secondSchedule = dateSchedule(item, second, due);
+        admin().body(Map.of("itemId", item, "assetInstanceId", first, "scheduleId", firstSchedule, "type", "dguv_v3", "result", "failed",
                 "notes", "Insulation fault")).post("/api/maintenance").then().statusCode(200);
         admin().get("/api/items/" + item).then().statusCode(200)
                 .body("maintenanceStatus", equalTo("certified")).body("nextMaintenanceDue", equalTo(due));
@@ -83,8 +85,8 @@ class AuditFixesApiTest {
         admin().body(checkout(item, first)).post("/api/transactions").then().statusCode(409);
         admin().body(checkout(item, second)).post("/api/transactions").then().statusCode(200);
 
-        // A sibling's passing inspection neither clears the failed asset nor moves the item calendar.
-        admin().body(Map.of("itemId", item, "assetInstanceId", second, "type", "dguv_v3", "result", "passed"))
+        // A sibling's passing inspection does not clear the failed asset; the item summary keeps the earliest asset due date.
+        admin().body(Map.of("itemId", item, "assetInstanceId", second, "scheduleId", secondSchedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200);
         admin().get("/api/items/" + item).then().body("nextMaintenanceDue", equalTo(due));
         admin().get("/api/items/" + item + "/assets").then()
@@ -93,7 +95,7 @@ class AuditFixesApiTest {
                 .body("find { it.id == '" + second + "' }.nextMaintenanceDue",
                         equalTo(LocalDate.now().plusDays(365).toString()));
 
-        admin().body(Map.of("itemId", item, "assetInstanceId", first, "type", "dguv_v3", "result", "passed"))
+        admin().body(Map.of("itemId", item, "assetInstanceId", first, "scheduleId", firstSchedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200);
         admin().get("/api/items/" + item + "/assets").then()
                 .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("certified"))
@@ -101,14 +103,20 @@ class AuditFixesApiTest {
     }
 
     @Test void overdueItemCalendarBlocksOnlyUninspectedAssets() { // H02
-        String item = serializedItem(2, Map.of("maintenanceIntervalDays", 365,
-                "nextMaintenanceDue", LocalDate.now().minusDays(1).toString()));
+        String item = serializedItem(2, Map.of());
         var list = assets(item);
         String inspected = list.getString("[0].id"), pending = list.getString("[1].id");
-        admin().body(Map.of("itemId", item, "assetInstanceId", inspected, "type", "dguv_v3", "result", "passed"))
+        String schedule = dateSchedule(item, inspected, LocalDate.now().minusDays(1).toString());
+        dateSchedule(item, pending, LocalDate.now().minusDays(1).toString());
+        admin().body(Map.of("itemId", item, "assetInstanceId", inspected, "scheduleId", schedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200);
         admin().body(checkout(item, pending)).post("/api/transactions").then().statusCode(409);
         admin().body(checkout(item, inspected)).post("/api/transactions").then().statusCode(200);
+    }
+
+    private String dateSchedule(String item, String asset, String due) {
+        return admin().body(Map.of("itemId",item,"assetInstanceId",asset,"maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",due+"T00:00:00Z","checkoutBlocking",true))
+                .post("/api/maintenance-schedules").then().statusCode(201).extract().path("id");
     }
 
     private static RequestSpecification actor(String id, String role) {

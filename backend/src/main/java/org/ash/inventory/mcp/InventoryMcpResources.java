@@ -38,7 +38,7 @@ public class InventoryMcpResources {
     @Transactional
     public TextResourceContents locations() throws Exception {
         service.authenticate();
-        var data = service.locations(null, null, null);
+        var data = service.locationResource();
         return TextResourceContents.create("inventory://locations", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(data));
     }
 

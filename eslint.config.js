@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // eslint-plugin-react-hooks v7 ships the React Compiler diagnostics (purity, refs, immutability, …)
 // in its recommended preset, replacing eslint-plugin-react-compiler.
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.claude/**', '.codex/**', 'graphify-out/**', 'backend/target/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -19,6 +19,7 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
     },
     rules: {
       'react-hooks/set-state-in-effect': 'error',
